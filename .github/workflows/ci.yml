@@ -15,56 +15,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  discover-packages:
-    name: Discover regular packages
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    outputs:
-      packages: ${{ steps.packages.outputs.packages }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v19
-
-      - name: Enable Nix cache
-        uses: DeterminateSystems/magic-nix-cache-action@v13
-
-      - name: Build package list
-        id: packages
-        shell: bash
-        run: |
-          set -euo pipefail
-          packages="$(
-            nix eval --json .#packages.x86_64-linux | python3 -c '
-import json
-import sys
-
-raw = json.load(sys.stdin)
-regular = [
-    name for name in sorted(raw.keys())
-    if not name.endswith("Wasmer") and name not in ("allWasmer", "default")
-]
-print(json.dumps(regular))
-'
-          )"
-          if [ "$packages" = "[]" ]; then
-            echo "No regular packages found in flake outputs."
-            exit 1
-          fi
-          echo "packages=$packages" >> "$GITHUB_OUTPUT"
-          echo "Discovered packages: $packages"
-
-  build-regular-packages:
-    name: Build ${{ matrix.package }}
+  build-all:
+    name: Build all packages
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    needs: discover-packages
-    strategy:
-      fail-fast: false
-      matrix:
-        package: ${{ fromJson(needs.discover-packages.outputs.packages) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -72,11 +26,8 @@ print(json.dumps(regular))
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v19
 
-      - name: Enable Nix cache
-        uses: DeterminateSystems/magic-nix-cache-action@v13
-
-      - name: Build package
+      - name: Build all
         shell: bash
         run: |
           set -euo pipefail
-          nix build --print-build-logs --show-trace ".#${{ matrix.package }}"
+          nix build --print-build-logs --show-trace .#all
