@@ -55,15 +55,20 @@ let
   };
 
   makeWasmerPackage = pkgs.callPackage ./wasmer/make-wasmer-package.nix { };
+  makePlainWasmerPackage = pkgs.callPackage ./wasmer/make-plain-wasmer-package.nix { };
 
   nanoWasmer = pkgs.callPackage ./programs/nano/nanoWasmer.nix {
     inherit makeWasmerPackage;
     nano = programs.nano;
   };
 
+  cliPlatformWasmer = pkgs.callPackage ./wasmer/cli-platform.nix {
+    inherit makePlainWasmerPackage;
+  };
+
   wasmer = import ./wasmer {
     inherit (pkgs) lib;
-    inherit pkgs nanoWasmer;
+    inherit pkgs nanoWasmer cliPlatformWasmer;
   };
 
   allPackages = libs // programs;
