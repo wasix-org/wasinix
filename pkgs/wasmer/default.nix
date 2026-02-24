@@ -1,7 +1,8 @@
-{ lib, pkgs, nanoWasmer, crabsayWasmer, cliPlatformWasmer }:
+{ lib, pkgs, nanoWasmer, grepWasmer, crabsayWasmer, cliPlatformWasmer }:
 let
   packages = {
     nano = nanoWasmer;
+    grep = grepWasmer;
     crabsay = crabsayWasmer;
     cliPlatform = cliPlatformWasmer;
   };
