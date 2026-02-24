@@ -2,7 +2,7 @@
 {
   nano = pkgsCross.callPackage ./nano/nano.nix {
     inherit nixpkgs toolchain;
-    ncurses = libs.ncurses;
+    ncurses = libs.ncursesLib;
   };
   grep = pkgsCross.callPackage ./grep/grep.nix {
     inherit toolchain;
@@ -12,6 +12,9 @@
   };
   find = pkgsCross.callPackage ./find/find.nix {
     inherit toolchain;
+  };
+  ncurses = pkgsCross.callPackage ./ncurses/ncurses.nix {
+    inherit nixpkgs toolchain;
   };
 
   crabsay = pkgs.callPackage ./crabsay/crabsay.nix {

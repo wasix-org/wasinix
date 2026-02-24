@@ -17,8 +17,8 @@
         inherit (wasix.toolchain) wasixcc;
         cargo-wasix = wasix.toolchain.cargoWasix;
         wasix-rust-toolchain = wasix.toolchain.wasixRustToolchain;
-        inherit (wasix.libs) ncurses;
-        inherit (wasix.programs) nano grep sed find crabsay;
+        inherit (wasix.libs) ncursesLib;
+        inherit (wasix.programs) nano grep sed find ncurses crabsay;
       };
 
       wasmer = wasix.wasmer.packages;
@@ -33,7 +33,7 @@
         packages = [
           wasix.toolchain.wasixcc
           wasix.toolchain.cargoWasix
-          wasix.libs.ncurses
+          wasix.libs.ncursesLib
           wasix.pkgs.gnumake
           wasix.pkgs.pkg-config
         ];

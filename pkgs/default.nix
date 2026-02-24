@@ -74,6 +74,10 @@ let
     inherit makeWasmerPackage;
     find = programs.find;
   };
+  ncursesWasmer = pkgs.callPackage ./programs/ncurses/ncursesWasmer.nix {
+    inherit makeWasmerPackage;
+    ncurses = programs.ncurses;
+  };
   crabsayWasmer = pkgs.callPackage ./programs/crabsay/crabsayWasmer.nix {
     inherit makeWasmerPackage;
     crabsay = programs.crabsay;
@@ -85,7 +89,7 @@ let
 
   wasmer = import ./wasmer {
     inherit (pkgs) lib;
-    inherit pkgs nanoWasmer grepWasmer sedWasmer findWasmer crabsayWasmer cliPlatformWasmer;
+    inherit pkgs nanoWasmer grepWasmer sedWasmer findWasmer ncursesWasmer crabsayWasmer cliPlatformWasmer;
   };
 
   allPackages = libs // programs;

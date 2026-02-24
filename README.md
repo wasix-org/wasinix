@@ -24,8 +24,10 @@ This repository is a Nix flake for building and packaging software for **WASIX**
 - Build one plain package:
   - `nix build .#wasix.nano`
   - `nix build .#wasix.ncurses`
+  - `nix build .#wasix.ncursesLib`
 - Build one Wasmer package:
   - `nix build .#wasmer.nano`
+  - `nix build .#wasmer.ncurses`
 - Build all Wasmer packages:
   - `nix build .#wasmerAll`
 - Enter development shell:
@@ -37,7 +39,7 @@ This repository is a Nix flake for building and packaging software for **WASIX**
 `flake.nix` exposes:
 
 - top-level namespaced package sets (build with `nix build .#...`):
-  - `wasix.<name>` (for example `wasix.nano`, `wasix.ncurses`, `wasix.wasixcc`)
+  - `wasix.<name>` (for example `wasix.nano`, `wasix.ncurses`, `wasix.ncursesLib`, `wasix.wasixcc`)
   - `wasmer.<name>` (for example `wasmer.nano`, `wasmer.crabsay`)
 - system-scoped aggregate bundles:
   - `packages.<system>.wasixAll` (all plain `.wasm` binaries in `result/bin`)
@@ -180,7 +182,7 @@ makeWasmerPackage {
 {
   nano = pkgsCross.callPackage ./nano/nano.nix {
     inherit nixpkgs toolchain;
-    ncurses = libs.ncurses;
+    ncurses = libs.ncursesLib;
   };
 
   # foo = pkgsCross.callPackage ./foo/foo.nix {

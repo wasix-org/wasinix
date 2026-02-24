@@ -1,6 +1,6 @@
 { nixpkgs, pkgsCross, toolchain }:
 {
-  ncurses = pkgsCross.callPackage ./ncurses {
+  ncursesLib = pkgsCross.callPackage ./ncurses {
     inherit nixpkgs toolchain;
   };
 }
