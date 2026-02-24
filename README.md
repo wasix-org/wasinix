@@ -53,6 +53,12 @@ This repository is a Nix flake for building and packaging software for **WASIX**
 ├── flake.nix
 ├── pkgs
 │   ├── default.nix                  # central wiring: toolchain, indexes, aggregates
+│   ├── toolchain
+│   │   ├── default.nix              # local WASIX toolchain index
+│   │   ├── wasix-llvm.nix           # pinned WASIX LLVM bundle
+│   │   ├── wasixcc.nix              # local wasixcc wrapper package
+│   │   ├── binaryen.nix             # pinned Binaryen bundle
+│   │   └── wasix-sysroot.nix        # pinned WASIX sysroot artifacts
 │   ├── libraries
 │   │   ├── default.nix              # library index
 │   │   └── ncurses/default.nix      # ncurses WASIX definition
@@ -74,7 +80,7 @@ This repository is a Nix flake for building and packaging software for **WASIX**
 
 `pkgs/default.nix` defines:
 
-- WASIX toolchain components from `wasixcc` input
+- WASIX toolchain components from local `pkgs/toolchain` definitions
 - cross configuration (`wasm32-unknown-wasi` with WASIX-specific flags)
 - shared env snippets used by package overrides (`toolchainEnv`, `ccEnv`, `commonPreConfigure`)
 

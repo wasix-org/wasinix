@@ -1,13 +1,9 @@
-{ system, nixpkgs, wasixcc }:
+{ system, nixpkgs }:
 let
   pkgs = import nixpkgs { inherit system; };
-  wasixPackages = wasixcc.packages.${system};
+  toolchainPkgs = import ./toolchain { inherit pkgs; };
 
-  toolchain = rec {
-    wasixcc = wasixPackages.wasixcc;
-    wasixLlvm = wasixPackages.wasixLlvm;
-    wasixSysroot = wasixPackages.wasixSysroot;
-    binaryen = wasixPackages.binaryen;
+  toolchainEnv = rec {
     buildCc = "${pkgs.buildPackages.stdenv.cc}/bin/cc";
     host = "wasm32-wasix";
     crossSystem = {
@@ -18,9 +14,9 @@ let
     };
 
     toolchainEnv = ''
-      export WASIXCC_LLVM_LOCATION="${wasixLlvm}/bin"
-      export WASIXCC_SYSROOT_PREFIX="${wasixSysroot}"
-      export WASIXCC_BINARYEN_LOCATION="${binaryen}/bin"
+      export WASIXCC_LLVM_LOCATION="${toolchainPkgs.wasixLlvm}/bin"
+      export WASIXCC_SYSROOT_PREFIX="${toolchainPkgs.wasixSysroot}"
+      export WASIXCC_BINARYEN_LOCATION="${toolchainPkgs.binaryen}/bin"
       export WASIXCC_AUTOCONF_WORKAROUNDS=yes
     '';
 
@@ -35,23 +31,28 @@ let
     '';
 
     commonPreConfigure = ''
-      export PATH="${wasixcc}/bin:$PATH"
+      export PATH="${toolchainPkgs.wasixcc}/bin:$PATH"
       ${toolchainEnv}
       ${ccEnv}
     '';
   };
+  toolchain = toolchainPkgs // toolchainEnv;
 
   pkgsCross = import nixpkgs {
     inherit system;
-    crossSystem = toolchain.crossSystem;
+    crossSystem = toolchainEnv.crossSystem;
   };
 
   libs = import ./libraries {
-    inherit nixpkgs pkgsCross toolchain;
+    nixpkgs = nixpkgs;
+    inherit pkgsCross;
+    inherit toolchain;
   };
 
   programs = import ./programs {
-    inherit nixpkgs pkgsCross toolchain libs;
+    nixpkgs = nixpkgs;
+    inherit pkgsCross libs;
+    inherit toolchain;
   };
 
   makeWasmerPackage = pkgs.callPackage ./wasmer/make-wasmer-package.nix { };

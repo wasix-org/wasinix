@@ -2,15 +2,14 @@
   description = "WASIX package repository";
 
   inputs = {
-    wasixcc.url = "github:wasix-org/wasixcc?ref=nix-flake";
-    nixpkgs.follows = "wasixcc/nixpkgs";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   };
 
-  outputs = { nixpkgs, wasixcc, ... }:
+  outputs = { nixpkgs, ... }:
     let
       system = "x86_64-linux";
       wasix = import ./pkgs {
-        inherit system nixpkgs wasixcc;
+        inherit system nixpkgs;
       };
 
     in {
@@ -37,6 +36,7 @@
       packages.${system} =
         {
           # Individual plain packages
+          inherit (wasix.toolchain) wasixcc;
           inherit (wasix.libs) ncurses;
           inherit (wasix.programs) nano;
         }
