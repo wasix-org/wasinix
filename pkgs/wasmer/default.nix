@@ -1,7 +1,7 @@
-{ lib, pkgs, nanoWasmer, cliPlatformWasmer }:
+{ lib, pkgs, nanoWasmer, crabsayWasmer, cliPlatformWasmer }:
 let
   packages = {
-    inherit nanoWasmer cliPlatformWasmer;
+    inherit nanoWasmer crabsayWasmer cliPlatformWasmer;
   };
 
   allWasmer = pkgs.runCommand "wasix-all-wasmer" { } ''

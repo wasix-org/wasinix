@@ -22,6 +22,7 @@
       devShells.${system}.default = wasix.pkgs.mkShell {
         packages = [
           wasix.toolchain.wasixcc
+          wasix.toolchain.cargoWasix
           wasix.libs.ncurses
           wasix.pkgs.gnumake
           wasix.pkgs.pkg-config
@@ -37,6 +38,8 @@
         {
           # Individual plain packages
           inherit (wasix.toolchain) wasixcc;
+          cargo-wasix = wasix.toolchain.cargoWasix;
+          wasix-rust-toolchain = wasix.toolchain.wasixRustToolchain;
           inherit (wasix.libs) ncurses;
           inherit (wasix.programs) nano;
         }

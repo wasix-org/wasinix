@@ -51,7 +51,7 @@ let
 
   programs = import ./programs {
     nixpkgs = nixpkgs;
-    inherit pkgsCross libs;
+    inherit pkgs pkgsCross libs;
     inherit toolchain;
   };
 
@@ -62,6 +62,10 @@ let
     inherit makeWasmerPackage;
     nano = programs.nano;
   };
+  crabsayWasmer = pkgs.callPackage ./programs/crabsay/crabsayWasmer.nix {
+    inherit makeWasmerPackage;
+    crabsay = programs.crabsay;
+  };
 
   cliPlatformWasmer = pkgs.callPackage ./wasmer/cli-platform.nix {
     inherit makePlainWasmerPackage;
@@ -69,7 +73,7 @@ let
 
   wasmer = import ./wasmer {
     inherit (pkgs) lib;
-    inherit pkgs nanoWasmer cliPlatformWasmer;
+    inherit pkgs nanoWasmer crabsayWasmer cliPlatformWasmer;
   };
 
   allPackages = libs // programs;
