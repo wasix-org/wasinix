@@ -25,8 +25,9 @@ let
           wasmFile = cmd.wasm or "${commandName}.wasm";
           outputFile = cmd.output or "${commandName}.wasmer";
           runner = cmd.runner or defaultRunner;
+          mainArgs = builtins.toJSON (cmd.mainArgs or null);
         in
-        "${commandName}|${moduleName}|${wasmFile}|${outputFile}|${runner}"
+        "${commandName}|${moduleName}|${wasmFile}|${outputFile}|${runner}|${mainArgs}"
       ) commands;
 in
 pkgs.runCommand "wasmer-package-${name}" { } ''
@@ -48,6 +49,7 @@ EOF
     module_name="$2"
     module_file="$3"
     runner="$4"
+    main_args_json="$5"
 
     cat >> "$pkg_dir/wasmer.toml" <<EOF
 
@@ -60,6 +62,13 @@ name = "$command_name"
 module = "$module_name"
 runner = "$runner"
 EOF
+
+    if [ "$main_args_json" != "null" ]; then
+      cat >> "$pkg_dir/wasmer.toml" <<EOF
+[command.annotations.wasi]
+main-args = $main_args_json
+EOF
+    fi
   }
 
   ${if commands == null then ''
@@ -73,7 +82,7 @@ EOF
         output_file="$command_name.wasmer"
 
         cp -f "$wasm_path" "$bin_dir/$output_file"
-        append_command "$command_name" "$module_name" "$output_file" "${defaultRunner}"
+        append_command "$command_name" "$module_name" "$output_file" "${defaultRunner}" "null"
       done < <(${pkgs.findutils}/bin/find "${package}/bin" -maxdepth 1 -type f -name '*.wasm' -print0)
     fi
 
@@ -82,7 +91,7 @@ EOF
       exit 1
     fi
   '' else ''
-    while IFS='|' read -r command_name module_name wasm_file output_file runner; do
+    while IFS='|' read -r command_name module_name wasm_file output_file runner main_args_json; do
       [ -n "$command_name" ] || continue
       source_path="${package}/bin/$wasm_file"
       if [ ! -f "$source_path" ]; then
@@ -91,7 +100,7 @@ EOF
       fi
 
       cp -f "$source_path" "$bin_dir/$output_file"
-      append_command "$command_name" "$module_name" "$output_file" "$runner"
+      append_command "$command_name" "$module_name" "$output_file" "$runner" "$main_args_json"
     done <<'EOF'
 ${commandLines}
 EOF

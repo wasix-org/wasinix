@@ -13,6 +13,9 @@
   find = pkgsCross.callPackage ./find/find.nix {
     inherit toolchain;
   };
+  gzip = pkgsCross.callPackage ./gzip/gzip.nix {
+    inherit toolchain;
+  };
   ncurses = pkgsCross.callPackage ./ncurses/ncurses.nix {
     inherit nixpkgs toolchain;
   };

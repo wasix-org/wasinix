@@ -74,6 +74,10 @@ let
     inherit makeWasmerPackage;
     find = programs.find;
   };
+  gzipWasmer = pkgs.callPackage ./programs/gzip/gzipWasmer.nix {
+    inherit makeWasmerPackage;
+    gzip = programs.gzip;
+  };
   ncursesWasmer = pkgs.callPackage ./programs/ncurses/ncursesWasmer.nix {
     inherit makeWasmerPackage;
     ncurses = programs.ncurses;
@@ -89,7 +93,7 @@ let
 
   wasmer = import ./wasmer {
     inherit (pkgs) lib;
-    inherit pkgs nanoWasmer grepWasmer sedWasmer findWasmer ncursesWasmer crabsayWasmer cliPlatformWasmer;
+    inherit pkgs nanoWasmer grepWasmer sedWasmer findWasmer gzipWasmer ncursesWasmer crabsayWasmer cliPlatformWasmer;
   };
 
   allPackages = libs // programs;

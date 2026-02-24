@@ -18,7 +18,7 @@
         cargo-wasix = wasix.toolchain.cargoWasix;
         wasix-rust-toolchain = wasix.toolchain.wasixRustToolchain;
         inherit (wasix.libs) ncursesLib;
-        inherit (wasix.programs) nano grep sed find ncurses crabsay;
+        inherit (wasix.programs) nano grep sed find gzip ncurses crabsay;
       };
 
       wasmer = wasix.wasmer.packages;
