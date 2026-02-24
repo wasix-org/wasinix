@@ -41,7 +41,7 @@
           cargo-wasix = wasix.toolchain.cargoWasix;
           wasix-rust-toolchain = wasix.toolchain.wasixRustToolchain;
           inherit (wasix.libs) ncurses;
-          inherit (wasix.programs) nano;
+          inherit (wasix.programs) nano crabsay;
         }
         // wasix.wasmer.packages
         // {
