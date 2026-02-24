@@ -10,6 +10,9 @@
   sed = pkgsCross.callPackage ./sed/sed.nix {
     inherit toolchain;
   };
+  find = pkgsCross.callPackage ./find/find.nix {
+    inherit toolchain;
+  };
 
   crabsay = pkgs.callPackage ./crabsay/crabsay.nix {
     cargoWasix = toolchain.cargoWasix;
