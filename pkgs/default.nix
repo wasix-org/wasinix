@@ -66,6 +66,10 @@ let
     inherit makeWasmerPackage;
     grep = programs.grep;
   };
+  sedWasmer = pkgs.callPackage ./programs/sed/sedWasmer.nix {
+    inherit makeWasmerPackage;
+    sed = programs.sed;
+  };
   crabsayWasmer = pkgs.callPackage ./programs/crabsay/crabsayWasmer.nix {
     inherit makeWasmerPackage;
     crabsay = programs.crabsay;
@@ -77,7 +81,7 @@ let
 
   wasmer = import ./wasmer {
     inherit (pkgs) lib;
-    inherit pkgs nanoWasmer grepWasmer crabsayWasmer cliPlatformWasmer;
+    inherit pkgs nanoWasmer grepWasmer sedWasmer crabsayWasmer cliPlatformWasmer;
   };
 
   allPackages = libs // programs;

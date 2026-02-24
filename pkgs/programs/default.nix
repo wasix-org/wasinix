@@ -7,6 +7,9 @@
   grep = pkgsCross.callPackage ./grep/grep.nix {
     inherit toolchain;
   };
+  sed = pkgsCross.callPackage ./sed/sed.nix {
+    inherit toolchain;
+  };
 
   crabsay = pkgs.callPackage ./crabsay/crabsay.nix {
     cargoWasix = toolchain.cargoWasix;
