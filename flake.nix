@@ -13,6 +13,16 @@
       };
 
     in {
+      wasix = {
+        inherit (wasix.toolchain) wasixcc;
+        cargo-wasix = wasix.toolchain.cargoWasix;
+        wasix-rust-toolchain = wasix.toolchain.wasixRustToolchain;
+        inherit (wasix.libs) ncurses;
+        inherit (wasix.programs) nano crabsay;
+      };
+
+      wasmer = wasix.wasmer.packages;
+
       legacyPackages.${system} = {
         pkgsCross = {
           wasix = wasix.pkgsCross;
@@ -36,18 +46,8 @@
 
       packages.${system} =
         {
-          # Individual plain packages
-          inherit (wasix.toolchain) wasixcc;
-          cargo-wasix = wasix.toolchain.cargoWasix;
-          wasix-rust-toolchain = wasix.toolchain.wasixRustToolchain;
-          inherit (wasix.libs) ncurses;
-          inherit (wasix.programs) nano crabsay;
-        }
-        // wasix.wasmer.packages
-        // {
-          # Aggregate package with all discovered WASM binaries.
-          all = wasix.allWasm;
-          allWasmer = wasix.wasmer.allWasmer;
+          wasixAll = wasix.allWasm;
+          wasmerAll = wasix.wasmer.allWasmer;
           default = wasix.allWasm;
         };
     };

@@ -20,14 +20,14 @@ This repository is a Nix flake for building and packaging software for **WASIX**
 
 - Build all plain WASM binaries:
   - `nix build`
-  - same as `nix build .#all`
+  - same as `nix build .#wasixAll`
 - Build one plain package:
-  - `nix build .#nano`
-  - `nix build .#ncurses`
+  - `nix build .#wasix.nano`
+  - `nix build .#wasix.ncurses`
 - Build one Wasmer package:
-  - `nix build .#nanoWasmer`
+  - `nix build .#wasmer.nano`
 - Build all Wasmer packages:
-  - `nix build .#allWasmer`
+  - `nix build .#wasmerAll`
 - Enter development shell:
   - `nix develop`
   The shell has the wasixcc toolchain available
@@ -36,15 +36,13 @@ This repository is a Nix flake for building and packaging software for **WASIX**
 
 `flake.nix` exposes:
 
-- plain packages:
-  - `packages.<system>.nano`
-  - `packages.<system>.ncurses`
-- wasmer packages:
-  - `packages.<system>.nanoWasmer`
-- aggregate packages:
-  - `packages.<system>.all` (all plain `.wasm` binaries in `result/bin`)
-  - `packages.<system>.allWasmer` (all Wasmer packages in `result/pkg`)
-  - `packages.<system>.default` (alias to `all`)
+- top-level namespaced package sets (build with `nix build .#...`):
+  - `wasix.<name>` (for example `wasix.nano`, `wasix.ncurses`, `wasix.wasixcc`)
+  - `wasmer.<name>` (for example `wasmer.nano`, `wasmer.crabsay`)
+- system-scoped aggregate bundles:
+  - `packages.<system>.wasixAll` (all plain `.wasm` binaries in `result/bin`)
+  - `packages.<system>.wasmerAll` (all Wasmer packages in `result/pkg`)
+  - `packages.<system>.default` (alias to `wasixAll`)
 
 ## Repository Layout
 
@@ -69,7 +67,7 @@ This repository is a Nix flake for building and packaging software for **WASIX**
 │   │       ├── nanoWasmer.nix       # Wasmer package definition
 │   │       └── patches/...          # package-local patches
 │   └── wasmer
-│       ├── default.nix              # Wasmer package index + allWasmer aggregate
+│       ├── default.nix              # Wasmer package index + aggregate bundle
 │       └── make-wasmer-package.nix  # reusable Wasmer package builder function
 └── README.md
 ```
@@ -94,8 +92,8 @@ This mirrors nixpkgs indexing style while keeping directory depth reasonable.
 
 ### 3) Aggregate outputs
 
-- `all` scans all plain packages for `bin/*.wasm` and copies them into `result/bin`
-- `allWasmer` merges all Wasmer package directories into `result/pkg`
+- `wasixAll` scans all plain packages for `bin/*.wasm` and copies them into `result/bin`
+- `wasmerAll` merges all Wasmer package directories into `result/pkg`
 
 ## Wasmer Packaging Model
 
@@ -134,15 +132,15 @@ This section describes the recommended flow for adding a new program package (fo
 2. In `pkgs/default.nix`, instantiate it with:
    - `foo = programs.foo`
    - `makeWasmerPackage`
-3. In `pkgs/wasmer/default.nix`, add `fooWasmer` to `packages`
-4. In `flake.nix`, include it via `// wasix.wasmer.packages` (already wired)
+3. In `pkgs/wasmer/default.nix`, add a package mapping like `foo = fooWasmer;`
+4. In `flake.nix`, it is exposed under `wasmer.<name>` (already wired)
 
 ### C. Validate
 
-- `nix build .#foo`
-- `nix build .#fooWasmer`
-- `nix build .#all`
-- `nix build .#allWasmer`
+- `nix build .#wasix.foo`
+- `nix build .#wasmer.foo`
+- `nix build .#wasixAll`
+- `nix build .#wasmerAll`
 
 Check expected output locations:
 
