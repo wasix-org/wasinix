@@ -16,6 +16,9 @@
   gzip = pkgsCross.callPackage ./gzip/gzip.nix {
     inherit toolchain;
   };
+  tar = pkgsCross.callPackage ./tar/tar.nix {
+    inherit toolchain;
+  };
   ncurses = pkgsCross.callPackage ./ncurses/ncurses.nix {
     inherit nixpkgs toolchain;
   };
