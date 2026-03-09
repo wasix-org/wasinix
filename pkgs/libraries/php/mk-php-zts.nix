@@ -250,8 +250,8 @@ stdenvNoCC.mkDerivation {
         NM = "wasixnm";
         CC = "wasixcc";
         CXX = "wasixcc++";
-        CFLAGS = "-g -flto -O2";
-        CXXFLAGS = "-g -flto -O2";
+        CFLAGS = "-g -O2 -mtail-call";
+        CXXFLAGS = "-g -O2 -mtail-call";
         LIBS = "${librarySearchFlags} -lpgcommon_shlib -lpgport_shlib -lm --no-wasm-opt";
         ac_cv_lib_pq_PQlibVersion = "yes";
         ac_cv_lib_pq_PQencryptPasswordConn = "yes";
