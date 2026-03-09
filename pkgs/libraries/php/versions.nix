@@ -120,6 +120,8 @@ in
       ./patches/php85/0002-opcache-static-embed.patch
       ./patches/php85/0003-pgsql-env-overrides.patch
       ./patches/php85/0005-restore-php-smart-string-compat.patch
+      ./patches/php85/0006-zend-vm-tailcall-wasm32.patch
+      ./patches/php85/0007-zend-vm-opcodes-tailcall-wasm32.patch
       ./patches/common/0004-openssl-no-sock.patch
     ];
   };
