@@ -15,8 +15,12 @@
   commands ? null,
   defaultRunner ? "https://webc.org/runner/wasi",
   metadata ? { },
+  fs ? { },
+  selfMounts ? [ ],
 }:
 let
+  wrapWasmerPackage = pkgs.callPackage ./wrap-wasmer-package.nix { };
+
   commandLines =
     if commands == null then
       ""
@@ -30,8 +34,12 @@ let
           runner = cmd.runner or defaultRunner;
           mainArgs = builtins.toJSON (cmd.mainArgs or null);
           atom = builtins.toJSON (cmd.atom or moduleName);
+          env = builtins.toJSON (
+            if cmd ? env then lib.mapAttrsToList (k: v: "${k}=${v}") cmd.env
+            else null
+          );
         in
-        "${commandName}|${moduleName}|${wasmFile}|${outputFile}|${runner}|${mainArgs}|${atom}"
+        "${commandName}|${moduleName}|${wasmFile}|${outputFile}|${runner}|${mainArgs}|${atom}|${env}"
       ) commands;
 
   extraMetadataLines =
@@ -43,8 +51,25 @@ let
           "${builtins.toJSON k} = ${builtins.toJSON v}"
         ) metadata
       );
+
+  # `selfMounts` covers the common case of mounting a store path at itself, e.g.
+  #   /nix/store/...-foo/:/nix/store/...-foo/
+  # Writing that directly via `fs = { ${toString src} = src; }` is rejected by
+  # Nix: it refuses to use a string that carries a reference to a store path
+  # as an attribute name. The dependency is already pulled in correctly through
+  # `src`, so we strip that reference off the virt side.
+  fsEntries =
+    (lib.mapAttrsToList (virt: src: { inherit virt src; }) fs)
+    ++ (map (src: {
+      virt = builtins.unsafeDiscardStringContext (toString src);
+      inherit src;
+    }) selfMounts);
+
 in
-pkgs.runCommand "wasmer-package-${name}" { } ''
+pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
+  name = "wasmer-package-${name}";
+  passthru.shim = wrapWasmerPackage { package = finalAttrs.finalPackage; inherit name; };
+  buildCommand = ''
   set -euo pipefail
 
   pkg_dir="$out/pkg/${name}"
@@ -79,6 +104,7 @@ EOF
     runner="$4"
     main_args_json="$5"
     atom_json="$6"
+    env_json="$7"
 
     if [ -z "''${module_seen[$module_name]+x}" ]; then
       module_seen["$module_name"]=1
@@ -97,7 +123,7 @@ module = "$module_name"
 runner = "$runner"
 EOF
 
-    if [ "$main_args_json" != "null" ] || [ "$atom_json" != "null" ]; then
+    if [ "$main_args_json" != "null" ] || [ "$atom_json" != "null" ] || [ "$env_json" != "null" ]; then
       cat >> "$pkg_dir/wasmer.toml" <<EOF
 [command.annotations.wasi]
 EOF
@@ -109,6 +135,11 @@ EOF
       if [ "$main_args_json" != "null" ]; then
         cat >> "$pkg_dir/wasmer.toml" <<EOF
 main-args = $main_args_json
+EOF
+      fi
+      if [ "$env_json" != "null" ]; then
+        cat >> "$pkg_dir/wasmer.toml" <<EOF
+env = $env_json
 EOF
       fi
     fi
@@ -125,7 +156,7 @@ EOF
         output_file="$command_name.wasm"
 
         cp -f "$wasm_path" "$bin_dir/$output_file"
-        append_command "$command_name" "$module_name" "$output_file" "${defaultRunner}" "null" "\"$module_name\""
+        append_command "$command_name" "$module_name" "$output_file" "${defaultRunner}" "null" "\"$module_name\"" "null"
       done < <(${pkgs.findutils}/bin/find "${package}/bin" -maxdepth 1 -type f -name '*.wasm' -print0)
     fi
 
@@ -134,7 +165,7 @@ EOF
       exit 1
     fi
   '' else ''
-    while IFS='|' read -r command_name module_name wasm_file output_file runner main_args_json atom_json; do
+    while IFS='|' read -r command_name module_name wasm_file output_file runner main_args_json atom_json env_json; do
       [ -n "$command_name" ] || continue
       source_path="${package}/bin/$wasm_file"
       if [ ! -f "$source_path" ]; then
@@ -143,9 +174,26 @@ EOF
       fi
 
       cp -f "$source_path" "$bin_dir/$output_file"
-      append_command "$command_name" "$module_name" "$output_file" "$runner" "$main_args_json" "$atom_json"
+      append_command "$command_name" "$module_name" "$output_file" "$runner" "$main_args_json" "$atom_json" "$env_json"
     done <<'EOF'
 ${commandLines}
 EOF
   ''}
-''
+
+  ${if fsEntries == [ ] then "" else ''
+    cat >> "$pkg_dir/wasmer.toml" <<EOF
+
+[fs]
+EOF
+    ${lib.concatMapStringsSep "\n" (e: ''
+      virt=${lib.escapeShellArg e.virt}
+      target="$pkg_dir/fs$virt"
+      mkdir -p "$(dirname "$target")"
+      ${pkgs.coreutils}/bin/cp -R --no-preserve=mode,ownership ${lib.escapeShellArg "${e.src}"} "$target"
+      chmod -R u+w "$(dirname "$target")"
+      printf '%s = %s\n' ${lib.escapeShellArg (builtins.toJSON e.virt)} ${lib.escapeShellArg (builtins.toJSON ("fs" + e.virt))} >> "$pkg_dir/wasmer.toml"
+    '') fsEntries}
+  ''}
+
+  '';
+})

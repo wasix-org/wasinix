@@ -21,6 +21,7 @@ let
     cliPlatform = cliPlatformWasmer;
   };
   allWasmerPackages = packages;
+  wrappedPackages = lib.mapAttrs (_: p: p.shim) (lib.filterAttrs (_: p: p ? shim) packages);
 
   allWasmer = pkgs.runCommand "wasix-all-wasmer" { } ''
     set -euo pipefail
@@ -34,5 +35,5 @@ let
   '';
 in
 {
-  inherit packages allWasmer;
+  inherit packages wrappedPackages allWasmer;
 }
