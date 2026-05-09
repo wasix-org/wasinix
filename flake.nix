@@ -46,6 +46,11 @@
         '';
       };
 
+      checks.${system} = import ./tests {
+        inherit (wasix) pkgs;
+        wasmerPkgs = wasix.wasmer.wrappedPackages;
+      };
+
       packages.${system} =
         {
           # Actual system packages.
