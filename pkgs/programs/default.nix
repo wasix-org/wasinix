@@ -34,6 +34,9 @@ rec {
     inherit toolchain;
     inherit (libraries) openssl zlib;
   };
+  shShim = pkgsCross.callPackage ./sh-shim/sh.nix {
+    inherit toolchain;
+  };
 
   # phpixPhp83 = pkgs.callPackage ./phpix/phpixPhp83.nix {
   #   cargoWasix = toolchain.cargoWasix;

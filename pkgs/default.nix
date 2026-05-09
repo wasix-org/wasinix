@@ -96,6 +96,10 @@ let
     inherit makeWasmerPackage;
     curl = programs.curl;
   };
+  shShimWasmer = pkgs.callPackage ./programs/sh-shim/shWasmer.nix {
+    inherit makeWasmerPackage;
+    shShim = programs.shShim;
+  };
 
   # phpixPhp83Wasmer = pkgs.callPackage ./programs/phpix/phpixPhp83Wasmer.nix {
   #   inherit makeWasmerPackage;
@@ -112,7 +116,7 @@ let
 
   wasmer = import ./wasmer {
     inherit (pkgs) lib;
-    inherit pkgs nanoWasmer grepWasmer sedWasmer findWasmer gzipWasmer tarWasmer lessWasmer ncursesWasmer crabsayWasmer curlWasmer cliPlatformWasmer;
+    inherit pkgs nanoWasmer grepWasmer sedWasmer findWasmer gzipWasmer tarWasmer lessWasmer ncursesWasmer crabsayWasmer curlWasmer shShimWasmer cliPlatformWasmer;
   };
 
   allPackages = defaultLibraries // programs;
