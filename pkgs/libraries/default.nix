@@ -23,6 +23,13 @@ let
       };
     };
 
+    zlib-ng = mkUpstreamLibrary {
+      package = pkgsCross.zlib-ng.override {
+        gtest = null;
+      };
+      doCheck = false;
+    };
+
     xz = mkUpstreamLibrary {
       package = pkgsCross.xz;
       doCheck = false;
