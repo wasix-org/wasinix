@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 { lib, pkgs, nanoWasmer, grepWasmer, sedWasmer, findWasmer, gzipWasmer, tarWasmer, lessWasmer, ncursesWasmer, crabsayWasmer, cliPlatformWasmer }:
+=======
+{ lib, pkgs, nanoWasmer, grepWasmer, sedWasmer, findWasmer, gzipWasmer, tarWasmer, lessWasmer, ncursesWasmer, crabsayWasmer, curlWasmer, cliPlatformWasmer }:
+>>>>>>> 5c2b714 (fixup! programs/curl: init)
 let
   packages = {
     nano = nanoWasmer;
@@ -10,6 +14,10 @@ let
     less = lessWasmer;
     ncurses = ncursesWasmer;
     crabsay = crabsayWasmer;
+<<<<<<< HEAD
+=======
+    curl = curlWasmer;
+>>>>>>> 5c2b714 (fixup! programs/curl: init)
     # phpixPhp83 = phpixPhp83Wasmer;
     # phpnixPhp83 = phpixPhp83Wasmer;
     # phpixPhp85 = phpixPhp85Wasmer;

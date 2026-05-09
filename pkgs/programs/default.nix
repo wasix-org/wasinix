@@ -30,6 +30,10 @@ rec {
   crabsay = pkgs.callPackage ./crabsay/crabsay.nix {
     cargoWasix = toolchain.cargoWasix;
   };
+  curl = pkgsCross.callPackage ./curl/curl.nix {
+    inherit toolchain;
+    inherit (libraries) openssl zlib;
+  };
 
   # phpixPhp83 = pkgs.callPackage ./phpix/phpixPhp83.nix {
   #   cargoWasix = toolchain.cargoWasix;
