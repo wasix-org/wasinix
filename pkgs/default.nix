@@ -100,6 +100,10 @@ let
     inherit makeWasmerPackage;
     shShim = programs.shShim;
   };
+  gettextWasmer = pkgs.callPackage ./programs/gettext/gettextWasmer.nix {
+    inherit makeWasmerPackage;
+    gettext = programs.gettext;
+  };
 
   # phpixPhp83Wasmer = pkgs.callPackage ./programs/phpix/phpixPhp83Wasmer.nix {
   #   inherit makeWasmerPackage;
@@ -116,13 +120,13 @@ let
 
   wasmer = import ./wasmer {
     inherit (pkgs) lib;
-    inherit pkgs nanoWasmer grepWasmer sedWasmer findWasmer gzipWasmer tarWasmer lessWasmer ncursesWasmer crabsayWasmer curlWasmer shShimWasmer cliPlatformWasmer;
+    inherit pkgs nanoWasmer grepWasmer sedWasmer findWasmer gzipWasmer tarWasmer lessWasmer ncursesWasmer crabsayWasmer curlWasmer shShimWasmer gettextWasmer cliPlatformWasmer;
   };
 
   allPackages = defaultLibraries // programs;
   allWasmPackages = allPackages;
 
-  allWasm = pkgs.runCommand "wasix-all-wasm" { } ''
+  allWasm = pkgs.runCommand "wasix-all-wasm" {} ''
     mkdir -p "$out/bin"
     ${pkgs.lib.concatMapStringsSep "\n" (name: ''
       if [ -d "${allWasmPackages.${name}}/bin" ]; then

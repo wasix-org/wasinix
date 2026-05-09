@@ -1,4 +1,4 @@
-{ lib, pkgs, nanoWasmer, grepWasmer, sedWasmer, findWasmer, gzipWasmer, tarWasmer, lessWasmer, ncursesWasmer, crabsayWasmer, curlWasmer, shShimWasmer, cliPlatformWasmer }:
+{ lib, pkgs, nanoWasmer, grepWasmer, sedWasmer, findWasmer, gzipWasmer, tarWasmer, lessWasmer, ncursesWasmer, crabsayWasmer, curlWasmer, shShimWasmer, gettextWasmer, cliPlatformWasmer }:
 let
   packages = {
     nano = nanoWasmer;
@@ -12,6 +12,7 @@ let
     crabsay = crabsayWasmer;
     curl = curlWasmer;
     shShim = shShimWasmer;
+    gettext = gettextWasmer;
     # phpixPhp83 = phpixPhp83Wasmer;
     # phpnixPhp83 = phpixPhp83Wasmer;
     # phpixPhp85 = phpixPhp85Wasmer;

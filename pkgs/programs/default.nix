@@ -37,6 +37,9 @@ rec {
   shShim = pkgsCross.callPackage ./sh-shim/sh.nix {
     inherit toolchain;
   };
+  gettext = pkgsCross.callPackage ./gettext/gettext.nix {
+    inherit toolchain;
+  };
 
   # phpixPhp83 = pkgs.callPackage ./phpix/phpixPhp83.nix {
   #   cargoWasix = toolchain.cargoWasix;
