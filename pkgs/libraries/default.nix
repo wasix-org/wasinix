@@ -364,6 +364,11 @@ let
       };
     };
 
+    expat = mkUpstreamLibrary {
+      package = pkgsCross.expat;
+      doCheck = false;
+    };
+
     ncurses = pkgsCross.callPackage ./ncurses {
       inherit nixpkgs toolchain;
     };
