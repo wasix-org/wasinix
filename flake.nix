@@ -8,10 +8,17 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    wasmer = {
+      # Pointing at the fork with the nix packaging updates and patches temporarily until PRs are merged
+      # Note: we have to use "git+url" instead of "github:" due to https://github.com/nixos/nix/issues/13571
+      # url = "git+https://github.com/wasmerio/wasmer";
+      url = "git+https://github.com/kilyanni/wasmer?ref=stacked";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     # self.submodules = true;
   };
 
-  outputs = { nixpkgs, ... }:
+  outputs = { nixpkgs, wasmer, ... }:
     let
       system = "x86_64-linux";
       wasix = import ./pkgs {
@@ -49,6 +56,7 @@
       checks.${system} = import ./tests {
         inherit (wasix) pkgs;
         wasmerPkgs = wasix.wasmer.wrappedPackages;
+        wasmer = wasmer.packages.${system}.wasmer;
       };
 
       packages.${system} =

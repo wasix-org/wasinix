@@ -1,8 +1,8 @@
-{ pkgs, wasmerPkgs }:
+{ pkgs, wasmerPkgs, wasmer ? null }:
 let
   lib = pkgs.lib;
 
-  testLib = import ./lib.nix { inherit pkgs; };
+  testLib = import ./lib.nix { inherit pkgs wasmer; };
 
   makeAll = name: tests:
     pkgs.runCommand "test-all-${name}" { } ''

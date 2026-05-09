@@ -200,7 +200,6 @@ let
         rtmpSupport = false;
         rustlsSupport = false;
         scpSupport = false;
-        wolfsslSupport = false;
         zlibSupport = true;
         zlib = self.zlib;
         zstdSupport = false;
