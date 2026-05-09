@@ -40,6 +40,15 @@ rec {
   gettext = pkgsCross.callPackage ./gettext/gettext.nix {
     inherit toolchain;
   };
+  git = pkgsCross.callPackage ./git/git.nix {
+    inherit toolchain gettext;
+    inherit (libraries) zlib-ng openssl curl expat libiconv;
+    sh = shShim;
+    gnugrep = grep;
+    gnused = sed;
+    gawk = pkgs.gawk;
+    coreutils = pkgs.coreutils;
+  };
 
   # phpixPhp83 = pkgs.callPackage ./phpix/phpixPhp83.nix {
   #   cargoWasix = toolchain.cargoWasix;
