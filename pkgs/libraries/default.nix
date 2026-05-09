@@ -369,6 +369,13 @@ let
       doCheck = false;
     };
 
+    readline = mkUpstreamLibrary {
+      package = pkgsCross.readline.override {
+        ncurses = self.ncurses;
+      };
+      doCheck = false;
+    };
+
     ncurses = pkgsCross.callPackage ./ncurses {
       inherit nixpkgs toolchain;
     };
