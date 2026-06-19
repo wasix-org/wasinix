@@ -9,10 +9,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     wasmer = {
-      # Pointing at the fork with the nix packaging updates and patches temporarily until PRs are merged
-      # Note: we have to use "git+url" instead of "github:" due to https://github.com/nixos/nix/issues/13571
-      # url = "git+https://github.com/wasmerio/wasmer";
-      url = "git+https://github.com/kilyanni/wasmer?ref=stacked";
+      url = "git+https://github.com/wasmerio/wasmer";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # self.submodules = true;
