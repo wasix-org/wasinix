@@ -49,7 +49,7 @@ in rec {
       export HOME=$TMPDIR/home
       mkdir -p "$HOME"
       cd "$(mktemp -d)"
-      bash -euo pipefail ${scriptFile} >"$out" 2>&1 || { cat "$out" >&2; exit 1; }
+      ${pkgs.bash}/bin/bash -euo pipefail ${scriptFile} >"$out" 2>&1 || { cat "$out" >&2; exit 1; }
     '';
 
   # Run a bash script with wasmer-package stubs available by name.
@@ -99,7 +99,7 @@ in rec {
 
             export WASIX_TEST_ROOT="$(mktemp -d)"
             cd "$WASIX_TEST_ROOT"
-            PATH="$shim_dir:$PATH" bash -euo pipefail ${scriptFile} >"$out" 2>&1 || { cat "$out" >&2; exit 1; }
+            PATH="$shim_dir:$PATH" ${pkgs.bash}/bin/bash -euo pipefail ${scriptFile} >"$out" 2>&1 || { cat "$out" >&2; exit 1; }
     '';
 
   # Run a script in both native and wasix environments.
