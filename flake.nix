@@ -12,17 +12,28 @@
       url = "git+https://github.com/wasmerio/wasmer";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     # self.submodules = true;
   };
 
-  outputs = { nixpkgs, wasmer, ... }:
+  outputs = { self, nixpkgs, wasmer, treefmt-nix, ... }:
     let
       system = "x86_64-linux";
       wasix = import ./pkgs {
         inherit system nixpkgs;
       };
 
+      treefmtEval = treefmt-nix.lib.evalModule wasix.pkgs {
+        projectRootFile = "flake.nix";
+        programs.alejandra.enable = true;
+      };
+
     in {
+      formatter.${system} = treefmtEval.config.build.wrapper;
+
       wasix = {
         inherit (wasix) toolchains libraries programs defaultProfileName;
       };
@@ -50,10 +61,12 @@
         '';
       };
 
-      checks.${system} = import ./tests {
+      checks.${system} = (import ./tests {
         inherit (wasix) pkgs;
         wasmerPkgs = wasix.wasmer.wrappedPackages;
         wasmer = wasmer.packages.${system}.wasmer;
+      }) // {
+        treefmt = treefmtEval.config.build.check self;
       };
 
       packages.${system} =
