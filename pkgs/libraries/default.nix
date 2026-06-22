@@ -6,6 +6,9 @@
   includePhp ? true,
 }: let
   inherit (pkgs) lib;
+  # off-EH <setjmp.h> gates sigsetjmp out; packages sharing bash's configure
+  # macros must pick plain setjmp.
+  offMode = (toolchain.wasmExceptions or "yes") == "no";
   mkUpstreamLibrary = pkgs.callPackage ./mk-upstream-library.nix {
     inherit toolchain;
   };
@@ -375,6 +378,8 @@
         ncurses = self.ncurses;
       };
       doCheck = false;
+      # readline shares bash's BASH_FUNC_POSIX_SETJMP check (same cache var).
+      configureFlags = lib.optionals offMode ["bash_cv_func_sigsetjmp=missing"];
     };
 
     ncurses = pkgsCross.callPackage ./ncurses {
