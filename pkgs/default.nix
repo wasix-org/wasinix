@@ -28,6 +28,11 @@
       wasmExceptions = "yes";
       pic = true;
     };
+    # No Wasm-EH: setjmp/longjmp and fork() both go through asyncify (used by bash).
+    off = mkToolchainProfile {
+      name = "off";
+      wasmExceptions = "no";
+    };
   };
   defaultProfileName = "exnrefEh";
   defaultToolchain = toolchains.${defaultProfileName};
@@ -54,8 +59,11 @@
   programs = import ./programs {
     nixpkgs = nixpkgs;
     inherit pkgs pkgsCross;
-    libraries = defaultLibraries;
     toolchain = defaultToolchain;
+    # bash + its linked readline/ncurses build off-EH (see ./programs/bash/README.md).
+    offToolchain = toolchains.off;
+    offLibraries = libraries.off;
+    libraries = defaultLibraries;
   };
 
   makeWasmerPackage = pkgs.callPackage ./wasmer/make-wasmer-package.nix {};
