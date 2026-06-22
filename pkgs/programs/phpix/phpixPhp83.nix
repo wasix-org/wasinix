@@ -7,8 +7,7 @@
   llvmPackages,
   php83ZTS,
   toolchain,
-}:
-let
+}: let
   mkPhpixWasix = import ./mk-phpix-wasix.nix {
     inherit
       lib
@@ -21,11 +20,11 @@ let
       ;
   };
 in
-mkPhpixWasix {
-  pname = "phpix-php83";
-  version = "0.1.12803";
-  src = ../../../vendor/phpix;
-  cargoLock = ./phpix.Cargo.lock;
-  phpPackage = php83ZTS;
-  meta.description = "PHPix server for WASIX built against PHP 8.3 static libphp";
-}
+  mkPhpixWasix {
+    pname = "phpix-php83";
+    version = "0.1.12803";
+    src = ../../../vendor/phpix;
+    cargoLock = ./phpix.Cargo.lock;
+    phpPackage = php83ZTS;
+    meta.description = "PHPix server for WASIX built against PHP 8.3 static libphp";
+  }

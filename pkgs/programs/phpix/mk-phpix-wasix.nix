@@ -6,14 +6,13 @@
   gcc,
   llvmPackages,
   toolchain,
-}:
-{
+}: {
   pname,
   version,
   src,
   cargoLock,
   phpPackage,
-  meta ? { },
+  meta ? {},
 }:
 stdenvNoCC.mkDerivation {
   inherit pname version src;
@@ -64,10 +63,12 @@ stdenvNoCC.mkDerivation {
     runHook postInstall
   '';
 
-  meta = {
-    description = "PHPix server for WASIX";
-    homepage = "https://github.com/wasmerio/phpix";
-    license = lib.licenses.mit;
-    platforms = lib.platforms.linux;
-  } // meta;
+  meta =
+    {
+      description = "PHPix server for WASIX";
+      homepage = "https://github.com/wasmerio/phpix";
+      license = lib.licenses.mit;
+      platforms = lib.platforms.linux;
+    }
+    // meta;
 }

@@ -11,39 +11,38 @@
   coreutils,
   patch,
   toolchain,
-}:
-{
+}: {
   pname,
   version,
   src,
   phpLibraries,
-  patches ? [ ],
-  bundledExtensions ? { },
+  patches ? [],
+  bundledExtensions ? {},
   configureFlags,
-  meta ? { },
-  passthru ? { },
-}:
-let
-  outputOrSelf =
-    output: drv:
-    if builtins.elem output (drv.outputs or [ "out" ]) then builtins.getAttr output drv else drv;
+  meta ? {},
+  passthru ? {},
+}: let
+  outputOrSelf = output: drv:
+    if builtins.elem output (drv.outputs or ["out"])
+    then builtins.getAttr output drv
+    else drv;
 
   outOutput = drv: outputOrSelf "out" drv;
   devOutput = drv: outputOrSelf "dev" drv;
   libOutput = drv:
-    if builtins.elem "lib" (drv.outputs or [ "out" ]) then
-      drv.lib
-    else if builtins.pathExists "${outOutput drv}/lib" then
-      outOutput drv
-    else
-      devOutput drv;
+    if builtins.elem "lib" (drv.outputs or ["out"])
+    then drv.lib
+    else if builtins.pathExists "${outOutput drv}/lib"
+    then outOutput drv
+    else devOutput drv;
   includeDir = drv: "${devOutput drv}/include";
   libraryDir = drv: "${libOutput drv}/lib";
-  pkgConfigDir = drv:
-    let
-      devPkgConfigDir = "${devOutput drv}/lib/pkgconfig";
-    in
-    if builtins.pathExists devPkgConfigDir then devPkgConfigDir else "${libOutput drv}/lib/pkgconfig";
+  pkgConfigDir = drv: let
+    devPkgConfigDir = "${devOutput drv}/lib/pkgconfig";
+  in
+    if builtins.pathExists devPkgConfigDir
+    then devPkgConfigDir
+    else "${libOutput drv}/lib/pkgconfig";
   libpqLibraryDir = "${devOutput phpLibraries.libpq}/lib";
   libpqPkgConfigDir = "${devOutput phpLibraries.libpq}/lib/pkgconfig";
   libpqPrefix = stdenvNoCC.mkDerivation {
@@ -74,49 +73,52 @@ let
     '';
   };
 
-  allLibraryDirs = map libraryDir [
-    phpLibraries.curl
-    phpLibraries.zlib
-    phpLibraries.xz
-    phpLibraries.libxml2
-    phpLibraries.sqlite
-    phpLibraries.openssl
-    phpLibraries.libiconv
-    phpLibraries.icu
-    phpLibraries.libpng
-    phpLibraries.libjpeg
-    phpLibraries.freetype
-    phpLibraries.libwebp
-    phpLibraries.libzip
-    phpLibraries.libsodium
-    phpLibraries.oniguruma
-    phpLibraries.libdeflate
-    phpLibraries.zstd
-    phpLibraries.libtiff
-    phpLibraries.imagemagick
-  ] ++ [ libpqLibraryDir ];
+  allLibraryDirs =
+    map libraryDir [
+      phpLibraries.curl
+      phpLibraries.zlib
+      phpLibraries.xz
+      phpLibraries.libxml2
+      phpLibraries.sqlite
+      phpLibraries.openssl
+      phpLibraries.libiconv
+      phpLibraries.icu
+      phpLibraries.libpng
+      phpLibraries.libjpeg
+      phpLibraries.freetype
+      phpLibraries.libwebp
+      phpLibraries.libzip
+      phpLibraries.libsodium
+      phpLibraries.oniguruma
+      phpLibraries.libdeflate
+      phpLibraries.zstd
+      phpLibraries.libtiff
+      phpLibraries.imagemagick
+    ]
+    ++ [libpqLibraryDir];
 
   pkgConfigPath = lib.concatStringsSep ":" (map pkgConfigDir [
-    phpLibraries.curl
-    phpLibraries.zlib
-    phpLibraries.xz
-    phpLibraries.libxml2
-    phpLibraries.sqlite
-    phpLibraries.openssl
-    phpLibraries.libiconv
-    phpLibraries.icu
-    phpLibraries.libpng
-    phpLibraries.libjpeg
-    phpLibraries.freetype
-    phpLibraries.libwebp
-    phpLibraries.libzip
-    phpLibraries.libsodium
-    phpLibraries.oniguruma
-    phpLibraries.libdeflate
-    phpLibraries.zstd
-    phpLibraries.libtiff
-    phpLibraries.imagemagick
-  ] ++ [ libpqPkgConfigDir ]);
+      phpLibraries.curl
+      phpLibraries.zlib
+      phpLibraries.xz
+      phpLibraries.libxml2
+      phpLibraries.sqlite
+      phpLibraries.openssl
+      phpLibraries.libiconv
+      phpLibraries.icu
+      phpLibraries.libpng
+      phpLibraries.libjpeg
+      phpLibraries.freetype
+      phpLibraries.libwebp
+      phpLibraries.libzip
+      phpLibraries.libsodium
+      phpLibraries.oniguruma
+      phpLibraries.libdeflate
+      phpLibraries.zstd
+      phpLibraries.libtiff
+      phpLibraries.imagemagick
+    ]
+    ++ [libpqPkgConfigDir]);
 
   librarySearchFlags = lib.concatMapStringsSep " " (dir: "-L${dir}") allLibraryDirs;
   phpExtraLinkLibs = [
@@ -151,62 +153,62 @@ let
     "zip"
   ];
 in
-stdenvNoCC.mkDerivation {
-  inherit pname version src patches;
+  stdenvNoCC.mkDerivation {
+    inherit pname version src patches;
 
-  nativeBuildInputs = [
-    toolchain.wasixcc
-    autoconf
-    bison
-    re2c
-    pkg-config
-    gnumake
-    perl
-    python3
-    coreutils
-    patch
-  ];
+    nativeBuildInputs = [
+      toolchain.wasixcc
+      autoconf
+      bison
+      re2c
+      pkg-config
+      gnumake
+      perl
+      python3
+      coreutils
+      patch
+    ];
 
-  enableParallelBuilding = true;
+    enableParallelBuilding = true;
 
-  postPatch =
-    let
+    postPatch = let
       bundledExtensionNames = builtins.attrNames bundledExtensions;
-      copyBundledExtensions = lib.concatMapStringsSep "\n" (name:
-        let
-          extension = bundledExtensions.${name};
-          extensionPatches = extension.patches or [ ];
-          applyExtensionPatches = lib.concatMapStringsSep "\n" (patchFile:
-            "patch -p1 < ${lib.escapeShellArg "${patchFile}"}"
-          ) extensionPatches;
-        in
-        ''
-          rm -rf "ext/${name}"
-          mkdir -p "ext/${name}"
-          cp -R --no-preserve=mode,ownership ${extension.src}/. "ext/${name}"
-          chmod -R u+w "ext/${name}"
-          ${applyExtensionPatches}
-        ''
-      ) bundledExtensionNames;
-      patchTargets = lib.concatStringsSep " " ([ "buildconf" "build" "scripts" ] ++ map (name: "ext/${name}") bundledExtensionNames);
-    in
-    ''
-      ${copyBundledExtensions}
-      substituteInPlace ext/imagick/config.m4 \
-        --replace-fail 'IM_FIND_IMAGEMAGICK([6.5.3], [$PHP_IMAGICK])' '# WASIX passes ImageMagick paths explicitly via IM_IMAGEMAGICK_{CFLAGS,LIBS}.
-# IM_FIND_IMAGEMAGICK([6.5.3], [$PHP_IMAGICK])'
-      substituteInPlace ext/imagick/php_imagick.h \
-        --replace-fail '#define PHP_IMAGICK_VERSION    "@PACKAGE_VERSION@"' '#define PHP_IMAGICK_VERSION    "3.8.1"'
-      substituteInPlace ext/imagick/imagick.c \
-        --replace-fail 'ext/standard/php_smart_string.h' 'Zend/zend_smart_string.h'
-      substituteInPlace ext/igbinary/src/php7/php_igbinary.h \
-        --replace-fail 'ext/standard/php_smart_string.h' 'Zend/zend_smart_string.h'
-      perl -0pi -e 's|AS_CASE\(\[\$4\], \[yes\], \[pgsql_dir=""\], \[pgsql_dir=\$4\]\)\nAS_VAR_IF\(\[pgsql_dir\],,\n  \[PKG_CHECK_MODULES\(\[PGSQL\], \[libpq >= 10\.0\],\n    \[found_pgsql=yes\],\n    \[found_pgsql=no\]\)\]\)|AS_CASE([\$4], [yes], [pgsql_dir=""], [pgsql_dir=\$4])\nAS_IF([test -n "\\$PGSQL_CFLAGS" && test -n "\\$PGSQL_LIBS"],\n  [found_pgsql=yes])\nAS_IF([test "\\$found_pgsql" = "no"], [\n  AS_VAR_IF([pgsql_dir],,\n    [PKG_CHECK_MODULES([PGSQL], [libpq >= 10.0],\n      [found_pgsql=yes],\n      [found_pgsql=no])])\n])|s' build/php.m4
-      patchShebangs ${patchTargets}
+      copyBundledExtensions =
+        lib.concatMapStringsSep "\n" (
+          name: let
+            extension = bundledExtensions.${name};
+            extensionPatches = extension.patches or [];
+            applyExtensionPatches =
+              lib.concatMapStringsSep "\n" (
+                patchFile: "patch -p1 < ${lib.escapeShellArg "${patchFile}"}"
+              )
+              extensionPatches;
+          in ''
+            rm -rf "ext/${name}"
+            mkdir -p "ext/${name}"
+            cp -R --no-preserve=mode,ownership ${extension.src}/. "ext/${name}"
+            chmod -R u+w "ext/${name}"
+            ${applyExtensionPatches}
+          ''
+        )
+        bundledExtensionNames;
+      patchTargets = lib.concatStringsSep " " (["buildconf" "build" "scripts"] ++ map (name: "ext/${name}") bundledExtensionNames);
+    in ''
+            ${copyBundledExtensions}
+            substituteInPlace ext/imagick/config.m4 \
+              --replace-fail 'IM_FIND_IMAGEMAGICK([6.5.3], [$PHP_IMAGICK])' '# WASIX passes ImageMagick paths explicitly via IM_IMAGEMAGICK_{CFLAGS,LIBS}.
+      # IM_FIND_IMAGEMAGICK([6.5.3], [$PHP_IMAGICK])'
+            substituteInPlace ext/imagick/php_imagick.h \
+              --replace-fail '#define PHP_IMAGICK_VERSION    "@PACKAGE_VERSION@"' '#define PHP_IMAGICK_VERSION    "3.8.1"'
+            substituteInPlace ext/imagick/imagick.c \
+              --replace-fail 'ext/standard/php_smart_string.h' 'Zend/zend_smart_string.h'
+            substituteInPlace ext/igbinary/src/php7/php_igbinary.h \
+              --replace-fail 'ext/standard/php_smart_string.h' 'Zend/zend_smart_string.h'
+            perl -0pi -e 's|AS_CASE\(\[\$4\], \[yes\], \[pgsql_dir=""\], \[pgsql_dir=\$4\]\)\nAS_VAR_IF\(\[pgsql_dir\],,\n  \[PKG_CHECK_MODULES\(\[PGSQL\], \[libpq >= 10\.0\],\n    \[found_pgsql=yes\],\n    \[found_pgsql=no\]\)\]\)|AS_CASE([\$4], [yes], [pgsql_dir=""], [pgsql_dir=\$4])\nAS_IF([test -n "\\$PGSQL_CFLAGS" && test -n "\\$PGSQL_LIBS"],\n  [found_pgsql=yes])\nAS_IF([test "\\$found_pgsql" = "no"], [\n  AS_VAR_IF([pgsql_dir],,\n    [PKG_CHECK_MODULES([PGSQL], [libpq >= 10.0],\n      [found_pgsql=yes],\n      [found_pgsql=no])])\n])|s' build/php.m4
+            patchShebangs ${patchTargets}
     '';
 
-  configurePhase =
-    let
+    configurePhase = let
       configureEnv = {
         CURL_CFLAGS = "-I${includeDir phpLibraries.curl}";
         CURL_LIBS = "-lcurl -lssl -lcrypto -ldl -pthread -lz";
@@ -264,11 +266,11 @@ stdenvNoCC.mkDerivation {
         WASIXCC_WASM_EXCEPTIONS = "yes";
         PROG_SENDMAIL = "/usr/bin/sendmail";
       };
-      exportConfigureEnv = lib.concatStringsSep "\n" (lib.mapAttrsToList (name: value:
-        "export ${name}=${lib.escapeShellArg value}"
-      ) configureEnv);
-    in
-    ''
+      exportConfigureEnv = lib.concatStringsSep "\n" (lib.mapAttrsToList (
+          name: value: "export ${name}=${lib.escapeShellArg value}"
+        )
+        configureEnv);
+    in ''
       runHook preConfigure
 
       ${toolchain.commonPreConfigure}
@@ -287,27 +289,31 @@ stdenvNoCC.mkDerivation {
       runHook postConfigure
     '';
 
-  buildPhase = ''
-    runHook preBuild
-    make -j''${NIX_BUILD_CORES:-1} install-headers install-sapi
-    runHook postBuild
-  '';
+    buildPhase = ''
+      runHook preBuild
+      make -j''${NIX_BUILD_CORES:-1} install-headers install-sapi
+      runHook postBuild
+    '';
 
-  installPhase = ''
-    runHook preInstall
-    mkdir -p "$out"
-    cp -a install/. "$out/"
-    runHook postInstall
-  '';
+    installPhase = ''
+      runHook preInstall
+      mkdir -p "$out"
+      cp -a install/. "$out/"
+      runHook postInstall
+    '';
 
-  passthru = passthru // {
-    inherit phpLibraries bundledExtensions;
-    phpExtraLibDirs = allLibraryDirs;
-    inherit phpExtraLinkLibs;
-  };
+    passthru =
+      passthru
+      // {
+        inherit phpLibraries bundledExtensions;
+        phpExtraLibDirs = allLibraryDirs;
+        inherit phpExtraLinkLibs;
+      };
 
-  meta = {
-    description = "Static WASIX libphp build";
-    homepage = "https://github.com/php/php-src";
-  } // meta;
-}
+    meta =
+      {
+        description = "Static WASIX libphp build";
+        homepage = "https://github.com/php/php-src";
+      }
+      // meta;
+  }

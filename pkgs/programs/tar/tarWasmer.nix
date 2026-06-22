@@ -1,4 +1,7 @@
-{ makeWasmerPackage, tar }:
+{
+  makeWasmerPackage,
+  tar,
+}:
 makeWasmerPackage {
   package = tar;
   name = "tar";

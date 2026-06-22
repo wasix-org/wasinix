@@ -1,4 +1,7 @@
-{ makeWasmerPackage, grep }:
+{
+  makeWasmerPackage,
+  grep,
+}:
 makeWasmerPackage {
   package = grep;
   # TODO: should extend version to make it semver compliant

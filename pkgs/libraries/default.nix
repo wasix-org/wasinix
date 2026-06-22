@@ -4,8 +4,7 @@
   pkgsCross,
   toolchain,
   includePhp ? true,
-}:
-let
+}: let
   inherit (pkgs) lib;
   mkUpstreamLibrary = pkgs.callPackage ./mk-upstream-library.nix {
     inherit toolchain;
@@ -93,7 +92,7 @@ let
         zlib = self.zlib;
       };
       doCheck = false;
-      extraBuildInputs = [ self.zlib ];
+      extraBuildInputs = [self.zlib];
       env = {
         CPPFLAGS = "-I${lib.getDev self.zlib}/include";
         LDFLAGS = "-L${lib.getLib self.zlib}/lib";
@@ -139,10 +138,12 @@ let
 
           runHook postInstall
         '';
-        env = (old.env or { }) // {
-          CPPFLAGS = "-I${lib.getDev self.zlib}/include";
-          LDFLAGS = "-L${lib.getLib self.zlib}/lib";
-        };
+        env =
+          (old.env or {})
+          // {
+            CPPFLAGS = "-I${lib.getDev self.zlib}/include";
+            LDFLAGS = "-L${lib.getLib self.zlib}/lib";
+          };
       };
     };
 
@@ -154,14 +155,13 @@ let
       doCheck = false;
       overrideAttrs = old: {
         nativeBuildInputs =
-          [ toolchain.wasixcc ]
+          [toolchain.wasixcc]
           ++ lib.filter (
-            input:
-            let
+            input: let
               name = input.pname or input.name or "";
             in
-            name != "make-shell-wrapper-hook"
-          ) (old.nativeBuildInputs or [ ]);
+              name != "make-shell-wrapper-hook"
+          ) (old.nativeBuildInputs or []);
         propagatedBuildInputs = [
           self.zlib
           self.libpng
@@ -223,51 +223,54 @@ let
       };
       doCheck = false;
       overrideAttrs = old: {
-        installPhase = lib.replaceStrings [ "rm -rfv $dev/lib/*_shlib.a" ] [ "" ] (old.installPhase or "");
+        installPhase = lib.replaceStrings ["rm -rfv $dev/lib/*_shlib.a"] [""] (old.installPhase or "");
         buildInputs = lib.filter (
-          input:
-          let
+          input: let
             name = input.pname or input.name or "";
           in
-          !lib.elem name [
-            "curl"
-            "gettext"
-            "libkrb5"
-            "openssl"
-          ]
-        ) (old.buildInputs or [ ]);
-        nativeBuildInputs = lib.filter (
-          input:
-          let
-            name = input.pname or input.name or "";
-          in
-          name != "make-shell-wrapper-hook"
-        ) (
-          [ toolchain.wasixcc ] ++ (old.nativeBuildInputs or [ ])
-        );
-        configureFlags = (lib.filter (
-          flag:
-          flag != "--with-openssl"
-        ) (old.configureFlags or [ ])) ++ [
-          "--with-template=linux"
-        ];
-        env = (old.env or { }) // {
-          CPPFLAGS = "-I${lib.getDev self.zlib}/include";
-          LDFLAGS = "-L${lib.getLib self.zlib}/lib";
-        };
+            !lib.elem name [
+              "curl"
+              "gettext"
+              "libkrb5"
+              "openssl"
+            ]
+        ) (old.buildInputs or []);
+        nativeBuildInputs =
+          lib.filter (
+            input: let
+              name = input.pname or input.name or "";
+            in
+              name != "make-shell-wrapper-hook"
+          ) (
+            [toolchain.wasixcc] ++ (old.nativeBuildInputs or [])
+          );
+        configureFlags =
+          (lib.filter (
+            flag:
+              flag != "--with-openssl"
+          ) (old.configureFlags or []))
+          ++ [
+            "--with-template=linux"
+          ];
+        env =
+          (old.env or {})
+          // {
+            CPPFLAGS = "-I${lib.getDev self.zlib}/include";
+            LDFLAGS = "-L${lib.getLib self.zlib}/lib";
+          };
         postInstall =
-          (lib.replaceStrings [ "rm -rfv $dev/lib/*_shlib.a" ] [ "" ] (old.postInstall or ""))
+          (lib.replaceStrings ["rm -rfv $dev/lib/*_shlib.a"] [""] (old.postInstall or ""))
           + "\n"
           + ''
-          pc="$dev/lib/pkgconfig/libpq.pc"
-          if [ -f "$pc" ]; then
-            libs="$(sed -n 's/^Libs: //p' "$pc")"
-            libs_private="$(sed -n 's/^Libs.private: //p' "$pc")"
-            libs_private="$(printf '%s' "$libs_private" | sed 's/-lpgcommon\\b/-lpgcommon_shlib/g; s/-lpgport\\b/-lpgport_shlib/g')"
-            sed -i "s|^Libs: .*|Libs: $libs $libs_private|" "$pc"
-            sed -i 's|^Libs.private: .*|Libs.private: |' "$pc"
-          fi
-        '';
+            pc="$dev/lib/pkgconfig/libpq.pc"
+            if [ -f "$pc" ]; then
+              libs="$(sed -n 's/^Libs: //p' "$pc")"
+              libs_private="$(sed -n 's/^Libs.private: //p' "$pc")"
+              libs_private="$(printf '%s' "$libs_private" | sed 's/-lpgcommon\\b/-lpgcommon_shlib/g; s/-lpgport\\b/-lpgport_shlib/g')"
+              sed -i "s|^Libs: .*|Libs: $libs $libs_private|" "$pc"
+              sed -i 's|^Libs.private: .*|Libs.private: |' "$pc"
+            fi
+          '';
       };
     };
 
@@ -331,7 +334,7 @@ let
         fftwSupport = false;
         coreutils = pkgs.coreutils;
         curl = self.curl;
-        potrace = pkgs.runCommand "potrace-placeholder" { } ''
+        potrace = pkgs.runCommand "potrace-placeholder" {} ''
           mkdir -p "$out"
         '';
       };
@@ -345,14 +348,13 @@ let
         LDFLAGS = "-L${lib.getLib self.zstd}/lib";
       };
       overrideAttrs = old: {
-        outputs = [ "out" ];
+        outputs = ["out"];
         buildInputs = lib.filter (
-          input:
-          let
+          input: let
             name = input.pname or input.name or "";
           in
-          name != "potrace"
-        ) ((old.buildInputs or [ ]) ++ [ self.zstd ]);
+            name != "potrace"
+        ) ((old.buildInputs or []) ++ [self.zstd]);
         postInstall = ''
           mkdir -p "$out/include"
           if ls "$out"/include/ImageMagick-* >/dev/null 2>&1; then
@@ -380,12 +382,12 @@ let
     };
   });
   phpLibraries =
-    if includePhp then
+    if includePhp
+    then
       import ./php {
         inherit pkgs toolchain;
         libraries = baseLibraries;
       }
-    else
-      { };
+    else {};
 in
-baseLibraries // phpLibraries
+  baseLibraries // phpLibraries

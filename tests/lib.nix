@@ -1,4 +1,7 @@
-{ pkgs, wasmer ? null }: let
+{
+  pkgs,
+  wasmer ? null,
+}: let
   lib = pkgs.lib;
   # Set WASMER_BIN=/path/to/wasmer and build with --impure to test against a local binary.
   localWasmerBin = builtins.getEnv "WASMER_BIN";
@@ -23,7 +26,8 @@
           chmod +x $out/bin/wasmer
         '';
       }
-    else if wasmer != null then wasmer
+    else if wasmer != null
+    then wasmer
     else pkgs.wasmer;
 in rec {
   # Run a bash script with the given packages in PATH.

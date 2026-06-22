@@ -1,4 +1,4 @@
-{ makePlainWasmerPackage }:
+{makePlainWasmerPackage}:
 makePlainWasmerPackage {
   name = "cli-platform";
   packageName = "cli";

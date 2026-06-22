@@ -1,4 +1,7 @@
-{ makeWasmerPackage, crabsay }:
+{
+  makeWasmerPackage,
+  crabsay,
+}:
 makeWasmerPackage {
   package = crabsay;
   name = "crabsay";

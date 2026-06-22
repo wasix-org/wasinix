@@ -7,8 +7,7 @@
   binaryen,
   wasixSysroot,
   stdenv,
-}:
-let
+}: let
   src = fetchFromGitHub {
     owner = "wasix-org";
     repo = "wasixcc";
@@ -36,36 +35,36 @@ let
     '';
   };
 in
-if supported then
-  stdenvNoCC.mkDerivation {
-    pname = "wasixcc";
-    inherit version;
-    dontUnpack = true;
+  if supported
+  then
+    stdenvNoCC.mkDerivation {
+      pname = "wasixcc";
+      inherit version;
+      dontUnpack = true;
 
-    # Update instructions:
-    # 1) Update `src.rev` and `src.hash` to the target wasix-org/wasixcc commit.
-    # 2) If Cargo dependencies changed, run `nix build .#wasixcc` and update cargoHash if Nix asks.
-    # 3) Keep wrapper env vars aligned with pkgs/default.nix toolchain env exports.
-    installPhase = ''
-      runHook preInstall
-      mkdir -p "$out/bin" "$out/libexec"
+      # Update instructions:
+      # 1) Update `src.rev` and `src.hash` to the target wasix-org/wasixcc commit.
+      # 2) If Cargo dependencies changed, run `nix build .#wasixcc` and update cargoHash if Nix asks.
+      # 3) Keep wrapper env vars aligned with pkgs/default.nix toolchain env exports.
+      installPhase = ''
+        runHook preInstall
+        mkdir -p "$out/bin" "$out/libexec"
 
-      cp "${wasixccRaw}/libexec/wasixccenv" "$out/libexec/wasixccenv"
+        cp "${wasixccRaw}/libexec/wasixccenv" "$out/libexec/wasixccenv"
 
-      for cmd in wasixcc 'wasix++' wasixcc++ wasixar wasixnm wasixranlib wasixld wasixccenv; do
-        printf '%s\n' \
-          '#!${bash}/bin/bash' \
-          'set -euo pipefail' \
-          'export WASIXCC_LLVM_LOCATION="${wasixLlvm}"' \
-          'export WASIXCC_BINARYEN_LOCATION="${binaryen}"' \
-          'export WASIXCC_SYSROOT_PREFIX="${wasixSysroot}"' \
-          "exec -a \"\$0\" \"$out/libexec/wasixccenv\" \"\$@\"" \
-          > "$out/bin/$cmd"
-        chmod +x "$out/bin/$cmd"
-      done
+        for cmd in wasixcc 'wasix++' wasixcc++ wasixar wasixnm wasixranlib wasixld wasixccenv; do
+          printf '%s\n' \
+            '#!${bash}/bin/bash' \
+            'set -euo pipefail' \
+            'export WASIXCC_LLVM_LOCATION="${wasixLlvm}"' \
+            'export WASIXCC_BINARYEN_LOCATION="${binaryen}"' \
+            'export WASIXCC_SYSROOT_PREFIX="${wasixSysroot}"' \
+            "exec -a \"\$0\" \"$out/libexec/wasixccenv\" \"\$@\"" \
+            > "$out/bin/$cmd"
+          chmod +x "$out/bin/$cmd"
+        done
 
-      runHook postInstall
-    '';
-  }
-else
-  throw "wasixcc package currently supports only x86_64-linux; current system is ${stdenv.hostPlatform.system}"
+        runHook postInstall
+      '';
+    }
+  else throw "wasixcc package currently supports only x86_64-linux; current system is ${stdenv.hostPlatform.system}"

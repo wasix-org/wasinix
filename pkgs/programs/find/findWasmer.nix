@@ -1,4 +1,7 @@
-{ makeWasmerPackage, find }:
+{
+  makeWasmerPackage,
+  find,
+}:
 makeWasmerPackage {
   package = find;
   name = "find";

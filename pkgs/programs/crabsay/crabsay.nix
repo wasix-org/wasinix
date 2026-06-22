@@ -15,7 +15,7 @@ stdenvNoCC.mkDerivation rec {
     hash = "sha256-5DVY/eoP/WhIYpIY8vvSQC4gFTI3N2kQb4Lkn0bbfZ8=";
   };
 
-  nativeBuildInputs = [ cargoWasix ];
+  nativeBuildInputs = [cargoWasix];
 
   buildPhase = ''
     runHook preBuild

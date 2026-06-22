@@ -1,5 +1,4 @@
-{ makeWasmerPackage }:
-{
+{makeWasmerPackage}: {
   name,
   package,
   license ? "MIT",

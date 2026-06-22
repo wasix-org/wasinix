@@ -1,8 +1,10 @@
-{ system, nixpkgs }:
-let
-  pkgs = import nixpkgs { inherit system; };
+{
+  system,
+  nixpkgs,
+}: let
+  pkgs = import nixpkgs {inherit system;};
   inherit (pkgs) lib;
-  toolchainPkgs = import ./toolchain { inherit pkgs; };
+  toolchainPkgs = import ./toolchain {inherit pkgs;};
   mkToolchainProfile = pkgs.callPackage ./toolchain/mk-profile.nix {
     inherit toolchainPkgs;
   };
@@ -36,13 +38,16 @@ let
     config.allowUnsupportedSystem = true;
   };
 
-  libraries = lib.mapAttrs (profileName: toolchain:
-    import ./libraries {
-      inherit nixpkgs pkgs pkgsCross toolchain;
-      # includePhp = profileName == defaultProfileName;
-      includePhp = false;
-    }
-  ) toolchains;
+  libraries =
+    lib.mapAttrs (
+      profileName: toolchain:
+        import ./libraries {
+          inherit nixpkgs pkgs pkgsCross toolchain;
+          # includePhp = profileName == defaultProfileName;
+          includePhp = false;
+        }
+    )
+    toolchains;
 
   defaultLibraries = libraries.${defaultProfileName};
 
@@ -53,8 +58,8 @@ let
     toolchain = defaultToolchain;
   };
 
-  makeWasmerPackage = pkgs.callPackage ./wasmer/make-wasmer-package.nix { };
-  makePlainWasmerPackage = pkgs.callPackage ./wasmer/make-plain-wasmer-package.nix { };
+  makeWasmerPackage = pkgs.callPackage ./wasmer/make-wasmer-package.nix {};
+  makePlainWasmerPackage = pkgs.callPackage ./wasmer/make-plain-wasmer-package.nix {};
 
   nanoWasmer = pkgs.callPackage ./programs/nano/nanoWasmer.nix {
     inherit makeWasmerPackage;
@@ -139,7 +144,6 @@ let
       fi
     '') (builtins.attrNames allWasmPackages)}
   '';
-in
-{
+in {
   inherit pkgs pkgsCross toolchains libraries programs wasmer allPackages allWasm defaultProfileName;
 }

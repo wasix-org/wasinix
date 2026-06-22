@@ -1,5 +1,10 @@
-{ nixpkgs, pkgs, pkgsCross, toolchain, libraries }:
-rec {
+{
+  nixpkgs,
+  pkgs,
+  pkgsCross,
+  toolchain,
+  libraries,
+}: rec {
   nano = pkgsCross.callPackage ./nano/nano.nix {
     inherit nixpkgs toolchain;
     ncurses = libraries.ncurses;

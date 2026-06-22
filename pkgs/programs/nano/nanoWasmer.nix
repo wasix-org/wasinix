@@ -1,4 +1,7 @@
-{ makeWasmerPackage, nano }:
+{
+  makeWasmerPackage,
+  nano,
+}:
 makeWasmerPackage {
   package = nano;
   name = "nano";

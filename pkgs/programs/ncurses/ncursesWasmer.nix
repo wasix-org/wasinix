@@ -1,4 +1,7 @@
-{ makeWasmerPackage, ncurses }:
+{
+  makeWasmerPackage,
+  ncurses,
+}:
 makeWasmerPackage {
   package = ncurses;
   name = "ncurses";

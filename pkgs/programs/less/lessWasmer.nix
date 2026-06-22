@@ -1,4 +1,7 @@
-{ makeWasmerPackage, less }:
+{
+  makeWasmerPackage,
+  less,
+}:
 makeWasmerPackage {
   package = less;
   version = "685.0.1";

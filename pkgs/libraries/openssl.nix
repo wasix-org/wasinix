@@ -4,9 +4,9 @@
   toolchain,
 }:
 pkgsCross.openssl.overrideAttrs (old: {
-  nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ toolchain.wasixcc ];
+  nativeBuildInputs = (old.nativeBuildInputs or []) ++ [toolchain.wasixcc];
   configureScript = "Configure";
-  configurePlatforms = [ ];
+  configurePlatforms = [];
   outputs = [
     "out"
     "dev"

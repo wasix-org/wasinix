@@ -13,7 +13,7 @@ makeWasmerPackage {
   fs = {
     "/etc/ssl" = "${cacert}/etc/ssl";
   };
-  selfMounts = [ git.sh git ];
+  selfMounts = [git.sh git];
   commands = [
     {
       name = "git";

@@ -1,4 +1,7 @@
-{ makeWasmerPackage, gzip }:
+{
+  makeWasmerPackage,
+  gzip,
+}:
 makeWasmerPackage {
   package = gzip;
   # TODO: should extend version to make it semver compliant
@@ -17,14 +20,14 @@ makeWasmerPackage {
       module = "gunzip";
       wasm = "gzip.wasm";
       output = "gunzip.wasm";
-      mainArgs = [ "-d" "-f" ];
+      mainArgs = ["-d" "-f"];
     }
     {
       name = "zcat";
       module = "zcat";
       wasm = "gzip.wasm";
       output = "zcat.wasm";
-      mainArgs = [ "-d" "-c" "-f" ];
+      mainArgs = ["-d" "-c" "-f"];
     }
   ];
 }

@@ -1,5 +1,21 @@
-{ lib, pkgs, nanoWasmer, grepWasmer, sedWasmer, findWasmer, gzipWasmer, tarWasmer, lessWasmer, ncursesWasmer, crabsayWasmer, curlWasmer, shShimWasmer, gitWasmer, gettextWasmer, cliPlatformWasmer }:
-let
+{
+  lib,
+  pkgs,
+  nanoWasmer,
+  grepWasmer,
+  sedWasmer,
+  findWasmer,
+  gzipWasmer,
+  tarWasmer,
+  lessWasmer,
+  ncursesWasmer,
+  crabsayWasmer,
+  curlWasmer,
+  shShimWasmer,
+  gitWasmer,
+  gettextWasmer,
+  cliPlatformWasmer,
+}: let
   packages = {
     nano = nanoWasmer;
     grep = grepWasmer;
@@ -23,7 +39,7 @@ let
   allWasmerPackages = packages;
   wrappedPackages = lib.mapAttrs (_: p: p.shim) (lib.filterAttrs (_: p: p ? shim) packages);
 
-  allWasmer = pkgs.runCommand "wasix-all-wasmer" { } ''
+  allWasmer = pkgs.runCommand "wasix-all-wasmer" {} ''
     set -euo pipefail
     mkdir -p "$out/pkg"
     ${lib.concatMapStringsSep "\n" (attrName: ''
@@ -33,7 +49,6 @@ let
       fi
     '') (builtins.attrNames allWasmerPackages)}
   '';
-in
-{
+in {
   inherit packages wrappedPackages allWasmer;
 }

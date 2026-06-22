@@ -1,10 +1,11 @@
-{ pkgs, toolchainPkgs }:
 {
+  pkgs,
+  toolchainPkgs,
+}: {
   name,
   wasmExceptions ? null,
   pic ? false,
-}:
-let
+}: let
   lib = pkgs.lib;
   buildCc = "${pkgs.buildPackages.stdenv.cc}/bin/cc";
   host = "wasm32-wasix";
@@ -16,9 +17,13 @@ let
   };
   profileEnv = lib.concatStringsSep "\n" (
     lib.optional (wasmExceptions != null)
-      "export WASIXCC_WASM_EXCEPTIONS=${lib.escapeShellArg wasmExceptions}"
+    "export WASIXCC_WASM_EXCEPTIONS=${lib.escapeShellArg wasmExceptions}"
     ++ [
-      "export WASIXCC_PIC=${if pic then "yes" else "no"}"
+      "export WASIXCC_PIC=${
+        if pic
+        then "yes"
+        else "no"
+      }"
     ]
   );
   toolchainEnv = ''
@@ -38,13 +43,14 @@ let
     export WASIXCC_RUN_WASM_OPT=no
   '';
 in
-toolchainPkgs // {
-  profileName = name;
-  inherit buildCc host crossSystem wasmExceptions pic toolchainEnv ccEnv;
+  toolchainPkgs
+  // {
+    profileName = name;
+    inherit buildCc host crossSystem wasmExceptions pic toolchainEnv ccEnv;
 
-  commonPreConfigure = ''
-    export PATH="${toolchainPkgs.wasixcc}/bin:$PATH"
-    ${toolchainEnv}
-    ${ccEnv}
-  '';
-}
+    commonPreConfigure = ''
+      export PATH="${toolchainPkgs.wasixcc}/bin:$PATH"
+      ${toolchainEnv}
+      ${ccEnv}
+    '';
+  }

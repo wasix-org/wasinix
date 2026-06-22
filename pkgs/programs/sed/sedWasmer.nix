@@ -1,4 +1,7 @@
-{ makeWasmerPackage, sed }:
+{
+  makeWasmerPackage,
+  sed,
+}:
 makeWasmerPackage {
   package = sed;
   name = "sed";

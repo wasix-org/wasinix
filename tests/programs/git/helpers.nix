@@ -1,5 +1,4 @@
-{ pkgs }:
-rec {
+{pkgs}: rec {
   gitNative = pkgs.gitMinimal.override {
     nlsSupport = false;
     svnSupport = false;
@@ -45,57 +44,65 @@ rec {
   # Write docroot/git-http-backend wrapper that bakes the env vars in.
   # GIT_HTTP_RECEIVE_PACK env var alone is not reliably inherited through
   # lighttpd's CGI; git config http.receivepack is the authoritative knob.
-  makeGitHttpBackendWrapper = { receivePack ? false }: ''
-    repos_path=$(realpath repos)
-    cat > docroot/git-http-backend << WRAPPER
-#!/bin/sh
-export GIT_HTTP_EXPORT_ALL=1
-export GIT_PROJECT_ROOT=$repos_path
-${if receivePack then "export GIT_HTTP_RECEIVE_PACK=1" else ""}
-exec ${pkgs.git}/libexec/git-core/git-http-backend
-WRAPPER
-    chmod +x docroot/git-http-backend
-    ${if receivePack then "${pkgs.git}/bin/git -C repos/remote.git config http.receivepack true" else ""}
+  makeGitHttpBackendWrapper = {receivePack ? false}: ''
+        repos_path=$(realpath repos)
+        cat > docroot/git-http-backend << WRAPPER
+    #!/bin/sh
+    export GIT_HTTP_EXPORT_ALL=1
+    export GIT_PROJECT_ROOT=$repos_path
+    ${
+      if receivePack
+      then "export GIT_HTTP_RECEIVE_PACK=1"
+      else ""
+    }
+    exec ${pkgs.git}/libexec/git-core/git-http-backend
+    WRAPPER
+        chmod +x docroot/git-http-backend
+        ${
+      if receivePack
+      then "${pkgs.git}/bin/git -C repos/remote.git config http.receivepack true"
+      else ""
+    }
   '';
 
   # Start lighttpd on port 8765 (HTTP). receivePack enables push.
-  startLighttpdHttp = { receivePack ? false }: ''
-    mkdir -p docroot
-    ${makeGitHttpBackendWrapper { inherit receivePack; }}
-    cat > lighttpd.conf << EOF
-server.document-root = "$(pwd)/docroot"
-server.port = 8765
-server.bind = "127.0.0.1"
-server.modules = ("mod_cgi")
-server.errorlog = "/dev/stderr"
-cgi.assign = ("git-http-backend" => "")
-EOF
-    ${pkgs.lighttpd}/sbin/lighttpd -D -f lighttpd.conf &
-    sleep 1
+  startLighttpdHttp = {receivePack ? false}: ''
+        mkdir -p docroot
+        ${makeGitHttpBackendWrapper {inherit receivePack;}}
+        cat > lighttpd.conf << EOF
+    server.document-root = "$(pwd)/docroot"
+    server.port = 8765
+    server.bind = "127.0.0.1"
+    server.modules = ("mod_cgi")
+    server.errorlog = "/dev/stderr"
+    cgi.assign = ("git-http-backend" => "")
+    EOF
+        ${pkgs.lighttpd}/sbin/lighttpd -D -f lighttpd.conf &
+        sleep 1
   '';
 
   # Start lighttpd on port 8766 (HTTPS). Generates a self-signed cert and
   # copies it to $HOME/server.crt so WASM git can find it via GIT_SSL_CAINFO.
-  startLighttpdHttps = { receivePack ? false }: ''
-    mkdir -p docroot
-    ${makeGitHttpBackendWrapper { inherit receivePack; }}
-    ${pkgs.openssl}/bin/openssl req -x509 -newkey rsa:2048 \
-      -keyout server.key -out server.crt -days 1 -nodes \
-      -subj "/CN=127.0.0.1"
-    cat > lighttpd.conf << EOF
-server.document-root = "$(pwd)/docroot"
-server.port = 8766
-server.bind = "127.0.0.1"
-server.modules = ("mod_cgi", "mod_openssl")
-server.errorlog = "/dev/stderr"
-cgi.assign = ("git-http-backend" => "")
-ssl.engine = "enable"
-ssl.pemfile = "$(pwd)/server.crt"
-ssl.privkey = "$(pwd)/server.key"
-EOF
-    ${pkgs.lighttpd}/sbin/lighttpd -D -f lighttpd.conf &
-    sleep 1
-    cp server.crt "$HOME/server.crt"
-    export GIT_SSL_CAINFO=$HOME/server.crt
+  startLighttpdHttps = {receivePack ? false}: ''
+        mkdir -p docroot
+        ${makeGitHttpBackendWrapper {inherit receivePack;}}
+        ${pkgs.openssl}/bin/openssl req -x509 -newkey rsa:2048 \
+          -keyout server.key -out server.crt -days 1 -nodes \
+          -subj "/CN=127.0.0.1"
+        cat > lighttpd.conf << EOF
+    server.document-root = "$(pwd)/docroot"
+    server.port = 8766
+    server.bind = "127.0.0.1"
+    server.modules = ("mod_cgi", "mod_openssl")
+    server.errorlog = "/dev/stderr"
+    cgi.assign = ("git-http-backend" => "")
+    ssl.engine = "enable"
+    ssl.pemfile = "$(pwd)/server.crt"
+    ssl.privkey = "$(pwd)/server.key"
+    EOF
+        ${pkgs.lighttpd}/sbin/lighttpd -D -f lighttpd.conf &
+        sleep 1
+        cp server.crt "$HOME/server.crt"
+        export GIT_SSL_CAINFO=$HOME/server.crt
   '';
 }

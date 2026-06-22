@@ -1,5 +1,7 @@
-{ lib, fetchFromGitHub }:
-let
+{
+  lib,
+  fetchFromGitHub,
+}: let
   commonConfigureFlags = [
     "--enable-fd-setsize=8192"
     "--enable-static"
@@ -67,10 +69,9 @@ let
     srcRev,
     srcHash,
     patches,
-    extraConfigureFlags ? [ ],
+    extraConfigureFlags ? [],
     bundledExtensions ? commonBundledExtensions,
-  }:
-  rec {
+  }: rec {
     pname = "php${series}-zts";
     version = "${upstreamVersion}-wasix";
 
@@ -92,8 +93,7 @@ let
       platforms = lib.platforms.linux;
     };
   };
-in
-{
+in {
   php83 = mkPhpZts {
     series = "83";
     upstreamVersion = "8.3.21";
