@@ -11,7 +11,6 @@
   ncursesWasmer,
   crabsayWasmer,
   curlWasmer,
-  shShimWasmer,
   bashWasmer,
   gitWasmer,
   gettextWasmer,
@@ -28,7 +27,6 @@
     ncurses = ncursesWasmer;
     crabsay = crabsayWasmer;
     curl = curlWasmer;
-    shShim = shShimWasmer;
     bash = bashWasmer;
     git = gitWasmer;
     gettext = gettextWasmer;

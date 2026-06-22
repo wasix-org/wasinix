@@ -1,7 +1,7 @@
 {
   lib,
   toolchain,
-  sh,
+  bash,
   gitMinimal,
   zlib-ng,
   openssl,
@@ -23,8 +23,8 @@
     coreutils
     zlib-ng
     ;
-  # makeWrapper wraps git in a bash script; bash is not packaged yet so null both.
-  bash = null;
+  inherit bash;
+  # makeWrapper only wraps the Perl subcommands gitMinimal omits.
   makeWrapper = null;
   inherit
     openssl
@@ -39,7 +39,7 @@
   passthru =
     (old.passthru or {})
     // {
-      inherit sh;
+      inherit bash;
     };
   makeFlags =
     old.makeFlags
@@ -66,7 +66,7 @@
   postPatch =
     (old.postPatch or "")
     + ''
-      sed -i "s|BASIC_CFLAGS += -DSHELL_PATH=.*|BASIC_CFLAGS += -DSHELL_PATH='\"${sh}/bin/sh.wasm\"'|" Makefile
+      sed -i "s|BASIC_CFLAGS += -DSHELL_PATH=.*|BASIC_CFLAGS += -DSHELL_PATH='\"${bash}/bin/bash.wasm\"'|" Makefile
       substituteInPlace run-command.c \
         --replace-fail 'if (is_executable(buf.buf))' 'if (!access(buf.buf, F_OK))'
 

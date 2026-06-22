@@ -43,9 +43,6 @@
     inherit toolchain;
     inherit (libraries) openssl zlib;
   };
-  shShim = pkgsCross.callPackage ./sh-shim/sh.nix {
-    inherit toolchain;
-  };
   bash = pkgsCross.callPackage ./bash/bash.nix {
     toolchain = offToolchain;
     bash = pkgsCross.bash;
@@ -57,7 +54,7 @@
   git = pkgsCross.callPackage ./git/git.nix {
     inherit toolchain gettext;
     inherit (libraries) zlib-ng openssl curl expat libiconv;
-    sh = shShim;
+    inherit bash;
     gnugrep = grep;
     gnused = sed;
     gawk = pkgs.gawk;
