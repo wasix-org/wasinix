@@ -3,6 +3,10 @@
   pkgs,
   pkgsCross,
   toolchain,
+  # bash builds in the off-EH profile; its linked
+  # readline/ncurses must match that profile.
+  offToolchain ? toolchain,
+  offLibraries ? libraries,
   libraries,
 }: rec {
   nano = pkgsCross.callPackage ./nano/nano.nix {
@@ -41,6 +45,11 @@
   };
   shShim = pkgsCross.callPackage ./sh-shim/sh.nix {
     inherit toolchain;
+  };
+  bash = pkgsCross.callPackage ./bash/bash.nix {
+    toolchain = offToolchain;
+    bash = pkgsCross.bash;
+    inherit (offLibraries) readline ncurses;
   };
   gettext = pkgsCross.callPackage ./gettext/gettext.nix {
     inherit toolchain;

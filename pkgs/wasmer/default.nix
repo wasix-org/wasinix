@@ -12,6 +12,7 @@
   crabsayWasmer,
   curlWasmer,
   shShimWasmer,
+  bashWasmer,
   gitWasmer,
   gettextWasmer,
   cliPlatformWasmer,
@@ -28,6 +29,7 @@
     crabsay = crabsayWasmer;
     curl = curlWasmer;
     shShim = shShimWasmer;
+    bash = bashWasmer;
     git = gitWasmer;
     gettext = gettextWasmer;
     # phpixPhp83 = phpixPhp83Wasmer;

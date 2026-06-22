@@ -113,6 +113,10 @@
     inherit makeWasmerPackage;
     shShim = programs.shShim;
   };
+  bashWasmer = pkgs.callPackage ./programs/bash/bashWasmer.nix {
+    inherit makeWasmerPackage;
+    bash = programs.bash;
+  };
   gettextWasmer = pkgs.callPackage ./programs/gettext/gettextWasmer.nix {
     inherit makeWasmerPackage;
     gettext = programs.gettext;
@@ -137,7 +141,7 @@
 
   wasmer = import ./wasmer {
     inherit (pkgs) lib;
-    inherit pkgs nanoWasmer grepWasmer sedWasmer findWasmer gzipWasmer tarWasmer lessWasmer ncursesWasmer crabsayWasmer curlWasmer shShimWasmer gettextWasmer gitWasmer cliPlatformWasmer;
+    inherit pkgs nanoWasmer grepWasmer sedWasmer findWasmer gzipWasmer tarWasmer lessWasmer ncursesWasmer crabsayWasmer curlWasmer shShimWasmer bashWasmer gettextWasmer gitWasmer cliPlatformWasmer;
   };
 
   allPackages = defaultLibraries // programs;
