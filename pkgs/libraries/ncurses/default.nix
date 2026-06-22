@@ -25,7 +25,26 @@
     "--without-shared"
     "--with-static"
     "--enable-widec"
+    # withCxx=false's flag is dropped by this configureFlags override; restate it.
+    # The C++ bindings use try/catch, which off-EH -fno-exceptions rejects.
+    "--without-cxx-binding"
   ];
+  # widec build ships libncursesw.a; add the non-suffixed compat symlinks a normal
+  # ncurses provides, so -lncurses / -ltinfo (e.g. bash's termcap) resolve.
+  postInstall =
+    (old.postInstall or "")
+    + ''
+      for base in ncurses form menu panel; do
+        if [ -f "$out/lib/lib''${base}w.a" ] && [ ! -e "$out/lib/lib''${base}.a" ]; then
+          ln -s "lib''${base}w.a" "$out/lib/lib''${base}.a"
+        fi
+      done
+      for alias in libtinfo libtinfow libtermcap libcurses; do
+        if [ ! -e "$out/lib/$alias.a" ]; then
+          ln -s libncursesw.a "$out/lib/$alias.a"
+        fi
+      done
+    '';
   # In split-output static cross builds, ncurses creates pkg-config alias
   # symlinks that can dangle during fixup. Materialize them first.
   preFixup =
