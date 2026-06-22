@@ -103,33 +103,28 @@
 
         asyncify "$out/bin/git.wasm"
 
-        # webc v3 has no symlinks, so it would deref every `→ git` symlink
-        # (bin/git-receive-pack, libexec/git-core/git-add, ...) into a full
-        # ~6.5MB copy of bin/git.wasm. Rewrite them as tiny exec shims that
-        # re-invoke the asyncified binary. Same for libexec/git-core/git
-        # itself, which run_command dispatches through and would otherwise
-        # stay pre-asyncify. Real helpers (git-remote-http, ...) get
-        # asyncified in place.
+        # git installs its subcommands as aliases of the main binary: bin/git-*
+        # and libexec/git-core/git-* are `→ git` symlinks, and libexec/git-core/git
+        # is a second full copy. Renaming git → git.wasm dangles those symlinks,
+        # so repoint them at the asyncified wasm. webc preserves symlinks since
+        # wasmerio/wasmer#6653 (webc 12), so each alias stays a link instead of
+        # deref'ing into a ~6.5MB copy of git.wasm; git's own argv[0] dispatch
+        # then routes `git-add` etc. through the binary as usual. Real helpers
+        # (git-remote-http, ...) are standalone wasm binaries, asyncified in place.
+        ln -sf ../../bin/git.wasm "$out/libexec/git-core/git"
         for f in "$out/bin/"* "$out/libexec/git-core/"*; do
           name=''${f##*/}
           [ "$name" = "git.wasm" ] && continue
-          # libexec/git-core/git isn't a symlink so the alias branch won't
-          # match; rewrite it (with no subcommand prefix) in the epilogue.
           [ "$name" = "git" ] && continue
 
           if [ -L "$f" ] && [ "$(readlink "$f")" = "git" ]; then
-            rm "$f"
-            printf '#!%s\nexec %s %s "$@"\n' \
-              "${sh}/bin/sh.wasm" "$out/bin/git.wasm" "''${name#git-}" > "$f"
-            chmod +x "$f"
+            case "$f" in
+              "$out/bin/"*) ln -sf git.wasm "$f" ;;
+              *)            ln -sf ../../bin/git.wasm "$f" ;;
+            esac
           elif [ -f "$f" ] && [ ! -L "$f" ] && od -An -N4 -tx1 "$f" | grep -q "00 61 73 6d"; then
             asyncify "$f"
           fi
         done
-
-        rm "$out/libexec/git-core/git"
-        printf '#!%s\nexec %s "$@"\n' \
-          "${sh}/bin/sh.wasm" "$out/bin/git.wasm" > "$out/libexec/git-core/git"
-        chmod +x "$out/libexec/git-core/git"
       '';
   })
