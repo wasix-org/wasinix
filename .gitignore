@@ -2,3 +2,5 @@ result
 result-man
 __pycache__/
 *.pyc
+nix-fast-build-result.xml
+nix-fast-build-result.json

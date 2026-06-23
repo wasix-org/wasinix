@@ -48,6 +48,20 @@
       pkgsCross = {
         wasix = wasix.pkgsCross;
       };
+
+      # One derivation per entry for nix-eval-jobs/nix-fast-build to build
+      # independently. Dotted keys, e.g. "libraries.exnrefEh.ncurses".
+      ci = let
+        inherit (wasix.pkgs) lib;
+        derivationsOnly = lib.filterAttrs (_: lib.isDerivation);
+        libraryJobs = lib.concatMapAttrs (
+          profile:
+            lib.mapAttrs' (name: drv: lib.nameValuePair "libraries.${profile}.${name}" drv)
+        ) (lib.mapAttrs (_: derivationsOnly) wasix.libraries);
+        programJobs = lib.mapAttrs' (name: drv: lib.nameValuePair "programs.${name}" drv) (derivationsOnly wasix.programs);
+        wasmerJobs = lib.mapAttrs' (name: drv: lib.nameValuePair "wasmer.${name}" drv) (derivationsOnly wasix.wasmer.packages);
+      in
+        libraryJobs // programJobs // wasmerJobs;
     };
 
     devShells.${system}.default = wasix.pkgs.mkShell {
