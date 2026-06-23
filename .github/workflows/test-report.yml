@@ -1,0 +1,27 @@
+name: Test report
+
+# Renders CI's JUnit report as a check run. workflow_run runs in base-repo
+# context with write perms, so fork PRs get a check (in-job reporters can't).
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read # download the artifact from the triggering run
+  checks: write # create the check run
+
+jobs:
+  report:
+    name: Package builds
+    runs-on: ubuntu-latest
+    steps:
+      # fetches the artifact from the triggering run, attaches check to its commit
+      - uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        with:
+          artifact: junit-report
+          name: Package builds
+          path: "*.xml"
+          reporter: java-junit
+          fail-on-error: false
