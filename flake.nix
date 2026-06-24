@@ -42,6 +42,18 @@
       projectRootFile = "flake.nix";
       programs.alejandra.enable = true;
     };
+
+    # Behavioural test suite + formatting check. Defined once, consumed by both
+    # `checks` (nix flake check) and the `ci` build set below.
+    flakeChecks =
+      (import ./tests {
+        inherit (wasix) pkgs;
+        wasmerPkgs = wasix.wasmer.wrappedPackages;
+        wasmer = wasmer.packages.${system}.wasmer;
+      })
+      // {
+        treefmt = treefmtEval.config.build.check self;
+      };
   in {
     formatter.${system} = treefmtEval.config.build.wrapper;
 
@@ -80,8 +92,11 @@
           # The wasmer runtime itself (from the wasmer input).
           "wasmer-runtime" = wasmer.packages.${system}.wasmer;
         };
+        checkJobs =
+          lib.mapAttrs' (name: drv: lib.nameValuePair "checks.${name}" drv)
+          (derivationsOnly flakeChecks);
       in
-        libraryJobs // programJobs // wasmerJobs // toolchainJobs;
+        libraryJobs // programJobs // wasmerJobs // toolchainJobs // checkJobs;
     };
 
     devShells.${system}.default = wasix.pkgs.mkShell {
@@ -100,15 +115,7 @@
       '';
     };
 
-    checks.${system} =
-      (import ./tests {
-        inherit (wasix) pkgs;
-        wasmerPkgs = wasix.wasmer.wrappedPackages;
-        wasmer = wasmer.packages.${system}.wasmer;
-      })
-      // {
-        treefmt = treefmtEval.config.build.check self;
-      };
+    checks.${system} = flakeChecks;
 
     packages.${system} = {
       # Actual system packages.
