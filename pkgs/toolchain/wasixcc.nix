@@ -25,6 +25,8 @@
     inherit version src;
     cargoLock.lockFile = "${src}/Cargo.lock";
 
+    patches = [./wasixcc-discard-undefined-version.patch];
+
     doCheck = true;
 
     installPhase = ''

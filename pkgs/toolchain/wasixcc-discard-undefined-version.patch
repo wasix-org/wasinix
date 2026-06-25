@@ -1,0 +1,17 @@
+diff --git a/src/compiler/flags.rs b/src/compiler/flags.rs
+index ac7e036..e55d8e7 100644
+--- a/src/compiler/flags.rs
++++ b/src/compiler/flags.rs
+@@ -153,6 +153,12 @@ static WASM_LD_FLAGS_TO_DISCARD: LazyLock<HashSet<&str>> = LazyLock::new(|| {
+         "--allow-shlib-undefined",
+         "--enable-new-dtags",
+         "--version-script",
++        // wasm-ld has no symbol versioning, so the version-script companion
++        // flags are unknown to it. nixpkgs sets `--undefined-version` on a
++        // number of packages (zlib, keyutils, libselinux, pulseaudio, …) as an
++        // ELF-lld workaround for its `--no-undefined-version` default.
++        "--undefined-version",
++        "--no-undefined-version",
+         "--stats",
+         "--no-stats",
+     ]
