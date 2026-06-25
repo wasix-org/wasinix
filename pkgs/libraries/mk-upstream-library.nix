@@ -19,10 +19,16 @@
   mergeScript = fragments:
     lib.concatStringsSep "\n" (lib.filter (fragment: fragment != "" && fragment != null) fragments);
 in
-  package.overrideAttrs (
+  # Build the upstream package through the first-class wasix cross stdenv
+  # (cc-wrapper around wasixcc) rather than re-using nixpkgs' cross stdenv and
+  # env-injecting CC=wasixcc. The stdenv already supplies $CC/$CXX (= wasixcc),
+  # the WASIXCC_* knobs (baked into its shim), and buildInputs → -I/-L
+  # propagation, so we no longer thread toolchain.{toolchainEnv,ccEnv} or add
+  # toolchain.wasixcc to nativeBuildInputs.
+  (package.override {stdenv = toolchain.stdenv;}).overrideAttrs (
     old:
       {
-        nativeBuildInputs = (old.nativeBuildInputs or []) ++ [toolchain.wasixcc] ++ extraNativeBuildInputs;
+        nativeBuildInputs = (old.nativeBuildInputs or []) ++ extraNativeBuildInputs;
         buildInputs = (old.buildInputs or []) ++ extraBuildInputs;
         propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ extraPropagatedBuildInputs;
 
@@ -32,8 +38,6 @@ in
         ];
 
         preConfigure = mergeScript [
-          toolchain.toolchainEnv
-          toolchain.ccEnv
           (old.preConfigure or "")
           preConfigure
         ];

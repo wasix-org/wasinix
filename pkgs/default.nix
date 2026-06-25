@@ -5,8 +5,23 @@
   pkgs = import nixpkgs {inherit system;};
   inherit (pkgs) lib;
   toolchainPkgs = import ./toolchain {inherit pkgs;};
+
+  # The single wasix cross target. Kept here (rather than derived from a
+  # toolchain profile) so pkgsCross can be built *before* the profiles — each
+  # profile now consumes pkgsCross to build its first-class cc-wrapper stdenv.
+  crossSystem = {
+    # Keep nixpkgs parser-compatible triple and pin WASIX tooling explicitly.
+    config = "wasm32-unknown-wasi";
+    useLLVM = true;
+    isWasix = true;
+  };
+  pkgsCross = import nixpkgs {
+    inherit system crossSystem;
+    config.allowUnsupportedSystem = true;
+  };
+
   mkToolchainProfile = pkgs.callPackage ./toolchain/mk-profile.nix {
-    inherit toolchainPkgs;
+    inherit toolchainPkgs pkgsCross crossSystem;
   };
 
   toolchains = {
@@ -36,12 +51,6 @@
   };
   defaultProfileName = "exnrefEh";
   defaultToolchain = toolchains.${defaultProfileName};
-
-  pkgsCross = import nixpkgs {
-    inherit system;
-    crossSystem = defaultToolchain.crossSystem;
-    config.allowUnsupportedSystem = true;
-  };
 
   mkLibraries = toolchain:
     import ./libraries {
