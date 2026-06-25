@@ -34,6 +34,7 @@
     ;
   nlsSupport = false;
   doInstallCheck = false;
+  stdenv = toolchain.stdenv;
 }).overrideAttrs
 (old: {
   passthru =
@@ -75,19 +76,23 @@
       cp ${./wasix-compat/proc.c} wasix-compat/proc.c
     '';
 
+  # buildInputs (-I/-L for zlib-ng/openssl/curl/expat/…) now propagate via the
+  # cc-wrapper stdenv. The local wasix-compat shim and an explicit -lz (git's
+  # Makefile doesn't emit -lz on this target) go through NIX_* so the cc-wrapper
+  # injects them into every compile/link with correct ordering. The shim lib is
+  # built in preConfigure below, before any link consumes -lwasix-compat.
+  env =
+    (old.env or {})
+    // {
+      NIX_CFLAGS_COMPILE = ((old.env or {}).NIX_CFLAGS_COMPILE or "") + " -Iwasix-compat";
+      NIX_LDFLAGS = ((old.env or {}).NIX_LDFLAGS or "") + " -Lwasix-compat -lwasix-compat -lz";
+    };
+
   preConfigure =
     (old.preConfigure or "")
     + ''
-      ${toolchain.commonPreConfigure}
-
-      # Without this, for some reason, it doesn't see the compiler/linker flags.
-      # And without -lz, it doesn't find libz-ng, even though it should be in buildInputs.
-      # TODO: Figure out why
-      export CPPFLAGS="-Iwasix-compat $NIX_CFLAGS_COMPILE"
-      export LDFLAGS="-Lwasix-compat -lwasix-compat $NIX_LDFLAGS -lz"
-
-      # Compile our shims
-      $CC $CPPFLAGS -c wasix-compat/proc.c -o wasix-compat/proc.o
+      # Compile the wasix-compat shim (process fns missing from WASIX libc).
+      $CC -c wasix-compat/proc.c -o wasix-compat/proc.o
       $AR rcs wasix-compat/libwasix-compat.a wasix-compat/proc.o
     '';
   configureFlags =

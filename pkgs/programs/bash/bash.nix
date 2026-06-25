@@ -12,27 +12,31 @@
 assert lib.assertMsg ((toolchain.wasmExceptions or "yes") == "no")
 "bash must be built in the off-EH profile (wasmExceptions = \"no\")";
 # .override so propagatedBuildInputs picks up our readline too, not just buildInputs.
-  (bash.override {inherit readline;}).overrideAttrs (old: {
+  (bash.override {
+    inherit readline;
+    stdenv = toolchain.stdenv;
+  }).overrideAttrs (old: {
     # readline is linked statically, so bash also needs its ncurses (termcap).
     buildInputs = (old.buildInputs or []) ++ [ncurses];
-    preConfigure =
-      (old.preConfigure or "")
-      + ''
-        ${toolchain.commonPreConfigure}
-
+    env =
+      (old.env or {})
+      // {
         # gnu17: clang defaults to C23, where `bool` is a keyword bash redefines.
         # NO_MAIN_ENV_ARG: WASI clang only wraps a 2-arg main(); pick bash's.
-        export CFLAGS="-std=gnu17 -g -O2 -DNO_MAIN_ENV_ARG"
-
-        # wasixcc isn't the cc-wrapper and ignores NIX_CFLAGS_COMPILE, so point at
-        # readline/ncurses directly.
-        export CPPFLAGS="''${CPPFLAGS-} -I${readline.dev}/include -I${ncurses.dev}/include"
-        # readline and bash both define xmalloc/sh_get_env_value; wasm-ld rejects
-        # the duplicates GNU ld would take first-wins.
-        export LDFLAGS="''${LDFLAGS-} -L${readline.out}/lib -L${ncurses.out}/lib -Wl,--allow-multiple-definition"
-        export bash_cv_termcap_lib=libncurses
-
-        # mkbuiltins et al. run on the build host: native cc, same gnu17 pin.
+        CFLAGS = "-std=gnu17 -g -O2 -DNO_MAIN_ENV_ARG";
+        # readline/ncurses include+lib paths arrive via buildInputs propagation
+        # (the cc-wrapper stdenv). readline and bash both define xmalloc/
+        # sh_get_env_value; wasm-ld rejects the duplicates GNU ld would take
+        # first-wins, so allow them — via NIX_LDFLAGS so the cc-wrapper passes it
+        # straight to wasm-ld (hence no -Wl, prefix).
+        NIX_LDFLAGS = "--allow-multiple-definition";
+        bash_cv_termcap_lib = "libncurses";
+      };
+    # mkbuiltins et al. run on the build host: native cc, same gnu17 pin. Set via
+    # makeFlagsArray (not makeFlags) because the value contains a space.
+    preBuild =
+      (old.preBuild or "")
+      + ''
         makeFlagsArray+=("CC_FOR_BUILD=${toolchain.buildCc} -std=gnu17")
       '';
     configureFlags =
