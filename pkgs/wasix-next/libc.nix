@@ -1,10 +1,13 @@
-# Foundation (new design, WIP): build the wasix libc FROM SOURCE (just the libc —
-# no compiler-rt/libc++/sysroot assembly yet). Base variant only for now.
+# Build the wasix libc FROM SOURCE, one of the 5 ABI variants (see the matrix in
+# default.nix). The variant is selected by the {eh, pic, exnref} booleans, which
+# mirror build32-general.sh:wasix_libc (Makefile vs Makefile-eh, PIC=, EXNREF_EH=).
 #
 # The libc (musl-based) is independent of the LLVM *sources* — it only needs *a*
-# clang to compile — so for this foundation step it builds with nixpkgs'
-# llvmPackages_21 (fast, decoupled from the from-source LLVM build). Once that
-# foundation lands we point CC at the wasix LLVM instead.
+# clang to compile — so it builds with nixpkgs' llvmPackages_21 (fast, decoupled
+# from the from-source LLVM build), with the Makefile supplying the ABI flags.
+#
+# Output is sysroot-shaped (lib/wasm32-wasi/ + include/), the same layout the
+# compiler-rt/libcxx builds consume via --sysroot and the final sysroot merges.
 {
   lib,
   stdenv,
@@ -18,15 +21,27 @@
   cargo,
   rustc,
   coreutils,
+  # wasix-libc checkout (centralized pin in default.nix) + its version label.
+  src,
+  version,
+  # ABI variant selectors (mirror wasix-libc's build32-general.sh).
+  eh ? false,
+  pic ? false,
+  exnref ? false,
 }: let
-  version = "v2026-02-16.1";
-
-  src = fetchFromGitHub {
-    owner = "wasix-org";
-    repo = "wasix-libc";
-    rev = "4048aab4bc1273868fe84c6d4d179f1e114b95bf"; # tag v2026-02-16.1
-    hash = "sha256-PI8Iushd3HS6+tCZ6f4agmz9TIJdL1nxpozWN90ubNY=";
-  };
+  # build32-general.sh:wasix_libc — EH picks Makefile-eh (+ EXNREF_EH), else the
+  # base Makefile; PIC is orthogonal. `exnref` only matters when `eh`.
+  variant =
+    if !eh
+    then "off"
+    else "${lib.optionalString exnref "exnref-"}eh${lib.optionalString pic "-pic"}";
+  makeFile =
+    if eh
+    then "Makefile-eh"
+    else "Makefile";
+  makeVariantArgs =
+    ["PIC=${if pic then "yes" else "no"}"]
+    ++ lib.optionals eh ["EXNREF_EH=${if exnref then "yes" else "no"}"];
 
   # witx specs for the header generators (cargo run generate-libc).
   wasiWitx = fetchFromGitHub {
@@ -53,12 +68,8 @@
   '';
 in
   stdenv.mkDerivation {
-    pname = "wasix-libc";
+    pname = "wasix-libc-${variant}";
     inherit version src;
-
-    # Match nixpkgs' wasilibc output contract so this is a drop-in cross libc
-    # (cc-wrapper takes libs from `out`/lib and headers from `dev`/include).
-    outputs = ["out" "dev"];
 
     nativeBuildInputs = [
       # raw (unwrapped) clang + llvm tools: wasix-libc drives the target itself.
@@ -108,29 +119,35 @@ in
       printf '#include "api_wasi.h"\n#include "api_wasix.h"\n#include "api_poly.h"\n' \
         > libc-bottom-half/headers/public/wasi/api.h
 
-      # Build the libc only (base variant: plain Makefile, no EH/PIC).
-      make CHECK_SYMBOLS=no -j"''${NIX_BUILD_CORES:-4}" -f Makefile
+      # Build the libc only (the ${variant} variant; runtimes come from nixpkgs cross).
+      make CHECK_SYMBOLS=no -j"''${NIX_BUILD_CORES:-4}" -f ${makeFile} ${lib.escapeShellArgs makeVariantArgs}
       rm -f sysroot/lib/wasm32-wasi/libc-printscan-long-double.a
+
+      # Generate libc.imports — the list of host-imported (undefined) wasix symbols
+      # wasixcc feeds to wasm-ld as --allow-undefined-file. The Makefile's
+      # check-symbols target produces it, but we skip that (CHECK_SYMBOLS=no) to
+      # avoid its brittle sanity checks, so reproduce just the imports extraction.
+      lib_dir=sysroot/lib/wasm32-wasi
+      llvm-nm --undefined-only "$lib_dir"/libc.a "$lib_dir"/libc-*.a "$lib_dir"/*.o 2>/dev/null \
+        | grep ' U ' | sed 's/.* U //' | LC_ALL=C sort | uniq \
+        | grep '^_*imported_wasix_' > "$lib_dir/libc.imports" || true
 
       runHook postBuild
     '';
 
     installPhase = ''
       runHook preInstall
-      mkdir -p "$out/lib" "$dev"
-      # nixpkgs' cc-wrapper finds crt/libs via -B<libc>/lib/ (FLAT), whereas
-      # wasix-libc's Makefile installs under lib/wasm32-wasi/. Flatten to match,
-      # and keep a wasm32-wasi -> . symlink for sysroot-style (-L .../lib/<triple>)
-      # consumers.
-      cp -r sysroot/lib/wasm32-wasi/. "$out/lib/"
-      ln -s . "$out/lib/wasm32-wasi"
-      cp -r sysroot/include "$dev/include"
+      # Sysroot-shaped output: lib/wasm32-wasi/ + include/ (+ share/), exactly as
+      # wasix-libc's Makefile installs it under sysroot/.
+      mkdir -p "$out"
+      cp -r sysroot/lib "$out/lib"
+      cp -r sysroot/include "$out/include"
       [ -d sysroot/share ] && cp -r sysroot/share "$out/share" || true
       runHook postInstall
     '';
 
     meta = with lib; {
-      description = "WASIX libc (base variant), built from source";
+      description = "WASIX libc (${variant} variant), built from source";
       homepage = "https://github.com/wasix-org/wasix-libc";
       license = with licenses; [asl20 mit];
       platforms = platforms.unix;

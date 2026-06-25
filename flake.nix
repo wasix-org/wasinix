@@ -31,12 +31,40 @@
       inherit system nixpkgs;
     };
 
-    # WIP: redesigned toolchain foundations (from-source LLVM + libc), built up
-    # in parallel with the existing toolchain. Not wired into anything yet.
+    # Redesigned, from-source toolchain foundations (LLVM + libc + runtimes +
+    # sysroot, built the upstream way). Now wired into the toolchain: pkgs/toolchain
+    # consumes wasixNext.{llvmTree, sysroot} (the prebuilt downloads are retired).
     wasixNext = import ./pkgs/wasix-next {
       pkgs = wasix.pkgs;
       inherit nixpkgs system;
     };
+
+    # End-to-end link + run tests, one per toolchain profile (= per ABI variant):
+    # compile + link a C++ program with that profile's wasixcc, then run it under
+    # wasmer. Exercises the from-source toolchain + sysroot through the real
+    # consumer path.
+    wasixLinkTests =
+      builtins.mapAttrs (
+        _name: toolchain:
+          wasix.pkgs.callPackage ./pkgs/wasix-next/link-test.nix {
+            wasmer = wasmer.packages.${system}.wasmer;
+            inherit toolchain;
+          }
+      )
+      wasix.toolchains;
+
+    # Per-profile test of the first-class cross stdenv (cc-wrapper around
+    # wasixcc): builds through a plain stdenv.mkDerivation (no env-injection),
+    # exercising $CC/$CXX + buildInputs propagation, then runs under wasmer.
+    wasixStdenvTests =
+      builtins.mapAttrs (
+        _name: toolchain:
+          wasix.pkgs.callPackage ./pkgs/wasix-next/stdenv-test.nix {
+            wasmer = wasmer.packages.${system}.wasmer;
+            inherit toolchain;
+          }
+      )
+      wasix.toolchains;
 
     treefmtEval = treefmt-nix.lib.evalModule wasix.pkgs {
       projectRootFile = "flake.nix";
@@ -53,7 +81,13 @@
       })
       // {
         treefmt = treefmtEval.config.build.check self;
-      };
+      }
+      # from-source wasix sysroot smoke tests, one per ABI variant
+      // (wasix.pkgs.lib.mapAttrs' (name: t: wasix.pkgs.lib.nameValuePair "wasix-next-${name}" t) wasixNext.tests)
+      # end-to-end link + run tests, one per toolchain profile
+      // (wasix.pkgs.lib.mapAttrs' (name: t: wasix.pkgs.lib.nameValuePair "wasix-link-${name}" t) wasixLinkTests)
+      # first-class stdenv (cc-wrapper around wasixcc) tests, one per profile
+      // (wasix.pkgs.lib.mapAttrs' (name: t: wasix.pkgs.lib.nameValuePair "wasix-stdenv-${name}" t) wasixStdenvTests);
   in {
     formatter.${system} = treefmtEval.config.build.wrapper;
 
@@ -89,6 +123,7 @@
           "toolchain.libc-next" = wasixNext.libc;
           "toolchain.compiler-rt-next" = wasixNext.compiler-rt;
           "toolchain.libcxx-next" = wasixNext.libcxx;
+          "toolchain.sysroot-next" = wasixNext.sysroot;
           # The wasmer runtime itself (from the wasmer input).
           "wasmer-runtime" = wasmer.packages.${system}.wasmer;
         };
@@ -132,9 +167,14 @@
       #   nix build .#wasix-llvm-next   (from-source LLVM — slow)
       wasix-libc-next = wasixNext.libc;
       wasix-llvm-next = wasixNext.llvm.clang;
-      # Runtimes via nixpkgs cross (deviations in the llvmPackages overlay):
+      # Runtimes built upstream-style (direct cmake of llvm-project driven by
+      # wasix-libc's committed clang-wasix*.cmake_toolchain files):
       wasix-compiler-rt-next = wasixNext.compiler-rt;
       wasix-libcxx-next = wasixNext.libcxx;
+      # The assembled multi-variant sysroot (drop-in for the download wasix-sysroot):
+      wasix-sysroot-next = wasixNext.sysroot;
+      # Smoke test of the default (off) variant's sysroot:
+      wasix-test-next = wasixNext.tests.off;
 
       wasmer-bin = wasmer.packages.${system}.wasmer;
 
