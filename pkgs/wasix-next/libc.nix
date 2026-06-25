@@ -40,8 +40,20 @@
     then "Makefile-eh"
     else "Makefile";
   makeVariantArgs =
-    ["PIC=${if pic then "yes" else "no"}"]
-    ++ lib.optionals eh ["EXNREF_EH=${if exnref then "yes" else "no"}"];
+    [
+      "PIC=${
+        if pic
+        then "yes"
+        else "no"
+      }"
+    ]
+    ++ lib.optionals eh [
+      "EXNREF_EH=${
+        if exnref
+        then "yes"
+        else "no"
+      }"
+    ];
 
   # witx specs for the header generators (cargo run generate-libc).
   wasiWitx = fetchFromGitHub {

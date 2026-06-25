@@ -90,7 +90,7 @@
   # components can merge into the same dirs.
   mkSysroot = sname: comps:
     pkgs.runCommand "wasix-sysroot-${sname}" {} (
-      ''mkdir -p "$out"
+      ''        mkdir -p "$out"
       ''
       + lib.concatMapStrings (c: ''
         cp -r --no-preserve=mode,ownership ${c}/. "$out/"
@@ -148,47 +148,45 @@
   # The 5 wasix ABI variants. `off` is threaded-but-no-EH; the EH variants add C++
   # exceptions; `pic` builds position-independent; `exnref` uses the exnref/SjLj
   # exception model. (PIC is only valid with EH — see build32.)
-  variants =
-    lib.mapAttrs (name: spec: mkVariant (spec // {inherit name;})) {
-      off = {
-        eh = false;
-        pic = false;
-        exnref = false;
-      };
-      eh = {
-        eh = true;
-        pic = false;
-        exnref = false;
-      };
-      ehpic = {
-        eh = true;
-        pic = true;
-        exnref = false;
-      };
-      exnrefEh = {
-        eh = true;
-        pic = false;
-        exnref = true;
-      };
-      exnrefEhpic = {
-        eh = true;
-        pic = true;
-        exnref = true;
-      };
+  variants = lib.mapAttrs (name: spec: mkVariant (spec // {inherit name;})) {
+    off = {
+      eh = false;
+      pic = false;
+      exnref = false;
     };
+    eh = {
+      eh = true;
+      pic = false;
+      exnref = false;
+    };
+    ehpic = {
+      eh = true;
+      pic = true;
+      exnref = false;
+    };
+    exnrefEh = {
+      eh = true;
+      pic = false;
+      exnref = true;
+    };
+    exnrefEhpic = {
+      eh = true;
+      pic = true;
+      exnref = true;
+    };
+  };
 
   # The combined sysroot: a prefix dir with one subdir per variant, matching the
   # release-tarball layout (it replaces the old download-based sysroot) — wasixcc
   # points WASIXCC_SYSROOT_PREFIX here and picks the subdir by EH/PIC.
-  sysroot =
-    pkgs.runCommand "wasix-sysroot" {} (
-      ''
-        mkdir -p "$out"
-      ''
-      + lib.concatMapStrings (v: ''
-        ln -s ${v.sysroot} "$out/${v.sysrootSubdir}"
-      '') (lib.attrValues variants)
-    );
+  sysroot = pkgs.runCommand "wasix-sysroot" {} (
+    ''
+      mkdir -p "$out"
+    ''
+    + lib.concatMapStrings (v: ''
+      ln -s ${v.sysroot} "$out/${v.sysrootSubdir}"
+    '') (lib.attrValues variants)
+  );
   # Per-variant sysroot smoke tests, keyed by variant name.
   tests = lib.mapAttrs (_: v: v.test) variants;
 in

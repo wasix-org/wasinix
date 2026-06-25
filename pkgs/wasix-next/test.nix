@@ -30,7 +30,7 @@
     int wasix_test() {
       std::vector<int> v{1, 2, 3, 4};
       int s = std::accumulate(v.begin(), v.end(), 0);
-    ${lib.optionalString eh ''  try { throw std::runtime_error("boom"); } catch (const std::exception &) { s += 10; }''}
+    ${lib.optionalString eh ''try { throw std::runtime_error("boom"); } catch (const std::exception &) { s += 10; }''}
       return s;
     }
   '';
