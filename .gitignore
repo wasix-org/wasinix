@@ -1,5 +1,5 @@
 result
-result-man
+result-*
 __pycache__/
 *.pyc
 nix-fast-build-result.xml
