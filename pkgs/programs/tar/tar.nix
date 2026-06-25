@@ -2,7 +2,7 @@
   toolchain,
   gnutar,
   ...
-}: (gnutar.overrideAttrs (old: {
+}: ((gnutar.override {stdenv = toolchain.stdenv;}).overrideAttrs (old: {
   postPatch =
     (old.postPatch or "")
     + ''
@@ -27,7 +27,6 @@
   preConfigure =
     (old.preConfigure or "")
     + ''
-      ${toolchain.commonPreConfigure}
       # WASIX libc already provides getgroups() with gid_t* signature.
       export ac_cv_func_getgroups=yes
     '';

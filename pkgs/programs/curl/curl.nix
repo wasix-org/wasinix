@@ -23,11 +23,11 @@
   zlibSupport = true;
   inherit zlib;
   zstdSupport = false;
+  stdenv = toolchain.stdenv;
 }).overrideAttrs (old: {
   preConfigure =
     (old.preConfigure or "")
     + ''
-      ${toolchain.commonPreConfigure}
     '';
   configureFlags =
     (old.configureFlags or [])

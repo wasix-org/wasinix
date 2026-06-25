@@ -7,11 +7,11 @@
 }: ((less.override {
     inherit ncurses;
     pcre2 = null;
+    stdenv = toolchain.stdenv;
   }).overrideAttrs (old: {
     preConfigure =
       (old.preConfigure or "")
       + ''
-        ${toolchain.commonPreConfigure}
         # less defines a signal handler named "winch" which collides with ncurses'
         # winch() symbol and causes invalid wasm due to signature mismatch.
         export CPPFLAGS="''${CPPFLAGS-} -I${ncurses.dev}/include -I${ncurses.dev}/include/ncursesw -Dwinch=less_winch"

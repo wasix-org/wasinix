@@ -12,11 +12,11 @@
   gettext = null;
   file = null;
   inherit ncurses;
+  stdenv = toolchain.stdenv;
 }).overrideAttrs (old: {
   preConfigure =
     (old.preConfigure or "")
     + ''
-      ${toolchain.commonPreConfigure}
       export CPPFLAGS="''${CPPFLAGS-} -I${ncurses.dev}/include -I${ncurses.dev}/include/ncursesw"
       export LDFLAGS="''${LDFLAGS-} -L${ncurses.out}/lib -static"
       export PKG_CONFIG_PATH="${ncurses.dev}/lib/pkgconfig"

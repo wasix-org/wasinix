@@ -5,6 +5,7 @@
 }: ((gzip.override {
     # Avoid pulling target-side bash-static via nixpkgs gzip's runtimeShellPackage.
     runtimeShellPackage = null;
+    stdenv = toolchain.stdenv;
   }).overrideAttrs (old: {
     nativeBuildInputs =
       builtins.filter
@@ -16,7 +17,6 @@
     preConfigure =
       (old.preConfigure or "")
       + ''
-        ${toolchain.commonPreConfigure}
       '';
     preFixup = ''
       sed -i '1{;/#!\/bin\/sh/aPATH="'$out'/bin:$PATH"

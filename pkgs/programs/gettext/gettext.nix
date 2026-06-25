@@ -7,6 +7,7 @@
   # bashNonInteractive is propagated into the closure as a runtime shell dep;
   # not needed for the WASIX build.
   bashNonInteractive = null;
+  stdenv = toolchain.stdenv;
 }).overrideAttrs (old: {
   postPatch =
     (old.postPatch or "")
@@ -32,7 +33,6 @@
   preConfigure =
     (old.preConfigure or "")
     + ''
-      ${toolchain.commonPreConfigure}
       #
       # ac_cv_func_posix_spawn / gl_cv_func_posix_spawn_works: WASIX sysroot
       # provides posix_spawn via proc_spawn. By default it'll try to use fork(),

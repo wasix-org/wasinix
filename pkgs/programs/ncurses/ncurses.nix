@@ -7,12 +7,11 @@
 (callPackage "${nixpkgs}/pkgs/development/libraries/ncurses/default.nix" {
   enableStatic = true;
   withCxx = false;
+  stdenv = toolchain.stdenv;
 }).overrideAttrs (old: {
-  nativeBuildInputs = (old.nativeBuildInputs or []) ++ [toolchain.wasixcc];
   preConfigure =
     (old.preConfigure or "")
     + ''
-      ${toolchain.commonPreConfigure}
     '';
   configureFlags = [
     "--host=${toolchain.host}"

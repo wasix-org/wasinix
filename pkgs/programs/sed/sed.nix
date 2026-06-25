@@ -3,12 +3,11 @@
   toolchain,
   gnused,
   ...
-}: (gnused.overrideAttrs (old: {
+}: ((gnused.override {stdenv = toolchain.stdenv;}).overrideAttrs (old: {
   preConfigure =
     (old.preConfigure or "")
     + ''
 
-      ${toolchain.commonPreConfigure}
     '';
   meta =
     old.meta

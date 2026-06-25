@@ -8,6 +8,7 @@
     # findutils injects coreutils paths into scripts at build time; on WASIX this
     # must come from the build platform package set.
     coreutils = buildPackages.coreutils;
+    stdenv = toolchain.stdenv;
   }).overrideAttrs (old: {
     postPatch =
       (old.postPatch or "")
@@ -45,7 +46,6 @@
     preConfigure =
       (old.preConfigure or "")
       + ''
-        ${toolchain.commonPreConfigure}
         # WASIX libc provides getgroups(); forcing this avoids a gnulib fallback
         # definition with a mismatched prototype for this target.
         export ac_cv_func_getgroups=yes

@@ -3,8 +3,7 @@
   pkgsCross,
   toolchain,
 }:
-pkgsCross.openssl.overrideAttrs (old: {
-  nativeBuildInputs = (old.nativeBuildInputs or []) ++ [toolchain.wasixcc];
+(pkgsCross.openssl.override {stdenv = toolchain.stdenv;}).overrideAttrs (old: {
   configureScript = "Configure";
   configurePlatforms = [];
   outputs = [
@@ -13,7 +12,6 @@ pkgsCross.openssl.overrideAttrs (old: {
   ];
   doCheck = false;
   dontDisableStatic = true;
-  preConfigure = toolchain.commonPreConfigure;
   postInstall = "";
   postFixup = "";
   postPatch = ''

@@ -13,6 +13,7 @@
   # Prevent pulling a target-side runtime shell package into the WASIX build
   # closure. Grep itself does not need bash for normal operation here.
   runtimeShellPackage = null;
+  stdenv = toolchain.stdenv;
 }).overrideAttrs (old: {
   # Upstream gnugrep runs gnulib-tests during build; several tests are not
   # portable to current WASIX and fail at compile-time. We only strip the
@@ -27,7 +28,6 @@
   preConfigure =
     (old.preConfigure or "")
     + ''
-      ${toolchain.commonPreConfigure}
     '';
   configureFlags =
     (old.configureFlags or [])
