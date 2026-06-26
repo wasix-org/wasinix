@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build packages
+    name: Build all packages
     runs-on: depot-ubuntu-24.04-16
     # high ceiling for a cold cache; warm runs finish in minutes (max is 360)
     timeout-minutes: 350
@@ -54,7 +54,7 @@ jobs:
 
       # per-package build + JUnit report; uploads to cache as it builds when
       # credentials are present (forks build keyless), so timeouts don't lose work
-      - name: Build
+      - name: Build packages
         id: build
         shell: bash
         run: ./scripts/ci-build.sh

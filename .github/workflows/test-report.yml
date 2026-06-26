@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   report:
-    name: Package builds
+    name: Full build report
     runs-on: ubuntu-latest
     steps:
       # fetches the artifact from the triggering run, attaches check to its commit
