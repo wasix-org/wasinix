@@ -1,0 +1,44 @@
+# Since wasix doesn't have TERM env var set by default, assume a fallback
+diff --git a/progs/clear.c b/progs/clear.c
+index 9a7332cb..e11c2f0c 100644
+--- a/progs/clear.c
++++ b/progs/clear.c
+@@ -75,6 +75,9 @@ main(int argc, char *argv[])
+     bool opt_x = FALSE;		/* clear scrollback if possible */
+ 
+     _nc_progname = _nc_rootname(argv[0]);
++    if ((getenv("TERM") == NULL) || (*getenv("TERM") == '\0')) {
++	(void) setenv("TERM", "xterm-256color", 0);
++    }
+     term = getenv("TERM");
+ 
+     while ((c = getopt(argc, argv, "T:Vx")) != -1) {
+diff --git a/progs/tput.c b/progs/tput.c
+index f90ecf53..b31bf0f6 100644
+--- a/progs/tput.c
++++ b/progs/tput.c
+@@ -408,6 +408,9 @@ main(int argc, char **argv)
+     _nc_progname = check_aliases(_nc_rootname(argv[0]), TRUE);
+     is_alias = (is_clear || is_reset || is_init);
+ 
++    if ((getenv("TERM") == NULL) || (*getenv("TERM") == '\0')) {
++	(void) setenv("TERM", "xterm-256color", 0);
++    }
+     term = getenv("TERM");
+ 
+     while ((c = getopt(argc, argv, is_alias ? "T:Vvx" : "ST:Vvx")) != -1) {
+diff --git a/progs/tset.c b/progs/tset.c
+index 6b2f6b4e..c1f8c462 100644
+--- a/progs/tset.c
++++ b/progs/tset.c
+@@ -605,8 +605,8 @@ get_termcap_entry(int fd, char *userarg)
+     }
+ #endif /* HAVE_PATH_TTYS */
+ 
+-    /* If still undefined, use "unknown". */
+-    ttype = "unknown";
++    /* If still undefined, use a sane fallback type. */
++    ttype = "xterm-256color";
+ 
+   map:ttype = mapped(ttype);
+ 

@@ -1,0 +1,29 @@
+# Why this patch exists:
+# - In WASIX/Wasmer, `lseek(STDIN_FILENO, ...)` can fail with EACCES/EPERM
+#   when stdin is piped, even though reads still work.
+# - Upstream grep treats non-ESPIPE seek failures as hard input errors.
+# - That produces `(standard input): Permission denied` for normal pipelines.
+#
+# What this patch changes:
+# - In `reset()`, treat EACCES/EPERM on stdin lseek like non-seekable input
+#   (same behavioral class as ESPIPE), so grep continues reading the stream.
+#
+# Why this is safe:
+# - The exception is scoped to stdin only and only for permission-style
+#   seek errors; regular file handling and other fds are unchanged.
+diff --git a/src/grep.c b/src/grep.c
+index 6a50d73..3f88f8d 100644
+--- a/src/grep.c
++++ b/src/grep.c
+@@ -938,7 +938,11 @@ reset (int fd, struct stat const *st)
+   if (seek_failed)
+     {
+-      if (errno != ESPIPE)
++      /* WASIX may report lseek(stdin) as EACCES/EPERM for pipes.
++         Treat that as non-seekable stdin rather than a hard error.  */
++      if (errno != ESPIPE
++          && !(fd == STDIN_FILENO
++               && (errno == EACCES || errno == EPERM)))
+         {
+           suppressible_error (errno);
+           return false;

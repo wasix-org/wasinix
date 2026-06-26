@@ -1,0 +1,91 @@
+diff --git a/src/files.c b/src/files.c
+index 7f12944..cbf2ff0 100644
+--- a/src/files.c
++++ b/src/files.c
+@@ -30,6 +30,25 @@
+ #include <unistd.h>
+ #include <sys/wait.h>
+ 
++/* WASIX/WASI libc variants may not provide getlogin()/getlogin_r().
++ * Gnulib replacements can still reference these symbols, so provide
++ * weak stubs to keep linkage deterministic for cross builds. */
++#if defined(__wasi__)
++__attribute__((weak)) char *getlogin(void)
++{
++	errno = ENOSYS;
++	return NULL;
++}
++
++__attribute__((weak)) int getlogin_r(char *name, size_t namesize)
++{
++	if (name != NULL && namesize > 0)
++		name[0] = '\0';
++
++	return ENOSYS;
++}
++#endif
++
+ #define RW_FOR_ALL  (S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)
+ 
+ #ifndef HAVE_FSYNC
+@@ -1470,8 +1488,10 @@ char *safe_tempfile(FILE **stream)
+ 	if (env_dir != NULL)
+ 		tempdir = check_writable_directory(env_dir);
+ 
++#ifdef P_tmpdir
+ 	if (tempdir == NULL)
+ 		tempdir = check_writable_directory(P_tmpdir);
++#endif
+ 
+ 	if (tempdir == NULL)
+ 		tempdir = copy_of("/tmp/");
+diff --git a/src/global.c b/src/global.c
+index 0e51ec6..eb30f9d 100644
+--- a/src/global.c
++++ b/src/global.c
+@@ -1226,6 +1226,10 @@ void shortcut_init(void)
+ 	/* Link key combos to functions in certain menus. */
+ 	add_to_sclist(MMOST|MBROWSER, "^M", '\r', do_enter, 0);
+ 	add_to_sclist(MMOST|MBROWSER, "Enter", KEY_ENTER, do_enter, 0);
++#ifdef __wasi__
++	/* Some WASIX runtimes deliver Enter as LF instead of CR. */
++	add_to_sclist(MMOST|MBROWSER, "^J", '\n', do_enter, 0);
++#endif
+ 	add_to_sclist(MMOST, "^I", '\t', do_tab, 0);
+ 	add_to_sclist(MMOST, "Tab", '\t', do_tab, 0);
+ 	add_to_sclist(MMAIN|MBROWSER|MHELP, "^B", 0, do_search_backward, 0);
+@@ -1299,7 +1303,9 @@ void shortcut_init(void)
+ #endif
+ #endif
+ #ifdef ENABLE_JUSTIFY
++#ifndef __wasi__
+ 	add_to_sclist(MMAIN, "^J", '\n', do_justify, 0);
++#endif
+ #endif
+ #ifdef ENABLE_LINTER
+ 	add_to_sclist(MEXECUTE, "^Y", 0, do_linter, 0);
+diff --git a/src/rcfile.c b/src/rcfile.c
+index 860248a..9f3e525 100644
+--- a/src/rcfile.c
++++ b/src/rcfile.c
+@@ -924,7 +924,9 @@ void parse_one_include(char *file, syntaxtype *syntax)
+ 	rcstream = fopen(file, "rb");
+ 
+ 	if (rcstream == NULL) {
+-		jot_error(N_("Error reading %s: %s"), file, strerror(errno));
++		/* Missing config files are expected in minimal WASIX runtimes. */
++		if (errno != ENOENT)
++			jot_error(N_("Error reading %s: %s"), file, strerror(errno));
+ 		return;
+ 	}
+ 
+@@ -1752,8 +1754,6 @@ void do_rcfiles(void)
+ 		if (have_nanorc(homedir, "/" HOME_RC_NAME) ||
+ 					have_nanorc(xdgconfdir, "/nano/" RCFILE_NAME) ||
+ 					have_nanorc(homedir, "/.config/nano/" RCFILE_NAME))
+ 			parse_one_nanorc();
+-		else if (homedir == NULL && xdgconfdir == NULL)
+-			jot_error(N_("I can't find my home directory!  Wah!"));
+ 	}
+ 
+ check_vitals_mapped();

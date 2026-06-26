@@ -1,0 +1,35 @@
+# Why this patch exists:
+# - Under some WASIX/Wasmer runs, `program_invocation_short_name` can be
+#   null or empty even when the binary executes normally.
+# - Grep uses `getprogname()` for help/version diagnostics, which then prints
+#   `(null)` in user-facing output.
+#
+# What this patch changes:
+# - In the `program_invocation_short_name` branch of `getprogname()`, return
+#   a deterministic fallback (`"grep"`) when the runtime-provided name is empty.
+#
+# Why this is safe:
+# - The fallback only applies when runtime metadata is missing.
+# - All other platform-specific `getprogname()` paths remain untouched.
+diff --git a/lib/getprogname.c b/lib/getprogname.c
+index 26084ad..a89f9d0 100644
+--- a/lib/getprogname.c
++++ b/lib/getprogname.c
+@@ -63,10 +63,16 @@ getprogname (void)
+ {
+ # if HAVE_DECL_PROGRAM_INVOCATION_SHORT_NAME                /* glibc, BeOS */
+   /* https://www.gnu.org/software/libc/manual/html_node/Error-Messages.html */
+-  return program_invocation_short_name;
++  /* WASIX runs under Wasmer can leave program_invocation_short_name unset.
++     Grep prints this value in help/version output; an empty value renders
++     "(null)" in user-facing text. Provide a deterministic fallback so usage
++     and diagnostics remain readable even when runtime argv/progname metadata
++     is missing. */
++  const char *p = program_invocation_short_name;
++  return p && p[0] ? p : "grep";
+ # elif HAVE_DECL_PROGRAM_INVOCATION_NAME                    /* glibc, BeOS */
+   /* https://www.gnu.org/software/libc/manual/html_node/Error-Messages.html */
+   return last_component (program_invocation_name);
+ # elif HAVE_GETEXECNAME                                     /* Solaris */
+   /* https://docs.oracle.com/cd/E19253-01/816-5168/6mbb3hrb1/index.html */
+   const char *p = getexecname ();

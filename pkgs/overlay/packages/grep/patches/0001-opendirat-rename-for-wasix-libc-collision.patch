@@ -1,0 +1,50 @@
+# Why this patch exists:
+# - WASIX libc provides `opendirat(int, const char *)`.
+# - gnugrep's gnulib code defines `opendirat(int, const char *, int, int *)`.
+# - The name collision causes conflicting declarations and bad call arity.
+#
+# What this patch changes:
+# - Renames gnulib's internal helper to `rpl_opendirat`.
+# - Updates declaration, definition, and fts call site.
+#
+# Why this is safe:
+# - Only internal gnulib symbol wiring changes; implementation is identical.
+diff --git a/lib/fts.c b/lib/fts.c
+index 6d6efa2..3c0f70f 100644
+--- a/lib/fts.c
++++ b/lib/fts.c
+@@ -1239,7 +1239,7 @@ set_stat_type (struct stat *st, int type)
+   while (0)
+ 
+ #define fts_opendir(file, Pdir_fd)                              \
+-        opendirat((! ISSET(FTS_NOCHDIR) && ISSET(FTS_CWDFD)     \
++        rpl_opendirat((! ISSET(FTS_NOCHDIR) && ISSET(FTS_CWDFD) \
+                    ? sp->fts_cwd_fd : AT_FDCWD),                \
+                   file,                                         \
+                   (((ISSET(FTS_PHYSICAL)                        \
+diff --git a/lib/opendirat.c b/lib/opendirat.c
+index 3ce5467..8ca4a64 100644
+--- a/lib/opendirat.c
++++ b/lib/opendirat.c
+@@ -37,7 +37,7 @@
+    On success, *PNEW_FD is at least 3, so this is a "safer" function.  */
+ 
+ DIR *
+-opendirat (int dir_fd, char const *dir, int extra_flags, int *pnew_fd)
++rpl_opendirat (int dir_fd, char const *dir, int extra_flags, int *pnew_fd)
+ {
+   int open_flags = (O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOCTTY
+                     | O_NONBLOCK | extra_flags);
+diff --git a/lib/opendirat.h b/lib/opendirat.h
+index 18af8bc..07f0ec5 100644
+--- a/lib/opendirat.h
++++ b/lib/opendirat.h
+@@ -27,7 +27,7 @@ extern "C" {
+ #endif
+ 
+ 
+-DIR *opendirat (int, char const *, int, int *)
++DIR *rpl_opendirat (int, char const *, int, int *)
+   _GL_ATTRIBUTE_MALLOC _GL_ATTRIBUTE_DEALLOC (closedir, 1);
+ 
+ 
