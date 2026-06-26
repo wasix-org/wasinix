@@ -1,201 +1,188 @@
 # WASIX Package Repository
 
-This repository is a Nix flake for building and packaging software for **WASIX**
-(`wasm32-wasix`), including:
+A Nix flake that builds software for **WASIX** (`wasm32-wasix`) from source — the
+toolchain (an LLVM fork + libc + runtimes + sysroot), a set of cross-compiled
+packages, and their **Wasmer/webc** package outputs (e.g. `pkg/git/wasmer.toml`
++ `bin/git.wasm`).
 
-- plain WASIX build outputs (for example `nano.wasm`)
-- Wasmer package outputs (for example `pkg/nano/{wasmer.toml,bin/nano.wasmer}`)
+## Quick start
 
-## Goals
+```sh
+nix develop                       # dev shell with wasixcc + cargo-wasix on PATH
 
-- provide a clean, maintainable package layout for WASIX cross-compilation
+nix build .#wasixcc               # the wasix C/C++ toolchain (the default output)
+nix build .#wasix-sysroot         # the multi-variant from-source sysroot
+nix build .#wasix-llvm            # the LLVM fork (slow)
 
-- Wrap existing nixpkgs packages with WASIX cross-compilation
-- Expose plain cross-compiled packages as individual nix packages
-- Expose Wasmer packages, which include wasm binaries and wasmer.toml package
-  definitions
+# webc packages + aggregates live under legacyPackages (the system is explicit):
+nix build .#legacyPackages.x86_64-linux.wasmer.git        # one webc package
+nix build .#legacyPackages.x86_64-linux.allWasmer         # the merged registry
+nix build .#legacyPackages.x86_64-linux.wasix.shippedPackages.grep   # one .wasm leaf
+```
 
+CI builds every package independently via the flat `ci` job set
+(`.#legacyPackages.<system>.ci`, consumed by `nix-fast-build` in
+`scripts/ci-build.sh`).
 
-## Quick Start
+## Architecture
 
-- Build all plain WASM binaries:
-  - `nix build`
-  - same as `nix build .#wasixAll`
-- Build one plain package:
-  - `nix build .#wasix.nano`
-  - `nix build .#wasix.ncurses`
-  - `nix build .#wasix.ncursesLib`
-- Build one Wasmer package:
-  - `nix build .#wasmer.nano`
-  - `nix build .#wasmer.ncurses`
-- Build all Wasmer packages:
-  - `nix build .#wasmerAll`
-- Enter development shell:
-  - `nix develop`
-  The shell has the wasixcc toolchain available
+Four layers, bottom to top:
 
-## Flake Outputs
+1. **Toolchain foundation** (`pkgs/toolchain/`) — built upstream-faithfully (mirrors
+   wasix-libc's `build32-general.sh`): the `wasix-org/llvm-project` fork provides
+   clang/lld; libc + compiler-rt + libc++ are built per ABI variant, driven by
+   wasix-libc's committed `clang-wasix*.cmake_toolchain` files, and merged into a
+   sysroot. `wasixcc` wraps it all.
 
-`flake.nix` exposes:
+2. **Profiles → cross sets** (`pkgs/profiles.nix`, `pkgs/mk-wasix-*.nix`) — the 5 ABI
+   variants (`eh`, `ehpic`, `exnrefEh` (default), `exnrefEhpic`, `off`). Each is a
+   **full nixpkgs cross package set** (like `pkgsStatic`) with the wasixcc
+   cc-wrapper stdenv injected via `config.replaceCrossStdenv`. Consequence:
+   **linked dependencies auto-thread within a profile** — a package just overrides
+   its nixpkgs counterpart and its deps come out wasix-built automatically, with no
+   manual dependency wiring.
 
-- top-level namespaced package sets (build with `nix build .#...`):
-  - `wasix.<name>` (for example `wasix.nano`, `wasix.ncurses`, `wasix.ncursesLib`, `wasix.wasixcc`)
-  - `wasmer.<name>` (for example `wasmer.nano`, `wasmer.crabsay`)
-- system-scoped aggregate bundles:
-  - `packages.<system>.wasixAll` (all plain `.wasm` binaries in `result/bin`)
-  - `packages.<system>.wasmerAll` (all Wasmer packages in `result/pkg`)
-  - `packages.<system>.default` (alias to `wasixAll`)
+3. **The overlay** (`pkgs/overlay/`) — one flat `packages/` dir holding both
+   libraries and CLIs (no library/program split). Each file is `prev.<pkg>` + a few
+   tweaks. `lib.nix` provides the helpers (`libTweaks`, `wasmRename`).
 
-## Repository Layout
+4. **The wasmer layer** (`pkgs/wasmer/`) — turns the shipped CLI leaves into webc
+   packages, **deriving** everything from the package (name from `meta.mainProgram`,
+   version, commands globbed from `bin/*.wasm`, …); per-package deviations live in
+   the package's `passthru.wasmer`.
+
+### Key concepts
+
+- **Profiles** are an ABI axis orthogonal to nixpkgs' build/host/target. The default
+  is `exnrefEh`; `off` (no Wasm-EH) exists for bash, which needs asyncify'd
+  fork/longjmp.
+- **Cross-profile deps** use `preferredPackages` (each package at its declared
+  preferred profile — `pkgs/profiles.nix` `preferred`, e.g. `bash → off`). This is
+  honest and explicit: `profileSets.exnrefEh.bash` asserts rather than silently
+  returning the off build. git, for instance, embeds `${preferredPackages.bash}`.
+- **`shippedCommands`** (in `pkgs/default.nix`) is the curated list of CLIs that ship
+  as webc packages — orthogonal to lib-vs-CLI (curl is both a linked lib and a
+  shipped CLI).
+
+## Repository layout
 
 ```text
-.
-├── flake.nix
-├── pkgs
-│   ├── default.nix                  # central wiring: toolchain, indexes, aggregates
-│   ├── toolchain
-│   │   ├── default.nix              # local WASIX toolchain index
-│   │   ├── wasix-llvm.nix           # pinned WASIX LLVM bundle
-│   │   ├── wasixcc.nix              # local wasixcc wrapper package
-│   │   ├── binaryen.nix             # pinned Binaryen bundle
-│   │   └── wasix-sysroot.nix        # pinned WASIX sysroot artifacts
-│   ├── libraries
-│   │   ├── default.nix              # library index
-│   │   └── ncurses/default.nix      # ncurses WASIX definition
-│   ├── programs
-│   │   ├── default.nix              # program index
-│   │   └── nano
-│   │       ├── nano.nix             # plain WASIX package definition
-│   │       ├── nanoWasmer.nix       # Wasmer package definition
-│   │       └── patches/...          # package-local patches
-│   └── wasmer
-│       ├── default.nix              # Wasmer package index + aggregate bundle
-│       └── make-wasmer-package.nix  # reusable Wasmer package builder function
-└── README.md
+pkgs/
+├── default.nix            # central wiring: toolchainPkgs, profileSets,
+│                          #   preferredPackages, the toolchains shim, wasmer, allWasm
+├── profiles.nix           # the 5 ABI profiles + default + the cross-profile `preferred` map
+├── mk-wasix-stdenv.nix    # the wasixcc cc-wrapper cross stdenv (via replaceCrossStdenv)
+├── mk-wasix-pkgs.nix      # build one profile's nixpkgs cross set
+├── crabsay.nix            # a Rust/cargo-wasix package (built on the build platform)
+├── overlay/
+│   ├── default.nix        # the wasix overlay: auto-imports packages/
+│   ├── lib.nix            # helpers: libTweaks, wasmRename, mergeScript
+│   ├── trivial.nix        # no-tweak packages, just names (→ libTweaks {} prev.X)
+│   ├── names.nix          # the canonical package-name set (files + dirs + trivial)
+│   └── packages/          # one package per entry — flat file, or a dir if it has assets
+│       ├── openssl.nix freetype.nix zlib.nix …    # tweak-only → a single file
+│       ├── grep/{package.nix, patches/…, tests/basic.nix}     # has assets → a dir
+│       └── gitMinimal/{package.nix, wasix-compat/, tests/…}
+├── wasmer/
+│   ├── default.nix             # builds shipped webc packages; attaches passthru.tests
+│   ├── make-wasmer-package.nix # derive-first webc builder (reads passthru.wasmer)
+│   ├── wrap-wasmer-package.nix # the run-by-name stub wrapper (wasmer run --entrypoint)
+│   └── test-lib.nix            # behavioural test harness (run under wasmer, diff vs native)
+└── toolchain/
+    ├── default.nix        # toolchainPkgs: the from-source foundation + the wrappers
+    ├── llvm.nix           # the wasix-org LLVM fork + install tree
+    ├── sysroot.nix        # per-variant from-source sysroot (mirrors build32)
+    ├── libc.nix compiler-rt.nix libcxx.nix test.nix   # per-component builders + smoke test
+    ├── wasixcc.nix cargo-wasix.nix binaryen.nix dev-env.nix   # wrappers + shell env
+    └── link-test.nix stdenv-test.nix                  # toolchain tests
 ```
 
-## How It Works
+## Flake outputs
 
-### 1) Toolchain and cross-system setup
+- `packages.<system>` — directly-buildable artifacts: `wasixcc` (also `default`),
+  `cargo-wasix`, `wasmer-bin`, and the foundation (`wasix-libc`, `wasix-llvm`,
+  `wasix-compiler-rt`, `wasix-libcxx`, `wasix-sysroot`).
+- `checks.<system>` — every package's `passthru.tests`, collected uniformly: the
+  behavioural suites (`bash`, `git`, …) + the toolchain suites (`sysroot`,
+  `wasixcc` — the latter groups the per-profile link/stdenv tests) + `treefmt`.
+- `devShells.<system>.default`, `formatter.<system>`.
+- `legacyPackages.<system>` — everything non-standard (so `nix flake check` stays
+  quiet). The buildable trees sit at top level so their attr path is the build
+  target: `toolchain.{wasixcc,cargo-wasix,libc,compiler-rt,libcxx,sysroot,llvm.clang,
+  llvm.lld,runtime}`, `libraryMatrix.<profile>.<lib>`, and `shippedPackages.<name>`
+  — the wasm cross build, carrying `.webc` (the webc package) and `.tests`. Plus
+  escape hatches (`profileSets`, `toolchains`, `pkgsCross`, `allWasmer`/`allWasm`)
+  and `ci`.
+- **`ci` is those same trees flattened to dotted keys**, so a job name *is* the
+  build path: `ci."libraryMatrix.exnrefEh.ncurses"` builds
+  `.#libraryMatrix.exnrefEh.ncurses`; `ci."shippedPackages.git.webc"` builds
+  `.#shippedPackages.git.webc` (+ `checks.<name>`). The two can't drift.
 
-`pkgs/default.nix` defines:
+### passthru conventions
 
-- WASIX toolchain components from local `pkgs/toolchain` definitions
-- cross configuration (`wasm32-unknown-wasi` with WASIX-specific flags)
-- shared env snippets used by package overrides (`toolchainEnv`, `ccEnv`, `commonPreConfigure`)
+Our markers on a package are namespaced to avoid collisions: `passthru.wasix.*`
+for build metadata (e.g. `preferredProfile`), `passthru.wasmer.*` for webc config
+(see below). `passthru.tests` stays standard (nixpkgs idiom), and `passthru.webc`
+is the package's built webc.
 
-### 2) Package indexes
+## Adding a package
 
-- `pkgs/libraries/default.nix` collects library packages
-- `pkgs/programs/default.nix` collects binary/program packages
-- `pkgs/wasmer/default.nix` collects Wasmer package outputs
+Pick the lightest form:
 
-This mirrors nixpkgs indexing style while keeping directory depth reasonable.
+- **No tweaks** → add the name to `pkgs/overlay/trivial.nix` (it becomes
+  `libTweaks {} prev.<name>`). No file.
+- **Tweaks, no assets** → a single `pkgs/overlay/packages/<name>.nix`.
+- **Has patches/tests/aux** → a dir `pkgs/overlay/packages/<name>/` with
+  `package.nix` + `patches/` + `tests/` + any aux. The loader picks up a flat file
+  or a dir automatically.
 
-### 3) Aggregate outputs
-
-- `wasixAll` scans all plain packages for `bin/*.wasm` and copies them into `result/bin`
-- `wasmerAll` merges all Wasmer package directories into `result/pkg`
-
-## Wasmer Packaging Model
-
-Wasmer packages are generated via `pkgs/wasmer/make-wasmer-package.nix`.
-
-Defaults:
-
-- `owner = "wasmer"` (overrideable)
-- package name in `wasmer.toml` becomes `"{owner}/{name}"`
-- description defaults to `package.meta.description` when available (overrideable)
-- commands auto-discover from `bin/*.wasm` when `commands = null`
-
-Per-package overrides are implemented in package-specific files such as:
-
-- `pkgs/programs/nano/nanoWasmer.nix`
-
-This keeps custom behavior close to each package.
-
-## Dev Guide: Add a New Package
-
-This section describes the recommended flow for adding a new program package (for example `foo`) and its Wasmer package.
-
-### A. Add the plain package
-
-1. Create `pkgs/programs/foo/foo.nix`
-   - start from nixpkgs package via `callPackage`
-   - apply WASIX cross tweaks in `overrideAttrs`
-   - ensure output binary is named `*.wasm` in `$out/bin` (for aggregate discovery)
-2. Add any patches under `pkgs/programs/foo/patches/`
-3. Export package from `pkgs/programs/default.nix`:
-   - add `foo = pkgsCross.callPackage ./foo/foo.nix { ... };`
-
-### B. Add the Wasmer package
-
-1. Create `pkgs/programs/foo/fooWasmer.nix` using `makeWasmerPackage`
-2. In `pkgs/default.nix`, instantiate it with:
-   - `foo = programs.foo`
-   - `makeWasmerPackage`
-3. In `pkgs/wasmer/default.nix`, add a package mapping like `foo = fooWasmer;`
-4. In `flake.nix`, it is exposed under `wasmer.<name>` (already wired)
-
-### C. Validate
-
-- `nix build .#wasix.foo`
-- `nix build .#wasmer.foo`
-- `nix build .#wasixAll`
-- `nix build .#wasmerAll`
-
-Check expected output locations:
-
-- plain: `result/bin/*.wasm`
-- Wasmer: `result/pkg/foo/wasmer.toml`, `result/pkg/foo/bin/*.wasmer`
-
-## Minimal Templates
-
-### `pkgs/programs/foo/fooWasmer.nix`
+### A library (linked dependency)
 
 ```nix
-{ makeWasmerPackage, foo }:
-makeWasmerPackage {
-  package = foo;
-  name = "foo";
-
-  # Optional overrides:
-  # owner = "your-org";
-  # description = "Custom package description";
-
-  # Optional explicit command mapping:
-  # commands = [
-  #   {
-  #     name = "foo";
-  #     module = "foo";
-  #     wasm = "foo.wasm";
-  #     output = "foo.wasmer";
-  #   }
-  # ];
-}
+# pkgs/overlay/packages/foo.nix   (or foo/package.nix)
+{ prev, helpers, ... }:
+helpers.libTweaks { configureFlags = [ "--disable-bar" ]; } prev.foo
 ```
+`prev.foo` is already built with the wasix cross stdenv, and its linked deps
+auto-thread — no manual `self.X`. Use `final.<dep>` for a same-profile dep you
+reference explicitly; patches go in `foo/patches/`. It's then available as
+`profileSets.<profile>.foo` and (unless shipped) in the per-profile `libraryMatrix`.
 
-### `pkgs/programs/default.nix` (pattern)
+### A CLI (shipped as a webc package)
 
-```nix
-{ nixpkgs, pkgsCross, toolchain, libs }:
-{
-  nano = pkgsCross.callPackage ./nano/nano.nix {
-    inherit nixpkgs toolchain;
-    ncurses = libs.ncursesLib;
-  };
+1. As above, but wrap with `wasmRename` to publish `bin/foo` as `foo.wasm` (add
+   `asyncifyFlags`/`binaryen` if it needs fork/longjmp), and add `"foo"` to
+   `shippedCommands` in `pkgs/default.nix`:
+   ```nix
+   { prev, helpers, ... }:
+   helpers.wasmRename { wasmName = "foo"; } (helpers.libTweaks { } prev.foo)
+   ```
+2. The webc `wasmer.toml` is derived automatically; only deviations go in the
+   package's `passthru.wasmer` — most need none. e.g. git:
+   ```nix
+   passthru.wasmer = {
+     owner = "kilyanni";
+     fs."/etc/ssl" = "${final.cacert}/etc/ssl";
+     commandEnv.git = { SSL_CERT_FILE = "/etc/ssl/certs/ca-bundle.crt"; };
+     autoSelfMount = true;   # mount the /nix/store paths the wasm embeds
+   };
+   ```
+   Other knobs: `name` (defaults to `meta.mainProgram`), `version`, `commands`
+   (explicit, for aliases like gunzip→gzip).
 
-  # foo = pkgsCross.callPackage ./foo/foo.nix {
-  #   inherit nixpkgs toolchain;
-  #   # add dependencies here
-  # };
-}
-```
+### Tests
 
-## Notes and Pitfalls
+Drop `pkgs/overlay/packages/<name>/tests/*.nix` (each returns an attrset of
+`testLib`-built derivations; a `helpers.nix` is shared setup). They're attached to
+the webc package as `passthru.tests` and run under wasmer — see the harness in
+`pkgs/wasmer/test-lib.nix` (`mkScriptComparison` diffs against the native tool;
+`expectFail`/`broken` mark non-blocking known-issue tests).
 
-- `nix build .#...` uses the **git-tracked** flake source. If a new file is untracked, Nix may report that the path does not exist.
-  - fix by staging/tracking the file (`git add ...`) before using `.#...`, or use `path:$PWD` while iterating.
-- keep patches close to the package that consumes them (`pkgs/programs/<name>/patches/`)
-- prefer explicit package-local Wasmer definitions when behavior might diverge later
+## Notes & pitfalls
 
+- `nix build .#…` uses the **git-tracked** flake source — `git add` a new file
+  before referencing it (or use `path:$PWD` while iterating).
+- Keep patches next to the package set that consumes them
+  (`pkgs/overlay/packages/patches/`).
+- `bash` and anything off-only build in the `off` profile; building them in another
+  profile asserts by design. Reach them via `preferredPackages` / the ship list.

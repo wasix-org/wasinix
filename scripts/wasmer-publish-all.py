@@ -281,7 +281,7 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parents[1]
     pkg_root = repo_root / "result" / "pkg"
 
-    run(["nix", "build", ".#wasmerAll"], cwd=repo_root)
+    run(["nix", "build", ".#legacyPackages.x86_64-linux.allWasmer"], cwd=repo_root)
 
     packages = read_packages(pkg_root)
     ordered = topo_sort(packages)

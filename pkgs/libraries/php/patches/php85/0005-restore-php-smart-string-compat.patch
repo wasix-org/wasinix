@@ -1,8 +1,0 @@
-diff --git a/ext/standard/php_smart_string.h b/ext/standard/php_smart_string.h
-new file mode 100644
-index 0000000..067e719
---- /dev/null
-+++ b/ext/standard/php_smart_string.h
-@@ -0,0 +1,2 @@
-+/* Header moved to Zend. This file is retained for BC. */
-+#include "zend_smart_string.h"
