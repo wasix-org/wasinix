@@ -5,7 +5,7 @@
 {
   final,
   prev,
-  toolchainPkgs,
+  foundation,
   preferredPackages,
   ...
 }: let
@@ -94,7 +94,7 @@ in
         mv "$out/bin/git" "$out/bin/git.wasm"
 
         asyncify() {
-          ${toolchainPkgs.binaryen}/bin/wasm-opt --asyncify -O2 "$1" -o "$1"
+          ${foundation.binaryen}/bin/wasm-opt --asyncify -O2 "$1" -o "$1"
         }
         asyncify "$out/bin/git.wasm"
 

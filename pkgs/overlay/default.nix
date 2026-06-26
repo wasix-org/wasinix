@@ -6,14 +6,18 @@
 # stdenv override, no manual `self.X` dependency threading.
 #
 # Each packages/<name>.nix is a function taking:
-#   { final, prev, helpers, toolchainPkgs, preferredPackages, nixpkgs }
+#   { final, prev, helpers, foundation, preferredPackages, nixpkgs }
 # and returning the wasix derivation. Use `final.<lib>` for linked deps
 # (same-profile, auto-threaded) and `preferredPackages.<tool>` for non-linked /
 # runtime-invoked deps (resolved to that tool's preferred profile).
 {
-  toolchainPkgs,
+  foundation,
   nixpkgs,
   preferredPackages,
+  wasixRustPlatform,
+  # ABI variants the wasix rust toolchain can target (e.g. ["eh"]); Rust packages
+  # in any other profile are marked broken.
+  rustSupportedVariants,
 }: final: prev: let
   lib = prev.lib;
   # Two independent gates (read prev.stdenv, not final.stdenv — gating the
@@ -39,6 +43,57 @@
     });
   };
 
+  # Make Rust transparent here, the same way C/C++ is: replace rustPlatform with the
+  # from-source wasix one (mk-wasix-rust-platform.nix), so `rustPlatform.buildRustPackage`
+  # cross-builds to wasm32-wasmer-wasi with no per-package plumbing. It carries its own
+  # clean cross set for the cargo-hook tooling (the wasixcc stdenv here is libc-less, so
+  # nixpkgs' own cross rustc can't build), while compiling with the fork rustc.
+  #
+  # Rust only targets some ABI variants (eh, and ehpic when -dl builds). In the others
+  # (off/exnref*) there's no std, so mark Rust packages broken — a clear, CI-graceful
+  # error (vs a missing rustPlatform). The variant name is derived from this profile's
+  # EH/PIC platform fields.
+  rustSupport = lib.optionalAttrs isWasixHost (let
+    hp = prev.stdenv.hostPlatform;
+    exc = hp.wasmExceptions or "no";
+    pic = hp.wasmPic or false;
+    variant =
+      if exc == "no"
+      then "off"
+      else if exc == "yes"
+      then
+        (
+          if pic
+          then "exnrefEhpic"
+          else "exnrefEh"
+        )
+      else
+        (
+          if pic
+          then "ehpic"
+          else "eh"
+        );
+    supported = lib.elem variant rustSupportedVariants;
+  in {
+    rustPlatform =
+      if supported
+      then wasixRustPlatform
+      else
+        wasixRustPlatform
+        // {
+          buildRustPackage = args:
+            wasixRustPlatform.buildRustPackage (args
+              // {
+                meta =
+                  (args.meta or {})
+                  // {
+                    broken = true;
+                    badPlatforms = ["wasm32-wasi"];
+                  };
+              });
+        };
+  });
+
   packages =
     if !isWasixHost
     then {}
@@ -52,13 +107,14 @@
         map (lib.removeSuffix ".nix")
         (lib.attrNames (lib.filterAttrs (n: t: t == "regular" && lib.hasSuffix ".nix" n) entries));
       dirNames = lib.attrNames (lib.filterAttrs (_: t: t == "directory") entries);
-      callArgs = {inherit final prev helpers toolchainPkgs preferredPackages nixpkgs;};
+      callArgs = {inherit final prev helpers foundation preferredPackages nixpkgs;};
     in
       (lib.genAttrs (import ./trivial.nix) (n: helpers.libTweaks {} prev.${n}))
       // (lib.genAttrs fileNames (n: import (pkgDir + "/${n}.nix") callArgs))
       // (lib.genAttrs dirNames (n: import (pkgDir + "/${n}/package.nix") callArgs));
 in
   packages
+  // rustSupport
   // wrapperFix
   // lib.optionalAttrs isWasixHost {
     # Opt-in setup hook (added to a package's nativeBuildInputs): forces wasm-opt

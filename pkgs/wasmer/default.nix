@@ -18,9 +18,6 @@
   shippedCommands,
   # overlay/packages, to find each package's co-located tests/.
   packagesDir,
-  # extra shipped CROSS packages not drawn from preferredPackages (crabsay), as
-  # { <overlayName> = crossPkg; }.
-  extraShipped ? {},
 }: let
   testLib = import ./test-lib.nix {inherit pkgs wasmer;};
   mkTestGroup = import ../test-group.nix {inherit pkgs lib;};
@@ -76,17 +73,15 @@
     });
 
   # Keyed by webc/program name (gitMinimal -> "git"): the shipped commands at
-  # their preferred profile, plus the extras (crabsay).
-  shippedPackages =
-    lib.listToAttrs (map (
-        n: let
-          crossPkg = preferredPackages.${n};
-          wname = crossPkg.passthru.wasmer.name or crossPkg.meta.mainProgram or crossPkg.pname or n;
-        in
-          lib.nameValuePair wname (augment n crossPkg)
-      )
-      shippedCommands)
-    // lib.mapAttrs augment extraShipped;
+  # their preferred profile.
+  shippedPackages = lib.listToAttrs (map (
+      n: let
+        crossPkg = preferredPackages.${n};
+        wname = crossPkg.passthru.wasmer.name or crossPkg.meta.mainProgram or crossPkg.pname or n;
+      in
+        lib.nameValuePair wname (augment n crossPkg)
+    )
+    shippedCommands);
 
   # `.webc.shim` (run-by-name stub) per package, for cross-package tests. `.shim`
   # doesn't touch `.tests`, so this stays lazy.

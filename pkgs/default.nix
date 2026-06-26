@@ -7,7 +7,7 @@
 }: let
   pkgs = import nixpkgs {inherit system;};
   inherit (pkgs) lib;
-  toolchainPkgs = import ./toolchain {inherit pkgs;};
+  foundation = import ./toolchain {inherit pkgs;};
 
   # The single wasix cross target. Kept here (rather than derived from a
   # toolchain profile) so pkgsCross can be built *before* the profiles — each
@@ -17,10 +17,24 @@
     config = "wasm32-unknown-wasi";
     useLLVM = true;
     isWasix = true;
+    # Rust builds for the fork's target; pkgsCross hosts the wasix rustPlatform
+    # below (its default stdenv has a real libc, which the cargo hooks' tooling
+    # needs — unlike the libc-less wasixcc profile stdenv). C/C++ ignore this.
+    rust.rustcTarget = "wasm32-wasmer-wasi";
   };
   pkgsCross = import nixpkgs {
     inherit system crossSystem;
     config.allowUnsupportedSystem = true;
+  };
+
+  # The wasix rustPlatform: nixpkgs' rustPlatform over the from-source toolchain,
+  # built on pkgsCross. The Rust counterpart to mk-wasix-stdenv — injected into each
+  # profile set by the overlay so wasix Rust crates build transparently via
+  # rustPlatform.buildRustPackage, the way C/C++ build via the wasixcc stdenv.
+  wasixRustPlatform = import ./mk-wasix-rust-platform.nix {
+    inherit lib pkgsCross;
+    inherit (foundation) wasixRustToolchain wasixcc;
+    cargo = pkgs.cargo;
   };
 
   defaultProfileName = "exnrefEh";
@@ -30,7 +44,7 @@
   # stdenv injected via replaceCrossStdenv + the wasix overlay; linked deps
   # auto-thread within a profile.
   profilesCfg = import ./profiles.nix;
-  mkWasixStdenv = import ./mk-wasix-stdenv.nix {inherit lib toolchainPkgs;};
+  mkWasixStdenv = import ./mk-wasix-stdenv.nix {inherit lib foundation;};
 
   # Package names = the overlay's package set (flat files + dirs + trivial list).
   wasixPkgNames = import ./overlay/names.nix {inherit lib;};
@@ -45,45 +59,49 @@
     profileSets.${defaultProfileName}.${name}.passthru.wasix.preferredProfile or defaultProfileName;
   preferredPackages = lib.genAttrs wasixPkgNames (name: profileSets.${preferredProfileOf name}.${name});
 
-  wasixOverlay = import ./overlay {inherit toolchainPkgs nixpkgs preferredPackages;};
+  wasixOverlay = import ./overlay {
+    inherit foundation nixpkgs preferredPackages wasixRustPlatform;
+    rustSupportedVariants = foundation.wasixRustToolchain.supportedVariants;
+  };
   mkWasixPkgs = import ./mk-wasix-pkgs.nix {inherit system nixpkgs mkWasixStdenv wasixOverlay;};
   profileSets = lib.mapAttrs (_: spec: mkWasixPkgs spec) profilesCfg.profiles;
 
-  # ── toolchains: per-profile toolchain handle ─────────────────────────────────
-  # The per-package cross stdenv lives in profileSets (via mk-wasix-stdenv); this
-  # re-exposes it alongside the toolchain tools + the dev-env shell fragments, for
-  # the consumers that drive wasixcc outside a package build: the link/stdenv
-  # tests and the devShell.
-  devEnvFor = import ./toolchain/dev-env.nix {inherit pkgs toolchainPkgs;};
-  toolchains =
+  # ── toolchain: per-profile build environments ────────────────────────────────
+  # `foundation` holds the flat, profile-independent compilers; this is the
+  # per-profile layer built from them: each profile's `stdenv` (C/C++, the wasixcc
+  # cc-wrapper from profileSets) and `rustPlatform` (Rust — real on the variants the
+  # rust toolchain targets, marked-broken elsewhere by the overlay), plus the
+  # dev-env shell fragments + ABI metadata the link/stdenv tests and devShell need.
+  devEnvFor = import ./toolchain/dev-env.nix {inherit pkgs foundation;};
+  toolchain =
     lib.mapAttrs (
       profileName: spec: let
         wasmExceptions = spec.wasmExceptions or null;
         pic = spec.wasmPic or false;
       in
-        toolchainPkgs
-        // (devEnvFor {inherit wasmExceptions pic;})
+        (devEnvFor {inherit wasmExceptions pic;})
         // {
           inherit profileName wasmExceptions pic;
           stdenv = profileSets.${profileName}.stdenv;
+          rustPlatform = profileSets.${profileName}.rustPlatform;
           host = "wasm32-wasix";
           buildCc = "${pkgs.buildPackages.stdenv.cc}/bin/cc";
         }
     )
     profilesCfg.profiles;
-  defaultToolchain = toolchains.${defaultProfileName};
+  defaultToolchain = toolchain.${defaultProfileName};
 
   # Toolchain tests, attached as passthru.tests on the toolchain packages so the
   # flake collects them uniformly with the shipped-package tests. Built here (not
-  # in the flake) because they need the per-profile toolchains + the wasmer
+  # in the flake) because they need the per-profile toolchain + the wasmer
   # runtime: sysroot smoke tests (per ABI variant) on `sysroot`, and per-profile
   # end-to-end link + stdenv tests on `wasixcc`.
   mkTestGroup = import ./test-group.nix {inherit pkgs lib;};
   toolchainTestPkgs = {
-    sysroot = toolchainPkgs.sysroot.overrideAttrs (o: {
-      passthru = (o.passthru or {}) // {tests = mkTestGroup "sysroot" toolchainPkgs.tests;};
+    sysroot = foundation.sysroot.overrideAttrs (o: {
+      passthru = (o.passthru or {}) // {tests = mkTestGroup "sysroot" foundation.tests;};
     });
-    wasixcc = defaultToolchain.wasixcc.overrideAttrs (o: {
+    wasixcc = foundation.wasixcc.overrideAttrs (o: {
       passthru =
         (o.passthru or {})
         // {
@@ -93,21 +111,17 @@
                 wasmer = wasmerRuntime;
                 toolchain = tc;
               }))
-            toolchains)
+            toolchain)
             // (lib.mapAttrs' (p: tc:
               lib.nameValuePair "stdenv-${p}" (pkgs.callPackage ./toolchain/stdenv-test.nix {
                 wasmer = wasmerRuntime;
                 toolchain = tc;
               }))
-            toolchains)
+            toolchain)
           );
         };
     });
   };
-
-  # crabsay is Rust/cargoWasix (builds on the build platform, ignores the cross
-  # stdenv), so it lives outside the overlay.
-  crabsay = pkgs.callPackage ./crabsay.nix {cargoWasix = toolchainPkgs.cargoWasix;};
 
   # ── package matrices for CI / consumers ──────────────────────────────────────
   # The non-shipped overlay packages are the libraries; build them across the
@@ -135,6 +149,7 @@
     "bash"
     "gitMinimal"
     "curl"
+    "crabsay"
   ];
 
   makeWasmerPackage = pkgs.callPackage ./wasmer/make-wasmer-package.nix {};
@@ -144,7 +159,6 @@
     inherit pkgs makeWasmerPackage preferredPackages shippedCommands;
     wasmer = wasmerRuntime;
     packagesDir = ./overlay/packages;
-    extraShipped = {inherit crabsay;};
   };
   # shippedPackages.<name> = the wasm cross build (keyed by program name), each
   # carrying passthru.webc (the webc package) + passthru.tests.
@@ -163,6 +177,6 @@
   '';
 in {
   inherit pkgs pkgsCross defaultProfileName;
-  inherit toolchainPkgs toolchains profileSets preferredPackages crabsay allWasm allWasmer;
+  inherit foundation toolchain profileSets preferredPackages allWasm allWasmer;
   inherit shippedCommands shippedPackages libraryMatrix toolchainTestPkgs;
 }

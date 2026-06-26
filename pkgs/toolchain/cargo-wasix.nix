@@ -4,7 +4,6 @@
   fetchFromGitHub,
   stdenv,
   bash,
-  cargo,
   rustup,
   wasixRustToolchain,
   wasixcc,
@@ -26,32 +25,17 @@
 
   supported = stdenv.hostPlatform.isLinux && stdenv.hostPlatform.isx86_64;
 
-  wasixRustupToolchain = stdenvNoCC.mkDerivation {
-    pname = "wasix-rustup-toolchain";
-    inherit version;
-    dontUnpack = true;
-
-    installPhase = ''
-      runHook preInstall
-      mkdir -p "$out"
-      cp -a "${wasixRustToolchain}"/. "$out"/
-      chmod -R u+w "$out"
-
-      cargo_bin="${cargo}/bin/.cargo-wrapped"
-      if [ ! -x "$cargo_bin" ]; then
-        cargo_bin="${cargo}/bin/cargo"
-      fi
-      ln -sf "$cargo_bin" "$out/bin/cargo"
-      runHook postInstall
-    '';
-  };
-
   cargoWasixRaw = rustPlatform.buildRustPackage {
     pname = "cargo-wasix-raw";
     inherit version src;
+    # Upstream ships no Cargo.lock, so cargoHash/fetchCargoVendor can't be used (it
+    # hard-requires one). Carry a committed lock and vendor from it via importCargoLock.
+    # Regenerate with `cargo generate-lockfile` against a new src when bumping.
     cargoLock.lockFile = ./cargo-wasix.Cargo.lock;
 
     doCheck = false;
+    # cargoSetupHook vendors from the lock but doesn't write Cargo.lock into the (lockless)
+    # source, so the offline cargo build wouldn't find one — put it there ourselves.
     prePatch = ''
       cp ${./cargo-wasix.Cargo.lock} Cargo.lock
     '';
@@ -73,7 +57,8 @@ in
 
       # Update instructions:
       # 1) Update `src.rev` and `src.hash` to the target wasix-org/cargo-wasix revision.
-      # 2) Run `nix build .#cargo-wasix` and update cargoHash if Nix asks.
+      # 2) Regenerate ./cargo-wasix.Cargo.lock (`cargo generate-lockfile`) — upstream
+      #    ships none, so it can't be vendored via cargoHash/nix-update.
       # 3) Keep wrapper env vars aligned with pkgs/default.nix toolchain env exports.
       installPhase = ''
               runHook preInstall
@@ -103,9 +88,9 @@ in
         export CARGO_WASIX_OFFLINE=1
 
         "${rustup}/bin/rustup" toolchain remove wasix >/dev/null 2>&1 || true
-        "${rustup}/bin/rustup" toolchain link wasix "${wasixRustupToolchain}" >/dev/null
+        "${rustup}/bin/rustup" toolchain link wasix "${wasixRustToolchain}" >/dev/null
         "${rustup}/bin/rustup" toolchain remove wasix-default >/dev/null 2>&1 || true
-        "${rustup}/bin/rustup" toolchain link wasix-default "${wasixRustupToolchain}" >/dev/null
+        "${rustup}/bin/rustup" toolchain link wasix-default "${wasixRustToolchain}" >/dev/null
         "${rustup}/bin/rustup" default wasix-default >/dev/null
 
         script_dir="\$(CDPATH= cd -- "\$(dirname -- "\$0")" && pwd)"

@@ -10,7 +10,14 @@
   wasixLlvm = llvmTree;
   wasixSysroot = sysroot;
 
-  wasixRustToolchain = pkgs.callPackage ./wasix-rust-toolchain.nix {};
+  wasixRustToolchain = pkgs.callPackage ./wasix-rust-toolchain.nix {
+    # build-wasix.sh maps the two wasix std targets to the EH and EH+PIC libc
+    # sysroots; take them (and the clang that compiles their C) from the same
+    # from-source foundation.
+    inherit wasixLlvm;
+    wasixSysrootEh = variants.eh.sysroot;
+    wasixSysrootEhpic = variants.ehpic.sysroot;
+  };
   binaryen = pkgs.callPackage ./binaryen.nix {};
   wasixcc = pkgs.callPackage ./wasixcc.nix {
     inherit wasixLlvm binaryen wasixSysroot;
@@ -19,7 +26,8 @@
     inherit wasixRustToolchain wasixcc wasixLlvm binaryen wasixSysroot;
   };
 in {
-  # wrappers
+  # wrappers (the wasix rustPlatform is assembled in pkgs/default.nix, where the
+  # plain pkgsCross it needs is in scope, and injected into the overlay).
   inherit wasixLlvm wasixSysroot wasixRustToolchain binaryen wasixcc cargoWasix;
   # from-source foundation (compiler + per-variant sysroot components + smoke tests)
   inherit llvm variants sysroot tests libc compiler-rt libcxx;

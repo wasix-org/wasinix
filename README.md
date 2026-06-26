@@ -68,8 +68,8 @@ Four layers, bottom to top:
 
 ```text
 pkgs/
-├── default.nix            # central wiring: toolchainPkgs, profileSets,
-│                          #   preferredPackages, the toolchains shim, wasmer, allWasm
+├── default.nix            # central wiring: foundation, profileSets,
+│                          #   preferredPackages, the toolchain shim, wasmer, allWasm
 ├── profiles.nix           # the 5 ABI profiles + default + the cross-profile `preferred` map
 ├── mk-wasix-stdenv.nix    # the wasixcc cc-wrapper cross stdenv (via replaceCrossStdenv)
 ├── mk-wasix-pkgs.nix      # build one profile's nixpkgs cross set
@@ -89,7 +89,7 @@ pkgs/
 │   ├── wrap-wasmer-package.nix # the run-by-name stub wrapper (wasmer run --entrypoint)
 │   └── test-lib.nix            # behavioural test harness (run under wasmer, diff vs native)
 └── toolchain/
-    ├── default.nix        # toolchainPkgs: the from-source foundation + the wrappers
+    ├── default.nix        # foundation: the from-source compilers + the wrappers
     ├── llvm.nix           # the wasix-org LLVM fork + install tree
     ├── sysroot.nix        # per-variant from-source sysroot (mirrors build32)
     ├── libc.nix compiler-rt.nix libcxx.nix test.nix   # per-component builders + smoke test
@@ -111,7 +111,7 @@ pkgs/
   target: `toolchain.{wasixcc,cargo-wasix,libc,compiler-rt,libcxx,sysroot,llvm.clang,
   llvm.lld,runtime}`, `libraryMatrix.<profile>.<lib>`, and `shippedPackages.<name>`
   — the wasm cross build, carrying `.webc` (the webc package) and `.tests`. Plus
-  escape hatches (`profileSets`, `toolchains`, `pkgsCross`, `allWasmer`/`allWasm`)
+  escape hatches (`profileSets`, `toolchain`, `pkgsCross`, `allWasmer`/`allWasm`)
   and `ci`.
 - **`ci` is those same trees flattened to dotted keys**, so a job name *is* the
   build path: `ci."libraryMatrix.exnrefEh.ncurses"` builds
