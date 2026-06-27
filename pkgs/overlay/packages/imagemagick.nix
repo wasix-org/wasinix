@@ -51,7 +51,7 @@ in
     librsvgSupport = false;
     libtiffSupport = true;
     libxml2Support = true;
-    openjpegSupport = false;
+    openjpegSupport = true;
     libwebpSupport = true;
     libheifSupport = false;
     fftwSupport = false;

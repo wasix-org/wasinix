@@ -1,5 +1,6 @@
-# gnugrep. pcre2 off (fails on this toolchain); runtimeShellPackage null (don't
-# pull a target-side shell). gnulib-tests stripped (not portable to WASIX).
+# gnugrep with -P (PCRE). pcre2 auto-threads to our overlay's pcre2 (the one that
+# builds) through the package-set fixpoint — just don't null it out. runtimeShell-
+# Package null (don't pull a target-side shell). gnulib-tests stripped (not portable).
 {
   prev,
   helpers,
@@ -7,7 +8,6 @@
 }:
 helpers.wasmRename {wasmName = "grep";} (
   helpers.libTweaks {
-    configureFlags = ["--disable-perl-regexp"];
     postPatch = ''
       sed -i 's:gnulib-tests::g' Makefile.in
     '';
@@ -21,7 +21,6 @@ helpers.wasmRename {wasmName = "grep";} (
         ];
     };
   } (prev.gnugrep.override {
-    pcre2 = null;
     runtimeShellPackage = null;
   })
 )

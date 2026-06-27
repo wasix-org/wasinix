@@ -1,13 +1,14 @@
 # Both the libcurl library (linked by git/imagemagick — they use lib/libcurl.a,
-# unaffected by the bin rename) and the curl CLI, shipped as curl.wasm. openssl
-# and zlib auto-thread; the *Support flags are build options (kept).
+# unaffected by the bin rename) and the curl CLI, shipped as curl.wasm. openssl,
+# zlib, brotli and zstd auto-thread; the remaining *Support flags need libs we
+# don't package yet (nghttp2, c-ares, libidn2, libpsl, …).
 {
   prev,
   helpers,
   ...
 }:
 helpers.wasmRename {wasmName = "curl";} (helpers.libTweaks {} (prev.curlMinimal.override {
-  brotliSupport = false;
+  brotliSupport = true;
   c-aresSupport = false;
   gssSupport = false;
   http2Support = false;
@@ -21,5 +22,5 @@ helpers.wasmRename {wasmName = "curl";} (helpers.libTweaks {} (prev.curlMinimal.
   rustlsSupport = false;
   scpSupport = false;
   zlibSupport = true;
-  zstdSupport = false;
+  zstdSupport = true;
 }))
