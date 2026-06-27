@@ -221,7 +221,16 @@ in
     configurePlatforms = [];
     configureFlags =
       [
-        "--release-channel=stable"
+        # NIGHTLY, not stable. The wasm32-wasmer-wasi target needs rustc's *unstable*
+        # wasm support (threads/atomics), and rustc only emits `--max-memory=4 GiB` for
+        # a shared (threaded) memory off the stable channel. On `stable` that flag is
+        # gated off, so the shared memory comes out non-growable (max == initial); the
+        # heap can't grow and the first allocation in std startup traps → the program
+        # _Exit(70)s before main ("Rust builds but doesn't run"). Upstream's
+        # config.toml.wasix-template leaves the channel at its non-stable default;
+        # forcing stable here was the bug. (cargo-wasix's prebuilt path always worked
+        # because its toolchain is non-stable and so emits the flag natively.)
+        "--release-channel=nightly"
         "--build=${hostTriple}"
         "--host=${hostTriple}"
         "--target=${hostTriple},wasm32-wasmer-wasi${optionalString withDynamicLinking ",wasm32-wasmer-wasi-dl"}"

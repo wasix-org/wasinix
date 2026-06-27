@@ -81,16 +81,26 @@
       else
         wasixRustPlatform
         // {
+          # Accept both buildRustPackage forms (attrset or finalAttrs: function),
+          # like the real wrapper — resolve, then force meta.broken.
           buildRustPackage = args:
-            wasixRustPlatform.buildRustPackage (args
-              // {
-                meta =
-                  (args.meta or {})
-                  // {
-                    broken = true;
-                    badPlatforms = ["wasm32-wasi"];
-                  };
-              });
+            wasixRustPlatform.buildRustPackage (
+              finalAttrs: let
+                a =
+                  if builtins.isFunction args
+                  then args finalAttrs
+                  else args;
+              in
+                a
+                // {
+                  meta =
+                    (a.meta or {})
+                    // {
+                      broken = true;
+                      badPlatforms = ["wasm32-wasi"];
+                    };
+                }
+            );
         };
   });
 

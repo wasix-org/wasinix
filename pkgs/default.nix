@@ -27,13 +27,14 @@
     config.allowUnsupportedSystem = true;
   };
 
-  # The wasix rustPlatform: nixpkgs' rustPlatform over the from-source toolchain,
-  # built on pkgsCross. The Rust counterpart to mk-wasix-stdenv — injected into each
-  # profile set by the overlay so wasix Rust crates build transparently via
-  # rustPlatform.buildRustPackage, the way C/C++ build via the wasixcc stdenv.
+  # The wasix rustPlatform: makeRustPlatform with a `cargo` that routes the build through
+  # cargo-wasix, so buildRustPackage drives it normally. The Rust counterpart to
+  # mk-wasix-stdenv — injected into each profile set by the overlay so wasix Rust crates
+  # build transparently via rustPlatform.buildRustPackage, the way C/C++ build via the
+  # wasixcc stdenv.
   wasixRustPlatform = import ./mk-wasix-rust-platform.nix {
     inherit lib pkgsCross;
-    inherit (foundation) wasixRustToolchain wasixcc;
+    inherit (foundation) wasixRustToolchain cargoWasix;
     cargo = pkgs.cargo;
   };
 
@@ -121,6 +122,21 @@
           );
         };
     });
+    # Rust analogue of the link/stdenv tests: build a hello-world through the wasix
+    # rustPlatform (the real consumer path) and run it under wasmer. Single test (Rust
+    # only targets the eh variant), attached to the rust toolchain package.
+    rust = foundation.wasixRustToolchain.overrideAttrs (o: {
+      passthru =
+        (o.passthru or {})
+        // {
+          tests = mkTestGroup "rust" {
+            hello = pkgs.callPackage ./toolchain/rust-test.nix {
+              rustPlatform = wasixRustPlatform;
+              wasmer = wasmerRuntime;
+            };
+          };
+        };
+    });
   };
 
   # ── package matrices for CI / consumers ──────────────────────────────────────
@@ -142,6 +158,7 @@
     "find"
     "gzip"
     "tar"
+    "jq"
     "less"
     "nano"
     "gettext"
@@ -150,6 +167,8 @@
     "gitMinimal"
     "curl"
     "crabsay"
+    "sd"
+    "ripgrep"
   ];
 
   makeWasmerPackage = pkgs.callPackage ./wasmer/make-wasmer-package.nix {};
