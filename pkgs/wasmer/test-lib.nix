@@ -50,6 +50,13 @@
     "SSL_CERT_FILE"
   ];
 
+  # Wall-clock budget (seconds) for a single script invocation, enforced with
+  # coreutils `timeout`. Guards against a hung wasm process blocking until Nix's
+  # global build timeout. Wasix runs interpret/JIT the module, so they get a
+  # larger budget than native. Override per-test via the helpers' `timeout` arg.
+  defaultTimeout = 300;
+  defaultWasixTimeout = 600;
+
   # Decide a test's verdict, honoring two optional, COMPOSABLE markers:
   #
   #   expectFail = "why failing is correct"   — a negative test: the EXPECTED
@@ -109,7 +116,7 @@
       else failHard;
   };
 in rec {
-  inherit defaultForwardEnv;
+  inherit defaultForwardEnv defaultTimeout defaultWasixTimeout;
 
   # Reusable output normalizers for mkScriptComparison's `normalize` hook: each is
   # an executable filtering stdin (its `native`/`wasix` arg is ignored — the same
@@ -129,6 +136,7 @@ in rec {
     script,
     packages ? [],
     extra ? [],
+    timeout ? defaultTimeout,
   }: let
     scriptFile =
       if builtins.isString script
@@ -141,7 +149,14 @@ in rec {
       export HOME=$TMPDIR/home
       mkdir -p "$HOME"
       cd "$(mktemp -d)"
-      ${pkgs.bash}/bin/bash -euo pipefail ${scriptFile} >"$out" 2>&1 || { cat "$out" >&2; exit 1; }
+      if ${pkgs.coreutils}/bin/timeout ${toString timeout} ${pkgs.bash}/bin/bash -euo pipefail ${scriptFile} >"$out" 2>&1; then
+        :
+      else
+        rc=$?
+        [ $rc -eq 124 ] && echo "TIMEOUT: '${name}' exceeded ${toString timeout}s" >&2
+        cat "$out" >&2
+        exit $rc
+      fi
     '';
 
   # Run a bash script with wasmer-package stubs available by name.
@@ -161,6 +176,7 @@ in rec {
     wasmer ? effectiveWasmer,
     wasmerArgs ? [],
     forwardEnv ? defaultForwardEnv,
+    timeout ? defaultWasixTimeout,
     # See xverdict: expectFail = negative test (failure is correct); broken =
     # known defect (non-blocking, tracked). Composable.
     expectFail ? null,
@@ -208,9 +224,18 @@ in rec {
 
             export WASIX_TEST_ROOT="$(mktemp -d)"
             cd "$WASIX_TEST_ROOT"
-            if PATH="$shim_dir:$PATH" ${pkgs.bash}/bin/bash -euo pipefail ${scriptFile} >"$out" 2>&1; then
+            if PATH="$shim_dir:$PATH" ${pkgs.coreutils}/bin/timeout ${toString timeout} ${pkgs.bash}/bin/bash -euo pipefail ${scriptFile} >"$out" 2>&1; then
               ${verdict.onCheckPass}
             else
+              rc=$?
+              # expectFail asserts the program *cleanly fails* its check; a timeout
+              # never completed, so it can't satisfy that — hard-fail the xfail.
+              # `broken` makes no such claim (it just tolerates a known defect), so a
+              # hang there stays tolerated by the normal verdict below.
+              if [ $rc -eq 124 ]; then
+                echo "TIMEOUT: '${name}' exceeded ${toString timeout}s" >&2
+                ${lib.optionalString (expectFail != null) ''cat "$out" >&2; exit 1''}
+              fi
               ${verdict.onCheckFail}
             fi
     '';
@@ -226,15 +251,18 @@ in rec {
     wasmer ? effectiveWasmer,
     wasmerArgs ? [],
     forwardEnv ? defaultForwardEnv,
+    timeout ? defaultTimeout,
+    wasixTimeout ? defaultWasixTimeout,
   }: {
     native = mkScriptRun {
       name = "${name}-native";
-      inherit script;
+      inherit script timeout;
       packages = common ++ nativePkgs;
     };
     wasix = mkWasixRun {
       name = "${name}-wasix";
       inherit script wasmer wasmerArgs forwardEnv;
+      timeout = wasixTimeout;
       nativePkgs = common;
       inherit wasixPkgs;
     };
@@ -252,6 +280,8 @@ in rec {
     wasmer ? effectiveWasmer,
     wasmerArgs ? [],
     forwardEnv ? defaultForwardEnv,
+    timeout ? defaultTimeout,
+    wasixTimeout ? defaultWasixTimeout,
     normalize ? null,
     # expectFail/broken as in xverdict — here the "check" is the output match, so
     # the marked/expected failure is the outputs *differing*. Both sides must
@@ -259,7 +289,7 @@ in rec {
     expectFail ? null,
     broken ? null,
   }: let
-    outputs = mkScriptOutputs {inherit name script common nativePkgs wasixPkgs wasmer wasmerArgs forwardEnv;};
+    outputs = mkScriptOutputs {inherit name script common nativePkgs wasixPkgs wasmer wasmerArgs forwardEnv timeout wasixTimeout;};
     process = mode: out:
       if normalize == null
       then out
