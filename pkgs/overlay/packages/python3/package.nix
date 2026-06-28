@@ -8,9 +8,10 @@
 #   tz data at runtime (no baked --with-tzpath).
 # - gdbm: gdbmshell.c calls fork() → undeclared on wasm. Drops the dbm.gnu module.
 #
-# bashNonInteractive is the build-platform bash (the wasix cross bash doesn't build — jobs.c fork);
-# it's only used for patchShebangs on dev tools, and subprocess(shell=True)'s baked /bin/sh is
-# reverted to a literal (postPatch). TODO: bake a wasix bash + enable posix_spawn for subprocess.
+# subprocess works (posix_spawn — wasi has no fork): the subprocess patch + the posix_spawn/pipe/
+# sigset/… cache vars enable it, and subprocess(shell=True) execs the wasix off-profile bash baked
+# into subprocess.py (postPatch). bashNonInteractive is only the build-platform bash for
+# patchShebangs on dev tools (the wasix cross bash doesn't build — jobs.c fork).
 {
   final,
   prev,
@@ -91,6 +92,34 @@
       ac_cv_func_fstatat = "yes";
       ac_cv_func_readlink = "yes";
       ac_cv_func_readlinkat = "yes";
+      # posix_spawn(p) ARE in the wasix libc + declared, but configure's probe misses them (like
+      # dup2/lstat). Force present so os.posix_spawnp is built — subprocess uses it (the patch).
+      ac_cv_func_posix_spawn = "yes";
+      ac_cv_func_posix_spawnp = "yes";
+      # os.posix_spawn's C impl calls parse_arglist/parse_envlist/free_string_array, which
+      # posixmodule.c guards behind HAVE_EXECV (not HAVE_POSIX_SPAWN) — so without it they're
+      # undefined at link. execv IS in the libc (configure's probe missed it too); force present.
+      ac_cv_func_execv = "yes";
+      # The rest of the subprocess pipeline: pipe (capture_output), waitpid (reap), fcntl/dup/dup3
+      # (fd setup), kill/sigaction (signals). cpython's plain-WASI support disables these
+      # (config.site-wasm32-wasi: pipe=no, …) / configure's probe misses them, but wasix has them
+      # all in libc. Re-enable.
+      ac_cv_func_pipe = "yes";
+      ac_cv_func_pipe2 = "yes";
+      ac_cv_func_waitpid = "yes";
+      ac_cv_func_wait4 = "yes";
+      ac_cv_func_fcntl = "yes";
+      ac_cv_func_dup = "yes";
+      ac_cv_func_dup3 = "yes";
+      ac_cv_func_kill = "yes";
+      ac_cv_func_sigaction = "yes";
+      # posix_spawn's setsigdef (restore_signals) needs HAVE_SIGSET_T, which posixmodule.h gates on
+      # pthread_sigmask|sigwait|sigtimedwait|sigwaitinfo — all in the wasix libc, all undetected.
+      # Without it os.posix_spawnp raises "sigset is not supported on this platform".
+      ac_cv_func_pthread_sigmask = "yes";
+      ac_cv_func_sigwait = "yes";
+      ac_cv_func_sigtimedwait = "yes";
+      ac_cv_func_sigwaitinfo = "yes";
       # wasix has real pthreads (the stdenv compiles -pthread -matomics -mbulk-memory + the sysroot
       # has them); configure defaults WASI to thread *stubs* that clash with the real headers. Force
       # real pthreads. (Do NOT use --enable-wasm-pthreads — it switches to the wasm32-wasi-threads
@@ -108,6 +137,11 @@
       ./patches/ctypes-find-library-wasi.patch
       # Allow --enable-wasm-dynamic-linking on WASI (upstream errors "not implemented yet").
       ./patches/enable-wasm-dynamic-linking-wasi.patch
+      # Enable subprocess on wasi: upstream's _can_fork_exec excludes wasi (→ "does not support
+      # processes"). wasi has no fork() but DOES have posix_spawn, so drop wasi from that guard, add
+      # it to _use_posix_spawn, force the posix_spawn branch in _execute_child (no fork fallback),
+      # and use posix_spawnp. Adapted from the wasix-org/cpython fork (which is sys.platform=wasix).
+      ./patches/subprocess-posix-spawn-wasi.patch
     ];
 
     # wasix-libc DECLARES but doesn't IMPLEMENT the pty fns (grantpt/unlockpt/ptsname/openpty), so
@@ -138,12 +172,14 @@
     '';
 
     # cpython bakes ${bashNonInteractive}/bin/sh into subprocess(shell=True)'s shell — the
-    # build-platform (x86_64) bash, which would bloat the wasm closure. Revert to a literal /bin/sh
-    # for now (subprocess is still cpython-disabled on wasi until posix_spawn is wired up — a TODO).
-    # A substituteInPlace, not a .patch, because the bash store path is dynamic.
+    # build-platform (x86_64) bash, wrong for wasm. Point it at the wasix off-profile bash: a real
+    # wasm shell that runs under wasmer (the same one git execs), now that the subprocess patch +
+    # posix_spawn make shell=True work. A substituteInPlace, not a .patch, because both store paths
+    # are dynamic. The webc mounts it via passthru.wasmer.selfMounts (autoSelfMount only scans
+    # bin/*.wasm, and this path lives in subprocess.py).
     postPatch = ''
       substituteInPlace Lib/subprocess.py \
-        --replace-fail '${final.buildPackages.bashNonInteractive}/bin/sh' '/bin/sh'
+        --replace-fail '${final.buildPackages.bashNonInteractive}/bin/sh' '${preferredPackages.bash}/bin/sh'
     '';
 
     # The interpreter installs as python3.13.wasm, so the python3.13/python3/python symlinks dangle
@@ -170,6 +206,9 @@
         name = "python";
         entrypoint = "python3.13";
         autoSelfMount = true;
+        # subprocess(shell=True) execs ${preferredPackages.bash}/bin/sh (baked into subprocess.py,
+        # a .py autoSelfMount doesn't scan), so mount the wasix bash explicitly.
+        selfMounts = [preferredPackages.bash];
       };
     };
 

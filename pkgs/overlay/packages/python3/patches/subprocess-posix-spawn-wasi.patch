@@ -1,0 +1,109 @@
+diff --git a/Lib/subprocess.py b/Lib/subprocess.py
+index 3a8c743..8be52c8 100644
+--- a/Lib/subprocess.py
++++ b/Lib/subprocess.py
+@@ -113,12 +113,14 @@ else:
+             WNOHANG = os.WNOHANG
+             ECHILD = errno.ECHILD
+     else:
++        # wasi has no fork-exec but spawns via posix_spawn, which still needs real child-reaping
++        # helpers (the None stubs are for emscripten, which can't spawn a child at all).
+         class _del_safe:
+-            waitpid = None
+-            waitstatus_to_exitcode = None
+-            WIFSTOPPED = None
+-            WSTOPSIG = None
+-            WNOHANG = None
++            waitpid = getattr(os, "waitpid", None)
++            waitstatus_to_exitcode = getattr(os, "waitstatus_to_exitcode", None)
++            WIFSTOPPED = getattr(os, "WIFSTOPPED", None)
++            WSTOPSIG = getattr(os, "WSTOPSIG", None)
++            WNOHANG = getattr(os, "WNOHANG", None)
+             ECHILD = errno.ECHILD
+ 
+     import select
+@@ -718,7 +720,7 @@ def _use_posix_spawn():
+     if ((_env := os.environ.get('_PYTHON_SUBPROCESS_USE_POSIX_SPAWN')) in ('0', '1')):
+         return bool(int(_env))
+ 
+-    if sys.platform in ('darwin', 'sunos5'):
++    if sys.platform in ('darwin', 'sunos5', 'wasi'):
+         # posix_spawn() is a syscall on both macOS and Solaris,
+         # and properly reports errors
+         return True
+@@ -824,7 +826,7 @@ class Popen:
+                  encoding=None, errors=None, text=None, umask=-1, pipesize=-1,
+                  process_group=None):
+         """Create new Popen instance."""
+-        if not _can_fork_exec:
++        if not _can_fork_exec and not _USE_POSIX_SPAWN:
+             raise OSError(
+                 errno.ENOTSUP, f"{sys.platform} does not support processes."
+             )
+@@ -1788,7 +1790,7 @@ class Popen:
+                          p2cread, p2cwrite,
+                          c2pread, c2pwrite,
+                          errread, errwrite):
+-            """Execute program using os.posix_spawn()."""
++            """Execute program using os.posix_spawnp()."""
+             kwargs = {}
+             if restore_signals:
+                 # See _Py_RestoreSignals() in Python/pylifecycle.c
+@@ -1812,12 +1814,18 @@ class Popen:
+                     file_actions.append((os.POSIX_SPAWN_DUP2, fd, fd2))
+ 
+             if close_fds:
+-                file_actions.append((os.POSIX_SPAWN_CLOSEFROM, 3))
++                if hasattr(os, 'POSIX_SPAWN_CLOSEFROM'):
++                    file_actions.append((os.POSIX_SPAWN_CLOSEFROM, 3))
++                else:
++                    # wasix lacks posix_spawn_file_actions_addclosefrom_np; fall back to closing
++                    # fds 3..1023 individually (a hack — breaks if >1024 fds are open).
++                    for fd in range(3, 1024):
++                        file_actions.append((os.POSIX_SPAWN_CLOSE, fd))
+ 
+             if file_actions:
+                 kwargs['file_actions'] = file_actions
+ 
+-            self.pid = os.posix_spawn(executable, args, env, **kwargs)
++            self.pid = os.posix_spawnp(executable, args, env, **kwargs)
+             self._child_created = True
+ 
+             self._close_pipe_fds(p2cread, p2cwrite,
+@@ -1858,21 +1866,21 @@ class Popen:
+ 
+             sys.audit("subprocess.Popen", executable, args, cwd, env)
+ 
+-            if (_USE_POSIX_SPAWN
+-                    and os.path.dirname(executable)
+-                    and preexec_fn is None
+-                    and (not close_fds or _HAVE_POSIX_SPAWN_CLOSEFROM)
+-                    and not pass_fds
+-                    and cwd is None
+-                    and (p2cread == -1 or p2cread > 2)
+-                    and (c2pwrite == -1 or c2pwrite > 2)
+-                    and (errwrite == -1 or errwrite > 2)
+-                    and not start_new_session
+-                    and process_group == -1
+-                    and gid is None
+-                    and gids is None
+-                    and uid is None
+-                    and umask < 0):
++            if _USE_POSIX_SPAWN:
++                # wasi has no fork(); always use posix_spawn(p). Features it can't express on wasi
++                # are asserted off rather than silently falling back to the (absent) fork path.
++                assert preexec_fn is None
++                assert not pass_fds
++                assert cwd is None
++                assert (p2cread == -1 or p2cread > 2)
++                assert (c2pwrite == -1 or c2pwrite > 2)
++                assert (errwrite == -1 or errwrite > 2)
++                assert not start_new_session
++                assert process_group == -1
++                assert gid is None
++                assert gids is None
++                assert uid is None
++                assert umask < 0
+                 self._posix_spawn(args, executable, env, restore_signals, close_fds,
+                                   p2cread, p2cwrite,
+                                   c2pread, c2pwrite,
