@@ -16,10 +16,8 @@ helpers.wasmRename {wasmName = "jq";} (
     # jq's postFixup strips $dev/$man/$doc refs from the binary to break a bin<->dev
     # output cycle (load-bearing) — retarget it at jq.wasm, since wasmRename's
     # postInstall renamed $bin/bin/jq before fixup runs.
-    overrideAttrs = _old: {
-      postFixup = ''
-        remove-references-to -t "$dev" -t "$man" -t "$doc" "$bin/bin/jq.wasm"
-      '';
-    };
+    postFixup = _: ''
+      remove-references-to -t "$dev" -t "$man" -t "$doc" "$bin/bin/jq.wasm"
+    '';
   } (prev.jq.override {tzdata = final.buildPackages.tzdata;})
 )

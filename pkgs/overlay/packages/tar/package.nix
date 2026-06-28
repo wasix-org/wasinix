@@ -30,13 +30,9 @@ helpers.wasmRename {wasmName = "tar";} (
     preConfigure = ''
       export ac_cv_func_getgroups=yes
     '';
-    overrideAttrs = old: {
-      postInstall =
-        (old.postInstall or "")
-        + ''
-          rm -f "$out/bin/rmt"
-        '';
-    };
+    postInstall = ''
+      rm -f "$out/bin/rmt"
+    '';
   }
   prev.gnutar
 )

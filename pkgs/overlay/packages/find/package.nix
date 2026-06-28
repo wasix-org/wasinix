@@ -66,26 +66,19 @@ helpers.libTweaks {
     export NIX_CFLAGS_COMPILE="''${NIX_CFLAGS_COMPILE-} -I$PWD/wasix-compat"
     export NIX_LDFLAGS="''${NIX_LDFLAGS-} -L$PWD/wasix-compat -lwasix-compat"
   '';
-  overrideAttrs = old: {
-    outputs = ["out"];
-    postFixup = "";
-    passthru =
-      (old.passthru or {})
-      // {wasmer = (old.passthru.wasmer or {}) // {entrypoint = "find";};};
-    # Rename find/xargs to *.wasm (the convention allWasm collects) and asyncify
-    # each so fork works at runtime. The standalone pass omits --enable-eh to dodge
-    # binaryen's "unexpected expr type" abort, exactly as git's pass does.
-    postInstall = helpers.mergeScript [
-      (old.postInstall or "")
-      ''
-        for prog in find xargs; do
-          if [ -f "$out/bin/$prog" ]; then
-            mv "$out/bin/$prog" "$out/bin/$prog.wasm"
-            ${foundation.binaryen}/bin/wasm-opt --asyncify -O2 \
-              "$out/bin/$prog.wasm" -o "$out/bin/$prog.wasm"
-          fi
-        done
-      ''
-    ];
-  };
+  outputs = _: ["out"];
+  postFixup = _: "";
+  passthru.wasmer.entrypoint = "find";
+  # Rename find/xargs to *.wasm (the convention allWasm collects) and asyncify
+  # each so fork works at runtime. The standalone pass omits --enable-eh to dodge
+  # binaryen's "unexpected expr type" abort, exactly as git's pass does.
+  postInstall = ''
+    for prog in find xargs; do
+      if [ -f "$out/bin/$prog" ]; then
+        mv "$out/bin/$prog" "$out/bin/$prog.wasm"
+        ${foundation.binaryen}/bin/wasm-opt --asyncify -O2 \
+          "$out/bin/$prog.wasm" -o "$out/bin/$prog.wasm"
+      fi
+    done
+  '';
 } (prev.findutils.override {coreutils = final.buildPackages.coreutils;})

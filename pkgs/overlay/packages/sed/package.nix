@@ -6,9 +6,9 @@
 }:
 helpers.wasmRename {wasmName = "sed";} (
   helpers.libTweaks {
-    overrideAttrs = old: {
-      meta = old.meta // {platforms = final.lib.platforms.all;};
-    };
+    # Replace platforms (not append): deep-merge would append a list, so use a
+    # function to override the old value outright.
+    meta.platforms = _: final.lib.platforms.all;
   }
   prev.gnused
 )

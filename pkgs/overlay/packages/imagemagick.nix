@@ -18,19 +18,17 @@ in
       CPPFLAGS = "-I${lib.getDev final.zstd}/include";
       LDFLAGS = "-L${lib.getLib final.zstd}/lib";
     };
-    overrideAttrs = old: {
-      outputs = ["out"];
-      buildInputs =
-        lib.filter (i: (i.pname or i.name or "") != "potrace")
-        ((old.buildInputs or []) ++ [final.zstd]);
-      postInstall = ''
-        mkdir -p "$out/include"
-        if ls "$out"/include/ImageMagick-* >/dev/null 2>&1; then
-          rm -f "$out/include/ImageMagick"
-          ln -s "$(basename "$(echo "$out"/include/ImageMagick-* | awk '{ print $1 }')")" "$out/include/ImageMagick"
-        fi
-      '';
-    };
+    outputs = _: ["out"];
+    buildInputs = bi:
+      lib.filter (i: (i.pname or i.name or "") != "potrace")
+      ((if bi == null then [] else bi) ++ [final.zstd]);
+    postInstall = _: ''
+      mkdir -p "$out/include"
+      if ls "$out"/include/ImageMagick-* >/dev/null 2>&1; then
+        rm -f "$out/include/ImageMagick"
+        ln -s "$(basename "$(echo "$out"/include/ImageMagick-* | awk '{ print $1 }')")" "$out/include/ImageMagick"
+      fi
+    '';
   } (prev.imagemagick.override {
     bzip2Support = false;
     zlibSupport = true;

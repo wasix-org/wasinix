@@ -39,13 +39,9 @@ helpers.libTweaks {
     EOF
     export CONFIG_SITE="$TMPDIR/config.site"
   '';
-  overrideAttrs = old: {
-    postInstall =
-      (old.postInstall or "")
-      + ''
-        for prog in "$out"/bin/*; do
-          [ -f "$prog" ] && mv "$prog" "$prog.wasm"
-        done
-      '';
-  };
+  postInstall = ''
+    for prog in "$out"/bin/*; do
+      [ -f "$prog" ] && mv "$prog" "$prog.wasm"
+    done
+  '';
 } (prev.gettext.override {bashNonInteractive = null;})

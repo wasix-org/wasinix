@@ -8,9 +8,7 @@
 }:
 helpers.libTweaks {
   configureFlags = ["--with-harfbuzz=no"];
-  overrideAttrs = _old: {
-    propagatedBuildInputs = [final.zlib final.libpng];
-    postInstall = "";
-  };
+  propagatedBuildInputs = _: [final.zlib final.libpng];
+  postInstall = _: "";
 }
 prev.freetype

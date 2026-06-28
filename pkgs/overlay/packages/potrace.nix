@@ -5,20 +5,18 @@
   ...
 }:
 helpers.libTweaks {
-  overrideAttrs = _old: {
-    outputs = ["out" "dev"];
-    buildPhase = ''
-      runHook preBuild
-      make -C src -j''${NIX_BUILD_CORES:-1} libpotrace.la
-      runHook postBuild
-    '';
-    installPhase = ''
-      runHook preInstall
-      mkdir -p "$out/lib" "$dev/include"
-      cp src/.libs/libpotrace.a "$out/lib/"
-      cp src/potracelib.h "$dev/include/"
-      runHook postInstall
-    '';
-  };
+  outputs = _: ["out" "dev"];
+  buildPhase = _: ''
+    runHook preBuild
+    make -C src -j''${NIX_BUILD_CORES:-1} libpotrace.la
+    runHook postBuild
+  '';
+  installPhase = _: ''
+    runHook preInstall
+    mkdir -p "$out/lib" "$dev/include"
+    cp src/.libs/libpotrace.a "$out/lib/"
+    cp src/potracelib.h "$dev/include/"
+    runHook postInstall
+  '';
 }
 prev.potrace

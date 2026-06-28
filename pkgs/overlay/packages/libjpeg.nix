@@ -10,8 +10,6 @@ helpers.libTweaks {
   # libjpeg declares a `man` output but installs no man pages on this target;
   # materialise the dir so the output isn't empty.
   postInstall = ''mkdir -p "$man/share/man"'';
-  overrideAttrs = old: {
-    cmakeFlags = (old.cmakeFlags or []) ++ ["-DWITH_SIMD=OFF"];
-  };
+  cmakeFlags = ["-DWITH_SIMD=OFF"];
 }
 prev.libjpeg

@@ -20,6 +20,7 @@
   rustSupportedVariants,
 }: final: prev: let
   lib = prev.lib;
+  helpers = import ./lib.nix {inherit lib;};
   # Two independent gates (read prev.stdenv, not final.stdenv — gating the
   # overlay's attr set on `final` would be a fixpoint cycle):
   #
@@ -54,26 +55,7 @@
   # error (vs a missing rustPlatform). The variant name is derived from this profile's
   # EH/PIC platform fields.
   rustSupport = lib.optionalAttrs isWasixHost (let
-    hp = prev.stdenv.hostPlatform;
-    exc = hp.wasmExceptions or "no";
-    pic = hp.wasmPic or false;
-    variant =
-      if exc == "no"
-      then "off"
-      else if exc == "yes"
-      then
-        (
-          if pic
-          then "exnrefEhpic"
-          else "exnrefEh"
-        )
-      else
-        (
-          if pic
-          then "ehpic"
-          else "eh"
-        );
-    supported = lib.elem variant rustSupportedVariants;
+    supported = lib.elem (helpers.variantOf prev.stdenv.hostPlatform) rustSupportedVariants;
   in {
     rustPlatform =
       if supported
@@ -108,7 +90,6 @@
     if !isWasixHost
     then {}
     else let
-      helpers = import ./lib.nix {inherit lib;};
       pkgDir = ./packages;
       entries = builtins.readDir pkgDir;
       # A package is either a flat packages/<name>.nix or a packages/<name>/ dir

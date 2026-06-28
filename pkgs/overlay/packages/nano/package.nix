@@ -24,15 +24,10 @@ in
           export LIBS="''${LIBS-} ${nc.out}/lib/libncursesw.a"
         fi
       '';
-      overrideAttrs = old: {
-        patches = (old.patches or []) ++ [./patches/0002-wasix-runtime-and-config-tolerance.patch];
-        # nano's upstream postInstall is null (not missing), so route through
-        # mergeScript, which filters nulls.
-        postInstall = helpers.mergeScript [
-          (old.postInstall or "")
-          ''rm -f "$out/bin/rnano"''
-        ];
-      };
+      patches = [./patches/0002-wasix-runtime-and-config-tolerance.patch];
+      # nano's upstream postInstall is null (not missing); extendDrv concats
+      # phases via mergeScript, which filters nulls.
+      postInstall = ''rm -f "$out/bin/rnano"'';
     } (final.callPackage "${nixpkgs}/pkgs/by-name/na/nano/package.nix" {
       enableNls = false;
       enableTiny = true;
