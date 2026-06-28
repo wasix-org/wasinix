@@ -169,6 +169,7 @@
     "crabsay"
     "sd"
     "ripgrep"
+    "python3"
   ];
 
   makeWasmerPackage = pkgs.callPackage ./wasmer/make-wasmer-package.nix {};

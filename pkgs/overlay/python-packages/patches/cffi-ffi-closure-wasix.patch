@@ -1,0 +1,32 @@
+From 11cf9bf11f393edb6bc2e12a407fd319c3849492 Mon Sep 17 00:00:00 2001
+From: Zebreus <zebreus@zebre.us>
+Date: Thu, 11 Sep 2025 10:21:26 +0200
+Subject: [PATCH] Use libffi ffi_closure_alloc on WASIX
+
+---
+ src/c/_cffi_backend.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/src/c/_cffi_backend.c b/src/c/_cffi_backend.c
+index b9faeb28..89644d8e 100644
+--- a/src/c/_cffi_backend.c
++++ b/src/c/_cffi_backend.c
+@@ -125,6 +125,15 @@
+ # define CFFI_CHECK_FFI_PREP_CIF_VAR 1
+ # define CFFI_CHECK_FFI_PREP_CIF_VAR_MAYBE 1
+ 
++#elif defined(__wasi__)
++
++# define CFFI_CHECK_FFI_CLOSURE_ALLOC 1
++# define CFFI_CHECK_FFI_CLOSURE_ALLOC_MAYBE 1
++# define CFFI_CHECK_FFI_PREP_CLOSURE_LOC 1
++# define CFFI_CHECK_FFI_PREP_CLOSURE_LOC_MAYBE 1
++# define CFFI_CHECK_FFI_PREP_CIF_VAR 0
++# define CFFI_CHECK_FFI_PREP_CIF_VAR_MAYBE 0
++
+ #else
+ 
+ # define CFFI_CHECK_FFI_CLOSURE_ALLOC 0
+-- 
+2.48.1
+

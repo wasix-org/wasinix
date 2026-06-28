@@ -1,0 +1,65 @@
+diff --git a/Lib/ctypes/util.py b/Lib/ctypes/util.py
+index 117bf06..53e6580 100644
+--- a/Lib/ctypes/util.py
++++ b/Lib/ctypes/util.py
+@@ -277,6 +277,60 @@ elif os.name == "posix":
+         def find_library(name, is64 = False):
+             return _get_soname(_findLib_crle(name, is64) or _findLib_gcc(name))
+ 
++    elif sys.platform in ("wasi", "wasix"):
++        # WASIX/WASI shared libraries are wasm modules carrying a `dylink.0` custom section.
++        # The generic-posix branch shells out to ldconfig/gcc, which no-op on wasm and return
++        # None; resolve builtins (linked into the main module) to libc.so and search the
++        # standard dirs (+ LD_LIBRARY_PATH) for a wasm dylib. Adapted from wasix-org/cpython.
++        import re as _wasi_re
++        from glob import glob as _wasi_glob
++
++        _wasi_builtin_libs = ("c", "m", "crypt", "pthread", "dl", "resolv", "rt", "util", "xnet")
++        _wasi_builtin_re = _wasi_re.compile(
++            r"(?:^(?:%s)$)|(?:.*lib(?:%s)\.so(?:\..*)?$)"
++            % ("|".join(_wasi_builtin_libs), "|".join(_wasi_builtin_libs)))
++
++        def _is_wasm_dylink(filepath):
++            try:
++                with open(filepath, "rb") as fh:
++                    if fh.read(4) != b"\x00asm":          # wasm magic
++                        return False
++                    if fh.read(4) != b"\x01\x00\x00\x00": # wasm version 1
++                        return False
++                    if fh.read(1) != b"\x00":             # first section is a custom section
++                        return False
++                    # Skip the section-length LEB128 varint (high bit = continuation).
++                    while True:
++                        byte = fh.read(1)
++                        if not byte:
++                            return False
++                        if not byte[0] & 0x80:
++                            break
++                    if fh.read(1) != b"\x08":             # len("dylink.0")
++                        return False
++                    return fh.read(8) == b"dylink.0"
++            except OSError:
++                return False
++
++        def find_library(name):
++            if os.path.isabs(name):
++                return name
++            if _wasi_builtin_re.match(name):
++                return "libc.so"
++            paths = ["/lib", "/usr/local/lib", "/usr/lib"]
++            if "LD_LIBRARY_PATH" in os.environ:
++                paths = os.environ["LD_LIBRARY_PATH"].split(":") + paths
++            for d in paths:
++                f = os.path.join(d, name)
++                if _is_wasm_dylink(f):
++                    return os.path.basename(f)
++                prefix = os.path.join(d, "lib" + name)
++                for suffix in (".so.*", ".so"):
++                    for cand in sorted(_wasi_glob(prefix + suffix), key=len, reverse=True):
++                        if _is_wasm_dylink(cand):
++                            return os.path.basename(cand)
++            return None
++
+     else:
+ 
+         def _findSoname_ldconfig(name):

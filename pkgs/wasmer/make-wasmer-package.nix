@@ -278,7 +278,11 @@ in
           [ -n "$sp" ] || continue
           [ -e "$sp" ] || continue
           add_mount "$sp" "$sp"
-        done < <(${pkgs.gnugrep}/bin/grep -ohaE '/nix/store/[a-z0-9]{32}-[^"'"'"' ]*' "$bin_dir"/*.wasm 2>/dev/null \
+        # Split on NUL first: store-path strings in the wasm are NUL-terminated, and a bare
+        # `grep -a` would glue a path to the next string (e.g. <prefix>argument), yielding a
+        # non-existent path that gets skipped. tr '\0' '\n' separates them.
+        done < <(${pkgs.coreutils}/bin/cat "$bin_dir"/*.wasm 2>/dev/null | ${pkgs.coreutils}/bin/tr '\0' '\n' \
+          | ${pkgs.gnugrep}/bin/grep -ohE '/nix/store/[a-z0-9]{32}-[^"'"'"' ]*' \
           | ${pkgs.gnused}/bin/sed -E 's#(/nix/store/[a-z0-9]{32}-[^/]*).*#\1#' \
           | LC_ALL=C sort -u)
       ''}
