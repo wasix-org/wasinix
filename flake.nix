@@ -88,6 +88,14 @@
       # key is the attr path. Recurse through plain attrsets, stop at a drv (but
       # still emit a shipped package's passthru.webc, so shippedPackages.git.webc
       # is its own job / build path).
+      #
+      # nix-eval-jobs reports any leaf that throws while forcing — a meta.broken
+      # package (fd/tokei, Rust libs in the off/exnref variants) or an attr that
+      # errors on access — as a failed job, which reddens the whole CI run. A
+      # deliberately-unsupported variant shouldn't fail CI, so leaves that don't
+      # cleanly evaluate to a buildable derivation are dropped here, before they
+      # become jobs. Only `ci` filters; the `.#` build targets keep the attrs.
+      drvOk = drv: (builtins.tryEval (drv.drvPath != null && !(drv.meta.broken or false) && (drv.meta.available or true))).value;
       flattenDrvs = prefix:
         lib.concatMapAttrs (
           name: val: let
@@ -95,9 +103,16 @@
               if prefix == ""
               then name
               else "${prefix}.${name}";
+            # Force val behind tryEval first: a throwing attr (broken access)
+            # must not abort the whole CI eval before drvOk can filter it.
+            forced = builtins.tryEval (lib.seq val val);
           in
-            if lib.isDerivation val
-            then {${key} = val;} // lib.optionalAttrs (val ? webc) {"${key}.webc" = val.webc;}
+            if !forced.success
+            then {}
+            else if lib.isDerivation val
+            then
+              lib.optionalAttrs (drvOk val) {${key} = val;}
+              // lib.optionalAttrs (val ? webc && drvOk val.webc) {"${key}.webc" = val.webc;}
             else if lib.isAttrs val
             then flattenDrvs key val
             else {}

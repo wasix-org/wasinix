@@ -56,10 +56,11 @@ in
         "OBJECT_CREATION_USES_RENAMES=YesPlease"
         # sysinfo() is in WASIX headers but absent from libc.a.
         "HAVE_SYSINFO="
-        # configure can't run WASM test binaries; force-enable curl + OpenSSL.
+        # configure can't run WASM test binaries; force-enable curl + OpenSSL. curl's link flags
+        # are derived from curl-config in preConfigure (not hand-typed), so they track curl's deps
+        # (brotli/zstd/…) instead of going stale; OpenSSL is just -lssl -lcrypto.
         "NO_CURL="
         "NO_OPENSSL="
-        "CURL_LDFLAGS=-lcurl -lssl -lcrypto"
         "OPENSSL_LINK=-lssl -lcrypto"
       ];
     postPatch =
@@ -87,6 +88,12 @@ in
       + ''
         $CC -c wasix-compat/proc.c -o wasix-compat/proc.o
         $AR rcs wasix-compat/libwasix-compat.a wasix-compat/proc.o
+
+        # Derive curl's link flags from curl-config rather than hand-typing them, so they track
+        # curl's transitive deps (brotli/zstd/openssl/zlib). curl-config is a target buildInput
+        # (not on $PATH), referenced by store path; it's a build-platform script emitting the
+        # target flags, including libcurl.a's Libs.private.
+        export CURL_LDFLAGS="$(${final.curl.dev}/bin/curl-config --static-libs)"
       '';
     postInstall =
       (lib.replaceStrings [''rm "$out/$prog"''] [''rm -f "$out/$prog"''] (old.postInstall or ""))
