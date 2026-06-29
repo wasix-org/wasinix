@@ -51,6 +51,10 @@ in
       # report_memleaks: PHP 8.5 deprecates the INI route, but request shutdown still reads the flag
       # to reclaim per-request memory; patch the Zend global directly for long-running workers.
       patch -N -p1 --batch < ${./patches/report-memleaks.patch} || true
+      # build.rs's extra-libs const omits several transitive deps of the bundled extensions
+      # (libpgcommon/pgport, lcms2, openjpeg, libdeflate, zstd, brotli, webpmux/demux), leaving them
+      # as undefined wasm imports — add them so the module instantiates.
+      patch -p1 --batch < ${./patches/link-extra-libs.patch}
     '';
 
     buildPhase = ''

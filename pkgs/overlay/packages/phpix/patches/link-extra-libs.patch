@@ -1,0 +1,27 @@
+Link the bundled extensions' transitive deps.
+
+build.rs's extra-libs const only listed some of what the extensions pull in. ext/pgsql needs
+libpgcommon/libpgport (pg_encoding_to_char etc.), and ImageMagick + libtiff + curl pull in lcms2,
+openjpeg (opj_*), libdeflate, zstd, brotli, and the webpmux/webpdemux variants. Without these the
+symbols are left as undefined wasm imports (--allow-undefined) and the module can't instantiate.
+
+diff --git a/build.rs b/build.rs
+--- a/build.rs
++++ b/build.rs
+@@ -22,6 +22,16 @@ const WASIX_PHP_EXTRA_LIBS: &[&str] = &[
+     "onig",
+     "png",
+     "pq",
++    "pgcommon",
++    "pgport",
++    "lcms2",
++    "openjp2",
++    "brotlidec",
++    "brotlicommon",
++    "deflate",
++    "zstd",
++    "webpmux",
++    "webpdemux",
+     "sharpyuv",
+     "sodium",
+     "sqlite3",
