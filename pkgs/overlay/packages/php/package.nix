@@ -5,7 +5,7 @@
 # Deps go in buildInputs, so the profile stdenv auto-threads -I/-L and pkg-config (PKG_CONFIG_PATH)
 # supplies each lib's flags — the old recipe's ~25 hand-fed per-lib *_CFLAGS/*_LIBS were just
 # discovery and are gone. Only libs PHP can't find via pkg-config keep explicit flags: iconv (no
-# .pc), imagick + pgsql (configure patched to read *_CFLAGS/*_LIBS), icu (explicit C++ std); curl's
+# .pc), imagick (config.m4 patched — its .pc lookup name is wrong), pgsql + icu (explicit flags); curl's
 # full static link is derived from curl-config in configurePhase (brotli/zstd deps).
 #
 # Produces `make install-headers install-sapi` (static libphp + headers) for phpix to link via
@@ -116,10 +116,13 @@
     ICU_CFLAGS = "-I${includeDir L.icu} -std=c11";
     ICU_CXXFLAGS = "-I${includeDir L.icu} -std=c++17";
     ICU_LIBS = "-licudata -licui18n -licuio -licuuc";
-    # imagick: config.m4 is patched (postPatch) to read these instead of IM_FIND_IMAGEMAGICK.
+    # imagick: IM_FIND_IMAGEMAGICK does PKG_CHECK_MODULES([MagickWand]), but the overlay ships the
+    # .pc as MagickWand-7.Q16HDRI (the Q16HDRI variant), so that lookup fails — config.m4 is patched
+    # (postPatch) to read these explicitly instead.
     IM_IMAGEMAGICK_CFLAGS = "-I${includeDir L.imagemagick}/ImageMagick -DIM_MAGICKWAND_HEADER_STYLE_SEVEN -DMAGICKCORE_QUANTUM_DEPTH=16 -DMAGICKCORE_HDRI_ENABLE=1 -DMAGICKCORE_CHANNEL_MASK_DEPTH=32";
     IM_IMAGEMAGICK_LIBS = "-lMagickWand-7.Q16HDRI -lMagickCore-7.Q16HDRI -ltiff -lz -ldeflate -ljpeg -llzma -lzstd -lpng16 -lwebpmux -lwebpdemux -lwebp -lsharpyuv -lfreetype -lxml2 -lcurl -lssl -lcrypto";
-    # pgsql: php.m4 is patched (postPatch) to read these; libpq is the synthetic merged prefix.
+    # pgsql: --with-pgsql=<prefix> (a path) makes PHP's config.m4 skip pkg-config, so it reads these;
+    # libpq is the synthetic merged prefix (libpq splits dev/lib).
     PGSQL_CFLAGS = "-I${libpqPrefix}/include";
     PGSQL_LIBS = "-lpq -lpgcommon_shlib -lpgport_shlib -lz -lm";
     PHP_BUILD_SYSTEM = "clang(WASIX+WasmEH)";
@@ -186,7 +189,6 @@ in
               --replace-fail 'ext/standard/php_smart_string.h' 'Zend/zend_smart_string.h'
             substituteInPlace ext/igbinary/src/php7/php_igbinary.h \
               --replace-fail 'ext/standard/php_smart_string.h' 'Zend/zend_smart_string.h'
-            perl -0pi -e 's|AS_CASE\(\[\$4\], \[yes\], \[pgsql_dir=""\], \[pgsql_dir=\$4\]\)\nAS_VAR_IF\(\[pgsql_dir\],,\n  \[PKG_CHECK_MODULES\(\[PGSQL\], \[libpq >= 10\.0\],\n    \[found_pgsql=yes\],\n    \[found_pgsql=no\]\)\]\)|AS_CASE([\$4], [yes], [pgsql_dir=""], [pgsql_dir=\$4])\nAS_IF([test -n "\\$PGSQL_CFLAGS" && test -n "\\$PGSQL_LIBS"],\n  [found_pgsql=yes])\nAS_IF([test "\\$found_pgsql" = "no"], [\n  AS_VAR_IF([pgsql_dir],,\n    [PKG_CHECK_MODULES([PGSQL], [libpq >= 10.0],\n      [found_pgsql=yes],\n      [found_pgsql=no])])\n])|s' build/php.m4
             patchShebangs ${patchTargets}
     '';
 
