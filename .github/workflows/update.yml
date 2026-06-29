@@ -1,0 +1,72 @@
+name: Update package pins
+
+# Weekly bump of the repo's own source pins (not the prev.X nixpkgs
+# passthroughs), including the derived-file regens (cargo-wasix Cargo.lock, rust
+# stage0 bootstrap). Opens a PR; the existing per-package CI validates the builds.
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Space-separated targets to update (blank = all)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    name: Bump pins and open PR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31.9.1
+        with:
+          extra_nix_config: |
+            extra-substituters = https://nix-cache.wasix.org
+            extra-trusted-public-keys = wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI=
+            trusted-users = root runner
+
+      - name: Run updater
+        id: run
+        shell: bash
+        run: |
+          args=()
+          if [ -n "${{ github.event.inputs.only }}" ]; then
+            args=(--only ${{ github.event.inputs.only }})
+          fi
+          nix run .#update -- "${args[@]}" 2>&1 | tee update.log
+          # surface the bump/regen lines in the PR body
+          {
+            echo 'summary<<EOF'
+            grep -E '^( {2}.* -> |  regen:|==>)' update.log || true
+            echo EOF
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Format
+        shell: bash
+        run: nix fmt
+
+      - name: Open PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: auto/update-pins
+          title: "pins: weekly source-pin bump"
+          commit-message: "pins: bump repo source pins (automated)"
+          body: |
+            Automated weekly bump of the repo's own source pins, with derived
+            files (cargo-wasix Cargo.lock, rust stage0 bootstrap) regenerated.
+
+            Let CI validate the builds before merging.
+
+            ```
+            ${{ steps.run.outputs.summary }}
+            ```
+          delete-branch: true

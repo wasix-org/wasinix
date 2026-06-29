@@ -176,5 +176,19 @@
 
       wasmer-bin = wasmer.packages.${system}.wasmer;
     };
+
+    # `nix run .#update` — bump the source pins of the repo's own packages (the
+    # ones with their own upstream, not the prev.X nixpkgs passthroughs) and
+    # regenerate the derived files that ride along (cargo-wasix's Cargo.lock, the
+    # rust fork's stage0 bootstrap). See scripts/update.py for the per-package
+    # backends. cargo is needed for `cargo generate-lockfile`.
+    apps.${system}.update = {
+      type = "app";
+      program = lib.getExe (wasix.pkgs.writeShellApplication {
+        name = "wasinix-update";
+        runtimeInputs = [wasix.pkgs.python3 wasix.pkgs.nix-update wasix.pkgs.cargo wasix.pkgs.git];
+        text = ''exec python3 "$(git rev-parse --show-toplevel)/scripts/update.py" "$@"'';
+      });
+    };
   };
 }
