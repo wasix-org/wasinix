@@ -18,7 +18,6 @@
   "mpfr"
   "oniguruma"
   "openjpeg"
-  "snappy"
   "tinyxml-2"
   "xz"
 ]

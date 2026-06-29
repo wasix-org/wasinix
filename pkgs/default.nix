@@ -147,7 +147,14 @@
   libPkgNames = lib.filter (n: !(lib.elem n shippedCommands)) wasixPkgNames;
   libraryMatrix =
     lib.genAttrs nonOffProfileNames
-    (profile: lib.genAttrs libPkgNames (n: profileSets.${profile}.${n}));
+    (profile:
+      # Skip libs that mark themselves unsupported on this profile via meta.badPlatforms (e.g.
+      # snappy at the PIC profiles — its -fno-exceptions can't combine with PIC under wasixcc). We
+      # check badPlatforms directly rather than meta.availableOn so libs with merely unix-only
+      # meta.platforms (which still build here under allowUnsupportedSystem) aren't dropped.
+        lib.filterAttrs
+        (_: drv: !(builtins.elem profileSets.${profile}.stdenv.hostPlatform.system (drv.meta.badPlatforms or [])))
+        (lib.genAttrs libPkgNames (n: profileSets.${profile}.${n})));
 
   # The CLIs shipped as webc packages, by overlay attr-name. Each is built at its
   # preferred profile (bash -> off, rest -> default) via preferredPackages, then
