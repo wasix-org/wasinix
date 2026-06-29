@@ -11,17 +11,16 @@
   binaryen,
   wasixSysroot,
 }: let
+  # version is the source of truth; the tag is `v${version}`. (The old
+  # `fromTOML (readFile "${src}/Cargo.toml")` was IFD — it forced the src to
+  # realise just to read the version.)
+  version = "0.1.28"; # past v0.1.25, which parsed wasm with walrus before wasm-opt.
   src = fetchFromGitHub {
     owner = "wasix-org";
     repo = "cargo-wasix";
-    # v0.1.25 parses wasm with walrus before invoking wasm-opt.
-    # Pin to a newer commit that removed that parser path.
-    rev = "9c0f8fd306c265734fdee7d941bc39641dc27c80";
-    hash = "sha256-U1zG+xBzPiQVrgEJDqsAypFBVjPO7XZr8v+vfZGG+s0=";
+    tag = "v${version}";
+    hash = "sha256-PQUQtvaoKUoNeITQ47gNPMvj9Odbaz9x3538f1D4WUE=";
   };
-
-  cargoToml = builtins.fromTOML (builtins.readFile "${src}/Cargo.toml");
-  version = cargoToml.package.version;
 
   supported = stdenv.hostPlatform.isLinux && stdenv.hostPlatform.isx86_64;
 
