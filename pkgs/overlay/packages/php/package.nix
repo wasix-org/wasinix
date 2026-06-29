@@ -74,7 +74,9 @@
   ];
   # phpix links libphp against these (passthru); kept explicit because phpix's link line needs the
   # exact archive names + dirs and can't rederive them from the php build.
-  allLibraryDirs = map libraryDir depList ++ [libpqLibraryDir];
+  # lcms2 + openjpeg are transitive (via imagemagick), not linked into php directly — but phpix's
+  # link needs their dirs on its search path (passthru-only, so this doesn't rebuild php).
+  allLibraryDirs = map libraryDir depList ++ [libpqLibraryDir (libraryDir L.lcms2) (libraryDir L.openjpeg)];
   phpExtraLinkLibs = [
     "MagickCore-7.Q16HDRI"
     "MagickWand-7.Q16HDRI"
@@ -135,9 +137,6 @@
     ac_cv_lib_pq_PQlibVersion = "yes";
     ac_cv_lib_pq_PQencryptPasswordConn = "yes";
     ac_cv_lib_pq_PQchangePassword = "yes";
-    # NOTE: pg_encoding_to_char is currently missing from the overlay libpq (its libpgcommon lacks the
-    # encnames module), so phpix.wasm imports it undefined and won't instantiate until libpq is fixed.
-    # php calls it unconditionally (libpq-fe.h decl), so toggling this ac_cv doesn't remove the call.
     ac_cv_lib_pq_pg_encoding_to_char = "yes";
     ac_cv_lib_pq_lo_truncate64 = "yes";
     ac_cv_lib_pq_PQsocketPoll = "yes";
