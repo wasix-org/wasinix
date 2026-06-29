@@ -1,13 +1,15 @@
 # PHP 8.5 — static ZTS libphp for wasix, the dependency phpix embeds. Ported from the old
 # pkgs/libraries/php (origin/php85-tailcall): upstream php-src + the php85 patch stack + bundled
-# igbinary/imagick. Built through the exnrefEh profile stdenv (which is wasixcc with
-# WASM_EXCEPTIONS=yes — the exnref EH the README requires); the old recipe drove wasixcc manually
-# via toolchain.commonPreConfigure, but the profile stdenv's shim bakes that env, so we drop it and
-# keep only the PHP-specific configure flags / *_CFLAGS / *_LIBS.
+# igbinary/imagick. Built through the exnrefEh profile stdenv (wasixcc with WASM_EXCEPTIONS=yes).
 #
-# This produces `make install-headers install-sapi` (static libphp + headers), NOT a runnable php —
-# phpix links it via passthru.phpExtraLibDirs / phpExtraLinkLibs. exnrefEh-only
-# (passthru.wasix.supportedProfiles).
+# Deps go in buildInputs, so the profile stdenv auto-threads -I/-L and pkg-config (PKG_CONFIG_PATH)
+# supplies each lib's flags — the old recipe's ~25 hand-fed per-lib *_CFLAGS/*_LIBS were just
+# discovery and are gone. Only libs PHP can't find via pkg-config keep explicit flags: iconv (no
+# .pc), imagick + pgsql (configure patched to read *_CFLAGS/*_LIBS), icu (explicit C++ std); curl's
+# full static link is derived from curl-config in configurePhase (brotli/zstd deps).
+#
+# Produces `make install-headers install-sapi` (static libphp + headers) for phpix to link via
+# passthru.phpExtraLibDirs / phpExtraLinkLibs. exnrefEh-only (passthru.wasix.supportedProfiles).
 {
   final,
   prev,
@@ -20,18 +22,14 @@
 
   L = final; # overlay deps, auto-threaded at this profile
 
-  # Deterministic output selection. The old recipe used builtins.pathExists, which is
-  # store-state-dependent at eval (false for unbuilt deps -> wrong dir); lib.getLib/getDev pick by
-  # the drv's declared outputs instead.
+  # Deterministic output selection (lib.getLib/getDev pick by the drv's declared outputs, unlike
+  # builtins.pathExists which is store-state-dependent at eval).
   includeDir = drv: "${lib.getDev drv}/include";
   libraryDir = drv: "${lib.getLib drv}/lib";
-  pkgConfigDir = drv: "${lib.getDev drv}/lib/pkgconfig";
 
-  # libpq ships its archives + .pc under its dev output.
+  # libpq splits dev/lib but PHP's --with-pgsql wants one prefix, so synthesize a merged one (+ a
+  # stub pg_config). libpq's archives live under its dev output.
   libpqLibraryDir = "${lib.getDev L.libpq}/lib";
-  libpqPkgConfigDir = "${lib.getDev L.libpq}/lib/pkgconfig";
-  # PHP's --with-pgsql wants one prefix; libpq splits dev/lib, so synthesize a merged prefix
-  # (+ a stub pg_config) from the libpq outputs.
   libpqPrefix = final.buildPackages.stdenvNoCC.mkDerivation {
     name = "php85-libpq-prefix";
     dontUnpack = true;
@@ -54,10 +52,7 @@
 
   depList = [
     L.curl
-    # brotli: the overlay curl is built --with-brotli, so libcurl.pc lists -lbrotlidec/-lbrotlicommon
-    # but their -L dir lives in Libs.private (not on PHP's non-static pkg-config line). Include
-    # brotli here so its -L reaches the link search path (the old recipe predates curl's brotli dep).
-    L.brotli
+    L.brotli # curl --with-brotli: libcurl.pc lists -lbrotlidec but its -L is in Libs.private
     L.zlib
     L.xz
     L.libxml2
@@ -77,9 +72,9 @@
     L.libtiff
     L.imagemagick
   ];
+  # phpix links libphp against these (passthru); kept explicit because phpix's link line needs the
+  # exact archive names + dirs and can't rederive them from the php build.
   allLibraryDirs = map libraryDir depList ++ [libpqLibraryDir];
-  pkgConfigPath = lib.concatStringsSep ":" (map pkgConfigDir depList ++ [libpqPkgConfigDir]);
-  librarySearchFlags = lib.concatMapStringsSep " " (dir: "-L${dir}") allLibraryDirs;
   phpExtraLinkLibs = [
     "MagickCore-7.Q16HDRI"
     "MagickWand-7.Q16HDRI"
@@ -112,49 +107,28 @@
     "zip"
   ];
 
-  # PHP-specific configure env. Dropped vs the old recipe: CC/CXX/AR/NM/RANLIB (the profile stdenv
-  # provides them) and WASIXCC_WASM_EXCEPTIONS (the exnrefEh stdenv sets it to yes).
+  # Only the flags PHP can't get from pkg-config + buildInputs. curl/zlib/libxml/sqlite/openssl/png/
+  # jpeg/freetype/webp/libzip/sodium/onig are all discovered via pkg-config now.
   configureEnv = {
-    CURL_CFLAGS = "-I${includeDir L.curl}";
-    CURL_LIBS = "-lcurl -lssl -lcrypto -ldl -pthread -lz";
-    ZLIB_CFLAGS = "-I${includeDir L.zlib}";
-    ZLIB_LIBS = "-lz";
-    LIBXML_CFLAGS = "-I${includeDir L.libxml2}/libxml2";
-    LIBXML_LIBS = "-lxml2 -llzma -lz";
-    SQLITE_CFLAGS = "-I${includeDir L.sqlite}";
-    SQLITE_LIBS = "-lsqlite3";
-    OPENSSL_CFLAGS = "-I${includeDir L.openssl}";
-    OPENSSL_LIBS = "-lssl -lcrypto";
-    ICONV_CFLAGS = "-I${includeDir L.libiconv}";
+    # iconv: wasilibc-iconv ships no .pc and its split charset/icrt libs aren't auto-linked.
     ICONV_LIBS = "-liconv -lcharset -licrt";
+    # intl/icu: needs an explicit C/C++ std (the -I is redundant with buildInputs but harmless).
     ICU_CFLAGS = "-I${includeDir L.icu} -std=c11";
     ICU_CXXFLAGS = "-I${includeDir L.icu} -std=c++17";
     ICU_LIBS = "-licudata -licui18n -licuio -licuuc";
-    PNG_CFLAGS = "-I${includeDir L.libpng} -I${includeDir L.libpng}/libpng16";
-    PNG_LIBS = "-lpng16 -lz";
-    JPEG_CFLAGS = "-I${includeDir L.libjpeg}";
-    JPEG_LIBS = "-ljpeg";
-    FREETYPE2_CFLAGS = "-I${includeDir L.freetype} -I${includeDir L.freetype}/freetype2";
-    FREETYPE2_LIBS = "-lfreetype -lpng16 -lz";
-    WEBP_CFLAGS = "-I${includeDir L.libwebp}";
-    WEBP_LIBS = "-lwebp -lsharpyuv";
-    LIBZIP_CFLAGS = "-I${includeDir L.libzip}";
-    LIBZIP_LIBS = "-lzip -llzma -lz";
-    LIBSODIUM_CFLAGS = "-I${includeDir L.libsodium}";
-    LIBSODIUM_LIBS = "-lsodium";
-    ONIG_CFLAGS = "-I${includeDir L.oniguruma}";
-    ONIG_LIBS = "-lonig";
+    # imagick: config.m4 is patched (postPatch) to read these instead of IM_FIND_IMAGEMAGICK.
     IM_IMAGEMAGICK_CFLAGS = "-I${includeDir L.imagemagick}/ImageMagick -DIM_MAGICKWAND_HEADER_STYLE_SEVEN -DMAGICKCORE_QUANTUM_DEPTH=16 -DMAGICKCORE_HDRI_ENABLE=1 -DMAGICKCORE_CHANNEL_MASK_DEPTH=32";
     IM_IMAGEMAGICK_LIBS = "-lMagickWand-7.Q16HDRI -lMagickCore-7.Q16HDRI -ltiff -lz -ldeflate -ljpeg -llzma -lzstd -lpng16 -lwebpmux -lwebpdemux -lwebp -lsharpyuv -lfreetype -lxml2 -lcurl -lssl -lcrypto";
+    # pgsql: php.m4 is patched (postPatch) to read these; libpq is the synthetic merged prefix.
     PGSQL_CFLAGS = "-I${libpqPrefix}/include";
     PGSQL_LIBS = "-lpq -lpgcommon_shlib -lpgport_shlib -lz -lm";
     PHP_BUILD_SYSTEM = "clang(WASIX+WasmEH)";
-    PHP_EXTRA_INCLUDES = "";
     PHP_IPV6 = "yes";
-    PKG_CONFIG_PATH = pkgConfigPath;
     CFLAGS = "-g -O2 -mtail-call";
     CXXFLAGS = "-g -O2 -mtail-call";
-    LIBS = "${librarySearchFlags} -lpgcommon_shlib -lpgport_shlib -lm --no-wasm-opt";
+    # pg's static libs at the final link (+ libm); other search dirs come from buildInputs.
+    LIBS = "-L${libpqLibraryDir} -lpgcommon_shlib -lpgport_shlib -lm";
+    # libpq link-checks can't run on wasm; assert the symbols exist.
     ac_cv_lib_pq_PQlibVersion = "yes";
     ac_cv_lib_pq_PQencryptPasswordConn = "yes";
     ac_cv_lib_pq_PQchangePassword = "yes";
@@ -197,6 +171,7 @@ in
       python3
       coreutils
     ];
+    buildInputs = depList;
 
     enableParallelBuilding = true;
 
@@ -220,8 +195,7 @@ in
       ${exportConfigureEnv}
       # The overlay curl is --with-brotli --with-zstd, so libcurl.a needs their symbols; derive the
       # full static curl link (-L dirs + -l flags for brotli/zstd/openssl/zlib) from curl-config
-      # rather than the recipe's static CURL_LIBS, which predates curl's brotli/zstd deps. (+ php's
-      # -ldl -pthread, which curl-config doesn't emit.)
+      # rather than a hand-typed list that goes stale when curl's deps change. (+ php's -ldl -pthread.)
       export CURL_LIBS="$(${lib.getDev L.curl}/bin/curl-config --static-libs) -ldl -pthread"
       installPrefix="$PWD/install"
       ./buildconf --force
