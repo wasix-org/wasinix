@@ -48,85 +48,9 @@ in
 
     prePatch = ''
       cp ${./phpix.Cargo.lock} Cargo.lock
-      patch -N -p1 --batch <<'PATCHEOF' || true
-diff --git a/src/php/mod.rs b/src/php/mod.rs
-index abd4f10..44ddb14 100644
---- a/src/php/mod.rs
-+++ b/src/php/mod.rs
-@@ -78,6 +78,22 @@ fn with_thread_mode<R>(f: impl FnOnce(&RefCell<Option<PhpThreadMode>>) -> R) ->
-     r
- }
-
-+unsafe fn configure_core_globals_for_embedded_request() {
-+    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
-+    {
-+        let pg = unsafe { phpix_pg() };
-+        if !pg.is_null() {
-+            // PHP 8.5 deprecates setting report_memleaks=0 via INI, but request
-+            // shutdown still uses this flag to decide whether tracked allocations
-+            // are released immediately. Set the global directly so long-running
-+            // workers reclaim request memory without invoking the deprecated INI handler.
-+            unsafe {
-+                (*pg).report_memleaks = false;
-+            }
-+        }
-+    }
-+}
-+
- pub fn start_php(
-     num_threads: u32,
-     document_root: &Path,
-@@ -129,24 +145,10 @@ pub fn start_php(
-
-         sapi_startup(&raw mut sapi_mod);
-
--        #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
--        // WASI PHP currently uses a custom tracked allocator path in Zend.
--        // PHP defaults report_memleaks to 1 (see php main/main.c ini defaults).
--        // With report_memleaks=1, request shutdown keeps leaked allocations for
--        // leak reporting and only clears tracking metadata, which causes memory
--        // to ratchet upward across requests in long-running workers.
--        // Disable leak reporting by default to force request-time reclamation.
--        let runtime_ini_defaults = "report_memleaks=0\n";
--        #[cfg(not(all(target_os = "wasi", target_vendor = "wasmer")))]
--        let runtime_ini_defaults = "";
--
-         let ini_entries = if let Some(php_ini_path) = php_ini_path
-             && let Some(user_ini) = load_ini_entries(php_ini_path)?
-         {
--            let combined = format!("{}{}", runtime_ini_defaults, user_ini.to_string_lossy());
--            Some(CString::new(combined)?)
--        } else if !runtime_ini_defaults.is_empty() {
--            Some(CString::new(runtime_ini_defaults)?)
-+            Some(user_ini)
-         } else {
-             None
-         };
-diff --git a/src/php/script.rs b/src/php/script.rs
-index 850d140..e575ee5 100644
---- a/src/php/script.rs
-+++ b/src/php/script.rs
-@@ -181,6 +181,7 @@ pub fn execute_cli_script(script_path: &Path, script_args: Vec<String>) -> Resul
-         // Set argc/argv in request_info so PHP core can populate $argc/$argv
-         sg.request_info.argc = argc;
-         sg.request_info.argv = argv_ptrs.as_ptr() as *mut *mut c_char;
-+        configure_core_globals_for_embedded_request();
-
-         if php_request_startup() != 0 {
-             php_request_shutdown(ptr::null_mut());
-diff --git a/src/php/worker.rs b/src/php/worker.rs
-index 87b0274..ab84828 100644
---- a/src/php/worker.rs
-+++ b/src/php/worker.rs
-@@ -209,6 +209,7 @@ fn process_task(task: PhpTask) -> Result<()> {
-         sg.server_context = std::ptr::dangling_mut();
-         sg.sapi_headers.http_response_code = 200;
-         update_server_globals(&mut sg.request_info);
-+        configure_core_globals_for_embedded_request();
-
-         if php_request_startup() != 0 {
-             php_request_shutdown(ptr::null_mut());
-PATCHEOF
+      # report_memleaks: PHP 8.5 deprecates the INI route, but request shutdown still reads the flag
+      # to reclaim per-request memory; patch the Zend global directly for long-running workers.
+      patch -N -p1 --batch < ${./patches/report-memleaks.patch} || true
     '';
 
     buildPhase = ''
