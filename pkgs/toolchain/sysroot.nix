@@ -18,7 +18,7 @@
   wasixLibcSrc = pkgs.fetchFromGitHub {
     owner = "wasix-org";
     repo = "wasix-libc";
-    rev = wasixLibcVersion; # resolve the tag; content hash pins it
+    tag = wasixLibcVersion; # content hash pins it
     hash = "sha256-PI8Iushd3HS6+tCZ6f4agmz9TIJdL1nxpozWN90ubNY=";
   };
 

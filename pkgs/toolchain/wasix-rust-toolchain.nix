@@ -56,8 +56,9 @@
   withDynamicLinking ? true,
 }: let
   inherit (lib) optionals optionalString;
-  # Fork release tag. `+` is part of the tag; fetchFromGitHub takes it verbatim.
-  version = "v2026-02-09.1+rust-1.90";
+  # version is the source of truth; the fork release tag is `v${version}`
+  # (the `+rust-1.90` suffix is part of it).
+  version = "2026-02-09.1+rust-1.90";
 
   hostTriple = "x86_64-unknown-linux-gnu";
 
@@ -65,7 +66,7 @@
   src = fetchFromGitHub {
     owner = "wasix-org";
     repo = "rust";
-    rev = version;
+    tag = "v${version}";
     fetchSubmodules = true;
     hash = "sha256-IpYgSk8ijtUcGQVZCR64rWmiF0bGgYsIN+7cX9TgyW0=";
   };

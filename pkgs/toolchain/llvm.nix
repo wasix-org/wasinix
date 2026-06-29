@@ -4,14 +4,13 @@
 # compiler that builds the sysroot runtimes.
 {pkgs}: let
   # The fork has two distinct numbers: the fork *release tag* and the *base LLVM
-  # version* nixpkgs needs to pick its patch set — they can't merge. The fetch
-  # stays pinned by commit (immutable + the monorepo fetch is large to re-resolve);
-  # the content `hash` is the real integrity guarantee either way.
+  # version* nixpkgs needs to pick its patch set — they can't merge. Pin the fetch
+  # by the fork release tag; the content `hash` is the real integrity guarantee.
   llvmVersion = "21.1.2"; # base LLVM (drives nixpkgs' patch selection)
   monorepoSrc = pkgs.fetchFromGitHub {
     owner = "wasix-org";
     repo = "llvm-project";
-    rev = "21.1.203"; # fork release tag (one of 21.1.201–204 on this commit)
+    tag = "21.1.203"; # fork release tag (one of 21.1.201–204 on this commit)
     hash = "sha256-IFQNaJfBTVXWYsahkCGLMbmcs6vWDEwr6xKszq7yHSM=";
   };
 
