@@ -18,7 +18,7 @@
     wasixSysrootEh = variants.eh.sysroot;
     wasixSysrootEhpic = variants.ehpic.sysroot;
   };
-  binaryen = pkgs.callPackage ./binaryen.nix {};
+  binaryen = pkgs.binaryen;
   wasixcc = pkgs.callPackage ./wasixcc.nix {
     inherit wasixLlvm binaryen wasixSysroot;
   };
