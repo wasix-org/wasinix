@@ -135,6 +135,9 @@
     ac_cv_lib_pq_PQlibVersion = "yes";
     ac_cv_lib_pq_PQencryptPasswordConn = "yes";
     ac_cv_lib_pq_PQchangePassword = "yes";
+    # NOTE: pg_encoding_to_char is currently missing from the overlay libpq (its libpgcommon lacks the
+    # encnames module), so phpix.wasm imports it undefined and won't instantiate until libpq is fixed.
+    # php calls it unconditionally (libpq-fe.h decl), so toggling this ac_cv doesn't remove the call.
     ac_cv_lib_pq_pg_encoding_to_char = "yes";
     ac_cv_lib_pq_lo_truncate64 = "yes";
     ac_cv_lib_pq_PQsocketPoll = "yes";
