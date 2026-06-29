@@ -20,6 +20,8 @@
   fetchFromGitHub,
   fetchurl,
   runCommand,
+  linkFarm,
+  formats,
   rustPlatform,
   autoPatchelfHook,
   # Sets HOME to a writable temp dir for the build (x.py/cargo write to ~/.cargo etc.).
@@ -39,13 +41,19 @@
   wasixLlvm,
   wasixSysrootEh,
   wasixSysrootEhpic,
-  # Also build std for wasm32-wasmer-wasi-dl (the dynamic-linking / PIC target).
-  # Off by default: the fork's cc-rs (f2e7d1a1) rejects the `-dl` ABI during the
-  # compiler-detection it runs for every target, so enabling it currently breaks the
-  # build. cargo-wasix's default builds target plain wasm32-wasmer-wasi (static), so
-  # the toolchain is fully usable without it. TODO: revisit once the cc-rs `dl` parse
-  # is sorted (newer cc-rs fork, or skip detection for this target).
-  withDynamicLinking ? false,
+  # Also build std for wasm32-wasmer-wasi-dl (the dynamic-linking / PIC target),
+  # needed for PIC `.so` Rust artifacts (e.g. pyo3 python extensions).
+  #
+  # An earlier note claimed the fork's cc-rs rejects the `-dl` ABI during compiler
+  # detection. That's stale: src/bootstrap pins cc-rs f2e7d1a1, which is the commit
+  # that *added* the `dl` env arm — it parses wasm32-wasmer-wasi-dl cleanly (the
+  # `wasi` OS rule then blanks the env, so bootstrap's flag-probe clang just sees
+  # --target=wasm32-wasmer-wasi). The library/ (std) workspace pins stock cc 1.2.0
+  # without that arm, but with optimized-compiler-builtins=false (below) and no
+  # profiler_builtins, the std build never invokes cc for the wasm target, so its
+  # parser is never exercised on `-dl`. Both sysroots (eh / ehpic) and the per-target
+  # WASI-SDK clang wrappers are already wired, so the `-dl` std target just builds.
+  withDynamicLinking ? true,
 }: let
   inherit (lib) optionals optionalString;
   # Fork release tag. `+` is part of the tag; fetchFromGitHub takes it verbatim.
@@ -85,53 +93,89 @@
     '';
   };
 
-  # Offline cargo registry for every workspace x.py compiles: the compiler/tools
-  # (root), std (library), the cargo tool, and bootstrap itself.
+  # Offline cargo registry for every workspace x.py compiles — the compiler/tools
+  # (root), std (library), the cargo tool, and bootstrap. Each is a separate cargo
+  # workspace with its own lockfile, so we vendor each with importCargoLock (reads the
+  # already-resolved entries — no re-resolution of the [patch.crates-io] forks, no
+  # vendor-wide FOD hash) and assemble one source-replacement config that x.py's single
+  # root .cargo/config.toml hands to all of them. Stock rust ships this prebuilt as the
+  # release tarball's vendor/; the fork ships only a git tag, so we reconstruct it.
   #
-  # We vendor each lockfile independently with importCargoLock rather than `cargo
-  # vendor`-ing them together. A merged vendor re-resolves the `[patch.crates-io]`
-  # forks (cc-rs, libc) and pulls a phantom crates-io `cc 1.2.27` that collides with
-  # the fork's own 1.2.27. importCargoLock reads only the already-resolved lockfile
-  # entries, so no phantom appears — and it fetches each crate by its lockfile
-  # checksum, so there's no vendor-wide FOD hash to maintain.
-  lockVendors =
-    map (
-      lf:
-        rustPlatform.importCargoLock {
-          lockFile = lf;
-          # The cc-rs / libc forks are pinned by commit, so builtins.fetchGit is pure.
-          allowBuiltinFetchGit = true;
-        }
-    ) [
-      "${src}/Cargo.lock"
-      "${src}/library/Cargo.lock"
-      "${src}/src/tools/cargo/Cargo.lock"
-      "${src}/src/bootstrap/Cargo.lock"
-    ];
+  # The crates come from two source kinds: crates-io and the wasix git forks (cc-rs,
+  # libc). name+version is NOT unique across them — cc 1.2.27 is the dl-arm fork (the
+  # git pin that teaches cc-rs the `wasm32-wasmer-wasi-dl` ABI) in src/bootstrap but
+  # stock crates-io in src/tools/cargo. cargo keeps git+… and registry+… as distinct
+  # sources, each with its own checksum, so this is legal — but a `directory` source is
+  # keyed by name+version alone. Collapsing both into one vendored dir would force a
+  # single cc-1.2.27 and silently serve one lockfile the other's crate (e.g. cargo
+  # compiling fork code under stock's `d487aa…` checksum). So vendor the two source
+  # kinds into separate directories and replace each source with the directory holding
+  # ITS crates: every crate served from exactly the source its lockfile names.
+  #
+  # It's all derived from the lockfiles in Nix — fromTOML to classify by source,
+  # linkFarm for the trees (attrset keys dedupe across lockfiles; same source+version is
+  # identical content), formats.toml to serialise the config. No shell.
+  lockFiles = map (p: "${src}/${p}") [
+    "Cargo.lock"
+    "library/Cargo.lock"
+    "src/tools/cargo/Cargo.lock"
+    "src/bootstrap/Cargo.lock"
+  ];
+  # The cc-rs / libc forks are pinned by commit, so builtins.fetchGit is pure.
+  vendorOf = lf:
+    rustPlatform.importCargoLock {
+      lockFile = lf;
+      allowBuiltinFetchGit = true;
+    };
+  packagesOf = lf: (builtins.fromTOML (builtins.readFile lf)).package or [];
+  isGitSource = source: lib.hasPrefix "git+" source;
 
-  # Union the per-lockfile trees (distinct name-version across sources now, so no
-  # collisions) and assemble one cargo config: crates-io plus each fork git source,
-  # all replaced by the merged directory. The git [source.*] blocks are lifted from
-  # importCargoLock's own generated configs, so they track any source/rev bump.
-  cargoVendor = runCommand "wasix-rust-vendor" {} ''
-    mkdir -p "$out/vendor"
-    for d in ${lib.escapeShellArgs lockVendors}; do
-      for entry in "$d"/*; do
-        name="$(basename "$entry")"
-        [ "$name" = "Cargo.lock" ] && continue
-        [ -e "$out/vendor/$name" ] || cp -a "$entry" "$out/vendor/$name"
-      done
-    done
+  # name-version → its vendored-crate subpath, for every package whose source matches
+  # `pred`, unioned across all lockfiles. importCargoLock names each crate dir
+  # "<name>-<version>"; workspace members carry no `source` and aren't vendored.
+  vendorTree = pred:
+    lib.listToAttrs (lib.concatMap (
+        lf: let
+          v = vendorOf lf;
+        in
+          map (p: lib.nameValuePair "${p.name}-${p.version}" "${v}/${p.name}-${p.version}")
+          (lib.filter (p: (p ? source) && pred p.source) (packagesOf lf))
+      )
+      lockFiles);
 
-    {
-      printf '[source.crates-io]\nreplace-with = "vendored-sources"\n\n'
-      for d in ${lib.escapeShellArgs lockVendors}; do
-        awk '/^\[source\."git\+/{f=1} f{print} f&&/replace-with/{print "";f=0}' \
-          "$d/.cargo/config.toml"
-      done | awk 'BEGIN{RS="";ORS="\n\n"} NF && !seen[$0]++'
-      printf '[source.vendored-sources]\ndirectory = "%s/vendor"\n' "$out"
-    } > "$out/config.toml"
-  '';
+  cratesIoVendor = linkFarm "wasix-rust-vendor" (vendorTree (s: !isGitSource s));
+  gitVendor = linkFarm "wasix-rust-vendor-git" (vendorTree isGitSource);
+
+  # One [source."git+…"] entry per distinct git source: define it (cargo needs the git
+  # url + ref to identify the source) and replace it with the git vendor dir. The source
+  # id encodes url + ref + rev, so we read those back out of it.
+  gitSourceEntry = source: let
+    m = builtins.match ''git\+([^?#]+)(\?(rev|tag|branch)=([^#]+))?#(.+)'' source;
+    refKind = lib.elemAt m 2;
+  in
+    lib.nameValuePair source ({
+        git = lib.elemAt m 0;
+        replace-with = "vendored-git";
+      }
+      // (
+        if refKind != null
+        then {${refKind} = lib.elemAt m 3;}
+        else {rev = lib.elemAt m 4;}
+      ));
+  gitSources = lib.unique (lib.concatMap (
+      lf: map (p: p.source) (lib.filter (p: (p ? source) && isGitSource p.source) (packagesOf lf))
+    )
+    lockFiles);
+
+  cargoConfig = (formats.toml {}).generate "wasix-rust-cargo-config.toml" {
+    source =
+      {
+        crates-io.replace-with = "vendored-sources";
+        vendored-sources.directory = "${cratesIoVendor}";
+        vendored-git.directory = "${gitVendor}";
+      }
+      // lib.listToAttrs (map gitSourceEntry gitSources);
+  };
 
   # rust bootstrap's cc_detect.rs locates the C compiler for a `-wasi` target at
   # $WASI_SDK_PATH/bin/<target>-clang[++] (see src/bootstrap/src/utils/cc_detect.rs).
@@ -203,15 +247,16 @@ in
     };
 
     # patchShebangs; apply the fork's LLVM WebAssembly-lowering patch (build-wasix.sh
-    # step 1); then wire up the merged vendor tree (crates-io + the cc-rs/libc git forks):
-    # a source-replacement .cargo/config.toml, plus a ./vendor symlink at the root that
-    # bootstrap's vendor check insists on.
+    # step 1); then drop the source-replacement .cargo/config.toml (crates-io + the
+    # cc-rs/libc git forks), plus the ./vendor symlink at the root that bootstrap's
+    # vendor check insists on (resolution is via the config's absolute dirs; this is
+    # just a presence check, so the crates-io tree suffices).
     postPatch = ''
       patchShebangs src/etc x.py configure
       ( cd src/llvm-project && patch -p1 < ../../wasix-llvm.patch )
       mkdir -p .cargo
-      cp ${cargoVendor}/config.toml .cargo/config.toml
-      ln -s ${cargoVendor}/vendor vendor
+      cp ${cargoConfig} .cargo/config.toml
+      ln -s ${cratesIoVendor} vendor
     '';
 
     # Drive rust's own ./configure (the nix-idiomatic path; it generates bootstrap.toml
