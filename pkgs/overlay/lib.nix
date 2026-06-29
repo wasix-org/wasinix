@@ -75,7 +75,13 @@
         else if builtins.elem name scriptPhases
         then mergeScript [cur val]
         else if builtins.isList val
-        then (if cur == null then [] else cur) ++ val
+        then
+          (
+            if cur == null
+            then []
+            else cur
+          )
+          ++ val
         else if lib.isAttrs val && !lib.isDerivation val && lib.isAttrs cur && !lib.isDerivation cur
         then cur // extendDrv cur val
         else val

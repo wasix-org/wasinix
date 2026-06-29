@@ -21,7 +21,12 @@ in
     outputs = _: ["out"];
     buildInputs = bi:
       lib.filter (i: (i.pname or i.name or "") != "potrace")
-      ((if bi == null then [] else bi) ++ [final.zstd]);
+      ((
+          if bi == null
+          then []
+          else bi
+        )
+        ++ [final.zstd]);
     postInstall = _: ''
       mkdir -p "$out/include"
       if ls "$out"/include/ImageMagick-* >/dev/null 2>&1; then
