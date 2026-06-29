@@ -1,0 +1,365 @@
+diff --git a/Zend/zend_string.h b/Zend/zend_string.h
+index ec4bd36..9f147e2 100644
+--- a/Zend/zend_string.h
++++ b/Zend/zend_string.h
+@@ -631,6 +631,8 @@ EMPTY_SWITCH_DEFAULT_CASE()
+ 	_(ZEND_STR_COUNT,                  "count") \
+ 	_(ZEND_STR_SENSITIVEPARAMETER,     "SensitiveParameter") \
+ 	_(ZEND_STR_CONST_EXPR_PLACEHOLDER, "[constant expression]") \
++	_(ZEND_STR_INSTABOOT,              "x-edge-instaboot") \
++	_(ZEND_STR_INSTABOOT_SHUTDOWN,     "x-wasmer-instaboot-shutdown") \
+ 
+ 
+ typedef enum _zend_known_string_id {
+diff --git a/sapi/cli/php_cli.c b/sapi/cli/php_cli.c
+index 64fb9c5..ab6149b 100644
+--- a/sapi/cli/php_cli.c
++++ b/sapi/cli/php_cli.c
+@@ -618,7 +618,7 @@ static int do_cli(int argc, char **argv) /* {{{ */
+ 
+ 	file_handle.filename = NULL;
+ 
+-	zend_try {
++	zend_first_try {
+ 
+ 		CG(in_compilation) = 0; /* not initialized but needed for several options */
+ 
+@@ -1334,17 +1334,27 @@ exit_loop:
+ 		CG(compiler_options) |= ZEND_COMPILE_EXTENDED_INFO;
+ 	}
+ 
+-	zend_first_try {
+ #ifndef PHP_CLI_WIN32_NO_CONSOLE
+-		if (sapi_module == &cli_sapi_module) {
++	if (sapi_module == &cli_sapi_module) {
+ #endif
+-			exit_status = do_cli(argc, argv);
++		exit_status = do_cli(argc, argv);
+ #ifndef PHP_CLI_WIN32_NO_CONSOLE
+-		} else {
++	} else {
++		exit_status = do_cli_server(argc, argv);
++#ifdef __wasi__
++		// If any instaboot requests were received, we're now in warmup mode. We
++		// want to snapshot the process state, and then start another server to
++		// do the actual request handling.
++		if (exit_status == 0 && wasmer_instaboot_warmup_mode == WASMER_INSTABOOT_WARMUP_MODE_IN_PROGRESS) {
++			// Note: we can't asyncify a function that does exception handling, so
++			// the zend_try call was moved into do_cli_server and do_cli.
++			wasmer_instaboot_warmup_mode = WASMER_INSTABOOT_WARMUP_MODE_DONE;
++			wasix_proc_snapshot();
+ 			exit_status = do_cli_server(argc, argv);
+ 		}
+ #endif
+-	} zend_end_try();
++	}
++#endif
+ out:
+ 	if (ini_path_override) {
+ 		free(ini_path_override);
+diff --git a/sapi/cli/php_cli_server.c b/sapi/cli/php_cli_server.c
+index 19edc0c..e452de0 100644
+--- a/sapi/cli/php_cli_server.c
++++ b/sapi/cli/php_cli_server.c
+@@ -36,6 +36,8 @@
+ #include <unixlib/local.h>
+ #endif
+ 
++#include <sys/stat.h>
++
+ #if HAVE_SYS_TIME_H
+ #include <sys/time.h>
+ #endif
+@@ -117,6 +119,10 @@ static pid_t	*php_cli_server_workers;
+ static zend_long php_cli_server_workers_max;
+ #endif
+ 
++#ifdef __wasi__
++int wasmer_instaboot_warmup_mode = WASMER_INSTABOOT_WARMUP_MODE_NONE;
++#endif
++
+ static zend_string* cli_concat_persistent_zstr_with_char(zend_string *old_str, const char *at, size_t length);
+ 
+ typedef struct php_cli_server_poller {
+@@ -728,6 +734,23 @@ static void sapi_cli_server_register_variables(zval *track_vars_array) /* {{{ */
+ 		zend_string_release_ex(tmp, /* persistent */ false);
+ 	}
+ 
++	// Set https protocol to true if x-forwarded-proto == "https"
++	{
++		zval *x_forwarded_proto;
++		if (NULL != (x_forwarded_proto = zend_hash_str_find(
++						 &client->request.headers,
++						 "x-forwarded-proto",
++						 sizeof("x-forwarded-proto") - 1)) &&
++			Z_TYPE(*x_forwarded_proto) == IS_STRING)
++		{
++			if (strncmp(Z_STRVAL_P(x_forwarded_proto), "https", strlen("https")) == 0)
++			{
++				sapi_cli_server_register_known_var_char(track_vars_array,
++														"HTTPS", strlen("HTTPS"), "1", strlen("1"));
++			}
++		}
++	}
++
+ 	sapi_cli_server_register_known_var_str(track_vars_array,
+ 		"REQUEST_URI", strlen("REQUEST_URI"), client->request.request_uri);
+ 	sapi_cli_server_register_known_var_char(track_vars_array,
+@@ -2202,6 +2225,21 @@ static zend_result php_cli_server_begin_send_static(php_cli_server *server, php_
+ 			return FAILURE;
+ 		}
+ 		append_essential_headers(&buffer, client, 1, NULL);
++
++		// Append Last-Modified
++		zend_stat_t file_info;
++		if (zend_fstat(fd, &file_info) != -1) {
++			zend_string *dt = php_format_date("D, d M Y H:i:s", sizeof("D, d M Y H:i:s") - 1, file_info.st_mtime, 0);
++			smart_str_appends_ex(&buffer, "Last-Modified: ", 1);
++			smart_str_append_ex(&buffer, dt, 1);
++			smart_str_appends_ex(&buffer, " GMT\r\n", 1);
++			zend_string_release_ex(dt, 0);
++
++			if (file_info.st_mtime > 0) {
++				smart_str_appends_ex(&buffer, "Cache-Control: public, max-age=31536000\r\n", 1);
++			}
++		}
++
+ 		if (mime_type) {
+ 			smart_str_appendl_ex(&buffer, "Content-Type: ", sizeof("Content-Type: ") - 1, 1);
+ 			smart_str_appends_ex(&buffer, mime_type, 1);
+@@ -2315,6 +2353,40 @@ static zend_result php_cli_server_dispatch(php_cli_server *server, php_cli_serve
+ 		is_static_file = 1;
+ 	}
+ 
++#ifdef __wasi__
++	if (wasmer_instaboot_warmup_mode < WASMER_INSTABOOT_WARMUP_MODE_DONE) {
++		switch (wasmer_instaboot_warmup_mode)
++		{
++			case WASMER_INSTABOOT_WARMUP_MODE_NONE:
++				if (zend_hash_find(&client->request.headers, ZSTR_KNOWN(ZEND_STR_INSTABOOT)) == NULL) {
++					// non-instaboot request; assume we're not warming up and disable these checks
++					wasmer_instaboot_warmup_mode = WASMER_INSTABOOT_WARMUP_MODE_DONE;
++					break;
++				} else {
++					php_cli_server_logf(PHP_CLI_SERVER_LOG_MESSAGE, "Going into instaboot warmup mode");
++					wasmer_instaboot_warmup_mode = WASMER_INSTABOOT_WARMUP_MODE_IN_PROGRESS;
++					// and fall through
++				}
++
++			case WASMER_INSTABOOT_WARMUP_MODE_IN_PROGRESS:
++				if (zend_hash_find(&client->request.headers, ZSTR_KNOWN(ZEND_STR_INSTABOOT)) == NULL) {
++					// Nothing to do here but warn people
++					php_cli_server_logf(PHP_CLI_SERVER_LOG_ERROR, "Non-instaboot request received in instaboot warmup mode");
++				}
++				if (zend_hash_find(&client->request.headers, ZSTR_KNOWN(ZEND_STR_INSTABOOT_SHUTDOWN)) != NULL) {
++					// We stay in IN_PROGRESS mode to let php_cli.c know about the warmup requests. It'll
++					// switch to DONE mode and restart the server after snapshotting.
++					php_cli_server_logf(PHP_CLI_SERVER_LOG_MESSAGE, "Shutting down warmup mode server");
++					server->is_running = 0;
++				}
++				break;
++
++			default:
++				break;
++		}
++	}
++#endif
++
+ 	if (server->router || !is_static_file) {
+ 		if (FAILURE == php_cli_server_request_startup(server, client)) {
+ 			php_cli_server_request_shutdown(server, client);
+@@ -2823,95 +2895,97 @@ int do_cli_server(int argc, char **argv) /* {{{ */
+ 	const char *router = NULL;
+ 	char document_root_buf[MAXPATHLEN];
+ 
+-	while ((c = php_getopt(argc, argv, OPTIONS, &php_optarg, &php_optind, 0, 2))!=-1) {
+-		switch (c) {
+-			case 'S':
+-				server_bind_address = php_optarg;
+-				break;
+-			case 't':
+-#ifndef PHP_WIN32
+-				document_root = php_optarg;
+-#else
+-				k = strlen(php_optarg);
+-				if (k + 1 > MAXPATHLEN) {
+-					fprintf(stderr, "Document root path is too long.\n");
+-					return 1;
+-				}
+-				memmove(document_root_tmp, php_optarg, k + 1);
+-				/* Clean out any trailing garbage that might have been passed
+-					from a batch script. */
+-				do {
+-					document_root_tmp[k] = '\0';
+-					k--;
+-				} while ('"' == document_root_tmp[k] || ' ' == document_root_tmp[k]);
+-				document_root = document_root_tmp;
+-#endif
+-				break;
+-			case 'q':
+-				if (php_cli_server_log_level > 1) {
+-					php_cli_server_log_level--;
+-				}
+-				break;
++	zend_first_try {
++		while ((c = php_getopt(argc, argv, OPTIONS, &php_optarg, &php_optind, 0, 2))!=-1) {
++			switch (c) {
++				case 'S':
++					server_bind_address = php_optarg;
++					break;
++				case 't':
++	#ifndef PHP_WIN32
++					document_root = php_optarg;
++	#else
++					k = strlen(php_optarg);
++					if (k + 1 > MAXPATHLEN) {
++						fprintf(stderr, "Document root path is too long.\n");
++						return 1;
++					}
++					memmove(document_root_tmp, php_optarg, k + 1);
++					/* Clean out any trailing garbage that might have been passed
++						from a batch script. */
++					do {
++						document_root_tmp[k] = '\0';
++						k--;
++					} while ('"' == document_root_tmp[k] || ' ' == document_root_tmp[k]);
++					document_root = document_root_tmp;
++	#endif
++					break;
++				case 'q':
++					if (php_cli_server_log_level > 1) {
++						php_cli_server_log_level--;
++					}
++					break;
++			}
+ 		}
+-	}
+ 
+-	if (document_root) {
+-		zend_stat_t sb = {0};
++		if (document_root) {
++			zend_stat_t sb = {0};
+ 
+-		if (php_sys_stat(document_root, &sb)) {
+-			fprintf(stderr, "Directory %s does not exist.\n", document_root);
+-			return 1;
+-		}
+-		if (!S_ISDIR(sb.st_mode)) {
+-			fprintf(stderr, "%s is not a directory.\n", document_root);
+-			return 1;
+-		}
+-		if (VCWD_REALPATH(document_root, document_root_buf)) {
+-			document_root = document_root_buf;
+-		}
+-	} else {
+-		char *ret = NULL;
++			if (php_sys_stat(document_root, &sb)) {
++				fprintf(stderr, "Directory %s does not exist.\n", document_root);
++				return 1;
++			}
++			if (!S_ISDIR(sb.st_mode)) {
++				fprintf(stderr, "%s is not a directory.\n", document_root);
++				return 1;
++			}
++			if (VCWD_REALPATH(document_root, document_root_buf)) {
++				document_root = document_root_buf;
++			}
++		} else {
++			char *ret = NULL;
+ 
+-#if HAVE_GETCWD
+-		ret = VCWD_GETCWD(document_root_buf, MAXPATHLEN);
+-#elif HAVE_GETWD
+-		ret = VCWD_GETWD(document_root_buf);
+-#endif
+-		document_root = ret ? document_root_buf: ".";
+-	}
++	#if HAVE_GETCWD
++			ret = VCWD_GETCWD(document_root_buf, MAXPATHLEN);
++	#elif HAVE_GETWD
++			ret = VCWD_GETWD(document_root_buf);
++	#endif
++			document_root = ret ? document_root_buf: ".";
++		}
+ 
+-	if (argc > php_optind) {
+-		router = argv[php_optind];
+-	}
++		if (argc > php_optind) {
++			router = argv[php_optind];
++		}
+ 
+-	if (FAILURE == php_cli_server_ctor(&server, server_bind_address, document_root, router)) {
+-		return 1;
+-	}
+-	sapi_module.phpinfo_as_text = 0;
++		if (FAILURE == php_cli_server_ctor(&server, server_bind_address, document_root, router)) {
++			return 1;
++		}
++		sapi_module.phpinfo_as_text = 0;
+ 
+-	{
+-		r = 0;
+-		bool ipv6 = strchr(server.host, ':');
+-		php_cli_server_logf(
+-			PHP_CLI_SERVER_LOG_PROCESS,
+-			"PHP %s Development Server (http://%s%s%s:%d) started",
+-			PHP_VERSION, ipv6 ? "[" : "", server.host,
+-			ipv6 ? "]" : "", server.port);
+-	}
++		{
++			r = 0;
++			bool ipv6 = strchr(server.host, ':');
++			php_cli_server_logf(
++				PHP_CLI_SERVER_LOG_PROCESS,
++				"PHP %s Development Server (http://%s%s%s:%d) started",
++				PHP_VERSION, ipv6 ? "[" : "", server.host,
++				ipv6 ? "]" : "", server.port);
++		}
+ 
+-#if defined(SIGINT)
+-	signal(SIGINT, php_cli_server_sigint_handler);
+-#endif
++	#if defined(SIGINT)
++		signal(SIGINT, php_cli_server_sigint_handler);
++	#endif
+ 
+-#if defined(SIGPIPE)
+-	signal(SIGPIPE, SIG_IGN);
+-#endif
++	#if defined(SIGPIPE)
++		signal(SIGPIPE, SIG_IGN);
++	#endif
+ 
+-	zend_signal_init();
++		zend_signal_init();
+ 
+-	if (SUCCESS != php_cli_server_do_event_loop(&server)) {
+-		r = 1;
+-	}
+-	php_cli_server_dtor(&server);
++		if (SUCCESS != php_cli_server_do_event_loop(&server)) {
++			r = 1;
++		}
++		php_cli_server_dtor(&server);
++	} zend_end_try()
+ 	return r;
+ } /* }}} */
+diff --git a/sapi/cli/php_cli_server.h b/sapi/cli/php_cli_server.h
+index 2440a5b..9cde327 100644
+--- a/sapi/cli/php_cli_server.h
++++ b/sapi/cli/php_cli_server.h
+@@ -19,6 +19,13 @@
+ 
+ #include "SAPI.h"
+ 
++#ifdef __wasi__
++extern int wasmer_instaboot_warmup_mode;
++#define WASMER_INSTABOOT_WARMUP_MODE_NONE 0
++#define WASMER_INSTABOOT_WARMUP_MODE_IN_PROGRESS 1
++#define WASMER_INSTABOOT_WARMUP_MODE_DONE 2
++#endif
++
+ extern const zend_function_entry server_additional_functions[];
+ extern sapi_module_struct cli_server_sapi_module;
+ extern int do_cli_server(int argc, char **argv);

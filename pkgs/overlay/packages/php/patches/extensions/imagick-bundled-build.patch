@@ -1,0 +1,27 @@
+diff --git a/ext/imagick/config.m4 b/ext/imagick/config.m4
+index 3c6c077..69c0c1e 100644
+--- a/ext/imagick/config.m4
++++ b/ext/imagick/config.m4
+@@ -14,7 +14,8 @@ m4_include(ifdef('PHP_IMAGICK_STATIC',PHP_EXT_BUILDDIR(imagick)[/],)[imagemagick
+ 
+ # This line checks that ImageMagick is available, and
+ # meets our minimum supported version. TODO change to 6.7.0
+-IM_FIND_IMAGEMAGICK([6.5.3], [$PHP_IMAGICK])
++# WASIX passes ImageMagick paths explicitly via IM_IMAGEMAGICK_{CFLAGS,LIBS}.
++# IM_FIND_IMAGEMAGICK([6.5.3], [$PHP_IMAGICK])
+ 
+ #
+ # PHP minimum version
+diff --git a/ext/imagick/php_imagick.h b/ext/imagick/php_imagick.h
+index 120e0a4..aa0e711 100644
+--- a/ext/imagick/php_imagick.h
++++ b/ext/imagick/php_imagick.h
+@@ -25,7 +25,7 @@
+ #define PHP_IMAGICK_EXTNAME    "imagick"
+ // The version is deliberately left as 'PACKAGE_VERSION' in source code.
+ // It is only replaced with the actual version number that packaged through pecl.php.net
+-#define PHP_IMAGICK_VERSION    "@PACKAGE_VERSION@"
++#define PHP_IMAGICK_VERSION    "3.8.1"
+ #define PHP_IMAGICK_EXTNUM     30801
+ 
+ /* Import configure options when building 

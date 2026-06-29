@@ -1,0 +1,20 @@
+diff --git a/ext/openssl/xp_ssl.c b/ext/openssl/xp_ssl.c
+--- a/ext/openssl/xp_ssl.c
++++ b/ext/openssl/xp_ssl.c
+@@ -1813,9 +1813,15 @@
+ 	} else {
+ 		SSL_set_ex_data(sslsock->ssl_handle, php_openssl_get_ssl_stream_data_index(), stream);
+ 	}
+ 
++	#ifdef OPENSSL_NO_SOCK
++	php_error_docref(NULL, E_WARNING,
++		"OpenSSL socket BIO support is unavailable on WASIX buuhu");
++	return FAILURE;
++	#else
+ 	if (!SSL_set_fd(sslsock->ssl_handle, sslsock->s.socket)) {
+ 		php_openssl_handle_ssl_error(stream, 0, 1);
+ 	}
++	#endif
+ 
+ #ifdef HAVE_TLS_SNI
+ 	/* Enable server-side SNI */

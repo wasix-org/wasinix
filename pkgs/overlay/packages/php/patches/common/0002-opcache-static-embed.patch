@@ -1,0 +1,660 @@
+diff --git a/ext/opcache/ZendAccelerator.c b/ext/opcache/ZendAccelerator.c
+index e3f7ca1..a3a3e5e 100644
+--- a/ext/opcache/ZendAccelerator.c
++++ b/ext/opcache/ZendAccelerator.c
+@@ -46,6 +46,7 @@
+ #include "zend_accelerator_util_funcs.h"
+ #include "zend_accelerator_hash.h"
+ #include "zend_file_cache.h"
++#include "zend_atomic.h"
+ #include "ext/pcre/php_pcre.h"
+ #include "ext/standard/md5.h"
+ #include "ext/hash/php_hash.h"
+@@ -81,7 +82,11 @@ typedef int gid_t;
+ #ifndef ZEND_WIN32
+ # include <sys/types.h>
+ # include <sys/wait.h>
++
++#ifndef __wasi__
+ # include <sys/ipc.h>
++#endif
++
+ # include <pwd.h>
+ # include <grp.h>
+ #endif
+@@ -139,6 +144,12 @@ static void preload_restart(void);
+ # define INCREMENT(v) InterlockedIncrement64(&ZCSG(v))
+ # define DECREMENT(v) InterlockedDecrement64(&ZCSG(v))
+ # define LOCKVAL(v)   (ZCSG(v))
++#elif defined(__wasi__)
++static uint32_t accel_wasi_mem_usage = 0;
++static uint32_t accel_wasi_restart_in = 0;
++# define INCREMENT(v) __atomic_add_fetch(&accel_wasi_##v, 1, __ATOMIC_SEQ_CST)
++# define DECREMENT(v) __atomic_sub_fetch(&accel_wasi_##v, 1, __ATOMIC_SEQ_CST)
++# define LOCKVAL(v)   __atomic_load_n(&accel_wasi_##v, __ATOMIC_SEQ_CST)
+ #endif
+ 
+ #define ZCG_KEY_LEN (MAXPATHLEN * 8)
+@@ -262,9 +273,9 @@ static ZEND_INI_MH(accel_include_path_on_modify)
+ 
+ static inline void accel_restart_enter(void)
+ {
+-#ifdef ZEND_WIN32
++#if defined(ZEND_WIN32) || defined(__wasi__)
+ 	INCREMENT(restart_in);
+-#else
++#elif !defined(__wasi__)
+ 	struct flock restart_in_progress;
+ 
+ 	restart_in_progress.l_type = F_WRLCK;
+@@ -281,10 +292,10 @@ static inline void accel_restart_enter(void)
+ 
+ static inline void accel_restart_leave(void)
+ {
+-#ifdef ZEND_WIN32
++#if defined(ZEND_WIN32) || defined(__wasi__)
+ 	ZCSG(restart_in_progress) = false;
+ 	DECREMENT(restart_in);
+-#else
++#elif !defined(__wasi__)
+ 	struct flock restart_finished;
+ 
+ 	restart_finished.l_type = F_UNLCK;
+@@ -302,7 +313,9 @@ static inline void accel_restart_leave(void)
+ static inline int accel_restart_is_active(void)
+ {
+ 	if (ZCSG(restart_in_progress)) {
+-#ifndef ZEND_WIN32
++#if defined(ZEND_WIN32) || defined(__wasi__)
++		return LOCKVAL(restart_in) != 0;
++#elif !defined(__wasi__)
+ 		struct flock restart_check;
+ 
+ 		restart_check.l_type = F_WRLCK;
+@@ -320,8 +333,6 @@ static inline int accel_restart_is_active(void)
+ 		} else {
+ 			return 1;
+ 		}
+-#else
+-		return LOCKVAL(restart_in) != 0;
+ #endif
+ 	}
+ 	return 0;
+@@ -330,11 +341,11 @@ static inline int accel_restart_is_active(void)
+ /* Creates a read lock for SHM access */
+ static inline zend_result accel_activate_add(void)
+ {
+-#ifdef ZEND_WIN32
++#if defined(ZEND_WIN32) || defined(__wasi__)
+ 	SHM_UNPROTECT();
+ 	INCREMENT(mem_usage);
+ 	SHM_PROTECT();
+-#else
++#elif !defined(__wasi__)
+ 	struct flock mem_usage_lock;
+ 
+ 	mem_usage_lock.l_type = F_RDLCK;
+@@ -353,14 +364,14 @@ static inline zend_result accel_activate_add(void)
+ /* Releases a lock for SHM access */
+ static inline void accel_deactivate_sub(void)
+ {
+-#ifdef ZEND_WIN32
++#if defined(ZEND_WIN32) || defined(__wasi__)
+ 	if (ZCG(counted)) {
+ 		SHM_UNPROTECT();
+ 		DECREMENT(mem_usage);
+ 		ZCG(counted) = false;
+ 		SHM_PROTECT();
+ 	}
+-#else
++#elif !defined(__wasi__)
+ 	struct flock mem_usage_unlock;
+ 
+ 	mem_usage_unlock.l_type = F_UNLCK;
+@@ -376,9 +387,9 @@ static inline void accel_deactivate_sub(void)
+ 
+ static inline void accel_unlock_all(void)
+ {
+-#ifdef ZEND_WIN32
++#if defined(ZEND_WIN32) || defined(__wasi__)
+ 	accel_deactivate_sub();
+-#else
++#elif !defined(__wasi__)
+ 	if (lock_file == -1) {
+ 		return;
+ 	}
+@@ -821,7 +832,7 @@ static void accel_use_shm_interned_strings(void)
+ 	HANDLE_UNBLOCK_INTERRUPTIONS();
+ }
+ 
+-#ifndef ZEND_WIN32
++#if !defined(ZEND_WIN32) && !defined(__wasi__)
+ static inline void kill_all_lockers(struct flock *mem_usage_check)
+ {
+ 	int tries;
+@@ -888,7 +899,7 @@ static inline void kill_all_lockers(struct flock *mem_usage_check)
+ 
+ static inline bool accel_is_inactive(void)
+ {
+-#ifdef ZEND_WIN32
++#if defined(ZEND_WIN32) || defined(__wasi__)
+ 	/* on Windows, we don't need kill_all_lockers() because SAPIs
+ 	   that work on Windows don't manage child processes (and we
+ 	   can't do anything about hanging threads anyway); therefore
+@@ -899,7 +910,7 @@ static inline bool accel_is_inactive(void)
+ 	if (LOCKVAL(mem_usage) == 0) {
+ 		return true;
+ 	}
+-#else
++#elif !defined(__wasi__)
+ 	struct flock mem_usage_check;
+ 
+ 	mem_usage_check.l_type = F_WRLCK;
+@@ -2819,6 +2830,7 @@ static inline zend_result accel_find_sapi(void)
+ 		"fuzzer",
+ 		"frankenphp",
+ 		"ngx-php",
++		"phpix",
+ 		NULL
+ 	};
+ 	const char **sapi_name;
+@@ -2917,6 +2929,10 @@ static zend_result zend_accel_init_shm(void)
+ 	ZCSG(start_time) = zend_accel_get_time();
+ 	ZCSG(last_restart_time) = 0;
+ 	ZCSG(restart_in_progress) = false;
++#ifdef __wasi__
++	__atomic_store_n(&accel_wasi_mem_usage, 0, __ATOMIC_SEQ_CST);
++	__atomic_store_n(&accel_wasi_restart_in, 0, __ATOMIC_SEQ_CST);
++#endif
+ 
+ 	for (i = 0; i < -HT_MIN_MASK; i++) {
+ 		ZCSG(uninitialized_bucket)[i] = HT_INVALID_IDX;
+@@ -2927,7 +2943,7 @@ static zend_result zend_accel_init_shm(void)
+ 	return SUCCESS;
+ }
+ 
+-static void accel_globals_ctor(zend_accel_globals *accel_globals)
++void accel_globals_ctor(zend_accel_globals *accel_globals)
+ {
+ #if defined(COMPILE_DL_OPCACHE) && defined(ZTS)
+ 	ZEND_TSRMLS_CACHE_UPDATE();
+@@ -2938,7 +2954,7 @@ static void accel_globals_ctor(zend_accel_globals *accel_globals)
+ }
+ 
+ #ifdef ZTS
+-static void accel_globals_dtor(zend_accel_globals *accel_globals)
++void accel_globals_dtor(zend_accel_globals *accel_globals)
+ {
+ 	zend_string_free(accel_globals->key);
+ }
+@@ -3112,14 +3128,8 @@ static void accel_move_code_to_huge_pages(void)
+ # endif /* defined(MAP_HUGETLB) || defined(MADV_HUGEPAGE) */
+ #endif /* HAVE_HUGE_CODE_PAGES */
+ 
+-static int accel_startup(zend_extension *extension)
++int accel_startup(zend_extension *extension)
+ {
+-#ifdef ZTS
+-	accel_globals_id = ts_allocate_id(&accel_globals_id, sizeof(zend_accel_globals), (ts_allocate_ctor) accel_globals_ctor, (ts_allocate_dtor) accel_globals_dtor);
+-#else
+-	accel_globals_ctor(&accel_globals);
+-#endif
+-
+ #ifdef HAVE_JIT
+ 	zend_jit_init();
+ #endif
+@@ -4705,8 +4715,10 @@ static zend_result accel_finish_startup_preload_subprocess(pid_t *pid)
+ 
+ 	if (!ZCG(accel_directives).preload_user
+ 	 || !*ZCG(accel_directives).preload_user) {
+-
+ 		bool sapi_requires_preload_user = !(strcmp(sapi_module.name, "cli") == 0
++#ifdef __wasi__
++		  || strcmp(sapi_module.name, "cli-server") == 0
++#endif
+ 		  || strcmp(sapi_module.name, "phpdbg") == 0);
+ 
+ 		if (!sapi_requires_preload_user) {
+@@ -4731,6 +4743,7 @@ static zend_result accel_finish_startup_preload_subprocess(pid_t *pid)
+ 		return SUCCESS;
+ 	}
+ 
++#ifndef __wasi__
+ 	*pid = fork();
+ 	if (*pid == -1) {
+ 		zend_shared_alloc_unlock();
+@@ -4754,6 +4767,14 @@ static zend_result accel_finish_startup_preload_subprocess(pid_t *pid)
+ 	}
+ 
+ 	return SUCCESS;
++#else
++	// Note: in WASIX, there is only one uid; it has "root" access to everything within the
++	// sandbox, but not the base OS, so it's OK to run everything with that user. That is to
++	// say, we shouldn't need to fork a new process here.
++	// It is also a fact that forking doesn't work under WASIX+EH anyway.
++	zend_accel_error(ACCEL_LOG_FATAL, "Preloading cannot fork to spawn a new process in WASIX");
++	exit(1);
++#endif
+ }
+ #endif /* ZEND_WIN32 */
+ 
+diff --git a/ext/opcache/ZendAccelerator.h b/ext/opcache/ZendAccelerator.h
+index a25f9a1..fdc7b25 100644
+--- a/ext/opcache/ZendAccelerator.h
++++ b/ext/opcache/ZendAccelerator.h
+@@ -103,6 +103,8 @@ typedef unsigned __int64 accel_time_t;
+ typedef time_t accel_time_t;
+ #endif
+ 
++extern zend_extension zend_extension_entry;
++
+ typedef enum _zend_accel_restart_reason {
+ 	ACCEL_RESTART_OOM,    /* restart because of out of memory */
+ 	ACCEL_RESTART_HASH,   /* restart because of hash overflow */
+@@ -326,6 +328,11 @@ zend_string* ZEND_FASTCALL accel_new_interned_string(zend_string *str);
+ 
+ uint32_t zend_accel_get_class_name_map_ptr(zend_string *type_name);
+ 
++void accel_globals_ctor(zend_accel_globals *accel_globals);
++#ifdef ZTS
++void accel_globals_dtor(zend_accel_globals *accel_globals);
++#endif
++
+ END_EXTERN_C()
+ 
+ /* memory write protection */
+diff --git a/ext/opcache/config.m4 b/ext/opcache/config.m4
+index 6561406..7195473 100644
+--- a/ext/opcache/config.m4
++++ b/ext/opcache/config.m4
+@@ -27,7 +27,7 @@ PHP_ARG_WITH([capstone],,
+ if test "$PHP_OPCACHE" != "no"; then
+ 
+   dnl Always build as shared extension
+-  ext_shared=yes
++  ext_shared=no
+ 
+   if test "$PHP_HUGE_CODE_PAGES" = "yes"; then
+     AC_DEFINE(HAVE_HUGE_CODE_PAGES, 1, [Define to enable copying PHP CODE pages into HUGE PAGES (experimental)])
+@@ -167,62 +167,63 @@ int main(void) {
+   AC_MSG_RESULT([$have_shm_ipc])
+ 
+   AC_MSG_CHECKING(for mmap() using MAP_ANON shared memory support)
+-  AC_RUN_IFELSE([AC_LANG_SOURCE([[
+-#include <sys/types.h>
+-#include <sys/wait.h>
+-#include <sys/mman.h>
+-#include <unistd.h>
+-#include <string.h>
+-
+-#ifndef MAP_ANON
+-# ifdef MAP_ANONYMOUS
+-#  define MAP_ANON MAP_ANONYMOUS
+-# endif
+-#endif
+-#ifndef MAP_FAILED
+-# define MAP_FAILED ((void*)-1)
+-#endif
+-
+-int main(void) {
+-  pid_t pid;
+-  int status;
+-  char *shm;
+-
+-  shm = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
+-  if (shm == MAP_FAILED) {
+-    return 1;
+-  }
+-
+-  strcpy(shm, "hello");
+-
+-  pid = fork();
+-  if (pid < 0) {
+-    return 5;
+-  } else if (pid == 0) {
+-    strcpy(shm, "bye");
+-    return 6;
+-  }
+-  if (wait(&status) != pid) {
+-    return 7;
+-  }
+-  if (!WIFEXITED(status) || WEXITSTATUS(status) != 6) {
+-    return 8;
+-  }
+-  if (strcmp(shm, "bye") != 0) {
+-    return 9;
+-  }
+-  return 0;
+-}
+-]])],[have_shm_mmap_anon=yes],[have_shm_mmap_anon=no],[
+-  case $host_alias in
+-    *linux*)
+-      have_shm_mmap_anon=yes
+-      ;;
+-    *)
+-      have_shm_mmap_anon=no
+-      ;;
+-  esac
+-])
++dnl   AC_RUN_IFELSE([AC_LANG_SOURCE([[
++dnl #include <sys/types.h>
++dnl #include <sys/wait.h>
++dnl #include <sys/mman.h>
++dnl #include <unistd.h>
++dnl #include <string.h>
++dnl
++dnl #ifndef MAP_ANON
++dnl # ifdef MAP_ANONYMOUS
++dnl #  define MAP_ANON MAP_ANONYMOUS
++dnl # endif
++dnl #endif
++dnl #ifndef MAP_FAILED
++dnl # define MAP_FAILED ((void*)-1)
++dnl #endif
++dnl
++dnl int main(void) {
++dnl   pid_t pid;
++dnl   int status;
++dnl   char *shm;
++dnl
++dnl   shm = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
++dnl   if (shm == MAP_FAILED) {
++dnl     return 1;
++dnl   }
++dnl
++dnl   strcpy(shm, "hello");
++dnl
++dnl   pid = fork();
++dnl   if (pid < 0) {
++dnl     return 5;
++dnl   } else if (pid == 0) {
++dnl     strcpy(shm, "bye");
++dnl     return 6;
++dnl   }
++dnl   if (wait(&status) != pid) {
++dnl     return 7;
++dnl   }
++dnl   if (!WIFEXITED(status) || WEXITSTATUS(status) != 6) {
++dnl     return 8;
++dnl   }
++dnl   if (strcmp(shm, "bye") != 0) {
++dnl     return 9;
++dnl   }
++dnl   return 0;
++dnl }
++dnl ]])],[have_shm_mmap_anon=yes],[have_shm_mmap_anon=no],[
++dnl   case $host_alias in
++dnl     *linux*)
++dnl       have_shm_mmap_anon=yes
++dnl       ;;
++dnl     *)
++dnl       have_shm_mmap_anon=no
++dnl       ;;
++dnl   esac
++dnl ])
++  have_shm_mmap_anon=yes
+   if test "$have_shm_mmap_anon" = "yes"; then
+     AC_DEFINE(HAVE_SHM_MMAP_ANON, 1, [Define if you have mmap(MAP_ANON) SHM support])
+   fi
+@@ -319,13 +320,13 @@ int main(void) {
+ 	shared_alloc_mmap.c \
+ 	shared_alloc_posix.c \
+ 	$ZEND_JIT_SRC,
+-	shared,,"$PHP_OPCACHE_CFLAGS -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1",,yes)
++	,,"$PHP_OPCACHE_CFLAGS -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1",,yes)
+ 
+   PHP_ADD_EXTENSION_DEP(opcache, pcre)
+ 
+-  if test "$have_shm_ipc" != "yes" && test "$have_shm_mmap_posix" != "yes" && test "$have_shm_mmap_anon" != "yes"; then
+-    AC_MSG_ERROR([No supported shared memory caching support was found when configuring opcache. Check config.log for any errors or missing dependencies.])
+-  fi
++  dnl if test "$have_shm_ipc" != "yes" && test "$have_shm_mmap_posix" != "yes" && test "$have_shm_mmap_anon" != "yes"; then
++  dnl   AC_MSG_ERROR([No supported shared memory caching support was found when configuring opcache. Check config.log for any errors or missing dependencies.])
++  dnl fi
+ 
+   if test "$PHP_OPCACHE_JIT" = "yes"; then
+     PHP_ADD_BUILD_DIR([$ext_builddir/jit], 1)
+diff --git a/ext/opcache/zend_accelerator_module.c b/ext/opcache/zend_accelerator_module.c
+index 9093692..c94da9e 100644
+--- a/ext/opcache/zend_accelerator_module.c
++++ b/ext/opcache/zend_accelerator_module.c
+@@ -290,7 +290,7 @@ ZEND_INI_BEGIN()
+ 	STD_PHP_INI_ENTRY("opcache.optimization_level"    , DEFAULT_OPTIMIZATION_LEVEL , PHP_INI_SYSTEM, OnUpdateLong, accel_directives.optimization_level,   zend_accel_globals, accel_globals)
+ 	STD_PHP_INI_ENTRY("opcache.opt_debug_level"       , "0"      , PHP_INI_SYSTEM, OnUpdateLong,             accel_directives.opt_debug_level,            zend_accel_globals, accel_globals)
+ 	STD_PHP_INI_BOOLEAN("opcache.enable_file_override"	, "0"   , PHP_INI_SYSTEM, OnUpdateBool,              accel_directives.file_override_enabled,     zend_accel_globals, accel_globals)
+-	STD_PHP_INI_BOOLEAN("opcache.enable_cli"             , "0"   , PHP_INI_SYSTEM, OnUpdateBool,              accel_directives.enable_cli,                zend_accel_globals, accel_globals)
++	STD_PHP_INI_BOOLEAN("opcache.enable_cli"             , "1"   , PHP_INI_SYSTEM, OnUpdateBool,              accel_directives.enable_cli,                zend_accel_globals, accel_globals)
+ 	STD_PHP_INI_ENTRY("opcache.error_log"                , ""    , PHP_INI_SYSTEM, OnUpdateString,	         accel_directives.error_log,                 zend_accel_globals, accel_globals)
+ 	STD_PHP_INI_ENTRY("opcache.restrict_api"             , ""    , PHP_INI_SYSTEM, OnUpdateString,	         accel_directives.restrict_api,              zend_accel_globals, accel_globals)
+ 
+@@ -408,8 +408,18 @@ static ZEND_MINIT_FUNCTION(zend_accelerator)
+ {
+ 	(void)type; /* keep the compiler happy */
+ 
++	// Run the ctor before registering the INI entries, as that will
++	// read and set the values
++#ifdef ZTS
++	accel_globals_id = ts_allocate_id(&accel_globals_id, sizeof(zend_accel_globals), (ts_allocate_ctor) accel_globals_ctor, (ts_allocate_dtor) accel_globals_dtor);
++#else
++    accel_globals_ctor(&accel_globals);
++#endif
++
+ 	REGISTER_INI_ENTRIES();
+ 
++	zend_register_extension(&zend_extension_entry, NULL);
++
+ 	return SUCCESS;
+ }
+ 
+@@ -555,7 +565,7 @@ void zend_accel_info(ZEND_MODULE_INFO_FUNC_ARGS)
+ 	DISPLAY_INI_ENTRIES();
+ }
+ 
+-static zend_module_entry accel_module_entry = {
++zend_module_entry accel_module_entry = {
+ 	STANDARD_MODULE_HEADER,
+ 	ACCELERATOR_PRODUCT_NAME,
+ 	ext_functions,
+@@ -572,7 +582,8 @@ static zend_module_entry accel_module_entry = {
+ 
+ int start_accel_module(void)
+ {
+-	return zend_startup_module(&accel_module_entry);
++	// return zend_startup_module(&accel_module_entry);
++	return SUCCESS;
+ }
+ 
+ /* {{{ Get the scripts which are accelerated by ZendAccelerator */
+diff --git a/ext/opcache/zend_accelerator_module.h b/ext/opcache/zend_accelerator_module.h
+index 656336e..69d1478 100644
+--- a/ext/opcache/zend_accelerator_module.h
++++ b/ext/opcache/zend_accelerator_module.h
+@@ -26,4 +26,7 @@ int start_accel_module(void);
+ 
+ void zend_accel_override_file_functions(void);
+ 
++extern zend_module_entry accel_module_entry;
++#define phpext_opcache_ptr &accel_module_entry
++
+ #endif /* _ZEND_ACCELERATOR_MODULE_H */
+diff --git a/ext/opcache/zend_file_cache.c b/ext/opcache/zend_file_cache.c
+index edcaf68..011c6a4 100644
+--- a/ext/opcache/zend_file_cache.c
++++ b/ext/opcache/zend_file_cache.c
+@@ -96,9 +96,15 @@ static int zend_file_cache_flock(int fd, int op)
+ #elif defined(HAVE_FLOCK)
+ # define zend_file_cache_flock flock
+ #else
+-# define LOCK_SH 0
+-# define LOCK_EX 1
+-# define LOCK_UN 2
++# ifndef LOCK_SH
++#  define LOCK_SH 0
++# endif
++# ifndef LOCK_EX
++#  define LOCK_EX 1
++# endif
++# ifndef LOCK_UN
++#  define LOCK_UN 2
++# endif
+ static int zend_file_cache_flock(int fd, int type)
+ {
+ 	return 0;
+diff --git a/ext/opcache/zend_shared_alloc.c b/ext/opcache/zend_shared_alloc.c
+index a7c7977..c20033b 100644
+--- a/ext/opcache/zend_shared_alloc.c
++++ b/ext/opcache/zend_shared_alloc.c
+@@ -29,6 +29,7 @@
+ #include <errno.h>
+ #include "ZendAccelerator.h"
+ #include "zend_shared_alloc.h"
++#include "zend_atomic.h"
+ #ifdef HAVE_UNISTD_H
+ # include <unistd.h>
+ #endif
+@@ -63,6 +64,14 @@ int lock_file = -1;
+ static char lockfile_name[MAXPATHLEN];
+ #endif
+ 
++#ifdef __wasi__
++# ifdef ZTS
++static MUTEX_T zend_shared_alloc_wasi_mutex;
++# else
++static zend_atomic_bool zend_shared_alloc_wasi_lock;
++# endif
++#endif
++
+ static const zend_shared_memory_handler_entry handler_table[] = {
+ #ifdef USE_MMAP
+ 	{ "mmap", &zend_alloc_mmap_handlers },
+@@ -182,7 +191,15 @@ int zend_shared_alloc_startup(size_t requested_size, size_t reserved_size)
+ 	ZSMMG(shared_free) = requested_size - reserved_size; /* goes to tmp_shared_globals.shared_free */
+ 
+ #ifndef ZEND_WIN32
++#ifdef __wasi__
++#ifdef ZTS
++	zend_shared_alloc_wasi_mutex = tsrm_mutex_alloc();
++#else
++	ZEND_ATOMIC_BOOL_INIT(&zend_shared_alloc_wasi_lock, false);
++#endif
++#else
+ 	zend_shared_alloc_create_lock(ZCG(accel_directives).lockfile_path);
++#endif
+ #else
+ 	zend_shared_alloc_create_lock();
+ #endif
+@@ -323,10 +340,17 @@ void zend_shared_alloc_shutdown(void)
+ 	ZSMMG(shared_segments) = NULL;
+ 	g_shared_alloc_handler = NULL;
+ #ifndef ZEND_WIN32
+-	close(lock_file);
++	if (lock_file >= 0) {
++		close(lock_file);
++		lock_file = -1;
++	}
+ 
+ # ifdef ZTS
++#  ifdef __wasi__
++	tsrm_mutex_free(zend_shared_alloc_wasi_mutex);
++#  else
+ 	tsrm_mutex_free(zts_lock);
++#  endif
+ # endif
+ #endif
+ }
+@@ -477,7 +501,16 @@ void zend_shared_alloc_lock(void)
+ {
+ 	ZEND_ASSERT(!ZCG(locked));
+ 
+-#ifndef ZEND_WIN32
++#ifdef ZEND_WIN32
++	zend_shared_alloc_lock_win32();
++#elif defined(__wasi__)
++#ifdef ZTS
++	tsrm_mutex_lock(zend_shared_alloc_wasi_mutex);
++#else
++	while (zend_atomic_bool_exchange_ex(&zend_shared_alloc_wasi_lock, true)) {
++	}
++#endif
++#else
+ 	struct flock mem_write_lock;
+ 
+ 	mem_write_lock.l_type = F_WRLCK;
+@@ -505,8 +538,6 @@ void zend_shared_alloc_lock(void)
+ 		}
+ 		break;
+ 	}
+-#else
+-	zend_shared_alloc_lock_win32();
+ #endif
+ 
+ 	ZCG(locked) = 1;
+@@ -516,7 +547,7 @@ void zend_shared_alloc_unlock(void)
+ {
+ 	ZEND_ASSERT(ZCG(locked));
+ 
+-#ifndef ZEND_WIN32
++#if !defined(ZEND_WIN32) && !defined(__wasi__)
+ 	struct flock mem_write_unlock;
+ 
+ 	mem_write_unlock.l_type = F_UNLCK;
+@@ -527,15 +558,21 @@ void zend_shared_alloc_unlock(void)
+ 
+ 	ZCG(locked) = 0;
+ 
+-#ifndef ZEND_WIN32
++#ifdef ZEND_WIN32
++	zend_shared_alloc_unlock_win32();
++#elif defined(__wasi__)
++#ifdef ZTS
++	tsrm_mutex_unlock(zend_shared_alloc_wasi_mutex);
++#else
++	zend_atomic_bool_store_ex(&zend_shared_alloc_wasi_lock, false);
++#endif
++#else
+ 	if (fcntl(lock_file, F_SETLK, &mem_write_unlock) == -1) {
+ 		zend_accel_error_noreturn(ACCEL_LOG_ERROR, "Cannot remove lock - %s (%d)", strerror(errno), errno);
+ 	}
+ #ifdef ZTS
+ 	tsrm_mutex_unlock(zts_lock);
+ #endif
+-#else
+-	zend_shared_alloc_unlock_win32();
+ #endif
+ }
+ 
+diff --git a/main/internal_functions.c.in b/main/internal_functions.c.in
+index cef0a43..665d144 100644
+--- a/main/internal_functions.c.in
++++ b/main/internal_functions.c.in
+@@ -23,6 +23,9 @@
+ #include <stdlib.h>
+ #include <stdio.h>
+ 
++// TODO: make this automatic in the build instead of hard-coding it!!!
++#include "ext/opcache/zend_accelerator_module.h"
++
+ @EXT_INCLUDE_CODE@
+ 
+ static zend_module_entry * const php_builtin_extensions[] = {
+
+diff --git a/ext/opcache/ZendAccelerator.c b/ext/opcache/ZendAccelerator.c
+index bf1dd2e..407367d 100644
+--- a/ext/opcache/ZendAccelerator.c
++++ b/ext/opcache/ZendAccelerator.c
+@@ -3010,13 +3010,13 @@ static void accel_move_code_to_huge_pages(void)
+ 			MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+ 			-1, 0);
+ 		/* this should never happen? */
+ 		ZEND_ASSERT(ret != MAP_FAILED);
+-#  ifdef MADV_HUGEPAGE
++#  if defined(MADV_HUGEPAGE) && !defined(__wasi__)
+ 		if (-1 == madvise(start, size, MADV_HUGEPAGE)) {
+ 			memcpy(start, mem, real_size);
+ 			mprotect(start, size, PROT_READ | PROT_EXEC);
+ 			munmap(mem, size);
+ 			zend_error(E_WARNING,
+ 				ACCELERATOR_PRODUCT_NAME " huge_code_pages: madvise(HUGEPAGE) failed: %s (%d)",
+ 				strerror(errno), errno);
+ 			return FAILURE;
+ 		}

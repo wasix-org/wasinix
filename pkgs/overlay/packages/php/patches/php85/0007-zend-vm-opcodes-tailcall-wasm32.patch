@@ -1,0 +1,13 @@
+diff --git a/Zend/zend_vm_opcodes.h b/Zend/zend_vm_opcodes.h
+--- a/Zend/zend_vm_opcodes.h
++++ b/Zend/zend_vm_opcodes.h
+@@ -45 +45 @@ static const char *const zend_vm_kind_name[] = {
+-#elif defined(HAVE_MUSTTAIL) && defined(HAVE_PRESERVE_NONE) && (defined(__x86_64__) || defined(__aarch64__))
++#elif defined(HAVE_MUSTTAIL) && ((defined(HAVE_PRESERVE_NONE) && (defined(__x86_64__) || defined(__aarch64__))) || defined(__wasm32__))
+@@ -58 +58,5 @@ static const char *const zend_vm_kind_name[] = {
+-# define ZEND_OPCODE_HANDLER_CCONV    ZEND_PRESERVE_NONE
++# ifdef HAVE_PRESERVE_NONE
++#  define ZEND_OPCODE_HANDLER_CCONV    ZEND_PRESERVE_NONE
++# else
++#  define ZEND_OPCODE_HANDLER_CCONV    ZEND_FASTCALL
++# endif
