@@ -65,8 +65,8 @@
   wasixWitx = fetchFromGitHub {
     owner = "wasix-org";
     repo = "wasix-witx";
-    rev = "7295cec42d709e965c7fe9e57faeff23931c9b93";
-    hash = "sha256-6sWezkhtrjIlZ9iWujFsiaIqlSVgkzKhfrt7adBELLI=";
+    rev = "0dfbd35a0f30f3fe7fd3b3ab5a50dc4191d5caed";
+    hash = "sha256-UNdASQKquBTFF9FhJ5NLcy5lxSUTIvaDUO5PG5BWMUg=";
   };
 
   cargoVendor = rustPlatform.importCargoLock {

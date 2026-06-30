@@ -4,7 +4,7 @@
 {final, ...}:
 final.rustPlatform.buildRustPackage {
   pname = "crabsay";
-  version = "0.1.1";
+  version = "0-unstable-2023-02-22";
   src = final.fetchFromGitHub {
     owner = "Zaechus";
     repo = "crabsay";

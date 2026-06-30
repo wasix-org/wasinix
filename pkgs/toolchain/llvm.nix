@@ -10,7 +10,7 @@
   monorepoSrc = pkgs.fetchFromGitHub {
     owner = "wasix-org";
     repo = "llvm-project";
-    tag = "21.1.203"; # fork release tag (one of 21.1.201–204 on this commit)
+    tag = "21.1.204"; # fork release tag (one of 21.1.201–204 on this commit)
     hash = "sha256-IFQNaJfBTVXWYsahkCGLMbmcs6vWDEwr6xKszq7yHSM=";
   };
 
