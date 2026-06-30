@@ -120,7 +120,9 @@ def fetch_source(owner, repo, rev):
 @dataclass
 class Target:
     name: str
-    backend: str  # "nix-update" | "prefetch"
+    backend: str  # "nix-update" | "prefetch" | "flake"
+    # flake: the flake.lock input name (`nix flake update <input>`)
+    input: str = ""
     # nix-update:
     attr: str = ""
     version: str = ""  # "", "branch", or an explicit version
@@ -261,6 +263,12 @@ TARGETS = [
            file="pkgs/toolchain/llvm.nix",
            owner="wasix-org", repo="llvm-project",
            version_re=r'tag = "([0-9][^"]+)"; # fork release tag'),
+
+    # Flake inputs (flake.lock). Each is its own target so `--only nixpkgs` works
+    # like a package. nixpkgs drives the stdenv + every prev.X override package.
+    Target("nixpkgs", "flake", input="nixpkgs"),
+    Target("wasmer", "flake", input="wasmer"),
+    Target("treefmt-nix", "flake", input="treefmt-nix"),
 ]
 
 
@@ -272,6 +280,18 @@ def update_nix_update(t):
         cmd += ["--override-filename", t.filename]
     cmd.append(t.attr)
     run(cmd, cwd=REPO)
+
+
+def flake_input_rev(name):
+    node = json.loads((REPO / "flake.lock").read_text())["nodes"][name]["locked"]
+    return node.get("rev") or node.get("ref") or ""
+
+
+def update_flake_input(t):
+    before = flake_input_rev(t.input)
+    run(["nix", "flake", "update", t.input], cwd=REPO)
+    after = flake_input_rev(t.input)
+    print(f"  {before[:10]} -> {after[:10]}" if before != after else "  up to date")
 
 
 def update_prefetch(t):
@@ -329,6 +349,12 @@ def main():
         return subprocess.run(["git", "-C", str(REPO), "status", "--porcelain"],
                               text=True, capture_output=True).stdout
 
+    backends = {
+        "nix-update": update_nix_update,
+        "prefetch": update_prefetch,
+        "flake": update_flake_input,
+    }
+
     # One flaky upstream must not abort the rest: isolate each target, collect
     # failures, and exit non-zero at the end so CI/the workflow notices.
     failures = []
@@ -336,8 +362,7 @@ def main():
         print(f"==> {t.name}")
         before = repo_status()
         try:
-            (update_nix_update if t.backend == "nix-update"
-             else update_prefetch)(t)
+            backends[t.backend](t)
         except Exception as e:
             print(f"  FAILED: {e}")
             failures.append(t.name)
