@@ -87,7 +87,7 @@ in
       (lib.cmakeBool "LIBUNWIND_ENABLE_THREADS" eh)
       (lib.cmakeBool "LIBUNWIND_HAS_PTHREAD_LIB" eh)
       (lib.cmakeBool "LIBUNWIND_INSTALL_LIBRARY" eh)
-      # PIC variants build position-independent.
+      # PIC: global-dynamic TLS comes from the patched toolchain file (sysroot.nix).
       (lib.cmakeBool "CMAKE_POSITION_INDEPENDENT_CODE" pic)
       (lib.cmakeBool "LLVM_ENABLE_PIC" pic)
     ];

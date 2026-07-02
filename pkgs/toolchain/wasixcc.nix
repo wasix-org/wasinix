@@ -25,7 +25,18 @@
     inherit version src;
     cargoLock.lockFile = "${src}/Cargo.lock";
 
-    patches = [./wasixcc-discard-undefined-version.patch];
+    patches = [
+      ./wasixcc-discard-undefined-version.patch
+      # wasixcc's no-input passthrough runs clang without pinning the linker, so
+      # clang-driven linker probes (meson's `cc -Wl,--version`) fail to find a bare
+      # `wasm-ld` off PATH. Pin it. TODO: upstream to wasix-org/wasixcc.
+      ./wasixcc-pin-linker-in-passthrough.patch
+      # wasixcc only links the C++ runtime (-lc++/-lc++abi) into executables, not
+      # shared libraries — so a C++ CPython extension's .so leaves its libc++ symbols
+      # as unresolved dynamic imports that the C interpreter can't satisfy at load.
+      # Link the C++ runtime into C++ shared libs too. TODO: upstream.
+      ./wasixcc-link-cxx-runtime-into-shared-libs.patch
+    ];
 
     doCheck = true;
 
@@ -46,7 +57,8 @@ in
 
       # Update instructions:
       # 1) Update `src.rev` and `src.hash` to the target wasix-org/wasixcc commit.
-      # 2) If Cargo dependencies changed, run `nix build .#wasixcc` and update cargoHash if Nix asks.
+      # 2) If Cargo dependencies changed, the updated Cargo.lock (cargoLock.lockFile above,
+      #    from the pinned src) is picked up automatically — no hash to bump; just rebuild.
       # 3) Keep wrapper env vars aligned with pkgs/default.nix toolchain env exports.
       installPhase = ''
         runHook preInstall

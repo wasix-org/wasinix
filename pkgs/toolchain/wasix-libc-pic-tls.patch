@@ -1,0 +1,51 @@
+--- a/tools/clang-wasix.cmake_toolchain	2026-07-01 16:21:50.168413911 +0200
++++ b/tools/clang-wasix.cmake_toolchain	2026-07-01 16:21:50.177413880 +0200
+@@ -1,7 +1,13 @@
+ # Cmake toolchain description file for the Makefile for WASI
+ cmake_minimum_required(VERSION 3.5.0)
+ 
+-set(COMPILE_FLAGS "-O2 -matomics -mbulk-memory -mmutable-globals -pthread -mthread-model posix -ftls-model=local-exec -fno-trapping-math -D_WASI_EMULATED_MMAN -D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_PROCESS_CLOCKS -fno-exceptions -fwasm-exceptions")
++# PIC: global-dynamic TLS (local-exec can't relocate imported errno).
++if(CMAKE_POSITION_INDEPENDENT_CODE)
++  set(WASIX_TLS_MODEL "global-dynamic")
++else()
++  set(WASIX_TLS_MODEL "local-exec")
++endif()
++set(COMPILE_FLAGS "-O2 -matomics -mbulk-memory -mmutable-globals -pthread -mthread-model posix -ftls-model=${WASIX_TLS_MODEL} -fno-trapping-math -D_WASI_EMULATED_MMAN -D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_PROCESS_CLOCKS -fno-exceptions -fwasm-exceptions")
+ set(LINK_FLAGS "-lwasi-emulated-mman -lwasi-emulated-process-clocks -lwasi-emulated-getpid -fno-exceptions -Wl,--shared-memory -Wl,--max-memory=4294967296 -Wl,--import-memory -Wl,--export-dynamic -Wl,--export=__heap_base -Wl,--export=__stack_pointer -Wl,--export=__data_end -Wl,--export=__wasm_init_tls -Wl,--export=__wasm_signal -Wl,--export=__tls_size -Wl,--export=__tls_align -Wl,--export=__tls_base -Wl,-mllvm,--wasm-enable-sjlj")
+ 
+ set(CMAKE_SYSTEM_NAME WASI) # Generic for now, to not trigger a Warning
+--- a/tools/clang-wasix-eh.cmake_toolchain	2026-07-01 16:21:50.179413873 +0200
++++ b/tools/clang-wasix-eh.cmake_toolchain	2026-07-01 16:21:50.184413855 +0200
+@@ -1,7 +1,13 @@
+ # Cmake toolchain description file for the Makefile for WASI
+ cmake_minimum_required(VERSION 3.5.0)
+ 
+-set(COMPILE_FLAGS "-O2 -matomics -mbulk-memory -mmutable-globals -pthread -mthread-model posix -ftls-model=local-exec -fno-trapping-math -D_WASI_EMULATED_MMAN -D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_PROCESS_CLOCKS -fwasm-exceptions")
++# PIC: global-dynamic TLS (local-exec can't relocate imported errno).
++if(CMAKE_POSITION_INDEPENDENT_CODE)
++  set(WASIX_TLS_MODEL "global-dynamic")
++else()
++  set(WASIX_TLS_MODEL "local-exec")
++endif()
++set(COMPILE_FLAGS "-O2 -matomics -mbulk-memory -mmutable-globals -pthread -mthread-model posix -ftls-model=${WASIX_TLS_MODEL} -fno-trapping-math -D_WASI_EMULATED_MMAN -D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_PROCESS_CLOCKS -fwasm-exceptions")
+ set(LINK_FLAGS "-lwasi-emulated-mman -lwasi-emulated-process-clocks -lwasi-emulated-getpid -Wl,--shared-memory -Wl,--max-memory=4294967296 -Wl,--import-memory -Wl,--export-dynamic -Wl,--export=__heap_base -Wl,--export=__stack_pointer -Wl,--export=__data_end -Wl,--export=__wasm_init_tls -Wl,--export=__wasm_signal -Wl,--export=__tls_size -Wl,--export=__tls_align -Wl,--export=__tls_base -Wl,-mllvm,--wasm-enable-sjlj")
+ 
+ set(CMAKE_SYSTEM_NAME WASI) # Generic for now, to not trigger a Warning
+--- a/tools/clang-wasix-exnref-eh.cmake_toolchain	2026-07-01 16:21:50.186413849 +0200
++++ b/tools/clang-wasix-exnref-eh.cmake_toolchain	2026-07-01 16:21:50.192413828 +0200
+@@ -1,7 +1,13 @@
+ # Cmake toolchain description file for the Makefile for WASI
+ cmake_minimum_required(VERSION 3.5.0)
+ 
+-set(COMPILE_FLAGS "-O2 -matomics -mbulk-memory -mmutable-globals -pthread -mthread-model posix -ftls-model=local-exec -fno-trapping-math -D_WASI_EMULATED_MMAN -D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_PROCESS_CLOCKS -fwasm-exceptions -mllvm --wasm-enable-eh -mllvm --wasm-enable-sjlj -mllvm --wasm-use-legacy-eh=false")
++# PIC: global-dynamic TLS (local-exec can't relocate imported errno).
++if(CMAKE_POSITION_INDEPENDENT_CODE)
++  set(WASIX_TLS_MODEL "global-dynamic")
++else()
++  set(WASIX_TLS_MODEL "local-exec")
++endif()
++set(COMPILE_FLAGS "-O2 -matomics -mbulk-memory -mmutable-globals -pthread -mthread-model posix -ftls-model=${WASIX_TLS_MODEL} -fno-trapping-math -D_WASI_EMULATED_MMAN -D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_PROCESS_CLOCKS -fwasm-exceptions -mllvm --wasm-enable-eh -mllvm --wasm-enable-sjlj -mllvm --wasm-use-legacy-eh=false")
+ set(LINK_FLAGS "-lwasi-emulated-mman -lwasi-emulated-process-clocks -lwasi-emulated-getpid -Wl,--shared-memory -Wl,--max-memory=4294967296 -Wl,--import-memory -Wl,--export-dynamic -Wl,--export=__heap_base -Wl,--export=__stack_pointer -Wl,--export=__data_end -Wl,--export=__wasm_init_tls -Wl,--export=__wasm_signal -Wl,--export=__tls_size -Wl,--export=__tls_align -Wl,--export=__tls_base -Wl,-mllvm,--wasm-enable-eh -Wl,-mllvm,--wasm-enable-sjlj -Wl,-mllvm,--wasm-use-legacy-eh=false -Wl,-mllvm,--exception-model=wasm")
+ 
+ set(CMAKE_SYSTEM_NAME WASI) # Generic for now, to not trigger a Warning

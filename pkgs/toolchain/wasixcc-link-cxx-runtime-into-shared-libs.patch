@@ -1,0 +1,23 @@
+--- a/src/compiler.rs	2026-06-29 20:39:45.640177239 +0200
++++ b/src/compiler.rs	2026-06-29 20:39:45.658177173 +0200
+@@ -479,6 +479,20 @@
+         }
+     }
+ 
++    // A C++ *shared library* (e.g. a CPython extension module) is loaded into a host
++    // that may be plain C (the cpython interpreter is C), so the C++ runtime symbols
++    // it references aren't exported by the main module and won't resolve via the
++    // shared-library `--unresolved-symbols=import-dynamic` below — they end up as
++    // missing dynamic imports at load time (e.g. std::bad_array_new_length's dtor).
++    // Link the C++ runtime into the module itself. The object files precede these on
++    // the command line, so archive resolution pulls in only the referenced members.
++    if !module_kind.is_executable() && (state.cxx || state.user_settings.include_cpp_symbols) {
++        command.args(["-lc++", "-lc++abi"]);
++        if state.user_settings.wasm_exceptions.is_enabled() {
++            command.arg("-lunwind");
++        }
++    }
++
+     if matches!(module_kind, ModuleKind::DynamicMain) {
+         command.args(["--no-whole-archive"]);
+     }

@@ -15,11 +15,16 @@
   inherit (pkgs) lib;
 
   wasixLibcVersion = "v2026-06-25.1";
-  wasixLibcSrc = pkgs.fetchFromGitHub {
-    owner = "wasix-org";
-    repo = "wasix-libc";
-    tag = wasixLibcVersion; # content hash pins it
-    hash = "sha256-f0AavtFFyeTwOOJKX9EwxMxRW1fK2NGAEJdoY81DA8o=";
+  wasixLibcSrc = pkgs.applyPatches {
+    name = "wasix-libc-${wasixLibcVersion}-patched";
+    src = pkgs.fetchFromGitHub {
+      owner = "wasix-org";
+      repo = "wasix-libc";
+      tag = wasixLibcVersion; # content hash pins it
+      hash = "sha256-f0AavtFFyeTwOOJKX9EwxMxRW1fK2NGAEJdoY81DA8o=";
+    };
+    # PIC sysroot libc++ needs global-dynamic TLS; upstream PR pending.
+    patches = [./wasix-libc-pic-tls.patch];
   };
 
   # The committed cmake toolchain file carrying this variant's ABI flags. PIC is

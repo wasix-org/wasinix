@@ -38,11 +38,60 @@
   isWasixHost = prev.stdenv.hostPlatform.isWasix or false;
   isWasixTarget = prev.stdenv.targetPlatform.isWasix or false;
 
-  wrapperFix = lib.optionalAttrs isWasixTarget {
-    makeShellWrapper = prev.makeShellWrapper.overrideAttrs (_: {
-      shell = "${final.buildPackages.bash}/bin/bash";
-    });
-  };
+  wrapperFix =
+    lib.optionalAttrs isWasixTarget {
+      makeShellWrapper = prev.makeShellWrapper.overrideAttrs (_: {
+        shell = "${final.buildPackages.bash}/bin/bash";
+      });
+
+      # nixpkgs' emulatorAvailable check evaluates the platform emulator
+      # (`selectEmulator` → `${pkgs.wasmtime}/bin/wasmtime`); with pkgs the wasix cross set
+      # that wasmtime is cross-compiled to wasm32 — nonsensical and meta-unsupported on
+      # wasm32-wasi, so it breaks the eval of every meson wheel. Give it a buildable
+      # build-platform stand-in so emulatorAvailable is true and eval proceeds. This is only
+      # to satisfy the availability check — meson never actually calls it, because
+      # mesonEmulatorHook is no-op'd below. (This shadows wasmtime-the-package in the wasix
+      # cross set, but nothing in a wasm sysroot depends on it, so that's harmless.)
+      wasmtime = final.buildPackages.writeShellScriptBin "wasmtime" ''
+        exec ${final.buildPackages.wasmer}/bin/wasmer run "$1" -- "''${@:2}"
+      '';
+
+      # Do NOT wire an exe_wrapper into meson's cross file. The stock mesonEmulatorHook adds
+      # `--cross-file=<exe_wrapper=emulator>`, making meson RUN target wasm binaries at build
+      # time (compiler sanity check, run-checks) via the emulator. That emulator (wasmer)
+      # can't execute in every build sandbox — on JIT/exec-memory-restricted remote builders
+      # it fails with "Executables created by c compiler … are not runnable", so the meson
+      # wheels build locally but not on such a builder. meson's MAIN cross file already sets
+      # needs_exe_wrapper=true for wasm, so with no wrapper it cross-compiles without running
+      # target binaries. numpy/contourpy/pandas/matplotlib don't need to (cpu-baseline=none).
+      mesonEmulatorHook =
+        final.buildPackages.makeSetupHook {name = "meson-emulator-hook-noop";}
+        (final.buildPackages.writeText "meson-emulator-hook-noop.sh" ''
+          # wasix: intentionally empty — no meson exe_wrapper (see overlay/default.nix).
+        '');
+
+      # Point the cross set's top-level `cargo`/`rustc` at the wasix toolchain. The
+      # python-rust path (setuptools-rust / maturin: bcrypt, cryptography, pydantic-core,
+      # …) pulls `cargo`/`rustc` as plain nativeBuildInputs; left as nixpkgs' defaults
+      # those are the cross nixpkgs rustc 1.95, whose rustc.nix wants
+      # `targetPackages.stdenv.cc.libc` — null on the libc-less wasix stdenv → eval error.
+      # Hand over our cargo-wasix shim + fork rustc. Gated isWasixTarget (not isWasixHost):
+      # these run on the build platform and *target* wasm, so they live in the
+      # pkgsBuildHost stage. Packages driven via `rustPlatform.buildRustPackage`
+      # (sd/ripgrep) don't read these, so they're unaffected.
+      cargo = wasixRustPlatform.cargo;
+      rustc = wasixRustPlatform.rustc;
+    }
+    # In the PURE build stage (host = x86, target = wasm), the python-rust build hooks are
+    # spliced from `rustPlatform`. nixpkgs' maturinBuildHook targets stock wasm32-wasip1
+    # (no std in our toolchain), so swap in the wasix one (dl target + rust-lld linker) for
+    # maturin wheels (pydantic-core/orjson). Swap ONLY that hook — replacing the whole
+    # rustPlatform would also pull the wasix cargoSetupHook, whose vendoring tools
+    # (diffutils/coreutils/…) would cross-compile and fail. Gated !isWasixHost so the
+    # wasm-host stage keeps rustSupport's broken-variant marking.
+    // lib.optionalAttrs (isWasixTarget && !isWasixHost) {
+      rustPlatform = prev.rustPlatform // {inherit (wasixRustPlatform) maturinBuildHook;};
+    };
 
   # Make Rust transparent here, the same way C/C++ is: replace rustPlatform with the
   # from-source wasix one (mk-wasix-rust-platform.nix), so `rustPlatform.buildRustPackage`
