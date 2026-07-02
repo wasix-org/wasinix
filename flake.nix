@@ -53,10 +53,28 @@
     # nix flake check input: every package's passthru.tests — the behavioural
     # suites on the shipped packages AND the link/stdenv/sysroot suites on the
     # toolchain packages, all attached in pkgs/ — collected uniformly, + treefmt.
-    collectTests = lib.foldlAttrs (acc: name: pkg: acc // lib.optionalAttrs (pkg ? tests) {${name} = pkg.tests;}) {};
+    # Prefix the check key (wheel attr-names share a flat namespace with shipped-package
+    # names, and read clearer as `wheel-<attr>`); collectTests is the unprefixed case.
+    #
+    # tryEval per entry (like the ci flattenDrvs): one wheel that throws on eval would otherwise
+    # abort the whole `checks` output; drop it instead.
+    collectTestsPrefixed = prefix:
+      lib.foldlAttrs (
+        acc: name: pkg: let
+          entry = builtins.tryEval (lib.optionalAttrs (pkg ? tests) {"${prefix}${name}" = pkg.tests;});
+        in
+          acc
+          // (
+            if entry.success
+            then entry.value
+            else {}
+          )
+      ) {};
+    collectTests = collectTestsPrefixed "";
     flakeChecks =
       collectTests wasix.shippedPackages
       // collectTests wasix.toolchainTestPkgs
+      // collectTestsPrefixed "wheel-" wasix.pythonWheels
       // {treefmt = treefmtEval.config.build.check self;};
   in {
     formatter.${system} = treefmtEval.config.build.wrapper;
@@ -89,6 +107,8 @@
         libraryMatrix = wasix.libraryMatrix; # <profile>.<lib>
         # <name> = wasm cross build; .webc = its webc package; .tests = its tests
         shippedPackages = wasix.shippedPackages;
+        # <attr> = wasm cross build of python3.pkgs.<attr>; .tests = import smoke-test
+        pythonWheels = wasix.pythonWheels;
       };
 
       # Flatten nested attrsets of derivations to {"a.b.c" = drv;} — the dotted

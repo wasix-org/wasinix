@@ -18,8 +18,10 @@
   callArgs,
 }: pyfinal: pyprev: let
   entries = builtins.readDir ./.;
+  # "wheels" is the ship/test worklist (a list, consumed by pkgs/python-wheels.nix),
+  # not a package override function — skip it like "default".
   fileNames =
-    builtins.filter (n: n != "default")
+    builtins.filter (n: n != "default" && n != "wheels")
     (map (lib.removeSuffix ".nix")
       (lib.attrNames (lib.filterAttrs (n: t: t == "regular" && lib.hasSuffix ".nix" n) entries)));
 in
