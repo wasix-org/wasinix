@@ -2,6 +2,8 @@
 # the overlay wasix libs auto-threading in. Ref: build-scripts' wasix-org/cpython recipe.
 # tzdata is swapped to build-platform (see below); gdbm dropped (fork()). subprocess works via
 # posix_spawn (wasi has no fork) — see the patch + the cache vars below.
+#
+# ehpic only (passthru.wasix.supportedProfiles below): dl/ctypes need the PIC sysroot.
 {
   final,
   prev,
@@ -10,13 +12,8 @@
   ...
 }: let
   lib = prev.lib;
-  hp = final.stdenv.hostPlatform;
   # CPython minor version ("3.13"), so the postInstall symlink/scrub paths track a bump.
   pyVer = prev.python3.pythonVersion;
-
-  # Build only on ehpic: dl (ctypes, extension loading) needs PIC, which only the *pic sysroot
-  # variants ship. Other profiles are unsupported (meta.badPlatforms below), not broken.
-  isSupported = helpers.variantOf hp == "ehpic";
 
   # wasix build fixes for the python package set; see overlay/python-packages/.
   pythonPackageOverrides = import ../../python-packages {
@@ -188,9 +185,13 @@
           else drf
         );
 
-      # autoSelfMount mounts the store paths the wasm embeds (incl. PREFIX=$out → the stdlib).
+      # ehpic only: PIC is required for dl — the wasix sysroot ships dlfcn.h + dlopen/dlsym only
+      # in its PIC variants, and ctypes + dynamic extension loading need them. Other profiles are
+      # genuinely unsupported (not broken); this also makes ehpic the preferred (shipping)
+      # profile. autoSelfMount mounts the store paths the wasm embeds (incl. PREFIX=$out → the
+      # stdlib).
       passthru = {
-        wasix.preferredProfile = "ehpic";
+        wasix.supportedProfiles = ["ehpic"];
         wasmer = {
           name = "python";
           entrypoint = "python3.13";
@@ -202,9 +203,6 @@
           selfMounts = [preferredPackages.bash final.buildPackages.tzdata];
         };
       };
-
-      # Mark non-ehpic profiles unsupported (not broken); see isSupported.
-      meta.badPlatforms = lib.optionals (!isSupported) [hp.system];
     } (prev.python3.override {
       # Build-platform tzdata: the cross tzcode doesn't build (getresuid), and null broke the BUILD
       # python's zoneinfo (babel/hypothesis suites). zoneinfo is platform-independent; the webc mounts

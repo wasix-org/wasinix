@@ -117,11 +117,13 @@
       # is its own job / build path).
       #
       # nix-eval-jobs reports any leaf that throws while forcing — a meta.broken
-      # package (fd/tokei, Rust libs in the off/exnref variants) or an attr that
-      # errors on access — as a failed job, which reddens the whole CI run. A
-      # deliberately-unsupported variant shouldn't fail CI, so leaves that don't
-      # cleanly evaluate to a buildable derivation are dropped here, before they
-      # become jobs. Only `ci` filters; the `.#` build targets keep the attrs.
+      # package (fd/tokei, via their passthru.wasix.broken contract) or an attr
+      # that errors on access — as a failed job, which reddens the whole CI run.
+      # (Unsupported-profile leaves never get this far: libraryMatrix filters them
+      # via the passthru.wasix contract in pkgs/default.nix.) A known-broken
+      # package shouldn't fail CI either, so leaves that don't cleanly evaluate to
+      # a buildable derivation are dropped here, before they become jobs. Only
+      # `ci` filters; the `.#` build targets keep the attrs.
       drvOk = drv: (builtins.tryEval (drv.drvPath != null && !(drv.meta.broken or false) && (drv.meta.available or true))).value;
       flattenDrvs = prefix:
         lib.concatMapAttrs (

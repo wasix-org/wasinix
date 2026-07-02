@@ -13,6 +13,9 @@
   llvmVersion,
 }: let
   inherit (pkgs) lib;
+  # The canonical profile table: one sysroot variant per profile, selected by the
+  # {eh, pic, exnref} encoding derived there (PIC is only valid with EH).
+  profilesCfg = import ../../profiles.nix;
 
   wasixLibcVersion = "v2026-06-25.1";
   wasixLibcSrc = pkgs.applyPatches {
@@ -86,10 +89,8 @@
     };
 
     # Subdir name under the combined sysroot, matching the release tarballs
-    # (off→sysroot, eh→sysroot-eh, ehpic→sysroot-ehpic, …).
-    sysrootSubdir =
-      "sysroot"
-      + lib.optionalString eh ("-" + lib.optionalString exnref "exnref-" + "eh" + lib.optionalString pic "pic");
+    # (off→sysroot, eh→sysroot-eh, ehpic→sysroot-ehpic, …) — from the profile table.
+    sysrootSubdir = profilesCfg.sysrootSubdirs.${name};
 
     sysroot = mkSysroot name [libc compiler-rt libcxx];
 
@@ -101,36 +102,12 @@
     inherit name eh pic exnref libc compiler-rt libcxx sysrootSubdir sysroot test;
   };
 
-  # The 5 wasix ABI variants. `off` is threaded-but-no-EH; the EH variants add C++
-  # exceptions; `pic` builds position-independent; `exnref` uses the exnref/SjLj
-  # exception model. (PIC is only valid with EH — see build32.)
-  variants = lib.mapAttrs (name: spec: mkVariant (spec // {inherit name;})) {
-    off = {
-      eh = false;
-      pic = false;
-      exnref = false;
-    };
-    eh = {
-      eh = true;
-      pic = false;
-      exnref = false;
-    };
-    ehpic = {
-      eh = true;
-      pic = true;
-      exnref = false;
-    };
-    exnrefEh = {
-      eh = true;
-      pic = false;
-      exnref = true;
-    };
-    exnrefEhpic = {
-      eh = true;
-      pic = true;
-      exnref = true;
-    };
-  };
+  # One variant per profile in the canonical table. `off` is threaded-but-no-EH;
+  # the EH variants add C++ exceptions; `pic` builds position-independent;
+  # `exnref` uses the exnref/SjLj exception model.
+  variants =
+    lib.mapAttrs (name: enc: mkVariant (enc // {inherit name;}))
+    profilesCfg.sysrootEncodings;
 
   # The combined sysroot: one subdir per variant, matching the release-tarball
   # layout. wasixcc points WASIXCC_SYSROOT_PREFIX here and picks the subdir by EH/PIC.

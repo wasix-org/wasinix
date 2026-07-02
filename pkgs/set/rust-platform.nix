@@ -98,9 +98,17 @@ in
             runHook postInstall
           '';
 
+        # Default the support contract to the profiles the rust toolchain built
+        # std for (the package's own declaration wins). The overlay's
+        # applyWasixMeta then marks the package unsupported elsewhere, and
+        # preferredProfileOf derives the shipping profile (eh) from it.
         passthru =
           (prevArgs.passthru or {})
-          // {wasix = ((prevArgs.passthru or {}).wasix or {}) // {preferredProfile = "eh";};};
+          // {
+            wasix =
+              {supportedProfiles = wasixRustToolchain.passthru.supportedProfiles;}
+              // ((prevArgs.passthru or {}).wasix or {});
+          };
 
         meta = (prevArgs.meta or {}) // {platforms = (prevArgs.meta or {}).platforms or lib.platforms.all;};
       };

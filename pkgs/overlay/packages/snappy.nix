@@ -7,14 +7,11 @@
 # The deeper issue is the wasixcc rule itself — PIC shouldn't actually require wasm exceptions;
 # relaxing that in the toolchain would be the proper fix, after which this gate can drop.
 {
-  final,
   prev,
   helpers,
   ...
-}: let
-  hp = final.stdenv.hostPlatform;
-in
-  helpers.libTweaks {
-    meta.badPlatforms = prev.lib.optionals (hp.wasmPic or false) [hp.system];
-  }
-  prev.snappy
+}:
+helpers.libTweaks {
+  passthru.wasix.supportedProfiles = helpers.profiles.withoutPic;
+}
+prev.snappy

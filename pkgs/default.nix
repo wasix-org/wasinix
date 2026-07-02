@@ -7,6 +7,7 @@
 }: let
   pkgs = import nixpkgs {inherit system;};
   inherit (pkgs) lib;
+  wasixLib = import ./lib {inherit lib;};
   foundation = import ./toolchain {inherit pkgs;};
 
   # The single wasix cross target. Kept here (rather than derived from a
@@ -51,18 +52,17 @@
   wasixPkgNames = import ./overlay/names.nix {inherit lib;};
 
   # preferredPackages: each package at its preferred profile. A package declares
-  # that via passthru.wasix.preferredProfile, read here WITHOUT building it
-  # (passthru is eval-only; default exnrefEh). Reached for non-linked / runtime-
-  # invoked deps so the consumer gets the dep at the profile it supports (e.g.
-  # bash -> off), regardless of the consumer's profile. Lazy / mutually recursive
-  # with profileSets.
+  # that via its passthru.wasix contract (preferredProfile, or derived from
+  # supportedProfiles — see pkgs/lib), read here WITHOUT building it (passthru is
+  # eval-only). Reached for non-linked / runtime-invoked deps so the consumer
+  # gets the dep at the profile it supports (e.g. bash -> off), regardless of the
+  # consumer's profile. Lazy / mutually recursive with profileSets.
   preferredProfileOf = name:
-    profileSets.${defaultProfileName}.${name}.passthru.wasix.preferredProfile or defaultProfileName;
+    wasixLib.preferredProfileOf profileSets.${defaultProfileName}.${name};
   preferredPackages = lib.genAttrs wasixPkgNames (name: profileSets.${preferredProfileOf name}.${name});
 
   wasixOverlay = import ./overlay {
     inherit foundation nixpkgs preferredPackages wasixRustPlatform;
-    rustSupportedVariants = foundation.wasixRustToolchain.supportedVariants;
   };
   mkWasixPkgs = import ./set/mk-pkgs.nix {inherit system nixpkgs mkWasixStdenv wasixOverlay;};
   profileSets = lib.mapAttrs (_: spec: mkWasixPkgs spec) profilesCfg.profiles;
@@ -70,8 +70,8 @@
   # ── toolchain: per-profile build environments ────────────────────────────────
   # `foundation` holds the flat, profile-independent compilers; this is the
   # per-profile layer built from them: each profile's `stdenv` (C/C++, the wasixcc
-  # cc-wrapper from profileSets) and `rustPlatform` (Rust — real on the variants the
-  # rust toolchain targets, marked-broken elsewhere by the overlay), plus the
+  # cc-wrapper from profileSets) and `rustPlatform` (Rust — its packages are only
+  # supported on the profiles the rust toolchain targets, see pkgs/lib), plus the
   # dev-env shell fragments + ABI metadata the link/stdenv tests and devShell need.
   devEnvFor = import ./toolchain/dev-env.nix {inherit pkgs foundation;};
   toolchain =
@@ -148,12 +148,13 @@
   libraryMatrix =
     lib.genAttrs nonOffProfileNames
     (profile:
-      # Skip libs that mark themselves unsupported on this profile via meta.badPlatforms (e.g.
-      # snappy at the PIC profiles — its -fno-exceptions can't combine with PIC under wasixcc). We
-      # check badPlatforms directly rather than meta.availableOn so libs with merely unix-only
-      # meta.platforms (which still build here under allowUnsupportedSystem) aren't dropped.
+      # Skip libs that don't target this profile (passthru.wasix.supportedProfiles,
+      # e.g. snappy at the PIC profiles, rust packages outside eh/ehpic). The
+      # predicate reads passthru rather than meta.availableOn so libs with merely
+      # unix-only meta.platforms (which still build here under
+      # allowUnsupportedSystem) aren't dropped.
         lib.filterAttrs
-        (_: drv: !(builtins.elem profileSets.${profile}.stdenv.hostPlatform.system (drv.meta.badPlatforms or [])))
+        (_: wasixLib.supportedIn profile)
         (lib.genAttrs libPkgNames (n: profileSets.${profile}.${n})));
 
   # The CLIs shipped as webc packages, by overlay attr-name. Each is built at its

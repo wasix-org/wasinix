@@ -15,9 +15,6 @@
   nixpkgs,
   preferredPackages,
   wasixRustPlatform,
-  # ABI variants the wasix rust toolchain can target (e.g. ["eh"]); Rust packages
-  # in any other profile are marked broken.
-  rustSupportedVariants,
 }: final: prev: let
   lib = prev.lib;
   helpers = import ../lib {inherit lib;};
@@ -88,7 +85,7 @@
     # maturin wheels (pydantic-core/orjson). Swap ONLY that hook — replacing the whole
     # rustPlatform would also pull the wasix cargoSetupHook, whose vendoring tools
     # (diffutils/coreutils/…) would cross-compile and fail. Gated !isWasixHost so the
-    # wasm-host stage keeps rustSupport's broken-variant marking.
+    # wasm-host stage keeps rustSupport's full wasixRustPlatform below.
     // lib.optionalAttrs (isWasixTarget && !isWasixHost) {
       rustPlatform = prev.rustPlatform // {inherit (wasixRustPlatform) maturinBuildHook;};
     };
@@ -99,41 +96,10 @@
   # clean cross set for the cargo-hook tooling (the wasixcc stdenv here is libc-less, so
   # nixpkgs' own cross rustc can't build), while compiling with the fork rustc.
   #
-  # Rust only targets some ABI variants (eh, and ehpic when -dl builds). In the others
-  # (off/exnref*) there's no std, so mark Rust packages broken — a clear, CI-graceful
-  # error (vs a missing rustPlatform). The variant name is derived from this profile's
-  # EH/PIC platform fields.
-  rustSupport = lib.optionalAttrs isWasixHost (let
-    supported = lib.elem (helpers.variantOf prev.stdenv.hostPlatform) rustSupportedVariants;
-  in {
-    rustPlatform =
-      if supported
-      then wasixRustPlatform
-      else
-        wasixRustPlatform
-        // {
-          # Accept both buildRustPackage forms (attrset or finalAttrs: function),
-          # like the real wrapper — resolve, then force meta.broken.
-          buildRustPackage = args:
-            wasixRustPlatform.buildRustPackage (
-              finalAttrs: let
-                a =
-                  if builtins.isFunction args
-                  then args finalAttrs
-                  else args;
-              in
-                a
-                // {
-                  meta =
-                    (a.meta or {})
-                    // {
-                      broken = true;
-                      badPlatforms = ["wasm32-wasi"];
-                    };
-                }
-            );
-        };
-  });
+  # Rust only targets some profiles (eh, and ehpic when -dl builds); rust-platform.nix
+  # injects passthru.wasix.supportedProfiles accordingly, and applyWasixMeta below marks
+  # Rust packages unsupported (not broken — it's intentional) everywhere else.
+  rustSupport = lib.optionalAttrs isWasixHost {rustPlatform = wasixRustPlatform;};
 
   packages =
     if !isWasixHost
@@ -148,10 +114,18 @@
         (lib.attrNames (lib.filterAttrs (n: t: t == "regular" && lib.hasSuffix ".nix" n) entries));
       dirNames = lib.attrNames (lib.filterAttrs (_: t: t == "directory") entries);
       callArgs = {inherit final prev helpers foundation preferredPackages nixpkgs;};
+      # Derive meta.badPlatforms/meta.broken from each package's passthru.wasix
+      # support contract — the ONLY place wasix support state touches meta.
+      applyWasixMeta =
+        helpers.applyWasixMeta
+        (helpers.profileOf prev.stdenv.hostPlatform)
+        prev.stdenv.hostPlatform.system;
     in
-      (lib.genAttrs (import ./trivial.nix) (n: helpers.libTweaks {} prev.${n}))
-      // (lib.genAttrs fileNames (n: import (pkgDir + "/${n}.nix") callArgs))
-      // (lib.genAttrs dirNames (n: import (pkgDir + "/${n}/package.nix") callArgs));
+      lib.mapAttrs (_: applyWasixMeta) (
+        (lib.genAttrs (import ./trivial.nix) (n: helpers.libTweaks {} prev.${n}))
+        // (lib.genAttrs fileNames (n: import (pkgDir + "/${n}.nix") callArgs))
+        // (lib.genAttrs dirNames (n: import (pkgDir + "/${n}/package.nix") callArgs))
+      );
 in
   packages
   // rustSupport

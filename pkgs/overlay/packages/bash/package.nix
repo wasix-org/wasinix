@@ -1,8 +1,8 @@
 # Off-EH profile only: bash needs fork() (-> asyncify) and setjmp/longjmp, which
-# collide under Wasm-EH but coexist in off-EH. It declares preferredProfile =
-# "off" (so preferredPackages.bash resolves to the off build) and still evaluates
-# in any profile — but BUILDING it under Wasm-EH fails loudly in preConfigure.
-# readline auto-threads (final.readline, the off-profile build).
+# collide under Wasm-EH but coexist in off-EH. It declares supportedProfiles =
+# ["off"] (so preferredPackages.bash resolves to the off build) and still
+# evaluates in any profile — but BUILDING it under Wasm-EH fails loudly in
+# preConfigure. readline auto-threads (final.readline, the off-profile build).
 {
   final,
   prev,
@@ -34,10 +34,11 @@ in
                        '#if (defined (TIOCGWINSZ) || defined (HAVE_TCGETWINSIZE)) && !defined(__wasi__)'
     '';
     # passthru.wasix.* = our build-graph metadata (vs passthru.wasmer.* = webc
-    # config); preferredProfile resolves preferredPackages.bash -> the off build.
-    passthru.wasix.preferredProfile = "off";
-    # Eval everywhere (so preferredProfile is readable without building), but
-    # refuse to BUILD outside off-EH.
+    # config); the support contract makes off the only (hence preferred) profile,
+    # so preferredPackages.bash resolves to the off build.
+    passthru.wasix.supportedProfiles = ["off"];
+    # Eval everywhere (so the contract is readable without building), but refuse
+    # to BUILD outside off-EH.
     preConfigure = final.lib.optionalString (!offProfile) ''
       echo 'bash must be built in the off-EH profile (wasmExceptions = "no")' >&2
       exit 1

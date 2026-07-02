@@ -1,29 +1,91 @@
 # Helpers for wasix package overlay entries. Because the profile's stdenv
 # (replaceCrossStdenv) already builds with wasixcc and auto-threads linked deps,
 # these only apply per-package tweaks — no stdenv override, no dep threading.
-{lib}: rec {
+#
+# This is also home to the passthru.wasix support contract. Every wasix package
+# may declare (all optional):
+#
+#   passthru.wasix = {
+#     supportedProfiles = profiles.withoutPic;  # profiles it TARGETS (default: all).
+#                                               # "Unsupported" = intentionally not
+#                                               # targeted — skipped silently, never
+#                                               # a CI job. Not a defect.
+#     preferredProfile = "off";                 # profile it SHIPS at (default: the
+#                                               # repo default if supported, else the
+#                                               # first supported profile).
+#     broken = "why + link";                    # a DEFECT: should work at its
+#                                               # supported profiles but currently
+#                                               # doesn't. Visible (meta.broken), with
+#                                               # removal pressure once fixed.
+#   };
+#
+# The overlay loader derives nixpkgs meta from it in ONE place (applyWasixMeta),
+# and pkgs/default.nix consumes it via supportedIn/preferredProfileOf — nothing
+# else hand-writes meta.badPlatforms/meta.broken.
+{lib}: let
+  profilesCfg = import ../profiles.nix;
+in rec {
   # Merge non-empty script fragments.
   mergeScript = frags: lib.concatStringsSep "\n" (lib.filter (f: f != "" && f != null) frags);
 
-  # The profile/ABI-variant name (off / eh / ehpic / exnrefEh / exnrefEhpic) derived from a host
-  # platform's wasmExceptions/wasmPic fields — the single source of truth for the EH/PIC -> variant
-  # mapping (consumed by both the rust gate in default.nix and python's profile gate).
-  variantOf = hp: let
-    exc = hp.wasmExceptions or "no";
-    pic = hp.wasmPic or false;
+  # The profile name (off / eh / ehpic / exnrefEh / exnrefEhpic) for a host
+  # platform, from its wasmExceptions/wasmPic fields (see pkgs/profiles.nix).
+  inherit (profilesCfg) profileOf defaultProfileName;
+
+  # Profile-set constructors for supportedProfiles declarations.
+  profiles = rec {
+    table = profilesCfg.profiles;
+    all = profilesCfg.profileNames;
+    pic = lib.filter (n: table.${n}.wasmPic or false) all;
+    withoutPic = lib.filter (n: !(table.${n}.wasmPic or false)) all;
+    withEh = lib.filter (n: table.${n}.wasmExceptions != "no") all;
+  };
+
+  # The support contract of a derivation (or of an explicit passthru.wasix value).
+  wasixMetaOf = drv: (drv.passthru or {}).wasix or {};
+
+  # Does `drv` target this profile? The eval-only predicate behind the library
+  # matrix and CI filtering — reads passthru, never meta, so it works the same
+  # before and after applyWasixMeta.
+  supportedIn = profileName: drv:
+    builtins.elem profileName ((wasixMetaOf drv).supportedProfiles or profiles.all);
+
+  # The profile a package ships at: its declared preferredProfile, else the repo
+  # default when supported, else the (alphabetically) first supported profile.
+  preferredProfileOf = drv: let
+    w = wasixMetaOf drv;
+    supported = w.supportedProfiles or profiles.all;
   in
-    if exc == "no"
-    then "off"
-    else if exc == "yes"
-    then
-      (
-        if pic
-        then "exnrefEhpic"
-        else "exnrefEh"
-      )
-    else if pic
-    then "ehpic"
-    else "eh";
+    w.preferredProfile
+    or (
+      if builtins.elem defaultProfileName supported
+      then defaultProfileName
+      else builtins.head supported
+    );
+
+  # Derive nixpkgs meta from the passthru.wasix contract, for the profile the
+  # package set is instantiated at. Applied uniformly by the overlay loader:
+  #   - not supported here -> meta.badPlatforms += [hp.system]. All wasix profiles
+  #     share one system string, so this only means "unsupported" INSIDE the
+  #     profile set that set it — exactly how the matrix/CI predicates read it.
+  #     Kept so nixpkgs-native tooling (availableOn etc.) sees it too.
+  #   - wasix.broken -> meta.broken (the human-readable reason stays on passthru).
+  applyWasixMeta = profileName: hostSystem: drv: let
+    w = wasixMetaOf drv;
+    unsupported = !(supportedIn profileName drv);
+    broken = (w.broken or null) != null;
+  in
+    if !unsupported && !broken
+    then drv
+    else
+      drv.overrideAttrs (old: {
+        meta =
+          (old.meta or {})
+          // lib.optionalAttrs unsupported {
+            badPlatforms = lib.unique (((old.meta or {}).badPlatforms or []) ++ [hostSystem]);
+          }
+          // lib.optionalAttrs broken {broken = true;};
+      });
 
   # The standard nixpkgs phases + their pre/post hooks: string attrs that must be CONCATENATED
   # (not replaced) when merged onto a derivation. Used by extendDrv.

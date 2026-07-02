@@ -343,12 +343,13 @@ in
       targetPlatforms = lib.platforms.all;
       tier1TargetPlatforms = lib.platforms.all;
       badTargetPlatforms = [];
-      # The ABI variants this toolchain built std for (and can thus target). Only
+      # The profiles this toolchain built std for (and can thus target). Only
       # eh (wasm32-wasmer-wasi); the -dl/ehpic target rides on withDynamicLinking.
-      # Consumed by the wasix overlay to mark Rust packages broken in the variants
-      # rust can't target (off/exnref*), giving a clear error instead of a missing
-      # rustPlatform.
-      supportedVariants = ["eh"] ++ optionals withDynamicLinking ["ehpic"];
+      # set/rust-platform.nix injects this as the default
+      # passthru.wasix.supportedProfiles of every wasix Rust package, so the
+      # overlay marks them unsupported in the profiles rust can't target
+      # (off/exnref*).
+      supportedProfiles = ["eh"] ++ optionals withDynamicLinking ["ehpic"];
     };
 
     meta = with lib; {
