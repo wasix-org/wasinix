@@ -108,7 +108,8 @@ Status legend: 🔴 needs upstream fix · 🟡 packaging workaround in place · 
   real cause below, not a libc allocator-ordering bug.
 - **Root cause:** rustc emits `--max-memory=4294967296` (4 GiB / 65536 pages) for a
   *shared* (threaded) wasm memory **only off the stable channel** — it's gated behind
-  unstable wasm support. Our `wasix-rust-toolchain.nix` forced `--release-channel=stable`
+  unstable wasm support. Our rust toolchain build (`pkgs/toolchain/rust/toolchain.nix`)
+  forced `--release-channel=stable`
   (upstream's `config.toml.wasix-template` sets no channel → non-stable), so rustc
   dropped the flag and the shared memory came out `max == initial` (non-growable). With
   no room to grow, the first heap allocation in std startup traps → `_Exit(70)`. The C
@@ -120,12 +121,15 @@ Status legend: 🔴 needs upstream fix · 🟡 packaging workaround in place · 
   non-stable and so emits the flag natively.
 - **Fix:** build on `--release-channel=nightly` (the wasix target genuinely needs
   rustc's unstable wasm support). No per-package flag — rustc emits `--max-memory`
-  itself; `mk-wasix-rust-platform.nix` needs nothing for it.
+  itself; `pkgs/set/rust-platform.nix` needs nothing for it.
 
 ### getrandom doesn't recognise the target 🟡
-- getrandom 0.3 → "Unknown version of WASI" on `wasm32-wasmer-wasi`. Set
-  `CARGO_TARGET_<triple>_RUSTFLAGS = --cfg getrandom_backend="wasi_p1"` (done globally
-  in `mk-wasix-rust-platform.nix`) so every getrandom-using crate compiles.
+- getrandom 0.3 → "Unknown version of WASI" on `wasm32-wasmer-wasi`. CLI crates built
+  through the cargo-wasix seam no longer need a workaround (the old global
+  `--cfg getrandom_backend="wasi_p1"` RUSTFLAGS was dropped with it). Python wheels
+  that pull getrandom 0.3 (bcrypt, pydantic-core) pin the `wasix-org/getrandom` fork
+  instead — its backend adds a dep on the `wasix` crate, which a vendor-patch can't
+  introduce (see `pkgs/overlay/python-packages/lib/rust.nix`).
 
 ### buildRustPackage wrapper had to learn nixpkgs idioms 🟢
 - To consume real nixpkgs Rust packages (`prev.<pkg>.override { rustPlatform = … }`):
