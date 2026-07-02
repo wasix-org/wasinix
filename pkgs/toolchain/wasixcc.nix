@@ -1,6 +1,6 @@
 # wasixcc, the WASIX cc driver. The wasixccenv binary dispatches on argv0; bin/
 # holds one makeWrapper wrapper per tool name, with the toolchain locations from
-# env.nix baked in. Updated by hand (no updater target); see docs/updating.md.
+# env.nix baked in.
 {
   lib,
   stdenvNoCC,
@@ -17,7 +17,7 @@
   src = fetchFromGitHub {
     owner = "wasix-org";
     repo = "wasixcc";
-    rev = "f60fd7d03690fc778633b3616caee39015fb8404";
+    tag = "v${version}";
     hash = "sha256-opTdoRjWIsNDCce2XaUdmn9RwzpesqXusw5QHp5Q8FE=";
   };
 

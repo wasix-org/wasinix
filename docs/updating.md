@@ -15,6 +15,7 @@ rust bootstrap pin, witx pins) are regenerated in the same run.
 | `rust-toolchain` | `wasix-org/rust` release | bootstrap pin from the fork's `src/stage0` |
 | `cargo-wasix` | `wasix-org/cargo-wasix` release | the committed `Cargo.lock` |
 | `wasix-libc` | `wasix-org/wasix-libc` release | the witx spec pins |
+| `wasixcc` | `wasix-org/wasixcc` release | |
 | `llvm` | fork release tag | |
 | `crabsay`, `libffi` | branch head | hashes |
 | `nixpkgs`, `wasmer`, `treefmt-nix` | flake inputs | |
@@ -46,7 +47,6 @@ applied on the source (`wasix-libc-pic-tls.patch`); drop any that landed
 upstream. Rebuilds everything. Check: `nix build .#wasix-libc` then
 `.#wasix-sysroot`, and `.#legacyPackages.x86_64-linux.foundation.sysroot.tests`.
 
-**wasixcc** (manual, pins a commit): set `src.rev`/`src.hash` and `version`
-(a literal; reading it from the source would force the download at eval
-time). The lockfile is in-source. Drop `wasixcc-*.patch` files that landed
-upstream. Check: `nix build .#wasixcc` and `.#foundation.wasixcc.tests`.
+**wasixcc**: the lockfile is in-source, nothing to regenerate. On update,
+drop any `wasixcc-*.patch` that landed upstream. Check: `nix build .#wasixcc`
+and `.#foundation.wasixcc.tests`.

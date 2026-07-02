@@ -11,8 +11,7 @@
 #   flake:      `nix flake update <input>`.
 # Per-target `regen` hooks update derived files after a bump: cargo-wasix's
 # committed Cargo.lock, the rust fork's stage0 bootstrap pin (synced from its
-# src/stage0), and wasix-libc's witx submodule pins. wasixcc has no target
-# (it pins a commit, not a release; see docs/tasks/update-wasixcc.md).
+# src/stage0), and wasix-libc's witx submodule pins.
 #
 # Usage (or `nix run .#update -- ...`):
 #   scripts/update.py              # update everything
@@ -233,12 +232,17 @@ TARGETS = [
            regen=regen_rust_bootstrap),
 
     # prefetch is used where nix-update's strict eval cannot introspect the
-    # package: libffi sets src inside overrideAttrs, cargo-wasix derives its
-    # version from the src via IFD.
+    # package (libffi sets src inside overrideAttrs) or its version heuristics
+    # get in the way.
     Target("libffi", "prefetch",
            file="pkgs/overlay/packages/libffi.nix",
            owner="wasix-org", repo="libffi", track="branch",
            version_re=r'rev = "([0-9a-f]{7,40})"'),
+    Target("wasixcc", "prefetch",
+           file="pkgs/toolchain/wasixcc.nix",
+           owner="wasix-org", repo="wasixcc",
+           version_re=r'version = "([^"]+)"',
+           tag_to_version=lambda t: (t.removeprefix("v"), t)),
     Target("cargo-wasix", "prefetch",
            file="pkgs/toolchain/rust/cargo-wasix.nix",
            owner="wasix-org", repo="cargo-wasix",

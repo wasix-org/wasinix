@@ -39,7 +39,7 @@ scripts/update.py    pin updater (nix run .#update)
 - All `WASIXCC_*`/`CC=wasixcc` environment comes from
   `pkgs/toolchain/env.nix`; never write the exports by hand.
 - Patches live next to the file that applies them.
-- Pins: `nix run .#update` (`docs/updating.md`); only wasixcc is manual.
+- Pins: `nix run .#update` (`docs/updating.md`).
 
 ## Checking your work
 
