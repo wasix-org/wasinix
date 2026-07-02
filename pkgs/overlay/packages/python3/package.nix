@@ -1,17 +1,7 @@
-# python3 (CPython 3.13.13) for wasix. Path A: nixpkgs upstream cpython (which has plain
-# wasm32-wasi support) built under the wasix stdenv, with the overlay wasix libs auto-threading
-# in (openssl, ncurses, sqlite, readline, zlib, bzip2, expat, xz, mpdecimal, libffi). Reference:
-# build-scripts' wasix-org/cpython recipe (see memory wasix-python-packaging).
-#
-# Dropped deps that don't cross-build to wasm (none are in build-scripts' core set):
-# - tzdata: nixpkgs compiles tzcode/zic with the *target* cc → wasm unix-isms. zoneinfo finds
-#   tz data at runtime (no baked --with-tzpath).
-# - gdbm: gdbmshell.c calls fork() → undeclared on wasm. Drops the dbm.gnu module.
-#
-# subprocess works (posix_spawn — wasi has no fork): the subprocess patch + the posix_spawn/pipe/
-# sigset/… cache vars enable it, and subprocess(shell=True) execs the wasix off-profile bash baked
-# into subprocess.py (postPatch). bashNonInteractive is only the build-platform bash for
-# patchShebangs on dev tools (the wasix cross bash doesn't build — jobs.c fork).
+# python3 (CPython 3.13) for wasix: nixpkgs upstream cpython built under the wasix stdenv, with
+# the overlay wasix libs auto-threading in. Ref: build-scripts' wasix-org/cpython recipe.
+# tzdata is swapped to build-platform (see below); gdbm dropped (fork()). subprocess works via
+# posix_spawn (wasi has no fork) — see the patch + the cache vars below.
 {
   final,
   prev,
@@ -21,16 +11,14 @@
 }: let
   lib = prev.lib;
   hp = final.stdenv.hostPlatform;
+  # CPython minor version ("3.13"), so the postInstall symlink/scrub paths track a bump.
+  pyVer = prev.python3.pythonVersion;
 
-  # Build only on legacy-EH + PIC (the "ehpic" variant). PIC is required for dl: the wasix sysroot
-  # ships dlfcn.h + dlopen/dlsym only in its PIC variants (Makefile-eh gates the musl ldso on PIC),
-  # and ctypes + dynamic extension loading need them. Other profiles are genuinely unsupported (not
-  # broken) — marked via meta.badPlatforms below.
+  # Build only on ehpic: dl (ctypes, extension loading) needs PIC, which only the *pic sysroot
+  # variants ship. Other profiles are unsupported (meta.badPlatforms below), not broken.
   isSupported = helpers.variantOf hp == "ehpic";
 
-  # wasix overrides for the Python package set (the python-package analogue of overlay/packages/).
-  # Folded into cpython's packageOverrides below, so every python3.pkgs.<pkg> can carry
-  # wasix-specific build fixes/patches. See overlay/python-packages/.
+  # wasix build fixes for the python package set; see overlay/python-packages/.
   pythonPackageOverrides = import ../../python-packages {
     inherit lib;
     callArgs = {inherit final prev preferredPackages helpers lib;};
@@ -38,17 +26,14 @@
 
   py =
     helpers.libTweaks {
-      # Enable dynamic linking → import of .so C-extension modules (wheels). Allowed for WASI by
-      # patches/enable-wasm-dynamic-linking-wasi.patch (upstream hard-errors on it); the flag then
-      # cascades ac_cv_func_dlopen=yes → DYNLOADFILE=dynload_shlib.o → HAVE_DYNAMIC_LOADING. Our
-      # ehpic main module is already built -pie/--experimental-pic, so no extra link flags needed.
+      # Dynamic linking → import .so C-extension wheels (via enable-wasm-dynamic-linking-wasi.patch;
+      # our ehpic module is already -pie, so no extra link flags).
       configureFlags = ["--enable-wasm-dynamic-linking"];
 
-      # Autoconf cache vars: feed configure what the wasix-org/cpython fork's config.site / configure
-      # patches would, declaratively (the build re-runs autoreconf+configure, so a fresh probe must
-      # see these in the env). From build-scripts' config.site-wasm32-wasix + wasix-libc-reality fixes.
+      # Autoconf cache vars: what the wasix-org/cpython config.site/configure patches would set,
+      # declaratively (the build re-runs autoreconf, so a fresh probe must see these).
       env = {
-        # clang 21 defaults to -std=gnu23, which breaks configure's "CC compiler name" conftest.
+        # clang 21 defaults to -std=gnu23, breaking configure's "CC name" conftest.
         ac_cv_cc_name = "clang";
         # Features wasix genuinely lacks:
         ac_cv_buggy_getaddrinfo = "no";
@@ -66,10 +51,11 @@
         ac_cv_func_fdopendir = "no";
         ax_cv_c_float_words_bigendian = "no";
         ac_cv_disable_int_conversion = "yes";
-        ac_cv_func_memfd_create = "no"; # declared but its probe genuinely fails
-        # Math funcs that ARE in libc.a but the -lm probe can't see (libm.a is an empty wasi-libc
-        # stub); timegm is a GNU extension. Without these, cpython compiles static fallbacks that
-        # clash with the real header declarations.
+        ac_cv_func_memfd_create = "no"; # declared but the probe fails
+        # In the sysroot but the cross probe defaults off; the mmap module needs both headers.
+        ac_cv_header_sys_mman_h = "yes";
+        ac_cv_header_sys_stat_h = "yes";
+        # In libc.a but the -lm probe can't see them (libm.a is an empty stub); timegm is a GNU ext.
         ac_cv_func_acosh = "yes";
         ac_cv_func_asinh = "yes";
         ac_cv_func_atanh = "yes";
@@ -79,32 +65,23 @@
         ac_cv_func_log1p = "yes";
         ac_cv_func_log2 = "yes";
         ac_cv_func_timegm = "yes";
-        # clock/clock_gettime come from -lwasi-emulated-process-clocks (still linked). Without
-        # HAVE_CLOCK*, pytime.c/timemodule.c guard out the definers while their users stay → undef.
+        ac_cv_func_strftime = "yes"; # probe-missed; pandas imports time.strftime at load
+        # From -lwasi-emulated-process-clocks; without HAVE_CLOCK* the users link against absent definers.
         ac_cv_func_clock = "yes";
         ac_cv_func_clock_gettime = "yes";
-        # The PIC libc.a defines dup2, but configure's AC_REPLACE_FUNCS probe misses it at PIC →
-        # cpython compiles Python/dup2.c → "duplicate symbol: dup2". Force present.
-        ac_cv_func_dup2 = "yes";
-        # cpython's plain-WASI support assumes no symlink stat, but WASIX implements lstat/fstatat/
-        # readlink. Without these os.lstat → realpath → NotImplementedError → sysconfig (hence
-        # `import ctypes`) breaks. All four are in the (PIC) libc + declared in the headers.
+        ac_cv_func_dup2 = "yes"; # in PIC libc.a but AC_REPLACE_FUNCS misses it → duplicate dup2
+        ac_cv_func_mmap = "yes"; # emulated-mman, always linked; cross probe defaults to no
+        # WASIX has symlink stat; without it os.lstat→realpath raises NotImplementedError → ctypes breaks.
         ac_cv_func_lstat = "yes";
         ac_cv_func_fstatat = "yes";
         ac_cv_func_readlink = "yes";
         ac_cv_func_readlinkat = "yes";
-        # posix_spawn(p) ARE in the wasix libc + declared, but configure's probe misses them (like
-        # dup2/lstat). Force present so os.posix_spawnp is built — subprocess uses it (the patch).
+        # posix_spawn(p) + the subprocess pipeline (pipe/reap/fd setup/signals): in libc, but
+        # probe-missed or WASI-disabled upstream. execv is needed for HAVE_EXECV (posix_spawn's
+        # parse_arglist etc. gate on it, not HAVE_POSIX_SPAWN). subprocess uses os.posix_spawnp.
         ac_cv_func_posix_spawn = "yes";
         ac_cv_func_posix_spawnp = "yes";
-        # os.posix_spawn's C impl calls parse_arglist/parse_envlist/free_string_array, which
-        # posixmodule.c guards behind HAVE_EXECV (not HAVE_POSIX_SPAWN) — so without it they're
-        # undefined at link. execv IS in the libc (configure's probe missed it too); force present.
         ac_cv_func_execv = "yes";
-        # The rest of the subprocess pipeline: pipe (capture_output), waitpid (reap), fcntl/dup/dup3
-        # (fd setup), kill/sigaction (signals). cpython's plain-WASI support disables these
-        # (config.site-wasm32-wasi: pipe=no, …) / configure's probe misses them, but wasix has them
-        # all in libc. Re-enable.
         ac_cv_func_pipe = "yes";
         ac_cv_func_pipe2 = "yes";
         ac_cv_func_waitpid = "yes";
@@ -114,42 +91,34 @@
         ac_cv_func_dup3 = "yes";
         ac_cv_func_kill = "yes";
         ac_cv_func_sigaction = "yes";
-        # posix_spawn's setsigdef (restore_signals) needs HAVE_SIGSET_T, which posixmodule.h gates on
-        # pthread_sigmask|sigwait|sigtimedwait|sigwaitinfo — all in the wasix libc, all undetected.
-        # Without it os.posix_spawnp raises "sigset is not supported on this platform".
+        ac_cv_func_getpid = "yes"; # emulated-getpid; multiprocessing.pool (e.g. caio) calls it at import
+        # os.uname / socket.gethostname; sqlalchemy reads them at import.
+        ac_cv_func_uname = "yes";
+        ac_cv_func_gethostname = "yes";
+        # HAVE_SIGSET_T (posix_spawn's restore_signals) gates on these; all in libc, undetected.
         ac_cv_func_pthread_sigmask = "yes";
         ac_cv_func_sigwait = "yes";
         ac_cv_func_sigtimedwait = "yes";
         ac_cv_func_sigwaitinfo = "yes";
-        # wasix has real pthreads (the stdenv compiles -pthread -matomics -mbulk-memory + the sysroot
-        # has them); configure defaults WASI to thread *stubs* that clash with the real headers. Force
-        # real pthreads. (Do NOT use --enable-wasm-pthreads — it switches to the wasm32-wasi-threads
-        # target + memory flags that fight the wasix target/stdenv.)
+        # wasix has real pthreads; configure defaults WASI to clashing stubs. (NOT --enable-wasm-pthreads.)
         ac_cv_pthread = "yes";
-        # clang 16+ makes implicit-function-declaration / int-conversion hard errors, breaking
-        # autoconf's legacy conftests (every AC_CHECK_FUNC probe fails to compile). Relax to warn.
+        # clang 16+ makes implicit-decl/int-conversion hard errors → autoconf conftests fail; relax to warn.
         NIX_CFLAGS_COMPILE = "-Wno-implicit-function-declaration -Wno-implicit-int -Wno-int-conversion -Wno-deprecated-non-prototype";
       };
 
       patches = [
-        # ctypes.util.find_library for wasi/wasix: upstream's generic-posix branch shells out to
-        # ldconfig/gcc (no-ops on wasm → None); add a branch that resolves builtins to the main
-        # module and searches the standard dirs for a wasm dylib (a `dylink.0` module).
+        # ctypes.util.find_library: upstream's posix branch shells out to ldconfig/gcc (→ None on
+        # wasm); resolve builtins to the main module + search the dirs for a wasm dylib.
         ./patches/ctypes-find-library-wasi.patch
         # Allow --enable-wasm-dynamic-linking on WASI (upstream errors "not implemented yet").
         ./patches/enable-wasm-dynamic-linking-wasi.patch
-        # Enable subprocess on wasi: upstream's _can_fork_exec excludes wasi (→ "does not support
-        # processes"). wasi has no fork() but DOES have posix_spawn, so drop wasi from that guard, add
-        # it to _use_posix_spawn, force the posix_spawn branch in _execute_child (no fork fallback),
-        # and use posix_spawnp. Adapted from the wasix-org/cpython fork (which is sys.platform=wasix).
+        # subprocess on wasi: drop wasi from _can_fork_exec's exclusion and route it through
+        # posix_spawn (no fork). From the wasix-org/cpython fork.
         ./patches/subprocess-posix-spawn-wasi.patch
       ];
 
-      # wasix-libc DECLARES but doesn't IMPLEMENT the pty fns (grantpt/unlockpt/ptsname/openpty), so
-      # configure sets HAVE_* and cpython compiles os.grantpt/os.openpty → undefined at link.
-      # Disabling python-side is whack-a-mole (the build re-runs autoreconf+configure regenerating
-      # pyconfig.h, and Argument Clinic splits impl from the generated wrapper). Provide ENOSYS stubs
-      # and link them — survives the re-configure. TODO: implement in wasix-libc upstream.
+      # wasix-libc declares but doesn't implement the pty fns → cpython compiles os.openpty etc. →
+      # undefined at link. Link ENOSYS stubs (survives the autoreconf re-configure). TODO: upstream.
       preBuild = ''
         cat > wasix_pty_stubs.c <<'STUBS'
         #include <errno.h>
@@ -165,35 +134,52 @@
         export NIX_LDFLAGS="''${NIX_LDFLAGS:-} $PWD/wasix_pty_stubs.o"
       '';
 
-      # configure's WASI block links -lwasi-emulated-signal (wasix has real signals in libc — no such
-      # lib) and the atomic check adds -latomic (wasm atomics are intrinsic via -matomics). Both break
-      # the link; drop them from the generated Makefile.
+      # configure's WASI block links phantom -lwasi-emulated-signal / -latomic (no such libs on
+      # wasix); drop them from the Makefile. The installed sysconfig carries them too (postInstall).
       postConfigure = ''
         sed -i 's/ -lwasi-emulated-signal//g; s/ -latomic//g' Makefile
       '';
 
-      # cpython bakes ${bashNonInteractive}/bin/sh into subprocess(shell=True)'s shell — the
-      # build-platform (x86_64) bash, wrong for wasm. Point it at the wasix off-profile bash: a real
-      # wasm shell that runs under wasmer (the same one git execs), now that the subprocess patch +
-      # posix_spawn make shell=True work. A substituteInPlace, not a .patch, because both store paths
-      # are dynamic. The webc mounts it via passthru.wasmer.selfMounts (autoSelfMount only scans
-      # bin/*.wasm, and this path lives in subprocess.py).
+      # Point subprocess(shell=True)'s baked sh at the wasix off-profile bash (cpython bakes the
+      # build-platform bash). substituteInPlace, not a .patch, because both store paths are dynamic;
+      # the webc mounts it via selfMounts (it lives in a .py, which autoSelfMount doesn't scan).
       postPatch = ''
-        substituteInPlace Lib/subprocess.py \
-          --replace-fail '${final.buildPackages.bashNonInteractive}/bin/sh' '${preferredPackages.bash}/bin/sh'
+                substituteInPlace Lib/subprocess.py \
+                  --replace-fail '${final.buildPackages.bashNonInteractive}/bin/sh' '${preferredPackages.bash}/bin/sh'
+
+                # configure hardcodes py_cv_module_mmap=n/a for WASI (and regenerates from
+                # configure.ac, so patching configure doesn't stick); force the mmap module via
+                # Setup.local. wasix has mmap and pandas imports it at load.
+                echo "mmap mmapmodule.c" >> Modules/Setup.local
+
+                # the #else wasi hits defines my_getpagesize but leaves my_getallocationgranularity
+                # undefined → link error; alias it too (wasi has getpagesize).
+                substituteInPlace Modules/mmapmodule.c \
+                  --replace-fail "#define my_getpagesize getpagesize" \
+                    "#define my_getpagesize getpagesize
+        #define my_getallocationgranularity my_getpagesize"
       '';
 
-      # The interpreter installs as python3.13.wasm, so the python3.13/python3/python symlinks dangle
-      # (they expect a non-.wasm binary). Point them all at the .wasm.
+      # Point the dangling python/python3 symlinks at the installed .wasm, and scrub the phantom
+      # -lwasi-emulated-signal/-latomic (see postConfigure) from every place an extension build reads
+      # link flags (pkgconfig, _sysconfigdata, config Makefile, python-config) — else meson feeds
+      # them to wasm-ld.
       postInstall = ''
-        for n in python3.13 python3 python; do ln -sf python3.13.wasm "$out/bin/$n"; done
+        for n in python${pyVer} python3 python; do ln -sf python${pyVer}.wasm "$out/bin/$n"; done
+
+        for f in \
+          "$out"/lib/pkgconfig/python-*.pc \
+          "$out"/lib/python${pyVer}/_sysconfigdata*.py \
+          "$out"/lib/python${pyVer}/config-*/Makefile \
+          "$out"/bin/python${pyVer}-config; do
+          [ -e "$f" ] && sed -i 's/-lwasi-emulated-signal//g; s/-latomic//g' "$f"
+        done
       '';
 
       dontCheckForBrokenSymlinks = true;
 
-      # Keep cpython's reference check, but allow the build-platform bash: its dev tools
-      # (python3.13-config, the config-3.13 Makefile) carry a shell shebang patchShebangs points at
-      # the build bash — harmless (they never run under wasmer). The build-host-python guard stays on.
+      # Allow the build-platform bash in the closure: dev-tool shebangs point at it (harmless, never
+      # run under wasmer). The build-host-python guard stays.
       disallowedReferences = drf:
         builtins.filter (r: r != final.buildPackages.bashNonInteractive)
         (
@@ -202,32 +188,32 @@
           else drf
         );
 
-      # Ship at the ehpic profile, and configure the webc: autoSelfMount mounts the store paths the
-      # wasm embeds (incl. python's baked PREFIX=$out), so the stdlib at $out/lib/python3.13 is found
-      # at runtime — no manual --volume. The command is python3.13 (the bin/*.wasm).
+      # autoSelfMount mounts the store paths the wasm embeds (incl. PREFIX=$out → the stdlib).
       passthru = {
         wasix.preferredProfile = "ehpic";
         wasmer = {
           name = "python";
           entrypoint = "python3.13";
           autoSelfMount = true;
-          # subprocess(shell=True) execs ${preferredPackages.bash}/bin/sh (baked into subprocess.py,
-          # a .py autoSelfMount doesn't scan), so mount the wasix bash explicitly.
-          selfMounts = [preferredPackages.bash];
+          # autoSelfMount only scans bin/*.wasm, so paths that live in a .py / the sysconfig are
+          # missed and mounted explicitly: the wasix bash (baked into subprocess.py), and tzdata
+          # (--with-tzpath bakes it into _sysconfigdata, not the .wasm — else zoneinfo raises
+          # "No time zone found").
+          selfMounts = [preferredPackages.bash final.buildPackages.tzdata];
         };
       };
 
-      # Genuinely unsupported (not broken) off legacy-EH+PIC: ctypes/dl need PIC, which only the *pic
-      # sysroot variants ship. Mark the profile unsupported rather than broken (deep-merged: appends
-      # to meta.badPlatforms).
+      # Mark non-ehpic profiles unsupported (not broken); see isSupported.
       meta.badPlatforms = lib.optionals (!isSupported) [hp.system];
     } (prev.python3.override {
-      tzdata = null;
+      # Build-platform tzdata: the cross tzcode doesn't build (getresuid), and null broke the BUILD
+      # python's zoneinfo (babel/hypothesis suites). zoneinfo is platform-independent; the webc mounts
+      # it via selfMounts above (--with-tzpath bakes it into _sysconfigdata, not the .wasm).
+      tzdata = final.buildPackages.tzdata;
       gdbm = null;
       bashNonInteractive = final.buildPackages.bashNonInteractive;
-      # Rethread the package set onto OUR python. Without `self`, python3.pkgs.<pkg> builds against
-      # the original unfixed python313 (tzdata, no dynamic linking, …). `self = py` makes .pkgs use
-      # this override (recursive; used lazily for .pkgs only, so it doesn't rebuild the interpreter).
+      # `self = py` makes python3.pkgs.<pkg> build against THIS python, not the unfixed python313
+      # (lazy: .pkgs only, doesn't rebuild the interpreter).
       self = py;
       packageOverrides = pythonPackageOverrides;
     });
