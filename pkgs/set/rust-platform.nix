@@ -1,7 +1,6 @@
-# The Rust counterpart to set/stdenv.nix: wires cargo-wasix in as the profile's rustPlatform, so
-# wasix Rust crates build via `rustPlatform.buildRustPackage` (just `prev.X`), like C via wasixcc.
-# cargo-wasix does the wasm-opt EH→exnref pass + target-features; route `cargo build` through it by
-# handing makeRustPlatform a `cargo` shim, so cargoBuildHook drives it normally.
+# Rust counterpart to set/stdenv.nix: the profile's rustPlatform, built with a
+# `cargo` shim that routes `cargo build` through cargo-wasix (which does the
+# wasm-opt EH->exnref pass + target-features), so buildRustPackage works unchanged.
 {
   lib,
   pkgsCross,
@@ -12,8 +11,8 @@
   hostTriple = "x86_64-unknown-linux-gnu";
   rustLld = "${wasixRustToolchain}/lib/rustlib/${hostTriple}/bin/rust-lld";
 
-  # The `cargo` buildRustPackage runs, routed: `cargo build …` goes through cargo-wasix,
-  # everything else (metadata, etc.) to the real cargo.
+  # `cargo build` goes through cargo-wasix, everything else (metadata, etc.)
+  # to the real cargo.
   cargoWasixCargo = pkgsCross.buildPackages.writeShellScriptBin "cargo" ''
     if [ "''${1-}" = build ]; then
       shift
@@ -31,9 +30,9 @@
     cargo = cargoWasixCargo;
   };
 
-  # maturin rejects the wasix `dl` triple via target-lexicon. The old wasix-org/maturin fork was
-  # only a target-lexicon [patch] (its source == upstream), so instead give nixpkgs' maturin the
-  # `dl` env by patching its vendored target-lexicon.
+  # maturin rejects the wasix `dl` triple via target-lexicon. The wasix-org/maturin
+  # fork was only a target-lexicon [patch] (source == upstream), so patch nixpkgs'
+  # maturin's vendored target-lexicon instead.
   patchVendoredTargetLexiconDl = import ../lib/vendor-target-lexicon-dl.nix {
     pkgs = pkgsCross.buildPackages;
   };
@@ -47,9 +46,9 @@ in
     cargo = cargoWasixCargo;
     rustc = wasixRustToolchain;
 
-    # Re-template maturinBuildHook for the dl target + rust-lld (nixpkgs' bakes the stock
-    # wasm32-wasip1, which our toolchain has no std for). Fed nixpkgs' own hook by its placeholders
-    # (not a vendored copy) so it tracks upstream and breaks loudly on a rework.
+    # Re-template maturinBuildHook for the dl target + rust-lld (nixpkgs bakes in
+    # wasm32-wasip1, which our toolchain has no std for). Uses nixpkgs' own hook
+    # file, not a vendored copy, so it tracks upstream and breaks loudly on a rework.
     maturinBuildHook =
       pkgsCross.makeSetupHook {
         name = "maturin-build-hook.sh";
@@ -65,9 +64,10 @@ in
       }
       "${pkgsCross.path}/pkgs/build-support/rust/hooks/maturin-build-hook.sh";
 
-    # Layer wasix defaults via lib.extendMkDerivation (what buildRustPackage itself uses), not a
-    # lambda wrapper: base.buildRustPackage is a __functor SET the cross-splice/`.override` machinery
-    # reads attrs off; a plain lambda loses that → "expected a set but found a function".
+    # Wasix defaults layered via lib.extendMkDerivation, NOT a lambda wrapper:
+    # base.buildRustPackage is a __functor set whose attrs the cross-splice and
+    # .override machinery read; a plain lambda loses them ("expected a set but
+    # found a function").
     buildRustPackage = lib.extendMkDerivation {
       constructDrv = base.buildRustPackage;
       extendDrvArgs = finalAttrs: prevArgs: {
@@ -77,9 +77,9 @@ in
         # cargo-auditable would re-link via the host rustc; unneeded for wasm.
         auditable = false;
 
-        # setEnv points CARGO_TARGET_<wasm>_LINKER at the wasi clang, which can't take
-        # rustc's raw wasm-ld flags; override it with the toolchain's rust-lld (the
-        # spec's native flavor). Flows through cargoBuildHook → the shim → cargo-wasix.
+        # setEnv points CARGO_TARGET_<wasm>_LINKER at the wasi clang, which can't
+        # take rustc's raw wasm-ld flags; override it with the toolchain's rust-lld
+        # (the spec's native flavor). Flows through cargoBuildHook to cargo-wasix.
         cargoBuildFlags =
           ["--config" ''target.wasm32-wasmer-wasi.linker="${rustLld}"'']
           ++ (prevArgs.cargoBuildFlags or []);
@@ -98,9 +98,9 @@ in
             runHook postInstall
           '';
 
-        # Default the support contract to the profiles the rust toolchain built
-        # std for (the package's own declaration wins). The overlay's
-        # applyWasixMeta then marks the package unsupported elsewhere, and
+        # Default passthru.wasix.supportedProfiles to the profiles the rust
+        # toolchain built std for (a package's own declaration wins). The
+        # overlay's applyWasixMeta marks the package unsupported elsewhere;
         # preferredProfileOf derives the shipping profile (eh) from it.
         passthru =
           (prevArgs.passthru or {})

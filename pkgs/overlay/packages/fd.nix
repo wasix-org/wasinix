@@ -1,4 +1,4 @@
-# fd — a fast `find` alternative in Rust.
+# fd: a `find` alternative in Rust.
 {
   prev,
   helpers,

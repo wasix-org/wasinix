@@ -1,13 +1,8 @@
-# Build the wasix libc FROM SOURCE, one of the 5 ABI variants (see the matrix in
-# default.nix). The variant is selected by the {eh, pic, exnref} booleans, which
-# mirror build32-general.sh:wasix_libc (Makefile vs Makefile-eh, PIC=, EXNREF_EH=).
-#
-# The libc (musl-based) is independent of the LLVM *sources* — it only needs *a*
-# clang to compile — so it builds with nixpkgs' llvmPackages_21 (fast, decoupled
-# from the from-source LLVM build), with the Makefile supplying the ABI flags.
-#
-# Output is sysroot-shaped (lib/wasm32-wasi/ + include/), the same layout the
-# compiler-rt/libcxx builds consume via --sysroot and the final sysroot merges.
+# One ABI variant of the wasix libc (musl-based), built from source. The
+# {eh, pic, exnref} booleans mirror build32-general.sh:wasix_libc (Makefile vs
+# Makefile-eh, PIC=, EXNREF_EH=). It only needs *a* clang, not the fork LLVM, so
+# it builds with nixpkgs' llvmPackages_21; the Makefile supplies the ABI flags.
+# Output is sysroot-shaped: lib/wasm32-wasi/ + include/.
 {
   lib,
   stdenv,
@@ -21,18 +16,18 @@
   cargo,
   rustc,
   coreutils,
-  # cargo/x.py want a writable HOME.
+  # cargo wants a writable HOME.
   writableTmpDirAsHomeHook,
-  # wasix-libc checkout (centralized pin in default.nix) + its version label.
+  # wasix-libc checkout (pinned in default.nix) and its version label.
   src,
   version,
-  # ABI variant selectors (mirror wasix-libc's build32-general.sh).
+  # ABI variant selectors.
   eh ? false,
   pic ? false,
   exnref ? false,
 }: let
-  # build32-general.sh:wasix_libc — EH picks Makefile-eh (+ EXNREF_EH), else the
-  # base Makefile; PIC is orthogonal. `exnref` only matters when `eh`.
+  # EH picks Makefile-eh (+ EXNREF_EH), else the base Makefile; PIC is
+  # orthogonal; `exnref` only matters when `eh`.
   variant =
     if !eh
     then "off"
@@ -129,13 +124,10 @@ in
         > libc-bottom-half/headers/public/wasi/api.h
     '';
 
-    # Build the libc only (the selected variant; runtimes come from nixpkgs cross)
-    # via the stock make buildPhase: -f ${makeFile}, the variant args, parallel -j.
-    # The toolchain goes on the make COMMAND LINE, not the environment: the
-    # stdenv's cc-wrapper setup hook exports CC=gcc etc. after env attrs are
+    # Stock make buildPhase. The toolchain goes on the make COMMAND LINE, not the
+    # environment: the stdenv's cc-wrapper hook exports CC=gcc after env attrs are
     # applied, and command-line variables are the one thing that overrides it
-    # (clang here is the unwrapped nixpkgs one from nativeBuildInputs — wasix-libc
-    # drives the wasm target itself).
+    # (clang is the unwrapped nixpkgs one from nativeBuildInputs).
     makefile = makeFile;
     makeFlags =
       [

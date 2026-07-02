@@ -1,7 +1,7 @@
-# pillow for wasix. nixpkgs' pillow links codec/X11 libraries (lcms2, libavif → glib → rust,
-# libimagequant (rust), libraqm, libxcb) that don't cross-build to wasix. Drop them, leaving
-# the minimal codec set build-scripts uses (freetype + jpeg/tiff/webp/openjpeg/zlib); pillow's
-# setup.py auto-disables the features whose libs are absent.
+# nixpkgs' pillow links codec/X11 libraries (lcms2, libavif -> glib -> rust,
+# libimagequant (rust), libraqm, libxcb) that don't cross-build to wasix. Drop
+# them, leaving a minimal codec set (freetype + jpeg/tiff/webp/openjpeg/zlib);
+# pillow's setup.py auto-disables features whose libs are absent.
 {
   pyprev,
   final,

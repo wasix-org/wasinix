@@ -1,8 +1,5 @@
-# Build a Wasmer (webc) package from a wasix package derivation.
-#
-# Everything is DERIVED from the package; deviations live in the package's
-# `passthru.wasmer` (so the wasmer intent is co-located with the package, and
-# there are no separate per-program wasmer files):
+# Build a Wasmer (webc) package from a wasix package derivation. Defaults are
+# derived from the package; overrides live in its `passthru.wasmer`:
 #   name        ? meta.mainProgram or pname        (e.g. git-minimal -> "git")
 #   version     ? toSemver package.version          (3.12 -> 3.12.0)
 #   description ? meta.description
@@ -10,35 +7,31 @@
 #   owner       ? "wasinix"
 #   commands    ? null  => one command per bin/*.wasm (auto-globbed at build)
 #   commandEnv  ? {}     => { <command> = { ENV = "val"; }; } merged onto a command
-#   fs          ? {}     => semantic mounts, e.g. { "/etc/ssl" = "${cacert}/etc/ssl"; }
+#   fs          ? {}     => mounts, e.g. { "/etc/ssl" = "${cacert}/etc/ssl"; }
 #   selfMounts  ? []     => explicit store-path-at-itself mounts
 #   autoSelfMount ? false => also scan bin/*.wasm for embedded /nix/store paths
-#                            and mount each at itself (for binaries that exec
-#                            siblings / embed other wasm, e.g. git -> bash + libexec)
+#                            and mount each at itself
 {
   lib,
   pkgs,
-  # the wasmer runtime, to build each package's .webc for a dep tree.
+  # wasmer runtime, used to build each dependency's .webc.
   wasmer,
-  # makeWasmerPackage itself, to build the webc of packages this one depends on.
+  # this function itself, to build dependency webcs.
   self,
 }: {package}: let
   w = package.passthru.wasmer or {};
 
-  # Coerce a version to a valid semver MAJOR.MINOR.PATCH for the webc manifest
-  # (wasmer rejects anything else). Take the leading numeric runs, padding/
-  # truncating to three: "9.0" -> "9.0.0", "685" -> "685.0.0", and GNU
-  # patch-level versions like bash "5.3p9" -> "5.3.9".
+  # Coerce a version to semver MAJOR.MINOR.PATCH (wasmer rejects anything
+  # else): "9.0" -> "9.0.0", "685" -> "685.0.0", "5.3p9" -> "5.3.9".
   toSemver = v: let
     digits = builtins.filter (s: builtins.isString s && s != "") (builtins.split "[^0-9]+" v);
     padded = lib.take 3 (digits ++ ["0" "0" "0"]);
   in
     lib.concatStringsSep "." padded;
 
-  # Single source of truth for how a wasix package maps to its published webc
-  # identity (owner / name / semver). Used both for THIS package and for any it
-  # depends on, so a `[dependencies]` reference can't drift from how the
-  # dependency itself publishes. Deviations live in the package's passthru.wasmer.
+  # Published webc identity (owner/name/semver) of a wasix package. Used for
+  # this package and its dependencies, so a [dependencies] reference always
+  # matches how the dependency itself publishes.
   webcIdent = p: let
     pw = p.passthru.wasmer or {};
     name = pw.name or p.meta.mainProgram or p.pname or p.name;
@@ -74,11 +67,10 @@
   selfMounts = w.selfMounts or [];
   autoSelfMount = w.autoSelfMount or false;
 
-  # Other wasix packages this one execs at runtime: each becomes a webc
-  # `[dependencies]` entry. At load wasmer's use_package writes the dependency's
-  # command atoms into this package's fs at /bin/<cmd> (and /usr/bin/<cmd>), so
-  # a program that execs e.g. /bin/bash resolves it from the dependency instead
-  # of bundling its own copy — shared programs ship once.
+  # Wasix packages this one execs at runtime; each becomes a webc
+  # [dependencies] entry. At load wasmer places each dependency's command atoms
+  # at /bin/<cmd> and /usr/bin/<cmd> in this package's fs, so e.g. /bin/bash
+  # resolves from the dependency instead of a bundled copy.
   dependencies = w.dependencies or [];
   dependencyLines =
     lib.concatMapStringsSep "\n" (
@@ -88,9 +80,8 @@
     )
     dependencies;
 
-  # The webc packages this one depends on, and their transitive closure. Each
-  # carries a `.treeEntry` (its built webc at owner/name/version.webc); the shim
-  # symlinkJoins the closure into one `--include-webc` tree so the deps resolve.
+  # Dependency webcs and their transitive closure, symlinkJoined (via each
+  # .treeEntry) into one --include-webc tree for the shim.
   depWebcs = map (dep: self {package = dep;}) dependencies;
   closure = webcs: lib.unique (webcs ++ lib.concatMap (w: closure w.depWebcs) webcs);
   depTree =
@@ -126,8 +117,8 @@
       )
       commands;
 
-  # name -> JSON array of "KEY=value", consulted by the auto-glob path so a
-  # globbed command can still carry env (e.g. git's SSL_CERT_FILE).
+  # command name -> JSON array of "KEY=value", so auto-globbed commands can
+  # still carry env (e.g. git's SSL_CERT_FILE).
   commandEnvDecl = lib.concatStringsSep "\n" (
     lib.mapAttrsToList (
       cmd: env: "command_env[${lib.escapeShellArg cmd}]=${lib.escapeShellArg (builtins.toJSON (lib.mapAttrsToList (k: v: "${k}=${v}") env))}"
@@ -146,10 +137,9 @@
         metadata
       );
 
-  # `selfMounts` covers mounting a store path at itself. Writing that via
-  # `fs = { ${toString src} = src; }` is rejected by Nix (it refuses an attr
-  # name carrying a store-path reference), so the dependency rides on `src` and
-  # we strip the reference off the virt side.
+  # selfMounts mounts a store path at itself. Nix rejects attr names carrying
+  # store-path references, so the virt side gets its string context stripped
+  # while src keeps the dependency.
   fsEntries =
     (lib.mapAttrsToList (virt: src: {inherit virt src;}) fs)
     ++ (map (src: {
@@ -163,8 +153,8 @@ in
     passthru = {
       id = {inherit owner name version;};
       inherit depWebcs;
-      # This package's built webc, placed at owner/name/version.webc so a set of
-      # them symlinkJoins into an `--include-webc` tree.
+      # The built webc at owner/name/version.webc, ready to symlinkJoin into an
+      # --include-webc tree.
       treeEntry = pkgs.runCommand "webc-${owner}-${name}-${version}" {} ''
         d="$out/${owner}/${name}"
         mkdir -p "$d"

@@ -1,59 +1,54 @@
 # WASIX Package Repository
 
-A Nix flake that builds software for **WASIX** (`wasm32-wasix`) from source — the
-toolchain (an LLVM fork + libc + runtimes + sysroot), a set of cross-compiled
-packages (C/C++, Rust, Python + wheels), and their **Wasmer/webc** package outputs
-(e.g. `pkg/git/wasmer.toml` + `bin/git.wasm`).
+A Nix flake that builds software for WASIX (`wasm32-wasix`, a POSIX-flavored
+extension of WASI run by Wasmer): the toolchain (an LLVM fork, the wasix-libc
+sysroot, wasixcc, a Rust fork with cargo-wasix), cross-compiled C/C++, Rust and
+Python packages, and webc packages for the Wasmer registry.
 
 ## Quick start
 
 ```sh
-nix develop                       # dev shell with wasixcc + cargo-wasix on PATH
+nix develop                       # shell with wasixcc + cargo-wasix on PATH
 
-nix build .#wasixcc               # the wasix C/C++ toolchain (the default output)
-nix build .#wasix-sysroot         # the multi-variant from-source sysroot
+nix build .#wasixcc               # the C/C++ toolchain (also the default output)
+nix build .#wasix-sysroot         # the per-profile sysroots
 nix build .#wasix-llvm            # the LLVM fork (slow)
 
-# packages + aggregates live under legacyPackages (the system is explicit):
-nix build .#legacyPackages.x86_64-linux.shippedPackages.git         # one .wasm leaf
-nix build .#legacyPackages.x86_64-linux.shippedPackages.git.webc    # its webc package
-nix build .#legacyPackages.x86_64-linux.libraryMatrix.exnrefEh.zlib # one library
-nix build .#legacyPackages.x86_64-linux.pythonWheels.numpy          # one python wheel
-nix build .#legacyPackages.x86_64-linux.allWasmer                   # the merged registry
+# packages live under legacyPackages (the system is explicit):
+nix build .#legacyPackages.x86_64-linux.shippedPackages.git         # a CLI
+nix build .#legacyPackages.x86_64-linux.shippedPackages.git.webc    # its webc
+nix build .#legacyPackages.x86_64-linux.libraryMatrix.exnrefEh.zlib # a library
+nix build .#legacyPackages.x86_64-linux.pythonWheels.numpy          # a wheel
+nix build .#legacyPackages.x86_64-linux.allWasmer                   # all webcs
 
-nix run .#update                  # bump all source pins
+nix run .#update                  # bump the source pins
 ```
 
-CI builds every package independently via the flat `ci` job set
-(`.#legacyPackages.<system>.ci`, consumed by `nix-fast-build` in
-`scripts/ci-build.sh`); a job's dotted name is its `.#` build path.
+CI builds every package as its own job (`.#legacyPackages.<system>.ci`,
+driven by `scripts/ci-build.sh`). A job's dotted name is its build path.
 
-## How it fits together
+## Structure
 
-Five layers, bottom to top — the full story is in
-[`docs/architecture.md`](docs/architecture.md):
+1. `pkgs/toolchain/`: the toolchain, all built from source.
+2. `pkgs/profiles.nix`, `pkgs/set/`: five ABI profiles (exception-handling
+   mode x PIC); each one is a full nixpkgs cross package set with a
+   wasixcc stdenv, so dependencies within a profile resolve automatically.
+   Rust builds through the same mechanism via cargo-wasix.
+3. `pkgs/overlay/packages/`: the package definitions, each a small override
+   of its nixpkgs counterpart. Packages declare which profiles they support
+   via `passthru.wasix`.
+4. `pkgs/overlay/python-packages/`, `pkgs/python-wheels.nix`: a
+   dynamic-linking CPython plus a set of wheels with import tests.
+5. `pkgs/wasmer/`: webc packaging and behavioural tests (run under Wasmer).
 
-1. **Toolchain foundation** (`pkgs/toolchain/`) — LLVM fork, per-profile
-   from-source sysroot (libc + compiler-rt + libc++), `wasixcc`, the rust fork +
-   cargo-wasix. Built upstream-faithfully.
-2. **Profiles → cross sets** (`pkgs/profiles.nix`, `pkgs/set/`) — 5 ABI profiles
-   (`eh`, `ehpic`, `exnrefEh` (default), `exnrefEhpic`, `off`), each a full
-   nixpkgs cross set with the wasixcc stdenv injected; linked deps auto-thread.
-   Rust builds transparently through the same seam.
-3. **The overlay** (`pkgs/overlay/packages/`) — one flat dir; each entry is
-   `prev.<pkg>` + tweaks. Where a package works is declared via the
-   **`passthru.wasix` support contract** (`pkgs/lib/`).
-4. **Python** (`overlay/python-packages/`, `pkgs/python-wheels.nix`) — a
-   dynamic-linking CPython (ehpic) + a shipped wheel set with import smoke-tests.
-5. **The wasmer layer** (`pkgs/wasmer/`) — shipped CLIs become webc packages,
-   config derived from the package; behavioural tests run under wasmer.
+Details: [`docs/architecture.md`](docs/architecture.md).
 
 ## Documentation
 
-| doc | what's in it |
+| doc | contents |
 |---|---|
-| [`AGENTS.md`](AGENTS.md) | conventions & hard rules for implementing changes (agents start here) |
-| [`docs/architecture.md`](docs/architecture.md) | the layer-by-layer deep dive, support contract semantics, flake outputs |
-| [`docs/packaging.md`](docs/packaging.md) | adding a package: C library, shipped CLI/webc, Rust, Python override/wheel, tests |
-| [`docs/updating.md`](docs/updating.md) | `nix run .#update`, what each pin's regen hook automates, manual fallbacks |
-| [`WASIX-TODO.md`](WASIX-TODO.md) | catalog of runtime/toolchain quirks + their in-repo workarounds |
+| [`AGENTS.md`](AGENTS.md) | conventions and rules for making changes |
+| [`docs/architecture.md`](docs/architecture.md) | how the layers fit together |
+| [`docs/packaging.md`](docs/packaging.md) | adding packages: C, CLI/webc, Rust, Python |
+| [`docs/updating.md`](docs/updating.md) | the pin updater and per-pin notes |
+| [`WASIX-TODO.md`](WASIX-TODO.md) | known WASIX/toolchain issues and workarounds |

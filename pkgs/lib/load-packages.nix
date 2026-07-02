@@ -1,13 +1,9 @@
-# The one auto-import convention for wasix package sets. A package is either a
-# flat <dir>/<name>.nix file or a <dir>/<name>/package.nix directory (which also
-# holds its patches/tests/aux files); packages needing no tweaks at all can be
-# listed in `trivial` instead of getting a file. Non-package files/dirs are
-# ignored: default.nix (the set's own loader) and dirs without a package.nix
-# (e.g. a shared patches/ dir).
-#
-# Used by the top-level overlay AND the python packageOverrides, so the
-# convention can't drift between sets. `names` is eval-only (no callArgs), which
-# is how pkgs/default.nix enumerates the package set without instantiating one.
+# Auto-import convention for wasix package sets: a package is <dir>/<name>.nix,
+# <dir>/<name>/package.nix, or (if it needs no tweaks) a name in `trivial`.
+# default.nix and dirs without a package.nix (e.g. shared patches/) are ignored.
+# Used by both the top-level overlay and the python packageOverrides, so the
+# convention can't drift between sets. `names` is eval-only (no callArgs),
+# letting pkgs/default.nix enumerate the set without instantiating one.
 {lib}: {
   dir,
   trivial ? [],

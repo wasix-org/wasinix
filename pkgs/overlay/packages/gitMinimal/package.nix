@@ -1,9 +1,7 @@
 # Built in the default profile; execs the off-profile bash at runtime via
-# SHELL_PATH=/bin/bash, mounted there from the bash webc dependency (see the
-# wasmer block below) rather than bundled in. preferredPackages.bash (the
-# cross-profile resolution) is still the build-time bash for the dependency ref.
-# zlib-ng/openssl/curl/expat/libiconv auto-thread; gnugrep/gnused are our wasix
-# builds (git bakes their paths into scripts); gawk/coreutils are build tools.
+# SHELL_PATH=/bin/bash, mounted from the bash webc dependency (see the wasmer
+# block) rather than bundled. gnugrep/gnused are our wasix builds (git bakes
+# their paths into scripts); gawk/coreutils are build tools.
 {
   final,
   prev,
@@ -31,8 +29,8 @@ in
       (old.passthru or {})
       // {
         inherit bash;
-        # wasmer packaging deviations (name "git" comes from meta.mainProgram;
-        # version/description/license/commands are all derived):
+        # wasmer packaging (name "git" comes from meta.mainProgram; the rest
+        # is derived):
         wasmer = {
           # certs for HTTPS clones, mounted where git/openssl look for them.
           fs."/etc/ssl" = "${final.cacert}/etc/ssl";
@@ -40,14 +38,13 @@ in
             SSL_CERT_FILE = "/etc/ssl/certs/ca-bundle.crt";
             GIT_SSL_CAINFO = "/etc/ssl/certs/ca-bundle.crt";
           };
-          # Shell ships once: git execs SHELL_PATH=/bin/bash (set below), and
-          # wasmer's use_package mounts this dependency's `bash` command there at
-          # load — so bash isn't bundled into git's webc. (Versionless ref of the
-          # off-profile bash; webcRefOf derives "owner/name"@version from it.)
+          # git execs SHELL_PATH=/bin/bash (set below); wasmer's use_package
+          # mounts this dependency's `bash` command there at load, so bash is
+          # not bundled into git's webc. webcRefOf derives "owner/name"@version
+          # from the versionless ref.
           dependencies = [bash];
-          # git still execs its own libexec helpers at absolute /nix/store paths;
-          # mount whatever git.wasm embeds. (bash is no longer embedded, so this
-          # no longer pulls in the shell.)
+          # git execs its libexec helpers at absolute /nix/store paths; mount
+          # whatever git.wasm embeds (bash is no longer embedded).
           autoSelfMount = true;
         };
       };
@@ -63,9 +60,9 @@ in
         "OBJECT_CREATION_USES_RENAMES=YesPlease"
         # sysinfo() is in WASIX headers but absent from libc.a.
         "HAVE_SYSINFO="
-        # configure can't run WASM test binaries; force-enable curl + OpenSSL. curl's link flags
-        # are derived from curl-config in preConfigure (not hand-typed), so they track curl's deps
-        # (brotli/zstd/…) instead of going stale; OpenSSL is just -lssl -lcrypto.
+        # configure can't run wasm test binaries; force-enable curl + OpenSSL.
+        # curl's link flags come from curl-config in preConfigure so they track
+        # curl's deps (brotli/zstd/...); OpenSSL is just -lssl -lcrypto.
         "NO_CURL="
         "NO_OPENSSL="
         "OPENSSL_LINK=-lssl -lcrypto"

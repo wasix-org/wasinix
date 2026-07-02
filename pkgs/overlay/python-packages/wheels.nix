@@ -1,11 +1,11 @@
-# The Python wheels wasinix ships (nixpkgs python3.pkgs attr-names) — the worklist driving the
-# pythonWheels build targets + import smoke-tests. A wasix build fix (if any) lives in
-# overlay/python-packages/<attr>.nix and folds in automatically; most need none.
+# Python wheels wasinix ships (nixpkgs python3.pkgs attr names); drives the
+# pythonWheels build targets and import smoke-tests. Build fixes, when needed,
+# live in overlay/python-packages/<attr>.nix and fold in automatically.
 #
 # Each entry:
-#   attr      — python3.pkgs.<attr> (also the build-target / CI key)
-#   pyImport  — module the smoke-test imports (default: attr with '-' → '_')
-#   skipTest  — ship without an import test (rare; note why)
+#   attr      python3.pkgs.<attr> (also the build-target / CI key)
+#   pyImport  module the smoke-test imports (default: attr with '-' -> '_')
+#   skipTest  ship without an import test (rare; note why)
 [
   # ── pure-python (no C extension) ───────────────────────────────────────────────
   {attr = "six";}
@@ -115,9 +115,9 @@
     attr = "lz4";
     pyImport = "lz4.frame";
   } # lz4
-  # NOTE: pycurl deferred — its setup.py links the *native* curl's libcurl.so via
-  # curl-config (wrong file type for wasm-ld). Needs a curl-config-pointing override
-  # like gitMinimal's.
+  # NOTE: pycurl deferred: its setup.py links the native curl's libcurl.so via
+  # curl-config (wrong file type for wasm-ld). Needs a curl-config-pointing
+  # override like gitMinimal's.
   {attr = "jq";} # jq + oniguruma
   {attr = "apsw";} # sqlite
   {

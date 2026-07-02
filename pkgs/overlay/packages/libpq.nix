@@ -1,6 +1,6 @@
-# libpq via its standalone expr. openssl is deliberately the (unused) zlib —
-# --with-openssl is filtered out, openssl is filtered from buildInputs — matching
-# the legacy. zlib auto-fills; tzdata is a build-platform tool.
+# libpq via nixpkgs' standalone libpq.nix. --with-openssl is filtered out and
+# openssl is filtered from buildInputs; the openssl argument is deliberately
+# the (unused) zlib. tzdata is a build-platform tool.
 {
   final,
   prev,

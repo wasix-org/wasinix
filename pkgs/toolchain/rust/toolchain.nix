@@ -1,19 +1,15 @@
-# Build the WASIX Rust toolchain FROM SOURCE (wasix-org/rust), the upstream way:
-# `x.py build --stage 2` for the host plus the two wasix std targets, against the
-# from-source wasix-libc sysroots. Replaces the old prebuilt-tarball download.
-#
-# Mirrors wasix-org/rust's build-wasix.sh + config.toml.wasix-template + CI:
-#   - bundled LLVM is built in-tree (download-ci-llvm = false) after applying
-#     wasix-llvm.patch — that patch carries the WebAssembly lowering the fork needs,
-#     so we can't substitute a stock nixpkgs LLVM here.
-#   - the two std targets map to the EH and EH+PIC libc sysroots (wasi-root), exactly
-#     like SYSROOT_EH / SYSROOT_EHPIC in build-wasix.sh.
-#   - stage0 is the official upstream rustc/cargo pinned in src/stage0 (1.89.0); the
-#     fork can only be bootstrapped by its immediate predecessor, so nixpkgs' much
-#     newer rustc can't stand in.
-#
-# The output is the linked stage2 tree (bin/{rustc,cargo,…} + lib/rustlib/…), the
-# same layout the release tarball shipped, so cargo-wasix.nix consumes it unchanged.
+# The WASIX Rust toolchain (wasix-org/rust), built from source: `x.py build
+# --stage 2` for the host plus the wasix std targets, mirroring upstream's
+# build-wasix.sh + config.toml.wasix-template:
+#   - LLVM is built in-tree (download-ci-llvm = false) after applying
+#     wasix-llvm.patch, which carries the fork's WebAssembly lowering; a stock
+#     nixpkgs LLVM can't substitute.
+#   - the two std targets use the EH and EH+PIC libc sysroots (wasi-root), like
+#     SYSROOT_EH / SYSROOT_EHPIC in build-wasix.sh.
+#   - stage0 is the upstream rustc/cargo pinned in src/stage0 (1.89.0); the fork
+#     only bootstraps from its immediate predecessor, so nixpkgs' rustc can't stand in.
+# Output is the linked stage2 tree (bin/ + lib/rustlib/), the release-tarball
+# layout cargo-wasix.nix expects.
 {
   lib,
   stdenv,
@@ -24,7 +20,7 @@
   formats,
   rustPlatform,
   autoPatchelfHook,
-  # Sets HOME to a writable temp dir for the build (x.py/cargo write to ~/.cargo etc.).
+  # x.py/cargo need a writable HOME.
   writableTmpDirAsHomeHook,
   python3,
   cmake,
@@ -37,27 +33,20 @@
   xz,
   which,
   file,
-  # From-source wasix LLVM (clang/lld) + the EH and EH+PIC libc sysroots (wasix-next).
+  # From-source wasix LLVM (clang/lld) + the EH and EH+PIC libc sysroots.
   wasixLlvm,
   wasixSysrootEh,
   wasixSysrootEhpic,
   # Also build std for wasm32-wasmer-wasi-dl (the dynamic-linking / PIC target),
-  # needed for PIC `.so` Rust artifacts (e.g. pyo3 python extensions).
-  #
-  # An earlier note claimed the fork's cc-rs rejects the `-dl` ABI during compiler
-  # detection. That's stale: src/bootstrap pins cc-rs f2e7d1a1, which is the commit
-  # that *added* the `dl` env arm — it parses wasm32-wasmer-wasi-dl cleanly (the
-  # `wasi` OS rule then blanks the env, so bootstrap's flag-probe clang just sees
-  # --target=wasm32-wasmer-wasi). The library/ (std) workspace pins stock cc 1.2.0
-  # without that arm, but with optimized-compiler-builtins=false (below) and no
-  # profiler_builtins, the std build never invokes cc for the wasm target, so its
-  # parser is never exercised on `-dl`. Both sysroots (eh / ehpic) and the per-target
-  # WASI-SDK clang wrappers are already wired, so the `-dl` std target just builds.
+  # needed for PIC `.so` Rust artifacts (e.g. pyo3 python extensions). cc-rs
+  # compatibility is fine: src/bootstrap pins the cc-rs commit (f2e7d1a1) that
+  # added the `-dl` env arm, and the library/ (std) workspace's stock cc 1.2.0
+  # never runs for the wasm target (optimized-compiler-builtins=false below, no
+  # profiler_builtins), so its parser never sees `-dl`.
   withDynamicLinking ? true,
 }: let
   inherit (lib) optionals optionalString;
-  # version is the source of truth; the fork release tag is `v${version}`
-  # (the `+rust-1.90` suffix is part of it).
+  # The fork release tag is `v${version}` (including the `+rust-1.90` suffix).
   version = "2026-05-21.1+rust-1.90";
 
   hostTriple = "x86_64-unknown-linux-gnu";
@@ -71,8 +60,8 @@
     hash = "sha256-rQ5E50rzs7b4FTEJfS5jaLJak3LqT/3FUINvUq+BZzw=";
   };
 
-  # stage0 bootstrap compiler: the exact upstream release pinned in src/stage0
-  # (compiler_date / compiler_version). x.py would otherwise download this itself.
+  # stage0 bootstrap compiler: the upstream release pinned in src/stage0, which
+  # x.py would otherwise download itself.
   bootstrap = stdenv.mkDerivation {
     pname = "rust-bootstrap";
     version = "1.89.0";
@@ -94,12 +83,10 @@
     '';
   };
 
-  # Offline cargo registry for every workspace x.py compiles — the compiler/tools
-  # (root), std (library), the cargo tool, and bootstrap. Each is a separate cargo
-  # workspace with its own lockfile; vendor.nix vendors each and assembles the one
-  # source-replacement config that x.py's single root .cargo/config.toml hands to
-  # all of them (crates-io and the cc-rs/libc git forks vendored separately — see
-  # vendor.nix for why that split is load-bearing).
+  # Offline cargo registry for every workspace x.py compiles, each with its own
+  # lockfile. vendor.nix vendors each and produces one source-replacement config;
+  # crates-io and the cc-rs/libc git forks are vendored separately (vendor.nix
+  # explains why the split is required).
   vendor = import ./vendor.nix {inherit lib rustPlatform linkFarm formats;} (
     map (p: "${src}/${p}") [
       "Cargo.lock"
@@ -109,11 +96,9 @@
     ]
   );
 
-  # rust bootstrap's cc_detect.rs locates the C compiler for a `-wasi` target at
-  # $WASI_SDK_PATH/bin/<target>-clang[++] (see src/bootstrap/src/utils/cc_detect.rs).
-  # Upstream's build environment supplies that; we synthesize an equivalent from the
-  # from-source wasix clang + the matching per-variant sysroot (eh for the base target,
-  # ehpic + -fPIC for the -dl target).
+  # rust bootstrap's cc_detect.rs looks for a `-wasi` target's C compiler at
+  # $WASI_SDK_PATH/bin/<target>-clang[++]; synthesize that layout from the wasix
+  # clang + matching sysroot (eh for the base target, ehpic + -fPIC for -dl).
   wasiSdk = let
     mkClang = triple: sysroot: extra: ''
       for lang in clang clang++; do
@@ -140,8 +125,8 @@ in
       pkg-config
       which
       file
-      # Patch the built rustc/cargo binaries so they find zlib/libstdc++ at runtime
-      # (x.py's own linking doesn't embed a store rpath for them).
+      # The built rustc/cargo need rpaths to zlib/libstdc++ (x.py doesn't embed
+      # store rpaths).
       autoPatchelfHook
       writableTmpDirAsHomeHook
     ];
@@ -161,28 +146,25 @@ in
     enableParallelBuilding = true;
     requiredSystemFeatures = ["big-parallel"];
 
-    # Static build env (eval-time-known, so declarative here rather than `export`ed in
-    # buildPhase). HOME stays a buildPhase export — it needs $TMPDIR, a build-time path.
+    # Build env known at eval time; HOME needs $TMPDIR (a build-time path), so it
+    # can't go here.
     env = {
       # Rust bootstrap special-cases CI environments; force it off.
       GITHUB_ACTIONS = "false";
-      # Resolve deps from the vendored sources only. We don't set build.vendor (that
-      # forces cargo --frozen, which trips over the fork's slightly stale lockfiles);
-      # offline mode still bars the network but lets cargo refresh a lock in place.
+      # Offline mode, not build.vendor: vendor forces cargo --frozen, which trips
+      # over the fork's slightly stale lockfiles; offline still bars the network
+      # but lets cargo refresh a lock in place.
       CARGO_NET_OFFLINE = "true";
       # The wasix C toolchain for the std targets' C compiler detection (cc_detect.rs).
       WASI_SDK_PATH = "${wasiSdk}";
-      # x.py runs the freshly-built stage2 rustc during the build; until autoPatchelf
-      # fixes the output it has no rpath for zlib/libstdc++, so expose them here. The
-      # sandbox starts with LD_LIBRARY_PATH unset, so no need to preserve a prior value.
+      # x.py runs the freshly-built stage2 rustc, which has no rpath for
+      # zlib/libstdc++ until autoPatchelf fixes the output, so expose them here.
       LD_LIBRARY_PATH = lib.makeLibraryPath [zlib stdenv.cc.cc.lib];
     };
 
-    # patchShebangs; apply the fork's LLVM WebAssembly-lowering patch (build-wasix.sh
-    # step 1); then drop the source-replacement .cargo/config.toml (crates-io + the
-    # cc-rs/libc git forks), plus the ./vendor symlink at the root that bootstrap's
-    # vendor check insists on (resolution is via the config's absolute dirs; this is
-    # just a presence check, so the crates-io tree suffices).
+    # Apply the fork's LLVM patch (build-wasix.sh step 1), install the vendor
+    # config, and create the ./vendor symlink bootstrap's vendor check insists on
+    # (a presence check only; resolution goes through the config's absolute dirs).
     postPatch = ''
       patchShebangs src/etc x.py configure
       ( cd src/llvm-project && patch -p1 < ../../wasix-llvm.patch )
@@ -191,22 +173,17 @@ in
       ln -s ${vendor.cratesIoVendor} vendor
     '';
 
-    # Drive rust's own ./configure (the nix-idiomatic path; it generates bootstrap.toml
-    # for us). Encodes config.toml.wasix-template's intent: host + the wasix std
-    # target(s) mapped to the EH (and optionally EH+PIC) sysroots, in-tree LLVM,
-    # stage0 = our bootstrap.
+    # Drive rust's own ./configure, encoding config.toml.wasix-template: the wasix
+    # std target(s) mapped to the EH (and optionally EH+PIC) sysroots, in-tree
+    # LLVM, stage0 = our bootstrap.
     configurePlatforms = [];
     configureFlags =
       [
-        # NIGHTLY, not stable. The wasm32-wasmer-wasi target needs rustc's *unstable*
-        # wasm support (threads/atomics), and rustc only emits `--max-memory=4 GiB` for
-        # a shared (threaded) memory off the stable channel. On `stable` that flag is
-        # gated off, so the shared memory comes out non-growable (max == initial); the
-        # heap can't grow and the first allocation in std startup traps → the program
-        # _Exit(70)s before main ("Rust builds but doesn't run"). Upstream's
-        # config.toml.wasix-template leaves the channel at its non-stable default;
-        # forcing stable here was the bug. (cargo-wasix's prebuilt path always worked
-        # because its toolchain is non-stable and so emits the flag natively.)
+        # NIGHTLY, not stable: the wasix target needs rustc's unstable wasm support
+        # (threads/atomics), and only off-stable does rustc emit `--max-memory` for
+        # the shared (threaded) memory. On stable the memory comes out non-growable,
+        # the first std-startup allocation traps, and the program _Exit(70)s before
+        # main. Upstream's template also leaves the channel non-stable.
         "--release-channel=nightly"
         "--build=${hostTriple}"
         "--host=${hostTriple}"
@@ -226,10 +203,9 @@ in
         "--set=llvm.download-ci-llvm=false"
         "--set=llvm.ninja=true"
         "--set=target.wasm32-wasmer-wasi.wasi-root=${wasixSysrootEh}"
-        # Build compiler-builtins as pure Rust (no C intrinsics) for the wasm targets,
-        # the same as nixpkgs does for wasm32-unknown-unknown. Otherwise
-        # compiler_builtins' `c` feature pulls in cc-rs (the builtins themselves come
-        # from the sysroot's libclang_rt anyway).
+        # Pure-Rust compiler-builtins for the wasm targets (as nixpkgs does for
+        # wasm32-unknown-unknown); otherwise the `c` feature pulls in cc-rs, and
+        # the builtins come from the sysroot's libclang_rt anyway.
         "--set=target.wasm32-wasmer-wasi.optimized-compiler-builtins=false"
         "--disable-docs"
       ]
@@ -238,12 +214,11 @@ in
         "--set=target.wasm32-wasmer-wasi-dl.optimized-compiler-builtins=false"
       ];
 
-    # Build cargo first, then rustc + std last. Building cargo re-assembles the stage2
-    # sysroot for the host only (dropping the wasm std), so the full `x.py build --stage 2`
-    # must run after it to leave the sysroot with std for every target; cargo's own binary
-    # (stage1-tools-bin) is unaffected by the second build. We copy the stage2 tree directly
-    # rather than `x.py install`, which on a non-git source insists on building the
-    # plain-source tarball — re-vendoring src/tools/cargo, which fails offline.
+    # cargo first, full stage 2 last: building cargo re-assembles the stage2
+    # sysroot for the host only (dropping the wasm std), so the full build must
+    # come after it. We copy stage2 directly instead of `x.py install`, which on
+    # a non-git source builds the plain-source tarball, re-vendoring
+    # src/tools/cargo, which fails offline.
     buildPhase = ''
       runHook preBuild
       python3 x.py build --stage 2 cargo
@@ -251,11 +226,10 @@ in
       runHook postBuild
     '';
 
-    # stage2/ is the rustc sysroot (rustc + std + bundled rust-lld). cargo is a ToolRustc,
-    # built with the previous-stage compiler, so `--stage 2 cargo` lands its binary in
-    # stage1-tools-bin/ (verified), outside the sysroot — copy it in. stage2 also leaves
-    # lib/rustlib/{src,rustc-src}/rust as symlinks into the build's source dir, which would
-    # dangle in $out, so drop them (the release artifact omits them too).
+    # cargo is a ToolRustc, so `--stage 2 cargo` lands its binary in
+    # stage1-tools-bin/, outside the stage2 sysroot: copy it in. stage2 also
+    # leaves lib/rustlib/{src,rustc-src}/rust as symlinks into the build dir,
+    # which would dangle in $out; drop them (release artifacts omit them too).
     installPhase = ''
       runHook preInstall
       mkdir -p "$out"
@@ -265,21 +239,18 @@ in
       runHook postInstall
     '';
 
-    # Metadata so this can stand in as the `rustc` of a `makeRustPlatform` (e.g.
-    # `makeRustPlatform { rustc = wasixRustToolchain; cargo = …; }`) without tripping
-    # buildRustPackage's `rustc.targetPlatforms` lookups. Note: driving a wasix build
-    # through buildRustPackage's cross path still needs the linker handled the way
+    # Metadata so this can stand in as the `rustc` of a makeRustPlatform without
+    # tripping buildRustPackage's rustc.targetPlatforms lookups. A wasix build
+    # through buildRustPackage's cross path still needs the linker handled as
     # cargo-wasix does (rustc's self-contained wasm-ld, not the cross cc-wrapper).
     passthru = {
       targetPlatforms = lib.platforms.all;
       tier1TargetPlatforms = lib.platforms.all;
       badTargetPlatforms = [];
-      # The profiles this toolchain built std for (and can thus target). Only
-      # eh (wasm32-wasmer-wasi); the -dl/ehpic target rides on withDynamicLinking.
-      # set/rust-platform.nix injects this as the default
-      # passthru.wasix.supportedProfiles of every wasix Rust package, so the
-      # overlay marks them unsupported in the profiles rust can't target
-      # (off/exnref*).
+      # Profiles this toolchain built std for: eh, plus ehpic when
+      # withDynamicLinking. set/rust-platform.nix injects this as the default
+      # passthru.wasix.supportedProfiles of wasix Rust packages, so the overlay
+      # marks them unsupported in the profiles rust can't target (off/exnref*).
       supportedProfiles = ["eh"] ++ optionals withDynamicLinking ["ehpic"];
     };
 

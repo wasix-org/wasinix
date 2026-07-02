@@ -1,7 +1,6 @@
-# Shell env fragments for driving wasixcc outside the cross stdenv — the devShell
-# and the env-injection link test. (The cross stdenv itself, used by every
-# package, gets these via set/stdenv.nix's shim instead.) All values come from
-# the shared env contract in env.nix, so the consumers can't drift.
+# Shell env fragments for driving wasixcc outside the cross stdenv (devShell,
+# link test); the stdenv itself gets the same values via set/stdenv.nix. All
+# values come from env.nix so consumers can't drift.
 {
   pkgs,
   foundation,

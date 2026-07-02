@@ -1,6 +1,6 @@
-# brotlicffi for wasix. Two _build.py link fixes: link llvm libc++ (-lc++), not GNU -lstdc++;
-# and add brotlicommon (BrotliDefaultAlloc/FreeFunc live there — else the .so fails at import
-# with a missing GOT export).
+# Two _build.py link fixes: link llvm libc++ (-lc++), not GNU -lstdc++, and
+# add brotlicommon (BrotliDefaultAlloc/FreeFunc live there; without it the .so
+# fails at import with a missing GOT export).
 {
   pyprev,
   helpers,

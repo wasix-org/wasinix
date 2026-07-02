@@ -6,7 +6,7 @@
 }: let
   native = [pkgs.gzip];
   wasix = [wasmerPkgs.gzip];
-  # Compare the round-trip (decompressed) output, not the compressed bytes —
+  # Compare the round-trip (decompressed) output, not the compressed bytes;
   # gzip headers carry an OS byte / timestamp that legitimately differ.
   cmp = name: script:
     testLib.mkScriptComparison {

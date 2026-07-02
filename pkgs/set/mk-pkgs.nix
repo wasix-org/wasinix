@@ -1,10 +1,8 @@
-# Build one wasix profile as a full nixpkgs cross package set — the same shape as
-# nixpkgs' own `pkgsStatic`/`pkgsMusl`: re-import nixpkgs with the wasix
-# crossSystem and inject the wasixcc stdenv via `config.replaceCrossStdenv`.
-#
-# The result is a complete package set where every package builds with wasixcc
-# and linked dependencies auto-thread within the profile (no manual `self.X`).
-# The wasixOverlay layers our per-package tweaks on top.
+# Build one wasix profile as a full nixpkgs cross set (like pkgsStatic):
+# re-import nixpkgs with the wasix crossSystem, inject the wasixcc stdenv via
+# config.replaceCrossStdenv, and layer the wasix overlay of per-package tweaks
+# on top. Every package then builds with wasixcc and linked dependencies
+# resolve within the profile.
 {
   system,
   nixpkgs,
@@ -15,7 +13,7 @@ import nixpkgs {
   inherit system;
   crossSystem =
     {
-      # Shared wasm triple; the profile rides as custom platform fields
+      # Shared wasm triple; the profile is carried as custom platform fields
       # (wasmExceptions/wasmPic), which survive elaboration and are read by
       # set/stdenv.nix.
       config = "wasm32-unknown-wasi";

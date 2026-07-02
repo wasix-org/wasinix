@@ -1,33 +1,28 @@
-# libc++ / libc++abi (+ libunwind for EH variants) for wasix, built the upstream
-# way: cmake of llvm-project/runtimes driven by wasix-libc's committed
-# clang-wasix*.cmake_toolchain (the single source of truth for the ABI flags).
-# Mirrors build32-general.sh:libcxx().
-#
-# Uses the standard nixpkgs cmake hook (stdenvNoCC). Output is sysroot-shaped:
-# lib/wasm32-wasi/{libc++.a,libc++abi.a,libunwind.a,…} + include/c++/v1/.
+# libc++ / libc++abi (+ libunwind for EH variants) for wasix: cmake of
+# llvm-project/runtimes driven by wasix-libc's clang-wasix*.cmake_toolchain,
+# mirroring build32-general.sh:libcxx(). Output is sysroot-shaped:
+# lib/wasm32-wasi/{libc++.a,libc++abi.a,libunwind.a,...} + include/c++/v1/.
 {
   lib,
   stdenvNoCC,
   cmake,
   ninja,
   python3,
-  # the fork LLVM (clang/lld/llvm tools). Its `.llvm.monorepoSrc` is the monorepo
-  # checkout we build the runtimes from — same tree the toolchain came from.
+  # the fork LLVM; its .llvm.monorepoSrc is the tree we build the runtimes from
+  # (the same one the toolchain came from).
   llvm,
   version,
-  # the wasix-libc cmake toolchain file for this variant (selected in default.nix).
+  # per-variant wasix-libc cmake toolchain file (selected in default.nix).
   toolchainFile,
   # staged sysroot to build against (libc + compiler-rt, per build32).
   sysroot,
-  # compiler env + reproducible prefix-map cmake flags (shared with
-  # compiler-rt.nix, defined in ./default.nix).
+  # compiler env + prefix-map cmake flags, shared with compiler-rt.nix (see ./default.nix).
   runtimesPreConfigure,
   name,
   eh ? false,
   pic ? false,
 }: let
-  # EH variants link the LLVM unwinder, built in-tree as a runtime (build32 does
-  # the same); the monorepo has libunwind/ so there's nothing to graft.
+  # EH variants build libunwind in-tree as a runtime, as build32 does.
   runtimes =
     if eh
     then "libcxx;libcxxabi;libunwind"
@@ -90,7 +85,7 @@ in
       (lib.cmakeBool "LIBUNWIND_ENABLE_THREADS" eh)
       (lib.cmakeBool "LIBUNWIND_HAS_PTHREAD_LIB" eh)
       (lib.cmakeBool "LIBUNWIND_INSTALL_LIBRARY" eh)
-      # PIC: global-dynamic TLS comes from the patched toolchain file (sysroot.nix).
+      # PIC: global-dynamic TLS comes from the patched toolchain file (see ./default.nix).
       (lib.cmakeBool "CMAKE_POSITION_INDEPENDENT_CODE" pic)
       (lib.cmakeBool "LLVM_ENABLE_PIC" pic)
     ];

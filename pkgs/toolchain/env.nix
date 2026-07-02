@@ -1,11 +1,9 @@
-# The WASIXCC_* environment contract, as data — the single source for every
-# consumer that drives wasixcc: the wasixcc bin wrappers (wasixcc.nix), the
-# cargo-wasix wrapper (rust/cargo-wasix.nix), the stdenv shim (set/stdenv.nix)
-# and the devShell/test export fragments (dev-env.nix). Render an env attrset
-# with `exportsOf` (shell exports) or `makeWrapperFlagsOf` (--set flags).
+# The WASIXCC_* environment variables as data, shared by every consumer that
+# drives wasixcc: wasixcc.nix, rust/cargo-wasix.nix, set/stdenv.nix, dev-env.nix.
+# Render with `exportsOf` (shell exports) or `makeWrapperFlagsOf` (--set flags).
 {lib}: rec {
-  # Locations of the toolchain pieces. Install dirs, NOT bin/ — wasixcc joins
-  # bin/<tool> onto user-provided locations itself (src/args.rs get_tool_path).
+  # Toolchain locations. Install dirs, NOT bin/: wasixcc appends bin/<tool>
+  # itself (src/args.rs get_tool_path).
   locationEnv = {
     wasixLlvm,
     binaryen,
@@ -16,8 +14,8 @@
     WASIXCC_SYSROOT_PREFIX = "${wasixSysroot}";
   };
 
-  # Per-profile ABI knobs (values are what WASIXCC_WASM_EXCEPTIONS expects; the
-  # sysroot variant is selected from EH/PIC).
+  # Per-profile ABI settings; wasmExceptions is passed through verbatim, and
+  # wasixcc selects the sysroot variant from EH/PIC.
   profileEnv = {
     wasmExceptions ? null,
     pic ? false,
@@ -30,11 +28,11 @@
         else "no";
     };
 
-  # Autoconf conftest workarounds — for driving arbitrary build systems.
+  # Autoconf conftest workarounds, for driving arbitrary build systems.
   autoconfEnv = {WASIXCC_AUTOCONF_WORKAROUNDS = "yes";};
 
-  # Route a build's toolchain through wasixcc. wasm-opt stays off for plain
-  # `make`-style consumers (the stdenv runs it per-package instead).
+  # Route a build's toolchain through wasixcc. wasm-opt stays off here; the
+  # stdenv runs it per-package instead.
   ccEnv = {
     CC = "wasixcc";
     CXX = "wasix++";
@@ -45,8 +43,7 @@
     WASIXCC_RUN_WASM_OPT = "no";
   };
 
-  # Renderers. Attr order is alphabetical (attrset semantics) — fine, the vars
-  # are independent.
+  # Renderers. Attr order is alphabetical; the vars are independent, so fine.
   exportsOf = env:
     lib.concatStringsSep "\n"
     (lib.mapAttrsToList (k: v: "export ${k}=${lib.escapeShellArg v}") env);

@@ -1,6 +1,6 @@
-# crabsay — a ferris-says clone in Rust. Not in nixpkgs, so built from source via the
-# rustPlatform seam (cargo-wasix) — which then installs the .wasm and sets the eh profile
-# + meta.platforms, same as any prev.X rust CLI.
+# crabsay, a ferris-says clone in Rust. Not in nixpkgs, so built from source
+# via the wasix rustPlatform, which installs the .wasm and sets the eh profile
+# and meta.platforms like any other rust CLI here.
 {final, ...}:
 final.rustPlatform.buildRustPackage {
   pname = "crabsay";

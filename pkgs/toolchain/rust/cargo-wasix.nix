@@ -1,13 +1,6 @@
-# cargo-wasix (the upstream build driver), wrapped for nix: the raw binary is
-# built from source, and the bin/ entry point is a makeWrapper wrapper that
-# pins the whole toolchain environment (wasixcc + LLVM + binaryen + sysroot)
-# and links the from-source rust toolchain into rustup before exec'ing.
-#
-# Update instructions:
-# 1) Update `version` and `src.hash` to the target wasix-org/cargo-wasix release.
-# 2) Regenerate ./cargo-wasix.Cargo.lock (`cargo generate-lockfile`) — upstream
-#    ships none, so it can't be vendored via cargoHash/nix-update.
-# 3) Keep the wrapper env vars aligned with toolchain/dev-env.nix.
+# cargo-wasix, built from source; the bin/ wrapper pins the toolchain env
+# (wasixcc + LLVM + binaryen + sysroot) and links the from-source rust toolchain
+# into rustup before exec'ing.
 {
   lib,
   stdenvNoCC,
@@ -23,10 +16,7 @@
 }: let
   env = import ../env.nix {inherit lib;};
 
-  # version is the source of truth; the tag is `v${version}`. (The old
-  # `fromTOML (readFile "${src}/Cargo.toml")` was IFD — it forced the src to
-  # realise just to read the version.)
-  version = "0.1.28"; # past v0.1.25, which parsed wasm with walrus before wasm-opt.
+  version = "0.1.28";
   src = fetchFromGitHub {
     owner = "wasix-org";
     repo = "cargo-wasix";
@@ -37,14 +27,13 @@
   cargoWasixRaw = rustPlatform.buildRustPackage {
     pname = "cargo-wasix-raw";
     inherit version src;
-    # Upstream ships no Cargo.lock, so cargoHash/fetchCargoVendor can't be used (it
-    # hard-requires one). Carry a committed lock and vendor from it via importCargoLock.
-    # Regenerate with `cargo generate-lockfile` against a new src when bumping.
+    # Upstream ships no Cargo.lock and cargoHash/fetchCargoVendor requires one,
+    # so vendor from a committed lock via importCargoLock.
     cargoLock.lockFile = ./cargo-wasix.Cargo.lock;
 
     doCheck = false;
-    # cargoSetupHook vendors from the lock but doesn't write Cargo.lock into the (lockless)
-    # source, so the offline cargo build wouldn't find one — put it there ourselves.
+    # cargoSetupHook doesn't write Cargo.lock into the lockless source; the
+    # offline cargo build needs it there.
     prePatch = ''
       cp ${./cargo-wasix.Cargo.lock} Cargo.lock
     '';
@@ -57,9 +46,8 @@
     '';
   };
 
-  # cargo-wasix insists on resolving its toolchain through rustup; before exec,
-  # (re-)link the from-source toolchain under the names it looks for. Idempotent
-  # (remove-then-link), and quiet on the happy path.
+  # cargo-wasix resolves its toolchain through rustup; before exec, (re-)link
+  # ours under the names it looks for. Idempotent, quiet on the happy path.
   rustupLink = ''
     "${rustup}/bin/rustup" toolchain remove wasix >/dev/null 2>&1 || true
     "${rustup}/bin/rustup" toolchain link wasix "${wasixRustToolchain}" >/dev/null || exit 1

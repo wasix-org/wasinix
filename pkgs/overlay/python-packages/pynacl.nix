@@ -1,8 +1,8 @@
-# pynacl for wasix. nixpkgs builds pynacl's HTML docs via sphinxHook, which drags a
-# native sphinx → babel into the build closure; babel's test suite is broken on
-# missing tzdata in this nixpkgs pin, so the native babel fails and takes pynacl with
-# it. The docs aren't needed for the wheel — drop the hook and its `doc` output.
-# (The wheel itself is cffi-over-libsodium, both already in the overlay.)
+# nixpkgs builds pynacl's HTML docs via sphinxHook, dragging a native sphinx
+# and babel into the build closure; babel's test suite fails on missing tzdata
+# in this nixpkgs pin and takes pynacl with it. The docs aren't needed, so
+# drop the hook and its `doc` output. The wheel itself is cffi-over-libsodium,
+# both already in the overlay.
 {
   pyprev,
   lib,

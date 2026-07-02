@@ -30,10 +30,10 @@
     then wasmer
     else pkgs.wasmer;
 
-  # Host env vars forwarded into the guest (only if set, at invocation). An explicit
-  # allowlist, not wasmer's blanket --forward-host-env — which would leak sandbox
-  # noise (NIX_*, TMPDIR, PATH, …) into the wasm process. Tests needing more pass
-  # `forwardEnv`. (Values must be space-free — they ride in the flag string.)
+  # Host env vars forwarded into the guest when set. An explicit allowlist
+  # rather than --forward-host-env, which would also leak NIX_*, TMPDIR, PATH,
+  # etc. Tests needing more pass `forwardEnv`. Values must not contain spaces
+  # (they are embedded in the flag string).
   defaultForwardEnv = [
     "HOME"
     "TERM"
@@ -50,32 +50,24 @@
     "SSL_CERT_FILE"
   ];
 
-  # Wall-clock budget (seconds) for a single script invocation, enforced with
-  # coreutils `timeout`. Guards against a hung wasm process blocking until Nix's
-  # global build timeout. Wasix runs interpret/JIT the module, so they get a
-  # larger budget than native. Override per-test via the helpers' `timeout` arg.
+  # Per-invocation wall-clock timeout in seconds (coreutils `timeout`), so a
+  # hung wasm process fails fast instead of hitting Nix's global build timeout.
+  # Wasix runs are slower than native, so they get a larger budget.
   defaultTimeout = 300;
   defaultWasixTimeout = 600;
 
-  # Decide a test's verdict, honoring two optional, COMPOSABLE markers:
-  #
-  #   expectFail = "why failing is correct"   — a negative test: the EXPECTED
-  #       outcome is the program's check *failing*, so the pass/fail is inverted.
-  #   broken     = "why it's wrong + link"    — a known defect: the test does NOT
-  #       yet meet its expectation; tolerate that (don't block CI) but track it.
-  #
-  # Set together they read naturally — e.g. `expectFail "should reject bad input"`
-  # + `broken "but currently accepts it, see #42"`: a negative test whose expected
-  # failure doesn't happen yet because of a tracked bug.
-  #
-  # `expectFail` defines what "meeting expectation" means (fail, vs the default
-  # pass); `broken` says we currently don't meet it. So:
-  #   * expectation met, not broken        -> succeed
-  #   * expectation unmet, marked broken    -> log "known broken", succeed (non-blocking)
-  #   * expectation met while marked broken -> XPASS: hard-fail "remove broken marker"
+  # Decide a test's verdict from two optional, composable markers:
+  #   expectFail = reason: negative test, the check is EXPECTED to fail
+  #                (pass/fail inverted).
+  #   broken     = reason: known defect, the expectation is currently unmet;
+  #                tolerated (does not block CI) but tracked.
+  # Verdicts:
+  #   * expectation met, not broken               -> succeed
+  #   * expectation unmet, marked broken          -> log "known broken", succeed
+  #   * expectation met while marked broken       -> XPASS: hard-fail, remove marker
   #   * expectation unmet, expectFail, not broken -> XPASS: hard-fail (regression)
-  #   * unmet, unmarked                     -> failHard
-  # The XPASS hard-fails stop a stale marker from masking a future regression.
+  #   * expectation unmet, unmarked               -> failHard
+  # The XPASS hard-fails stop stale markers from masking future regressions.
   #
   # Caller runs the check and branches: `if <check>; then ${onCheckPass} else ${onCheckFail} fi`.
   #   succeed:  shell that makes the derivation succeed
@@ -118,9 +110,8 @@
 in rec {
   inherit defaultForwardEnv defaultTimeout defaultWasixTimeout;
 
-  # Reusable output normalizers for mkScriptComparison's `normalize` hook: each is
-  # an executable filtering stdin (its `native`/`wasix` arg is ignored — the same
-  # cleanup applies to both sides).
+  # Normalizers for mkScriptComparison's `normalize` hook: executables filtering
+  # stdin. The native/wasix argument is ignored (both sides get the same cleanup).
   normalizers = {
     stripAnsi = pkgs.writeShellScript "normalize-strip-ansi" ''
       ${pkgs.gnused}/bin/sed -e 's/\r//' -e 's/\x1b\[[0-9;]*m//g'
@@ -159,11 +150,9 @@ in rec {
       fi
     '';
 
-  # Run a bash script with wasmer-package stubs available by name.
-  #
-  # For each binary in wasixPkgs, generates a shim that:
-  #   1. Computes WASMER_FLAGS at invocation time ($HOME, $(pwd) resolved then)
-  #   2. Calls the original wasmer-package stub, which reads $WASMER_FLAGS
+  # Run a bash script with wasmer-package stubs available by name. Each
+  # wasixPkgs binary gets a shim that computes WASMER_FLAGS at invocation time
+  # ($HOME, $(pwd)) and calls the original stub, which reads $WASMER_FLAGS.
   #
   # nativePkgs: native tools put directly in PATH (not shimmed)
   # wasixPkgs:  wasmer-package outputs whose stubs get shims
@@ -177,7 +166,7 @@ in rec {
     wasmerArgs ? [],
     forwardEnv ? defaultForwardEnv,
     timeout ? defaultWasixTimeout,
-    # See xverdict: expectFail = negative test (failure is correct); broken =
+    # See xverdict: expectFail = negative test (failure is correct), broken =
     # known defect (non-blocking, tracked). Composable.
     expectFail ? null,
     broken ? null,
@@ -283,9 +272,9 @@ in rec {
     timeout ? defaultTimeout,
     wasixTimeout ? defaultWasixTimeout,
     normalize ? null,
-    # expectFail/broken as in xverdict — here the "check" is the output match, so
-    # the marked/expected failure is the outputs *differing*. Both sides must
-    # still run; a crashing wasix run isn't comparable — use mkWasixRun's marker.
+    # expectFail/broken as in xverdict; here the check is the output match, so
+    # the marked/expected failure is the outputs differing. Both sides must
+    # still run: for a crashing wasix run use mkWasixRun's marker instead.
     expectFail ? null,
     broken ? null,
   }: let

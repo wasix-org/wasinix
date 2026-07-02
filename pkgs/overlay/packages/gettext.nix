@@ -1,5 +1,5 @@
-# renames every installed bin/* to *.wasm (so wasmRename's single-name form
-# doesn't fit — done in postInstall).
+# Renames every installed bin/* to *.wasm in postInstall; wasmRename's
+# single-name form doesn't fit.
 {
   prev,
   helpers,

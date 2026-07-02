@@ -1,31 +1,25 @@
-# The wasmer (webc) layer. A shipped CLI IS its package (the wasm cross build),
-# carrying two passthru attrs:
-#   .webc  — the webc package, built by make-wasmer-package (which derives
-#            name/version/commands/… and reads per-package deviations from
-#            passthru.wasmer);
-#   .tests — behavioural tests discovered from the package's own
-#            overlay/packages/<name>/tests/ dir, run under wasmer via test-lib.
-# So `shippedPackages.git` is the wasm, `.git.webc` the webc package, `.git.tests`
-# its tests — everything hangs off the one package.
+# The wasmer (webc) layer. Each shipped CLI is its wasm cross build plus two
+# passthru attrs: .webc (the webc package from make-wasmer-package, configured
+# via passthru.wasmer) and .tests (tests discovered from the package's
+# overlay/packages/<name>/tests/ dir, run under wasmer via test-lib).
 {
   lib,
   pkgs,
-  # the wasmer runtime for passthru.tests (the flake input; null -> pkgs.wasmer).
+  # wasmer runtime for passthru.tests; null -> pkgs.wasmer.
   wasmer ? null,
   makeWasmerPackage,
   preferredPackages,
-  # overlay attr-names of the CLIs to ship; each resolved at its preferred profile.
+  # overlay attr names of the CLIs to ship, resolved at their preferred profile.
   shippedCommands,
-  # overlay/packages, to find each package's co-located tests/.
+  # overlay/packages dir, used to locate each package's tests/.
   packagesDir,
 }: let
   testLib = import ./test-lib.nix {inherit pkgs wasmer;};
   mkTestGroup = import ../lib/test-group.nix {inherit pkgs lib;};
 
-  # Build the test group from packages/<overlayName>/tests/ (if present): every
-  # *.nix there (except helpers.nix) auto-registers, given only the args it asks
-  # for. The group is a derivation that runs all tests AND carries each as a
-  # sub-attr, so `pkg.tests` runs everything and `pkg.tests.<t>` runs just one.
+  # Collect tests from packages/<overlayName>/tests/: every *.nix file except
+  # helpers.nix contributes tests, called with only the args it declares. The
+  # group derivation runs all tests and exposes each one as a sub-attribute.
   testGroupFor = overlayName: let
     dir = packagesDir + "/${overlayName}/tests";
   in
@@ -54,26 +48,22 @@
     in
       mkTestGroup overlayName tests;
 
-  # Augment a shipped cross package with its webc build (.webc) and co-located
-  # tests (.tests, if any). Lazy: forcing the package — or its .webc.shim — never
-  # forces .tests, so cross-package tests (git -> bash) referencing wrappedPackages
-  # don't cycle. The webc is built from the original crossPkg (same bin), so the
-  # augmented package referencing its own .webc is fine.
+  # Add .webc and (if present) .tests passthru to a cross package. Forcing the
+  # package or its .webc.shim never forces .tests, so tests referencing
+  # wrappedPackages (e.g. git tests using bash) do not cycle.
   augment = overlayName: crossPkg: let
     group = testGroupFor overlayName;
   in
     crossPkg.overrideAttrs (o: {
       passthru =
-        # drop any inherited nixpkgs passthru.tests (those are x86 tests, and would
-        # otherwise leak into our `checks`); set ours only when the package has a
-        # tests/ dir.
+        # Drop inherited nixpkgs passthru.tests (native tests that would leak
+        # into our `checks`).
         removeAttrs (o.passthru or {}) ["tests"]
         // {webc = makeWasmerPackage {package = crossPkg;};}
         // (lib.optionalAttrs (group != null) {tests = group;});
     });
 
-  # Keyed by webc/program name (gitMinimal -> "git"): the shipped commands at
-  # their preferred profile.
+  # Shipped commands keyed by webc/program name (gitMinimal -> "git").
   shippedPackages = lib.listToAttrs (map (
       n: let
         crossPkg = preferredPackages.${n};
@@ -83,8 +73,8 @@
     )
     shippedCommands);
 
-  # `.webc.shim` (run-by-name stub) per package, for cross-package tests. `.shim`
-  # doesn't touch `.tests`, so this stays lazy.
+  # Run-by-name stubs (.webc.shim) per package, for cross-package tests;
+  # accessing .shim does not force .tests.
   wrappedPackages =
     lib.mapAttrs (_: p: p.webc.shim)
     (lib.filterAttrs (_: p: p.webc ? shim) shippedPackages);

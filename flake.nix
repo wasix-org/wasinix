@@ -27,22 +27,19 @@
     ...
   }: let
     system = "x86_64-linux";
-    # wasmer runtime plus PR 6768 (offline resolution: --offline and --include-webc
-    # directory trees), vendored until it merges upstream. The patch is .rs only,
-    # so cargo deps stay cached.
+    # wasmer plus PR 6768 (offline resolution: --offline and --include-webc),
+    # vendored until it merges. The patch is .rs-only, so cargo deps stay cached.
     wasmerRuntime = wasmer.packages.${system}.wasmer.overrideAttrs (old: {
       patches = (old.patches or []) ++ [./patches/wasmer-offline-resolution.patch];
     });
     wasix = import ./pkgs {
       inherit system nixpkgs;
-      # used to run the behavioural passthru.tests on the webc packages.
+      # runs the behavioural passthru.tests on the webc packages.
       inherit wasmerRuntime;
     };
     lib = wasix.pkgs.lib;
 
-    # The from-source toolchain foundation (LLVM fork + libc + runtimes + sysroot,
-    # built the upstream way) lives in pkgs/toolchain and is exposed via
-    # wasix.foundation.
+    # From-source toolchain (LLVM fork + libc + runtimes + sysroot), see pkgs/toolchain.
     foundation = wasix.foundation;
 
     treefmtEval = treefmt-nix.lib.evalModule wasix.pkgs {
@@ -50,14 +47,10 @@
       programs.alejandra.enable = true;
     };
 
-    # nix flake check input: every package's passthru.tests — the behavioural
-    # suites on the shipped packages AND the link/stdenv/sysroot suites on the
-    # toolchain packages, all attached in pkgs/ — collected uniformly, + treefmt.
-    # Prefix the check key (wheel attr-names share a flat namespace with shipped-package
-    # names, and read clearer as `wheel-<attr>`); collectTests is the unprefixed case.
-    #
-    # tryEval per entry (like the ci flattenDrvs): one wheel that throws on eval would otherwise
-    # abort the whole `checks` output; drop it instead.
+    # Collect every package's passthru.tests into the flake checks. Wheels get a
+    # "wheel-" prefix (their attr names share the flat check namespace with the
+    # shipped packages). tryEval per entry: one attr that throws on eval would
+    # otherwise abort the whole `checks` output, so drop it instead.
     collectTestsPrefixed = prefix:
       lib.foldlAttrs (
         acc: name: pkg: let
@@ -79,21 +72,17 @@
   in {
     formatter.${system} = treefmtEval.config.build.wrapper;
 
-    # Custom outputs live here because the flake-output schema only recognises
-    # packages/checks/devShells/… — anything else at top level makes `nix flake
-    # check` warn. legacyPackages is the unchecked escape hatch.
+    # Custom outputs go under legacyPackages: unknown top-level flake outputs
+    # make `nix flake check` warn.
     legacyPackages.${system} = let
-      # ── canonical buildable trees ─────────────────────────────────────────────
-      # These attr paths ARE the `.#` build targets, and (flattened to dotted
-      # keys) the `ci` job names — so the two cannot drift. e.g.
-      #   nix build .#libraryMatrix.exnrefEh.ncurses   <->   ci."libraryMatrix.exnrefEh.ncurses"
-      #   nix build .#foundation.llvm.clang            <->   ci."foundation.llvm.clang"
+      # These attr paths are both the `.#` build targets and, flattened to dotted
+      # keys, the `ci` job names, so the two cannot drift, e.g.
+      #   nix build .#foundation.llvm.clang  <->  ci."foundation.llvm.clang"
       buildable = {
         # The flat, profile-independent compilers (the per-profile stdenv/rustPlatform
         # build envs live under the non-buildable `.#toolchain.<profile>`).
         foundation = {
-          # sysroot + wasixcc carry their suites as passthru.tests (link/stdenv/
-          # sysroot), so .#foundation.sysroot.tests / .wasixcc.tests work.
+          # sysroot + wasixcc carry their link/stdenv/sysroot suites as passthru.tests.
           inherit (wasix.toolchainTestPkgs) sysroot wasixcc;
 
           cargo-wasix = foundation.cargoWasix;
@@ -111,19 +100,14 @@
         pythonWheels = wasix.pythonWheels;
       };
 
-      # Flatten nested attrsets of derivations to {"a.b.c" = drv;} — the dotted
-      # key is the attr path. Recurse through plain attrsets, stop at a drv (but
-      # still emit a shipped package's passthru.webc, so shippedPackages.git.webc
-      # is its own job / build path).
+      # Flatten nested attrsets of derivations to {"a.b.c" = drv;}: recurse
+      # through plain attrsets, stop at a drv, but also emit a shipped package's
+      # passthru.webc as "<key>.webc".
       #
-      # nix-eval-jobs reports any leaf that throws while forcing — a meta.broken
-      # package (fd/tokei, via their passthru.wasix.broken contract) or an attr
-      # that errors on access — as a failed job, which reddens the whole CI run.
-      # (Unsupported-profile leaves never get this far: libraryMatrix filters them
-      # via the passthru.wasix contract in pkgs/default.nix.) A known-broken
-      # package shouldn't fail CI either, so leaves that don't cleanly evaluate to
-      # a buildable derivation are dropped here, before they become jobs. Only
-      # `ci` filters; the `.#` build targets keep the attrs.
+      # nix-eval-jobs reports any leaf that throws or is meta.broken (fd/tokei,
+      # via passthru.wasix.broken) as a failed job, so drop such leaves here.
+      # Only `ci` filters; the `.#` build targets keep the attrs. Unsupported-
+      # profile leaves are already filtered out of libraryMatrix in pkgs/default.nix.
       drvOk = drv: (builtins.tryEval (drv.drvPath != null && !(drv.meta.broken or false) && (drv.meta.available or true))).value;
       flattenDrvs = prefix:
         lib.concatMapAttrs (
@@ -149,7 +133,7 @@
     in
       buildable
       // {
-        # escape hatches / aggregates — reachable via `.#`, but not ci jobs.
+        # Escape hatches / aggregates: reachable via `.#`, but not ci jobs.
         # `.#toolchain.<profile>.{stdenv,rustPlatform}` is the per-profile build env.
         inherit (wasix) profileSets toolchain defaultProfileName;
         pkgsCross.wasix = wasix.pkgsCross;
@@ -183,8 +167,8 @@
     checks.${system} = flakeChecks;
 
     packages.${system} = {
-      # The toolchain + foundation, buildable directly. (The webc packages and
-      # the merged registry live under legacyPackages — see above.)
+      # The toolchain + foundation, buildable directly (the webc packages and
+      # the merged registry live under legacyPackages).
       wasixcc = foundation.wasixcc;
       cargo-wasix = foundation.cargoWasix;
       wasix-rust-toolchain = foundation.wasixRustToolchain;
@@ -192,7 +176,7 @@
 
       # From-source toolchain foundation, buildable in isolation:
       #   nix build .#wasix-libc    (fast)
-      #   nix build .#wasix-llvm    (from-source LLVM — slow)
+      #   nix build .#wasix-llvm    (from-source LLVM, slow)
       wasix-libc = foundation.libc;
       wasix-llvm = foundation.llvm.clang;
       # Runtimes built upstream-style (direct cmake of llvm-project driven by
@@ -206,12 +190,11 @@
       wasmer-bin = wasmerRuntime;
     };
 
-    # `nix run .#update` — bump the source pins of the repo's own packages (the
-    # ones with their own upstream, not the prev.X nixpkgs passthroughs) and
-    # regenerate the derived files that ride along (cargo-wasix's Cargo.lock, the
-    # rust fork's stage0 bootstrap). See scripts/update.py for the per-package
-    # backends. cargo regenerates cargo-wasix's lockfile; nix-prefetch-git hashes
-    # the rust fork's fetchSubmodules tree (src/llvm-project).
+    # `nix run .#update`: bump the source pins of the repo's own packages (not
+    # the prev.X nixpkgs passthroughs) and regenerate derived files: cargo
+    # regenerates cargo-wasix's Cargo.lock, nix-prefetch-git hashes the rust
+    # fork's fetchSubmodules tree (src/llvm-project). Per-package backends live
+    # in scripts/update.py.
     apps.${system}.update = {
       type = "app";
       program = lib.getExe (wasix.pkgs.writeShellApplication {

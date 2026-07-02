@@ -1,15 +1,12 @@
-# Per-profile test of the first-class cross stdenv (cc-wrapper around wasixcc,
-# `toolchain.stdenv`). Unlike link-test.nix (which exercises wasixcc via the
-# `commonPreConfigure` env-injection), this builds through a plain
-# `stdenv.mkDerivation` — no CC=wasixcc exports — to prove the two things the
-# stdenv path must deliver:
-#   * a working $CC/$CXX (compile + link C++ with libc++ and exceptions), and
-#   * automatic buildInputs → -I/-L/-l propagation (the consumer finds `libfoo`
-#     purely via `buildInputs`, with no hand-written include/lib paths).
-# Then it runs the result under wasmer (where the EH proposal allows).
+# Per-profile test of the cross stdenv (cc-wrapper around wasixcc,
+# `toolchain.stdenv`). Unlike link-test.nix's env-injection, this builds through
+# a plain `stdenv.mkDerivation` with no CC=wasixcc exports, proving a working
+# $CC/$CXX (C++ with libc++ and exceptions) and automatic buildInputs -> -I/-L/-l
+# propagation (libfoo is found via buildInputs alone). Then it runs the result
+# under wasmer (where the EH proposal allows).
 #
-# Takes the toolchain profile as an argument (rather than importing it) to stay
-# clear of importing pkgs/toolchain (which would cycle).
+# Takes the toolchain profile as an argument; importing pkgs/toolchain here
+# would cycle.
 {
   lib,
   wasmer,
@@ -21,12 +18,12 @@
     if eh
     then 20
     else 15;
-  # wasmer can't execute the *legacy* `try` opcode (no feature flag), so the
-  # legacy-EH profiles are link-only — same gate as link-test.nix.
+  # wasmer can't execute the *legacy* `try` opcode (no feature flag), so
+  # legacy-EH profiles are link-only; same gate as link-test.nix.
   canRun = (toolchain.wasmExceptions or "no") != "legacy";
 
-  # A tiny static library built *with this stdenv*, installed in the normal
-  # nixpkgs layout. The consumer below must discover it purely via buildInputs.
+  # A static library built with this stdenv, normal nixpkgs layout; the consumer
+  # below must find it via buildInputs alone.
   libfoo = stdenv.mkDerivation {
     name = "wasix-stdenv-libfoo-${toolchain.profileName}";
     dontUnpack = true;
@@ -51,7 +48,7 @@ in
   stdenv.mkDerivation {
     name = "wasix-stdenv-test-${toolchain.profileName}";
     dontUnpack = true;
-    # The ONLY wiring to libfoo — no -I/-L/-lfoo spelled out by hand.
+    # The ONLY wiring to libfoo: no hand-written -I/-L/-lfoo.
     buildInputs = [libfoo];
 
     buildPhase = ''

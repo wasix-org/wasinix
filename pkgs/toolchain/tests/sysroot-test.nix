@@ -1,15 +1,11 @@
-# A basic per-variant smoke test: compile a small C++ program against the variant's
-# sysroot, via its committed clang-wasix*.cmake_toolchain (the documented consumer
-# path — so the test reuses the same flag source of truth, no duplication), and
-# assert the result is a valid wasm object.
+# Per-variant smoke test: compile a small C++ program against the variant's
+# sysroot via its clang-wasix*.cmake_toolchain (reusing the same flag source) and
+# assert a valid wasm object.
 #
-# This is compile-only on purpose: linking an executable needs the builtins/crt
-# discovery that wasixcc provides (raw clang + the bare toolchain file looks for
-# compiler-rt in clang's resource dir, not the sysroot — build32 only ever builds
-# archives with it). The full link + run test arrives with the wasixcc wiring (step
-# 4). Compile-only still exercises, per variant: the fork clang, the wasix ABI
-# compile flags, the sysroot's headers (libc + libc++/v1), EH (try/catch) codegen,
-# and PIC codegen.
+# Compile-only on purpose: linking needs the builtins/crt discovery wasixcc
+# provides (raw clang + the bare toolchain file looks for compiler-rt in clang's
+# resource dir, not the sysroot); link-test.nix covers link + run. This still
+# exercises the fork clang, the ABI flags, the sysroot headers, and EH/PIC codegen.
 {
   lib,
   stdenvNoCC,
@@ -44,7 +40,7 @@ in
   stdenvNoCC.mkDerivation {
     name = "wasix-test-${name}";
     dontUnpack = true;
-    # We write + drive a tiny cmake project by hand, so skip the hook's configure.
+    # We drive cmake by hand, so skip the hook's configure.
     dontUseCmakeConfigure = true;
     nativeBuildInputs = [cmake ninja llvm.clang-unwrapped llvm.lld llvm.llvm];
 

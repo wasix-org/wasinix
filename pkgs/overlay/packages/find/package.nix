@@ -1,10 +1,10 @@
-# findutils: find + xargs. Both fork (find -exec, xargs spawns), which on WASIX
-# works only via asyncify — so each binary gets a standalone binaryen --asyncify
-# pass (the wasixcc link-time pass would also add --enable-eh and abort; this pass
-# omits it, like git). coreutils is pinned to the build platform (findutils bakes
-# its paths into scripts). Shipped as one webc with find + xargs commands
-# (entrypoint find). locate/frcode/updatedb are dropped — they need a runtime
-# database, which is useless on wasm.
+# findutils: find + xargs. Both fork (find -exec, xargs spawns), which on
+# WASIX needs asyncify, so each binary gets a standalone binaryen --asyncify
+# pass (the wasixcc link-time pass would also add --enable-eh and abort; this
+# one omits it, like git). coreutils is pinned to the build platform
+# (findutils bakes its paths into scripts). locate/frcode/updatedb are
+# dropped: they need a runtime database, useless on wasm. Ships as one webc
+# with find + xargs (entrypoint find).
 {
   final,
   prev,

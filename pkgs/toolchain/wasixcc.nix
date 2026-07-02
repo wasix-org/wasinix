@@ -1,12 +1,6 @@
-# wasixcc — the WASIX cc driver. The raw wasixccenv binary is built from source;
-# bin/ holds one makeWrapper wrapper per tool name (wasixcc, wasix++, …), each
-# exec'ing wasixccenv under that argv0 (it dispatches on the invoked name) with
-# the toolchain locations from the shared env contract (env.nix) baked in.
-#
-# Update instructions:
-# 1) Update `src.rev` and `src.hash` to the target wasix-org/wasixcc commit, and
-#    `version` to that commit's Cargo.toml package.version.
-# 2) The Cargo.lock ships in-source, so dependency changes vendor automatically.
+# wasixcc, the WASIX cc driver. The wasixccenv binary dispatches on argv0; bin/
+# holds one makeWrapper wrapper per tool name, with the toolchain locations from
+# env.nix baked in. Updated by hand (no updater target); see docs/updating.md.
 {
   lib,
   stdenvNoCC,
@@ -19,8 +13,6 @@
 }: let
   env = import ./env.nix {inherit lib;};
 
-  # Mirrors the pinned rev's Cargo.toml package.version. A literal: reading it
-  # via fromTOML(readFile "${src}/…") would be IFD, forcing the fetch at eval.
   version = "0.4.2";
   src = fetchFromGitHub {
     owner = "wasix-org";
@@ -36,14 +28,12 @@
 
     patches = [
       ./wasixcc-discard-undefined-version.patch
-      # wasixcc's no-input passthrough runs clang without pinning the linker, so
-      # clang-driven linker probes (meson's `cc -Wl,--version`) fail to find a bare
-      # `wasm-ld` off PATH. Pin it. TODO: upstream to wasix-org/wasixcc.
+      # The no-input passthrough runs clang without pinning the linker, so probes
+      # like meson's `cc -Wl,--version` fail to find wasm-ld on PATH. TODO: upstream.
       ./wasixcc-pin-linker-in-passthrough.patch
-      # wasixcc only links the C++ runtime (-lc++/-lc++abi) into executables, not
-      # shared libraries — so a C++ CPython extension's .so leaves its libc++ symbols
-      # as unresolved dynamic imports that the C interpreter can't satisfy at load.
-      # Link the C++ runtime into C++ shared libs too. TODO: upstream.
+      # wasixcc links -lc++/-lc++abi into executables only, so a C++ .so (e.g. a
+      # CPython extension) is left with unresolved libc++ imports at load time.
+      # Link the C++ runtime into shared libs too. TODO: upstream.
       ./wasixcc-link-cxx-runtime-into-shared-libs.patch
     ];
 

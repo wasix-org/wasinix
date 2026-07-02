@@ -30,11 +30,11 @@ in {
     find t -name '*.txt' | sort
   '';
 
-  # -exec and xargs fork+exec correctly (wasix-compat fork shim + asyncify) and cwd
-  # is fixed, but the command they spawn (cat/echo) isn't resolvable in the wasm
-  # runtime PATH — a runtime command-resolution gap. find -exec swallows the exec
-  # failure and still exits 0, so it surfaces as an output diff; xargs propagates it
-  # (non-zero exit). Both tracked until the runtime resolves spawned commands.
+  # -exec and xargs fork+exec correctly (wasix-compat fork shim + asyncify) and
+  # cwd is fixed, but the spawned command (cat/echo) isn't resolvable in the
+  # wasm runtime PATH. find -exec swallows the exec failure and exits 0, so it
+  # surfaces as an output diff; xargs propagates it (non-zero exit). Both
+  # tracked until the runtime resolves spawned commands.
   exec = testLib.mkScriptComparison {
     name = "find-exec";
     nativePkgs = native;

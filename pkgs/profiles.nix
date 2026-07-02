@@ -1,17 +1,13 @@
-# The canonical table of wasix ABI profiles — the single source of truth for the
-# EH/PIC variant matrix. Everything else derives from it:
-#   - set/mk-pkgs.nix merges a profile's platform fields into the crossSystem, so
-#     they ride on the platform record as `hostPlatform.wasmExceptions` /
-#     `hostPlatform.wasmPic` (readable by set/stdenv.nix and profileOf).
-#   - toolchain/sysroot/ builds one sysroot per profile from `sysrootEncodings`
-#     (the {eh, pic, exnref} booleans wasix-libc's build32-general.sh speaks).
-#   - pkgs/lib (the wasix helpers) exposes profile-set constructors and the
-#     platform -> profile-name lookup for the passthru.wasix support contract.
+# The wasix ABI profile table (EH/PIC variants). Everything derives from it:
+#   - set/mk-pkgs.nix merges the fields into the crossSystem, so they appear as
+#     hostPlatform.wasmExceptions/wasmPic (read by set/stdenv.nix and profileOf).
+#   - toolchain/sysroot/ builds one sysroot per profile from sysrootEncodings.
+#   - pkgs/lib exposes profile-set constructors and the platform -> profile lookup.
 #
-# wasmExceptions: "legacy" | "yes" (exnref) | "no" (off, asyncify) — values are
-# what wasixcc's WASIXCC_WASM_EXCEPTIONS expects. wasmPic toggles -fPIC + the PIC
-# sysroot variant. PIC is only valid with EH (see build32-general.sh), so there is
-# no off+pic profile. `off` exists for asyncify consumers (bash: fork/setjmp).
+# wasmExceptions: "legacy" | "yes" (exnref) | "no", the values wasixcc's
+# WASIXCC_WASM_EXCEPTIONS expects. wasmPic toggles -fPIC + the PIC sysroot
+# variant. PIC is only valid with EH (see build32-general.sh), so there is no
+# off+pic profile. `off` exists for asyncify consumers (bash: fork/setjmp).
 rec {
   profiles = {
     eh = {wasmExceptions = "legacy";};
@@ -30,13 +26,12 @@ rec {
 
   profileNames = builtins.attrNames profiles;
 
-  # The profile shipped binaries are built in by default, and the profile the
-  # per-profile library matrix is anchored on. A package that needs a different
-  # profile declares it via passthru.wasix (supportedProfiles/preferredProfile —
-  # see pkgs/lib); pkgs/default.nix reads that to build preferredPackages.
+  # Default profile for shipped binaries and the library matrix. A package that
+  # needs a different profile declares it via passthru.wasix (see pkgs/lib);
+  # pkgs/default.nix reads that to build preferredPackages.
   defaultProfileName = "exnrefEh";
 
-  # The {eh, pic, exnref} encoding of each profile — what wasix-libc's
+  # The {eh, pic, exnref} encoding of each profile, which wasix-libc's
   # build32-general.sh (and thus toolchain/sysroot/) selects variants by.
   sysrootEncodings =
     builtins.mapAttrs (_: p: {
@@ -46,10 +41,9 @@ rec {
     })
     profiles;
 
-  # Subdir name under the combined sysroot, matching the release tarballs
-  # (off -> sysroot, eh -> sysroot-eh, exnrefEhpic -> sysroot-exnref-ehpic, …).
-  # wasixcc points WASIXCC_SYSROOT_PREFIX at the combined sysroot and picks the
-  # subdir by EH/PIC, so this naming is fixed by wasixcc's convention.
+  # Subdir per profile under the combined sysroot (off -> sysroot, eh ->
+  # sysroot-eh, ...). The naming is fixed by wasixcc, which picks the subdir
+  # under WASIXCC_SYSROOT_PREFIX by EH/PIC; it matches the release tarballs.
   sysrootSubdirs =
     builtins.mapAttrs (
       _: enc:
@@ -71,8 +65,8 @@ rec {
     )
     sysrootEncodings;
 
-  # The profile name for a host platform (the reverse of the crossSystem merge):
-  # match the platform's wasmExceptions/wasmPic fields back against the table.
+  # Profile name for a host platform: match its wasmExceptions/wasmPic fields
+  # back against the table (the reverse of the crossSystem merge).
   profileOf = hp: let
     matches =
       builtins.filter (

@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # Build every CI package independently, emitting a JUnit report (one test case
-# per package). With a signing key present it signs and uploads each package to
-# the cache as it builds (--copy-to, with --retries for transient blips), so a
-# timeout/cancel never loses built work.
-# Without a key (e.g. fork PR) it just builds. A down cache only slows builds.
+# per package). With a signing key present, each package is signed and uploaded
+# to the cache as it builds (--copy-to), so a timeout or cancel never loses
+# built work. Without a key (e.g. fork PRs) it just builds.
 
 set -uo pipefail # no -e: keep building past failures
 
@@ -31,9 +30,9 @@ else
   echo "No signing key — building without cache upload."
 fi
 
-# --copy-to pushes only runtime closures, so build-only deps (pkg-config wrapper
-# + hooks) never cache, leaving those packages uncached next run. Capture them
-# pre-build (post-build they'd read "local", not "notBuilt"); pushed below.
+# --copy-to pushes only runtime closures, so build-only deps never reach the
+# cache. Capture the needed builds before building (afterwards they would read
+# "local", not "notBuilt"); they are pushed after the build.
 PUSH_DRVS=""
 if [ -n "${NIX_SIGNING_KEY:-}" ]; then
   PUSH_DRVS=$(
@@ -58,10 +57,10 @@ nix run nixpkgs#nix-fast-build -- \
   "${COPY_ARGS[@]}"
 status=$?
 
-# Realise + push the captured build-only deps. Realise is required: nix-fast-build
-# substitutes cached outputs instead of building, so these are never realised on
-# the runner. --keep-going so a broken heavy dep can't block the cheap hooks;
-# nix copy skips cached paths, so it's a no-op once warm.
+# Realise and push the captured build-only deps: nix-fast-build substitutes
+# cached outputs, so these may never have been realised on the runner.
+# --keep-going so one broken dep does not block the rest; nix copy skips
+# already-cached paths, so this is a no-op once warm.
 if [ -n "${NIX_SIGNING_KEY:-}" ] && [ -n "$PUSH_DRVS" ]; then
   # shellcheck disable=SC2086
   outs=$(printf '%s\n' "$PUSH_DRVS" | xargs -r nix-store --realise --keep-going 2>/dev/null)

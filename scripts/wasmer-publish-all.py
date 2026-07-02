@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 
-# Build every shipped Wasmer (webc) package and publish the ones the registry
-# doesn't already have. Each package built by make-wasmer-package.nix is a
-# self-contained webc — its runtime deps ride along as `fs`/`selfMounts` store
-# paths, not as registry `[dependencies]` — so the packages are independent and
-# publish order doesn't matter. (Older revisions topo-sorted a library/program
-# graph; that layout was dropped, so the ordering machinery went with it.)
+# Build every shipped Wasmer (webc) package and publish those the registry
+# does not already have. Packages built by make-wasmer-package.nix are
+# self-contained (runtime deps are bundled as fs/selfMounts store paths, not
+# registry [dependencies]), so publish order does not matter.
 
 import argparse
 import hashlib

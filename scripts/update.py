@@ -1,30 +1,23 @@
 #!/usr/bin/env python3
-# Auto-update the source pins of packages defined in this repo (the ones with
-# their own upstream, not the `prev.X` nixpkgs passthroughs). Three backends:
+# Auto-update the source pins of packages defined in this repo (not the
+# `prev.X` nixpkgs passthroughs). Backends:
+#   nix-update: single-`src` derivations reachable as flake attrs; discovers
+#               the version and refills hashes by building.
+#   prefetch:   bare version/rev literals with a separate hash, where
+#               nix-update's strict eval cannot introspect the package.
+#               Resolves the latest tag (or branch HEAD), prefetches the new
+#               hash, and swaps the literals in place so surrounding comments
+#               survive.
+#   flake:      `nix flake update <input>`.
+# Per-target `regen` hooks update derived files after a bump: cargo-wasix's
+# committed Cargo.lock, the rust fork's stage0 bootstrap pin (synced from its
+# src/stage0), and wasix-libc's witx submodule pins. wasixcc has no target
+# (it pins a commit, not a release; see docs/tasks/update-wasixcc.md).
 #
-#   nix-update  — for clean single-`src` derivations reachable as flake attrs.
-#                 Discovers the new version, refills src hash + cargoHash by
-#                 building. Used for crabsay.
-#
-#   prefetch    — for bare-string pins (a `version`/`rev` literal + a separate
-#                 `hash`, where nix-update's strict eval can't introspect the
-#                 package): rust-toolchain, cargo-wasix, wasix-libc, llvm,
-#                 libffi. Reads the current literal, resolves the latest
-#                 upstream tag (or branch HEAD), prefetches the new hash, and
-#                 does an exact string swap so the explanatory comments survive.
-#
-#   flake       — `nix flake update <input>`: nixpkgs, wasmer, treefmt-nix.
-#
-# Derived files ride along automatically via per-target `regen` hooks:
-# cargo-wasix's committed Cargo.lock is regenerated, the rust fork's stage0
-# bootstrap pin is synced from its src/stage0, and wasix-libc's witx submodule
-# pins are synced to the new tag. (wasixcc has no target — it pins a commit,
-# not a release; see docs/tasks/update-wasixcc.md.)
-#
-# Usage (or `nix run .#update -- …`):
+# Usage (or `nix run .#update -- ...`):
 #   scripts/update.py              # update everything
 #   scripts/update.py --only llvm wasix-libc
-#   scripts/update.py --list       # show targets + current pins, no changes
+#   scripts/update.py --list       # show targets, no changes
 
 import argparse
 import json
@@ -93,11 +86,10 @@ def prefetch_url(url):
 
 
 def prefetch_github_submodules(owner, repo, rev):
-    # `prefetch-file --unpack` hashes only the archive tarball, which omits
-    # submodules; for fetchSubmodules=true (rust pulls src/llvm-project) we must
-    # fetch the real tree. nix-prefetch-git --fetch-submodules computes exactly
-    # the hash fetchFromGitHub verifies, and (unlike `import <nixpkgs>`) needs no
-    # nixpkgs in the search path — which CI/flake eval doesn't provide.
+    # GitHub archives omit submodules, so for fetchSubmodules=true the hash
+    # must cover the full tree. nix-prefetch-git --fetch-submodules computes
+    # the hash fetchFromGitHub verifies and needs no nixpkgs in the search
+    # path (CI does not provide one).
     out = run(["nix-prefetch-git", "--quiet", "--fetch-submodules",
                "--url", f"https://github.com/{owner}/{repo}.git", "--rev", rev])
     return json.loads(out.stdout)["hash"]
@@ -110,8 +102,8 @@ def raw_file(owner, repo, rev, path):
 
 
 def fetch_source(owner, repo, rev):
-    # Download + unpack the github archive into a temp dir; returns the unpacked
-    # root. (Archives omit submodules — fine for the lockfile/stage0 regens.)
+    # Download and unpack the GitHub archive into a temp dir; returns the
+    # unpacked root. Archives omit submodules, which is fine for the regens.
     url = f"https://github.com/{owner}/{repo}/archive/{rev}.tar.gz"
     tmp = Path(tempfile.mkdtemp(prefix="wasinix-update-"))
     tarball = tmp / "src.tar.gz"
@@ -138,8 +130,8 @@ class Target:
     repo: str = ""
     kind: str = "github"  # "github" | "url"
     track: str = "release"  # "release" (latest tag) | "branch" (default-branch HEAD)
-    submodules: bool = False  # fetchSubmodules=true → hash the real tree, not the archive
-    # the literal currently holding the version/rev, captured so we can swap it
+    submodules: bool = False  # fetchSubmodules=true: hash the full tree, not the archive
+    # regex capturing the current version/rev literal, for the swap
     version_re: str = ""
     # given the chosen tag, map it to (literal-to-write, rev-for-prefetch)
     tag_to_version: object = field(default=lambda t: (t, t))
@@ -166,9 +158,9 @@ def regen_cargo_wasix_lock(t):
 
 
 def regen_rust_bootstrap(t):
-    # The rust fork's vendoring auto-tracks the src lockfiles (no FOD hash). The
-    # only pin that can drift is the stage0 bootstrap compiler, declared in the
-    # fork's src/stage0 — sync version + url + hash from there.
+    # The rust fork's vendoring auto-tracks the src lockfiles (no FOD hash), so
+    # the only pin that can drift is the stage0 bootstrap compiler; sync
+    # version, url, and hash from the fork's src/stage0.
     path = REPO / "pkgs/toolchain/rust/toolchain.nix"
     text = path.read_text()
     version = re.search(r'version = "([^"]+)"', text).group(1)
@@ -196,11 +188,10 @@ def regen_rust_bootstrap(t):
 
 
 def regen_libc_witx(t):
-    # wasix-libc carries the wasi/wasix witx specs as git submodules; libc.nix
-    # pins them separately (the header generators run from those, decoupled from
-    # the libc src). A wasix-libc bump usually moves the wasix-witx submodule
-    # (new syscalls), and a stale pin fails the libc build with undeclared
-    # __wasi_* functions — so sync each pin to the submodule rev at the new tag.
+    # libc.nix pins the wasi/wasix witx specs (git submodules of wasix-libc)
+    # separately from the libc src. A stale pin fails the libc build with
+    # undeclared __wasi_* functions, so sync each pin to the submodule rev at
+    # the new tag.
     tag = re.search(r'wasixLibcVersion = "([^"]+)"',
                     (REPO / "pkgs/toolchain/sysroot/default.nix").read_text()).group(1)
     path = REPO / "pkgs/toolchain/sysroot/libc.nix"
@@ -231,10 +222,9 @@ TARGETS = [
     Target("crabsay", "nix-update",
            attr=f"legacyPackages.{SYSTEM}.shippedPackages.crabsay",
            version="branch"),
-    # rust-toolchain: prefetch, not nix-update — its date+suffix fork tags
-    # (v2026-…+rust-1.90) defeat nix-update's version heuristic (it strips the
-    # `v` and looks up a tag that doesn't exist). fetchSubmodules pulls
-    # src/llvm-project, so the hash covers the real tree, not the archive.
+    # rust-toolchain uses prefetch: its fork tags (v2026-...+rust-1.90) defeat
+    # nix-update's version heuristic. fetchSubmodules pulls src/llvm-project,
+    # so the hash must cover the full tree, not the archive.
     Target("rust-toolchain", "prefetch",
            file="pkgs/toolchain/rust/toolchain.nix",
            owner="wasix-org", repo="rust", submodules=True,
@@ -242,10 +232,9 @@ TARGETS = [
            tag_to_version=lambda t: (t.removeprefix("v"), t),
            regen=regen_rust_bootstrap),
 
-    # The prefetch backend (no package eval) is used where nix-update's strict
-    # eval can't introspect the package: libffi sets src inside overrideAttrs
-    # (unsafeGetAttrPos returns null), and cargo-wasix derives its version from
-    # the src via IFD. Both just need a literal swap + a re-prefetched hash.
+    # prefetch is used where nix-update's strict eval cannot introspect the
+    # package: libffi sets src inside overrideAttrs, cargo-wasix derives its
+    # version from the src via IFD.
     Target("libffi", "prefetch",
            file="pkgs/overlay/packages/libffi.nix",
            owner="wasix-org", repo="libffi", track="branch",

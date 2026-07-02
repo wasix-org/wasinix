@@ -1,7 +1,5 @@
-# The wasix toolchain: the from-source compiler + sysroot (llvm.nix, sysroot/
-# and the per-component builders) plus the wrappers that drive them (wasixcc,
-# cargo-wasix, binaryen) and the shell env fragments (dev-env.nix). Everything is
-# built from source, the upstream way.
+# The wasix toolchain: LLVM fork, per-variant sysroot, and the wrappers that
+# drive them (wasixcc, cargo-wasix, binaryen). Everything is built from source.
 {pkgs}: let
   inherit (import ./llvm.nix {inherit pkgs;}) llvm llvmTree llvmVersion;
   foundation = import ./sysroot {inherit pkgs llvm llvmVersion;};
@@ -11,9 +9,8 @@
   wasixSysroot = sysroot;
 
   wasixRustToolchain = pkgs.callPackage ./rust/toolchain.nix {
-    # build-wasix.sh maps the two wasix std targets to the EH and EH+PIC libc
-    # sysroots; take them (and the clang that compiles their C) from the same
-    # from-source foundation.
+    # The two wasix std targets use the EH and EH+PIC sysroots, as in upstream
+    # build-wasix.sh.
     inherit wasixLlvm;
     wasixSysrootEh = variants.eh.sysroot;
     wasixSysrootEhpic = variants.ehpic.sysroot;
@@ -26,9 +23,9 @@
     inherit wasixRustToolchain wasixcc wasixLlvm binaryen wasixSysroot;
   };
 in {
-  # wrappers (the wasix rustPlatform is assembled in pkgs/default.nix, where the
-  # plain pkgsCross it needs is in scope, and injected into the overlay).
+  # Wrappers. The wasix rustPlatform is assembled in pkgs/default.nix, where the
+  # pkgsCross it needs is in scope.
   inherit wasixLlvm wasixSysroot wasixRustToolchain binaryen wasixcc cargoWasix;
-  # from-source foundation (compiler + per-variant sysroot components + smoke tests)
+  # Compiler, per-variant sysroot components, and smoke tests.
   inherit llvm variants sysroot tests libc compiler-rt libcxx;
 }

@@ -1,8 +1,8 @@
-# libffi for wasix (the dependency behind Python's ctypes). Upstream libffi's only wasm
-# backend (src/wasm/ffi.c) is emscripten-specific (`#include <emscripten/emscripten.h>`), so
-# it can't target wasix. The wasix-org/libffi fork adds a wasi backend (src/wasm32/ffi.c);
-# base on it. Also disable the multi-os-directory probe (runs `clang -print-multi-os-directory`,
-# which wasix-llvm's clang rejects) and the raw API (inline asm). Matches build-scripts.
+# libffi (behind Python's ctypes). Upstream's only wasm backend is
+# emscripten-specific, so base on the wasix-org/libffi fork, which adds a wasi
+# backend (src/wasm32/ffi.c). Also disable the multi-os-directory probe (runs
+# `clang -print-multi-os-directory`, rejected by wasix-llvm's clang) and the
+# raw API (inline asm).
 {
   final,
   prev,

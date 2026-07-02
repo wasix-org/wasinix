@@ -1,9 +1,6 @@
-# compiler-rt builtins for wasix, built the upstream way: cmake of
-# llvm-project/compiler-rt driven by wasix-libc's committed clang-wasix*.cmake_toolchain
-# (the single source of truth for the ABI flags). Mirrors build32-general.sh:compiler_rt().
-#
-# Uses the standard nixpkgs cmake hook (stdenvNoCC so there's no host cc to fight;
-# the toolchain file owns the compiler, we just export the tools the hook wires up).
+# compiler-rt builtins for wasix: cmake of llvm-project/compiler-rt driven by
+# wasix-libc's clang-wasix*.cmake_toolchain, mirroring build32-general.sh:compiler_rt().
+# stdenvNoCC so no host cc interferes; the toolchain file owns the compiler.
 # Output is sysroot-shaped: lib/wasm32-wasi/libclang_rt.builtins-wasm32.a.
 {
   lib,
@@ -11,16 +8,15 @@
   cmake,
   ninja,
   python3,
-  # the fork LLVM (clang/lld/llvm tools). Its `.llvm.monorepoSrc` is the monorepo
-  # checkout we build compiler-rt from — same tree the toolchain came from.
+  # the fork LLVM; its .llvm.monorepoSrc is the tree we build compiler-rt from
+  # (the same one the toolchain came from).
   llvm,
   version,
-  # the wasix-libc cmake toolchain file for this variant (selected in default.nix).
+  # per-variant wasix-libc cmake toolchain file (selected in default.nix).
   toolchainFile,
   # staged sysroot to build against (libc only, per build32).
   sysroot,
-  # compiler env + reproducible prefix-map cmake flags (shared with libcxx.nix,
-  # defined in ./default.nix).
+  # compiler env + prefix-map cmake flags, shared with libcxx.nix (see ./default.nix).
   runtimesPreConfigure,
   name,
   pic ? false,
@@ -41,7 +37,7 @@ stdenvNoCC.mkDerivation {
     llvm.llvm
   ];
 
-  # Build the compiler-rt subproject out-of-source (hook cd's into ./build).
+  # Build the compiler-rt subproject out-of-source (the hook cd's into ./build).
   cmakeDir = "../compiler-rt";
   cmakeBuildType = "RelWithDebInfo";
 

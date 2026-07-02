@@ -1,42 +1,21 @@
-# Helpers for wasix package overlay entries. Because the profile's stdenv
-# (replaceCrossStdenv) already builds with wasixcc and auto-threads linked deps,
-# these only apply per-package tweaks — no stdenv override, no dep threading.
-#
-# This is also home to the passthru.wasix support contract. Every wasix package
-# may declare (all optional):
-#
-#   passthru.wasix = {
-#     supportedProfiles = profiles.withoutPic;  # profiles it TARGETS (default: all).
-#                                               # "Unsupported" = intentionally not
-#                                               # targeted — skipped silently, never
-#                                               # a CI job. Not a defect.
-#     preferredProfile = "off";                 # profile it SHIPS at (default: the
-#                                               # repo default if supported, else the
-#                                               # first supported profile).
-#     broken = "why + link";                    # a DEFECT: should work at its
-#                                               # supported profiles but currently
-#                                               # doesn't. Visible (meta.broken), with
-#                                               # removal pressure once fixed.
-#   };
-#
-# The overlay loader derives nixpkgs meta from it in ONE place (applyWasixMeta),
-# and pkgs/default.nix consumes it via supportedIn/preferredProfileOf — nothing
-# else hand-writes meta.badPlatforms/meta.broken.
+# Helpers for wasix package files, and the passthru.wasix declaration (all
+# optional): supportedProfiles = profiles the package is built for (default
+# all; others skip it silently), preferredProfile = where it ships (default
+# exnrefEh, else first supported), broken = "reason" for a real defect.
+# applyWasixMeta below is the only writer of meta.badPlatforms/meta.broken.
 {lib}: let
   profilesCfg = import ../profiles.nix;
 in rec {
   # Merge non-empty script fragments.
   mergeScript = frags: lib.concatStringsSep "\n" (lib.filter (f: f != "" && f != null) frags);
 
-  # The auto-import convention for package sets (top-level overlay + python) —
-  # see load-packages.nix.
+  # Auto-import for package dirs (top-level overlay and python set).
   loadPackageDir = import ./load-packages.nix {inherit lib;};
 
-  # The profile name (off / eh / ehpic / exnrefEh / exnrefEhpic) for a host
-  # platform, from its wasmExceptions/wasmPic fields (see pkgs/profiles.nix).
+  # Profile name for a host platform (from wasmExceptions/wasmPic).
   inherit (profilesCfg) profileOf defaultProfileName;
 
-  # Profile-set constructors for supportedProfiles declarations.
+  # Profile subsets for supportedProfiles declarations.
   profiles = rec {
     table = profilesCfg.profiles;
     all = profilesCfg.profileNames;
@@ -45,17 +24,14 @@ in rec {
     withEh = lib.filter (n: table.${n}.wasmExceptions != "no") all;
   };
 
-  # The support contract of a derivation (or of an explicit passthru.wasix value).
   wasixMetaOf = drv: (drv.passthru or {}).wasix or {};
 
-  # Does `drv` target this profile? The eval-only predicate behind the library
-  # matrix and CI filtering — reads passthru, never meta, so it works the same
-  # before and after applyWasixMeta.
+  # Is `drv` built for this profile? Reads passthru, not meta, so the answer
+  # is the same before and after applyWasixMeta.
   supportedIn = profileName: drv:
     builtins.elem profileName ((wasixMetaOf drv).supportedProfiles or profiles.all);
 
-  # The profile a package ships at: its declared preferredProfile, else the repo
-  # default when supported, else the (alphabetically) first supported profile.
+  # Declared preferredProfile, else the repo default, else first supported.
   preferredProfileOf = drv: let
     w = wasixMetaOf drv;
     supported = w.supportedProfiles or profiles.all;
@@ -67,13 +43,10 @@ in rec {
       else builtins.head supported
     );
 
-  # Derive nixpkgs meta from the passthru.wasix contract, for the profile the
-  # package set is instantiated at. Applied uniformly by the overlay loader:
-  #   - not supported here -> meta.badPlatforms += [hp.system]. All wasix profiles
-  #     share one system string, so this only means "unsupported" INSIDE the
-  #     profile set that set it — exactly how the matrix/CI predicates read it.
-  #     Kept so nixpkgs-native tooling (availableOn etc.) sees it too.
-  #   - wasix.broken -> meta.broken (the human-readable reason stays on passthru).
+  # passthru.wasix -> meta, applied to every package by the overlay loader:
+  # unsupported here -> badPlatforms += [hp.system] (all profiles share one
+  # system string, so this is only meaningful within the setting profile set);
+  # wasix.broken -> meta.broken = true.
   applyWasixMeta = profileName: hostSystem: drv: let
     w = wasixMetaOf drv;
     unsupported = !(supportedIn profileName drv);
@@ -91,8 +64,7 @@ in rec {
           // lib.optionalAttrs broken {broken = true;};
       });
 
-  # The standard nixpkgs phases + their pre/post hooks: string attrs that must be CONCATENATED
-  # (not replaced) when merged onto a derivation. Used by extendDrv.
+  # Phases (and hooks) that extendDrv concatenates instead of replacing.
   scriptPhases = [
     "preUnpack"
     "unpackPhase"
@@ -123,14 +95,9 @@ in rec {
     "postDist"
   ];
 
-  # Merge a tweak attrset onto a derivation's `old` attrs, dispatching per-attr by KIND so callers
-  # never hand-write `(old.X or []) ++ …` / `(old.X or "") + …` boilerplate:
-  #   - a function           -> applied to the old value (the escape for filter/replace/old-dependent)
-  #   - a known script phase -> concatenated (mergeScript)
-  #   - a list               -> appended to the old list
-  #   - an attrset (env/meta/passthru) -> deep-merged recursively, so nested lists append too
-  #   - anything else (scalar / derivation / path) -> set
-  # Returns the attrs to hand to overrideAttrs.
+  # Merge tweaks onto old drv attrs by kind, for overrideAttrs: functions get
+  # the old value, phases concatenate, lists append, attrsets merge
+  # recursively, everything else replaces.
   extendDrv = old: new:
     lib.mapAttrs (
       name: val: let
@@ -154,26 +121,22 @@ in rec {
     )
     new;
 
-  # Per-package wasix tweaks. Pass any derivation attrs; each is merged onto the package by kind
-  # (see extendDrv) — phases concat, lists append, attrsets deep-merge, scalars set, and a function
-  # value receives the old value (for filters / replacements). doCheck defaults to false (cross
-  # can't run target tests; pass doCheck = true to override). No escape-hatch, no per-attr params.
+  # Apply tweaks (merged per extendDrv). doCheck defaults to false: cross
+  # builds can't run target tests.
   libTweaks = tweaks: pkg:
     pkg.overrideAttrs (old: extendDrv old ({doCheck = false;} // tweaks));
 
-  # Rename bin/<wasmName> -> <wasmName>.wasm (the convention allWasm collects),
-  # optionally asyncifying. For leaf CLIs.
+  # Rename bin/<wasmName> -> <wasmName>.wasm (what allWasm collects),
+  # optionally asyncifying. For shipped CLIs.
   wasmRename = {
     wasmName,
     asyncifyFlags ? null,
     binaryen ? null, # only needed when asyncifyFlags != null
   }: pkg:
     pkg.overrideAttrs (old: {
-      # mergeScript (not `+`): Nix strips the leading newline of an indented
-      # string, so `old + ''<nl>if…''` would glue onto a non-empty old.postInstall
-      # with no separator.
-      # Rename in whichever output holds bin/ — usually $out, but multi-output
-      # packages put it in $bin (e.g. curl's default output is "bin").
+      # mergeScript, not `+` (indented strings drop their leading newline, so
+      # `+` would glue onto old.postInstall). bin/ is usually in $out but can
+      # be in $bin (curl).
       postInstall = mergeScript [
         (old.postInstall or "")
         ''

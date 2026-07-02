@@ -1,9 +1,8 @@
-# python3 (CPython 3.13) for wasix: nixpkgs upstream cpython built under the wasix stdenv, with
-# the overlay wasix libs auto-threading in. Ref: build-scripts' wasix-org/cpython recipe.
-# tzdata is swapped to build-platform (see below); gdbm dropped (fork()). subprocess works via
-# posix_spawn (wasi has no fork) — see the patch + the cache vars below.
-#
-# ehpic only (passthru.wasix.supportedProfiles below): dl/ctypes need the PIC sysroot.
+# python3 (CPython 3.13) for wasix: nixpkgs cpython built under the wasix
+# stdenv, following the wasix-org/cpython recipe. tzdata comes from the build
+# platform (see below), gdbm is dropped (needs fork), subprocess works via
+# posix_spawn (wasi has no fork; see the patch and cache vars below).
+# ehpic only: dl/ctypes need the PIC sysroot.
 {
   final,
   prev,
@@ -12,7 +11,7 @@
   ...
 }: let
   lib = prev.lib;
-  # CPython minor version ("3.13"), so the postInstall symlink/scrub paths track a bump.
+  # CPython minor version ("3.13"); keeps the postInstall paths correct across bumps.
   pyVer = prev.python3.pythonVersion;
 
   # wasix build fixes for the python package set; see overlay/python-packages/.
@@ -22,12 +21,12 @@
 
   py =
     helpers.libTweaks {
-      # Dynamic linking → import .so C-extension wheels (via enable-wasm-dynamic-linking-wasi.patch;
-      # our ehpic module is already -pie, so no extra link flags).
+      # Enables importing .so C-extension wheels (needs enable-wasm-dynamic-linking-wasi.patch;
+      # ehpic is already -pie, so no extra link flags).
       configureFlags = ["--enable-wasm-dynamic-linking"];
 
-      # Autoconf cache vars: what the wasix-org/cpython config.site/configure patches would set,
-      # declaratively (the build re-runs autoreconf, so a fresh probe must see these).
+      # Autoconf cache vars, equivalent to the wasix-org/cpython config.site/configure
+      # patches; the build re-runs autoreconf, so fresh probes must see these.
       env = {
         # clang 21 defaults to -std=gnu23, breaking configure's "CC name" conftest.
         ac_cv_cc_name = "clang";
@@ -157,9 +156,9 @@
       '';
 
       # Point the dangling python/python3 symlinks at the installed .wasm, and scrub the phantom
-      # -lwasi-emulated-signal/-latomic (see postConfigure) from every place an extension build reads
-      # link flags (pkgconfig, _sysconfigdata, config Makefile, python-config) — else meson feeds
-      # them to wasm-ld.
+      # -lwasi-emulated-signal/-latomic (see postConfigure) from every place an extension build
+      # reads link flags (pkgconfig, _sysconfigdata, config Makefile, python-config), else meson
+      # feeds them to wasm-ld.
       postInstall = ''
         for n in python${pyVer} python3 python; do ln -sf python${pyVer}.wasm "$out/bin/$n"; done
 
@@ -184,28 +183,27 @@
           else drf
         );
 
-      # ehpic only: PIC is required for dl — the wasix sysroot ships dlfcn.h + dlopen/dlsym only
-      # in its PIC variants, and ctypes + dynamic extension loading need them. Other profiles are
-      # genuinely unsupported (not broken); this also makes ehpic the preferred (shipping)
-      # profile. autoSelfMount mounts the store paths the wasm embeds (incl. PREFIX=$out → the
-      # stdlib).
+      # ehpic only: the wasix sysroot ships dlfcn.h + dlopen/dlsym only in its PIC variants,
+      # which ctypes and dynamic extension loading need. Other profiles are unsupported (not
+      # broken); this also makes ehpic the preferred profile. autoSelfMount mounts the store
+      # paths the wasm embeds (including PREFIX=$out, the stdlib).
       passthru = {
         wasix.supportedProfiles = ["ehpic"];
         wasmer = {
           name = "python";
           entrypoint = "python3.13";
           autoSelfMount = true;
-          # autoSelfMount only scans bin/*.wasm, so paths that live in a .py / the sysconfig are
-          # missed and mounted explicitly: the wasix bash (baked into subprocess.py), and tzdata
-          # (--with-tzpath bakes it into _sysconfigdata, not the .wasm — else zoneinfo raises
+          # autoSelfMount only scans bin/*.wasm, so paths living in a .py or the sysconfig are
+          # mounted explicitly: the wasix bash (baked into subprocess.py) and tzdata
+          # (--with-tzpath bakes it into _sysconfigdata, not the .wasm; else zoneinfo raises
           # "No time zone found").
           selfMounts = [preferredPackages.bash final.buildPackages.tzdata];
         };
       };
     } (prev.python3.override {
-      # Build-platform tzdata: the cross tzcode doesn't build (getresuid), and null broke the BUILD
-      # python's zoneinfo (babel/hypothesis suites). zoneinfo is platform-independent; the webc mounts
-      # it via selfMounts above (--with-tzpath bakes it into _sysconfigdata, not the .wasm).
+      # Build-platform tzdata: the cross tzcode doesn't build (getresuid), and null broke the
+      # BUILD python's zoneinfo (babel/hypothesis suites). zoneinfo is platform-independent;
+      # the webc mounts it via selfMounts above.
       tzdata = final.buildPackages.tzdata;
       gdbm = null;
       bashNonInteractive = final.buildPackages.bashNonInteractive;

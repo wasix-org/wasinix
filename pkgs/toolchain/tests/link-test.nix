@@ -1,11 +1,9 @@
-# End-to-end link + run test for one toolchain profile: compile + link a small C++
-# program with that profile's wasixcc (which selects the matching sysroot variant
-# and handles builtins/crt/EH/PIC linking), then *run* it under wasmer. The program
-# returns 0 only when its result is correct, so a clean wasmer exit validates the
-# whole chain — compile → link → execute — against the from-source toolchain+sysroot.
+# End-to-end test for one profile: compile + link a small C++ program with that
+# profile's wasixcc, then run it under wasmer. The program returns 0 only when
+# its result is correct, so a clean exit validates compile, link, and execute.
 #
-# Takes the toolchain profile as an argument (rather than importing it), so it stays
-# free of importing pkgs/toolchain (which would cycle).
+# Takes the toolchain profile as an argument; importing pkgs/toolchain here
+# would cycle.
 {
   lib,
   stdenvNoCC,
@@ -17,9 +15,8 @@
     if eh
     then 20
     else 15;
-  # wasmer runs the exnref EH proposal (and no-EH) by default, but can't execute
-  # the *legacy* `try` opcode (no feature flag for it), so the legacy-EH profiles
-  # are link-only — the toolchain/sysroot are still fully exercised by the link.
+  # wasmer can't execute the *legacy* `try` opcode (no feature flag for it), so
+  # legacy-EH profiles are link-only; the link still exercises toolchain + sysroot.
   canRun = (toolchain.wasmExceptions or "no") != "legacy";
 in
   stdenvNoCC.mkDerivation {

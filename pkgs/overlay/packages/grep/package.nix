@@ -1,6 +1,6 @@
-# gnugrep with -P (PCRE). pcre2 auto-threads to our overlay's pcre2 (the one that
-# builds) through the package-set fixpoint — just don't null it out. runtimeShell-
-# Package null (don't pull a target-side shell). gnulib-tests stripped (not portable).
+# gnugrep with -P (PCRE). pcre2 resolves to the overlay's pcre2 through the
+# fixpoint, so don't null it out. runtimeShellPackage null (no target-side
+# shell); gnulib-tests stripped (not portable).
 {
   prev,
   helpers,

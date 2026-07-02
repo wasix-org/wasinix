@@ -1,11 +1,8 @@
-# A hello-world sanity test for the from-source wasix Rust toolchain: build a tiny crate
-# through the wasix `rustPlatform.buildRustPackage` — the real consumer path, the same
-# machinery sd/crabsay use — and run the result under wasmer, asserting it prints.
-#
-# This is the Rust analogue of stdenv-test.nix / link-test.nix. Running under wasmer is
-# the actual check: a Rust wasm whose shared memory came out non-growable exits 70 at std
-# startup, which fails the run here — so this guards directly against the stable-channel
-# regression (see WASIX-TODO "Rust", and [[wasix-rust-nightly-channel]] in memory).
+# Hello-world test for the wasix Rust toolchain: build a tiny crate through the
+# wasix `rustPlatform.buildRustPackage` (the same path real packages use) and run
+# it under wasmer, asserting it prints. Running is the real check: a Rust wasm
+# with non-growable shared memory exits 70 at std startup, so this guards against
+# the stable-channel regression (see the release-channel note in rust/toolchain.nix).
 {
   lib,
   runCommand,
@@ -52,8 +49,8 @@ in
     inherit src;
     cargoLock.lockFile = "${src}/Cargo.lock";
 
-    # Build hello.wasm, then run it under wasmer as the check (build phase is the stock
-    # cargo build for wasm32-wasmer-wasi; only the install/run is bespoke).
+    # Stock cargo build for wasm32-wasmer-wasi; the install phase runs the wasm
+    # under wasmer as the check.
     installPhase = ''
       runHook preInstall
       wasm=target/wasm32-wasmer-wasi/release/hello.wasm

@@ -1,8 +1,7 @@
 {
   system,
   nixpkgs,
-  # the wasmer runtime used to run behavioural tests (passthru.tests on the webc
-  # packages). A flake-level input; null falls back to nixpkgs' wasmer.
+  # wasmer runtime for the behavioural tests; null falls back to nixpkgs' wasmer.
   wasmerRuntime ? null,
 }: let
   pkgs = import nixpkgs {inherit system;};
@@ -10,17 +9,17 @@
   wasixLib = import ./lib {inherit lib;};
   foundation = import ./toolchain {inherit pkgs;};
 
-  # The single wasix cross target. Kept here (rather than derived from a
-  # toolchain profile) so pkgsCross can be built *before* the profiles — each
-  # profile now consumes pkgsCross to build its first-class cc-wrapper stdenv.
+  # The wasix cross target. Defined here (not derived from a profile) so
+  # pkgsCross can be built before the profiles, which consume it for their
+  # cc-wrapper stdenvs.
   crossSystem = {
     # Keep nixpkgs parser-compatible triple and pin WASIX tooling explicitly.
     config = "wasm32-unknown-wasi";
     useLLVM = true;
     isWasix = true;
-    # Rust builds for the fork's target; pkgsCross hosts the wasix rustPlatform
-    # below (its default stdenv has a real libc, which the cargo hooks' tooling
-    # needs — unlike the libc-less wasixcc profile stdenv). C/C++ ignore this.
+    # Rust builds for the fork's target. pkgsCross hosts the wasix rustPlatform:
+    # its default stdenv has a real libc, which the cargo hooks' tooling needs
+    # (the wasixcc profile stdenv is libc-less). C/C++ ignore this field.
     rust.rustcTarget = "wasm32-wasmer-wasi";
   };
   pkgsCross = import nixpkgs {
@@ -28,11 +27,9 @@
     config.allowUnsupportedSystem = true;
   };
 
-  # The wasix rustPlatform: makeRustPlatform with a `cargo` that routes the build through
-  # cargo-wasix, so buildRustPackage drives it normally. The Rust counterpart to
-  # set/stdenv.nix — injected into each profile set by the overlay so wasix Rust crates
-  # build transparently via rustPlatform.buildRustPackage, the way C/C++ build via the
-  # wasixcc stdenv.
+  # makeRustPlatform with a cargo shim that routes builds through cargo-wasix.
+  # The overlay injects it into each profile set so Rust crates build via
+  # rustPlatform.buildRustPackage, like C/C++ do via the wasixcc stdenv.
   wasixRustPlatform = import ./set/rust-platform.nix {
     inherit lib pkgsCross;
     inherit (foundation) wasixRustToolchain cargoWasix;
@@ -43,8 +40,8 @@
 
   # ── Per-profile cross package sets ───────────────────────────────────────────
   # Each profile is a full nixpkgs cross set (like pkgsStatic) with the wasixcc
-  # stdenv injected via replaceCrossStdenv + the wasix overlay; linked deps
-  # auto-thread within a profile.
+  # stdenv injected via replaceCrossStdenv plus the wasix overlay; linked deps
+  # resolve within the profile.
   profilesCfg = import ./profiles.nix;
   mkWasixStdenv = import ./set/stdenv.nix {inherit lib foundation;};
 
@@ -56,12 +53,10 @@
       trivial = import ./overlay/trivial.nix;
     }).names;
 
-  # preferredPackages: each package at its preferred profile. A package declares
-  # that via its passthru.wasix contract (preferredProfile, or derived from
-  # supportedProfiles — see pkgs/lib), read here WITHOUT building it (passthru is
-  # eval-only). Reached for non-linked / runtime-invoked deps so the consumer
-  # gets the dep at the profile it supports (e.g. bash -> off), regardless of the
-  # consumer's profile. Lazy / mutually recursive with profileSets.
+  # Each package at its preferred profile, read eval-only from passthru.wasix
+  # (preferredProfile, or derived from supportedProfiles; see pkgs/lib). Used
+  # for non-linked, runtime-invoked deps so e.g. bash resolves at "off"
+  # regardless of the consumer's profile. Lazy, mutually recursive with profileSets.
   preferredProfileOf = name:
     wasixLib.preferredProfileOf profileSets.${defaultProfileName}.${name};
   preferredPackages = lib.genAttrs wasixPkgNames (name: profileSets.${preferredProfileOf name}.${name});
@@ -73,11 +68,10 @@
   profileSets = lib.mapAttrs (_: spec: mkWasixPkgs spec) profilesCfg.profiles;
 
   # ── toolchain: per-profile build environments ────────────────────────────────
-  # `foundation` holds the flat, profile-independent compilers; this is the
-  # per-profile layer built from them: each profile's `stdenv` (C/C++, the wasixcc
-  # cc-wrapper from profileSets) and `rustPlatform` (Rust — its packages are only
-  # supported on the profiles the rust toolchain targets, see pkgs/lib), plus the
-  # dev-env shell fragments + ABI metadata the link/stdenv tests and devShell need.
+  # Per-profile layer over the profile-independent `foundation`: each profile's
+  # stdenv and rustPlatform (from profileSets), plus the dev-env shell fragments
+  # and ABI metadata the link/stdenv tests and devShell need. Rust is only
+  # supported on the profiles its toolchain targets (see pkgs/lib).
   devEnvFor = import ./toolchain/dev-env.nix {inherit pkgs foundation;};
   toolchain =
     lib.mapAttrs (
@@ -97,11 +91,10 @@
     profilesCfg.profiles;
   defaultToolchain = toolchain.${defaultProfileName};
 
-  # Toolchain tests, attached as passthru.tests on the toolchain packages so the
-  # flake collects them uniformly with the shipped-package tests. Built here (not
-  # in the flake) because they need the per-profile toolchain + the wasmer
-  # runtime: sysroot smoke tests (per ABI variant) on `sysroot`, and per-profile
-  # end-to-end link + stdenv tests on `wasixcc`.
+  # Toolchain tests as passthru.tests, so the flake collects them like the
+  # shipped-package tests: per-variant sysroot smoke tests on `sysroot`,
+  # per-profile link + stdenv tests on `wasixcc`. Built here (not in the flake)
+  # because they need the per-profile toolchain and the wasmer runtime.
   mkTestGroup = import ./lib/test-group.nix {inherit pkgs lib;};
   toolchainTestPkgs = {
     sysroot = foundation.sysroot.overrideAttrs (o: {
@@ -127,9 +120,9 @@
           );
         };
     });
-    # Rust analogue of the link/stdenv tests: build a hello-world through the wasix
-    # rustPlatform (the real consumer path) and run it under wasmer. Single test (Rust
-    # only targets the eh variant), attached to the rust toolchain package.
+    # Rust analogue of the link/stdenv tests: build hello-world through the wasix
+    # rustPlatform and run it under wasmer. Single test, since Rust only targets
+    # the eh variant.
     rust = foundation.wasixRustToolchain.overrideAttrs (o: {
       passthru =
         (o.passthru or {})
@@ -145,26 +138,24 @@
   };
 
   # ── package matrices for CI / consumers ──────────────────────────────────────
-  # The non-shipped overlay packages are the libraries; build them across the
-  # non-off profiles (off has no PIC sysroot — it exists only for bash & its
-  # linked readline/ncurses, drawn on demand via preferredPackages).
+  # Libraries (the non-shipped overlay packages), built across the non-off
+  # profiles: off has no PIC sysroot and exists only for bash and its linked
+  # readline/ncurses, reached via preferredPackages.
   nonOffProfileNames = lib.filter (n: n != "off") (lib.attrNames profilesCfg.profiles);
   libPkgNames = lib.filter (n: !(lib.elem n shippedCommands)) wasixPkgNames;
   libraryMatrix =
     lib.genAttrs nonOffProfileNames
     (profile:
-      # Skip libs that don't target this profile (passthru.wasix.supportedProfiles,
-      # e.g. snappy at the PIC profiles, rust packages outside eh/ehpic). The
-      # predicate reads passthru rather than meta.availableOn so libs with merely
-      # unix-only meta.platforms (which still build here under
-      # allowUnsupportedSystem) aren't dropped.
+      # Skip libs whose passthru.wasix.supportedProfiles excludes this profile
+      # (snappy at PIC profiles, rust packages outside eh/ehpic). Reads passthru,
+      # not meta.availableOn, so libs with merely unix-only meta.platforms
+      # (which still build under allowUnsupportedSystem) aren't dropped.
         lib.filterAttrs
         (_: wasixLib.supportedIn profile)
         (lib.genAttrs libPkgNames (n: profileSets.${profile}.${n})));
 
-  # The CLIs shipped as webc packages, by overlay attr-name. Each is built at its
-  # preferred profile (bash -> off, rest -> default) via preferredPackages, then
-  # the wasmer layer augments it with .webc (the webc package) + .tests.
+  # CLIs shipped as webc packages, by overlay attr name. Built at their preferred
+  # profile (bash -> off, rest -> default); the wasmer layer adds .webc + .tests.
   shippedCommands = [
     "grep"
     "sed"
@@ -186,10 +177,9 @@
   ];
 
   # ── python wheels ────────────────────────────────────────────────────────────
-  # The shipped Python wheels (overlay/python-packages/wheels.nix), each the wasm
-  # cross build of python3.pkgs.<attr> carrying an import smoke-test. cpython only
-  # builds at the ehpic profile (ctypes/dl need PIC), so the wheels are anchored
-  # there too — a single set, not a per-profile matrix.
+  # Shipped Python wheels (overlay/python-packages/wheels.nix): wasm cross builds
+  # of python3.pkgs.<attr>, each with an import smoke-test. cpython only builds
+  # at ehpic (ctypes/dl need PIC), so the wheels are a single set anchored there.
   pythonWheels = import ./python-wheels.nix {
     inherit pkgs lib mkTestGroup;
     python3 = profileSets.ehpic.python3;

@@ -55,10 +55,9 @@
       fi
     '';
 
-  # The shipped wheel: python3.pkgs.<attr> augmented with .tests (only passthru is
-  # touched, so the build is the same store path as python3.pkgs.<attr>). Drop any
-  # inherited nixpkgs passthru.tests (those are x86 test suites that would leak into
-  # our `checks`).
+  # python3.pkgs.<attr> with .tests added (passthru-only, so the store path is
+  # unchanged). Inherited nixpkgs passthru.tests are dropped: they are x86 test
+  # suites that would leak into `checks`.
   mkWheel = e:
     (python3.pkgs.${e.attr}).overrideAttrs (o: {
       passthru =

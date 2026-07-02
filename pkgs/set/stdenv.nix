@@ -1,23 +1,21 @@
-# The first-class wasix cross stdenv: a nixpkgs cc-wrapper around wasixcc.
+# The wasix cross stdenv: a nixpkgs cc-wrapper around wasixcc. Used as
+# config.replaceCrossStdenv when importing nixpkgs for a wasix profile (see
+# set/mk-pkgs.nix), so every package in the set builds with wasixcc. The
+# profile (EH/PIC) is read from hostPlatform.wasmExceptions/wasmPic, carried
+# by the crossSystem custom fields.
 #
-# Used as `config.replaceCrossStdenv` when importing nixpkgs for a wasix profile
-# (see set/mk-pkgs.nix), so EVERY package in that set builds with wasixcc and
-# its dependencies auto-thread within the profile. The profile (EH/PIC) is read
-# from the platform record (hostPlatform.wasmExceptions/wasmPic), which the
-# crossSystem custom fields carry.
-#
-# The six load-bearing knobs (the base is the `baseStdenv` the replaceCrossStdenv
+# Required cc-wrapper settings (base = the baseStdenv the replaceCrossStdenv
 # hook hands us):
-#   (1) cc = shim, NOT isClang   — else the wrapper injects -nostdlibinc, hiding
-#                                  the sysroot includes.
-#   (2) libc=null/noLibc on cc AND bintools — skip libc/crt/sysroot injection,
-#       keep buildInputs -> -I/-L propagation (an assert couples the two).
-#   (3) libcxx = null            — else -cxx-isystem <nixpkgs libc++> leaks in.
-#   (4) extraBuildCommands="" + nixSupport={} — drop the cross stdenv's inherited
+#   (1) cc = shim, NOT isClang: else the wrapper injects -nostdlibinc, hiding
+#       the sysroot includes.
+#   (2) libc=null/noLibc on cc AND bintools: skips libc/crt/sysroot injection,
+#       keeps buildInputs -> -I/-L propagation (an assert couples the two).
+#   (3) libcxx = null: else -cxx-isystem <nixpkgs libc++> leaks in.
+#   (4) extraBuildCommands="" + nixSupport={}: drop the cross stdenv's inherited
 #       cc-flags (nixpkgs' own compiler-rt, -fno-exceptions).
 #   (5) defaultHardeningFlags=[] on bintools + hardeningUnsupportedFlags on the
-#       shim — wasm rejects -fzero-call-used-regs / -fstack-clash-protection.
-# The shim execs wasixcc/wasix++ with this profile's WASIXCC_* knobs.
+#       shim: wasm rejects -fzero-call-used-regs / -fstack-clash-protection.
+# The shim execs wasixcc/wasix++ with this profile's WASIXCC_* env.
 {
   lib,
   foundation,
@@ -29,8 +27,8 @@
   exceptions = hp.wasmExceptions or null;
   pic = hp.wasmPic or false;
 
-  # Profile knobs + build-system workarounds from the shared env contract
-  # (toolchain locations aren't needed: the wasixcc bin wrappers bake them).
+  # Profile knobs + build-system workarounds from toolchain/env.nix (toolchain
+  # locations aren't needed: the wasixcc bin wrappers bake them in).
   # DISCARD_UNSUPPORTED_FLAGS is shim-specific: nixpkgs' generic flags include
   # ones wasm rejects.
   env = import ../toolchain/env.nix {inherit lib;};

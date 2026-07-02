@@ -23,8 +23,8 @@
     propagatedBuildInputs = f;
   };
 
-  # Strip sphinxHook (+ extraNames, e.g. "myst") and its `doc` output — the docs pass isn't
-  # needed and its tools don't cross-build.
+  # Strip sphinxHook (+ extraNames, e.g. "myst") and its `doc` output; the docs
+  # pass isn't needed and its tools don't cross-build.
   dropSphinxDocs = extraNames: {
     nativeBuildInputs = xs:
       lib.filter (x: let n = lib.getName x; in !(lib.any (m: lib.hasInfix m n) (["sphinx"] ++ extraNames))) (

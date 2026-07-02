@@ -1,8 +1,7 @@
-# Off-EH profile only: bash needs fork() (-> asyncify) and setjmp/longjmp, which
-# collide under Wasm-EH but coexist in off-EH. It declares supportedProfiles =
-# ["off"] (so preferredPackages.bash resolves to the off build) and still
-# evaluates in any profile — but BUILDING it under Wasm-EH fails loudly in
-# preConfigure. readline auto-threads (final.readline, the off-profile build).
+# Off-EH profile only: bash needs fork() (via asyncify) and setjmp/longjmp,
+# which collide under Wasm-EH but coexist in off-EH. It evaluates in any
+# profile but refuses to build outside off-EH (preConfigure below). readline
+# auto-threads in as the off-profile build.
 {
   final,
   prev,
@@ -33,12 +32,11 @@ in
         --replace-fail '#if defined (TIOCGWINSZ) || defined (HAVE_TCGETWINSIZE)' \
                        '#if (defined (TIOCGWINSZ) || defined (HAVE_TCGETWINSIZE)) && !defined(__wasi__)'
     '';
-    # passthru.wasix.* = our build-graph metadata (vs passthru.wasmer.* = webc
-    # config); the support contract makes off the only (hence preferred) profile,
-    # so preferredPackages.bash resolves to the off build.
+    # passthru.wasix.* is build-graph metadata (passthru.wasmer.* is webc
+    # config). off is the only, hence preferred, profile, so
+    # preferredPackages.bash resolves to the off build.
     passthru.wasix.supportedProfiles = ["off"];
-    # Eval everywhere (so the contract is readable without building), but refuse
-    # to BUILD outside off-EH.
+    # Evaluates in any profile, but refuses to build outside off-EH.
     preConfigure = final.lib.optionalString (!offProfile) ''
       echo 'bash must be built in the off-EH profile (wasmExceptions = "no")' >&2
       exit 1
@@ -62,9 +60,9 @@ in
     preBuild = ''
       makeFlagsArray+=("CC_FOR_BUILD=${final.buildPackages.stdenv.cc}/bin/cc -std=gnu17")
     '';
-    # Ship as *.wasm (already asyncified at link, above) + repoint bin/sh at the
-    # renamed wasm. (Custom ordering — not the wasmRename helper — because sh must
-    # be repointed after the rename.)
+    # Ship as *.wasm (already asyncified at link) and repoint bin/sh at the
+    # renamed wasm. Done by hand, not via the wasmRename helper, because sh
+    # must be repointed after the rename.
     postInstall = ''
       if [ -f "$out/bin/bash" ]; then
         mv "$out/bin/bash" "$out/bin/bash.wasm"

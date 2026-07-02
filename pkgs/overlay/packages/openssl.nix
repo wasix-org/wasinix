@@ -1,5 +1,5 @@
 # nixpkgs openssl has no wasm Configure target, so drive Configure by hand
-# (linux-generic32, static-only). Ported from the legacy libraries/openssl.nix.
+# (linux-generic32, static-only).
 {
   final,
   prev,

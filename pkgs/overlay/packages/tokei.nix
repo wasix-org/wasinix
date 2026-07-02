@@ -1,4 +1,4 @@
-# tokei — code statistics in Rust.
+# tokei: code statistics in Rust.
 {
   prev,
   helpers,
