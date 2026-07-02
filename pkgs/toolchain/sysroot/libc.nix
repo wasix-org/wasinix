@@ -21,6 +21,8 @@
   cargo,
   rustc,
   coreutils,
+  # cargo/x.py want a writable HOME.
+  writableTmpDirAsHomeHook,
   # wasix-libc checkout (centralized pin in default.nix) + its version label.
   src,
   version,
@@ -94,10 +96,16 @@ in
       cargo
       rustc
       coreutils
+      writableTmpDirAsHomeHook
     ];
 
-    CARGO_NET_OFFLINE = "true";
     dontConfigure = true;
+
+    env = {
+      CARGO_NET_OFFLINE = "true";
+      TARGET_ARCH = "wasm32";
+      TARGET_OS = "wasix";
+    };
 
     postPatch = ''
       rm -rf tools/wasi-headers/WASI tools/wasix-headers/WASI
@@ -108,19 +116,8 @@ in
       cp ${cargoConfig} .cargo/config.toml
     '';
 
-    buildPhase = ''
-      runHook preBuild
-
-      export HOME="$TMPDIR"
-      export TARGET_ARCH=wasm32
-      export TARGET_OS=wasix
-      export CC=clang
-      export CXX=clang++
-      export NM=llvm-nm
-      export AR=llvm-ar
-      export RANLIB=llvm-ranlib
-
-      # Regenerate the wasi/wasix api headers (build32-general.sh:prepare_wasix_libc).
+    # Regenerate the wasi/wasix api headers (build32-general.sh:prepare_wasix_libc).
+    preBuild = ''
       cargo run --manifest-path tools/wasix-headers/Cargo.toml generate-libc
       cp -f libc-bottom-half/headers/public/wasi/api.h libc-bottom-half/headers/public/wasi/api_wasix.h
       sed -i 's|__wasi__|__wasix__|g; s|__wasi_api_h|__wasix_api_h|g' \
@@ -130,9 +127,29 @@ in
       cp -f libc-bottom-half/headers/public/wasi/api.h libc-bottom-half/headers/public/wasi/api_wasi.h
       printf '#include "api_wasi.h"\n#include "api_wasix.h"\n#include "api_poly.h"\n' \
         > libc-bottom-half/headers/public/wasi/api.h
+    '';
 
-      # Build the libc only (the ${variant} variant; runtimes come from nixpkgs cross).
-      make CHECK_SYMBOLS=no -j"''${NIX_BUILD_CORES:-4}" -f ${makeFile} ${lib.escapeShellArgs makeVariantArgs}
+    # Build the libc only (the selected variant; runtimes come from nixpkgs cross)
+    # via the stock make buildPhase: -f ${makeFile}, the variant args, parallel -j.
+    # The toolchain goes on the make COMMAND LINE, not the environment: the
+    # stdenv's cc-wrapper setup hook exports CC=gcc etc. after env attrs are
+    # applied, and command-line variables are the one thing that overrides it
+    # (clang here is the unwrapped nixpkgs one from nativeBuildInputs — wasix-libc
+    # drives the wasm target itself).
+    makefile = makeFile;
+    makeFlags =
+      [
+        "CHECK_SYMBOLS=no"
+        "CC=clang"
+        "CXX=clang++"
+        "NM=llvm-nm"
+        "AR=llvm-ar"
+        "RANLIB=llvm-ranlib"
+      ]
+      ++ makeVariantArgs;
+    enableParallelBuilding = true;
+
+    postBuild = ''
       rm -f sysroot/lib/wasm32-wasi/libc-printscan-long-double.a
 
       # Generate libc.imports — the list of host-imported (undefined) wasix symbols
@@ -143,8 +160,6 @@ in
       llvm-nm --undefined-only "$lib_dir"/libc.a "$lib_dir"/libc-*.a "$lib_dir"/*.o 2>/dev/null \
         | grep ' U ' | sed 's/.* U //' | LC_ALL=C sort | uniq \
         | grep '^_*imported_wasix_' > "$lib_dir/libc.imports" || true
-
-      runHook postBuild
     '';
 
     installPhase = ''

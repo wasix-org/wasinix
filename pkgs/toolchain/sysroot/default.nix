@@ -46,7 +46,10 @@
   # staged build-sysroots and the final per-variant sysroot. Mirrors build32's
   # sysroot(), which rsyncs whole component outputs together (each component's own
   # build guarantees its contents). --no-preserve=mode so the read-only store files
-  # become writable and later components can merge into the same dirs.
+  # become writable and later components can merge into the same dirs. A real
+  # copy, not symlinkJoin: the components install into the SAME directories
+  # (lib/wasm32-wasi, include/) and cmake/clang resolve --sysroot paths through
+  # the tree, so we want one plain dir, not a forest of store symlinks.
   mkSysroot = sname: comps:
     pkgs.runCommand "wasix-sysroot-${sname}" {} (
       ''
@@ -57,6 +60,22 @@
       '')
       comps
     );
+
+  # Shared by the compiler-rt/libcxx cmake builds (stdenvNoCC has no compiler
+  # env; the hook wires CMAKE_{C,CXX}_COMPILER/AR/… from these, and the variant
+  # toolchain file reads $CC). Reproducible debug info via prefix-map (mirrors
+  # build32) — computed in preConfigure because it needs the source path ($PWD,
+  # before the cmake hook descends into ./build) and clang's resource dir.
+  runtimesPreConfigure = ''
+    export CC=clang CXX=clang++ NM=llvm-nm AR=llvm-ar RANLIB=llvm-ranlib STRIP=llvm-strip
+    resource_dir="$(clang -print-resource-dir)"
+    prefix_map="-ffile-prefix-map=$PWD=. -ffile-prefix-map=$resource_dir=/clang"
+    cmakeFlagsArray+=(
+      "-DCMAKE_C_FLAGS=$prefix_map"
+      "-DCMAKE_CXX_FLAGS=$prefix_map"
+      "-DCMAKE_ASM_FLAGS=$prefix_map"
+    )
+  '';
 
   mkVariant = {
     name,
@@ -76,14 +95,14 @@
     # source comes from `llvm` — the same tree the toolchain was built from, so
     # they can't drift.
     compiler-rt = pkgs.callPackage ./compiler-rt.nix {
-      inherit name pic llvm toolchainFile;
+      inherit name pic llvm toolchainFile runtimesPreConfigure;
       version = llvmVersion;
       sysroot = mkSysroot "${name}-rtdeps" [libc];
     };
 
     # libcxx builds against a sysroot of libc + compiler-rt (build32 staging).
     libcxx = pkgs.callPackage ./libcxx.nix {
-      inherit name eh pic llvm toolchainFile;
+      inherit name eh pic llvm toolchainFile runtimesPreConfigure;
       version = llvmVersion;
       sysroot = mkSysroot "${name}-cxxdeps" [libc compiler-rt];
     };

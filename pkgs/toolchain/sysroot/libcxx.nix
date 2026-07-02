@@ -19,6 +19,9 @@
   toolchainFile,
   # staged sysroot to build against (libc + compiler-rt, per build32).
   sysroot,
+  # compiler env + reproducible prefix-map cmake flags (shared with
+  # compiler-rt.nix, defined in ./default.nix).
+  runtimesPreConfigure,
   name,
   eh ? false,
   pic ? false,
@@ -92,16 +95,7 @@ in
       (lib.cmakeBool "LLVM_ENABLE_PIC" pic)
     ];
 
-    preConfigure = ''
-      export CC=clang CXX=clang++ NM=llvm-nm AR=llvm-ar RANLIB=llvm-ranlib STRIP=llvm-strip
-      resource_dir="$(clang -print-resource-dir)"
-      prefix_map="-ffile-prefix-map=$PWD=. -ffile-prefix-map=$resource_dir=/clang"
-      cmakeFlagsArray+=(
-        "-DCMAKE_C_FLAGS=$prefix_map"
-        "-DCMAKE_CXX_FLAGS=$prefix_map"
-        "-DCMAKE_ASM_FLAGS=$prefix_map"
-      )
-    '';
+    preConfigure = runtimesPreConfigure;
 
     meta = with lib; {
       description = "libc++/libc++abi for WASIX (${name} variant), built from source";

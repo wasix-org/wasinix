@@ -1,24 +1,33 @@
+# wasixcc — the WASIX cc driver. The raw wasixccenv binary is built from source;
+# bin/ holds one makeWrapper wrapper per tool name (wasixcc, wasix++, …), each
+# exec'ing wasixccenv under that argv0 (it dispatches on the invoked name) with
+# the toolchain locations from the shared env contract (env.nix) baked in.
+#
+# Update instructions:
+# 1) Update `src.rev` and `src.hash` to the target wasix-org/wasixcc commit, and
+#    `version` to that commit's Cargo.toml package.version.
+# 2) The Cargo.lock ships in-source, so dependency changes vendor automatically.
 {
+  lib,
   stdenvNoCC,
   rustPlatform,
   fetchFromGitHub,
-  bash,
+  makeWrapper,
   wasixLlvm,
   binaryen,
   wasixSysroot,
-  stdenv,
 }: let
+  env = import ./env.nix {inherit lib;};
+
+  # Mirrors the pinned rev's Cargo.toml package.version. A literal: reading it
+  # via fromTOML(readFile "${src}/…") would be IFD, forcing the fetch at eval.
+  version = "0.4.2";
   src = fetchFromGitHub {
     owner = "wasix-org";
     repo = "wasixcc";
     rev = "f60fd7d03690fc778633b3616caee39015fb8404";
     hash = "sha256-opTdoRjWIsNDCce2XaUdmn9RwzpesqXusw5QHp5Q8FE=";
   };
-
-  cargoToml = builtins.fromTOML (builtins.readFile "${src}/Cargo.toml");
-  version = cargoToml.package.version;
-
-  supported = stdenv.hostPlatform.isLinux && stdenv.hostPlatform.isx86_64;
 
   wasixccRaw = rustPlatform.buildRustPackage {
     pname = "wasixcc-raw";
@@ -47,38 +56,34 @@
       runHook postInstall
     '';
   };
+
+  # wasixccenv dispatches on its invoked name; expose it under every tool name.
+  tools = ["wasixcc" "wasix++" "wasixcc++" "wasixar" "wasixnm" "wasixranlib" "wasixld" "wasixccenv"];
 in
-  if supported
-  then
-    stdenvNoCC.mkDerivation {
-      pname = "wasixcc";
-      inherit version;
-      dontUnpack = true;
+  stdenvNoCC.mkDerivation {
+    pname = "wasixcc";
+    inherit version;
+    dontUnpack = true;
 
-      # Update instructions:
-      # 1) Update `src.rev` and `src.hash` to the target wasix-org/wasixcc commit.
-      # 2) If Cargo dependencies changed, the updated Cargo.lock (cargoLock.lockFile above,
-      #    from the pinned src) is picked up automatically — no hash to bump; just rebuild.
-      # 3) Keep wrapper env vars aligned with pkgs/default.nix toolchain env exports.
-      installPhase = ''
-        runHook preInstall
-        mkdir -p "$out/bin" "$out/libexec"
+    nativeBuildInputs = [makeWrapper];
 
-        cp "${wasixccRaw}/libexec/wasixccenv" "$out/libexec/wasixccenv"
+    installPhase = ''
+      runHook preInstall
+      install -Dm755 "${wasixccRaw}/libexec/wasixccenv" "$out/libexec/wasixccenv"
+      for cmd in ${lib.escapeShellArgs tools}; do
+        makeWrapper "$out/libexec/wasixccenv" "$out/bin/$cmd" \
+          --argv0 "$cmd" \
+          ${env.makeWrapperFlagsOf (env.locationEnv {inherit wasixLlvm binaryen wasixSysroot;})}
+      done
+      runHook postInstall
+    '';
 
-        for cmd in wasixcc 'wasix++' wasixcc++ wasixar wasixnm wasixranlib wasixld wasixccenv; do
-          printf '%s\n' \
-            '#!${bash}/bin/bash' \
-            'set -euo pipefail' \
-            'export WASIXCC_LLVM_LOCATION="${wasixLlvm}"' \
-            'export WASIXCC_BINARYEN_LOCATION="${binaryen}"' \
-            'export WASIXCC_SYSROOT_PREFIX="${wasixSysroot}"' \
-            "exec -a \"\$0\" \"$out/libexec/wasixccenv\" \"\$@\"" \
-            > "$out/bin/$cmd"
-          chmod +x "$out/bin/$cmd"
-        done
-
-        runHook postInstall
-      '';
-    }
-  else throw "wasixcc package currently supports only x86_64-linux; current system is ${stdenv.hostPlatform.system}"
+    meta = {
+      description = "WASIX C/C++ compiler driver (clang/lld/binaryen orchestrator), wrapped with the from-source toolchain";
+      homepage = "https://github.com/wasix-org/wasixcc";
+      license = with lib.licenses; [mit asl20];
+      # The wrapped toolchain (LLVM fork, sysroot) is only built for x86_64-linux.
+      platforms = ["x86_64-linux"];
+      mainProgram = "wasixcc";
+    };
+  }

@@ -21,6 +21,8 @@
   binaryen,
   wasixSysroot,
 }: let
+  env = import ../env.nix {inherit lib;};
+
   # version is the source of truth; the tag is `v${version}`. (The old
   # `fromTOML (readFile "${src}/Cargo.toml")` was IFD — it forced the src to
   # realise just to read the version.)
@@ -78,19 +80,13 @@ in
       install -Dm755 "${cargoWasixRaw}/bin/cargo-wasix" "$out/libexec/cargo-wasix"
       makeWrapper "$out/libexec/cargo-wasix" "$out/bin/cargo-wasix" \
         --prefix PATH : "${lib.makeBinPath [rustup wasixcc]}" \
-        --set WASIXCC_LLVM_LOCATION "${wasixLlvm}/bin" \
-        --set WASIXCC_BINARYEN_LOCATION "${binaryen}/bin" \
-        --set WASIXCC_SYSROOT_PREFIX "${wasixSysroot}" \
-        --set WASIXCC_AUTOCONF_WORKAROUNDS yes \
-        --set WASIXCC_RUN_WASM_OPT no \
-        --set CC wasixcc \
-        --set CXX wasix++ \
-        --set LD wasixld \
-        --set AR wasixar \
-        --set NM wasixnm \
-        --set RANLIB wasixranlib \
+        ${env.makeWrapperFlagsOf (
+        env.locationEnv {inherit wasixLlvm binaryen wasixSysroot;}
+        // env.autoconfEnv
+        // env.ccEnv
+        // {CARGO_WASIX_OFFLINE = "1";}
+      )} \
         --set-default WASM_OPT "${binaryen}/bin/wasm-opt" \
-        --set CARGO_WASIX_OFFLINE 1 \
         --run ${lib.escapeShellArg rustupLink}
       runHook postInstall
     '';

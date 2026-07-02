@@ -19,6 +19,9 @@
   toolchainFile,
   # staged sysroot to build against (libc only, per build32).
   sysroot,
+  # compiler env + reproducible prefix-map cmake flags (shared with libcxx.nix,
+  # defined in ./default.nix).
+  runtimesPreConfigure,
   name,
   pic ? false,
 }:
@@ -75,20 +78,7 @@ stdenvNoCC.mkDerivation {
     (lib.cmakeBool "UNIX" true)
   ];
 
-  # stdenvNoCC has no compiler env; the hook wires CMAKE_{C,CXX}_COMPILER/AR/… from
-  # these, and the toolchain file reads $CC. Reproducible debug info via prefix-map
-  # (mirrors build32) — computed here because it needs the source path ($PWD, the
-  # source root before the hook descends into ./build).
-  preConfigure = ''
-    export CC=clang CXX=clang++ NM=llvm-nm AR=llvm-ar RANLIB=llvm-ranlib STRIP=llvm-strip
-    resource_dir="$(clang -print-resource-dir)"
-    prefix_map="-ffile-prefix-map=$PWD=. -ffile-prefix-map=$resource_dir=/clang"
-    cmakeFlagsArray+=(
-      "-DCMAKE_C_FLAGS=$prefix_map"
-      "-DCMAKE_CXX_FLAGS=$prefix_map"
-      "-DCMAKE_ASM_FLAGS=$prefix_map"
-    )
-  '';
+  preConfigure = runtimesPreConfigure;
 
   postInstall = ''
     llvm-ranlib "$out/lib/wasm32-wasi/libclang_rt.builtins-wasm32.a"

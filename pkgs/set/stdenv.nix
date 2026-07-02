@@ -29,18 +29,18 @@
   exceptions = hp.wasmExceptions or null;
   pic = hp.wasmPic or false;
 
-  shimEnv = lib.concatStringsSep "\n" (
-    lib.optional (exceptions != null)
-    "export WASIXCC_WASM_EXCEPTIONS=${lib.escapeShellArg exceptions}"
-    ++ [
-      "export WASIXCC_PIC=${
-        if pic
-        then "yes"
-        else "no"
-      }"
-      "export WASIXCC_AUTOCONF_WORKAROUNDS=yes"
-      "export WASIXCC_DISCARD_UNSUPPORTED_FLAGS=yes"
-    ]
+  # Profile knobs + build-system workarounds from the shared env contract
+  # (toolchain locations aren't needed: the wasixcc bin wrappers bake them).
+  # DISCARD_UNSUPPORTED_FLAGS is shim-specific: nixpkgs' generic flags include
+  # ones wasm rejects.
+  env = import ../toolchain/env.nix {inherit lib;};
+  shimEnv = env.exportsOf (
+    env.profileEnv {
+      wasmExceptions = exceptions;
+      inherit pic;
+    }
+    // env.autoconfEnv
+    // {WASIXCC_DISCARD_UNSUPPORTED_FLAGS = "yes";}
   );
 
   mkShimBin = binName: tool:
