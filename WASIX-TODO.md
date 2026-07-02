@@ -1,138 +1,104 @@
-# WASIX TODO — quirks & issues
+# WASIX quirks & issues
 
-A catalog of WASIX/Wasmer runtime, libc, and toolchain quirks hit while packaging.
-Two uses: **reference** when a package breaks in a familiar way, and a **worklist**
-to go through, reproduce minimally, and file upstream (Wasmer / wasix-libc / binaryen).
+Runtime, libc, and toolchain issues hit while packaging: a reference when a
+package breaks in a familiar way, and a worklist for upstream fixes.
+Re-verified 2026-07-02 against wasmer 7.2.0, wasix-libc v2026-06-25.1,
+binaryen 129; entries marked "not re-verified" are carried on trust.
 
-Each entry: symptom · where seen / how to repro · workaround in this repo · the real
-fix · status.
-
-Status legend: 🔴 needs upstream fix · 🟡 packaging workaround in place · 🟢 fixed upstream.
-
----
+Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
 
 ## Runtime / libc
 
-### `fchdir` is broken 🟡→🔴
-- **Symptom:** any gnulib-based CLI exits non-zero with `Failed to restore initial
-  working directory: Not a directory` (ENOTDIR). Output is correct, but the exit
-  code is 1.
-- **Cause:** wasix has native `chdir` (`__wasi_chdir`) + `getcwd` (`__wasi_getcwd`)
-  but **no `__wasi_fchdir`**, and musl's raw `SYS_fchdir` isn't wired — it errors.
-  There's no general fd→path either (only preopen names via `fd_prestat_dir_name`).
-  gnulib's `save_cwd` does `open(".")` + `fchdir` to restore → fails.
-- **Repro:** `find <dir>` under wasmer; check `$?`. Minimal: C program `open(".")`
-  then `fchdir(fd)`.
-- **Workaround:** `find/package.nix` patches `gl/lib/save-cwd.c` (`cwd->desc = -1`)
-  to force `getcwd`+`chdir`.
-- **Fix:** add `__wasi_fchdir` to the Wasmer runtime + wire `wasix-libc/.../fchdir.c`
-  → it. Fixes every gnulib CLI globally, not per-package.
+### `fchdir` doesn't exist 🟡
+- wasix-libc has no `fchdir` at all: not declared in the headers, no symbol in
+  `libc.a` (verified: undeclared-function error, then undefined symbol with a
+  manual declaration). There is also no general fd-to-path mechanism (only
+  preopen names via `fd_prestat_dir_name`).
+- Consequence: gnulib's `save_cwd` (open "." + fchdir to restore) can't work;
+  its fallback made every gnulib CLI exit non-zero with ENOTDIR.
+- Workaround: `find/package.nix` patches `gl/lib/save-cwd.c` to force
+  getcwd + chdir.
+- Fix: `__wasi_fchdir` in wasmer plus libc wiring. Fixes gnulib CLIs globally.
 
-### Spawned commands aren't PATH-resolvable 🔴
-- **Symptom:** `find -exec cat …` / `xargs echo …` fail with `cat: No such file or
-  directory`, though the fork+exec itself works. (find swallows it → exit 0; xargs
-  propagates → non-zero.)
-- **Cause:** a wasm process under wasmer can't resolve a sibling/external command by
-  name in the guest PATH. git only works because it execs **absolute** baked paths
-  (`${bash}/bin/bash.wasm`) + `autoSelfMount`, never a PATH lookup.
-- **Repro:** `printf 'x\n' | xargs echo` under wasmer.
-- **Fix:** spawned-command/PATH resolution for wasm processes (Wasmer side).
+### spawned commands and PATH 🟢
+- Fixed in current wasmer: `posix_spawnp` and fork + `execvp` both resolve the
+  child via the guest PATH, and the child's `argv[0]` arrives correctly
+  (verified with minimal C programs; the find suite's fork/exec tests pass).
+  Older runtimes could not resolve by name, which is why git execs absolute
+  baked paths; that approach still works and stays.
 
-### `argv[0]` is wrong 🔴
-- **Symptom:** errors prefixed `(null): …`; tools that branch on `argv[0]` (busybox
-  multi-call style) misbehave; needs custom fixups.
-- **Seen:** every wasix process error line, e.g. `(null): cat: No such file…`.
-- **Fix:** populate `argv[0]` correctly in the WASIX process model.
+### `argv[0]` 🟢
+- Correct on current wasmer for both directly-run and spawned programs
+  (verified). Older runtimes passed `(null)`.
 
 ### `fork()` is hidden under Wasm-EH 🟡
-- **Symptom:** `call to undeclared function 'fork'` when compiling in the EH
-  profiles; the symbol is also absent from `libc.a`.
-- **Cause:** the sysroot hides `fork`'s declaration when
-  `__wasm_exception_handling__` is defined.
-- **Workaround:** git's `wasix-compat/` shim — a `unistd.h` declaring `fork` + a
-  `proc.c` implementing it via `__wasi_proc_fork`; reused by findutils. fork needs
-  **asyncify** at runtime.
-- **Fix:** decide whether `fork` should be declared/available under EH; if so, expose
-  it from the sysroot so the shim isn't needed.
+- The sysroot hides `fork`'s declaration when `__wasm_exception_handling__` is
+  defined and the symbol is absent from `libc.a` (verified: undeclared under
+  exnrefEh). fork also requires an asyncified binary in every profile: the
+  runtime must capture and rewind the wasm call stack, and Wasm-EH doesn't
+  substitute (verified: the same fork+exec program exits 45 with no output
+  without asyncify, works with it).
+- Workaround: git's `wasix-compat/` shim (a `unistd.h` declaring fork + a
+  `proc.c` implementing it via `__wasi_proc_fork`), reused by findutils, plus
+  `WASIXCC_WASM_OPT_FLAGS=--asyncify:-O2` (below).
+- Fix: expose fork from the sysroot under EH, or upstream the shim.
 
-### `isatty` returns true for a redirected stdout 🟡
-- **Symptom:** programs that colorize/format only on a TTY do so even when piped to a
-  file — e.g. jq emits ANSI color when stdout is `>file`.
-- **Repro:** `echo '[1]' | jq add > out` under wasmer → `out` has `\e[…m` codes.
-- **Workaround:** tests strip ANSI (`testLib.normalizers.stripAnsi`).
-- **Fix:** `isatty`/`fd_filestat` should report non-TTY for regular files/pipes.
+### `isatty` returns true for redirected stdout 🟡
+- `isatty(1)` is 1 even with stdout redirected (verified). Tools colorize into
+  files (jq emits ANSI into `>file`).
+- Workaround: tests strip ANSI (`testLib.normalizers.stripAnsi`).
+- Fix: report non-TTY for regular files/pipes.
 
-### TERM env fallback (pre-existing) 🔴
-- wasmer should set a default `TERM` fallback so terminal programs/tools work better.
+### no default `TERM` 🔴
+- wasmer starts processes with `TERM` unset (verified); terminal programs
+  degrade. Fix: a runtime default.
 
-## Toolchain (wasixcc / binaryen / cross-build)
+## Toolchain
 
-### `wasm-opt` corrupts autoconf feature detection 🟡
-- **Symptom:** `configure` false-negatives a feature (e.g. sqlite: "Cannot find libm
-  functions") because the wasm-opt pass over a throwaway conftest fails.
-- **Workaround:** `disableWasmOptInConfigureHook` (overlay) — opt-in, on the few
-  packages whose conftests trip it (sqlite, libzip).
-- **Fix:** wasm-opt shouldn't fail (or shouldn't run) on trivial conftests; or the
-  toolchain should skip it during `configure`.
+### asyncify can't process Wasm-EH instructions 🟡
+- `wasm-opt --asyncify` aborts ("unexpected expr type", Flatten.cpp) on
+  modules containing EH instructions. Under the EH profiles that means C++
+  exceptions or anything using setjmp/longjmp (lowered to Wasm-EH SjLj):
+  verified with a C++ binary, and reproduced by git's clar unit-tests binary
+  (clar uses setjmp). Plain C without setjmp asyncifies fine regardless of
+  feature flags.
+- Workaround: fork-using C programs (git, findutils) set
+  `WASIXCC_WASM_OPT_FLAGS=--asyncify:-O2`, so wasixcc's link-time wasm-opt
+  applies the pass in the EH profiles like it does on its own in the off
+  profile. git additionally skips building its test binaries
+  (`TEST_PROGRAMS=`, `CLAR_TEST_PROG=`), which contain setjmp and can never
+  run in a cross build.
+- Fix: binaryen asyncify support for EH; upstream the wasixcc setting.
 
-### asyncify + Wasm-EH abort in binaryen 🟡
-- **Symptom:** `wasm-opt --asyncify … --enable-exception-handling` aborts with
-  "unexpected expr type" on EH binaries (e.g. git's build-time unit-tests).
-- **Workaround:** the standalone asyncify pass omits `--enable-eh` (targets only
-  shipped binaries) — git, findutils.
-- **Fix:** binaryen asyncify + EH interop.
+### `wasm-opt` corrupts autoconf feature detection 🟡 (not re-verified)
+- A failing wasm-opt run on a throwaway conftest makes `configure`
+  false-negative a feature (sqlite: "Cannot find libm functions").
+- Workaround: `disableWasmOptInConfigureHook`, opt-in per package (sqlite,
+  libzip).
+- Fix: skip or tolerate wasm-opt during configure.
 
-## Packages that don't cross-build for wasix
+## Packages that don't cross-build
 
-### `tzdata` 🟡
-- **Symptom:** `localtime.c` uses `getresuid`/`getresgid`/`tzname`/`timezone`/
-  `daylight` — absent on WASIX.
-- **Workaround:** point dependents at the **build-platform** tzdata (zoneinfo is
-  platform-independent data) — see `jq`.
-- **Fix:** port tzdata, or provide the missing libc symbols.
-
-### `libffi` 🟡
-- nixpkgs `libffi` won't build for wasm; wasix uses the `wasix-org/libffi` fork.
-
-### `pcre2grep` callout-fork 🟡
-- pcre2grep's callout-fork uses `fork()`; build with
-  `--disable-pcre2grep-callout-fork` (libpcre2 itself is fine) — see `pcre2`.
+- **tzdata** 🟡: `localtime.c` needs getresuid/tzname/…, absent on WASIX.
+  Dependents use build-platform tzdata (zoneinfo is platform-independent
+  data): jq, python3.
+- **libffi** 🟡: nixpkgs libffi has no wasm32-wasi port; the
+  `wasix-org/libffi` fork adds one.
+- **pcre2grep callout-fork** 🟡: uses fork();
+  `--disable-pcre2grep-callout-fork` (the library is unaffected).
 
 ## Rust
 
-### Rust programs exited 70 in std init — our toolchain built on the stable channel 🟢
-- **Symptom:** every Rust wasm (`sd`, `crabsay`, any) exited 70 with no output under
-  `wasmer run`, before `main`. Not a wasm-feature, runtime, cargo-wasix, or linker
-  problem (all chased and ruled out) — and **not** wasi-libc's preopen `malloc` (an
-  early wrong theory): the trace stopping at `fd_prestat_get` is a *symptom* of the
-  real cause below, not a libc allocator-ordering bug.
-- **Root cause:** rustc emits `--max-memory=4294967296` (4 GiB / 65536 pages) for a
-  *shared* (threaded) wasm memory **only off the stable channel** — it's gated behind
-  unstable wasm support. Our rust toolchain build (`pkgs/toolchain/rust/toolchain.nix`)
-  forced `--release-channel=stable`
-  (upstream's `config.toml.wasix-template` sets no channel → non-stable), so rustc
-  dropped the flag and the shared memory came out `max == initial` (non-growable). With
-  no room to grow, the first heap allocation in std startup traps → `_Exit(70)`. The C
-  wasm is unaffected because wasixcc passes `--max-memory` itself.
-- **Diagnosis:** same toolchain, `RUSTC_BOOTSTRAP=1 rustc … --print link-args` shows
-  `--max-memory` appear; plain stable shows only `--shared-memory`. Memory decl via
-  `wasm-tools print | grep memory`: `(memory N N shared)` broken vs `(memory N 65536
-  shared)` fixed. cargo-wasix's prebuilt path always worked because its toolchain is
-  non-stable and so emits the flag natively.
-- **Fix:** build on `--release-channel=nightly` (the wasix target genuinely needs
-  rustc's unstable wasm support). No per-package flag — rustc emits `--max-memory`
-  itself; `pkgs/set/rust-platform.nix` needs nothing for it.
+### Rust binaries exited 70 in std init: toolchain built on the stable channel 🟢
+- rustc only emits `--max-memory=4GiB` for a shared (threaded) memory off the
+  stable channel; built on stable, the memory came out non-growable and the
+  first allocation in std startup trapped, `_Exit(70)` before main. The
+  toolchain builds with `--release-channel=nightly` (see
+  `toolchain/rust/toolchain.nix`); nothing needed per package.
 
-### getrandom doesn't recognise the target 🟡
-- getrandom 0.3 → "Unknown version of WASI" on `wasm32-wasmer-wasi`. CLI crates built
-  through the cargo-wasix seam no longer need a workaround (the old global
-  `--cfg getrandom_backend="wasi_p1"` RUSTFLAGS was dropped with it). Python wheels
-  that pull getrandom 0.3 (bcrypt, pydantic-core) pin the `wasix-org/getrandom` fork
-  instead — its backend adds a dep on the `wasix` crate, which a vendor-patch can't
-  introduce (see `pkgs/overlay/python-packages/lib/rust.nix`).
-
-### buildRustPackage wrapper had to learn nixpkgs idioms 🟢
-- To consume real nixpkgs Rust packages (`prev.<pkg>.override { rustPlatform = … }`):
-  the wrapper must accept the `finalAttrs:` function form (not just an attrset), and
-  `CC_<target>` env keys must use the underscored target (valid shell identifiers
-  under `__structuredAttrs`; cc-rs finds both forms). Done.
+### getrandom 0.3 doesn't recognise the target 🟡
+- "Unknown version of WASI" on `wasm32-wasmer-wasi`. CLI crates built through
+  cargo-wasix need no workaround. Python wheels pulling getrandom 0.3
+  (bcrypt, pydantic-core) pin the `wasix-org/getrandom` fork; its backend
+  adds a dependency on the `wasix` crate, which a vendor patch can't
+  introduce (see `overlay/python-packages/lib/rust.nix`).
