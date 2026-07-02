@@ -5,7 +5,6 @@
 {
   final,
   prev,
-  foundation,
   preferredPackages,
   ...
 }: let
@@ -66,6 +65,11 @@ in
         "NO_CURL="
         "NO_OPENSSL="
         "OPENSSL_LINK=-lssl -lcrypto"
+        # Skip test-tool/unit-tests: `all::` builds them, a cross build can never
+        # run them, and unit-tests contains setjmp (wasm-EH instructions under
+        # the EH profiles) that the link-time asyncify pass can't process.
+        "TEST_PROGRAMS="
+        "CLAR_TEST_PROG="
       ];
     postPatch =
       (old.postPatch or "")
@@ -86,6 +90,10 @@ in
       // {
         NIX_CFLAGS_COMPILE = ((old.env or {}).NIX_CFLAGS_COMPILE or "") + " -Iwasix-compat";
         NIX_LDFLAGS = ((old.env or {}).NIX_LDFLAGS or "") + " -Lwasix-compat -lwasix-compat -lz";
+        # fork() needs asyncified binaries. wasixcc only asyncifies in the off
+        # profile on its own; these extra wasm-opt flags (which imply running
+        # wasm-opt) apply the pass to every linked output here too.
+        WASIXCC_WASM_OPT_FLAGS = "--asyncify:-O2";
       };
     preConfigure =
       (old.preConfigure or "")
@@ -104,17 +112,11 @@ in
       + ''
         mv "$out/bin/git" "$out/bin/git.wasm"
 
-        asyncify() {
-          ${foundation.binaryen}/bin/wasm-opt --asyncify -O2 "$1" -o "$1"
-        }
-        asyncify "$out/bin/git.wasm"
-
         # git's subcommands are aliases (bin/git-* and libexec/git-core/git-* are
         # `→ git` symlinks; libexec/git-core/git is a 2nd full copy). Renaming git
-        # → git.wasm dangles those, so repoint them at the asyncified wasm. webc
-        # preserves symlinks (wasmerio/wasmer#6653), so aliases stay links; git's
-        # argv[0] dispatch routes git-add etc. Real helpers (git-remote-http, …)
-        # are standalone wasm binaries, asyncified in place.
+        # → git.wasm dangles those, so repoint them. webc preserves symlinks
+        # (wasmerio/wasmer#6653), so aliases stay links; git's argv[0] dispatch
+        # routes git-add etc. Real helpers (git-remote-http, …) keep their names.
         ln -sf ../../bin/git.wasm "$out/libexec/git-core/git"
         for f in "$out/bin/"* "$out/libexec/git-core/"*; do
           name=''${f##*/}
@@ -126,8 +128,6 @@ in
               "$out/bin/"*) ln -sf git.wasm "$f" ;;
               *) ln -sf ../../bin/git.wasm "$f" ;;
             esac
-          elif [ -f "$f" ] && [ ! -L "$f" ] && od -An -N4 -tx1 "$f" | grep -q "00 61 73 6d"; then
-            asyncify "$f"
           fi
         done
       '';

@@ -1,18 +1,19 @@
-# findutils: find + xargs. Both fork (find -exec, xargs spawns), which on
-# WASIX needs asyncify, so each binary gets a standalone binaryen --asyncify
-# pass (the wasixcc link-time pass would also add --enable-eh and abort; this
-# one omits it, like git). coreutils is pinned to the build platform
-# (findutils bakes its paths into scripts). locate/frcode/updatedb are
-# dropped: they need a runtime database, useless on wasm. Ships as one webc
-# with find + xargs (entrypoint find).
+# findutils: find + xargs. Both fork (find -exec, xargs spawns), so they are
+# asyncified at link (WASM_OPT_FLAGS below). coreutils is pinned to the
+# build platform (findutils bakes its paths into scripts).
+# locate/frcode/updatedb are dropped: they need a runtime database, useless
+# on wasm. Ships as one webc with find + xargs (entrypoint find).
 {
   final,
   prev,
   helpers,
-  foundation,
   ...
 }:
 helpers.libTweaks {
+  # fork() needs asyncified binaries. wasixcc only asyncifies in the off
+  # profile on its own; these extra wasm-opt flags apply the pass here too.
+  env.WASIXCC_WASM_OPT_FLAGS = "--asyncify:-O2";
+
   postPatch = ''
     substituteInPlace configure \
       --replace-fail 'as_fn_error $? "could not determine how to read list of mounted file systems" "$LINENO" 5' \
@@ -69,15 +70,11 @@ helpers.libTweaks {
   outputs = _: ["out"];
   postFixup = _: "";
   passthru.wasmer.entrypoint = "find";
-  # Rename find/xargs to *.wasm (the convention allWasm collects) and asyncify
-  # each so fork works at runtime. The standalone pass omits --enable-eh to dodge
-  # binaryen's "unexpected expr type" abort, exactly as git's pass does.
+  # Rename find/xargs to *.wasm (the convention allWasm collects).
   postInstall = ''
     for prog in find xargs; do
       if [ -f "$out/bin/$prog" ]; then
         mv "$out/bin/$prog" "$out/bin/$prog.wasm"
-        ${foundation.binaryen}/bin/wasm-opt --asyncify -O2 \
-          "$out/bin/$prog.wasm" -o "$out/bin/$prog.wasm"
       fi
     done
   '';

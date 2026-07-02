@@ -126,13 +126,10 @@ in rec {
   libTweaks = tweaks: pkg:
     pkg.overrideAttrs (old: extendDrv old ({doCheck = false;} // tweaks));
 
-  # Rename bin/<wasmName> -> <wasmName>.wasm (what allWasm collects),
-  # optionally asyncifying. For shipped CLIs.
-  wasmRename = {
-    wasmName,
-    asyncifyFlags ? null,
-    binaryen ? null, # only needed when asyncifyFlags != null
-  }: pkg:
+  # Rename bin/<wasmName> -> <wasmName>.wasm (what allWasm collects). For
+  # shipped CLIs. Programs needing fork/setjmp set env.WASIXCC_WASM_OPT_FLAGS
+  # instead (wasixcc asyncifies at link).
+  wasmRename = {wasmName}: pkg:
     pkg.overrideAttrs (old: {
       # mergeScript, not `+` (indented strings drop their leading newline, so
       # `+` would glue onto old.postInstall). bin/ is usually in $out but can
@@ -143,8 +140,6 @@ in rec {
           for _bindir in "$out" ''${bin:+"$bin"}; do
             if [ -f "$_bindir/bin/${wasmName}" ]; then
               mv "$_bindir/bin/${wasmName}" "$_bindir/bin/${wasmName}.wasm"
-              ${lib.optionalString (asyncifyFlags != null) ''
-              ${binaryen}/bin/wasm-opt --asyncify ${asyncifyFlags} -O2 "$_bindir/bin/${wasmName}.wasm" -o "$_bindir/bin/${wasmName}.wasm"''}
             fi
           done
         ''
