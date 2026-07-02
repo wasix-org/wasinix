@@ -28,6 +28,10 @@ in rec {
   # Merge non-empty script fragments.
   mergeScript = frags: lib.concatStringsSep "\n" (lib.filter (f: f != "" && f != null) frags);
 
+  # The auto-import convention for package sets (top-level overlay + python) —
+  # see load-packages.nix.
+  loadPackageDir = import ./load-packages.nix {inherit lib;};
+
   # The profile name (off / eh / ehpic / exnrefEh / exnrefEhpic) for a host
   # platform, from its wasmExceptions/wasmPic fields (see pkgs/profiles.nix).
   inherit (profilesCfg) profileOf defaultProfileName;

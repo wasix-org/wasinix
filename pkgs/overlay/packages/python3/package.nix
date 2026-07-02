@@ -17,7 +17,6 @@
 
   # wasix build fixes for the python package set; see overlay/python-packages/.
   pythonPackageOverrides = import ../../python-packages {
-    inherit lib;
     callArgs = {inherit final prev preferredPackages helpers lib;};
   };
 

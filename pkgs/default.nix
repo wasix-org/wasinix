@@ -48,8 +48,13 @@
   profilesCfg = import ./profiles.nix;
   mkWasixStdenv = import ./set/stdenv.nix {inherit lib foundation;};
 
-  # Package names = the overlay's package set (flat files + dirs + trivial list).
-  wasixPkgNames = import ./overlay/names.nix {inherit lib;};
+  # Package names = the overlay's package set (flat files + dirs + trivial list),
+  # enumerated eval-only via the shared loader so the two can't drift.
+  wasixPkgNames =
+    (wasixLib.loadPackageDir {
+      dir = ./overlay/packages;
+      trivial = import ./overlay/trivial.nix;
+    }).names;
 
   # preferredPackages: each package at its preferred profile. A package declares
   # that via its passthru.wasix contract (preferredProfile, or derived from

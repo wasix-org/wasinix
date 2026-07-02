@@ -105,15 +105,13 @@
     if !isWasixHost
     then {}
     else let
-      pkgDir = ./packages;
-      entries = builtins.readDir pkgDir;
-      # A package is either a flat packages/<name>.nix or a packages/<name>/ dir
-      # (package.nix + patches/tests/aux). Trivial ones (no tweaks) are a list.
-      fileNames =
-        map (lib.removeSuffix ".nix")
-        (lib.attrNames (lib.filterAttrs (n: t: t == "regular" && lib.hasSuffix ".nix" n) entries));
-      dirNames = lib.attrNames (lib.filterAttrs (_: t: t == "directory") entries);
-      callArgs = {inherit final prev helpers foundation preferredPackages nixpkgs;};
+      # The shared auto-import convention (pkgs/lib/load-packages.nix): flat
+      # packages/<name>.nix files + packages/<name>/package.nix dirs + the
+      # trivial list.
+      loaded = helpers.loadPackageDir {
+        dir = ./packages;
+        trivial = import ./trivial.nix;
+      };
       # Derive meta.badPlatforms/meta.broken from each package's passthru.wasix
       # support contract — the ONLY place wasix support state touches meta.
       applyWasixMeta =
@@ -121,11 +119,10 @@
         (helpers.profileOf prev.stdenv.hostPlatform)
         prev.stdenv.hostPlatform.system;
     in
-      lib.mapAttrs (_: applyWasixMeta) (
-        (lib.genAttrs (import ./trivial.nix) (n: helpers.libTweaks {} prev.${n}))
-        // (lib.genAttrs fileNames (n: import (pkgDir + "/${n}.nix") callArgs))
-        // (lib.genAttrs dirNames (n: import (pkgDir + "/${n}/package.nix") callArgs))
-      );
+      lib.mapAttrs (_: applyWasixMeta) (loaded.mkPackages {
+        callArgs = {inherit final prev helpers foundation preferredPackages nixpkgs;};
+        mkTrivial = n: helpers.libTweaks {} prev.${n};
+      });
 in
   packages
   // rustSupport
