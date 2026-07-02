@@ -179,6 +179,17 @@
     "python3"
   ];
 
+  # ── python wheels ────────────────────────────────────────────────────────────
+  # The shipped Python wheels (overlay/python-packages/wheels.nix), each the wasm
+  # cross build of python3.pkgs.<attr> carrying an import smoke-test. cpython only
+  # builds at the ehpic profile (ctypes/dl need PIC), so the wheels are anchored
+  # there too — a single set, not a per-profile matrix.
+  pythonWheels = import ./python-wheels.nix {
+    inherit pkgs lib mkTestGroup;
+    python3 = profileSets.ehpic.python3;
+    wasmer = wasmerRuntime;
+  };
+
   makeWasmerPackage = pkgs.callPackage ./wasmer/make-wasmer-package.nix {
     self = makeWasmerPackage;
     wasmer = wasmerRuntime;
@@ -209,4 +220,5 @@ in {
   inherit pkgs pkgsCross defaultProfileName;
   inherit foundation toolchain profileSets preferredPackages allWasm allWasmer;
   inherit shippedCommands shippedPackages libraryMatrix toolchainTestPkgs;
+  inherit pythonWheels;
 }

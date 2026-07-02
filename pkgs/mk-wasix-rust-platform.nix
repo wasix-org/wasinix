@@ -1,16 +1,7 @@
-# The Rust counterpart to mk-wasix-stdenv: wires cargo-wasix in as the profile's
-# `rustPlatform`, so wasix Rust crates build + package transparently via
-# `rustPlatform.buildRustPackage` (just `prev.X`), the way C/C++ build via the wasixcc
-# stdenv. Everything generic to a wasix Rust CLI lives here; package files carry only real
-# per-package tweaks, via the same libTweaks/overrideAttrs C uses.
-#
-# cargo-wasix is the upstream tool and does essential work beyond `cargo build`: its
-# wasm-opt pass translates EH→exnref (what wasmer runs), enables threads/bulk-memory/
-# reference-types and applies the target-features. We integrate it the way buildRustPackage
-# is built for — `cargo` is one of its inputs (see build-rust-package/default.nix) — by
-# handing makeRustPlatform a `cargo` that routes `cargo build` through cargo-wasix. So
-# cargoBuildHook drives it normally: nothing skipped (no dontCargoBuild), nothing
-# reimplemented (vendoring + arg handling are buildRustPackage's).
+# The Rust counterpart to mk-wasix-stdenv: wires cargo-wasix in as the profile's rustPlatform, so
+# wasix Rust crates build via `rustPlatform.buildRustPackage` (just `prev.X`), like C via wasixcc.
+# cargo-wasix does the wasm-opt EH→exnref pass + target-features; route `cargo build` through it by
+# handing makeRustPlatform a `cargo` shim, so cargoBuildHook drives it normally.
 {
   lib,
   pkgsCross,
@@ -39,54 +30,79 @@
     rustc = wasixRustToolchain;
     cargo = cargoWasixCargo;
   };
+
+  # maturin rejects the wasix `dl` triple via target-lexicon. The old wasix-org/maturin fork was
+  # only a target-lexicon [patch] (its source == upstream), so instead give nixpkgs' maturin the
+  # `dl` env by patching its vendored target-lexicon.
+  patchVendoredTargetLexiconDl = import ./vendor-target-lexicon-dl.nix {
+    pkgs = pkgsCross.buildPackages;
+  };
+  wasixMaturin = pkgsCross.buildPackages.maturin.overrideAttrs (old: {
+    cargoDeps = patchVendoredTargetLexiconDl old.cargoDeps;
+  });
 in
   base
   // {
-    buildRustPackage = args:
-      base.buildRustPackage (
-        finalAttrs: let
-          # Accept both forms (attrset, or `finalAttrs:` function — what most nixpkgs
-          # packages use, so prev.<pkg>.override works).
-          a =
-            if builtins.isFunction args
-            then args finalAttrs
-            else args;
-        in
-          {
-            # wasm can't run tests / installChecks on the build host.
-            doCheck = false;
-            doInstallCheck = false;
-            # cargo-auditable would re-link via the host rustc; unneeded for wasm.
-            auditable = false;
-          }
-          // a
-          // {
-            # setEnv points CARGO_TARGET_<wasm>_LINKER at the wasi clang, which can't take
-            # rustc's raw wasm-ld flags; override it with the toolchain's rust-lld (the
-            # spec's native flavor). Flows through cargoBuildHook → the shim → cargo-wasix.
-            cargoBuildFlags =
-              ["--config" ''target.wasm32-wasmer-wasi.linker="${rustLld}"'']
-              ++ (a.cargoBuildFlags or []);
+    # Expose cargo/rustc at top level so consumers avoid the deprecated rustPlatform.rust.* aliases.
+    cargo = cargoWasixCargo;
+    rustc = wasixRustToolchain;
 
-            # Install each CLI cargo-wasix emitted (<name>.wasm; skip its .wasi/.rustc
-            # intermediates).
-            installPhase =
-              a.installPhase or ''
-                runHook preInstall
-                mkdir -p "$out/bin"
-                shopt -s nullglob
-                for w in target/wasm32-wasmer-wasi/release/*.wasm; do
-                  case "$w" in *.wasi.wasm | *.rustc.wasm) continue ;; esac
-                  install -Dm644 "$w" "$out/bin/$(basename "$w")"
-                done
-                runHook postInstall
-              '';
+    # Re-template maturinBuildHook for the dl target + rust-lld (nixpkgs' bakes the stock
+    # wasm32-wasip1, which our toolchain has no std for). Fed nixpkgs' own hook by its placeholders
+    # (not a vendored copy) so it tracks upstream and breaks loudly on a rework.
+    maturinBuildHook =
+      pkgsCross.makeSetupHook {
+        name = "maturin-build-hook.sh";
+        propagatedBuildInputs = [
+          wasixMaturin
+          cargoWasixCargo
+          wasixRustToolchain
+        ];
+        substitutions = {
+          rustcTargetSpec = "wasm32-wasmer-wasi-dl";
+          setEnv = "CARGO_TARGET_WASM32_WASMER_WASI_DL_LINKER=${rustLld}";
+        };
+      }
+      "${pkgsCross.path}/pkgs/build-support/rust/hooks/maturin-build-hook.sh";
 
-            passthru =
-              (a.passthru or {})
-              // {wasix = ((a.passthru or {}).wasix or {}) // {preferredProfile = "eh";};};
+    # Layer wasix defaults via lib.extendMkDerivation (what buildRustPackage itself uses), not a
+    # lambda wrapper: base.buildRustPackage is a __functor SET the cross-splice/`.override` machinery
+    # reads attrs off; a plain lambda loses that → "expected a set but found a function".
+    buildRustPackage = lib.extendMkDerivation {
+      constructDrv = base.buildRustPackage;
+      extendDrvArgs = finalAttrs: prevArgs: {
+        # wasm can't run tests / installChecks on the build host.
+        doCheck = false;
+        doInstallCheck = false;
+        # cargo-auditable would re-link via the host rustc; unneeded for wasm.
+        auditable = false;
 
-            meta = (a.meta or {}) // {platforms = (a.meta or {}).platforms or lib.platforms.all;};
-          }
-      );
+        # setEnv points CARGO_TARGET_<wasm>_LINKER at the wasi clang, which can't take
+        # rustc's raw wasm-ld flags; override it with the toolchain's rust-lld (the
+        # spec's native flavor). Flows through cargoBuildHook → the shim → cargo-wasix.
+        cargoBuildFlags =
+          ["--config" ''target.wasm32-wasmer-wasi.linker="${rustLld}"'']
+          ++ (prevArgs.cargoBuildFlags or []);
+
+        # Install each CLI cargo-wasix emitted (<name>.wasm; skip its .wasi/.rustc
+        # intermediates).
+        installPhase =
+          prevArgs.installPhase or ''
+            runHook preInstall
+            mkdir -p "$out/bin"
+            shopt -s nullglob
+            for w in target/wasm32-wasmer-wasi/release/*.wasm; do
+              case "$w" in *.wasi.wasm | *.rustc.wasm) continue ;; esac
+              install -Dm644 "$w" "$out/bin/$(basename "$w")"
+            done
+            runHook postInstall
+          '';
+
+        passthru =
+          (prevArgs.passthru or {})
+          // {wasix = ((prevArgs.passthru or {}).wasix or {}) // {preferredProfile = "eh";};};
+
+        meta = (prevArgs.meta or {}) // {platforms = (prevArgs.meta or {}).platforms or lib.platforms.all;};
+      };
+    };
   }
