@@ -1,0 +1,36 @@
+From 983f6ede334a6864b48ef87e7b135fa879b4f059 Mon Sep 17 00:00:00 2001
+From: Elliott Sales de Andrade <quantum.analyst@gmail.com>
+Date: Thu, 26 Sep 2024 06:14:03 -0400
+Subject: [PATCH] agg: Explicitly cast dimensions when creating Python buffer
+
+On WASM, which is wholly 32-bit, casting unsigned int to signed long is
+a narrowing conversion, which it seems to treat as an error. The Agg
+buffer cannot be over `(1<<23)` in width or height, so this cast is
+safe even with the smaller sizes.
+---
+ src/_backend_agg_wrapper.cpp | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/_backend_agg_wrapper.cpp b/src/_backend_agg_wrapper.cpp
+index 3dd50b31f6..11d45773d1 100644
+--- a/src/_backend_agg_wrapper.cpp
++++ b/src/_backend_agg_wrapper.cpp
+@@ -254,12 +254,12 @@ PYBIND11_MODULE(_backend_agg, m, py::mod_gil_not_used())
+ 
+         .def_buffer([](RendererAgg *renderer) -> py::buffer_info {
+             std::vector<py::ssize_t> shape {
+-                renderer->get_height(),
+-                renderer->get_width(),
++                static_cast<py::ssize_t>(renderer->get_height()),
++                static_cast<py::ssize_t>(renderer->get_width()),
+                 4
+             };
+             std::vector<py::ssize_t> strides {
+-                renderer->get_width() * 4,
++                static_cast<py::ssize_t>(renderer->get_width() * 4),
+                 4,
+                 1
+             };
+-- 
+2.48.1
+

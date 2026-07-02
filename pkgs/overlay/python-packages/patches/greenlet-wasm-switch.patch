@@ -1,0 +1,328 @@
+diff --git a/src/greenlet/TGreenlet.cpp b/src/greenlet/TGreenlet.cpp
+index d12722b..153cb26 100644
+--- a/src/greenlet/TGreenlet.cpp
++++ b/src/greenlet/TGreenlet.cpp
+@@ -26,7 +26,7 @@ Greenlet::Greenlet(PyGreenlet* p)
+ }
+ 
+ Greenlet::Greenlet(PyGreenlet* p, const StackState& initial_stack)
+-    :  _self(p), stack_state(initial_stack)
++    :  _self(p), stack_state(initial_stack), _context_id(-1)
+ {
+     assert(p->pimpl == nullptr);
+     p->pimpl = this;
+diff --git a/src/greenlet/TGreenlet.hpp b/src/greenlet/TGreenlet.hpp
+index 32330e9..84a6b6a 100644
+--- a/src/greenlet/TGreenlet.hpp
++++ b/src/greenlet/TGreenlet.hpp
+@@ -11,6 +11,7 @@
+ #include "greenlet_refs.hpp"
+ #include "greenlet_cpython_compat.hpp"
+ #include "greenlet_allocator.hpp"
++#include <wasix/context.h>
+ 
+ using greenlet::refs::OwnedObject;
+ using greenlet::refs::OwnedGreenlet;
+@@ -356,6 +357,7 @@ namespace greenlet
+         PythonState python_state;
+         Greenlet(PyGreenlet* p, const StackState& initial_state);
+     public:
++        wasix_context_id_t _context_id;
+         // This constructor takes ownership of the PyGreenlet, by
+         // setting ``p->pimpl = this;``.
+         Greenlet(PyGreenlet* p);
+@@ -707,6 +709,9 @@ public:
+         virtual bool belongs_to_thread(const ThreadState* state) const;
+         virtual int tp_traverse(visitproc visit, void* arg);
+         virtual int tp_clear();
++        inline void slp_start_stack() noexcept;
++        OwnedObject* __run;
++
+         class ParentIsCurrentGuard
+         {
+         private:
+diff --git a/src/greenlet/TMainGreenlet.cpp b/src/greenlet/TMainGreenlet.cpp
+index ee01481..3d34c82 100644
+--- a/src/greenlet/TMainGreenlet.cpp
++++ b/src/greenlet/TMainGreenlet.cpp
+@@ -13,6 +13,7 @@
+ #define T_MAIN_GREENLET_CPP
+ 
+ #include "TGreenlet.hpp"
++#include "wasix/context.h"
+ 
+ #ifdef Py_GIL_DISABLED
+ #include <atomic>
+@@ -48,6 +49,8 @@ MainGreenlet::MainGreenlet(PyGreenlet* p, ThreadState* state)
+       _self(p),
+       _thread_state(state)
+ {
++    // TODO: Only relevant for wasix. Guard this with #ifdef?
++    this->_context_id = wasix_context_main;
+     G_TOTAL_MAIN_GREENLETS++;
+ }
+ 
+diff --git a/src/greenlet/TUserGreenlet.cpp b/src/greenlet/TUserGreenlet.cpp
+index 73a8133..3a89c72 100644
+--- a/src/greenlet/TUserGreenlet.cpp
++++ b/src/greenlet/TUserGreenlet.cpp
+@@ -47,6 +47,10 @@ UserGreenlet::~UserGreenlet()
+     // TestLeaks.test_untracked_memory_doesnt_increase_unfinished_thread_dealloc_in_main fails.
+     this->python_state.did_finish(nullptr);
+     this->tp_clear();
++    if (this->_context_id != -1 && this->_context_id != wasix_context_main) {
++        int _ = wasix_context_destroy(this->_context_id);
++        this->_context_id = -1;
++    }
+ }
+ 
+ 
+@@ -233,6 +237,7 @@ UserGreenlet::g_initialstub(void* mark)
+           This could run arbitrary python code and switch greenlets!
+         */
+         run = this->self().PyRequireAttr(mod_globs->str_run);
++        this->__run = &run;
+         /* restore saved exception */
+         saved.PyErrRestore();
+ 
+@@ -285,7 +290,7 @@ UserGreenlet::g_initialstub(void* mark)
+ 
+     /* perform the initial switch */
+     switchstack_result_t err = this->g_switchstack();
+-    /* returns twice!
++    /* returns twice! (Except for WASIX, that calls slp_start_stack instead)
+        The 1st time with ``err == 1``: we are in the new greenlet.
+        This one owns a greenlet that used to be current.
+        The 2nd time with ``err <= 0``: back in the caller's
+@@ -296,7 +301,7 @@ UserGreenlet::g_initialstub(void* mark)
+        constructed for the second time until the switch actually happens.
+     */
+     if (err.status == 1) {
+-        // In the new greenlet.
++        // In the new greenlet. (Except for WASIX, that calls slp_start_stack instead)
+ 
+         // This never returns! Calling inner_bootstrap steals
+         // the contents of our run object within this stack frame, so
+@@ -374,7 +379,68 @@ UserGreenlet::g_initialstub(void* mark)
+     return err;
+ }
+ 
++// this = switching_thread_state
++inline void UserGreenlet::slp_start_stack() noexcept {
++    // For WASIX we can't start new stacks in the middle of a function, 
++    // so this function is used as the entrypoint
++    
++    // From g_switchstack():
++    Greenlet* greenlet_that_switched_in = switching_thread_state; // aka this
++    switching_thread_state = nullptr;
++    OwnedGreenlet origin = greenlet_that_switched_in->g_switchstack_success();
++    assert(greenlet_that_switched_in->args() || PyErr_Occurred());
++    // return switchstack_result_t(err, greenlet_that_switched_in, origin);
++
++    // From g_initialstub();
++    try {
++        this->inner_bootstrap(origin.relinquish_ownership(), (this->__run)->relinquish_ownership());
++    }
++    // Getting a C++ exception here isn't good. It's probably a
++    // bug in the underlying greenlet, meaning it's probably a
++    // C++ extension. We're going to abort anyway, but try to
++    // display some nice information *if* possible. Some obscure
++    // platforms don't properly support this (old 32-bit Arm, see see
++    // https://github.com/python-greenlet/greenlet/issues/385); that's not
++    // great, but should usually be OK because, as mentioned above, we're
++    // terminating anyway.
++    //
++    // The catching is tested by
++    // ``test_cpp.CPPTests.test_unhandled_exception_in_greenlet_aborts``.
++    //
++    // PyErrOccurred can theoretically be thrown by
++    // inner_bootstrap() -> g_switch_finish(), but that should
++    // never make it back to here. It is a std::exception and
++    // would be caught if it is.
++    catch (const std::exception& e) {
++        std::string base = "greenlet: Unhandled C++ exception: ";
++        base += e.what();
++        Py_FatalError(base.c_str());
++    }
++    catch (...) {
++        // Some compilers/runtimes use exceptions internally.
++        // It appears that GCC on Linux with libstdc++ throws an
++        // exception internally at process shutdown time to unwind
++        // stacks and clean up resources. Depending on exactly
++        // where we are when the process exits, that could result
++        // in an unknown exception getting here. If we
++        // Py_FatalError() or abort() here, we interfere with
++        // orderly process shutdown. Throwing the exception on up
++        // is the right thing to do.
++        //
++        // gevent's ``examples/dns_mass_resolve.py`` demonstrates this.
++#ifndef NDEBUG
++        fprintf(stderr,
++                "greenlet: inner_bootstrap threw unknown exception; "
++                "is the process terminating?\n");
++#endif
++        throw;
++    }
++    Py_FatalError("greenlet: inner_bootstrap returned with no exception.\n");
++}
++
++
+ 
++// TODO: Reenable origin_greenlet for tracing.
+ void
+ UserGreenlet::inner_bootstrap(PyGreenlet* origin_greenlet, PyObject* run)
+ {
+diff --git a/src/greenlet/greenlet.cpp b/src/greenlet/greenlet.cpp
+index 7722bd0..1cb0397 100644
+--- a/src/greenlet/greenlet.cpp
++++ b/src/greenlet/greenlet.cpp
+@@ -195,6 +195,10 @@ static void GREENLET_NOINLINE(slp_restore_state_trampoline)()
+ {
+     switching_thread_state->slp_restore_state();
+ }
++static void GREENLET_NOINLINE(slp_start_stack_trampoline)()
++{
++    ((UserGreenlet*)switching_thread_state)->slp_start_stack();
++}
+ }
+ 
+ 
+diff --git a/src/greenlet/greenlet_slp_switch.hpp b/src/greenlet/greenlet_slp_switch.hpp
+index bdffcca..33b2685 100644
+--- a/src/greenlet/greenlet_slp_switch.hpp
++++ b/src/greenlet/greenlet_slp_switch.hpp
+@@ -3,6 +3,7 @@
+ 
+ #include "greenlet_compiler_compat.hpp"
+ #include "greenlet_refs.hpp"
++#include <wasix/context.h>
+ 
+ /*
+  * the following macros are spliced into the OS/compiler
+@@ -30,7 +31,7 @@
+ // ``slp_save_state_asm`()` to fetch the pointer to pass to the
+ // macro.)
+ //
+-// Our compromise is to use a *glabal*, untracked, weak, pointer
++// Our compromise is to use a *global*, untracked, weak, pointer
+ // to the necessary thread state during the process of switching only.
+ // This is safe because we're protected by the GIL, and if we're
+ // running this code, the thread isn't exiting. This also nets us a
+@@ -45,22 +46,36 @@ static greenlet::Greenlet* volatile switching_thread_state = nullptr;
+ 
+ extern "C" {
+ static int GREENLET_NOINLINE(slp_save_state_trampoline)(char* stackref);
++static void GREENLET_NOINLINE(slp_start_stack_trampoline)();
+ static void GREENLET_NOINLINE(slp_restore_state_trampoline)();
+ }
+ 
+-
+ #define SLP_SAVE_STATE(stackref, stsizediff) \
+ do {                                                    \
+     assert(switching_thread_state);  \
+     stackref += STACK_MAGIC;                 \
+     if (slp_save_state_trampoline((char*)stackref))    \
+         return -1;                                     \
+-    if (!switching_thread_state->active()) \
+-        return 1;                                      \
++    if (!switching_thread_state->active()) { \
++        stsizediff = 0; \
++        int _ = wasix_context_create(&(switching_thread_state->_context_id), slp_start_stack_trampoline); \
++        break;\
++        /* TODO: Restore the stack we just saved again and return 0*/ \
++        /* return 1; */ \
++    } \
+     stsizediff = switching_thread_state->stack_start() - (char*)stackref; \
+ } while (0)
+ 
+-#define SLP_RESTORE_STATE() slp_restore_state_trampoline()
++// This now only runs if 
++#define SLP_RESTORE_STATE() \
++do { \
++    assert(switching_thread_state);  \
++    if (switching_thread_state->active()) { \
++        slp_restore_state_trampoline(); \
++    } \
++} while (0)
++
++
+ 
+ #define SLP_EVAL
+ extern "C" {
+diff --git a/src/greenlet/platform/switch_wasm32_wasix.h b/src/greenlet/platform/switch_wasm32_wasix.h
+new file mode 100644
+index 0000000..1113bcc
+--- /dev/null
++++ b/src/greenlet/platform/switch_wasm32_wasix.h
+@@ -0,0 +1,58 @@
++/**
++ * this is the internal transfer function for WASIX contexts
++ * 
++ * As we cannot really manipulate the call stack/program counter in WASM,
++ * we need to use helper functions provided by the WASIX context switching API.
++ */
++#define STACK_REFPLUS 1
++
++#if defined(SLP_EVAL)
++
++#define STACK_MAGIC 0
++
++#define WASIX_CONTEXT_SWITCH() \
++    do { \
++        assert(switching_thread_state); \
++        assert(switching_thread_state->_context_id); \
++        int _ = wasix_context_switch(switching_thread_state->_context_id); \
++    } while (0)
++
++static int
++slp_switch(void)
++{
++    int ret;
++    long *stackref, stsizediff;
++
++    // Save current C stack pointer into stackref.
++    __asm__ volatile(
++        "global.get __stack_pointer\n"
++        "local.set %0"
++        : "=r"(stackref)
++        :);
++
++    {
++        SLP_SAVE_STATE(stackref, stsizediff);
++        // Move the C stack pointer to the new stack
++        __asm__ volatile(
++            "local.get %0\n"
++            "global.get __stack_pointer\n"
++            "i32.add\n"
++            "global.set __stack_pointer\n"
++            : /* no outputs */
++            : "r"(stsizediff));
++        SLP_RESTORE_STATE();
++    }
++
++    // We now have the C stack pointer pointing to the correct C stack
++    // Now we can switch the WASM callstack
++    WASIX_CONTEXT_SWITCH();
++
++    __asm__ volatile(
++        "i32.const 0\n"
++        "local.set %0"
++        : "=r"(ret)
++        :);
++    return ret;
++}
++
++#endif
+diff --git a/src/greenlet/slp_platformselect.h b/src/greenlet/slp_platformselect.h
+index d9b7d0a..7ce11cf 100644
+--- a/src/greenlet/slp_platformselect.h
++++ b/src/greenlet/slp_platformselect.h
+@@ -70,6 +70,8 @@ extern "C" {
+ # include "platform/switch_loongarch64_linux.h" /* LoongArch64 */
+ #elif defined(__GNUC__) && defined(__sh__)
+ # include "platform/switch_sh_gcc.h" /* SuperH */
++#elif defined(__GNUC__) && __has_include("wasix/context.h")
++# include "platform/switch_wasm32_wasix.h" /* gcc on X86 */
+ #endif
+ 
+ #ifdef __cplusplus
