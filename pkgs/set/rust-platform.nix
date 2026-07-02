@@ -1,4 +1,4 @@
-# The Rust counterpart to mk-wasix-stdenv: wires cargo-wasix in as the profile's rustPlatform, so
+# The Rust counterpart to set/stdenv.nix: wires cargo-wasix in as the profile's rustPlatform, so
 # wasix Rust crates build via `rustPlatform.buildRustPackage` (just `prev.X`), like C via wasixcc.
 # cargo-wasix does the wasm-opt EH→exnref pass + target-features; route `cargo build` through it by
 # handing makeRustPlatform a `cargo` shim, so cargoBuildHook drives it normally.
@@ -34,7 +34,7 @@
   # maturin rejects the wasix `dl` triple via target-lexicon. The old wasix-org/maturin fork was
   # only a target-lexicon [patch] (its source == upstream), so instead give nixpkgs' maturin the
   # `dl` env by patching its vendored target-lexicon.
-  patchVendoredTargetLexiconDl = import ./vendor-target-lexicon-dl.nix {
+  patchVendoredTargetLexiconDl = import ../lib/vendor-target-lexicon-dl.nix {
     pkgs = pkgsCross.buildPackages;
   };
   wasixMaturin = pkgsCross.buildPackages.maturin.overrideAttrs (old: {

@@ -20,7 +20,7 @@
   packagesDir,
 }: let
   testLib = import ./test-lib.nix {inherit pkgs wasmer;};
-  mkTestGroup = import ../test-group.nix {inherit pkgs lib;};
+  mkTestGroup = import ../lib/test-group.nix {inherit pkgs lib;};
 
   # Build the test group from packages/<overlayName>/tests/ (if present): every
   # *.nix there (except helpers.nix) auto-registers, given only the args it asks

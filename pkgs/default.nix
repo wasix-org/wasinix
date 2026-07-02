@@ -29,10 +29,10 @@
 
   # The wasix rustPlatform: makeRustPlatform with a `cargo` that routes the build through
   # cargo-wasix, so buildRustPackage drives it normally. The Rust counterpart to
-  # mk-wasix-stdenv — injected into each profile set by the overlay so wasix Rust crates
+  # set/stdenv.nix — injected into each profile set by the overlay so wasix Rust crates
   # build transparently via rustPlatform.buildRustPackage, the way C/C++ build via the
   # wasixcc stdenv.
-  wasixRustPlatform = import ./mk-wasix-rust-platform.nix {
+  wasixRustPlatform = import ./set/rust-platform.nix {
     inherit lib pkgsCross;
     inherit (foundation) wasixRustToolchain cargoWasix;
     cargo = pkgs.cargo;
@@ -45,7 +45,7 @@
   # stdenv injected via replaceCrossStdenv + the wasix overlay; linked deps
   # auto-thread within a profile.
   profilesCfg = import ./profiles.nix;
-  mkWasixStdenv = import ./mk-wasix-stdenv.nix {inherit lib foundation;};
+  mkWasixStdenv = import ./set/stdenv.nix {inherit lib foundation;};
 
   # Package names = the overlay's package set (flat files + dirs + trivial list).
   wasixPkgNames = import ./overlay/names.nix {inherit lib;};
@@ -64,7 +64,7 @@
     inherit foundation nixpkgs preferredPackages wasixRustPlatform;
     rustSupportedVariants = foundation.wasixRustToolchain.supportedVariants;
   };
-  mkWasixPkgs = import ./mk-wasix-pkgs.nix {inherit system nixpkgs mkWasixStdenv wasixOverlay;};
+  mkWasixPkgs = import ./set/mk-pkgs.nix {inherit system nixpkgs mkWasixStdenv wasixOverlay;};
   profileSets = lib.mapAttrs (_: spec: mkWasixPkgs spec) profilesCfg.profiles;
 
   # ── toolchain: per-profile build environments ────────────────────────────────
@@ -97,7 +97,7 @@
   # in the flake) because they need the per-profile toolchain + the wasmer
   # runtime: sysroot smoke tests (per ABI variant) on `sysroot`, and per-profile
   # end-to-end link + stdenv tests on `wasixcc`.
-  mkTestGroup = import ./test-group.nix {inherit pkgs lib;};
+  mkTestGroup = import ./lib/test-group.nix {inherit pkgs lib;};
   toolchainTestPkgs = {
     sysroot = foundation.sysroot.overrideAttrs (o: {
       passthru = (o.passthru or {}) // {tests = mkTestGroup "sysroot" foundation.tests;};
@@ -108,13 +108,13 @@
         // {
           tests = mkTestGroup "wasixcc" (
             (lib.mapAttrs' (p: tc:
-              lib.nameValuePair "link-${p}" (pkgs.callPackage ./toolchain/link-test.nix {
+              lib.nameValuePair "link-${p}" (pkgs.callPackage ./toolchain/tests/link-test.nix {
                 wasmer = wasmerRuntime;
                 toolchain = tc;
               }))
             toolchain)
             // (lib.mapAttrs' (p: tc:
-              lib.nameValuePair "stdenv-${p}" (pkgs.callPackage ./toolchain/stdenv-test.nix {
+              lib.nameValuePair "stdenv-${p}" (pkgs.callPackage ./toolchain/tests/stdenv-test.nix {
                 wasmer = wasmerRuntime;
                 toolchain = tc;
               }))
@@ -130,7 +130,7 @@
         (o.passthru or {})
         // {
           tests = mkTestGroup "rust" {
-            hello = pkgs.callPackage ./toolchain/rust-test.nix {
+            hello = pkgs.callPackage ./toolchain/tests/rust-test.nix {
               rustPlatform = wasixRustPlatform;
               wasmer = wasmerRuntime;
             };

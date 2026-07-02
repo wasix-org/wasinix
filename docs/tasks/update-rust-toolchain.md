@@ -4,14 +4,14 @@ This task updates the pinned prebuilt Rust toolchain downloaded from `wasix-org/
 
 ## Files to update
 
-- `pkgs/toolchain/wasix-rust-toolchain.nix`
+- `pkgs/toolchain/rust/toolchain.nix`
 - `pkgs/toolchain/default.nix` (only if wiring changes)
 - `flake.nix` (only if package exposure changes)
 
 ## Steps
 
 1. Choose the new `wasix-org/rust` release tag.
-2. Update `version` in `pkgs/toolchain/wasix-rust-toolchain.nix`.
+2. Update `version` in `pkgs/toolchain/rust/toolchain.nix`.
 3. Build once with `nix build .#wasix-rust-toolchain` and update `hash` from Nix output if needed.
 4. Validate the resulting toolchain binaries are usable:
    - `nix build .#wasix-rust-toolchain`

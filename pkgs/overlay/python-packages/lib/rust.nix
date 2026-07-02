@@ -16,8 +16,8 @@
   getrandomForkBranch = "wasix-0.3.3";
 
   # Patch a wheel's cargoDeps so vendored target-lexicon parses the wasix `dl` env — no fork.
-  # See ../../../vendor-target-lexicon-dl.nix.
-  patchVendoredTargetLexiconDl = import ../../../vendor-target-lexicon-dl.nix {
+  # See ../../../lib/vendor-target-lexicon-dl.nix.
+  patchVendoredTargetLexiconDl = import ../../../lib/vendor-target-lexicon-dl.nix {
     pkgs = final.buildPackages;
   };
 }

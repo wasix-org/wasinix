@@ -1,6 +1,6 @@
 # Shell env fragments for driving wasixcc outside the cross stdenv — the devShell
 # and the env-injection link test. (The cross stdenv itself, used by every
-# package, gets these via mk-wasix-stdenv's shim instead.) The per-profile
+# package, gets these via set/stdenv.nix's shim instead.) The per-profile
 # `toolchain` set and these consumers share one source for the env.
 {
   pkgs,

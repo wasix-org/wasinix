@@ -17,7 +17,7 @@ import nixpkgs {
     {
       # Shared wasm triple; the profile rides as custom platform fields
       # (wasmExceptions/wasmPic), which survive elaboration and are read by
-      # mk-wasix-stdenv.nix.
+      # set/stdenv.nix.
       config = "wasm32-unknown-wasi";
       useLLVM = true;
       isWasix = true;

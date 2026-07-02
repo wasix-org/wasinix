@@ -148,11 +148,11 @@ class Target:
 def regen_cargo_wasix_lock(t):
     # cargo-wasix ships no Cargo.lock; we carry one and vendor from it. Resolve a
     # fresh lock against the just-bumped src so the offline build stays buildable.
-    path = REPO / "pkgs/toolchain/cargo-wasix.nix"
+    path = REPO / "pkgs/toolchain/rust/cargo-wasix.nix"
     version = re.search(r'version = "([^"]+)"', path.read_text()).group(1)
     src = fetch_source("wasix-org", "cargo-wasix", f"v{version}")
     run(["cargo", "generate-lockfile", "--manifest-path", str(src / "Cargo.toml")])
-    dst = REPO / "pkgs/toolchain/cargo-wasix.Cargo.lock"
+    dst = REPO / "pkgs/toolchain/rust/cargo-wasix.Cargo.lock"
     new = (src / "Cargo.lock").read_text()
     if dst.read_text() == new:
         return None
@@ -164,7 +164,7 @@ def regen_rust_bootstrap(t):
     # The rust fork's vendoring auto-tracks the src lockfiles (no FOD hash). The
     # only pin that can drift is the stage0 bootstrap compiler, declared in the
     # fork's src/stage0 — sync version + url + hash from there.
-    path = REPO / "pkgs/toolchain/wasix-rust-toolchain.nix"
+    path = REPO / "pkgs/toolchain/rust/toolchain.nix"
     text = path.read_text()
     version = re.search(r'version = "([^"]+)"', text).group(1)
     stage0 = raw_file("wasix-org", "rust", f"v{version}", "src/stage0")
@@ -197,8 +197,8 @@ def regen_libc_witx(t):
     # (new syscalls), and a stale pin fails the libc build with undeclared
     # __wasi_* functions — so sync each pin to the submodule rev at the new tag.
     tag = re.search(r'wasixLibcVersion = "([^"]+)"',
-                    (REPO / "pkgs/toolchain/sysroot.nix").read_text()).group(1)
-    path = REPO / "pkgs/toolchain/libc.nix"
+                    (REPO / "pkgs/toolchain/sysroot/default.nix").read_text()).group(1)
+    path = REPO / "pkgs/toolchain/sysroot/libc.nix"
     text = path.read_text()
     bumped = []
     for sub, owner, repo in [
@@ -231,7 +231,7 @@ TARGETS = [
     # `v` and looks up a tag that doesn't exist). fetchSubmodules pulls
     # src/llvm-project, so the hash covers the real tree, not the archive.
     Target("rust-toolchain", "prefetch",
-           file="pkgs/toolchain/wasix-rust-toolchain.nix",
+           file="pkgs/toolchain/rust/toolchain.nix",
            owner="wasix-org", repo="rust", submodules=True,
            version_re=r'version = "([^"]+)"',
            tag_to_version=lambda t: (t.removeprefix("v"), t),
@@ -246,14 +246,14 @@ TARGETS = [
            owner="wasix-org", repo="libffi", track="branch",
            version_re=r'rev = "([0-9a-f]{7,40})"'),
     Target("cargo-wasix", "prefetch",
-           file="pkgs/toolchain/cargo-wasix.nix",
+           file="pkgs/toolchain/rust/cargo-wasix.nix",
            owner="wasix-org", repo="cargo-wasix",
            # version literal is bare (0.1.28); the release tag is v${version}.
            version_re=r'version = "([^"]+)"',
            tag_to_version=lambda t: (t.removeprefix("v"), t),
            regen=regen_cargo_wasix_lock),
     Target("wasix-libc", "prefetch",
-           file="pkgs/toolchain/sysroot.nix",
+           file="pkgs/toolchain/sysroot/default.nix",
            owner="wasix-org", repo="wasix-libc",
            version_re=r'wasixLibcVersion = "([^"]+)"',
            regen=regen_libc_witx),

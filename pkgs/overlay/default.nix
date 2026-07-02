@@ -20,7 +20,7 @@
   rustSupportedVariants,
 }: final: prev: let
   lib = prev.lib;
-  helpers = import ./lib.nix {inherit lib;};
+  helpers = import ../lib {inherit lib;};
   # Two independent gates (read prev.stdenv, not final.stdenv — gating the
   # overlay's attr set on `final` would be a fixpoint cycle):
   #
@@ -94,7 +94,7 @@
     };
 
   # Make Rust transparent here, the same way C/C++ is: replace rustPlatform with the
-  # from-source wasix one (mk-wasix-rust-platform.nix), so `rustPlatform.buildRustPackage`
+  # from-source wasix one (set/rust-platform.nix), so `rustPlatform.buildRustPackage`
   # cross-builds to wasm32-wasmer-wasi with no per-package plumbing. It carries its own
   # clean cross set for the cargo-hook tooling (the wasixcc stdenv here is libc-less, so
   # nixpkgs' own cross rustc can't build), while compiling with the fork rustc.

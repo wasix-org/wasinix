@@ -1,7 +1,7 @@
 # The first-class wasix cross stdenv: a nixpkgs cc-wrapper around wasixcc.
 #
 # Used as `config.replaceCrossStdenv` when importing nixpkgs for a wasix profile
-# (see mk-wasix-pkgs.nix), so EVERY package in that set builds with wasixcc and
+# (see set/mk-pkgs.nix), so EVERY package in that set builds with wasixcc and
 # its dependencies auto-thread within the profile. The profile (EH/PIC) is read
 # from the platform record (hostPlatform.wasmExceptions/wasmPic), which the
 # crossSystem custom fields carry.

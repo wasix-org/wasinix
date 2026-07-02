@@ -1,6 +1,6 @@
 # The wasix ABI profiles. Each profileSpec is merged into the cross `crossSystem`
 # as custom platform fields (wasmExceptions/wasmPic), readable as
-# `hostPlatform.wasmExceptions` / `hostPlatform.wasmPic` by mk-wasix-stdenv.nix.
+# `hostPlatform.wasmExceptions` / `hostPlatform.wasmPic` by set/stdenv.nix.
 #
 # wasmExceptions: "legacy" | "yes" (exnref) | "no" (off, asyncify) — values are
 # what wasixcc's WASIXCC_WASM_EXCEPTIONS expects. wasmPic toggles -fPIC + the PIC

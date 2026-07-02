@@ -94,7 +94,7 @@
     sysroot = mkSysroot name [libc compiler-rt libcxx];
 
     # Basic smoke test: compile+link a C++ program against this sysroot.
-    test = pkgs.callPackage ./test.nix {
+    test = pkgs.callPackage ../tests/sysroot-test.nix {
       inherit name eh pic toolchainFile sysroot llvm;
     };
   in {
