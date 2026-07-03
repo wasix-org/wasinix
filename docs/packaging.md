@@ -87,6 +87,15 @@ cross-package webc dependency (git → bash) is satisfied by it.
   plus `pyfinal`/`pyprev` for Python-set deps. Patches in
   `python-packages/patches/`, Rust-wheel helpers in `python-packages/lib/`.
 
+All shipped wheels (plus their transitive python deps) are also published as a
+static PEP 503 "simple" index: `.#pythonRegistry` (`pkgs/python-registry/`).
+Serve the output from any static file host, or install directly:
+`pip install --index-url file://$(readlink -f result)/simple <pkg>`. A new
+wheels.nix entry lands in the registry automatically. Its test suite
+(`checks.python-registry`) walks the index for hash/metadata integrity and
+pip-installs representative packages (deps resolved from the index too), then
+imports them under wasmer.
+
 ## Tests
 
 `pkgs/overlay/packages/<name>/tests/*.nix`, each returning an attrset of

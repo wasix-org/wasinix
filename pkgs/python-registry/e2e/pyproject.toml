@@ -1,0 +1,20 @@
+# The e2e project's dependency list IS the test input: tests.nix reads
+# [project].dependencies (tomllib) and pip-installs exactly these from the
+# registry, so adding a dep here both requires it to resolve from the index and
+# (via main.py) to actually work under wasmer. Spans every wheel tier we ship:
+# pure python, C extensions, meson builds, rust/maturin, C-library linkers.
+[project]
+name = "wasix-registry-e2e"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+  "requests", # pure; drags urllib3/idna/certifi/charset-normalizer off the index
+  "numpy", # meson C extension
+  "pandas", # meson C++; drags python-dateutil/pytz/tzdata/six
+  "pillow", # C extension linking zlib/libjpeg/…
+  "lxml", # C extension linking libxml2 + libxslt
+  "markupsafe", # small setuptools C extension
+  "cryptography", # rust/maturin + openssl; drags cffi/pycparser
+  "orjson", # rust/maturin
+  "tzdata", # pure data; feeds stdlib zoneinfo (wasix has no system tzdb)
+]

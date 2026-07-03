@@ -19,6 +19,7 @@ nix build .#legacyPackages.x86_64-linux.shippedPackages.git         # a CLI
 nix build .#legacyPackages.x86_64-linux.shippedPackages.git.webc    # its webc
 nix build .#legacyPackages.x86_64-linux.libraryMatrix.exnrefEh.zlib # a library
 nix build .#legacyPackages.x86_64-linux.pythonWheels.numpy          # a wheel
+nix build .#legacyPackages.x86_64-linux.pythonRegistry              # static wheel index
 nix build .#legacyPackages.x86_64-linux.allWasmer                   # all webcs
 
 nix run .#update                  # bump the source pins

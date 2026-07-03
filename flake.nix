@@ -68,6 +68,7 @@
       collectTests wasix.shippedPackages
       // collectTests wasix.toolchainTestPkgs
       // collectTestsPrefixed "wheel-" wasix.pythonWheels
+      // collectTests {python-registry = wasix.pythonRegistry;}
       // lib.mapAttrs' (p: lib.nameValuePair "abi-${p}") wasix.abiChecks
       // {treefmt = treefmtEval.config.build.check self;};
   in {
@@ -99,6 +100,8 @@
         shippedPackages = wasix.shippedPackages;
         # <attr> = wasm cross build of python3.pkgs.<attr>; .tests = import smoke-test
         pythonWheels = wasix.pythonWheels;
+        # all shipped wheels + transitive deps as a static PEP 503 index
+        pythonRegistry = wasix.pythonRegistry;
       };
 
       # Flatten nested attrsets of derivations to {"a.b.c" = drv;}: recurse

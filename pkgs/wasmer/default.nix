@@ -90,5 +90,5 @@
       (builtins.attrNames shippedPackages)}
   '';
 in {
-  inherit shippedPackages wrappedPackages allWasmer;
+  inherit shippedPackages wrappedPackages allWasmer testLib;
 }

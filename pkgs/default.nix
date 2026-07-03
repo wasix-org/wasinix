@@ -228,6 +228,15 @@
   # carrying passthru.webc (the webc package) + passthru.tests.
   inherit (wasmerLayer) shippedPackages allWasmer;
 
+  # The shipped wheels (+ their transitive python deps) as a static PEP 503
+  # "simple" index; tests run against the shipped python webc.
+  pythonRegistry = import ./python-registry {
+    inherit pkgs lib pythonWheels mkTestGroup;
+    python3 = profileSets.ehpic.python3;
+    inherit (wasmerLayer) testLib;
+    pythonWebc = wasmerLayer.wrappedPackages.python;
+  };
+
   # All shipped .wasm binaries, collected from the leaves at their preferred
   # profiles (curl puts curl.wasm in its `bin` output, hence the per-pkg glob).
   allWasm = pkgs.runCommand "wasix-all-wasm" {} ''
@@ -243,5 +252,5 @@ in {
   inherit pkgs pkgsCross defaultProfileName;
   inherit foundation toolchain profileSets preferredPackages allWasm allWasmer;
   inherit shippedCommands shippedPackages libraryMatrix toolchainTestPkgs abiChecks;
-  inherit pythonWheels;
+  inherit pythonWheels pythonRegistry;
 }
