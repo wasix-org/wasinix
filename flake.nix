@@ -37,6 +37,7 @@
       inherit wasmerRuntime;
     };
     lib = wasix.pkgs.lib;
+    wasixLib = import ./pkgs/lib {inherit lib;};
 
     # From-source toolchain (LLVM fork + libc + runtimes + sysroot), see pkgs/toolchain.
     foundation = wasix.foundation;
@@ -130,6 +131,9 @@
             then flattenDrvs key val
             else {}
         );
+      # One derivation per dotted key for nix-eval-jobs / nix-fast-build; names
+      # mirror the `.#` paths above, plus checks.<name> from the flake checks.
+      ci = flattenDrvs "" buildable // flattenDrvs "checks" flakeChecks;
     in
       buildable
       // {
@@ -140,9 +144,15 @@
         allWasmer = wasix.allWasmer;
         allWasm = wasix.allWasm;
 
-        # One derivation per dotted key for nix-eval-jobs / nix-fast-build; names
-        # mirror the `.#` paths above, plus checks.<name> from the flake checks.
-        ci = flattenDrvs "" buildable // flattenDrvs "checks" flakeChecks;
+        inherit ci;
+
+        # ci jobs with stale passthru.wasix.updateReminders (see
+        # pkgs/lib/default.nix): temporary workarounds whose package moved past
+        # the version they were written for. Read by scripts/update.py and the
+        # CI report; consumers dedupe the per-profile repeats.
+        updateReminders =
+          lib.filterAttrs (_: rs: rs != [])
+          (lib.mapAttrs (_: wasixLib.staleRemindersOf) ci);
       };
 
     devShells.${system}.default = wasix.pkgs.mkShell {

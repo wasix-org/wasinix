@@ -373,9 +373,33 @@ def main():
                 print(f"  regen FAILED: {e}")
                 failures.append(f"{t.name} (regen)")
 
+    print_stale_reminders()
+
     if failures:
         print(f"\nFAILED: {', '.join(failures)}")
         sys.exit(1)
+
+
+def print_stale_reminders():
+    # passthru.wasix.updateReminders whose package moved past writtenFor:
+    # workarounds to revisit now that the pins changed. Advisory only.
+    try:
+        out = run(["nix", "eval", "--json",
+                   f".#legacyPackages.{SYSTEM}.updateReminders"]).stdout
+        stale = json.loads(out)
+    except Exception as e:
+        print(f"WARN: reminder check failed: {e}", file=sys.stderr)
+        return
+    seen = set()
+    for attr, rems in sorted(stale.items()):
+        for r in rems:
+            key = (r["message"], r["writtenFor"])
+            if key in seen:
+                continue
+            seen.add(key)
+            name = attr.rsplit(".", 1)[-1]
+            print(f"\nREMINDER: {name} moved {r['writtenFor']} -> {r.get('version')}:"
+                  f"\n  {r['message']}")
 
 
 if __name__ == "__main__":

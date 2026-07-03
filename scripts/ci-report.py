@@ -54,6 +54,26 @@ def classify(cases):
     return counts, failed
 
 
+def dedupe_reminders(reminders):
+    # {attr: [{message, writtenFor, version}]} -> one entry per distinct
+    # reminder; the per-profile attrs collapse to a package name + count
+    merged = {}
+    for attr, rems in (reminders or {}).items():
+        for r in rems:
+            key = (r["message"], r["writtenFor"], r.get("version"))
+            merged.setdefault(key, []).append(attr)
+    return [
+        {
+            "name": sorted(attrs)[0].rsplit(".", 1)[-1],
+            "attrs": sorted(attrs),
+            "message": k[0],
+            "writtenFor": k[1],
+            "version": k[2],
+        }
+        for k, attrs in merged.items()
+    ]
+
+
 def title_of(counts, failed, diff, content):
     if counts is None:
         parts = ["build produced no results"]
@@ -82,9 +102,30 @@ def title_of(counts, failed, diff, content):
     return " · ".join(parts)
 
 
+def with_reminder_count(title, reminders):
+    if reminders:
+        return f"{title} · ⏰ {len(reminders)} stale reminders"
+    return title
+
+
 def excerpt(log):
     lines = [ln for ln in log.splitlines() if ln.strip()][-MAX_LOG_LINES:]
     return "\n".join(lines)[-MAX_LOG_CHARS:]
+
+
+def render_reminders(reminders):
+    if not reminders:
+        return ""
+    md = (
+        f"\n<details open><summary>⏰ Stale update reminders ({len(reminders)})"
+        "</summary>\n\n"
+    )
+    for r in sorted(reminders, key=lambda r: r["name"]):
+        md += (
+            f"- **{r['name']}** ({r['version']}, written for {r['writtenFor']}):"
+            f" {r['message']} <sub>({len(r['attrs'])} jobs)</sub>\n"
+        )
+    return md + "\n</details>\n"
 
 
 def render_md(title, counts, failed):
@@ -117,6 +158,7 @@ def main():
     ap.add_argument("--junit", required=True)
     ap.add_argument("--diff-summary", help="summary json from eval-diff.py")
     ap.add_argument("--content-summary", help="summary json from content-diff.py")
+    ap.add_argument("--reminders", help="updateReminders json from nix eval")
     ap.add_argument("--md-out", required=True)
     ap.add_argument("--json-out", required=True)
     args = ap.parse_args()
@@ -133,15 +175,16 @@ def main():
 
     diff = load_optional(args.diff_summary)
     content = load_optional(args.content_summary)
+    reminders = dedupe_reminders(load_optional(args.reminders))
 
     cases = parse_junit(args.junit)
     counts, failed = (None, []) if cases is None else classify(cases)
-    title = title_of(counts, failed, diff, content)
+    title = with_reminder_count(title_of(counts, failed, diff, content), reminders)
 
     with open(args.json_out, "w") as f:
         json.dump({"title": title, "failed": len(failed)}, f)
     with open(args.md_out, "w") as f:
-        f.write(render_md(title, counts, failed))
+        f.write(render_md(title, counts, failed) + render_reminders(reminders))
     print(title, file=sys.stderr)
 
 

@@ -69,6 +69,11 @@ jobs:
             --base-map-out base-map.json \
             --base-rev "${candidates[@]}"
           cat rebuild-diff.md >>"$GITHUB_STEP_SUMMARY"
+          # stale passthru.wasix.updateReminders, shown in the report
+          nix eval --json \
+            ".#legacyPackages.$(nix eval --raw --impure --expr 'builtins.currentSystem').updateReminders" \
+            --option accept-flake-config true >update-reminders.json ||
+            echo '{}' >update-reminders.json
 
       # consumed by test-report.yml (workflow_run, so fork PRs get the check
       # run and sticky comment too); uploaded before the build so a timeout
@@ -131,6 +136,7 @@ jobs:
             --junit nix-fast-build-result.xml \
             --diff-summary diff-summary.json \
             --content-summary content-summary.json \
+            --reminders update-reminders.json \
             --md-out build-report.md \
             --json-out report.json
           cat build-report.md >>"$GITHUB_STEP_SUMMARY"

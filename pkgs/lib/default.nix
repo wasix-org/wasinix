@@ -1,7 +1,10 @@
 # Helpers for wasix package files, and the passthru.wasix declaration (all
 # optional): supportedProfiles = profiles the package is built for (default
 # all; others skip it silently), preferredProfile = where it ships (default
-# exnrefEh, else first supported), broken = "reason" for a real defect.
+# exnrefEh, else first supported), broken = "reason" for a real defect,
+# updateReminders = [{writtenFor; message;}] = temporary workarounds to
+# revisit; surfaced by scripts/update.py and the CI report once the package
+# version moves past writtenFor.
 # applyWasixMeta below is the only writer of meta.badPlatforms/meta.broken.
 {lib}: let
   profilesCfg = import ../profiles.nix;
@@ -25,6 +28,20 @@ in rec {
   };
 
   wasixMetaOf = drv: (drv.passthru or {}).wasix or {};
+
+  # updateReminders entries whose writtenFor no longer matches the version:
+  # the package moved, the workaround should be revisited. Reminders with no
+  # version to compare against stay stale until fixed rather than vanish.
+  staleRemindersOf = drv: let
+    version = drv.version or null;
+    stale =
+      map (r: r // {inherit version;})
+      (lib.filter (r: version != r.writtenFor) ((wasixMetaOf drv).updateReminders or []));
+    forced = builtins.tryEval (builtins.deepSeq stale stale);
+  in
+    if forced.success
+    then forced.value
+    else [];
 
   # Is `drv` built for this profile? Reads passthru, not meta, so the answer
   # is the same before and after applyWasixMeta.

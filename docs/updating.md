@@ -10,6 +10,12 @@ nix run .#update -- --only llvm wasix-libc
 (nixpkgs packages follow the nixpkgs input). Derived files (lockfiles, the
 rust bootstrap pin, witx pins) are regenerated in the same run.
 
+At the end of a run, stale `passthru.wasix.updateReminders` are printed:
+temporary workarounds whose package moved past the version they were written
+for (`writtenFor`), e.g. a vendored patch that may have landed upstream. CI
+shows the same list in the Per-package status report until the workaround is
+removed or the reminder's `writtenFor` is re-pinned.
+
 | target | updates | also regenerates |
 |---|---|---|
 | `rust-toolchain` | `wasix-org/rust` release | bootstrap pin from the fork's `src/stage0` |

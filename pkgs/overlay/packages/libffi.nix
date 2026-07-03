@@ -23,4 +23,14 @@ prev.libffi.overrideAttrs (old: {
   # --disable-docs skips the texinfo build, so the `info` output is never produced (nix then
   # errors). Drop it.
   outputs = prev.lib.filter (o: o != "info") old.outputs;
+  passthru =
+    (old.passthru or {})
+    // {
+      wasix.updateReminders = [
+        {
+          writtenFor = "3.5.2";
+          message = "src pins a wasix-org/libffi fork rev; on a libffi bump, refresh the fork pin or check whether upstream gained a non-emscripten wasm backend";
+        }
+      ];
+    };
 })
