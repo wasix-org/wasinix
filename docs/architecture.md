@@ -97,6 +97,20 @@ against the native tool.
   `scripts/ci-build.sh` runs it with nix-fast-build and incremental cache
   upload.
 
+CA derivations were considered (early cutoff would show which rebuilds
+actually change outputs) and rejected for now: binary caches cannot serve
+the realisations layer, so CA outputs are unsubstitutable from R2
+([nix#11748](https://github.com/NixOS/nix/issues/11748), and no third-party
+cache server implements it either), `nix copy` does not reliably upload
+realisations ([nix#6623](https://github.com/NixOS/nix/issues/6623)),
+realisation signatures are not checked on registration
+([nix#11393](https://github.com/NixOS/nix/issues/11393)), and non-determinism
+produces conflicting realisations across builders while `--check` cannot
+detect it in CA mode ([nix#5336](https://github.com/NixOS/nix/issues/5336)).
+Revisit when 11748 and 11393 close (milestone:
+[ca-derivations stabilisation](https://github.com/NixOS/nix/milestone/35))
+and the toolchain is measured reproducible.
+
 ## passthru namespaces
 
 `passthru.wasix.*` where it works · `passthru.wasmer.*` webc config ·
