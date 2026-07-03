@@ -51,15 +51,10 @@ counterpart (`prev.<name>`). Entries are found by
 or a `<name>/package.nix` dir. The same loader produces the package name list
 used elsewhere.
 
-Packages declare where they work:
-
-```nix
-passthru.wasix = {
-  supportedProfiles = [ ... ];  # default: all five; others skip silently
-  preferredProfile  = "...";    # default: exnrefEh, else first supported
-  broken = "reason";            # a defect, surfaces as meta.broken
-};
-```
+Packages declare where they work in `passthru.wasix`: `supportedProfiles`
+(default all five; unsupported profiles skip the package silently),
+`preferredProfile` (default `exnrefEh`, else the first supported), and
+`broken = "reason"` for defects (usage in `docs/packaging.md`).
 
 `applyWasixMeta` translates this into `meta.badPlatforms`/`meta.broken`;
 nothing else sets those. `preferredPackages.<name>` is each package at its
@@ -89,7 +84,9 @@ against the native tool.
   `wasix-rust-toolchain`, `wasmer-bin`, `wasix-{libc,llvm,compiler-rt,libcxx,sysroot}`.
 - `checks.<system>`: every `passthru.tests`: behavioural suites, toolchain
   suites (`sysroot`, `wasixcc`, `rust`), wheel imports (`wheel-<attr>`),
-  `treefmt`.
+  per-profile ABI checks (`abi-<profile>`: built artifacts carry the
+  profile's EH feature, PIC relocation flavor, and module kind; see
+  `pkgs/toolchain/tests/abi-check.nix`), `treefmt`.
 - `apps.<system>.update`: the pin updater.
 - `legacyPackages.<system>`: the buildable trees, attr path = build target:
   `foundation.<part>`, `libraryMatrix.<profile>.<lib>`,

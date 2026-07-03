@@ -1,6 +1,6 @@
 # sqlite's configure libm check links a conftest, and the default wasm-opt
 # pass false-negatives it ("Cannot find libm functions"); skip wasm-opt during
-# configure. Otherwise a plain library (would be in trivial.nix).
+# configure.
 {
   final,
   prev,

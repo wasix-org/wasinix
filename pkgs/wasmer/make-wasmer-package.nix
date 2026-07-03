@@ -333,7 +333,7 @@ in
           add_mount "$sp" "$sp"
         # Split on NUL first: store-path strings in the wasm are NUL-terminated, and a bare
         # `grep -a` would glue a path to the next string (e.g. <prefix>argument), yielding a
-        # non-existent path that gets skipped. tr '\0' '\n' separates them.
+        # non-existent path that gets skipped.
         done < <(${pkgs.coreutils}/bin/cat "$bin_dir"/*.wasm 2>/dev/null | ${pkgs.coreutils}/bin/tr '\0' '\n' \
           | ${pkgs.gnugrep}/bin/grep -ohE '/nix/store/[a-z0-9]{32}-[^"'"'"' ]*' \
           | ${pkgs.gnused}/bin/sed -E 's#(/nix/store/[a-z0-9]{32}-[^/]*).*#\1#' \

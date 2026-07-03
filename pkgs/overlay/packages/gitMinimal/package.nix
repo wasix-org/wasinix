@@ -39,8 +39,7 @@ in
           };
           # git execs SHELL_PATH=/bin/bash (set below); wasmer's use_package
           # mounts this dependency's `bash` command there at load, so bash is
-          # not bundled into git's webc. webcRefOf derives "owner/name"@version
-          # from the versionless ref.
+          # not bundled into git's webc.
           dependencies = [bash];
           # git execs its libexec helpers at absolute /nix/store paths; mount
           # whatever git.wasm embeds (bash is no longer embedded).

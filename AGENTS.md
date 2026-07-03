@@ -40,6 +40,11 @@ scripts/update.py    pin updater (nix run .#update)
   `pkgs/toolchain/env.nix`; never write the exports by hand.
 - Patches live next to the file that applies them.
 - Pins: `nix run .#update` (`docs/updating.md`).
+- We control wasmer and the wasix-org forks: root-cause their bugs and
+  quirks and suggest an upstream fix rather than only working around them.
+  Vendor pending fixes as `.patch` files (placed per the patches rule
+  above); when a workaround is needed to ship, track it in `WASIX-TODO.md`
+  with the upstream fix identified.
 
 ## Checking your work
 
@@ -53,9 +58,17 @@ scripts/update.py    pin updater (nix run .#update)
 - A CI job name is a build path: `nix build .#libraryMatrix.exnrefEh.zlib`,
   `.#shippedPackages.git.webc`, `.#pythonWheels.numpy`.
 - Toolchain suites: `.#foundation.wasixcc.tests` (compile+link+run per
-  profile), `.#foundation.sysroot.tests`.
+  profile), `.#foundation.sysroot.tests`; the Rust suite is
+  `.#checks.x86_64-linux.rust`.
 - Touching `pkgs/toolchain/` (except `llvm.nix`) rebuilds everything; use a
   remote builder or the CI cache.
+- The most thorough check is `nix-fast-build --flake
+  .#legacyPackages.x86_64-linux.ci --no-link --skip-cached --option
+  accept-flake-config true`, the same build set as CI
+  (`scripts/ci-build.sh`). `--skip-cached` only helps while the change
+  avoids mass rebuilds, and those are easy to trigger (anything under
+  `pkgs/toolchain/`, a pin bump); expect a huge build that can OOM the
+  machine. Do not run it without asking the user first.
 
 ## Style
 

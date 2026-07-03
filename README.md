@@ -29,18 +29,11 @@ driven by `scripts/ci-build.sh`). A job's dotted name is its build path.
 
 ## Structure
 
-1. `pkgs/toolchain/`: the toolchain, all built from source.
-2. `pkgs/profiles.nix`, `pkgs/set/`: five ABI profiles (exception-handling
-   mode x PIC); each one is a full nixpkgs cross package set with a
-   wasixcc stdenv, so dependencies within a profile resolve automatically.
-   Rust builds through the same mechanism via cargo-wasix.
-3. `pkgs/overlay/packages/`: the package definitions, each a small override
-   of its nixpkgs counterpart. Packages declare which profiles they support
-   via `passthru.wasix`.
-4. `pkgs/overlay/python-packages/`, `pkgs/python-wheels.nix`: a
-   dynamic-linking CPython plus a set of wheels with import tests.
-5. `pkgs/wasmer/`: webc packaging and behavioural tests (run under Wasmer).
-
+`pkgs/toolchain/` builds the toolchain from source; `pkgs/profiles.nix` +
+`pkgs/set/` turn it into five ABI profiles, each a full nixpkgs cross
+package set; `pkgs/overlay/` holds the package definitions (small overrides
+of their nixpkgs counterparts), including a dynamic-linking CPython and
+wheels; `pkgs/wasmer/` packages CLIs as webc and tests them under Wasmer.
 Details: [`docs/architecture.md`](docs/architecture.md).
 
 ## Documentation

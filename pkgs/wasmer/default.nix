@@ -84,7 +84,6 @@
     mkdir -p "$out/pkg"
     ${lib.concatMapStringsSep "\n" (n: ''
         if [ -d "${shippedPackages.${n}.webc}/pkg" ]; then
-          # Do not preserve top-level directory permissions from Nix store paths.
           ${pkgs.coreutils}/bin/cp -R --no-preserve=mode,ownership "${shippedPackages.${n}.webc}/pkg/." "$out/pkg/"
         fi
       '')

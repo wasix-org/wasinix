@@ -11,8 +11,6 @@
   buildCc = "${final.buildPackages.stdenv.cc}/bin/cc";
 in
   helpers.libTweaks {
-    # Replace configureFlags (not append): the override drops withCxx=false's flag,
-    # so use a function to override the old value outright.
     configureFlags = _: [
       "--with-build-cc=${buildCc}"
       "--with-build-cpp=${buildCc}"

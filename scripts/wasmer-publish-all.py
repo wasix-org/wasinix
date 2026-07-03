@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 
 # Build every shipped Wasmer (webc) package and publish those the registry
-# does not already have. Packages built by make-wasmer-package.nix are
-# self-contained (runtime deps are bundled as fs/selfMounts store paths, not
-# registry [dependencies]), so publish order does not matter.
+# does not already have. Packages publish in name order; the only
+# cross-package webc [dependencies] edge (git -> bash) is satisfied by it.
 
 import argparse
 import hashlib

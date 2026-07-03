@@ -50,3 +50,13 @@ upstream. Rebuilds everything. Check: `nix build .#wasix-libc` then
 **wasixcc**: the lockfile is in-source, nothing to regenerate. On update,
 drop any `wasixcc-*.patch` that landed upstream. Check: `nix build .#wasixcc`
 and `.#foundation.wasixcc.tests`.
+
+**wasmer**: the runtime every behavioural test runs under. flake.nix applies
+`patches/wasmer-offline-resolution.patch` (wasmer PR 6768) on top; drop it
+once the PR merges. A newer runtime can make `broken`-marked tests start
+passing, which fails them loudly (XPASS): remove the markers it names.
+
+**nixpkgs**: moves every `prev.X` package and the stdenv underneath the
+overlay; the biggest blast radius, everything rebuilds. Check: the CI set
+(`scripts/ci-build.sh`, or start with a few shipped packages and the
+toolchain suites).

@@ -94,8 +94,6 @@
     if !isWasixHost
     then {}
     else let
-      # Auto-import (pkgs/lib/load-packages.nix): packages/<name>.nix files,
-      # packages/<name>/package.nix dirs, and the trivial list.
       loaded = helpers.loadPackageDir {
         dir = ./packages;
         trivial = import ./trivial.nix;

@@ -11,10 +11,8 @@
   ...
 }: let
   lib = prev.lib;
-  # CPython minor version ("3.13"); keeps the postInstall paths correct across bumps.
   pyVer = prev.python3.pythonVersion;
 
-  # wasix build fixes for the python package set; see overlay/python-packages/.
   pythonPackageOverrides = import ../../python-packages {
     callArgs = {inherit final prev preferredPackages helpers lib;};
   };
@@ -136,8 +134,7 @@
       '';
 
       # Point subprocess(shell=True)'s baked sh at the wasix off-profile bash (cpython bakes the
-      # build-platform bash). substituteInPlace, not a .patch, because both store paths are dynamic;
-      # the webc mounts it via selfMounts (it lives in a .py, which autoSelfMount doesn't scan).
+      # build-platform bash).
       postPatch = ''
                 substituteInPlace Lib/subprocess.py \
                   --replace-fail '${final.buildPackages.bashNonInteractive}/bin/sh' '${preferredPackages.bash}/bin/sh'
@@ -207,8 +204,7 @@
       tzdata = final.buildPackages.tzdata;
       gdbm = null;
       bashNonInteractive = final.buildPackages.bashNonInteractive;
-      # `self = py` makes python3.pkgs.<pkg> build against THIS python, not the unfixed python313
-      # (lazy: .pkgs only, doesn't rebuild the interpreter).
+      # `self = py` makes python3.pkgs.<pkg> build against THIS python, not the unfixed python313.
       self = py;
       packageOverrides = pythonPackageOverrides;
     });

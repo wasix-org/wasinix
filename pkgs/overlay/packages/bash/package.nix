@@ -32,11 +32,7 @@ in
         --replace-fail '#if defined (TIOCGWINSZ) || defined (HAVE_TCGETWINSIZE)' \
                        '#if (defined (TIOCGWINSZ) || defined (HAVE_TCGETWINSIZE)) && !defined(__wasi__)'
     '';
-    # passthru.wasix.* is build-graph metadata (passthru.wasmer.* is webc
-    # config). off is the only, hence preferred, profile, so
-    # preferredPackages.bash resolves to the off build.
     passthru.wasix.supportedProfiles = ["off"];
-    # Evaluates in any profile, but refuses to build outside off-EH.
     preConfigure = final.lib.optionalString (!offProfile) ''
       echo 'bash must be built in the off-EH profile (wasmExceptions = "no")' >&2
       exit 1

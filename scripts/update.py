@@ -101,8 +101,7 @@ def raw_file(owner, repo, rev, path):
 
 
 def fetch_source(owner, repo, rev):
-    # Download and unpack the GitHub archive into a temp dir; returns the
-    # unpacked root. Archives omit submodules, which is fine for the regens.
+    # Archives omit submodules, which is fine for the regens.
     url = f"https://github.com/{owner}/{repo}/archive/{rev}.tar.gz"
     tmp = Path(tempfile.mkdtemp(prefix="wasinix-update-"))
     tarball = tmp / "src.tar.gz"

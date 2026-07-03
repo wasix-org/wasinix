@@ -23,9 +23,13 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
 ### spawned commands and PATH 🟢
 - Fixed in current wasmer: `posix_spawnp` and fork + `execvp` both resolve the
   child via the guest PATH, and the child's `argv[0]` arrives correctly
-  (verified with minimal C programs; the find suite's fork/exec tests pass).
+  (verified with minimal C programs).
   Older runtimes could not resolve by name, which is why git execs absolute
   baked paths; that approach still works and stays.
+- The find suite's `-exec`/xargs tests stay `broken` regardless: the spawned
+  tools (cat/echo) aren't on the guest PATH at all — the test harness forwards
+  an env allowlist, not the host PATH — so there is nothing for resolution to
+  find. That is a harness/environment gap, not this issue.
 
 ### `argv[0]` 🟢
 - Correct on current wasmer for both directly-run and spawned programs

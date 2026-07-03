@@ -54,7 +54,7 @@
     WASIXCC_RUN_WASM_OPT = "no";
   };
 
-  # Renderers. Attr order is alphabetical; the vars are independent, so fine.
+  # Renderers.
   exportsOf = env:
     lib.concatStringsSep "\n"
     (lib.mapAttrsToList (k: v: "export ${k}=${lib.escapeShellArg v}") env);

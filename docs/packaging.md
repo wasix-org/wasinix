@@ -59,8 +59,8 @@ not in nixpkgs, call `final.rustPlatform.buildRustPackage` (see
    helpers.wasmRename { wasmName = "foo"; } (helpers.libTweaks { } prev.foo)
    ```
 
-   `wasmRename` takes `asyncifyFlags`/`binaryen` for programs needing
-   fork/longjmp.
+   Programs needing fork/setjmp set `env.WASIXCC_WASM_OPT_FLAGS =
+   "--asyncify:-O2"` so wasixcc asyncifies at link (see `find`, `gitMinimal`).
 
 2. The webc manifest is generated; most packages need zero config. Deviations
    go in `passthru.wasmer`: `name`, `version`, `commands` (aliases),
@@ -68,6 +68,15 @@ not in nixpkgs, call `final.rustPlatform.buildRustPackage` (see
    store paths found in the wasm), `selfMounts` (paths referenced from
    scripts, which autoSelfMount can't see). See git's package.nix for a full
    example.
+
+## Publishing to the registry
+
+`scripts/wasmer-publish-all.py --registry wasmer.io` builds `allWasmer` and
+publishes every shipped webc the registry does not already have (`--dry-run`
+previews). Existing versions are hash-verified against the registry, so a
+changed webc under an unchanged version fails loudly. Needs an authenticated
+`wasmer` CLI (`wasmer login`). Packages publish in name order; the only
+cross-package webc dependency (git → bash) is satisfied by it.
 
 ## A Python package or wheel
 
@@ -86,6 +95,9 @@ setup). They attach as `passthru.tests` and appear under `checks.<name>`.
 `mkScriptComparison` diffs against the native tool; `expectFail` marks a
 must-fail test; `broken "reason"` tolerates a known failure and fails loudly
 once it starts passing.
+
+To run tests against a locally built runtime instead of the pinned one:
+`WASMER_BIN=/path/to/wasmer nix build --impure .#checks.x86_64-linux.<name>`.
 
 ## Pitfalls
 

@@ -38,15 +38,10 @@
   wasixSysrootEh,
   wasixSysrootEhpic,
   # Also build std for wasm32-wasmer-wasi-dl (the dynamic-linking / PIC target),
-  # needed for PIC `.so` Rust artifacts (e.g. pyo3 python extensions). cc-rs
-  # compatibility is fine: src/bootstrap pins the cc-rs commit (f2e7d1a1) that
-  # added the `-dl` env arm, and the library/ (std) workspace's stock cc 1.2.0
-  # never runs for the wasm target (optimized-compiler-builtins=false below, no
-  # profiler_builtins), so its parser never sees `-dl`.
+  # needed for PIC `.so` Rust artifacts (e.g. pyo3 python extensions).
   withDynamicLinking ? true,
 }: let
   inherit (lib) optionals optionalString;
-  # The fork release tag is `v${version}` (including the `+rust-1.90` suffix).
   version = "2026-05-21.1+rust-1.90";
 
   hostTriple = "x86_64-unknown-linux-gnu";
@@ -73,7 +68,6 @@
     buildInputs = [stdenv.cc.cc.lib zlib];
     installPhase = ''
       runHook preInstall
-      # The release installer's scripts use `#!/usr/bin/env`, absent in the sandbox.
       patchShebangs install.sh
       ./install.sh \
         --prefix="$out" \
@@ -146,8 +140,6 @@ in
     enableParallelBuilding = true;
     requiredSystemFeatures = ["big-parallel"];
 
-    # Build env known at eval time; HOME needs $TMPDIR (a build-time path), so it
-    # can't go here.
     env = {
       # Rust bootstrap special-cases CI environments; force it off.
       GITHUB_ACTIONS = "false";

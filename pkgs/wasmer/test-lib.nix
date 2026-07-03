@@ -198,8 +198,6 @@ in rec {
                 bin_name=$(basename "$original_bin")
                 cat > "$shim_dir/$bin_name" <<SHIMEOF
       #!/bin/sh
-      # Forward only the allowlisted host vars that are actually set (not wasmer's
-      # blanket --forward-host-env, which would leak NIX_*/TMPDIR/PATH/… too).
       env_flags=""
       for _v in ${forwardEnvNames}; do
         _val=\$(printenv "\$_v" 2>/dev/null) && env_flags="\$env_flags --env \$_v=\$_val"
