@@ -96,8 +96,10 @@ against the native tool.
   path. Unsupported/broken packages are filtered out before becoming jobs.
   `scripts/ci-build.sh` runs it with nix-fast-build and incremental cache
   upload. `scripts/eval-diff.py` diffs the eval (attr to drvPath) against the
-  base branch and posts what a PR rebuilds as a sticky comment; maps are
-  published to the cache bucket (`eval-maps/<rev>.json`) on pushes to main.
+  base branch to surface what a PR rebuilds; maps are published to the cache
+  bucket (`eval-maps/<rev>.json`) on pushes to main. `scripts/ci-report.py`
+  folds that and the JUnit results into the "Per-package status" check run
+  and a sticky PR comment (test-report.yml, workflow_run so fork PRs work).
 
 CA derivations were considered (early cutoff would show which rebuilds
 actually change outputs) and rejected for now: binary caches cannot serve

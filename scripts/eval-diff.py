@@ -111,14 +111,22 @@ def section(title, attrs):
     )
 
 
-def render(base, head):
+def diff_of(base, head):
     both = head["jobs"].keys() & base["jobs"].keys()
-    rebuilt = sorted(a for a in both if head["jobs"][a] != base["jobs"][a])
-    added = sorted(head["jobs"].keys() - base["jobs"].keys())
-    removed = sorted(base["jobs"].keys() - head["jobs"].keys())
-    new_errors = {
-        a: e for a, e in head["errors"].items() if a not in base["errors"]
+    return {
+        "rebuilt": sorted(a for a in both if head["jobs"][a] != base["jobs"][a]),
+        "added": sorted(head["jobs"].keys() - base["jobs"].keys()),
+        "removed": sorted(base["jobs"].keys() - head["jobs"].keys()),
+        "newErrors": {
+            a: e for a, e in head["errors"].items() if a not in base["errors"]
+        },
     }
+
+
+def render(base, head):
+    d = diff_of(base, head)
+    rebuilt, added, removed = d["rebuilt"], d["added"], d["removed"]
+    new_errors = d["newErrors"]
 
     total = len(head["jobs"])
     md = f"### Rebuild diff vs `{base['rev'][:12]}`\n\n"
@@ -161,6 +169,7 @@ def main():
     ap.add_argument("--jobs-out", help="where to write the nix-eval-jobs output")
     ap.add_argument("--map-out", required=True)
     ap.add_argument("--md-out", required=True)
+    ap.add_argument("--summary-out", help="counts as json, for ci-report.py")
     ap.add_argument("--base-rev", nargs="*", default=[])
     ap.add_argument("--base-map", help="local base map file, for testing")
     args = ap.parse_args()
@@ -191,6 +200,15 @@ def main():
         md = render(base, head)
     with open(args.md_out, "w") as f:
         f.write(md)
+
+    if args.summary_out:
+        summary = {"total": len(head["jobs"]), "baseRev": None}
+        if base is not None:
+            d = diff_of(base, head)
+            summary["baseRev"] = base["rev"]
+            summary.update({k: len(v) for k, v in d.items()})
+        with open(args.summary_out, "w") as f:
+            json.dump(summary, f)
 
 
 if __name__ == "__main__":
