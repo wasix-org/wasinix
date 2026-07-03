@@ -5,6 +5,7 @@
   final,
   prev,
   nixpkgs,
+  helpers,
   ...
 }: let
   lib = final.lib;
@@ -19,6 +20,11 @@ in
   })
   .overrideAttrs (old: {
     doCheck = false;
+    # postgres error handling is built on sigsetjmp, which the off sysroot's
+    # <setjmp.h> doesn't declare.
+    passthru =
+      (old.passthru or {})
+      // {wasix.supportedProfiles = helpers.profiles.withEh;};
     installPhase = dropShlibClean (old.installPhase or "");
     buildInputs =
       lib.filter

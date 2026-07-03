@@ -10,6 +10,8 @@
   lib = final.lib;
 in
   helpers.libTweaks {
+    # Magick++ throws; the off profile compiles C++ with -fno-exceptions.
+    passthru.wasix.supportedProfiles = helpers.profiles.withEh;
     postPatch = ''
       substituteInPlace MagickCore/delegate.c \
         --replace-fail 'child_pid=(pid_t) fork();' 'child_pid=(pid_t) -1; /* WASIX: fork unsupported */'

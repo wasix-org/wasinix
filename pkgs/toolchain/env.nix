@@ -16,6 +16,13 @@
 
   # Per-profile ABI settings; wasmExceptions is passed through verbatim, and
   # wasixcc selects the sysroot variant from EH/PIC.
+  #
+  # WASIXCC_PIC is a default, not a pin: wasixcc documents that a -fPIC flag
+  # enables PIC, silently switching to the PIC sysroot (and erroring at off,
+  # which has none). Build systems pass -fPIC unconditionally (cmake,
+  # hardening), so the profile pins its PIC mode with a countermanding
+  # COMPILER_POST_FLAGS entry, which wasixcc appends after all arguments
+  # (response files included) and resolves last-wins.
   profileEnv = {
     wasmExceptions ? null,
     pic ? false,
@@ -26,6 +33,10 @@
         if pic
         then "yes"
         else "no";
+      WASIXCC_COMPILER_POST_FLAGS =
+        if pic
+        then "-fPIC"
+        else "-fno-PIC";
     };
 
   # Autoconf conftest workarounds, for driving arbitrary build systems.

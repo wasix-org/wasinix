@@ -138,13 +138,11 @@
   };
 
   # ── package matrices for CI / consumers ──────────────────────────────────────
-  # Libraries (the non-shipped overlay packages), built across the non-off
-  # profiles: off has no PIC sysroot and exists only for bash and its linked
-  # readline/ncurses, reached via preferredPackages.
-  nonOffProfileNames = lib.filter (n: n != "off") (lib.attrNames profilesCfg.profiles);
+  # Libraries (the non-shipped overlay packages), built across all profiles.
+  # A package that doesn't target a profile declares it via passthru.wasix.
   libPkgNames = lib.filter (n: !(lib.elem n shippedCommands)) wasixPkgNames;
   libraryMatrix =
-    lib.genAttrs nonOffProfileNames
+    lib.genAttrs (lib.attrNames profilesCfg.profiles)
     (profile:
       # Skip libs whose passthru.wasix.supportedProfiles excludes this profile
       # (snappy at PIC profiles, rust packages outside eh/ehpic). Reads passthru,
