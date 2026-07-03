@@ -68,6 +68,7 @@
       collectTests wasix.shippedPackages
       // collectTests wasix.toolchainTestPkgs
       // collectTestsPrefixed "wheel-" wasix.pythonWheels
+      // lib.mapAttrs' (p: lib.nameValuePair "abi-${p}") wasix.abiChecks
       // {treefmt = treefmtEval.config.build.check self;};
   in {
     formatter.${system} = treefmtEval.config.build.wrapper;

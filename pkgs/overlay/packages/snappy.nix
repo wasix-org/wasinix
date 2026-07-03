@@ -1,16 +1,15 @@
-# snappy's CMakeLists forces -fno-exceptions for Clang, and wasixcc rejects
-# PIC + no-exceptions ("PIC without wasm exceptions is not a valid build
-# configuration"), so snappy builds only on the non-PIC profiles. Nothing in
-# the overlay depends on snappy (it is in the library matrix for coverage),
-# so mark the PIC profiles unsupported rather than override the deliberate
-# -fno-exceptions. Proper fix: relax the wasixcc rule (PIC shouldn't require
-# wasm exceptions), then drop this gate.
+# snappy's CMakeLists forces -fno-exceptions, which wasixcc deduces into
+# exceptions=off: whatever the profile, the artifact is built against the off
+# sysroot (the abi check caught eh columns shipping off-ABI snappy). Declare
+# what it actually is, an off-ABI library; nothing in the overlay consumes it
+# (matrix coverage only). If a consumer at an EH profile ever needs it, patch
+# the -fno-exceptions out of its CMakeLists instead.
 {
   prev,
   helpers,
   ...
 }:
 helpers.libTweaks {
-  passthru.wasix.supportedProfiles = helpers.profiles.withoutPic;
+  passthru.wasix.supportedProfiles = ["off"];
 }
 prev.snappy

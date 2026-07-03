@@ -152,6 +152,35 @@
         (_: wasixLib.supportedIn profile)
         (lib.genAttrs libPkgNames (n: profileSets.${profile}.${n})));
 
+  # One ABI check per profile over that profile's whole column (matrix libs +
+  # shipped packages preferring the profile, minus broken): objects must carry
+  # the profile's exception-handling feature and PIC relocation flavor, linked
+  # wasm the right module kind. Guards against flags moving a build to another
+  # profile's sysroot. Asyncify expectations are per-package, checked in the
+  # packages' own tests instead.
+  abiCheck = pkgs.callPackage ./toolchain/tests/abi-check.nix {
+    inherit (foundation) wasixLlvm binaryen;
+  };
+  abiChecks =
+    lib.mapAttrs (
+      profile: enc: let
+        notBroken = lib.filterAttrs (_: d: !(d.meta.broken or false));
+        shippedHere =
+          lib.filter
+          (n: lib.elem n shippedCommands && preferredProfileOf n == profile)
+          wasixPkgNames;
+      in
+        abiCheck {
+          name = profile;
+          paths =
+            lib.attrValues (notBroken libraryMatrix.${profile})
+            ++ map (n: preferredPackages.${n}) shippedHere;
+          inherit (enc) eh pic;
+          dylink = enc.pic;
+        }
+    )
+    profilesCfg.sysrootEncodings;
+
   # CLIs shipped as webc packages, by overlay attr name. Built at their preferred
   # profile (bash -> off, rest -> default); the wasmer layer adds .webc + .tests.
   shippedCommands = [
@@ -213,6 +242,6 @@
 in {
   inherit pkgs pkgsCross defaultProfileName;
   inherit foundation toolchain profileSets preferredPackages allWasm allWasmer;
-  inherit shippedCommands shippedPackages libraryMatrix toolchainTestPkgs;
+  inherit shippedCommands shippedPackages libraryMatrix toolchainTestPkgs abiChecks;
   inherit pythonWheels;
 }
