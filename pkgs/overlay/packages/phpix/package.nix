@@ -93,6 +93,7 @@ in
     '';
 
     passthru.wasix.supportedProfiles = ["exnrefEh"];
+    passthru.wasix.shipped = true;
     # The manifest entrypoint is what makes `wasmer run <pkg>` consult the
     # command's detected wasm features (tail calls!) when picking its engine;
     # without it the default engine rejects the module.
