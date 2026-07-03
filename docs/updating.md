@@ -48,8 +48,8 @@ in `pkgs/toolchain/env.nix`. Check: `nix build .#cargo-wasix`, then crabsay.
 
 **wasix-libc**: the witx interface specs are submodules (absent from archive
 downloads), pinned separately in `sysroot/libc.nix` and synced on update; a
-stale pin fails the build with undeclared `__wasi_*` functions. Patches are
-applied on the source (`wasix-libc-pic-tls.patch`); drop any that landed
+stale pin fails the build with undeclared `__wasi_*` functions. Patches, if
+any, are applied on the source via `applyPatches`; drop any that landed
 upstream. Rebuilds everything. Check: `nix build .#wasix-libc` then
 `.#wasix-sysroot`, and `.#legacyPackages.x86_64-linux.foundation.sysroot.tests`.
 

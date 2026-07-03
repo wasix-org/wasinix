@@ -17,16 +17,11 @@
   profilesCfg = import ../../profiles.nix;
 
   wasixLibcVersion = "v2026-07-03.1";
-  wasixLibcSrc = pkgs.applyPatches {
-    name = "wasix-libc-${wasixLibcVersion}-patched";
-    src = pkgs.fetchFromGitHub {
-      owner = "wasix-org";
-      repo = "wasix-libc";
-      tag = wasixLibcVersion; # content hash pins it
-      hash = "sha256-6xpQdtb3GjF9MnepHuZXxsdQssEP8m3ZK8MavLfFU2o=";
-    };
-    # PIC sysroot libc++ needs global-dynamic TLS; upstream PR pending.
-    patches = [./wasix-libc-pic-tls.patch];
+  wasixLibcSrc = pkgs.fetchFromGitHub {
+    owner = "wasix-org";
+    repo = "wasix-libc";
+    tag = wasixLibcVersion; # content hash pins it
+    hash = "sha256-6xpQdtb3GjF9MnepHuZXxsdQssEP8m3ZK8MavLfFU2o=";
   };
 
   # The cmake toolchain file with this variant's ABI flags. PIC is a cmake arg,
