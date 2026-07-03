@@ -42,7 +42,7 @@
   withDynamicLinking ? true,
 }: let
   inherit (lib) optionals optionalString;
-  version = "2026-05-21.1+rust-1.90";
+  version = "2026-07-03.1+rust-1.90";
 
   hostTriple = "x86_64-unknown-linux-gnu";
 
@@ -52,7 +52,7 @@
     repo = "rust";
     tag = "v${version}";
     fetchSubmodules = true;
-    hash = "sha256-rQ5E50rzs7b4FTEJfS5jaLJak3LqT/3FUINvUq+BZzw=";
+    hash = "sha256-am5SBlIW/Ff1EVvfo0KMBYPu3X7Ke0lQSqUEW+VELs0=";
   };
 
   # stage0 bootstrap compiler: the upstream release pinned in src/stage0, which

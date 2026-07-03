@@ -16,14 +16,14 @@
   # (PIC is only valid with EH).
   profilesCfg = import ../../profiles.nix;
 
-  wasixLibcVersion = "v2026-06-25.1";
+  wasixLibcVersion = "v2026-07-03.1";
   wasixLibcSrc = pkgs.applyPatches {
     name = "wasix-libc-${wasixLibcVersion}-patched";
     src = pkgs.fetchFromGitHub {
       owner = "wasix-org";
       repo = "wasix-libc";
       tag = wasixLibcVersion; # content hash pins it
-      hash = "sha256-f0AavtFFyeTwOOJKX9EwxMxRW1fK2NGAEJdoY81DA8o=";
+      hash = "sha256-6xpQdtb3GjF9MnepHuZXxsdQssEP8m3ZK8MavLfFU2o=";
     };
     # PIC sysroot libc++ needs global-dynamic TLS; upstream PR pending.
     patches = [./wasix-libc-pic-tls.patch];
