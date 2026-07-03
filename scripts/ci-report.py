@@ -54,7 +54,7 @@ def classify(cases):
     return counts, failed
 
 
-def title_of(counts, failed, diff):
+def title_of(counts, failed, diff, content):
     if counts is None:
         parts = ["build produced no results"]
     else:
@@ -77,6 +77,8 @@ def title_of(counts, failed, diff):
         parts.append(f"{diff['rebuilt']} rebuilt vs base")
         if diff.get("newErrors"):
             parts.append(f"{diff['newErrors']} new eval failures")
+    if content and content.get("pairs"):
+        parts.append(f"{content['identical']}/{content['pairs']} outputs identical")
     return " · ".join(parts)
 
 
@@ -114,21 +116,27 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--junit", required=True)
     ap.add_argument("--diff-summary", help="summary json from eval-diff.py")
+    ap.add_argument("--content-summary", help="summary json from content-diff.py")
     ap.add_argument("--md-out", required=True)
     ap.add_argument("--json-out", required=True)
     args = ap.parse_args()
 
-    diff = None
-    if args.diff_summary:
+    def load_optional(path):
+        if not path:
+            return None
         try:
-            with open(args.diff_summary) as f:
-                diff = json.load(f)
+            with open(path) as f:
+                return json.load(f)
         except OSError as e:
-            print(f"WARN: no diff summary ({e})", file=sys.stderr)
+            print(f"WARN: {e}", file=sys.stderr)
+            return None
+
+    diff = load_optional(args.diff_summary)
+    content = load_optional(args.content_summary)
 
     cases = parse_junit(args.junit)
     counts, failed = (None, []) if cases is None else classify(cases)
-    title = title_of(counts, failed, diff)
+    title = title_of(counts, failed, diff, content)
 
     with open(args.json_out, "w") as f:
         json.dump({"title": title, "failed": len(failed)}, f)

@@ -66,6 +66,7 @@ jobs:
             --map-out eval-map.json \
             --md-out rebuild-diff.md \
             --summary-out diff-summary.json \
+            --base-map-out base-map.json \
             --base-rev "${candidates[@]}"
           cat rebuild-diff.md >>"$GITHUB_STEP_SUMMARY"
 
@@ -106,6 +107,20 @@ jobs:
           NIX_SIGNING_KEY: ${{ secrets.NIX_SIGNING_KEY }}
           JOBS_FILE: eval-jobs.jsonl
 
+      # of the rebuilt outputs, which actually changed content vs base?
+      # narinfo comparison mostly; only self-referential paths download
+      - name: Content diff
+        if: ${{ always() && steps.build.conclusion != 'skipped' }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          ./scripts/content-diff.py \
+            --base-map base-map.json \
+            --head-map eval-map.json \
+            --md-out content-diff.md \
+            --summary-out content-summary.json
+          cat content-diff.md >>"$GITHUB_STEP_SUMMARY"
+
       # one-line status + per-failure details from the JUnit; test-report.yml
       # turns this into the check run title and the sticky comment
       - name: Render report
@@ -115,6 +130,7 @@ jobs:
           ./scripts/ci-report.py \
             --junit nix-fast-build-result.xml \
             --diff-summary diff-summary.json \
+            --content-summary content-summary.json \
             --md-out build-report.md \
             --json-out report.json
           cat build-report.md >>"$GITHUB_STEP_SUMMARY"
@@ -127,5 +143,6 @@ jobs:
           path: |
             build-report.md
             report.json
+            content-diff.md
             nix-fast-build-result.xml
           if-no-files-found: error

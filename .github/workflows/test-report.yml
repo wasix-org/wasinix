@@ -44,7 +44,7 @@ jobs:
             const run = context.payload.workflow_run;
             const report = JSON.parse(read('report.json') ?? '{}');
             const title = report.title ?? `no report produced (run ${run.conclusion})`;
-            const body = [read('build-report.md'), read('rebuild-diff.md')]
+            const body = [read('build-report.md'), read('content-diff.md'), read('rebuild-diff.md')]
               .filter(Boolean).join('\n\n') || 'No report artifacts found.';
             // check run output.summary caps at 64k
             const summary = body.length > 60000 ? body.slice(0, 60000) + '\n\n(truncated)' : body;

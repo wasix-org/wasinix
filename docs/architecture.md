@@ -97,9 +97,12 @@ against the native tool.
   `scripts/ci-build.sh` runs it with nix-fast-build and incremental cache
   upload. `scripts/eval-diff.py` diffs the eval (attr to drvPath) against the
   base branch to surface what a PR rebuilds; maps are published to the cache
-  bucket (`eval-maps/<rev>.json`) on pushes to main. `scripts/ci-report.py`
-  folds that and the JUnit results into the "Per-package status" check run
-  and a sticky PR comment (test-report.yml, workflow_run so fork PRs work).
+  bucket (`eval-maps/<rev>.json`) on pushes to main. `scripts/content-diff.py`
+  then splits rebuilt outputs into bit-identical vs actually changed
+  (narinfo narHash compare; self-referential paths get normalized with `nix
+  store make-content-addressed`). `scripts/ci-report.py` folds all that and
+  the JUnit results into the "Per-package status" check run and a sticky PR
+  comment (test-report.yml, workflow_run so fork PRs work).
 
 CA derivations were considered (early cutoff would show which rebuilds
 actually change outputs) and rejected for now: binary caches cannot serve

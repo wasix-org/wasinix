@@ -59,7 +59,7 @@ def eval_jobs(flake, jobs_path):
 
 
 def load_map_from_jobs(jobs_path, rev):
-    jobs, errors = {}, {}
+    jobs, outputs, errors = {}, {}, {}
     with open(jobs_path) as f:
         for line in f:
             if not line.strip():
@@ -72,7 +72,15 @@ def load_map_from_jobs(jobs_path, rev):
                 errors[attr] = obj["error"].splitlines()[0]
             else:
                 jobs[attr] = obj["drvPath"]
-    return {"schema": MAP_SCHEMA, "rev": rev, "jobs": jobs, "errors": errors}
+                # output paths feed content-diff.py (rebuilt vs actually changed)
+                outputs[attr] = obj.get("outputs") or {}
+    return {
+        "schema": MAP_SCHEMA,
+        "rev": rev,
+        "jobs": jobs,
+        "outputs": outputs,
+        "errors": errors,
+    }
 
 
 def fetch_base_map(revs, base_map_path):
@@ -172,6 +180,7 @@ def main():
     ap.add_argument("--summary-out", help="counts as json, for ci-report.py")
     ap.add_argument("--base-rev", nargs="*", default=[])
     ap.add_argument("--base-map", help="local base map file, for testing")
+    ap.add_argument("--base-map-out", help="save the fetched base map, for content-diff.py")
     args = ap.parse_args()
 
     jobs_path = args.jobs
@@ -190,6 +199,9 @@ def main():
     log(f"{len(head['jobs'])} jobs, {len(head['errors'])} eval errors -> {args.map_out}")
 
     base = fetch_base_map(args.base_rev, args.base_map)
+    if base is not None and args.base_map_out:
+        with open(args.base_map_out, "w") as f:
+            json.dump(base, f)
     if base is None:
         md = (
             "### Rebuild diff\n\nNo base eval map found"
