@@ -32,14 +32,20 @@ fi
 
 # --copy-to pushes only runtime closures, so build-only deps never reach the
 # cache. Capture the needed builds before building (afterwards they would read
-# "local", not "notBuilt"); they are pushed after the build.
+# "local", not "notBuilt"); they are pushed after the build. JOBS_FILE reuses
+# the eval from the rebuild-diff step (scripts/eval-diff.py) instead of
+# evaling a second time.
 PUSH_DRVS=""
 if [ -n "${NIX_SIGNING_KEY:-}" ]; then
-  PUSH_DRVS=$(
-    nix run nixpkgs#nix-eval-jobs -- \
-      --flake "$CI_ATTR" --check-cache-status --option accept-flake-config true 2>/dev/null |
-      jq -r '.neededBuilds[]?' | sort -u
-  )
+  if [ -n "${JOBS_FILE:-}" ] && [ -s "$JOBS_FILE" ]; then
+    PUSH_DRVS=$(jq -r '.neededBuilds[]?' "$JOBS_FILE" | sort -u)
+  else
+    PUSH_DRVS=$(
+      nix run nixpkgs#nix-eval-jobs -- \
+        --flake "$CI_ATTR" --check-cache-status --option accept-flake-config true 2>/dev/null |
+        jq -r '.neededBuilds[]?' | sort -u
+    )
+  fi
 fi
 
 echo "Building all packages under $CI_ATTR independently..."

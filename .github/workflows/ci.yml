@@ -52,6 +52,53 @@ jobs:
           git config --global --add url.https://github.com/.insteadOf git@github.com:
           git config --global --add url.https://github.com/.insteadOf ssh://git@github.com/
 
+      # eval once (attr -> drvPath), diff against the base branch's published
+      # map to surface what this change rebuilds; ci-build.sh reuses the raw
+      # eval. Informational: a missing base map skips the diff, not the build.
+      - name: Rebuild diff
+        shell: bash
+        run: |
+          candidates=()
+          base_ref=""
+          case "${{ github.event_name }}" in
+            pull_request) base_ref="${{ github.event.pull_request.base.ref }}" ;;
+            merge_group) base_ref="${{ github.event.merge_group.base_ref }}" ;;
+          esac
+          if [ -n "$base_ref" ]; then
+            # walk back: the newest base commits may not have published yet
+            git fetch --quiet --depth=30 origin "$base_ref"
+            mapfile -t candidates < <(git rev-list -n 30 FETCH_HEAD)
+          fi
+          ./scripts/eval-diff.py \
+            --rev "${{ github.sha }}" \
+            --jobs-out eval-jobs.jsonl \
+            --map-out eval-map.json \
+            --md-out rebuild-diff.md \
+            --base-rev "${candidates[@]}"
+          cat rebuild-diff.md >>"$GITHUB_STEP_SUMMARY"
+
+      # posted as a sticky PR comment by test-report.yml (workflow_run, so
+      # fork PRs get one too)
+      - name: Upload rebuild diff
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rebuild-diff
+          path: rebuild-diff.md
+
+      # publish the eval map so future PRs can diff against this commit
+      - name: Publish eval map
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          aws s3 cp --no-progress eval-map.json \
+            "s3://wasinix-cache/eval-maps/${{ github.sha }}.json" \
+            --endpoint-url https://1541b1e8a3fc6ad155ce67ef38899700.r2.cloudflarestorage.com
+
       # per-package build + JUnit report; uploads to cache as it builds when
       # credentials are present (forks build keyless), so timeouts don't lose work
       - name: Build packages
@@ -63,6 +110,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
           NIX_SIGNING_KEY: ${{ secrets.NIX_SIGNING_KEY }}
+          JOBS_FILE: eval-jobs.jsonl
 
       # rendered by test-report.yml (workflow_run, so fork PRs get a check too)
       - name: Upload report

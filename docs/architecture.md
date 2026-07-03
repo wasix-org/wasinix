@@ -95,7 +95,9 @@ against the native tool.
 - `ci`: the same trees flattened to dotted names, so a job name is a build
   path. Unsupported/broken packages are filtered out before becoming jobs.
   `scripts/ci-build.sh` runs it with nix-fast-build and incremental cache
-  upload.
+  upload. `scripts/eval-diff.py` diffs the eval (attr to drvPath) against the
+  base branch and posts what a PR rebuilds as a sticky comment; maps are
+  published to the cache bucket (`eval-maps/<rev>.json`) on pushes to main.
 
 CA derivations were considered (early cutoff would show which rebuilds
 actually change outputs) and rejected for now: binary caches cannot serve

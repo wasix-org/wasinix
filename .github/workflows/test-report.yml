@@ -28,3 +28,54 @@ jobs:
           # set to false to create a commit check run (shows in PR Checks), not just an
           # Actions-tab summary
           use-actions-summary: false
+
+  # sticky PR comment with the rebuild diff (scripts/eval-diff.py); the
+  # artifact only exists for pull_request runs
+  rebuild-diff:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'pull_request'
+    permissions:
+      actions: read
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        id: download
+        # a run cancelled before the eval step has no artifact
+        continue-on-error: true
+        with:
+          name: rebuild-diff
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        if: steps.download.outcome == 'success'
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- wasinix-rebuild-diff -->';
+            const body = marker + '\n' + fs.readFileSync('rebuild-diff.md', 'utf8');
+
+            // workflow_run.pull_requests is empty for fork PRs; find by head sha
+            const { owner, repo } = context.repo;
+            const headSha = context.payload.workflow_run.head_sha;
+            let prs = context.payload.workflow_run.pull_requests;
+            if (!prs.length) {
+              const res = await github.rest.repos.listPullRequestsAssociatedWithCommit(
+                { owner, repo, commit_sha: headSha });
+              prs = res.data.filter(pr => pr.state === 'open');
+            }
+            if (!prs.length) {
+              core.warning(`no PR found for ${headSha}`);
+              return;
+            }
+            const issue_number = prs[0].number;
+
+            const comments = await github.paginate(github.rest.issues.listComments,
+              { owner, repo, issue_number, per_page: 100 });
+            const existing = comments.find(c => c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment(
+                { owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
