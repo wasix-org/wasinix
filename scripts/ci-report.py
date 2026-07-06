@@ -117,6 +117,8 @@ def dedupe_reminders(reminders):
 
 
 def title_of(counts, failed, diff, content):
+    if diff and diff.get("evalFailed"):
+        return "eval failed"
     if counts is None:
         parts = ["build produced no results"]
     else:

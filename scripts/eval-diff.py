@@ -49,7 +49,9 @@ def default_flake():
 
 def eval_jobs(flake, jobs_path):
     # --check-cache-status so ci-build.sh can reuse this eval for its
-    # build-dep push list; stderr stays on the terminal for progress.
+    # build-dep push list. Returns the nix error on a top-level eval failure
+    # (broken flake): that becomes report content, not a step crash; the
+    # build step fails the job on the same error.
     cmd = [
         "nix", "run", "nixpkgs#nix-eval-jobs", "--",
         "--flake", flake,
@@ -58,9 +60,15 @@ def eval_jobs(flake, jobs_path):
     ]
     log(f"$ {' '.join(cmd)}")
     with open(jobs_path, "w") as f:
-        p = subprocess.run(cmd, stdout=f)
-    if p.returncode != 0:
-        sys.exit(f"nix-eval-jobs exited {p.returncode}")
+        p = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, text=True)
+    sys.stderr.write(p.stderr)
+    if p.returncode == 0:
+        return None
+    # the last error: block is the complete one (workers print partials)
+    lines = p.stderr.splitlines()
+    starts = [i for i, ln in enumerate(lines) if ln.startswith("error:")]
+    tail = lines[starts[-1] :] if starts else lines[-30:]
+    return "\n".join(tail[:60])
 
 
 def load_map_from_jobs(jobs_path, rev):
@@ -205,11 +213,26 @@ def main():
     args = ap.parse_args()
 
     jobs_path = args.jobs
+    eval_error = None
     if not jobs_path:
         if not args.jobs_out:
             sys.exit("need --jobs or --jobs-out")
         jobs_path = args.jobs_out
-        eval_jobs(args.flake or default_flake(), jobs_path)
+        eval_error = eval_jobs(args.flake or default_flake(), jobs_path)
+
+    if eval_error is not None:
+        # no map written: a broken eval must not be published as a base
+        md = (
+            "### Rebuild diff\n\nEval failed; no jobs to diff."
+            f"\n\n```\n{eval_error}\n```\n"
+        )
+        with open(args.md_out, "w") as f:
+            f.write(md)
+        if args.summary_out:
+            with open(args.summary_out, "w") as f:
+                json.dump({"evalFailed": True}, f)
+        log("eval failed; wrote error report")
+        return
 
     rev = args.rev or subprocess.run(
         ["git", "rev-parse", "HEAD"], check=True, text=True, capture_output=True

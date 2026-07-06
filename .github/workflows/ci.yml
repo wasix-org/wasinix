@@ -49,8 +49,11 @@ jobs:
 
       # eval once (attr -> drvPath), diff against the base branch's published
       # map to surface what this change rebuilds; ci-build.sh reuses the raw
-      # eval. Informational: a missing base map skips the diff, not the build.
+      # eval. Informational: a missing base map skips the diff, an eval
+      # failure becomes report content, and a script bug must not eat the
+      # build or the report (the build step fails the job on real breakage)
       - name: Rebuild diff
+        continue-on-error: true
         shell: bash
         run: |
           candidates=()
@@ -99,9 +102,14 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
         run: |
-          aws s3 cp --no-progress eval-map.json \
-            "s3://wasinix-cache/eval-maps/${{ github.sha }}.json" \
-            --endpoint-url https://1541b1e8a3fc6ad155ce67ef38899700.r2.cloudflarestorage.com
+          # absent when the eval failed; never publish a broken base
+          if [ -f eval-map.json ]; then
+            aws s3 cp --no-progress eval-map.json \
+              "s3://wasinix-cache/eval-maps/${{ github.sha }}.json" \
+              --endpoint-url https://1541b1e8a3fc6ad155ce67ef38899700.r2.cloudflarestorage.com
+          else
+            echo "no eval map (eval failed); skipping publish"
+          fi
 
       # per-package build + JUnit report; uploads to cache as it builds when
       # credentials are present (forks build keyless), so timeouts don't lose work

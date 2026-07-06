@@ -194,8 +194,12 @@ def main():
             base = json.load(f)
     except OSError:
         return done("### Content diff\n\nSkipped: no base eval map.\n", {})
-    with open(args.head_map) as f:
-        head = json.load(f)
+    try:
+        with open(args.head_map) as f:
+            head = json.load(f)
+    except OSError:
+        # eval failed: eval-diff.py wrote no head map
+        return done("### Content diff\n\nSkipped: no head eval map.\n", {})
 
     failed = failed_attrs(args.junit)
     moved = sorted(
