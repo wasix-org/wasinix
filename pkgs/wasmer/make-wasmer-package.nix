@@ -22,10 +22,12 @@
   w = package.passthru.wasmer or {};
 
   # Coerce a version to semver MAJOR.MINOR.PATCH (wasmer rejects anything
-  # else): "9.0" -> "9.0.0", "685" -> "685.0.0", "5.3p9" -> "5.3.9".
+  # else, including leading zeros): "9.0" -> "9.0.0", "5.3p9" -> "5.3.9",
+  # "0-unstable-2023-02-22" -> "0.2023.2".
   toSemver = v: let
     digits = builtins.filter (s: builtins.isString s && s != "") (builtins.split "[^0-9]+" v);
-    padded = lib.take 3 (digits ++ ["0" "0" "0"]);
+    canonical = map (d: toString (lib.toIntBase10 d)) digits;
+    padded = lib.take 3 (canonical ++ ["0" "0" "0"]);
   in
     lib.concatStringsSep "." padded;
 
