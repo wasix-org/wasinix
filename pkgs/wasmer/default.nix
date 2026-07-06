@@ -9,6 +9,9 @@
   wasmer ? null,
   makeWasmerPackage,
   preferredPackages,
+  # the default-profile cross set, for tests that cross-build a consumer
+  # program (e.g. icu-data's smoke test).
+  crossPkgs,
   # overlay attr names of the CLIs to ship, resolved at their preferred profile.
   shippedCommands,
   # overlay/packages dir, used to locate each package's tests/.
@@ -31,7 +34,7 @@
         then import (dir + "/helpers.nix") {inherit pkgs;}
         else {};
       scope = {
-        inherit pkgs testLib helpers;
+        inherit pkgs testLib helpers crossPkgs makeWasmerPackage;
         wasmerPkgs = wrappedPackages;
       };
       testFiles = lib.attrNames (lib.filterAttrs

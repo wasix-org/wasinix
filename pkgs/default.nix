@@ -207,6 +207,7 @@
   wasmerLayer = import ./wasmer {
     inherit (pkgs) lib;
     inherit pkgs makeWasmerPackage preferredPackages shippedCommands;
+    crossPkgs = profileSets.${defaultProfileName};
     wasmer = wasmerRuntime;
     packagesDir = ./overlay/packages;
   };

@@ -107,6 +107,9 @@ green main build (`publish-index` in ci.yml).
 `pkgs/overlay/packages/<name>/tests/*.nix`, each returning an attrset of
 derivations built with `pkgs/wasmer/test-lib.nix` (a `helpers.nix` is shared
 setup). They attach as `passthru.tests` and appear under `checks.<name>`.
+Besides `pkgs`/`testLib`/`wasmerPkgs`, test files can take `crossPkgs` (the
+default-profile cross set) and `makeWasmerPackage` to cross-build and package
+a consumer program (see icu-data's smoke test).
 `mkScriptComparison` diffs against the native tool; `expectFail` marks a
 must-fail test; `broken "reason"` tolerates a known failure and fails loudly
 once it starts passing.
