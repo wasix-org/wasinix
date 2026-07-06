@@ -28,8 +28,10 @@ scripts/update.py    pin updater (nix run .#update)
   `pkgs/lib/default.nix`). Never set `meta.badPlatforms`/`meta.broken`
   directly.
 - Package placement: name in `trivial.nix` / flat `packages/<name>.nix` /
-  `packages/<name>/package.nix` dir. Same in `python-packages/`. Only
-  `pkgs/lib/load-packages.nix` enumerates these dirs.
+  `packages/<name>/package.nix` dir; a dir's `package.nix` may be
+  `{names, packages}` for version families (icu). Same in
+  `python-packages/`. Only `pkgs/lib/load-packages.nix` enumerates these
+  dirs.
 - Tweaks go through `helpers.libTweaks` (phases concatenate, lists append,
   attrsets merge, scalars replace, functions get the old value). No
   `(old.X or []) ++ ...` in package files.

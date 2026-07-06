@@ -6,6 +6,9 @@ Lightest form that works (the loader finds all of these):
 - Changes, no extra files: `pkgs/overlay/packages/<name>.nix`.
 - Patches/tests: `pkgs/overlay/packages/<name>/` with `package.nix`,
   `patches/`, `tests/`.
+- Version families (icu, icu-data): one dir whose `package.nix` evaluates to
+  `{names, packages}` instead of a function; `names` is the static attr list
+  it provides, `packages = callArgs: {<name> = drv;}`.
 
 A package file is a function over one argument set:
 
