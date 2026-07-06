@@ -153,26 +153,14 @@ def render(base, head):
     rebuilt, added, removed = d["rebuilt"], d["added"], d["removed"]
     new_errors = d["newErrors"]
 
-    ignored = sorted(
-        a
-        for a in TREE_TRACKING
-        if head["jobs"].get(a, base["jobs"].get(a)) != base["jobs"].get(a)
-    )
-    note = (
-        f" ({', '.join(f'`{a}`' for a in ignored)} tracks the source tree"
-        " and always rebuilds; ignored)"
-        if ignored
-        else ""
-    )
-
     total = len(head["jobs"])
     md = f"### Rebuild diff vs `{base['rev'][:12]}`\n\n"
     if not (rebuilt or added or removed or new_errors):
-        return md + f"No rebuilds{note or ': eval identical to base'}.\n"
+        return md + "No rebuilds.\n"
     md += (
         f"**{len(rebuilt)}** of **{total}** jobs rebuild"
         f" · {len(added)} added · {len(removed)} removed"
-        f" · {len(new_errors)} new eval failures{note}\n"
+        f" · {len(new_errors)} new eval failures\n"
     )
 
     mass = sorted(
