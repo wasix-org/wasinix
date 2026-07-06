@@ -101,6 +101,21 @@ jobs:
             rebuild-diff.md
             diff-summary.json
 
+      # the rebuild count predicts how long the build below will take, so put
+      # it on the PR now: check run in_progress + comment, updated in place by
+      # the final Post report. Fork PRs (read-only token) only get the final
+      # report, via test-report.yml.
+      - name: Post eval report
+        if: ${{ github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PRELIMINARY: "1"
+        with:
+          script: |
+            const post = require('${{ github.workspace }}/scripts/post-report.js');
+            await post({github, context, core});
+
       # publish the eval map so future PRs can diff against this commit
       - name: Publish eval map
         if: github.event_name == 'push'

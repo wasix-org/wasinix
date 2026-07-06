@@ -23,13 +23,24 @@ module.exports = async ({ github, context, core }) => {
     : context.eventName === 'pull_request'
       ? context.payload.pull_request.head.sha
       : context.sha;
+  // Preliminary mode: called right after the eval, before the multi-hour
+  // build, so the rebuild count (the build-time predictor) is on the PR
+  // immediately. Creates the check run in_progress; the final call updates
+  // it in place via the id file.
+  const preliminary = process.env.PRELIMINARY === '1';
   const rawConclusion = isWfRun ? run.conclusion : (process.env.BUILD_OUTCOME ?? 'failure');
   const conclusion = ['success', 'failure', 'cancelled'].includes(rawConclusion)
     ? rawConclusion
     : 'neutral';
 
   const report = JSON.parse(read('report.json') ?? '{}');
-  const title = report.title ?? `no report produced (${rawConclusion})`;
+  const diff = JSON.parse(read('diff-summary.json') ?? '{}');
+  const evalTitle = diff.evalFailed
+    ? 'eval failed'
+    : diff.baseRev != null
+      ? `building: ${diff.rebuilt} of ${diff.total} jobs rebuild`
+      : 'building (no base map to diff against)';
+  const title = preliminary ? evalTitle : (report.title ?? `no report produced (${rawConclusion})`);
   const body =
     [read('build-report.md'), read('content-diff.md'), read('rebuild-diff.md')]
       .filter(Boolean)
@@ -38,15 +49,38 @@ module.exports = async ({ github, context, core }) => {
   const summary = body.length > 60000 ? body.slice(0, 60000) + '\n\n(truncated)' : body;
 
   const { owner, repo } = context.repo;
-  await github.rest.checks.create({
-    owner,
-    repo,
-    name: 'Per-package status',
-    head_sha: headSha,
-    status: 'completed',
-    conclusion,
-    output: { title, summary },
-  });
+  const output = { title, summary };
+  const priorId = read('check-run-id');
+  if (preliminary) {
+    const created = await github.rest.checks.create({
+      owner,
+      repo,
+      name: 'Per-package status',
+      head_sha: headSha,
+      status: 'in_progress',
+      output,
+    });
+    fs.writeFileSync('check-run-id', String(created.data.id));
+  } else if (priorId) {
+    await github.rest.checks.update({
+      owner,
+      repo,
+      check_run_id: Number(priorId),
+      status: 'completed',
+      conclusion,
+      output,
+    });
+  } else {
+    await github.rest.checks.create({
+      owner,
+      repo,
+      name: 'Per-package status',
+      head_sha: headSha,
+      status: 'completed',
+      conclusion,
+      output,
+    });
+  }
 
   let issue_number;
   if (isWfRun) {
