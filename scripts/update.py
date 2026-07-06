@@ -231,12 +231,7 @@ TARGETS = [
            regen=regen_rust_bootstrap),
 
     # prefetch is used where nix-update's strict eval cannot introspect the
-    # package (libffi sets src inside overrideAttrs) or its version heuristics
-    # get in the way.
-    Target("libffi", "prefetch",
-           file="pkgs/overlay/packages/libffi.nix",
-           owner="wasix-org", repo="libffi", track="branch",
-           version_re=r'rev = "([0-9a-f]{7,40})"'),
+    # package or its version heuristics get in the way.
     Target("wasixcc", "prefetch",
            file="pkgs/toolchain/wasixcc.nix",
            owner="wasix-org", repo="wasixcc",

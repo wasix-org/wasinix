@@ -1,0 +1,1446 @@
+wasix-org/libffi's wasi backend on upstream libffi: replaces the
+emscripten-specific src/wasm backend (the fork still calls the dir
+src/wasm32; upstream renamed it) and adapts closures.c for wasi.
+Regenerate from
+https://github.com/libffi/libffi/compare/v3.5.2...wasix-org:libffi:master
+when it stops applying.
+
+diff --git a/src/closures.c b/src/closures.c
+index 02cf78fa2..15c484bdb 100644
+--- a/src/closures.c
++++ b/src/closures.c
+@@ -31,7 +31,7 @@
+ #define _GNU_SOURCE 1
+ #endif
+ 
+-#ifndef __EMSCRIPTEN__
++#ifndef __wasm__
+ 
+ #include <fficonfig.h>
+ #include <ffi.h>
+@@ -1104,4 +1104,4 @@ ffi_tramp_is_present (__attribute__((unused)) void *ptr)
+ #endif /* FFI_CLOSURES */
+ 
+ #endif /* NetBSD with PROT_MPROTECT */
+-#endif /* __EMSCRIPTEN__ */
++#endif /* __wasm__ */
+diff --git a/src/wasm/ffi.c b/src/wasm/ffi.c
+index 486ffa7..ddcd859 100644
+--- a/src/wasm/ffi.c
++++ b/src/wasm/ffi.c
+@@ -30,19 +30,54 @@
+ #include <stdlib.h>
+ #include <stdint.h>
+ 
++#define CHECK_FIELD_OFFSET(struct, field, offset)                                  \
++  _Static_assert(                                                                  \
++    offsetof(struct, field) == offset,                                             \
++    "Memory layout of '" #struct "' has changed: '" #field "' is in an unexpected location");
++
++CHECK_FIELD_OFFSET(ffi_cif, abi, 4*0);
++CHECK_FIELD_OFFSET(ffi_cif, nargs, 4*1);
++CHECK_FIELD_OFFSET(ffi_cif, arg_types, 4*2);
++CHECK_FIELD_OFFSET(ffi_cif, rtype, 4*3);
++CHECK_FIELD_OFFSET(ffi_cif, nfixedargs, 4*6);
++
++CHECK_FIELD_OFFSET(ffi_type, size, 0);
++CHECK_FIELD_OFFSET(ffi_type, alignment, 4);
++CHECK_FIELD_OFFSET(ffi_type, type, 6);
++CHECK_FIELD_OFFSET(ffi_type, elements, 8);
++
++CHECK_FIELD_OFFSET(ffi_closure, ftramp, 4*0);
++CHECK_FIELD_OFFSET(ffi_closure, cif, 4*1);
++CHECK_FIELD_OFFSET(ffi_closure, fun, 4*2);
++CHECK_FIELD_OFFSET(ffi_closure, user_data, 4*3);
++
++// Most wasm runtimes support at most 1000 Js trampoline args.
++#define MAX_ARGS 1000
++
++#define VARARGS_FLAG 1
++
++#if defined __wasm__ && defined FFI_DEBUG
++#include <stdio.h>
++#define ABORT_WITH_MSG(msg) \
++  fprintf(stderr, "libffi: %s\n", msg); \
++  abort();
++#else
++#define ABORT_WITH_MSG(msg) \
++  abort();
++#endif
++
++#ifdef __EMSCRIPTEN__
+ #include <emscripten/emscripten.h>
+ 
+ #ifdef DEBUG_F
+ #define LOG_DEBUG(args...)  \
+-  console.warn(`====LIBFFI(line __LINE__)`, args)
++console.warn(`====LIBFFI(line __LINE__)`, args)
+ #else
+ #define LOG_DEBUG(args...) 0
+ #endif
+ 
+ #define EM_JS_MACROS(ret, name, args, body...) EM_JS(ret, name, args, body)
+ 
+-EM_JS_DEPS(libffi, "$getWasmTableEntry,$setWasmTableEntry,$getEmptyTableSlot,$convertJsFunctionToWasm");
+-
+ #define DEREF_U8(addr, offset) HEAPU8[addr + offset]
+ #define DEREF_S8(addr, offset) HEAP8[addr + offset]
+ #define DEREF_U16(addr, offset) HEAPU16[(addr >> 1) + offset]
+@@ -54,98 +89,24 @@ EM_JS_DEPS(libffi, "$getWasmTableEntry,$setWasmTableEntry,$getEmptyTableSlot,$co
+ #define DEREF_F64(addr, offset) HEAPF64[(addr >> 3) + offset]
+ #define DEREF_U64(addr, offset) HEAPU64[(addr >> 3) + offset]
+ 
+-#define CHECK_FIELD_OFFSET(struct, field, offset)                                  \
+-  _Static_assert(                                                                  \
+-    offsetof(struct, field) == offset,                                             \
+-    "Memory layout of '" #struct "' has changed: '" #field "' is in an unexpected location");
+-
+-#if __SIZEOF_POINTER__ == 4
+-
+-#define FFI_EMSCRIPTEN_ABI FFI_WASM32_EMSCRIPTEN
+-#define PTR_SIG 'i'
+-
+-#define DEC_PTR(p) p
+-#define ENC_PTR(p) p
+-
+-#define DEREF_PTR(addr, offset) DEREF_U32(addr, offset)
+-#define DEREF_PTR_NUMBER(addr, offset) DEREF_PTR(addr, offset)
+-
+-CHECK_FIELD_OFFSET(ffi_cif, abi, 4*0);
+-CHECK_FIELD_OFFSET(ffi_cif, nargs, 4*1);
+-CHECK_FIELD_OFFSET(ffi_cif, arg_types, 4*2);
+-CHECK_FIELD_OFFSET(ffi_cif, rtype, 4*3);
+-CHECK_FIELD_OFFSET(ffi_cif, flags, 4*5);
+-CHECK_FIELD_OFFSET(ffi_cif, nfixedargs, 4*6);
+-
+ #define CIF__ABI(addr) DEREF_U32(addr, 0)
+ #define CIF__NARGS(addr) DEREF_U32(addr, 1)
+ #define CIF__ARGTYPES(addr) DEREF_U32(addr, 2)
+ #define CIF__RTYPE(addr) DEREF_U32(addr, 3)
+-#define CIF__FLAGS(addr) DEREF_U32(addr, 5)
+ #define CIF__NFIXEDARGS(addr) DEREF_U32(addr, 6)
+ 
+-CHECK_FIELD_OFFSET(ffi_type, size, 0);
+-CHECK_FIELD_OFFSET(ffi_type, alignment, 4);
+-CHECK_FIELD_OFFSET(ffi_type, type, 6);
+-CHECK_FIELD_OFFSET(ffi_type, elements, 8);
+-
+ #define FFI_TYPE__SIZE(addr) DEREF_U32(addr, 0)
+ #define FFI_TYPE__ALIGN(addr) DEREF_U16(addr + 4, 0)
+ #define FFI_TYPE__TYPEID(addr) DEREF_U16(addr + 6, 0)
+ #define FFI_TYPE__ELEMENTS(addr) DEREF_U32(addr + 8, 0)
+ 
+-#elif __SIZEOF_POINTER__ == 8
+-
+-#define FFI_EMSCRIPTEN_ABI FFI_WASM64_EMSCRIPTEN
+-#define PTR_SIG 'j'
+-
+-// DEC_PTR casts a pointer value (comming from Wasm) represented as BigInt (i64) to Number (i53).
+-// This should be used for a pointer that is expected to be within the i53 range. If the pointer
+-// value is outside the Number's range, the value will become NaN.
+-#define DEC_PTR(p) bigintToI53Checked(p)
+-// ENC_PTR casts a pointer value represented as Number to BigInt (i64)
+-#define ENC_PTR(p) BigInt(p)
+-
+-#define DEREF_PTR(addr, offset) DEREF_U64(addr, offset)
+-#define DEREF_PTR_NUMBER(addr, offset) DEC_PTR(DEREF_PTR(addr, offset))
+-
+-CHECK_FIELD_OFFSET(ffi_cif, abi, 0);
+-CHECK_FIELD_OFFSET(ffi_cif, nargs, 4);
+-CHECK_FIELD_OFFSET(ffi_cif, arg_types, 8);
+-CHECK_FIELD_OFFSET(ffi_cif, rtype, 16);
+-CHECK_FIELD_OFFSET(ffi_cif, flags, 28);
+-CHECK_FIELD_OFFSET(ffi_cif, nfixedargs, 32);
+-
+-#define CIF__ABI(addr) DEREF_U32(addr, 0)
+-#define CIF__NARGS(addr) DEREF_U32(addr + 4,  0)
+-#define CIF__ARGTYPES(addr) DEREF_U64(addr + 8,  0)
+-#define CIF__RTYPE(addr) DEREF_U64(addr + 16, 0)
+-#define CIF__FLAGS(addr) DEREF_U32(addr + 28, 0)
+-#define CIF__NFIXEDARGS(addr) DEREF_U32(addr + 32, 0)
+-
+-CHECK_FIELD_OFFSET(ffi_type, size, 0);
+-CHECK_FIELD_OFFSET(ffi_type, alignment, 8);
+-CHECK_FIELD_OFFSET(ffi_type, type, 10);
+-CHECK_FIELD_OFFSET(ffi_type, elements, 16);
+-
+-#define FFI_TYPE__SIZE(addr) DEREF_U64(addr, 0)
+-#define FFI_TYPE__ALIGN(addr) DEREF_U16(addr + 8, 0)
+-#define FFI_TYPE__TYPEID(addr) DEREF_U16(addr + 10, 0)
+-#define FFI_TYPE__ELEMENTS(addr) DEREF_U64(addr + 16, 0)
+-
+-#else
+-#error "Unknown pointer size"
+-#endif
+-
+ #define ALIGN_ADDRESS(addr, align) (addr &= (~((align) - 1)))
+ #define STACK_ALLOC(stack, size, align) ((stack -= (size)), ALIGN_ADDRESS(stack, align))
+ 
+-// Most wasm runtimes support at most 1000 Js trampoline args.
+-#define MAX_ARGS 1000
+-
+-#include <stddef.h>
+-
+-#define VARARGS_FLAG 1
++#define CLOSURE__wrapper(addr) DEREF_U32(addr, 0)
++#define CLOSURE__cif(addr) DEREF_U32(addr, 1)
++#define CLOSURE__fun(addr) DEREF_U32(addr, 2)
++#define CLOSURE__user_data(addr) DEREF_U32(addr, 3)
+ 
+ #define FFI_OK_MACRO 0
+ _Static_assert(FFI_OK_MACRO == FFI_OK, "FFI_OK must be 0");
+@@ -153,36 +114,7 @@ _Static_assert(FFI_OK_MACRO == FFI_OK, "FFI_OK must be 0");
+ #define FFI_BAD_TYPEDEF_MACRO 1
+ _Static_assert(FFI_BAD_TYPEDEF_MACRO == FFI_BAD_TYPEDEF, "FFI_BAD_TYPEDEF must be 1");
+ 
+-ffi_status FFI_HIDDEN
+-ffi_prep_cif_machdep(ffi_cif *cif)
+-{
+-  if (cif->abi != FFI_EMSCRIPTEN_ABI)
+-    return FFI_BAD_ABI;
+-  // This is called after ffi_prep_cif_machdep_var so we need to avoid
+-  // overwriting cif->nfixedargs.
+-  if (!(cif->flags & VARARGS_FLAG))
+-    cif->nfixedargs = cif->nargs;
+-  if (cif->nargs > MAX_ARGS)
+-    return FFI_BAD_TYPEDEF;
+-  if (cif->rtype->type == FFI_TYPE_COMPLEX)
+-    return FFI_BAD_TYPEDEF;
+-  // If they put the COMPLEX type into a struct we won't notice, but whatever.
+-  for (int i = 0; i < cif->nargs; i++)
+-    if (cif->arg_types[i]->type == FFI_TYPE_COMPLEX)
+-      return FFI_BAD_TYPEDEF;
+-  return FFI_OK;
+-}
+-
+-ffi_status FFI_HIDDEN
+-ffi_prep_cif_machdep_var(ffi_cif *cif, unsigned nfixedargs, unsigned ntotalargs)
+-{
+-  cif->flags |= VARARGS_FLAG;
+-  cif->nfixedargs = nfixedargs;
+-  // The varargs takes up one extra argument
+-  if (cif->nfixedargs + 1 > MAX_ARGS)
+-    return FFI_BAD_TYPEDEF;
+-  return FFI_OK;
+-}
++EM_JS_DEPS(libffi, "$getWasmTableEntry,$setWasmTableEntry,$getEmptyTableSlot,$convertJsFunctionToWasm");
+ 
+ /**
+  * A Javascript helper function. This takes an argument typ which is a wasm
+@@ -200,7 +132,6 @@ ffi_prep_cif_machdep_var(ffi_cif *cif, unsigned nfixedargs, unsigned ntotalargs)
+ EM_JS_MACROS(
+ void,
+ unbox_small_structs, (ffi_type type_ptr), {
+-  type_ptr = DEC_PTR(type_ptr);
+   var type_id = FFI_TYPE__TYPEID(type_ptr);
+   while (type_id === FFI_TYPE_STRUCT) {
+     // Don't unbox single element structs if they are bigger than 16 bytes. This
+@@ -213,15 +144,15 @@ unbox_small_structs, (ffi_type type_ptr), {
+     //
+     // See the Python comment here:
+     // https://github.com/python/cpython/blob/a16a9f978f42b8a09297c1efbf33877f6388c403/Modules/_ctypes/stgdict.c#L718-L779
+-    if (DEC_PTR(FFI_TYPE__SIZE(type_ptr)) > 16) {
++    if (FFI_TYPE__SIZE(type_ptr) > 16) {
+       break;
+     }
+-    var elements = DEC_PTR(FFI_TYPE__ELEMENTS(type_ptr));
+-    var first_element = DEREF_PTR_NUMBER(elements, 0);
++    var elements = FFI_TYPE__ELEMENTS(type_ptr);
++    var first_element = DEREF_U32(elements, 0);
+     if (first_element === 0) {
+       type_id = FFI_TYPE_VOID;
+       break;
+-    } else if (DEREF_PTR_NUMBER(elements, 1) === 0) {
++    } else if (DEREF_U32(elements, 1) === 0) {
+       type_ptr = first_element;
+       type_id = FFI_TYPE__TYPEID(first_element);
+     } else {
+@@ -235,15 +166,10 @@ EM_JS_MACROS(
+ void,
+ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+ {
+-  cif = DEC_PTR(cif);
+-  fn = DEC_PTR(fn);
+-  rvalue = DEC_PTR(rvalue);
+-  avalue = DEC_PTR(avalue);
+   var abi = CIF__ABI(cif);
+   var nargs = CIF__NARGS(cif);
+   var nfixedargs = CIF__NFIXEDARGS(cif);
+-  var arg_types_ptr = DEC_PTR(CIF__ARGTYPES(cif));
+-  var flags = CIF__FLAGS(cif);
++  var arg_types_ptr = CIF__ARGTYPES(cif);
+   var rtype_unboxed = unbox_small_structs(CIF__RTYPE(cif));
+   var rtype_ptr = rtype_unboxed[0];
+   var rtype_id = rtype_unboxed[1];
+@@ -267,7 +193,7 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+   // just use this. We also mark a flag that we don't need to convert the return
+   // value of the dynamic call back to C.
+   if (rtype_id === FFI_TYPE_LONGDOUBLE || rtype_id === FFI_TYPE_STRUCT) {
+-    args.push(ENC_PTR(rvalue));
++    args.push(rvalue);
+     ret_by_arg = true;
+   }
+ 
+@@ -276,8 +202,8 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+   // Javascript to C automatically, here we manually do the inverse conversion
+   // from C to Javascript.
+   for (var i = 0; i < nfixedargs; i++) {
+-    var arg_ptr = DEREF_PTR_NUMBER(avalue, i);
+-    var arg_unboxed = unbox_small_structs(DEREF_PTR(arg_types_ptr, i));
++    var arg_ptr = DEREF_U32(avalue, i);
++    var arg_unboxed = unbox_small_structs(DEREF_U32(arg_types_ptr, i));
+     var arg_type_ptr = arg_unboxed[0];
+     var arg_type_id = arg_unboxed[1];
+ 
+@@ -288,6 +214,7 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+     case FFI_TYPE_INT:
+     case FFI_TYPE_SINT32:
+     case FFI_TYPE_UINT32:
++    case FFI_TYPE_POINTER:
+       args.push(DEREF_U32(arg_ptr, 0));
+       break;
+     case FFI_TYPE_FLOAT:
+@@ -321,14 +248,11 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+       // Nontrivial structs are passed by pointer.
+       // Have to copy the struct onto the stack though because C ABI says it's
+       // call by value.
+-      var size = DEC_PTR(FFI_TYPE__SIZE(arg_type_ptr));
++      var size = FFI_TYPE__SIZE(arg_type_ptr);
+       var align = FFI_TYPE__ALIGN(arg_type_ptr);
+       STACK_ALLOC(cur_stack_ptr, size, align);
+       HEAP8.subarray(cur_stack_ptr, cur_stack_ptr+size).set(HEAP8.subarray(arg_ptr, arg_ptr + size));
+-      args.push(ENC_PTR(cur_stack_ptr));
+-      break;
+-    case FFI_TYPE_POINTER:
+-      args.push(DEREF_PTR(arg_ptr, 0));
++      args.push(cur_stack_ptr);
+       break;
+     case FFI_TYPE_COMPLEX:
+       throw new Error('complex marshalling nyi');
+@@ -346,11 +270,11 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+   // We don't have any way of knowing how many args were actually passed, so we
+   // just always copy extra nonsense past the end. The ownwards call will know
+   // not to look at it.
+-  if (flags & VARARGS_FLAG) {
++  if (nfixedargs != nargs) {
+     var struct_arg_info = [];
+     for (var i = nargs - 1;  i >= nfixedargs; i--) {
+-      var arg_ptr = DEREF_PTR_NUMBER(avalue, i);
+-      var arg_unboxed = unbox_small_structs(DEREF_PTR(arg_types_ptr, i));
++      var arg_ptr = DEREF_U32(avalue, i);
++      var arg_unboxed = unbox_small_structs(DEREF_U32(arg_types_ptr, i));
+       var arg_type_ptr = arg_unboxed[0];
+       var arg_type_id = arg_unboxed[1];
+       switch (arg_type_id) {
+@@ -367,6 +291,7 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+       case FFI_TYPE_INT:
+       case FFI_TYPE_UINT32:
+       case FFI_TYPE_SINT32:
++      case FFI_TYPE_POINTER:
+       case FFI_TYPE_FLOAT:
+         STACK_ALLOC(cur_stack_ptr, 4, 4);
+         DEREF_U32(cur_stack_ptr, 0) = DEREF_U32(arg_ptr, 0);
+@@ -389,12 +314,8 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+         // Again, struct must be passed by pointer.
+         // But ABI is by value, so have to copy struct onto stack.
+         // Currently arguments are going onto stack so we can't put it there now. Come back for this.
+-        STACK_ALLOC(cur_stack_ptr, __SIZEOF_POINTER__, __SIZEOF_POINTER__);
+-        struct_arg_info.push([cur_stack_ptr, arg_ptr, DEC_PTR(FFI_TYPE__SIZE(arg_type_ptr)), FFI_TYPE__ALIGN(arg_type_ptr)]);
+-        break;
+-      case FFI_TYPE_POINTER:
+-        STACK_ALLOC(cur_stack_ptr, __SIZEOF_POINTER__, __SIZEOF_POINTER__);
+-        DEREF_PTR(cur_stack_ptr, 0) = DEREF_PTR(arg_ptr, 0);
++        STACK_ALLOC(cur_stack_ptr, 4, 4);
++        struct_arg_info.push([cur_stack_ptr, arg_ptr, FFI_TYPE__SIZE(arg_type_ptr), FFI_TYPE__ALIGN(arg_type_ptr)]);
+         break;
+       case FFI_TYPE_COMPLEX:
+         throw new Error('complex arg marshalling nyi');
+@@ -403,7 +324,7 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+       }
+     }
+     // extra normal argument which is the pointer to the varargs.
+-    args.push(ENC_PTR(cur_stack_ptr));
++    args.push(cur_stack_ptr);
+     // Now allocate variable struct args on stack too.
+     for (var i = 0; i < struct_arg_info.length; i++) {
+       var struct_info = struct_arg_info[i];
+@@ -413,7 +334,7 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+       var align = struct_info[3];
+       STACK_ALLOC(cur_stack_ptr, size, align);
+       HEAP8.subarray(cur_stack_ptr, cur_stack_ptr+size).set(HEAP8.subarray(arg_ptr, arg_ptr + size));
+-      DEREF_PTR(arg_target, 0) = ENC_PTR(cur_stack_ptr);
++      DEREF_U32(arg_target, 0) = cur_stack_ptr;
+     }
+   }
+   stackRestore(cur_stack_ptr);
+@@ -438,6 +359,7 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+   case FFI_TYPE_INT:
+   case FFI_TYPE_UINT32:
+   case FFI_TYPE_SINT32:
++  case FFI_TYPE_POINTER:
+     DEREF_U32(rvalue, 0) = result;
+     break;
+   case FFI_TYPE_FLOAT:
+@@ -458,9 +380,6 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+   case FFI_TYPE_SINT64:
+     DEREF_U64(rvalue, 0) = result;
+     break;
+-  case FFI_TYPE_POINTER:
+-    DEREF_PTR(rvalue, 0) = result;
+-    break;
+   case FFI_TYPE_COMPLEX:
+     throw new Error('complex ret marshalling nyi');
+   default:
+@@ -468,79 +387,30 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+   }
+ });
+ 
+-void ffi_call(ffi_cif *cif, void (*fn)(void), void *rvalue, void **avalue) {
+-  ffi_call_js(cif, fn, rvalue, avalue);
+-}
+-
+-#if __SIZEOF_POINTER__ == 4
+-
+-CHECK_FIELD_OFFSET(ffi_closure, ftramp, 4*0);
+-CHECK_FIELD_OFFSET(ffi_closure, cif, 4*1);
+-CHECK_FIELD_OFFSET(ffi_closure, fun, 4*2);
+-CHECK_FIELD_OFFSET(ffi_closure, user_data, 4*3);
+-
+-#define CLOSURE__wrapper(addr) DEREF_U32(addr, 0)
+-#define CLOSURE__cif(addr) DEREF_U32(addr, 1)
+-#define CLOSURE__fun(addr) DEREF_U32(addr, 2)
+-#define CLOSURE__user_data(addr) DEREF_U32(addr, 3)
+-
+-#elif __SIZEOF_POINTER__ == 8
+-
+-CHECK_FIELD_OFFSET(ffi_closure, ftramp, 0);
+-CHECK_FIELD_OFFSET(ffi_closure, cif, 8);
+-CHECK_FIELD_OFFSET(ffi_closure, fun, 16);
+-CHECK_FIELD_OFFSET(ffi_closure, user_data, 24);
+-
+-#define CLOSURE__wrapper(addr) DEREF_U64(addr, 0)
+-#define CLOSURE__cif(addr) DEREF_U64(addr, 1)
+-#define CLOSURE__fun(addr) DEREF_U64(addr, 2)
+-#define CLOSURE__user_data(addr) DEREF_U64(addr, 3)
+-
+-#else
+-#error "Unknown pointer size"
+-#endif
+-
+ EM_JS_MACROS(void *, ffi_closure_alloc_js, (size_t size, void **code), {
+-  size = DEC_PTR(size);
+-  code = DEC_PTR(code);
+   var closure = _malloc(size);
+   var index = getEmptyTableSlot();
+-  DEREF_PTR(code, 0) = ENC_PTR(index);
+-  CLOSURE__wrapper(closure) = ENC_PTR(index);
+-  return ENC_PTR(closure);
++  DEREF_U32(code, 0) = index;
++  CLOSURE__wrapper(closure) = index;
++  return closure;
+ })
+ 
+-void * __attribute__ ((visibility ("default")))
+-ffi_closure_alloc(size_t size, void **code) {
+-  return ffi_closure_alloc_js(size, code);
+-}
+-
+ EM_JS_MACROS(void, ffi_closure_free_js, (void *closure), {
+-  closure = DEC_PTR(closure);
+-  var index = DEC_PTR(CLOSURE__wrapper(closure));
++  var index = CLOSURE__wrapper(closure);
+   freeTableIndexes.push(index);
+   _free(closure);
+ })
+ 
+-void __attribute__ ((visibility ("default")))
+-ffi_closure_free(void *closure) {
+-  return ffi_closure_free_js(closure);
+-}
+ 
+ EM_JS_MACROS(
+ ffi_status,
+ ffi_prep_closure_loc_js,
+ (ffi_closure *closure, ffi_cif *cif, void *fun, void *user_data, void *codeloc),
+ {
+-  closure = DEC_PTR(closure);
+-  cif = DEC_PTR(cif);
+-  fun = DEC_PTR(fun);
+-  user_data = DEC_PTR(user_data);
+-  codeloc = DEC_PTR(codeloc);
+   var abi = CIF__ABI(cif);
+   var nargs = CIF__NARGS(cif);
+   var nfixedargs = CIF__NFIXEDARGS(cif);
+-  var arg_types_ptr = DEC_PTR(CIF__ARGTYPES(cif));
++  var arg_types_ptr = CIF__ARGTYPES(cif);
+   var rtype_unboxed = unbox_small_structs(CIF__RTYPE(cif));
+   var rtype_ptr = rtype_unboxed[0];
+   var rtype_id = rtype_unboxed[1];
+@@ -556,7 +426,7 @@ ffi_prep_closure_loc_js,
+   case FFI_TYPE_STRUCT:
+   case FFI_TYPE_LONGDOUBLE:
+     // Return via a first pointer argument.
+-    sig = 'v' + PTR_SIG;
++    sig = 'vi';
+     ret_by_arg = true;
+     break;
+   case FFI_TYPE_INT:
+@@ -566,6 +436,7 @@ ffi_prep_closure_loc_js,
+   case FFI_TYPE_SINT16:
+   case FFI_TYPE_UINT32:
+   case FFI_TYPE_SINT32:
++  case FFI_TYPE_POINTER:
+     sig = 'i';
+     break;
+   case FFI_TYPE_FLOAT:
+@@ -578,9 +449,6 @@ ffi_prep_closure_loc_js,
+   case FFI_TYPE_SINT64:
+     sig = 'j';
+     break;
+-  case FFI_TYPE_POINTER:
+-    sig = PTR_SIG;
+-    break;
+   case FFI_TYPE_COMPLEX:
+     throw new Error('complex ret marshalling nyi');
+   default:
+@@ -589,11 +457,11 @@ ffi_prep_closure_loc_js,
+   var unboxed_arg_type_id_list = [];
+   var unboxed_arg_type_info_list = [];
+   for (var i = 0; i < nargs; i++) {
+-    var arg_unboxed = unbox_small_structs(DEREF_PTR(arg_types_ptr, i));
++    var arg_unboxed = unbox_small_structs(DEREF_U32(arg_types_ptr, i));
+     var arg_type_ptr = arg_unboxed[0];
+     var arg_type_id = arg_unboxed[1];
+     unboxed_arg_type_id_list.push(arg_type_id);
+-    unboxed_arg_type_info_list.push([DEC_PTR(FFI_TYPE__SIZE(arg_type_ptr)), FFI_TYPE__ALIGN(arg_type_ptr)]);
++    unboxed_arg_type_info_list.push([FFI_TYPE__SIZE(arg_type_ptr), FFI_TYPE__ALIGN(arg_type_ptr)]);
+   }
+   for (var i = 0; i < nfixedargs; i++) {
+     switch (unboxed_arg_type_id_list[i]) {
+@@ -604,6 +472,8 @@ ffi_prep_closure_loc_js,
+     case FFI_TYPE_SINT16:
+     case FFI_TYPE_UINT32:
+     case FFI_TYPE_SINT32:
++    case FFI_TYPE_POINTER:
++    case FFI_TYPE_STRUCT:
+       sig += 'i';
+       break;
+     case FFI_TYPE_FLOAT:
+@@ -619,10 +489,6 @@ ffi_prep_closure_loc_js,
+     case FFI_TYPE_SINT64:
+       sig += 'j';
+       break;
+-    case FFI_TYPE_STRUCT:
+-    case FFI_TYPE_POINTER:
+-      sig += PTR_SIG;
+-      break;
+     case FFI_TYPE_COMPLEX:
+       throw new Error('complex marshalling nyi');
+     default:
+@@ -631,7 +497,7 @@ ffi_prep_closure_loc_js,
+   }
+   if (nfixedargs < nargs) {
+     // extra pointer to varargs stack
+-    sig += PTR_SIG;
++    sig += 'i';
+   }
+   LOG_DEBUG("CREATE_CLOSURE", "sig:", sig);
+   function trampoline() {
+@@ -650,7 +516,7 @@ ffi_prep_closure_loc_js,
+       STACK_ALLOC(cur_ptr, 8, 8);
+       ret_ptr = cur_ptr;
+     }
+-    cur_ptr -= __SIZEOF_POINTER__ * nargs;
++    cur_ptr -= 4 * nargs;
+     var args_ptr = cur_ptr;
+     var carg_idx = 0;
+     // Here we either have the actual argument, or a pair of BigInts for long
+@@ -671,62 +537,58 @@ ffi_prep_closure_loc_js,
+       case FFI_TYPE_SINT8:
+         // Bad things happen if we don't align to 4 here
+         STACK_ALLOC(cur_ptr, 1, 4);
+-        DEREF_PTR(args_ptr, carg_idx) = ENC_PTR(cur_ptr);
++        DEREF_U32(args_ptr, carg_idx) = cur_ptr;
+         DEREF_U8(cur_ptr, 0) = cur_arg;
+         break;
+       case FFI_TYPE_UINT16:
+       case FFI_TYPE_SINT16:
+         // Bad things happen if we don't align to 4 here
+         STACK_ALLOC(cur_ptr, 2, 4);
+-        DEREF_PTR(args_ptr, carg_idx) = ENC_PTR(cur_ptr);
++        DEREF_U32(args_ptr, carg_idx) = cur_ptr;
+         DEREF_U16(cur_ptr, 0) = cur_arg;
+         break;
+       case FFI_TYPE_INT:
+       case FFI_TYPE_UINT32:
+       case FFI_TYPE_SINT32:
++      case FFI_TYPE_POINTER:
+         STACK_ALLOC(cur_ptr, 4, 4);
+-        DEREF_PTR(args_ptr, carg_idx) = ENC_PTR(cur_ptr);
++        DEREF_U32(args_ptr, carg_idx) = cur_ptr;
+         DEREF_U32(cur_ptr, 0) = cur_arg;
+         break;
+       case FFI_TYPE_STRUCT:
+         // cur_arg is already a pointer to struct
+         // copy it onto stack to pass by value
+         STACK_ALLOC(cur_ptr, arg_size, arg_align);
+-        HEAP8.subarray(cur_ptr, cur_ptr + arg_size).set(HEAP8.subarray(DEC_PTR(cur_arg), DEC_PTR(cur_arg) + arg_size));
+-        DEREF_PTR(args_ptr, carg_idx) = ENC_PTR(cur_ptr);
++        HEAP8.subarray(cur_ptr, cur_ptr + arg_size).set(HEAP8.subarray(cur_arg, cur_arg + arg_size));
++        DEREF_U32(args_ptr, carg_idx) = cur_ptr;
+         break;
+       case FFI_TYPE_FLOAT:
+         STACK_ALLOC(cur_ptr, 4, 4);
+-        DEREF_PTR(args_ptr, carg_idx) = ENC_PTR(cur_ptr);
++        DEREF_U32(args_ptr, carg_idx) = cur_ptr;
+         DEREF_F32(cur_ptr, 0) = cur_arg;
+         break;
+       case FFI_TYPE_DOUBLE:
+         STACK_ALLOC(cur_ptr, 8, 8);
+-        DEREF_PTR(args_ptr, carg_idx) = ENC_PTR(cur_ptr);
++        DEREF_U32(args_ptr, carg_idx) = cur_ptr;
+         DEREF_F64(cur_ptr, 0) = cur_arg;
+         break;
+       case FFI_TYPE_UINT64:
+       case FFI_TYPE_SINT64:
+         STACK_ALLOC(cur_ptr, 8, 8);
+-        DEREF_PTR(args_ptr, carg_idx) = ENC_PTR(cur_ptr);
++        DEREF_U32(args_ptr, carg_idx) = cur_ptr;
+         DEREF_U64(cur_ptr, 0) = cur_arg;
+         break;
+       case FFI_TYPE_LONGDOUBLE:
+         STACK_ALLOC(cur_ptr, 16, 8);
+-        DEREF_PTR(args_ptr, carg_idx) = ENC_PTR(cur_ptr);
++        DEREF_U32(args_ptr, carg_idx) = cur_ptr;
+         DEREF_U64(cur_ptr, 0) = cur_arg;
+         cur_arg = args[jsarg_idx++];
+         DEREF_U64(cur_ptr, 1) = cur_arg;
+         break;
+-      case FFI_TYPE_POINTER:
+-        STACK_ALLOC(cur_ptr, __SIZEOF_POINTER__, __SIZEOF_POINTER__);
+-        DEREF_PTR(args_ptr, carg_idx) = ENC_PTR(cur_ptr);
+-        DEREF_PTR(cur_ptr, 0) = cur_arg;
+-        break;
+       }
+     }
+     // If its a varargs call, last js argument is a pointer to the varargs.
+-    var varargs = DEC_PTR(args[args.length - 1]);
++    var varargs = args[args.length - 1];
+     // We have no way of knowing how many varargs were actually provided, this
+     // fills the rest of the stack space allocated with nonsense. The onward
+     // call will know to ignore the nonsense.
+@@ -742,20 +604,20 @@ ffi_prep_closure_loc_js,
+       if (arg_type_id === FFI_TYPE_STRUCT) {
+         // In this case varargs is a pointer to pointer to struct so we need to
+         // deref once
+-        var struct_ptr = DEREF_PTR_NUMBER(varargs, 0);
++        var struct_ptr = DEREF_U32(varargs, 0);
+         STACK_ALLOC(cur_ptr, arg_size, arg_align);
+         HEAP8.subarray(cur_ptr, cur_ptr + arg_size).set(HEAP8.subarray(struct_ptr, struct_ptr + arg_size));
+-        DEREF_PTR(args_ptr, carg_idx) = ENC_PTR(cur_ptr);
++        DEREF_U32(args_ptr, carg_idx) = cur_ptr;
+       } else {
+-        DEREF_PTR(args_ptr, carg_idx) = ENC_PTR(varargs);
++        DEREF_U32(args_ptr, carg_idx) = varargs;
+       }
+-      varargs += __SIZEOF_POINTER__;
++      varargs += 4;
+     }
+     stackRestore(cur_ptr);
+     stackAlloc(0); // stackAlloc enforces alignment invariants on the stack pointer
+     LOG_DEBUG("CALL_CLOSURE", "closure:", closure, "fptr", CLOSURE__fun(closure), "cif", CLOSURE__cif(closure));
+     getWasmTableEntry(CLOSURE__fun(closure))(
+-        CLOSURE__cif(closure), ENC_PTR(ret_ptr), ENC_PTR(args_ptr),
++        CLOSURE__cif(closure), ret_ptr, args_ptr,
+         CLOSURE__user_data(closure)
+     );
+     stackRestore(orig_stack_ptr);
+@@ -780,19 +642,745 @@ ffi_prep_closure_loc_js,
+     return FFI_BAD_TYPEDEF_MACRO;
+   }
+   setWasmTableEntry(codeloc, wasm_trampoline);
+-  CLOSURE__cif(closure) = ENC_PTR(cif);
+-  CLOSURE__fun(closure) = ENC_PTR(fun);
+-  CLOSURE__user_data(closure) = ENC_PTR(user_data);
++  CLOSURE__cif(closure) = cif;
++  CLOSURE__fun(closure) = fun;
++  CLOSURE__user_data(closure) = user_data;
+   return FFI_OK_MACRO;
+ })
+ 
++#else
++#include <stdbool.h>
++
++// Call a function pointer with dynamic parameters.
++//
++// The values are passed as a pointer to a buffer containing the values in the exact order in which they will be passed to the wasm C ABI.
++// i32 and f32 values take 4 bytes, i64 and f64 take 8 bytes. This function does not require the parameters to be aligned in any way.
++//
++// The results are passed in the same way. The caller must ensure that the results buffer is large enough to hold the results of the function call.
++//
++// You may notice that this function does not require the types of the parameters.
++// This is because every runtime always knows the type of every function pointer and can thus interpret the parameters and results correctly.
++static void impl_call_dynamic(
++    void *function,
++    void *values,
++    size_t values_len,
++    void *results,
++    size_t results_len
++);
++
++// Reserve a spot in the indirect function table for a closure
++static void impl_closure_alloc(void **code);
++
++// Inform the host that a previously allocated spot in the indirect function table is no longer needed.
++//
++// Calling the function at code after this call is undefined behavior.
++//
++// code needs to be a pointer obtained via impl_closure_alloc.
++static void impl_free_closure(void *code);
++
++// Prepare a closure for execution.
++//
++// The backing_function is a pointer to the function that will be called when the closure is executed.
++// The backing function needs to be a function that takes the following three parameters:
++//   uint8_t* wasm_arguments - a pointer to a buffer containing the arguments in the exact order in which they will be passed to the wasm C ABI; see impl_call_dynamic for details
++//   uint8_t* wasm_results - a pointer to a buffer where the results will be written in the same way as in impl_call_dynamic
++//   void* closure_data_ptr - the closure_data_ptr that was passed to impl_closure_prepare
++//
++// code is a index into the indirect function table that was previously reserved with impl_closure_alloc.
++// After this function is called, that index will point to a function with the requested signature.
++// 
++// argument_types_ptr is a pointer to a buffer of uint8_t of length argument_types_len containing the types of the arguments.
++// each value must be one of the following:
++//  FFI_WASM_TYPE_I32
++//  FFI_WASM_TYPE_I64
++//  FFI_WASM_TYPE_F32
++//  FFI_WASM_TYPE_F64
++//
++// result_types_ptr and result_types_len behave like argument_types_ptr and argument_types_len, but for the return value of the closure.
++//
++// user_data_ptr is a pointer to a buffer of bytes that will be passed to the closure when it is executed.
++// It will not be interpreted by this function in any way.
++static ffi_status impl_closure_prepare(
++    void *backing_function,
++    void *code,
++    uint8_t *argument_types_ptr,
++    size_t argument_types_len,
++    uint8_t *result_types_ptr,
++    size_t result_types_len,
++    void *user_data_ptr
++);
++
++// Represents the i32 type in a wasm function signature.
++#define FFI_WASM_TYPE_I32 0
++// Represents the i64 type in a wasm function signature.
++#define FFI_WASM_TYPE_I64 1
++// Represents the f32 type in a wasm function signature.
++#define FFI_WASM_TYPE_F32 2
++// Represents the f64 type in a wasm function signature.
++#define FFI_WASM_TYPE_F64 3
++
++// Implement the functions defined above using wasix syscalls.
++#if defined __has_include
++#if __has_include (<wasix/call_dynamic.h>) && __has_include (<wasix/closure.h>)
++#include <wasix/call_dynamic.h>
++#include <wasix/closure.h>
++
++// Set the correct values for the FFI_WASM_TYPE_* defines
++#undef FFI_WASM_TYPE_I32
++#define FFI_WASM_TYPE_I32 WASIX_VALUE_TYPE_I32
++#undef FFI_WASM_TYPE_I64
++#define FFI_WASM_TYPE_I64 WASIX_VALUE_TYPE_I64
++#undef FFI_WASM_TYPE_F32
++#define FFI_WASM_TYPE_F32 WASIX_VALUE_TYPE_F32
++#undef FFI_WASM_TYPE_F64
++#define FFI_WASM_TYPE_F64 WASIX_VALUE_TYPE_F64
++
++static void impl_call_dynamic(
++    void *function,
++    void *values,
++    size_t values_len,
++    void *results,
++    size_t results_len
++) {
++  int error = wasix_call_dynamic((wasix_function_pointer_t)function, values, values_len, results, results_len, false);
++  if(error != 0) {
++    abort();
++  }
++}
++
++static ffi_status impl_closure_prepare(
++    void *backing_function,
++    void *code,
++    uint8_t *argument_types_ptr,
++    size_t argument_types_len,
++    uint8_t *result_types_ptr,
++    size_t result_types_len,
++    void *user_data_ptr
++) {
++  int error = wasix_closure_prepare(
++      (wasix_function_pointer_t)backing_function, (wasix_function_pointer_t)code, argument_types_ptr, argument_types_len,
++      result_types_ptr, result_types_len, user_data_ptr);
++  if(error != 0) {
++    abort();
++  }
++  return FFI_OK;
++}
++
++static void impl_closure_alloc(void **code) {
++  int error = wasix_closure_allocate((wasix_function_pointer_t *)code);
++  if (error != 0) {
++    abort();
++  }
++}
++
++static void impl_free_closure(void *code) {
++  int error = wasix_closure_free((wasix_function_pointer_t)code);
++  if(error != 0) {
++    abort();
++  }
++}
++
++#endif
++#endif
++
++// Modifies the given ffi_type in place to make it easier to process later on.
++//
++// * Structs with no fields are replaced with void
++// * Structs that recursively contain just a single scalar type are replaced with that scalar's type
++// * Structs that recursively contain just no scalar types (or only void) are replaced with void
++// * Complex types are replaced with a struct containing two floating point numbers (real and imaginary parts)
++// * Struct fields are recursively processed according to the same rules
++// * Only for results: long doubles are replaced with a struct containing two 64-bit integers
++//
++// ffi_type: points to a pointer to the ffi_type to process. For struct types the ffi_type will be modified in place. For complex and long double types the pointer will be replaced with a new pointer to a different ffi_type.
++//
++// in_results: Set to true if the type a result, false if it is an argument.
++//
++// After this processing, there will be no complex numbers, and all structs will have more than one non-void element and will thus be passed indirectly as a pointer.
++static unsigned short replace_type(ffi_type **type_ptr, bool in_results) {
++  ffi_type *type = *type_ptr;
++  if (type == NULL) {
++    return FFI_TYPE_VOID; // No type, so no processing needed. Should only happen for return types.
++  }
++
++  if (type->type == FFI_TYPE_COMPLEX) {
++    // _Complex types are represented in the ABI as a struct containing two corresponding floating-point fields, real and imaginary.
++    static ffi_type *ffi_type_complex_float_struct_elements[] = {&ffi_type_float, &ffi_type_float, 0};
++    static ffi_type *ffi_type_complex_double_struct_elements[] = {&ffi_type_double, &ffi_type_double, 0};
++    static ffi_type *ffi_type_complex_longdouble_struct_elements[] = {&ffi_type_longdouble, &ffi_type_longdouble, 0};
++    static ffi_type ffi_type_complex_float_struct = {
++      .size = sizeof(float) * 2,
++      .alignment = _Alignof(float),
++      .type = FFI_TYPE_STRUCT,
++      .elements = ffi_type_complex_float_struct_elements,
++    };
++    static ffi_type ffi_type_complex_double_struct = {
++      .size = sizeof(double) * 2,
++      .alignment = _Alignof(double),
++      .type = FFI_TYPE_STRUCT,
++      .elements = ffi_type_complex_double_struct_elements,
++    };
++    static ffi_type ffi_type_complex_longdouble_struct = {
++      .size = sizeof(long double) * 2,
++      .alignment = _Alignof(long double),
++      .type = FFI_TYPE_STRUCT,
++      .elements = ffi_type_complex_longdouble_struct_elements,
++    };
++
++    ffi_type* underlying_type = type->elements[0];
++    switch (underlying_type->type) {
++      case FFI_TYPE_FLOAT:
++        *type_ptr = &ffi_type_complex_float_struct;
++        break;
++      case FFI_TYPE_DOUBLE:
++        *type_ptr = &ffi_type_complex_double_struct;
++        break;
++      case FFI_TYPE_LONGDOUBLE:
++        *type_ptr = &ffi_type_complex_longdouble_struct;
++        break;
++      default:
++        ABORT_WITH_MSG("Only float, double and long double complex types are supported");
++    }
++    // The size of the struct should be exactly the real and imaginary parts combined
++    FFI_ASSERT(type->size == underlying_type->size * 2);
++    // The alignment of the struct should be the same as a single of the underlying type
++    FFI_ASSERT(type->alignment == underlying_type->alignment);
++    return FFI_TYPE_STRUCT;
++  }
++
++  if (in_results && type->type == FFI_TYPE_LONGDOUBLE) {
++    // When returning long doubles, they are treated as structs.
++    static ffi_type *ffi_type_longdouble_struct_elements[] = {&ffi_type_sint64, &ffi_type_sint64, 0};
++    static ffi_type ffi_type_longdouble_struct = {
++      .size = sizeof(SINT64) * 2,
++      .alignment = 16, // long double is 16 byte aligned
++      .type = FFI_TYPE_STRUCT,
++      .elements = ffi_type_longdouble_struct_elements
++    };
++    *type_ptr = &ffi_type_longdouble_struct;
++    return FFI_TYPE_STRUCT;
++  }
++
++  if (type->type == FFI_TYPE_STRUCT) {
++    // Treat zero size structs as void
++    if (type->size == 0) {
++      type->type = FFI_TYPE_VOID;
++      return FFI_TYPE_VOID;
++    }
++  
++    // Analyze if a struct has only one non-void element
++    unsigned short scalar_type = FFI_TYPE_VOID;
++    size_t number_of_nonvoid_elements = 0;
++    for (size_t i = 0; type->elements[i] != 0; i++) {
++      unsigned short element_type = replace_type(&type->elements[i], false);
++      if (element_type != FFI_TYPE_VOID) {
++        scalar_type = element_type;
++        number_of_nonvoid_elements += 1;
++      }
++    }
++  
++    // Don't change the type of structs that have more than one non-void element
++    if (number_of_nonvoid_elements > 1) {
++      return type->type;
++    }
++
++    // Treat structs with only one non-void element like that element
++    type->type = scalar_type;
++    return scalar_type;
++  }
++
++  // Not a complex or a struct, so no processing needed
++  return type->type;
++}
++
++// Get the size of the type in the WASM C ABI in bytes.
++static uint8_t type_size(ffi_type *type) {
++  if (type == NULL) { // No return type, so no size
++    return 0;
++  }
++
++  switch (type->type) {
++  case FFI_TYPE_VOID:
++    return 0; // Ignored
++  case FFI_TYPE_INT:
++  case FFI_TYPE_UINT8:
++  case FFI_TYPE_SINT8:
++  case FFI_TYPE_UINT16:
++  case FFI_TYPE_SINT16:
++  case FFI_TYPE_UINT32:
++  case FFI_TYPE_SINT32:
++    return 4; // i32
++  case FFI_TYPE_FLOAT:
++    return 4; // f32
++  case FFI_TYPE_UINT64:
++  case FFI_TYPE_SINT64:
++    return 8; // i64
++  case FFI_TYPE_DOUBLE:
++    return 8; // f64
++  case FFI_TYPE_POINTER:
++  case FFI_TYPE_STRUCT:
++    return 4; // i32 (i64 on wasm64)
++  case FFI_TYPE_LONGDOUBLE:
++    return 16; // i64 i64
++  case FFI_TYPE_COMPLEX:
++    ABORT_WITH_MSG("_Complex type should have been replaced with a struct during ffi_prep_cif");
++  default:
++    ABORT_WITH_MSG("Unknown type in get_type_size");
++  }
++};
++
++// Places a value into the values buffer
++//
++// type is the type that value is interpreted as.
++//
++// value is a pointer to the value to place into the buffer.
++//
++// values must be a pointer to a buffer as described in impl_call_dynamic.
++// The values pointer will be incremented by the size of the placed value.
++static void place_value(ffi_type *type, void *value, uint8_t **values) {
++  switch (type->type) {
++  case FFI_TYPE_VOID:
++    return;
++  case FFI_TYPE_UINT8:
++    *((UINT32 *)*values) = (UINT32)(*(UINT8 *)value);
++    *values += 4;
++    return;
++  case FFI_TYPE_SINT8:
++    *((SINT32 *)*values) = (SINT32)(*(SINT8 *)value);
++    *values += 4;
++    return;
++  case FFI_TYPE_UINT16:
++    *((UINT32 *)*values) = (UINT32)(*(UINT16 *)value);
++    *values += 4;
++    return;
++  case FFI_TYPE_SINT16:
++    *((SINT32 *)*values) = (SINT32)(*(SINT16 *)value);
++    *values += 4;
++    return;
++  case FFI_TYPE_UINT32:
++    *((UINT32 *)*values) = (UINT32)(*(UINT32 *)value);
++    *values += 4;
++    return;
++  case FFI_TYPE_INT:
++  case FFI_TYPE_SINT32:
++    *((SINT32 *)*values) = (SINT32)(*(SINT32 *)value);
++    *values += 4;
++    return;
++  case FFI_TYPE_FLOAT:
++    *((FLOAT32 *)*values) = (FLOAT32)(*(FLOAT32 *)value);
++    *values += 4;
++    return;
++  case FFI_TYPE_UINT64:
++    *((UINT64 *)*values) = (UINT64)(*(UINT64 *)value);
++    *values += 8;
++    return;
++  case FFI_TYPE_SINT64:
++    *((SINT64 *)*values) = (SINT64)(*(SINT64 *)value);
++    *values += 8;
++    return;
++  case FFI_TYPE_DOUBLE:
++    *((double *)*values) = (double)(*(double *)value);
++    *values += 8;
++    return;
++  case FFI_TYPE_POINTER:
++    *((UINT32 *)*values) = (UINT32)(*(UINT32 *)value);
++    *values += 4;
++    return;
++  case FFI_TYPE_STRUCT:
++    // Pass indirectly by pointer
++    *((UINT32 *)*values) = (UINT32)(value);
++    *values += 4;
++    return;
++  case FFI_TYPE_LONGDOUBLE:
++    // If the return type is indirect, we need an extra parameter for the return value
++    *((long double *)*values) = (long double)(*(long double *)value);
++    *values += 16;
++    return;
++  case FFI_TYPE_COMPLEX:
++    ABORT_WITH_MSG("_Complex type should have been replaced with a struct during ffi_prep_cif");
++  default:
++    ABORT_WITH_MSG("Unknown type in place_value");
++  }
++}
++
++// Takes a value from the values buffer and returns a pointer to it.
++//
++// type is the type that value is interpreted as.
++//
++// Increments the values pointer by the size of the value taken.
++//
++// values must be a pointer to a buffer as described in impl_call_dynamic.
++// The values pointer will be incremented by the size of the taken value.
++static void *take_value(ffi_type *type, uint8_t **values) {
++  void *result;
++  switch (type->type) {
++  case FFI_TYPE_VOID:
++    result = *values;
++    return result;
++  case FFI_TYPE_UINT8:
++  case FFI_TYPE_SINT8:
++  case FFI_TYPE_UINT16:
++  case FFI_TYPE_SINT16:
++  case FFI_TYPE_UINT32:
++  case FFI_TYPE_INT:
++  case FFI_TYPE_SINT32:
++  case FFI_TYPE_FLOAT:
++    result = *values;
++    (*values) += 4;
++    return result;
++  case FFI_TYPE_UINT64:
++  case FFI_TYPE_SINT64:
++  case FFI_TYPE_DOUBLE:
++    result = *values;
++    (*values) += 8;
++    return result;
++  case FFI_TYPE_POINTER:
++    result = *values;
++    (*values) += 4;
++    return result;
++  case FFI_TYPE_STRUCT:
++    // Pass indirectly by pointer
++    result = **(void ***)values;
++    (*values) += 4;
++    return result;
++  case FFI_TYPE_LONGDOUBLE:
++    result = *values;
++    (*values) += 16;
++    return result;
++  case FFI_TYPE_COMPLEX:
++    ABORT_WITH_MSG("_Complex type should have been replaced with a struct during ffi_prep_cif");
++  default:
++    ABORT_WITH_MSG("Unknown type in take_value");
++  }
++}
++
++// Interprets the given ffi_type and places it in a buffer as a wasm C ABI type.
++//
++// type is the ffi_type to interpret.
++//
++// types is a buffer of wasm basic C ABI types, as described in impl_closure_prepare.
++// The buffer will be modified in place, and the pointer will be incremented by the size of the type placed.
++static void place_type(ffi_type *type, uint8_t **types) {
++  switch (type->type) {
++  case FFI_TYPE_VOID:
++    return;
++  case FFI_TYPE_SINT8:
++  case FFI_TYPE_UINT8:
++  case FFI_TYPE_UINT16:
++  case FFI_TYPE_SINT16:
++  case FFI_TYPE_UINT32:
++  case FFI_TYPE_INT:
++  case FFI_TYPE_SINT32:
++    **types = FFI_WASM_TYPE_I32;
++    *types += 1;
++    return;
++  case FFI_TYPE_FLOAT:
++    **types = FFI_WASM_TYPE_F32;
++    *types += 1;
++    return;
++  case FFI_TYPE_UINT64:
++  case FFI_TYPE_SINT64:
++    **types = FFI_WASM_TYPE_I64;
++    *types += 1;
++    return;
++  case FFI_TYPE_DOUBLE:
++    **types = FFI_WASM_TYPE_F64;
++    *types += 1;
++    return;
++  case FFI_TYPE_POINTER:
++  case FFI_TYPE_STRUCT:
++    **types = FFI_WASM_TYPE_I32;
++    *types += 1;
++    return;
++  case FFI_TYPE_LONGDOUBLE:
++    **types = FFI_WASM_TYPE_I64;
++    *types += 1;
++    **types = FFI_WASM_TYPE_I64;
++    *types += 1;
++    return;
++  case FFI_TYPE_COMPLEX:
++    ABORT_WITH_MSG("_Complex type should have been replaced with a struct during ffi_prep_cif");
++  default:
++    ABORT_WITH_MSG("Unknown type in place_type");
++  }
++}
++
++// Determines whether the type is returned indirectly
++//
++// Indirect return means that a pointer to the return value is passed as the first argument of the function call.
++static bool return_indirect(ffi_type *rtype) {
++  if (rtype == NULL) {
++    // Nullptr means no return type, which is treated as void
++    return false;
++  }
++  switch (rtype->type) {
++  case FFI_TYPE_VOID: // Void can be treated as direct return, as it is ignored
++  case FFI_TYPE_INT:
++  case FFI_TYPE_FLOAT:
++  case FFI_TYPE_UINT8:
++  case FFI_TYPE_SINT8:
++  case FFI_TYPE_UINT16:
++  case FFI_TYPE_SINT16:
++  case FFI_TYPE_UINT32:
++  case FFI_TYPE_SINT32:
++  case FFI_TYPE_UINT64:
++  case FFI_TYPE_SINT64:
++  case FFI_TYPE_DOUBLE:
++  case FFI_TYPE_POINTER:
++    return false;
++  case FFI_TYPE_STRUCT:
++    return true;
++  case FFI_TYPE_COMPLEX:
++    ABORT_WITH_MSG("_Complex type should have been replaced with a struct during ffi_prep_cif");
++  case FFI_TYPE_LONGDOUBLE:
++    ABORT_WITH_MSG("longdouble return type should have been replaced with a struct during ffi_prep_cif");
++  default:
++    ABORT_WITH_MSG("Unknown type in return_indirect");
++  }
++}
++
++// Determines how many arguments are required to pass this type using the wasm basic C ABI
++static uint8_t arguments_count(ffi_type *type) {
++  switch (type->type) {
++  case FFI_TYPE_VOID: // Void can be treated as direct return, as it is ignored
++    return 0;
++  case FFI_TYPE_INT:
++  case FFI_TYPE_FLOAT:
++  case FFI_TYPE_UINT8:
++  case FFI_TYPE_SINT8:
++  case FFI_TYPE_UINT16:
++  case FFI_TYPE_SINT16:
++  case FFI_TYPE_UINT32:
++  case FFI_TYPE_SINT32:
++  case FFI_TYPE_UINT64:
++  case FFI_TYPE_SINT64:
++  case FFI_TYPE_DOUBLE:
++  case FFI_TYPE_POINTER:
++  case FFI_TYPE_STRUCT:
++    return 1;
++  case FFI_TYPE_LONGDOUBLE:
++    return 2;
++  case FFI_TYPE_COMPLEX:
++    ABORT_WITH_MSG("_Complex type should have been replaced with a struct during ffi_prep_cif");
++  default:
++    ABORT_WITH_MSG("Unknown type in arguments_count");
++  }
++}
++
++// This function will be passed as the backing function to impl_closure_prepare
++//
++// wasm_arguments is a pointer to a buffer containing the arguments in the same format as in impl_call_dynamic
++// wasm_results is a pointer to an empty buffer where the results should be written in the same format as in impl_call_dynamic
++//
++// closure is a pointer to the ffi_closure struct that was passed to impl_closure_prepare. cif and user_data is taken from it
++static void closure_backing_function(
++  uint8_t* wasm_arguments,
++  uint8_t* wasm_results,
++  ffi_closure* closure
++) {
++  ffi_cif* cif = closure->cif;
++  void* user_data = closure->user_data;
++  void (*fun)(ffi_cif *, void *, void **, void *) = closure->fun;
++
++  void* libffi_args[cif->nargs];
++  void* libffi_result = wasm_results;
++
++  uint8_t * libffi_args_ptr = (uint8_t *)wasm_arguments;
++  if (return_indirect(cif->rtype)) {
++    // If the return type is indirect, the first argument is a pointer to the result
++    libffi_result = take_value(cif->rtype, (uint8_t**)(&libffi_args_ptr));
++  }
++  for (int i = 0; i < cif->nargs; i++) {
++    libffi_args[i] = take_value(cif->arg_types[i], (uint8_t**)(&libffi_args_ptr));
++  }
++
++  fun(cif, libffi_result, libffi_args, user_data);
++
++  return;
++}
++
++#endif
++
++
++
++ffi_status FFI_HIDDEN
++ffi_prep_cif_machdep(ffi_cif *cif)
++{
++#ifdef __EMSCRIPTEN__
++  if (cif->abi != FFI_WASM32_EMSCRIPTEN)
++    return FFI_BAD_ABI;
++  if (cif->rtype->type == FFI_TYPE_COMPLEX)
++    return FFI_BAD_TYPEDEF;
++  // If they put the COMPLEX type into a struct we won't notice, but whatever.
++  for (int i = 0; i < cif->nargs; i++)
++    if (cif->arg_types[i]->type == FFI_TYPE_COMPLEX)
++      return FFI_BAD_TYPEDEF;
++#else
++  // Preprocess arguments and return types
++  for (int i = 0; i < cif->nargs; i++) {
++    replace_type(&cif->arg_types[i], false);
++  }
++  replace_type(&cif->rtype, true);
++#endif
++
++  // This is called after ffi_prep_cif_machdep_var so we need to avoid
++  // overwriting cif->nfixedargs.
++  if (!(cif->flags & VARARGS_FLAG))
++    cif->nfixedargs = cif->nargs;
++  if (cif->nargs > MAX_ARGS)
++    return FFI_BAD_TYPEDEF;
++
++  return FFI_OK;
++}
++
++ffi_status FFI_HIDDEN
++ffi_prep_cif_machdep_var(ffi_cif *cif, unsigned nfixedargs, unsigned ntotalargs)
++{
++  cif->flags |= VARARGS_FLAG;
++  cif->nfixedargs = nfixedargs;
++#ifdef __EMSCRIPTEN__
++  // The varargs takes up one extra argument
++  if (cif->nfixedargs + 1 > MAX_ARGS)
++    return FFI_BAD_TYPEDEF;
++  return FFI_OK;
++#else
++  return FFI_BAD_ABI; // Varargs are not yet supported without emscripten
++#endif
++}
++
++void ffi_call(ffi_cif *cif, void (*fn)(void), void *rvalue, void **avalue) {
++#ifdef __EMSCRIPTEN__
++  ffi_call_js(cif, fn, rvalue, avalue);
++  return;
++#else
++  // Calculate the total size that we need to allocate for the arguments
++  size_t total_size = 0;
++
++  bool indirect_return = return_indirect(cif->rtype);
++  if (indirect_return) {
++    // If the return type is indirect, we need an extra parameter for the return value
++    total_size += type_size(cif->rtype);
++  }
++
++  // Calculate how much space we need for all arguments
++  for (int i = 0; i < cif->nargs; i++) {
++    total_size += type_size(cif->arg_types[i]);
++  }
++
++  // Buffer for arguments as described in impl_call_dynamic
++  uint8_t values[total_size];
++
++  // Fill the buffers
++  uint8_t * current_value = values;
++  if (indirect_return) {
++    *((void **)current_value) = rvalue;
++    current_value += 4;
++  }
++  for (int i = 0; i < cif->nargs; i++) {
++    place_value(cif->arg_types[i], avalue[i], &current_value);
++  }
++
++  impl_call_dynamic(fn, values, total_size, rvalue, indirect_return ? 0 : type_size(cif->rtype));
++#endif
++}
++
++void * __attribute__ ((visibility ("default")))
++ffi_closure_alloc(size_t size, void **code) {
++#ifdef __EMSCRIPTEN__
++  return ffi_closure_alloc_js(size, code);
++#else
++  // We also allocate space for a pointer to the entry in the function table, so we don't need to keep track of which data allocation is for which closure separately.
++  //
++  // We need this, because there is no guarantee that the allocation will be used for a ffi_closure struct.
++  //
++  // Although we are under no obligation to do so, we assure the returned allocation has the correct alignment for a ffi_closure.
++  const size_t alignment = _Alignof(ffi_closure) > _Alignof(void *) ? _Alignof(ffi_closure) : _Alignof(void *);
++  const size_t code_ptr_size = (sizeof(void *) + alignment - 1) & ~(alignment - 1);
++
++  void *allocation = aligned_alloc(alignment, size + code_ptr_size);
++  impl_closure_alloc(code);
++  *(void **)allocation = *code;
++  // Return a pointer to a allocation requested of the requested size
++  return allocation + code_ptr_size;
++#endif
++}
++
++void __attribute__ ((visibility ("default")))
++ffi_closure_free(void *closure) {
++#ifdef __EMSCRIPTEN__
++  return ffi_closure_free_js(closure);
++#else
++  // See the comment in ffi_closure_alloc for why we store the pointer to the code in the allocation.
++  const size_t alignment = _Alignof(ffi_closure) > _Alignof(void *) ? _Alignof(ffi_closure) : _Alignof(void *);
++  const size_t code_ptr_size = (sizeof(void *) + alignment - 1) & ~(alignment - 1);
++
++  // Retrieve the original allocation pointer
++  void *allocation = closure - code_ptr_size;
++  impl_free_closure(*(void **)allocation);
++  free(allocation);
++#endif
++}
++
+ // EM_JS does not correctly handle function pointer arguments, so we need a
+ // helper
+ ffi_status ffi_prep_closure_loc(ffi_closure *closure, ffi_cif *cif,
+                                 void (*fun)(ffi_cif *, void *, void **, void *),
+                                 void *user_data, void *codeloc) {
+-  if (cif->abi != FFI_EMSCRIPTEN_ABI)
++#ifdef __EMSCRIPTEN__
++  if (cif->abi != FFI_WASM32_EMSCRIPTEN)
+     return FFI_BAD_ABI;
+   return ffi_prep_closure_loc_js(closure, cif, (void *)fun, user_data,
+                                      codeloc);
++#else
++  if (cif->abi == FFI_WASM32_EMSCRIPTEN)
++    return FFI_BAD_ABI;
++  // Figure out the number of the arguments and results
++  int argument_count = 0;
++  int result_count = 0;
++  bool indirect_return = return_indirect(cif->rtype);
++  if (indirect_return) {
++    // Always 1 as only structs are returned indirectly
++    argument_count += arguments_count(cif->rtype);
++  }else {
++    // Always 0 or 1, as longdouble returns are rewritten as structs during ffi_prep_cif
++    result_count += arguments_count(cif->rtype);
++  }
++  for (int i = 0; i < cif->nargs; i++) {
++    argument_count += arguments_count(cif->arg_types[i]);
++  }
++
++  // Buffers for arguments and results as described in impl_closure_prepare
++  uint8_t argument_types[argument_count];
++  uint8_t result_types[result_count];
++
++  // Fill the buffers
++  uint8_t* arg_types_ptr = argument_types;
++  uint8_t* result_types_ptr = result_types;
++  if (indirect_return) {
++    // If the return type is indirect, it is passed as the first argument
++    place_type(cif->rtype, &arg_types_ptr);
++  } else {
++    place_type(cif->rtype, &result_types_ptr);
++  }
++  for (int i = 0; i < cif->nargs; i++) {
++    place_type(cif->arg_types[i], &arg_types_ptr);
++  }
++
++  // Setup the closure struct
++  closure->cif = cif;
++  closure->fun = fun;
++  closure->user_data = user_data;
++  closure->ftramp = codeloc;
++  
++  // Prepare the actual closure
++  ffi_status status = impl_closure_prepare(
++    closure_backing_function,
++    codeloc,
++    argument_types,
++    argument_count,
++    result_types,
++    result_count,
++    closure);
++  return status;
++#endif
+ }
+diff --git a/src/wasm/ffitarget.h b/src/wasm/ffitarget.h
+index 10041c0..d5d4a43 100644
+--- a/src/wasm/ffitarget.h
++++ b/src/wasm/ffitarget.h
+@@ -42,31 +42,16 @@ typedef void (*ffi_fp)(void);
+ 
+ typedef enum ffi_abi {
+   FFI_FIRST_ABI = 0,
+-#if __SIZEOF_POINTER__ == 4
+-  FFI_WASM32, // "raw", no structures, varargs, or closures (not implemented!)
++  // The basic C ABI for wasm32 as implemented by clang/LLVM
++  // https://github.com/WebAssembly/tool-conventions/blob/main/BasicCABI.md
++  FFI_WASM32, // varargs not implemented yet
+   FFI_WASM32_EMSCRIPTEN, // structures, varargs, and split 64-bit params
+-#elif __SIZEOF_POINTER__ == 8
+-  FFI_WASM64,
+-  FFI_WASM64_EMSCRIPTEN,
+-#else
+-#error "Unknown pointer size"
+-#endif
+   FFI_LAST_ABI,
+-#if __SIZEOF_POINTER__ == 4
+ #ifdef __EMSCRIPTEN__
+   FFI_DEFAULT_ABI = FFI_WASM32_EMSCRIPTEN
+ #else
+   FFI_DEFAULT_ABI = FFI_WASM32
+ #endif
+-#elif __SIZEOF_POINTER__ == 8
+-#ifdef __EMSCRIPTEN__
+-  FFI_DEFAULT_ABI = FFI_WASM64_EMSCRIPTEN
+-#else
+-  FFI_DEFAULT_ABI = FFI_WASM64
+-#endif
+-#else
+-#error "Unknown pointer size"
+-#endif
+ } ffi_abi;
+ 
+ #define FFI_CLOSURES 1

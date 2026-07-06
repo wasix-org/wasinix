@@ -23,8 +23,11 @@ removed or the reminder's `writtenFor` is re-pinned.
 | `wasix-libc` | `wasix-org/wasix-libc` release | the witx spec pins |
 | `wasixcc` | `wasix-org/wasixcc` release | |
 | `llvm` | fork release tag | |
-| `crabsay`, `libffi` | branch head | hashes |
+| `crabsay` | branch head | hashes |
 | `nixpkgs`, `wasmer`, `treefmt-nix` | flake inputs | |
+
+libffi has no pin: it follows nixpkgs' libffi with the wasix-org fork's wasi
+backend vendored as a patch (`packages/libffi/wasi-backend.patch`).
 
 ## Per-pin notes
 
