@@ -1,8 +1,11 @@
 # The wasix toolchain: LLVM fork, per-variant sysroot, and the wrappers that
 # drive them (wasixcc, cargo-wasix, binaryen). Everything is built from source.
 {pkgs}: let
-  inherit (import ./llvm.nix {inherit pkgs;}) llvm llvmTree llvmVersion;
-  foundation = import ./sysroot {inherit pkgs llvm llvmVersion;};
+  inherit (import ./llvm.nix {inherit pkgs;}) llvm llvmTree version;
+  foundation = import ./sysroot {
+    inherit pkgs llvm;
+    llvmVersion = version;
+  };
   inherit (foundation) variants sysroot tests libc compiler-rt libcxx;
 
   wasixLlvm = llvmTree;

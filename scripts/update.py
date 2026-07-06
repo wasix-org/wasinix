@@ -1,17 +1,11 @@
 #!/usr/bin/env python3
-# Auto-update the source pins of packages defined in this repo (not the
-# `prev.X` nixpkgs passthroughs). Backends:
-#   nix-update: single-`src` derivations reachable as flake attrs; discovers
-#               the version and refills hashes by building.
-#   prefetch:   bare version/rev literals with a separate hash, where
-#               nix-update's strict eval cannot introspect the package.
-#               Resolves the latest tag (or branch HEAD), prefetches the new
-#               hash, and swaps the literals in place so surrounding comments
-#               survive.
-#   flake:      `nix flake update <input>`.
-# Per-target `regen` hooks update derived files after a bump: cargo-wasix's
-# committed Cargo.lock, the rust fork's stage0 bootstrap pin (synced from its
-# src/stage0), and wasix-libc's witx submodule pins.
+# Driver for the repo's pin updates. What to bump and how lives in each
+# package as passthru.updateScript (nix-update-script), discovered by eval;
+# this script only drives:
+# it runs each target isolated, adds the flake-input targets (which have no
+# package file), runs the cross-file regen hooks after a bump (cargo-wasix's
+# committed Cargo.lock, the rust fork's stage0 bootstrap pin, wasix-libc's
+# witx submodule pins), and reports the summary plus stale updateReminders.
 #
 # Usage (or `nix run .#update -- ...`):
 #   scripts/update.py              # update everything
@@ -20,13 +14,14 @@
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from urllib import request
 
@@ -63,16 +58,6 @@ def gh(path):
         return json.load(r)
 
 
-def latest_release_tag(repo):
-    return gh(f"{repo}/releases/latest")["tag_name"]
-
-
-def default_branch_head(repo):
-    info = gh(repo)
-    branch = info["default_branch"]
-    return gh(f"{repo}/branches/{branch}")["commit"]["sha"]
-
-
 def prefetch_github(owner, repo, rev):
     url = f"https://github.com/{owner}/{repo}/archive/{rev}.tar.gz"
     out = run(["nix", "store", "prefetch-file", "--json", "--unpack", url])
@@ -81,16 +66,6 @@ def prefetch_github(owner, repo, rev):
 
 def prefetch_url(url):
     out = run(["nix", "store", "prefetch-file", "--json", url])
-    return json.loads(out.stdout)["hash"]
-
-
-def prefetch_github_submodules(owner, repo, rev):
-    # GitHub archives omit submodules, so for fetchSubmodules=true the hash
-    # must cover the full tree. nix-prefetch-git --fetch-submodules computes
-    # the hash fetchFromGitHub verifies and needs no nixpkgs in the search
-    # path (CI does not provide one).
-    out = run(["nix-prefetch-git", "--quiet", "--fetch-submodules",
-               "--url", f"https://github.com/{owner}/{repo}.git", "--rev", rev])
     return json.loads(out.stdout)["hash"]
 
 
@@ -115,29 +90,13 @@ def fetch_source(owner, repo, rev):
 @dataclass
 class Target:
     name: str
-    backend: str  # "nix-update" | "prefetch" | "flake"
+    backend: str  # "updateScript" | "flake"
     # flake: the flake.lock input name (`nix flake update <input>`)
     input: str = ""
-    # nix-update:
+    # updateScript (passthru.updateScript, discovered by eval):
     attr: str = ""
-    version: str = ""  # "", "branch", or an explicit version
-    filename: str = ""  # --override-filename when meta.position is absent
-    # prefetch:
-    file: str = ""
-    owner: str = ""
-    repo: str = ""
-    kind: str = "github"  # "github" | "url"
-    track: str = "release"  # "release" (latest tag) | "branch" (default-branch HEAD)
-    submodules: bool = False  # fetchSubmodules=true: hash the full tree, not the archive
-    # regex capturing the current version/rev literal, for the swap
-    version_re: str = ""
-    # given the chosen tag, map it to (literal-to-write, rev-for-prefetch)
-    tag_to_version: object = field(default=lambda t: (t, t))
-    # for kind == "url": build the fetch URL from the version literal
-    url_for: object = None
-    # run after the pin bump to regenerate derived files (lockfile, bootstrap).
-    # Takes the Target, returns a one-line summary or None if nothing changed.
-    regen: object = None
+    command: tuple = ()
+    file: str = ""  # repo-relative pin file, from meta.position
 
 
 def regen_cargo_wasix_lock(t):
@@ -190,10 +149,9 @@ def regen_libc_witx(t):
     # separately from the libc src. A stale pin fails the libc build with
     # undeclared __wasi_* functions, so sync each pin to the submodule rev at
     # the new tag.
-    tag = re.search(r'wasixLibcVersion = "([^"]+)"',
-                    (REPO / "pkgs/toolchain/sysroot/default.nix").read_text()).group(1)
     path = REPO / "pkgs/toolchain/sysroot/libc.nix"
     text = path.read_text()
+    tag = "v" + re.search(r'\bversion = "([^"]+)"', text).group(1)
     bumped = []
     for sub, owner, repo in [
         ("tools/wasi-headers/WASI", "WebAssembly", "WASI"),
@@ -215,67 +173,91 @@ def regen_libc_witx(t):
     return "witx pins: " + ", ".join(bumped)
 
 
+# Cross-file regen hooks, keyed by target name: they synchronize other repo
+# files with the new pin, which is driver logic, not package logic. What to
+# bump and how lives in each package as passthru.updateScript.
+REGEN_BY_NAME = {
+    "rust-toolchain": regen_rust_bootstrap,
+    "cargo-wasix": regen_cargo_wasix_lock,
+    "wasix-libc": regen_libc_witx,
+}
+
+# Flake inputs (flake.lock) have no package file to carry an updateScript.
+# Each is its own target so `--only nixpkgs` works like a package; nixpkgs
+# drives the stdenv + every prev.X override package.
 TARGETS = [
-    # crabsay (a third-party demo) cuts no releases, so track its default branch.
-    Target("crabsay", "nix-update",
-           attr=f"legacyPackages.{SYSTEM}.shippedPackages.crabsay",
-           version="branch"),
-    # rust-toolchain uses prefetch: its fork tags (v2026-...+rust-1.90) defeat
-    # nix-update's version heuristic. fetchSubmodules pulls src/llvm-project,
-    # so the hash must cover the full tree, not the archive.
-    Target("rust-toolchain", "prefetch",
-           file="pkgs/toolchain/rust/toolchain.nix",
-           owner="wasix-org", repo="rust", submodules=True,
-           version_re=r'version = "([^"]+)"',
-           tag_to_version=lambda t: (t.removeprefix("v"), t),
-           regen=regen_rust_bootstrap),
-
-    # prefetch is used where nix-update's strict eval cannot introspect the
-    # package or its version heuristics get in the way.
-    Target("wasixcc", "prefetch",
-           file="pkgs/toolchain/wasixcc.nix",
-           owner="wasix-org", repo="wasixcc",
-           version_re=r'version = "([^"]+)"',
-           tag_to_version=lambda t: (t.removeprefix("v"), t)),
-    Target("cargo-wasix", "prefetch",
-           file="pkgs/toolchain/rust/cargo-wasix.nix",
-           owner="wasix-org", repo="cargo-wasix",
-           # version literal is bare (0.1.28); the release tag is v${version}.
-           version_re=r'version = "([^"]+)"',
-           tag_to_version=lambda t: (t.removeprefix("v"), t),
-           regen=regen_cargo_wasix_lock),
-    Target("wasix-libc", "prefetch",
-           file="pkgs/toolchain/sysroot/default.nix",
-           owner="wasix-org", repo="wasix-libc",
-           version_re=r'wasixLibcVersion = "([^"]+)"',
-           regen=regen_libc_witx),
-    # llvm: bump the fork release tag + hash only. llvmVersion is the *base* LLVM
-    # version that drives nixpkgs' patch selection and must not be touched.
-    Target("llvm", "prefetch",
-           file="pkgs/toolchain/llvm.nix",
-           owner="wasix-org", repo="llvm-project",
-           version_re=r'tag = "([0-9][^"]+)"; # fork release tag'),
-
-    # Flake inputs (flake.lock). Each is its own target so `--only nixpkgs` works
-    # like a package. nixpkgs drives the stdenv + every prev.X override package.
     Target("nixpkgs", "flake", input="nixpkgs"),
     Target("wasmer", "flake", input="wasmer"),
     Target("treefmt-nix", "flake", input="treefmt-nix"),
 ]
 
 
+def repo_relative(path):
+    # meta.position under a flake eval is inside the source store copy
+    m = re.match(r"^/nix/store/[^/]+/(.*)$", path)
+    if m:
+        return m.group(1)
+    try:
+        return str(Path(path).relative_to(REPO))
+    except ValueError:
+        return path
+
+
+def discovered_targets():
+    # passthru.updateScript declarations (flake attr `updateScripts`), one
+    # target per package, deduped across the per-profile ci attrs.
+    out = run(["nix", "eval", "--json",
+               f".#legacyPackages.{SYSTEM}.updateScripts"]).stdout
+    targets = {}
+    for attr, s in sorted(json.loads(out).items()):
+        name = s.get("name") or attr.rsplit(".", 1)[-1]
+        if name in targets:
+            continue
+        pos = s.get("position")
+        targets[name] = Target(
+            name, "updateScript",
+            # attrPath: the declared target attr (e.g. the unwrapped package
+            # behind a wrapper), else the attr the declaration was found on
+            attr=f"legacyPackages.{SYSTEM}.{s.get('attrPath') or attr}",
+            command=tuple(s["command"]),
+            file=repo_relative(pos.rsplit(":", 1)[0]) if pos else "",
+        )
+    return list(targets.values())
+
+
 # Each backend returns a one-line outcome for the summary (None: let the
 # caller derive it from whether the working tree changed).
 
 
-def update_nix_update(t):
-    cmd = ["nix-update", "--flake"]
-    if t.version:
-        cmd.append(f"--version={t.version}")
-    if t.filename:
-        cmd += ["--override-filename", t.filename]
-    cmd.append(t.attr)
-    run(cmd, cwd=REPO)
+def run_update_script(t):
+    cmd = list(t.command)
+    # repo-relative script commands run from the checkout; store paths and
+    # bare tool names pass through
+    if "/" in cmd[0] and not cmd[0].startswith("/"):
+        cmd[0] = str(REPO / cmd[0])
+    env = os.environ.copy()
+    env["UPDATE_NIX_ATTR_PATH"] = t.attr
+    if t.file:
+        env["UPDATE_NIX_SOURCE_FILE"] = t.file
+    print(f"  $ {' '.join(t.command)}", file=sys.stderr)
+    p = subprocess.run(cmd, cwd=REPO, env=env, text=True, capture_output=True)
+    sys.stderr.write(p.stderr)
+    out = p.stdout.strip()
+    for line in out.splitlines():
+        print(f"  {line}")
+    if p.returncode != 0:
+        raise RuntimeError(
+            f"{t.command[0]} exited {p.returncode}:"
+            f"\n{(p.stderr or p.stdout).strip()}")
+    # nix-update reports an early "Update a -> b in file" line; take the
+    # last line that looks like an outcome, else fall back to the
+    # tree-changed heuristic in main()
+    for line in reversed(out.splitlines()):
+        if line.startswith("up to date"):
+            return line
+        m = re.search(r"(\S+ -> \S+?)( in /|$)", line)
+        if m:
+            return m.group(1)
     return None
 
 
@@ -293,38 +275,6 @@ def update_flake_input(t):
     return outcome
 
 
-def update_prefetch(t):
-    path = REPO / t.file
-    text = path.read_text()
-    m = re.search(t.version_re, text)
-    if not m:
-        raise SystemExit(f"{t.name}: version pattern not found in {t.file}")
-    cur = m.group(1)
-
-    if t.track == "branch":
-        new_literal = rev = default_branch_head(f"{t.owner}/{t.repo}")
-    else:
-        new_literal, rev = t.tag_to_version(latest_release_tag(f"{t.owner}/{t.repo}"))
-    if new_literal == cur:
-        print(f"  up to date ({cur})")
-        return f"up to date ({cur})"
-
-    print(f"  {cur} -> {new_literal}")
-    if t.kind == "url":
-        new_hash = prefetch_url(t.url_for(new_literal))
-    elif t.submodules:
-        new_hash = prefetch_github_submodules(t.owner, t.repo, rev)
-    else:
-        new_hash = prefetch_github(t.owner, t.repo, rev)
-
-    # swap the version literal (exact, via the captured span) and the old hash.
-    old_hash = re.search(r'sha256-[A-Za-z0-9+/=]+', text[m.end():]).group(0)
-    text = text[:m.start(1)] + new_literal + text[m.end(1):]
-    text = text.replace(old_hash, new_hash, 1)
-    path.write_text(text)
-    return f"{cur} -> {new_literal}"
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", nargs="*", metavar="NAME")
@@ -333,17 +283,18 @@ def main():
                     help="write a markdown summary (the auto-update PR body)")
     args = ap.parse_args()
 
-    targets = TARGETS
+    targets = discovered_targets() + TARGETS
     if args.only:
         wanted = set(args.only)
-        targets = [t for t in TARGETS if t.name in wanted]
+        targets = [t for t in targets if t.name in wanted]
         unknown = wanted - {t.name for t in targets}
         if unknown:
             raise SystemExit(f"unknown target(s): {', '.join(sorted(unknown))}")
 
     if args.list:
         for t in targets:
-            print(f"{t.name:16} {t.backend}")
+            detail = t.input if t.backend == "flake" else " ".join(t.command)
+            print(f"{t.name:16} {t.backend:12} {detail}")
         return
 
     def repo_status():
@@ -351,8 +302,7 @@ def main():
                               text=True, capture_output=True).stdout
 
     backends = {
-        "nix-update": update_nix_update,
-        "prefetch": update_prefetch,
+        "updateScript": run_update_script,
         "flake": update_flake_input,
     }
 
@@ -375,9 +325,10 @@ def main():
         if outcome is None:
             outcome = "updated" if changed else "up to date"
         # Run the regen only on an actual bump (the working tree changed).
-        if t.regen and changed:
+        regen = REGEN_BY_NAME.get(t.name)
+        if regen and changed:
             try:
-                summary = t.regen(t)
+                summary = regen(t)
                 print(f"  regen: {summary or 'no derived changes'}")
                 if summary:
                     outcome += f"; {summary}"

@@ -156,6 +156,48 @@
         updateReminders =
           lib.filterAttrs (_: rs: rs != [])
           (lib.mapAttrs (_: wasixLib.staleRemindersOf) ci);
+
+        # passthru.updateScript declarations (standard nixpkgs convention),
+        # collected for scripts/update.py: the command, an optional display
+        # name, and meta.position (the file the pin lives in; the overlay
+        # loader stamps it to our files). Consumers dedupe per-profile repeats.
+        updateScripts = let
+          srcRoot = toString self;
+          scriptOf = attr: drv: let
+            s = drv.passthru.updateScript or null;
+            command =
+              if lib.isList s
+              then map toString s
+              else if lib.isAttrs s && s ? command
+              then map toString (lib.toList s.command)
+              else null;
+            # prev.X packages inherit nixpkgs' updateScripts, which must not
+            # run against this repo; ours are the ones declared in this tree
+            pos = builtins.unsafeGetAttrPos "updateScript" (drv.passthru or {});
+            ours =
+              command
+              != null
+              && command != []
+              && pos != null
+              && lib.hasPrefix srcRoot pos.file;
+            entry = builtins.tryEval (
+              let
+                v = lib.optionalAttrs ours {
+                  ${attr} =
+                    {inherit command;}
+                    // lib.optionalAttrs (lib.isAttrs s && s ? name) {inherit (s) name;}
+                    // lib.optionalAttrs (lib.isAttrs s && s ? attrPath) {inherit (s) attrPath;}
+                    // {position = drv.meta.position or null;};
+                };
+              in
+                builtins.deepSeq v v
+            );
+          in
+            if entry.success
+            then entry.value
+            else {};
+        in
+          lib.concatMapAttrs scriptOf ci;
       };
 
     devShells.${system}.default = wasix.pkgs.mkShell {

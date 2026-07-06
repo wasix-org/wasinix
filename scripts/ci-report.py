@@ -96,24 +96,16 @@ def classify(cases, drvs):
     return counts, failed
 
 
-def dedupe_reminders(reminders):
-    # {attr: [{message, writtenFor, version}]} -> one entry per distinct
-    # reminder; the per-profile attrs collapse to a package name + count
+def dedupe_notes(fired):
+    # {attr: [{message, prior, version}]} -> one entry per message; the
+    # per-profile attrs collapse to a package name
     merged = {}
-    for attr, rems in (reminders or {}).items():
-        for r in rems:
-            key = (r["message"], r["writtenFor"], r.get("version"))
-            merged.setdefault(key, []).append(attr)
-    return [
-        {
-            "name": sorted(attrs)[0].rsplit(".", 1)[-1],
-            "attrs": sorted(attrs),
-            "message": k[0],
-            "writtenFor": k[1],
-            "version": k[2],
-        }
-        for k, attrs in merged.items()
-    ]
+    for attr, notes in (fired or {}).items():
+        for n in notes:
+            merged.setdefault(
+                n["message"], {"name": attr.rsplit(".", 1)[-1], **n}
+            )
+    return sorted(merged.values(), key=lambda n: n["name"])
 
 
 def title_of(counts, failed, diff, content):
@@ -146,9 +138,9 @@ def title_of(counts, failed, diff, content):
     return " · ".join(parts)
 
 
-def with_reminder_count(title, reminders):
-    if reminders:
-        return f"{title} · ⏰ {len(reminders)} stale reminders"
+def with_note_count(title, notes):
+    if notes:
+        return f"{title} · 📌 {len(notes)} update notes"
     return title
 
 
@@ -157,18 +149,13 @@ def excerpt(log):
     return "\n".join(lines)[-MAX_LOG_CHARS:]
 
 
-def render_reminders(reminders):
-    if not reminders:
+def render_notes(notes):
+    if not notes:
         return ""
-    md = (
-        f"\n<details open><summary>⏰ Stale update reminders ({len(reminders)})"
-        "</summary>\n\n"
-    )
-    for r in sorted(reminders, key=lambda r: r["name"]):
-        md += (
-            f"- **{r['name']}** ({r['version']}, written for {r['writtenFor']}):"
-            f" {r['message']} <sub>({len(r['attrs'])} jobs)</sub>\n"
-        )
+    md = f"\n<details open><summary>📌 Update notes ({len(notes)})</summary>\n\n"
+    for n in notes:
+        moved = f" ({n['prior']} -> {n['version']})" if n.get("prior") else ""
+        md += f"- **{n['name']}**{moved}: {n['message']}\n"
     return md + "\n</details>\n"
 
 
@@ -214,7 +201,7 @@ def main():
     ap.add_argument("--jobs", help="nix-eval-jobs output, for drv paths (nix log)")
     ap.add_argument("--diff-summary", help="summary json from eval-diff.py")
     ap.add_argument("--content-summary", help="summary json from content-diff.py")
-    ap.add_argument("--reminders", help="updateReminders json from nix eval")
+    ap.add_argument("--notes", help="fired updateNotes json from nix eval")
     ap.add_argument("--md-out", required=True)
     ap.add_argument("--json-out", required=True)
     args = ap.parse_args()
@@ -231,18 +218,18 @@ def main():
 
     diff = load_optional(args.diff_summary)
     content = load_optional(args.content_summary)
-    reminders = dedupe_reminders(load_optional(args.reminders))
+    notes = dedupe_notes(load_optional(args.notes))
 
     cases = parse_junit(args.junit)
     counts, failed = (
         (None, []) if cases is None else classify(cases, load_drv_map(args.jobs))
     )
-    title = with_reminder_count(title_of(counts, failed, diff, content), reminders)
+    title = with_note_count(title_of(counts, failed, diff, content), notes)
 
     with open(args.json_out, "w") as f:
         json.dump({"title": title, "failed": len(failed)}, f)
     with open(args.md_out, "w") as f:
-        f.write(render_md(title, counts, failed) + render_reminders(reminders))
+        f.write(render_md(title, counts, failed) + render_notes(notes))
     print(title, file=sys.stderr)
 
 

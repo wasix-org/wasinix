@@ -19,6 +19,7 @@
   linkFarm,
   formats,
   rustPlatform,
+  nix-update-script,
   autoPatchelfHook,
   # x.py/cargo need a writable HOME.
   writableTmpDirAsHomeHook,
@@ -244,6 +245,8 @@ in
       # passthru.wasix.supportedProfiles of wasix Rust packages, so the overlay
       # marks them unsupported in the profiles rust can't target (off/exnref*).
       supportedProfiles = ["eh"] ++ optionals withDynamicLinking ["ehpic"];
+
+      updateScript = nix-update-script {extraArgs = ["--flake"];};
     };
 
     meta = with lib; {

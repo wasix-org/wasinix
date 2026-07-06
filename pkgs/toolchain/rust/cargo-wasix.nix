@@ -7,6 +7,7 @@
   rustPlatform,
   fetchFromGitHub,
   makeWrapper,
+  nix-update-script,
   rustup,
   wasixRustToolchain,
   wasixcc,
@@ -24,8 +25,8 @@
     hash = "sha256-PQUQtvaoKUoNeITQ47gNPMvj9Odbaz9x3538f1D4WUE=";
   };
 
-  cargoWasixRaw = rustPlatform.buildRustPackage {
-    pname = "cargo-wasix-raw";
+  cargoWasixUnwrapped = rustPlatform.buildRustPackage {
+    pname = "cargo-wasix-unwrapped";
     inherit version src;
     # Upstream ships no Cargo.lock and cargoHash/fetchCargoVendor requires one,
     # so vendor from a committed lock via importCargoLock.
@@ -65,7 +66,7 @@ in
 
     installPhase = ''
       runHook preInstall
-      install -Dm755 "${cargoWasixRaw}/bin/cargo-wasix" "$out/libexec/cargo-wasix"
+      install -Dm755 "${cargoWasixUnwrapped}/bin/cargo-wasix" "$out/libexec/cargo-wasix"
       makeWrapper "$out/libexec/cargo-wasix" "$out/bin/cargo-wasix" \
         --prefix PATH : "${lib.makeBinPath [rustup wasixcc]}" \
         ${env.makeWrapperFlagsOf (
@@ -78,6 +79,16 @@ in
         --run ${lib.escapeShellArg rustupLink}
       runHook postInstall
     '';
+
+    passthru = {
+      unwrapped = cargoWasixUnwrapped;
+      # nix-update needs version + src on the drv it evals: the wrapper has
+      # neither, so point it at the unwrapped package
+      updateScript = {
+        command = nix-update-script {extraArgs = ["--flake"];};
+        attrPath = "foundation.cargo-wasix.unwrapped";
+      };
+    };
 
     meta = {
       description = "cargo subcommand driving WASIX builds, wrapped with the from-source wasix toolchain";

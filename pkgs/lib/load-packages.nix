@@ -23,6 +23,20 @@
     (lib.attrNames (lib.filterAttrs (_: t: t == "directory") entries));
   dirEntry = n: import (dir + "/${n}/package.nix");
   isMulti = e: !builtins.isFunction e;
+
+  # Most packages here override a nixpkgs drv, whose meta.position points into
+  # nixpkgs; restamp it to our file so `nix edit`, error messages, and update
+  # tooling land where the package is actually defined. Via `pos`, not
+  # meta.position: mkDerivation recomputes meta.position from pos after
+  # merging attrs.meta, so setting the latter is silently clobbered. meta
+  # changes do not move drvPaths.
+  stampPosition = file: drv:
+    drv.overrideAttrs (_old: {
+      pos = {
+        file = toString file;
+        line = 1;
+      };
+    });
 in {
   names =
     fileNames
@@ -42,18 +56,26 @@ in {
   mkPackages = {
     callArgs,
     mkTrivial ? name: throw "load-packages: '${name}' is in the trivial list but no mkTrivial was given",
-  }:
-    (lib.genAttrs trivial mkTrivial)
-    // (lib.genAttrs fileNames (n: import (dir + "/${n}.nix") callArgs))
+    # meta.position for the trivial names (the list that declares them)
+    trivialPosition ? null,
+  }: let
+    stampTrivial =
+      if trivialPosition != null
+      then stampPosition trivialPosition
+      else lib.id;
+  in
+    (lib.genAttrs trivial (n: stampTrivial (mkTrivial n)))
+    // (lib.genAttrs fileNames (n: stampPosition (dir + "/${n}.nix") (import (dir + "/${n}.nix") callArgs)))
     // (builtins.foldl' (
         acc: n: let
           e = dirEntry n;
+          file = dir + "/${n}/package.nix";
         in
           acc
           // (
             if isMulti e
-            then e.packages callArgs
-            else {${n} = e callArgs;}
+            then lib.mapAttrs (_: stampPosition file) (e.packages callArgs)
+            else {${n} = stampPosition file (e callArgs);}
           )
       ) {}
       dirNames);

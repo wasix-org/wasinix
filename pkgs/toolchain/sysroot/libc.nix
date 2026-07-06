@@ -8,6 +8,7 @@
   stdenv,
   fetchFromGitHub,
   rustPlatform,
+  nix-update-script,
   writeText,
   llvmPackages_21,
   gnumake,
@@ -18,14 +19,19 @@
   coreutils,
   # cargo wants a writable HOME.
   writableTmpDirAsHomeHook,
-  # wasix-libc checkout (pinned in default.nix) and its version label.
-  src,
-  version,
   # ABI variant selectors.
   eh ? false,
   pic ? false,
   exnref ? false,
 }: let
+  version = "2026-07-03.1";
+  src = fetchFromGitHub {
+    owner = "wasix-org";
+    repo = "wasix-libc";
+    tag = "v${version}";
+    hash = "sha256-6xpQdtb3GjF9MnepHuZXxsdQssEP8m3ZK8MavLfFU2o=";
+  };
+
   # EH picks Makefile-eh (+ EXNREF_EH), else the base Makefile; PIC is
   # orthogonal; `exnref` only matters when `eh`.
   variant =
@@ -79,6 +85,11 @@ in
   stdenv.mkDerivation {
     pname = "wasix-libc-${variant}";
     inherit version src;
+
+    passthru.updateScript = {
+      name = "wasix-libc"; # attr tail is `libc`; keep the familiar target name
+      command = nix-update-script {extraArgs = ["--flake"];};
+    };
 
     nativeBuildInputs = [
       # raw (unwrapped) clang + llvm tools: wasix-libc drives the target itself.

@@ -6,9 +6,18 @@ nix run .#update -- --list          # targets + current pins
 nix run .#update -- --only llvm wasix-libc
 ```
 
-`scripts/update.py` bumps the pinned sources of packages this repo defines
-(nixpkgs packages follow the nixpkgs input). Derived files (lockfiles, the
-rust bootstrap pin, witx pins) are regenerated in the same run.
+How a pin is bumped is declared next to the pin, as the package's
+`passthru.updateScript` (`nix-update-script`, the standard nixpkgs
+convention). nix-update resolves the pin's file from `meta.position`, which
+the overlay loader stamps to our package files; wrappers point it at their
+`passthru.unwrapped` via `updateScript.attrPath` (llvm likewise: its drv
+versions are the fork release, while nixpkgs' scope keeps the base LLVM as
+release_version for its version gates and source check). `scripts/update.py`
+is only the driver: it discovers the declarations by eval, adds the flake-input
+targets (no package file to carry a declaration), runs everything isolated,
+regenerates derived files after a bump (lockfiles, the rust bootstrap pin,
+witx pins; hooks keyed by target name in update.py), and reports the
+summary.
 
 At the end of a run, stale `passthru.wasix.updateReminders` are printed:
 temporary workarounds whose package moved past the version they were written

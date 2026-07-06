@@ -108,6 +108,7 @@
       lib.mapAttrs (_: applyWasixMeta) (loaded.mkPackages {
         callArgs = {inherit final prev helpers foundation preferredPackages nixpkgs;};
         mkTrivial = n: helpers.libTweaks {} prev.${n};
+        trivialPosition = ./trivial.nix;
       });
 in
   packages

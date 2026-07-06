@@ -7,6 +7,10 @@
 # updateReminders = [{writtenFor; message;}] = temporary workarounds to
 # revisit; surfaced by scripts/update.py and the CI report once the package
 # version moves past writtenFor.
+# Pin updates use the standard passthru.updateScript convention
+# (nix-update-script; sidecar fields: name = display/regen key, attrPath =
+# eval target, e.g. a wrapper's unwrapped). scripts/update.py discovers and
+# drives them. See docs/updating.md.
 # applyWasixMeta below is the only writer of meta.badPlatforms/meta.broken.
 {lib}: let
   profilesCfg = import ../profiles.nix;

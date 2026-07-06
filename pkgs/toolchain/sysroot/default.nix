@@ -16,13 +16,9 @@
   # (PIC is only valid with EH).
   profilesCfg = import ../../profiles.nix;
 
-  wasixLibcVersion = "v2026-07-03.1";
-  wasixLibcSrc = pkgs.fetchFromGitHub {
-    owner = "wasix-org";
-    repo = "wasix-libc";
-    tag = wasixLibcVersion; # content hash pins it
-    hash = "sha256-6xpQdtb3GjF9MnepHuZXxsdQssEP8m3ZK8MavLfFU2o=";
-  };
+  # The wasix-libc source pin lives in libc.nix, next to the witx pins; the
+  # per-variant libc drvs share it as their (content-addressed) src.
+  wasixLibcSrc = (pkgs.callPackage ./libc.nix {}).src;
 
   # The cmake toolchain file with this variant's ABI flags. PIC is a cmake arg,
   # not a separate file.
@@ -76,11 +72,7 @@
   }: let
     toolchainFile = toolchainFileFor {inherit eh exnref;};
 
-    libc = pkgs.callPackage ./libc.nix {
-      inherit eh pic exnref;
-      src = wasixLibcSrc;
-      version = wasixLibcVersion;
-    };
+    libc = pkgs.callPackage ./libc.nix {inherit eh pic exnref;};
 
     # compiler-rt builds against a libc-only sysroot (build32 staging), from the
     # same LLVM tree the toolchain was built from.

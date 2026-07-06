@@ -7,6 +7,7 @@
   rustPlatform,
   fetchFromGitHub,
   makeWrapper,
+  nix-update-script,
   wasixLlvm,
   binaryen,
   wasixSysroot,
@@ -21,8 +22,8 @@
     hash = "sha256-y3NXxRqdgTaFa/C6Kt+pZao6c8q0nRrRge8w6uSjrs8=";
   };
 
-  wasixccRaw = rustPlatform.buildRustPackage {
-    pname = "wasixcc-raw";
+  wasixccUnwrapped = rustPlatform.buildRustPackage {
+    pname = "wasixcc-unwrapped";
     inherit version src;
     cargoLock.lockFile = "${src}/Cargo.lock";
 
@@ -59,7 +60,7 @@ in
 
     installPhase = ''
       runHook preInstall
-      install -Dm755 "${wasixccRaw}/libexec/wasixccenv" "$out/libexec/wasixccenv"
+      install -Dm755 "${wasixccUnwrapped}/libexec/wasixccenv" "$out/libexec/wasixccenv"
       for cmd in ${lib.escapeShellArgs tools}; do
         makeWrapper "$out/libexec/wasixccenv" "$out/bin/$cmd" \
           --argv0 "$cmd" \
@@ -67,6 +68,16 @@ in
       done
       runHook postInstall
     '';
+
+    passthru = {
+      unwrapped = wasixccUnwrapped;
+      # nix-update needs version + src on the drv it evals: the wrapper has
+      # neither, so point it at the unwrapped package
+      updateScript = {
+        command = nix-update-script {extraArgs = ["--flake"];};
+        attrPath = "foundation.wasixcc.unwrapped";
+      };
+    };
 
     meta = {
       description = "WASIX C/C++ compiler driver (clang/lld/binaryen orchestrator), wrapped with the from-source toolchain";

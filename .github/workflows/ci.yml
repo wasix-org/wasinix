@@ -67,6 +67,12 @@ jobs:
             git fetch --quiet --depth=30 origin "$base_ref"
             mapfile -t candidates < <(git rev-list -n 30 FETCH_HEAD)
           fi
+          # update notes: current versions ride in the map; the base map's
+          # copy comes back as the `prior` side of each note's predicate
+          sys=$(nix eval --raw --impure --expr 'builtins.currentSystem')
+          nix eval --json ".#legacyPackages.$sys.updateNotes.versions" \
+            --option accept-flake-config true >note-versions.json ||
+            echo '{}' >note-versions.json
           ./scripts/eval-diff.py \
             --rev "${{ github.sha }}" \
             --jobs-out eval-jobs.jsonl \
@@ -74,13 +80,15 @@ jobs:
             --md-out rebuild-diff.md \
             --summary-out diff-summary.json \
             --base-map-out base-map.json \
+            --note-versions note-versions.json \
+            --priors-out note-priors.json \
             --base-rev "${candidates[@]}"
           cat rebuild-diff.md >>"$GITHUB_STEP_SUMMARY"
-          # stale passthru.wasix.updateReminders, shown in the report
-          nix eval --json \
-            ".#legacyPackages.$(nix eval --raw --impure --expr 'builtins.currentSystem').updateReminders" \
-            --option accept-flake-config true >update-reminders.json ||
-            echo '{}' >update-reminders.json
+          NOTE_PRIORS=$(cat note-priors.json) nix eval --json --impure \
+            ".#legacyPackages.$sys.updateNotes.fired" \
+            --apply 'f: f (builtins.fromJSON (builtins.getEnv "NOTE_PRIORS"))' \
+            --option accept-flake-config true >update-notes.json ||
+            echo '{}' >update-notes.json
 
       # consumed by test-report.yml (workflow_run, so fork PRs get the check
       # run and sticky comment too); uploaded before the build so a timeout
@@ -150,7 +158,7 @@ jobs:
             --jobs eval-jobs.jsonl \
             --diff-summary diff-summary.json \
             --content-summary content-summary.json \
-            --reminders update-reminders.json \
+            --notes update-notes.json \
             --md-out build-report.md \
             --json-out report.json
           cat build-report.md >>"$GITHUB_STEP_SUMMARY"

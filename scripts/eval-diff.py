@@ -198,6 +198,8 @@ def main():
     ap.add_argument("--base-rev", nargs="*", default=[])
     ap.add_argument("--base-map", help="local base map file, for testing")
     ap.add_argument("--base-map-out", help="save the fetched base map, for content-diff.py")
+    ap.add_argument("--note-versions", help="updateNotes.versions json, published in the map")
+    ap.add_argument("--priors-out", help="write the base map's note versions, for updateNotes.fired")
     args = ap.parse_args()
 
     jobs_path = args.jobs
@@ -226,6 +228,12 @@ def main():
         ["git", "rev-parse", "HEAD"], check=True, text=True, capture_output=True
     ).stdout.strip()
     head = load_map_from_jobs(jobs_path, rev)
+    if args.note_versions:
+        try:
+            with open(args.note_versions) as f:
+                head["noteVersions"] = json.load(f)
+        except OSError as e:
+            log(f"WARN: no note versions ({e})")
     with open(args.map_out, "w") as f:
         json.dump(head, f)
     log(f"{len(head['jobs'])} jobs, {len(head['errors'])} eval errors -> {args.map_out}")
@@ -234,6 +242,9 @@ def main():
     if base is not None and args.base_map_out:
         with open(args.base_map_out, "w") as f:
             json.dump(base, f)
+    if args.priors_out:
+        with open(args.priors_out, "w") as f:
+            json.dump((base or {}).get("noteVersions", {}), f)
     if base is None:
         md = (
             "### Rebuild diff\n\nNo base eval map found"
