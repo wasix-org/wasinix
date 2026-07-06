@@ -81,7 +81,7 @@
     dependencies;
 
   # Dependency webcs and their transitive closure, symlinkJoined (via each
-  # .treeEntry) into one --include-webc tree for the shim.
+  # .webc) into one --include-webc tree for the shim.
   depWebcs = map (dep: self {package = dep;}) dependencies;
   closure = webcs: lib.unique (webcs ++ lib.concatMap (w: closure w.depWebcs) webcs);
   depTree =
@@ -90,7 +90,7 @@
     else
       pkgs.symlinkJoin {
         name = "webc-deps-${name}";
-        paths = map (w: w.treeEntry) (closure depWebcs);
+        paths = map (w: w.webc) (closure depWebcs);
       };
 
   wrapWasmerPackage = pkgs.callPackage ./wrap-wasmer-package.nix {};
@@ -155,7 +155,7 @@ in
       inherit depWebcs;
       # The built webc at owner/name/version.webc, ready to symlinkJoin into an
       # --include-webc tree.
-      treeEntry = pkgs.runCommand "webc-${owner}-${name}-${version}" {} ''
+      webc = pkgs.runCommand "webc-${owner}-${name}-${version}" {} ''
         d="$out/${owner}/${name}"
         mkdir -p "$d"
         ${wasmer}/bin/wasmer package build --quiet "${finalAttrs.finalPackage}/pkg/${name}" -o "$d/${version}.webc"

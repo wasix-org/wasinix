@@ -183,7 +183,7 @@
 
   # Packages shipped as webc, by overlay attr name: everything declaring
   # passthru.wasix.shipped. Built at their preferred profile (bash -> off,
-  # rest -> default); the wasmer layer adds .webc + .tests.
+  # rest -> default); the wasmer layer adds .pkg/.webc + .tests.
   shippedCommands =
     lib.filter
     (n: wasixLib.shippedOf profileSets.${defaultProfileName}.${n})
@@ -212,7 +212,7 @@
     packagesDir = ./overlay/packages;
   };
   # shippedPackages.<name> = the wasm cross build (keyed by program name), each
-  # carrying passthru.webc (the webc package) + passthru.tests.
+  # carrying passthru.pkg (the wasmer package), passthru.webc (its webc) + passthru.tests.
   inherit (wasmerLayer) shippedPackages allWasmer;
 
   # The shipped wheels (+ their transitive python deps) as a static PEP 503

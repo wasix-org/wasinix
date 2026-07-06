@@ -96,7 +96,7 @@
           runtime = wasmerRuntime; # the wasmer runtime (input, patched)
         };
         libraryMatrix = wasix.libraryMatrix; # <profile>.<lib>
-        # <name> = wasm cross build; .webc = its webc package; .tests = its tests
+        # <name> = wasm cross build; .pkg = its wasmer package; .webc = the built webc; .tests = its tests
         shippedPackages = wasix.shippedPackages;
         # <attr> = wasm cross build of python3.pkgs.<attr>; .tests = import smoke-test
         pythonWheels = wasix.pythonWheels;

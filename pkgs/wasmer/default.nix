@@ -1,5 +1,5 @@
 # The wasmer (webc) layer. Each shipped CLI is its wasm cross build plus two
-# passthru attrs: .webc (the webc package from make-wasmer-package, configured
+# passthru attrs: .pkg (the wasmer package from make-wasmer-package, configured
 # via passthru.wasmer) and .tests (tests discovered from the package's
 # overlay/packages/<name>/tests/ dir, run under wasmer via test-lib).
 {
@@ -51,18 +51,23 @@
     in
       mkTestGroup overlayName tests;
 
-  # Add .webc and (if present) .tests passthru to a cross package. Forcing the
-  # package or its .webc.shim never forces .tests, so tests referencing
-  # wrappedPackages (e.g. git tests using bash) do not cycle.
+  # Add .pkg (the wasmer package dir), .webc (its built webc), and (if
+  # present) .tests passthru to a cross package. Forcing the package or its
+  # .pkg.shim never forces .tests, so tests referencing wrappedPackages
+  # (e.g. git tests using bash) do not cycle.
   augment = overlayName: crossPkg: let
     group = testGroupFor overlayName;
+    pkg = makeWasmerPackage {package = crossPkg;};
   in
     crossPkg.overrideAttrs (o: {
       passthru =
         # Drop inherited nixpkgs passthru.tests (native tests that would leak
         # into our `checks`).
         removeAttrs (o.passthru or {}) ["tests"]
-        // {webc = makeWasmerPackage {package = crossPkg;};}
+        // {
+          inherit pkg;
+          webc = pkg.webc;
+        }
         // (lib.optionalAttrs (group != null) {tests = group;});
     });
 
@@ -76,18 +81,18 @@
     )
     shippedCommands);
 
-  # Run-by-name stubs (.webc.shim) per package, for cross-package tests;
+  # Run-by-name stubs (.pkg.shim) per package, for cross-package tests;
   # accessing .shim does not force .tests.
   wrappedPackages =
-    lib.mapAttrs (_: p: p.webc.shim)
-    (lib.filterAttrs (_: p: p.webc ? shim) shippedPackages);
+    lib.mapAttrs (_: p: p.pkg.shim)
+    (lib.filterAttrs (_: p: p.pkg ? shim) shippedPackages);
 
   allWasmer = pkgs.runCommand "wasix-all-wasmer" {} ''
     set -euo pipefail
     mkdir -p "$out/pkg"
     ${lib.concatMapStringsSep "\n" (n: ''
-        if [ -d "${shippedPackages.${n}.webc}/pkg" ]; then
-          ${pkgs.coreutils}/bin/cp -R --no-preserve=mode,ownership "${shippedPackages.${n}.webc}/pkg/." "$out/pkg/"
+        if [ -d "${shippedPackages.${n}.pkg}/pkg" ]; then
+          ${pkgs.coreutils}/bin/cp -R --no-preserve=mode,ownership "${shippedPackages.${n}.pkg}/pkg/." "$out/pkg/"
         fi
       '')
       (builtins.attrNames shippedPackages)}

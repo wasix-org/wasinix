@@ -90,7 +90,7 @@ against the native tool.
 - `apps.<system>.update`: the pin updater.
 - `legacyPackages.<system>`: the buildable trees, attr path = build target:
   `foundation.<part>`, `libraryMatrix.<profile>.<lib>`,
-  `shippedPackages.<name>` (with `.webc`, `.tests`), `pythonWheels.<attr>`;
+  `shippedPackages.<name>` (with `.pkg`, `.webc`, `.tests`), `pythonWheels.<attr>`;
   plus `profileSets`, `toolchain`, `pkgsCross`, `allWasmer`, `allWasm`.
 - `ci`: the same trees flattened to dotted names, so a job name is a build
   path. Unsupported/broken packages are filtered out before becoming jobs.
@@ -123,4 +123,4 @@ and the toolchain is measured reproducible.
 ## passthru namespaces
 
 `passthru.wasix.*` where it works · `passthru.wasmer.*` webc config ·
-`passthru.tests` standard nixpkgs · `passthru.webc` the built webc.
+`passthru.tests` standard nixpkgs · `passthru.pkg` the wasmer package · `passthru.webc` the built webc.
