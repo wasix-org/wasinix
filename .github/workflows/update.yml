@@ -62,9 +62,15 @@ jobs:
         shell: bash
         run: nix fmt
 
+      # UPDATE_PR_TOKEN: events from the default GITHUB_TOKEN don't cascade,
+      # so a PR created with it never triggers CI (someone has to press
+      # re-run). Set the secret to a fine-grained PAT (or GitHub App token)
+      # with contents + pull-requests write on this repo and CI runs on the
+      # PR like on any other; without it, today's manual-re-run behavior.
       - name: Open PR
         uses: peter-evans/create-pull-request@v7
         with:
+          token: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
           branch: auto/update-pins
           title: "pins: automated source-pin bump"
           commit-message: "pins: bump repo source pins (automated)"
