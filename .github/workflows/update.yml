@@ -1,8 +1,8 @@
 name: Update package pins
 
-# Weekly bump of the repo's own source pins (not the prev.X nixpkgs
-# passthroughs), including the derived-file regens (cargo-wasix Cargo.lock, rust
-# stage0 bootstrap). Opens a PR; the existing per-package CI validates the builds.
+# Bump the repo's own source pins (not the prev.X nixpkgs passthroughs),
+# scheduled and on demand. Opens a PR; the existing per-package CI validates
+# the builds.
 on:
   schedule:
     - cron: "0 6 * * 1" # Mondays 06:00 UTC
@@ -45,16 +45,16 @@ jobs:
           # A failed target must not abort the PR for the ones that bumped: capture
           # the exit code (the script already isolates targets) and re-raise it at
           # the end of the job, after the partial PR is opened.
-          # Log outside the checkout so create-pull-request doesn't commit it.
-          log="$RUNNER_TEMP/update.log"
+          # Summary outside the checkout so create-pull-request doesn't commit it.
+          summary="$RUNNER_TEMP/update-summary.md"
           set +e
-          nix run .#update -- "${args[@]}" 2>&1 | tee "$log"
-          code=${PIPESTATUS[0]}
+          nix run .#update -- "${args[@]}" --summary-out "$summary"
+          code=$?
           set -e
           {
             echo "exit_code=$code"
             echo 'summary<<EOF'
-            grep -E '^(  .* -> |  regen:|  FAILED|==>|FAILED)' "$log" || true
+            cat "$summary" 2>/dev/null || echo "(the updater crashed before writing a summary)"
             echo EOF
           } >>"$GITHUB_OUTPUT"
 
@@ -66,17 +66,14 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           branch: auto/update-pins
-          title: "pins: weekly source-pin bump"
+          title: "pins: automated source-pin bump"
           commit-message: "pins: bump repo source pins (automated)"
           body: |
-            Automated weekly bump of the repo's own source pins, with derived
-            files (cargo-wasix Cargo.lock, rust stage0 bootstrap) regenerated.
-            If the job is red, one or more targets failed (see FAILED below) — the
-            rest still bumped. Let CI validate the builds before merging.
+            Automated bump of this repo's source pins. Failed targets keep
+            their old pins; everything else bumped anyway, so CI can validate
+            the rest.
 
-            ```
             ${{ steps.run.outputs.summary }}
-            ```
           delete-branch: true
 
       # Re-raise any target failure so the run is red, after the partial PR opens.
@@ -84,5 +81,5 @@ jobs:
         if: steps.run.outputs.exit_code != '0'
         shell: bash
         run: |
-          echo "::error::updater reported failed target(s) — see the PR body / log"
+          echo "::error::updater reported failed target(s); see the PR body / log"
           exit 1

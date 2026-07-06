@@ -168,7 +168,7 @@ jobs:
           if-no-files-found: error
 
       # post the check run + sticky comment directly: bot-created PRs (the
-      # weekly pin bump) never fire workflow_run, and in-job is faster anyway.
+      # pin bump) never fire workflow_run, and in-job is faster anyway.
       # Fork PRs have a read-only token here; test-report.yml covers them.
       - name: Post report
         if: ${{ always() && steps.build.conclusion != 'skipped' &&

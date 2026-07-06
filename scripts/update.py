@@ -269,6 +269,10 @@ TARGETS = [
 ]
 
 
+# Each backend returns a one-line outcome for the summary (None: let the
+# caller derive it from whether the working tree changed).
+
+
 def update_nix_update(t):
     cmd = ["nix-update", "--flake"]
     if t.version:
@@ -277,6 +281,7 @@ def update_nix_update(t):
         cmd += ["--override-filename", t.filename]
     cmd.append(t.attr)
     run(cmd, cwd=REPO)
+    return None
 
 
 def flake_input_rev(name):
@@ -288,7 +293,9 @@ def update_flake_input(t):
     before = flake_input_rev(t.input)
     run(["nix", "flake", "update", t.input], cwd=REPO)
     after = flake_input_rev(t.input)
-    print(f"  {before[:10]} -> {after[:10]}" if before != after else "  up to date")
+    outcome = f"{before[:10]} -> {after[:10]}" if before != after else "up to date"
+    print(f"  {outcome}")
+    return outcome
 
 
 def update_prefetch(t):
@@ -305,7 +312,7 @@ def update_prefetch(t):
         new_literal, rev = t.tag_to_version(latest_release_tag(f"{t.owner}/{t.repo}"))
     if new_literal == cur:
         print(f"  up to date ({cur})")
-        return False
+        return f"up to date ({cur})"
 
     print(f"  {cur} -> {new_literal}")
     if t.kind == "url":
@@ -320,13 +327,15 @@ def update_prefetch(t):
     text = text[:m.start(1)] + new_literal + text[m.end(1):]
     text = text.replace(old_hash, new_hash, 1)
     path.write_text(text)
-    return True
+    return f"{cur} -> {new_literal}"
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", nargs="*", metavar="NAME")
     ap.add_argument("--list", action="store_true")
+    ap.add_argument("--summary-out", metavar="FILE",
+                    help="write a markdown summary (the auto-update PR body)")
     args = ap.parse_args()
 
     targets = TARGETS
@@ -355,51 +364,82 @@ def main():
     # One flaky upstream must not abort the rest: isolate each target, collect
     # failures, and exit non-zero at the end so CI/the workflow notices.
     failures = []
+    results = []  # (name, outcome) for the summary
     for t in targets:
         print(f"==> {t.name}")
         before = repo_status()
         try:
-            backends[t.backend](t)
+            outcome = backends[t.backend](t)
         except Exception as e:
+            first = str(e).splitlines()[0][:120] if str(e) else "unknown error"
             print(f"  FAILED: {e}")
             failures.append(t.name)
+            results.append((t.name, f"FAILED: {first}"))
             continue
+        changed = repo_status() != before
+        if outcome is None:
+            outcome = "updated" if changed else "up to date"
         # Run the regen only on an actual bump (the working tree changed).
-        if t.regen and repo_status() != before:
+        if t.regen and changed:
             try:
                 summary = t.regen(t)
                 print(f"  regen: {summary or 'no derived changes'}")
+                if summary:
+                    outcome += f"; {summary}"
             except Exception as e:
                 print(f"  regen FAILED: {e}")
                 failures.append(f"{t.name} (regen)")
+                outcome += f"; regen FAILED: {str(e).splitlines()[0][:120]}"
+        results.append((t.name, outcome))
 
-    print_stale_reminders()
+    reminders = stale_reminders()
+    for r in reminders:
+        print(f"\nREMINDER: {r['name']} moved {r['writtenFor']} -> {r['version']}:"
+              f"\n  {r['message']}")
+
+    if args.summary_out:
+        Path(args.summary_out).write_text(summary_md(results, reminders))
 
     if failures:
         print(f"\nFAILED: {', '.join(failures)}")
         sys.exit(1)
 
 
-def print_stale_reminders():
-    # passthru.wasix.updateReminders whose package moved past writtenFor:
-    # workarounds to revisit now that the pins changed. Advisory only.
+def stale_reminders():
+    # passthru.wasix.updateReminders whose watched pin moved past writtenFor:
+    # workarounds to revisit now that the pins changed. Advisory only;
+    # deduped across the per-profile attrs.
     try:
         out = run(["nix", "eval", "--json",
                    f".#legacyPackages.{SYSTEM}.updateReminders"]).stdout
         stale = json.loads(out)
     except Exception as e:
         print(f"WARN: reminder check failed: {e}", file=sys.stderr)
-        return
-    seen = set()
+        return []
+    seen = {}
     for attr, rems in sorted(stale.items()):
         for r in rems:
             key = (r["message"], r["writtenFor"])
-            if key in seen:
-                continue
-            seen.add(key)
-            name = attr.rsplit(".", 1)[-1]
-            print(f"\nREMINDER: {name} moved {r['writtenFor']} -> {r.get('version')}:"
-                  f"\n  {r['message']}")
+            if key not in seen:
+                seen[key] = {"name": attr.rsplit(".", 1)[-1], **r}
+    return list(seen.values())
+
+
+def summary_md(results, reminders):
+    md = "| target | result |\n|:--|:--|\n"
+    # bumps and failures first, the up-to-date tail last
+    order = sorted(results, key=lambda r: r[1].startswith("up to date"))
+    for name, outcome in order:
+        cell = outcome.replace("|", "\\|")
+        if outcome.startswith("FAILED"):
+            cell = f"❌ {cell}"
+        md += f"| {name} | {cell} |\n"
+    if reminders:
+        md += "\n### Update reminders\n\n"
+        for r in reminders:
+            md += (f"- **{r['name']}** ({r['writtenFor']} -> {r['version']}):"
+                   f" {r['message']}\n")
+    return md
 
 
 if __name__ == "__main__":

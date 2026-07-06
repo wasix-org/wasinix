@@ -27,7 +27,7 @@ if [ -n "${NIX_SIGNING_KEY:-}" ]; then
   COPY_ARGS=(--copy-to "$CACHE_STORE&secret-key=$KEY_FILE")
   echo "Incremental cache upload enabled."
 else
-  echo "No signing key — building without cache upload."
+  echo "No signing key; building without cache upload."
 fi
 
 # --copy-to pushes only runtime closures, so build-only deps never reach the
