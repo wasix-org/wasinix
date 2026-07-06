@@ -149,13 +149,25 @@
 
         inherit ci;
 
-        # ci jobs with stale passthru.wasix.updateReminders (see
-        # pkgs/lib/default.nix): temporary workarounds whose package moved past
-        # the version they were written for. Read by scripts/update.py and the
-        # CI report; consumers dedupe the per-profile repeats.
-        updateReminders =
-          lib.filterAttrs (_: rs: rs != [])
-          (lib.mapAttrs (_: wasixLib.staleRemindersOf) ci);
+        # passthru.wasix.updateNotes (see pkgs/lib/default.nix): things to
+        # check when a package moves. `versions` is published in the eval
+        # maps; `fired` gets the base branch's copy of it back as the `prior`
+        # side of each note's predicate. Read by scripts/update.py and the CI
+        # report; consumers dedupe the per-profile repeats.
+        updateNotes = let
+          noted = lib.filterAttrs (_: wasixLib.hasUpdateNotes) ci;
+          versionOf = drv: let
+            r = builtins.tryEval (drv.version or null);
+          in
+            if r.success
+            then r.value
+            else null;
+        in {
+          versions = lib.mapAttrs (_: versionOf) noted;
+          fired = priors:
+            lib.filterAttrs (_: ns: ns != [])
+            (lib.mapAttrs (attr: wasixLib.firedNotesOf (priors.${attr} or null)) noted);
+        };
 
         # passthru.updateScript declarations (standard nixpkgs convention),
         # collected for scripts/update.py: the command, an optional display

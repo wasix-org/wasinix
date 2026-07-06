@@ -86,6 +86,13 @@
               command = pkgs.nix-update-script {extraArgs = ["--flake" "--version-regex" "^([0-9.]+)$"];};
               attrPath = "foundation.llvm.clang.pin";
             };
+            wasix.updateNotes = [
+              {
+                name = "llvm";
+                message = "the base LLVM version moved with this bump and nixpkgs' patch selection switched with it; check the toolchain build and the applied patches";
+                when = prior: current: prior != null && current != null && baseOf prior != baseOf current;
+              }
+            ];
           };
       });
     });

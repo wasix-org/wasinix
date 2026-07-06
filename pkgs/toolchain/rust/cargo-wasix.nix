@@ -88,6 +88,10 @@ in
         command = nix-update-script {extraArgs = ["--flake"];};
         attrPath = "foundation.cargo-wasix.unwrapped";
       };
+      # default predicate: fires in the change that bumps cargo-wasix
+      wasix.updateNotes = [
+        {message = "upstream may ship its own Cargo.lock; try dropping the vendored cargo-wasix.Cargo.lock, the regen hook in update.py, and the importCargoLock plumbing";}
+      ];
     };
 
     meta = {

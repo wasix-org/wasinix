@@ -19,11 +19,13 @@ regenerates derived files after a bump (lockfiles, the rust bootstrap pin,
 witx pins; hooks keyed by target name in update.py), and reports the
 summary.
 
-At the end of a run, stale `passthru.wasix.updateReminders` are printed:
-temporary workarounds whose package moved past the version they were written
-for (`writtenFor`), e.g. a vendored patch that may have landed upstream. CI
-shows the same list in the Per-package status report until the workaround is
-removed or the reminder's `writtenFor` is re-pinned.
+Packages can carry `passthru.wasix.updateNotes`: things to check when the
+package moves, e.g. a vendored patch that may have landed upstream. Each
+note's `when` predicate gets the version from before the change and the
+current one; the default fires when the change bumps the package, so the
+note shows up exactly in the bump PR (and update run) and nowhere else. A
+self-contained predicate (ignoring the arguments, closing over the
+package's own bindings) fires on every run until resolved.
 
 | target | updates | also regenerates |
 |---|---|---|

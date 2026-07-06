@@ -4,9 +4,12 @@
 # exnrefEh, else first supported), shipped = packaged as webc (at the
 # preferred profile) instead of built across the libraryMatrix,
 # broken = "reason" for a real defect,
-# updateReminders = [{writtenFor; message;}] = temporary workarounds to
-# revisit; surfaced by scripts/update.py and the CI report once the package
-# version moves past writtenFor.
+# updateNotes = [{message; when ? prior: current: ...}] = things to check
+# when the package moves, surfaced by scripts/update.py and the CI report.
+# `when` gets the base branch's version (null when unknown) and the current
+# one; the default fires when this change bumps the package. Self-contained
+# predicates (closing over the package's own bindings, ignoring the
+# arguments) fire on every run until resolved.
 # Pin updates use the standard passthru.updateScript convention
 # (nix-update-script; sidecar fields: name = display/regen key, attrPath =
 # eval target, e.g. a wrapper's unwrapped). scripts/update.py discovers and
@@ -35,15 +38,27 @@ in rec {
 
   wasixMetaOf = drv: (drv.passthru or {}).wasix or {};
 
-  # updateReminders entries whose writtenFor no longer matches the version:
-  # the package moved, the workaround should be revisited. Reminders with no
-  # version to compare against stay stale until fixed rather than vanish.
-  staleRemindersOf = drv: let
+  hasUpdateNotes = drv: let
+    r = builtins.tryEval ((wasixMetaOf drv).updateNotes or [] != []);
+  in
+    r.success && r.value;
+
+  # updateNotes whose predicate fires for (prior, current).
+  firedNotesOf = prior: drv: let
     version = drv.version or null;
-    stale =
-      map (r: r // {inherit version;})
-      (lib.filter (r: version != r.writtenFor) ((wasixMetaOf drv).updateReminders or []));
-    forced = builtins.tryEval (builtins.deepSeq stale stale);
+    defaultWhen = p: c: p != null && p != c;
+    fired =
+      map (
+        n:
+          {
+            inherit (n) message;
+            inherit prior version;
+          }
+          // lib.optionalAttrs (n ? name) {inherit (n) name;}
+      )
+      (lib.filter (n: (n.when or defaultWhen) prior version)
+        ((wasixMetaOf drv).updateNotes or []));
+    forced = builtins.tryEval (builtins.deepSeq fired fired);
   in
     if forced.success
     then forced.value

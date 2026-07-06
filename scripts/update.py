@@ -5,7 +5,7 @@
 # it runs each target isolated, adds the flake-input targets (which have no
 # package file), runs the cross-file regen hooks after a bump (cargo-wasix's
 # committed Cargo.lock, the rust fork's stage0 bootstrap pin, wasix-libc's
-# witx submodule pins), and reports the summary plus stale updateReminders.
+# witx submodule pins), and reports the summary plus fired updateNotes.
 #
 # Usage (or `nix run .#update -- ...`):
 #   scripts/update.py              # update everything
@@ -306,6 +306,9 @@ def main():
         "flake": update_flake_input,
     }
 
+    # captured before anything bumps: the `prior` side of the update notes
+    priors = note_versions()
+
     # One flaky upstream must not abort the rest: isolate each target, collect
     # failures, and exit non-zero at the end so CI/the workflow notices.
     failures = []
@@ -338,40 +341,55 @@ def main():
                 outcome += f"; regen FAILED: {str(e).splitlines()[0][:120]}"
         results.append((t.name, outcome))
 
-    reminders = stale_reminders()
-    for r in reminders:
-        print(f"\nREMINDER: {r['name']} moved {r['writtenFor']} -> {r['version']}:"
-              f"\n  {r['message']}")
+    notes = fired_notes(priors)
+    for n in notes:
+        moved = f" ({n['prior']} -> {n['version']})" if n.get("prior") else ""
+        print(f"\nNOTE: {n['name']}{moved}:\n  {n['message']}")
 
     if args.summary_out:
-        Path(args.summary_out).write_text(summary_md(results, reminders))
+        Path(args.summary_out).write_text(summary_md(results, notes))
 
     if failures:
         print(f"\nFAILED: {', '.join(failures)}")
         sys.exit(1)
 
 
-def stale_reminders():
-    # passthru.wasix.updateReminders whose watched pin moved past writtenFor:
-    # workarounds to revisit now that the pins changed. Advisory only;
-    # deduped across the per-profile attrs.
+def note_versions():
+    # versions of the packages carrying updateNotes, from before the run:
+    # the `prior` side of each note's predicate
     try:
         out = run(["nix", "eval", "--json",
-                   f".#legacyPackages.{SYSTEM}.updateReminders"]).stdout
-        stale = json.loads(out)
+                   f".#legacyPackages.{SYSTEM}.updateNotes.versions"]).stdout
+        return json.loads(out)
     except Exception as e:
-        print(f"WARN: reminder check failed: {e}", file=sys.stderr)
+        print(f"WARN: note version eval failed: {e}", file=sys.stderr)
+        return {}
+
+
+def fired_notes(priors):
+    # passthru.wasix.updateNotes whose predicate fires now that the pins
+    # changed. Advisory only; deduped across the per-profile attrs.
+    env = os.environ.copy()
+    env["NOTE_PRIORS"] = json.dumps(priors)
+    try:
+        p = subprocess.run(
+            ["nix", "eval", "--json", "--impure",
+             f".#legacyPackages.{SYSTEM}.updateNotes.fired",
+             "--apply", 'f: f (builtins.fromJSON (builtins.getEnv "NOTE_PRIORS"))'],
+            cwd=REPO, env=env, text=True, capture_output=True, check=True)
+        fired = json.loads(p.stdout)
+    except Exception as e:
+        print(f"WARN: note check failed: {e}", file=sys.stderr)
         return []
     seen = {}
-    for attr, rems in sorted(stale.items()):
-        for r in rems:
-            key = (r["message"], r["writtenFor"])
-            if key not in seen:
-                seen[key] = {"name": attr.rsplit(".", 1)[-1], **r}
+    for attr, notes in sorted(fired.items()):
+        for n in notes:
+            if n["message"] not in seen:
+                seen[n["message"]] = {"name": attr.rsplit(".", 1)[-1], **n}
     return list(seen.values())
 
 
-def summary_md(results, reminders):
+def summary_md(results, notes):
     md = "| target | result |\n|:--|:--|\n"
     # bumps and failures first, the up-to-date tail last
     order = sorted(results, key=lambda r: r[1].startswith("up to date"))
@@ -380,11 +398,11 @@ def summary_md(results, reminders):
         if outcome.startswith("FAILED"):
             cell = f"❌ {cell}"
         md += f"| {name} | {cell} |\n"
-    if reminders:
-        md += "\n### Update reminders\n\n"
-        for r in reminders:
-            md += (f"- **{r['name']}** ({r['writtenFor']} -> {r['version']}):"
-                   f" {r['message']}\n")
+    if notes:
+        md += "\n### Update notes\n\n"
+        for n in notes:
+            moved = f" ({n['prior']} -> {n['version']})" if n.get("prior") else ""
+            md += f"- **{n['name']}**{moved}: {n['message']}\n"
     return md
 
 
