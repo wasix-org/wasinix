@@ -8,7 +8,7 @@
   # wasmer runtime for passthru.tests; null -> pkgs.wasmer.
   wasmer ? null,
   makeWasmerPackage,
-  preferredPackages,
+  preferredProfilePackages,
   # the default-profile cross set, for tests that cross-build a consumer
   # program (e.g. icu-data's smoke test).
   crossPkgs,
@@ -72,9 +72,9 @@
     });
 
   # Shipped commands keyed by webc/program name (gitMinimal -> "git").
-  shippedPackages = lib.listToAttrs (map (
+  wasmerPackages = lib.listToAttrs (map (
       n: let
-        crossPkg = preferredPackages.${n};
+        crossPkg = preferredProfilePackages.${n};
         wname = crossPkg.passthru.wasmer.name or crossPkg.meta.mainProgram or crossPkg.pname or n;
       in
         lib.nameValuePair wname (augment n crossPkg)
@@ -85,18 +85,18 @@
   # accessing .shim does not force .tests.
   wrappedPackages =
     lib.mapAttrs (_: p: p.pkg.shim)
-    (lib.filterAttrs (_: p: p.pkg ? shim) shippedPackages);
+    (lib.filterAttrs (_: p: p.pkg ? shim) wasmerPackages);
 
-  allWasmer = pkgs.runCommand "wasix-all-wasmer" {} ''
+  allWasmerPackages = pkgs.runCommand "wasix-all-wasmer" {} ''
     set -euo pipefail
     mkdir -p "$out/pkg"
     ${lib.concatMapStringsSep "\n" (n: ''
-        if [ -d "${shippedPackages.${n}.pkg}/pkg" ]; then
-          ${pkgs.coreutils}/bin/cp -R --no-preserve=mode,ownership "${shippedPackages.${n}.pkg}/pkg/." "$out/pkg/"
+        if [ -d "${wasmerPackages.${n}.pkg}/pkg" ]; then
+          ${pkgs.coreutils}/bin/cp -R --no-preserve=mode,ownership "${wasmerPackages.${n}.pkg}/pkg/." "$out/pkg/"
         fi
       '')
-      (builtins.attrNames shippedPackages)}
+      (builtins.attrNames wasmerPackages)}
   '';
 in {
-  inherit shippedPackages wrappedPackages allWasmer testLib;
+  inherit wasmerPackages wrappedPackages allWasmerPackages testLib;
 }

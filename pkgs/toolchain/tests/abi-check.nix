@@ -11,7 +11,7 @@
 # Usage:
 #   abiCheck {
 #     name = "zlib-off";
-#     paths = [ profileSets.off.zlib ];
+#     paths = [ nixpkgsByProfile.off.zlib ];
 #     eh = false;          # expect the exception-handling feature?
 #     pic = false;         # expect PIC relocations?
 #     asyncify = null;     # true/false to check linked wasm, null to skip

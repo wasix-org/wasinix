@@ -40,7 +40,7 @@
     wasixLib = import ./pkgs/lib {inherit lib;};
 
     # From-source toolchain (LLVM fork + libc + runtimes + sysroot), see pkgs/toolchain.
-    foundation = wasix.foundation;
+    toolchain = wasix.toolchain;
 
     treefmtEval = treefmt-nix.lib.evalModule wasix.pkgs {
       projectRootFile = "flake.nix";
@@ -65,7 +65,7 @@
       ) {};
     collectTests = collectTestsPrefixed "";
     flakeChecks =
-      collectTests wasix.shippedPackages
+      collectTests wasix.wasmerPackages
       // collectTests wasix.toolchainTestPkgs
       // collectTestsPrefixed "wheel-" wasix.pythonWheels
       // collectTests {python-registry = wasix.pythonRegistry;}
@@ -79,25 +79,25 @@
     legacyPackages.${system} = let
       # These attr paths are both the `.#` build targets and, flattened to dotted
       # keys, the `ci` job names, so the two cannot drift, e.g.
-      #   nix build .#foundation.llvm.clang  <->  ci."foundation.llvm.clang"
+      #   nix build .#toolchain.llvm.clang  <->  ci."toolchain.llvm.clang"
       buildable = {
         # The flat, profile-independent compilers (the per-profile stdenv/rustPlatform
-        # build envs live under the non-buildable `.#toolchain.<profile>`).
-        foundation = {
+        # build envs live under the non-buildable `.#toolchainByProfile.<profile>`).
+        toolchain = {
           # sysroot + wasixcc carry their link/stdenv/sysroot suites as passthru.tests.
           inherit (wasix.toolchainTestPkgs) sysroot wasixcc;
 
-          cargo-wasix = foundation.cargoWasix;
-          rust-toolchain = foundation.wasixRustToolchain;
-          libc = foundation.libc;
-          compiler-rt = foundation.compiler-rt;
-          libcxx = foundation.libcxx;
-          llvm = {inherit (foundation.llvm) clang lld;};
+          cargo-wasix = toolchain.cargoWasix;
+          rust-toolchain = toolchain.wasixRustToolchain;
+          libc = toolchain.libc;
+          compiler-rt = toolchain.compiler-rt;
+          libcxx = toolchain.libcxx;
+          llvm = {inherit (toolchain.llvm) clang lld;};
           runtime = wasmerRuntime; # the wasmer runtime (input, patched)
         };
-        libraryMatrix = wasix.libraryMatrix; # <profile>.<lib>
+        librariesByProfile = wasix.librariesByProfile; # <profile>.<lib>
         # <name> = wasm cross build; .pkg = its wasmer package; .webc = the built webc; .tests = its tests
-        shippedPackages = wasix.shippedPackages;
+        wasmerPackages = wasix.wasmerPackages;
         # <attr> = wasm cross build of python3.pkgs.<attr>; .tests = import smoke-test
         pythonWheels = wasix.pythonWheels;
         # all shipped wheels + transitive deps as a static PEP 503 index
@@ -111,7 +111,7 @@
       # nix-eval-jobs reports any leaf that throws or is meta.broken (fd/tokei,
       # via passthru.wasix.broken) as a failed job, so drop such leaves here.
       # Only `ci` filters; the `.#` build targets keep the attrs. Unsupported-
-      # profile leaves are already filtered out of libraryMatrix in pkgs/default.nix.
+      # profile leaves are already filtered out of librariesByProfile in pkgs/default.nix.
       drvOk = drv: (builtins.tryEval (drv.drvPath != null && !(drv.meta.broken or false) && (drv.meta.available or true))).value;
       flattenDrvs = prefix:
         lib.concatMapAttrs (
@@ -141,10 +141,10 @@
       buildable
       // {
         # Escape hatches / aggregates: reachable via `.#`, but not ci jobs.
-        # `.#toolchain.<profile>.{stdenv,rustPlatform}` is the per-profile build env.
-        inherit (wasix) profileSets toolchain defaultProfileName;
+        # `.#toolchainByProfile.<profile>.{stdenv,rustPlatform}` is the per-profile build env.
+        inherit (wasix) nixpkgsByProfile toolchainByProfile defaultProfileName;
         pkgsCross.wasix = wasix.pkgsCross;
-        allWasmer = wasix.allWasmer;
+        allWasmerPackages = wasix.allWasmerPackages;
         allWasm = wasix.allWasm;
 
         inherit ci;
@@ -214,9 +214,9 @@
 
     devShells.${system}.default = wasix.pkgs.mkShell {
       packages = [
-        foundation.wasixcc
-        foundation.cargoWasix
-        wasix.profileSets.${wasix.defaultProfileName}.ncurses
+        toolchain.wasixcc
+        toolchain.cargoWasix
+        wasix.nixpkgsByProfile.${wasix.defaultProfileName}.ncurses
         wasix.pkgs.gnumake
         wasix.pkgs.pkg-config
         wasmerRuntime
@@ -225,8 +225,8 @@
         nixpkgs.legacyPackages.${system}.nix-eval-jobs
       ];
       shellHook = ''
-        ${wasix.toolchain.${wasix.defaultProfileName}.toolchainEnv}
-        ${wasix.toolchain.${wasix.defaultProfileName}.ccEnv}
+        ${wasix.toolchainByProfile.${wasix.defaultProfileName}.toolchainEnv}
+        ${wasix.toolchainByProfile.${wasix.defaultProfileName}.ccEnv}
         echo "WASIX shell ready. Build with: nix build"
       '';
     };
@@ -234,24 +234,24 @@
     checks.${system} = flakeChecks;
 
     packages.${system} = {
-      # The toolchain + foundation, buildable directly (the webc packages and
+      # The toolchain, buildable directly (the webc packages and
       # the merged registry live under legacyPackages).
-      wasixcc = foundation.wasixcc;
-      cargo-wasix = foundation.cargoWasix;
-      wasix-rust-toolchain = foundation.wasixRustToolchain;
-      default = foundation.wasixcc;
+      wasixcc = toolchain.wasixcc;
+      cargo-wasix = toolchain.cargoWasix;
+      wasix-rust-toolchain = toolchain.wasixRustToolchain;
+      default = toolchain.wasixcc;
 
-      # From-source toolchain foundation, buildable in isolation:
+      # From-source toolchain parts, buildable in isolation:
       #   nix build .#wasix-libc    (fast)
       #   nix build .#wasix-llvm    (from-source LLVM, slow)
-      wasix-libc = foundation.libc;
-      wasix-llvm = foundation.llvm.clang;
+      wasix-libc = toolchain.libc;
+      wasix-llvm = toolchain.llvm.clang;
       # Runtimes built upstream-style (direct cmake of llvm-project driven by
       # wasix-libc's committed clang-wasix*.cmake_toolchain files):
-      wasix-compiler-rt = foundation.compiler-rt;
-      wasix-libcxx = foundation.libcxx;
+      wasix-compiler-rt = toolchain.compiler-rt;
+      wasix-libcxx = toolchain.libcxx;
       # The assembled multi-variant sysroot:
-      wasix-sysroot = foundation.sysroot;
+      wasix-sysroot = toolchain.sysroot;
       # (per-variant sysroot smoke tests are checks.wasix-sysroot-<variant>)
 
       wasmer-bin = wasmerRuntime;

@@ -3,7 +3,7 @@
 # values come from env.nix so consumers can't drift.
 {
   pkgs,
-  foundation,
+  toolchain,
 }: {
   wasmExceptions ? null,
   pic ? false,
@@ -11,13 +11,13 @@
   env = import ./env.nix {inherit (pkgs) lib;};
   profileEnv = env.exportsOf (env.profileEnv {inherit wasmExceptions pic;});
   toolchainEnv = env.exportsOf (
-    env.locationEnv {inherit (foundation) wasixLlvm binaryen wasixSysroot;}
+    env.locationEnv {inherit (toolchain) wasixLlvm binaryen wasixSysroot;}
     // env.autoconfEnv
     // env.profileEnv {inherit wasmExceptions pic;}
   );
   ccEnv = env.exportsOf env.ccEnv;
   commonPreConfigure = ''
-    export PATH="${foundation.wasixcc}/bin:$PATH"
+    export PATH="${toolchain.wasixcc}/bin:$PATH"
     ${toolchainEnv}
     ${ccEnv}
   '';

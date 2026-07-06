@@ -57,10 +57,10 @@ Packages declare where they work in `passthru.wasix`: `supportedProfiles`
 `broken = "reason"` for defects (usage in `docs/packaging.md`).
 
 `applyWasixMeta` translates this into `meta.badPlatforms`/`meta.broken`;
-nothing else sets those. `preferredPackages.<name>` is each package at its
+nothing else sets those. `preferredProfilePackages.<name>` is each package at its
 preferred profile, used for cross-profile runtime dependencies: git runs
-bash, bash only builds in `off`, so git references `preferredPackages.bash`
-(`profileSets.exnrefEh.bash` fails on purpose).
+bash, bash only builds in `off`, so git references `preferredProfilePackages.bash`
+(`nixpkgsByProfile.exnrefEh.bash` fails on purpose).
 
 ## 4. Python (`overlay/packages/python3/`, `overlay/python-packages/`)
 
@@ -89,9 +89,9 @@ against the native tool.
   `pkgs/toolchain/tests/abi-check.nix`), `treefmt`.
 - `apps.<system>.update`: the pin updater.
 - `legacyPackages.<system>`: the buildable trees, attr path = build target:
-  `foundation.<part>`, `libraryMatrix.<profile>.<lib>`,
-  `shippedPackages.<name>` (with `.pkg`, `.webc`, `.tests`), `pythonWheels.<attr>`;
-  plus `profileSets`, `toolchain`, `pkgsCross`, `allWasmer`, `allWasm`.
+  `toolchain.<part>`, `librariesByProfile.<profile>.<lib>`,
+  `wasmerPackages.<name>` (with `.pkg`, `.webc`, `.tests`), `pythonWheels.<attr>`;
+  plus `nixpkgsByProfile`, `toolchainByProfile`, `pkgsCross`, `allWasmerPackages`, `allWasm`.
 - `ci`: the same trees flattened to dotted names, so a job name is a build
   path. Unsupported/broken packages are filtered out before becoming jobs.
   `scripts/ci-build.sh` runs it with nix-fast-build and incremental cache

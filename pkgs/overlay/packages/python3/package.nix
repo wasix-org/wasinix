@@ -6,7 +6,7 @@
 {
   final,
   prev,
-  preferredPackages,
+  preferredProfilePackages,
   helpers,
   ...
 }: let
@@ -14,7 +14,7 @@
   pyVer = prev.python3.pythonVersion;
 
   pythonPackageOverrides = import ../../python-packages {
-    callArgs = {inherit final prev preferredPackages helpers lib;};
+    callArgs = {inherit final prev preferredProfilePackages helpers lib;};
   };
 
   py =
@@ -138,7 +138,7 @@
       # build-platform bash).
       postPatch = ''
                 substituteInPlace Lib/subprocess.py \
-                  --replace-fail '${final.buildPackages.bashNonInteractive}/bin/sh' '${preferredPackages.bash}/bin/sh'
+                  --replace-fail '${final.buildPackages.bashNonInteractive}/bin/sh' '${preferredProfilePackages.bash}/bin/sh'
 
                 # configure hardcodes py_cv_module_mmap=n/a for WASI (and regenerates from
                 # configure.ac, so patching configure doesn't stick); force the mmap module via
@@ -195,7 +195,7 @@
           # mounted explicitly: the wasix bash (baked into subprocess.py) and tzdata
           # (--with-tzpath bakes it into _sysconfigdata, not the .wasm; else zoneinfo raises
           # "No time zone found").
-          selfMounts = [preferredPackages.bash final.buildPackages.tzdata];
+          selfMounts = [preferredProfilePackages.bash final.buildPackages.tzdata];
         };
       };
     } (prev.python3.override {

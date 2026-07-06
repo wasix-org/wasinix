@@ -5,11 +5,11 @@
 {
   final,
   prev,
-  preferredPackages,
+  preferredProfilePackages,
   ...
 }: let
   lib = final.lib;
-  bash = preferredPackages.bash;
+  bash = preferredProfilePackages.bash;
 in
   (prev.gitMinimal.override {
     gnugrep = final.grep;

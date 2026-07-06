@@ -65,7 +65,7 @@
         pos = __curPos;
       });
       # Update metadata rides on clang because that is the fork drv in the ci
-      # job set (foundation.llvm.clang). nix-update finds the file to edit at
+      # job set (toolchain.llvm.clang). nix-update finds the file to edit at
       # the version attr's definition site, which through overrideAttrs still
       # points into nixpkgs; `pin` is the pin as a record of its own, with
       # version and src defined here.
@@ -84,7 +84,7 @@
               name = "llvm"; # attr tail is `clang`
               # the fork also carries non-release tags (wasixrel-*, llvmorg-*)
               command = pkgs.nix-update-script {extraArgs = ["--flake" "--version-regex" "^([0-9.]+)$"];};
-              attrPath = "foundation.llvm.clang.pin";
+              attrPath = "toolchain.llvm.clang.pin";
             };
             wasix.updateNotes = [
               {

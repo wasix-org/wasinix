@@ -15,12 +15,12 @@ nix build .#wasix-sysroot         # the per-profile sysroots
 nix build .#wasix-llvm            # the LLVM fork (slow)
 
 # packages live under legacyPackages (the system is explicit):
-nix build .#legacyPackages.x86_64-linux.shippedPackages.git         # a CLI
-nix build .#legacyPackages.x86_64-linux.shippedPackages.git.webc    # its webc
-nix build .#legacyPackages.x86_64-linux.libraryMatrix.exnrefEh.zlib # a library
+nix build .#legacyPackages.x86_64-linux.wasmerPackages.git         # a CLI
+nix build .#legacyPackages.x86_64-linux.wasmerPackages.git.webc    # its webc
+nix build .#legacyPackages.x86_64-linux.librariesByProfile.exnrefEh.zlib # a library
 nix build .#legacyPackages.x86_64-linux.pythonWheels.numpy          # a wheel
 nix build .#legacyPackages.x86_64-linux.pythonRegistry              # static wheel index
-nix build .#legacyPackages.x86_64-linux.allWasmer                   # all webcs
+nix build .#legacyPackages.x86_64-linux.allWasmerPackages                   # all webcs
 
 nix run .#update                  # bump the source pins
 ```

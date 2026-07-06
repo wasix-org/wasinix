@@ -75,7 +75,7 @@ in
       # neither, so point it at the unwrapped package
       updateScript = {
         command = nix-update-script {extraArgs = ["--flake"];};
-        attrPath = "foundation.wasixcc.unwrapped";
+        attrPath = "toolchain.wasixcc.unwrapped";
       };
     };
 

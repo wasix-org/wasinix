@@ -2,7 +2,7 @@
 # optional): supportedProfiles = profiles the package is built for (default
 # all; others skip it silently), preferredProfile = where it ships (default
 # exnrefEh, else first supported), shipped = packaged as webc (at the
-# preferred profile) instead of built across the libraryMatrix,
+# preferred profile) instead of built across the librariesByProfile,
 # broken = "reason" for a real defect,
 # updateNotes = [{message; when ? prior: current: ...}] = things to check
 # when the package moves, surfaced by scripts/update.py and the CI report.

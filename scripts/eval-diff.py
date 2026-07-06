@@ -27,7 +27,7 @@ MAP_SCHEMA = 1
 LIST_CAP = 250  # per section; a toolchain bump rebuilds everything
 
 # A drv move under these prefixes rebuilds the world downstream.
-MASS_REBUILD_PREFIXES = ("foundation.",)
+MASS_REBUILD_PREFIXES = ("toolchain.",)
 
 # Drvs that hash the whole source tree: they move on every diff and carry no
 # rebuild signal. Kept as CI jobs, excluded from the diff (content-diff.py

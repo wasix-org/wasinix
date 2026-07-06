@@ -13,12 +13,12 @@ Lightest form that works (the loader finds all of these):
 A package file is a function over one argument set:
 
 ```nix
-{ final, prev, helpers, foundation, preferredPackages, nixpkgs, ... }: ...
+{ final, prev, helpers, toolchain, preferredProfilePackages, nixpkgs, ... }: ...
 ```
 
 `prev.<name>` is the nixpkgs package, already compiling with the WASIX stdenv
 and resolving deps within the profile. `final.<dep>` names a same-profile dep
-explicitly. `preferredPackages.<tool>` is for tools executed at runtime,
+explicitly. `preferredProfilePackages.<tool>` is for tools executed at runtime,
 which may need another profile (bash only builds in `off`).
 
 ## Tweaks
@@ -42,7 +42,7 @@ passthru.wasix.supportedProfiles = helpers.profiles.withoutPic;
 passthru.wasix.broken = "reason + upstream link";   # defect, not a limit
 ```
 
-The result is `profileSets.<profile>.foo`, and a `libraryMatrix` entry unless
+The result is `nixpkgsByProfile.<profile>.foo`, and a `librariesByProfile` entry unless
 it's a shipped CLI.
 
 ## A Rust CLI
@@ -76,7 +76,7 @@ not in nixpkgs, call `final.rustPlatform.buildRustPackage` (see
 
 ## Publishing to the registry
 
-`scripts/wasmer-publish-all.py --registry wasmer.io` builds `allWasmer` and
+`scripts/wasmer-publish-all.py --registry wasmer.io` builds `allWasmerPackages` and
 publishes every shipped webc the registry does not already have (`--dry-run`
 previews). Existing versions are hash-verified against the registry, so a
 changed webc under an unchanged version fails loudly. Needs an authenticated
@@ -121,7 +121,7 @@ To run tests against a locally built runtime instead of the pinned one:
 
 - `nix build` reads the git-tracked tree; `git add` new files first.
 - Off-only packages fail in other profiles on purpose; use
-  `preferredPackages`.
+  `preferredProfilePackages`.
 - `configure` misdetecting features can be wasm-opt failing on test programs:
   add `disableWasmOptInConfigureHook` to `nativeBuildInputs`.
 - Check `WASIX-TODO.md` before debugging odd runtime behaviour.

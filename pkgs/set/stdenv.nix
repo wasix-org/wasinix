@@ -18,7 +18,7 @@
 # The shim execs wasixcc/wasix++ with this profile's WASIXCC_* env.
 {
   lib,
-  foundation,
+  toolchain,
 }: {
   buildPackages,
   baseStdenv,
@@ -44,7 +44,7 @@
   mkShimBin = binName: tool:
     buildPackages.writeShellScriptBin binName ''
       ${shimEnv}
-      exec ${foundation.wasixcc}/bin/${tool} "$@"
+      exec ${toolchain.wasixcc}/bin/${tool} "$@"
     '';
 
   wasixShim = buildPackages.symlinkJoin {

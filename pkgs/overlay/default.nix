@@ -3,13 +3,13 @@
 # linked deps, so each package file is just `prev.X` plus tweaks.
 #
 # Each packages/<name>.nix is a function
-# { final, prev, helpers, foundation, preferredPackages, nixpkgs }
+# { final, prev, helpers, toolchain, preferredProfilePackages, nixpkgs }
 # returning the wasix derivation. Use `final.<lib>` for linked (same-profile)
-# deps and `preferredPackages.<tool>` for non-linked or runtime-invoked deps.
+# deps and `preferredProfilePackages.<tool>` for non-linked or runtime-invoked deps.
 {
-  foundation,
+  toolchain,
   nixpkgs,
-  preferredPackages,
+  preferredProfilePackages,
   wasixRustPlatform,
 }: final: prev: let
   lib = prev.lib;
@@ -106,7 +106,7 @@
         prev.stdenv.hostPlatform.system;
     in
       lib.mapAttrs (_: applyWasixMeta) (loaded.mkPackages {
-        callArgs = {inherit final prev helpers foundation preferredPackages nixpkgs;};
+        callArgs = {inherit final prev helpers toolchain preferredProfilePackages nixpkgs;};
         mkTrivial = n: helpers.libTweaks {} prev.${n};
         trivialPosition = ./trivial.nix;
       });

@@ -86,7 +86,7 @@ in
       # neither, so point it at the unwrapped package
       updateScript = {
         command = nix-update-script {extraArgs = ["--flake"];};
-        attrPath = "foundation.cargo-wasix.unwrapped";
+        attrPath = "toolchain.cargo-wasix.unwrapped";
       };
       # default predicate: fires in the change that bumps cargo-wasix
       wasix.updateNotes = [

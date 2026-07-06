@@ -49,7 +49,7 @@ backend vendored as a patch (`packages/libffi/wasi-backend.patch`).
 lockfiles, no hash to refill. On a base-Rust bump, review targets/flags
 against the fork's `build-wasix.sh`. Check: `nix build
 .#wasix-rust-toolchain` (slow), then
-`.#legacyPackages.x86_64-linux.shippedPackages.crabsay`.
+`.#legacyPackages.x86_64-linux.wasmerPackages.crabsay`.
 
 **llvm**: `tag` is the pin; `llvmVersion` is the base version that selects
 nixpkgs' patches. Never bump `llvmVersion` mechanically, only when the fork
@@ -65,11 +65,11 @@ downloads), pinned separately in `sysroot/libc.nix` and synced on update; a
 stale pin fails the build with undeclared `__wasi_*` functions. Patches, if
 any, are applied on the source via `applyPatches`; drop any that landed
 upstream. Rebuilds everything. Check: `nix build .#wasix-libc` then
-`.#wasix-sysroot`, and `.#legacyPackages.x86_64-linux.foundation.sysroot.tests`.
+`.#wasix-sysroot`, and `.#legacyPackages.x86_64-linux.toolchain.sysroot.tests`.
 
 **wasixcc**: the lockfile is in-source, nothing to regenerate. On update,
 drop any `wasixcc-*.patch` that landed upstream. Check: `nix build .#wasixcc`
-and `.#foundation.wasixcc.tests`.
+and `.#toolchain.wasixcc.tests`.
 
 **wasmer**: the runtime every behavioural test runs under. flake.nix applies
 `patches/wasmer-offline-resolution.patch` (wasmer PR 6768) on top; drop it

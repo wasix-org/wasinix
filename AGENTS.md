@@ -35,8 +35,8 @@ scripts/update.py    pin updater (nix run .#update)
 - Tweaks go through `helpers.libTweaks` (phases concatenate, lists append,
   attrsets merge, scalars replace, functions get the old value). No
   `(old.X or []) ++ ...` in package files.
-- Deps: `final.<dep>` for linking (same profile); `preferredPackages.<name>`
-  for tools run at runtime. Never `profileSets.<profile>.<dep>` from a
+- Deps: `final.<dep>` for linking (same profile); `preferredProfilePackages.<name>`
+  for tools run at runtime. Never `nixpkgsByProfile.<profile>.<dep>` from a
   package file.
 - All `WASIXCC_*`/`CC=wasixcc` environment comes from
   `pkgs/toolchain/env.nix`; never write the exports by hand.
@@ -57,10 +57,10 @@ scripts/update.py    pin updater (nix run .#update)
   builtins.attrNames`. For behaviour-preserving refactors, also diff
   `--apply 'j: builtins.mapAttrs (_: d: d.drvPath) j'` before/after; meta and
   passthru changes don't move drv paths.
-- A CI job name is a build path: `nix build .#libraryMatrix.exnrefEh.zlib`,
-  `.#shippedPackages.git.webc`, `.#pythonWheels.numpy`.
-- Toolchain suites: `.#foundation.wasixcc.tests` (compile+link+run per
-  profile), `.#foundation.sysroot.tests`; the Rust suite is
+- A CI job name is a build path: `nix build .#librariesByProfile.exnrefEh.zlib`,
+  `.#wasmerPackages.git.webc`, `.#pythonWheels.numpy`.
+- Toolchain suites: `.#toolchain.wasixcc.tests` (compile+link+run per
+  profile), `.#toolchain.sysroot.tests`; the Rust suite is
   `.#checks.x86_64-linux.rust`.
 - Touching `pkgs/toolchain/` (except `llvm.nix`) rebuilds everything; use a
   remote builder or the CI cache.
