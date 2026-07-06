@@ -1,7 +1,9 @@
 # Helpers for wasix package files, and the passthru.wasix declaration (all
 # optional): supportedProfiles = profiles the package is built for (default
 # all; others skip it silently), preferredProfile = where it ships (default
-# exnrefEh, else first supported), broken = "reason" for a real defect,
+# exnrefEh, else first supported), shipped = packaged as webc (at the
+# preferred profile) instead of built across the libraryMatrix,
+# broken = "reason" for a real defect,
 # updateReminders = [{writtenFor; message;}] = temporary workarounds to
 # revisit; surfaced by scripts/update.py and the CI report once the package
 # version moves past writtenFor.
@@ -47,6 +49,9 @@ in rec {
   # is the same before and after applyWasixMeta.
   supportedIn = profileName: drv:
     builtins.elem profileName ((wasixMetaOf drv).supportedProfiles or profiles.all);
+
+  # Does `drv` ship as a webc package?
+  shippedOf = drv: (wasixMetaOf drv).shipped or false;
 
   # Declared preferredProfile, else the repo default, else first supported.
   preferredProfileOf = drv: let

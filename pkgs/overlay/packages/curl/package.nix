@@ -7,7 +7,7 @@
   helpers,
   ...
 }:
-helpers.wasmRename {wasmName = "curl";} (helpers.libTweaks {} ((prev.curlMinimal.override {
+helpers.wasmRename {wasmName = "curl";} (helpers.libTweaks {passthru.wasix.shipped = true;} ((prev.curlMinimal.override {
     brotliSupport = true;
     c-aresSupport = false;
     gssSupport = false;

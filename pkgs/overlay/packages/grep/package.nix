@@ -8,6 +8,7 @@
 }:
 helpers.wasmRename {wasmName = "grep";} (
   helpers.libTweaks {
+    passthru.wasix.shipped = true;
     postPatch = ''
       sed -i 's:gnulib-tests::g' Makefile.in
     '';

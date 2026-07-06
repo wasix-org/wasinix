@@ -6,6 +6,7 @@
   ...
 }:
 helpers.libTweaks {
+  passthru.wasix.shipped = true;
   configureFlags = [
     "--disable-java"
     "--disable-csharp"

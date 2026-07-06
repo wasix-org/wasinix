@@ -12,6 +12,7 @@ final.rustPlatform.buildRustPackage {
     hash = "sha256-ptHjotWwpEJ4xz12pSTHxPh7+6EuPKM6ZnXT6WurVq8=";
   };
   cargoHash = "sha256-ejCXTplGKAtJjkOO6yAkR/TDiXKqiXZseXkcwrx0e2c=";
+  passthru.wasix.shipped = true;
   meta = {
     description = "ferris-says clone, built to WASIX";
     homepage = "https://github.com/Zaechus/crabsay";

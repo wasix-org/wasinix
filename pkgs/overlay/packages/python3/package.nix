@@ -19,6 +19,7 @@
 
   py =
     helpers.libTweaks {
+      passthru.wasix.shipped = true;
       # Enables importing .so C-extension wheels (needs enable-wasm-dynamic-linking-wasi.patch;
       # ehpic is already -pie, so no extra link flags).
       configureFlags = ["--enable-wasm-dynamic-linking"];

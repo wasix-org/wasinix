@@ -9,6 +9,7 @@
   buildCc = "${final.buildPackages.stdenv.cc}/bin/cc";
 in
   helpers.libTweaks {
+    passthru.wasix.shipped = true;
     # Replace configureFlags (not append): the override drops withCxx=false's flag,
     # so use a function to override the old value outright.
     configureFlags = _: [

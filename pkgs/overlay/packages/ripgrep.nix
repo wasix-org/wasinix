@@ -3,8 +3,12 @@
 # wasm target (and the man page/completions they generate need to run rg,
 # impossible when cross-building). Blank both; the wasix rustPlatform disables
 # installChecks anyway. pcre2 (-P) stays on.
-{prev, ...}:
-prev.ripgrep.overrideAttrs (_: {
+{
+  prev,
+  helpers,
+  ...
+}:
+helpers.libTweaks {passthru.wasix.shipped = true;} (prev.ripgrep.overrideAttrs (_: {
   postFixup = "";
   installCheckPhase = "";
-})
+}))

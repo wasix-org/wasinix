@@ -33,6 +33,7 @@ in
                        '#if (defined (TIOCGWINSZ) || defined (HAVE_TCGETWINSIZE)) && !defined(__wasi__)'
     '';
     passthru.wasix.supportedProfiles = ["off"];
+    passthru.wasix.shipped = true;
     preConfigure = final.lib.optionalString (!offProfile) ''
       echo 'bash must be built in the off-EH profile (wasmExceptions = "no")' >&2
       exit 1

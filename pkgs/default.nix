@@ -181,27 +181,13 @@
     )
     profilesCfg.sysrootEncodings;
 
-  # CLIs shipped as webc packages, by overlay attr name. Built at their preferred
-  # profile (bash -> off, rest -> default); the wasmer layer adds .webc + .tests.
-  shippedCommands = [
-    "grep"
-    "sed"
-    "find"
-    "gzip"
-    "tar"
-    "jq"
-    "less"
-    "nano"
-    "gettext"
-    "ncurses-progs"
-    "bash"
-    "gitMinimal"
-    "curl"
-    "crabsay"
-    "sd"
-    "ripgrep"
-    "python3"
-  ];
+  # Packages shipped as webc, by overlay attr name: everything declaring
+  # passthru.wasix.shipped. Built at their preferred profile (bash -> off,
+  # rest -> default); the wasmer layer adds .webc + .tests.
+  shippedCommands =
+    lib.filter
+    (n: wasixLib.shippedOf profileSets.${defaultProfileName}.${n})
+    wasixPkgNames;
 
   # ── python wheels ────────────────────────────────────────────────────────────
   # Shipped Python wheels (overlay/python-packages/wheels.nix): wasm cross builds

@@ -28,6 +28,7 @@ in
       (old.passthru or {})
       // {
         inherit bash;
+        wasix.shipped = true;
         # wasmer packaging (name "git" comes from meta.mainProgram; the rest
         # is derived):
         wasmer = {

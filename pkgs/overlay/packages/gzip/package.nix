@@ -6,6 +6,7 @@
 }:
 helpers.wasmRename {wasmName = "gzip";} (
   helpers.libTweaks {
+    passthru.wasix.shipped = true;
     # Drop nixpkgs' preFixup: it PATH-injects the gunzip/zcat shell scripts
     # (which we delete) and wrapProgram's bin/gzip (which we rename to
     # gzip.wasm), so it would fail. gzip.wasm is a standalone binary.

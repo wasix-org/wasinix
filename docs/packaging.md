@@ -54,12 +54,14 @@ not in nixpkgs, call `final.rustPlatform.buildRustPackage` (see
 
 ## A CLI shipped as webc
 
-1. Rename the binary to `<name>.wasm` and list it in `shippedCommands`
-   (`pkgs/default.nix`):
+1. Rename the binary to `<name>.wasm` and declare it shipped
+   (`shippedCommands` in `pkgs/default.nix` is derived from the flag):
 
    ```nix
    { prev, helpers, ... }:
-   helpers.wasmRename { wasmName = "foo"; } (helpers.libTweaks { } prev.foo)
+   helpers.wasmRename { wasmName = "foo"; } (helpers.libTweaks {
+     passthru.wasix.shipped = true;
+   } prev.foo)
    ```
 
    Programs needing fork/setjmp set `env.WASIXCC_WASM_OPT_FLAGS =

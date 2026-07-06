@@ -10,6 +10,7 @@
 in
   helpers.wasmRename {wasmName = "nano";} (
     helpers.libTweaks {
+      passthru.wasix.shipped = true;
       configureFlags = ["--with-ncursesw"];
       preConfigure = ''
         export CPPFLAGS="''${CPPFLAGS-} -I${nc.dev}/include -I${nc.dev}/include/ncursesw"

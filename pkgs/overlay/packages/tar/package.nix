@@ -5,6 +5,7 @@
 }:
 helpers.wasmRename {wasmName = "tar";} (
   helpers.libTweaks {
+    passthru.wasix.shipped = true;
     configureFlags = [
       "--disable-rmt"
       # Keep archive compression support intentionally narrow for now.

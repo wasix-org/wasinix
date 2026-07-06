@@ -10,6 +10,7 @@
 in
   helpers.wasmRename {wasmName = "less";} (
     helpers.libTweaks {
+      passthru.wasix.shipped = true;
       configureFlags = ["--with-regex=pcre2"];
       preConfigure = ''
         export CPPFLAGS="''${CPPFLAGS-} -I${nc.dev}/include -I${nc.dev}/include/ncursesw -Dwinch=less_winch"
