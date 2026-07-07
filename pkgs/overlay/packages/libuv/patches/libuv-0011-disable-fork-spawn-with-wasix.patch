@@ -1,0 +1,27 @@
+diff --git a/src/unix/process.c b/src/unix/process.c
+index 539e7d9..645e594 100644
+--- a/src/unix/process.c
++++ b/src/unix/process.c
+@@ -180,7 +180,8 @@ void uv__wait_children(uv_loop_t* loop) {
+  * Used for initializing stdio streams like options.stdin_stream. Returns
+  * zero on success. See also the cleanup section in uv_spawn().
+  */
+-#if !(defined(__APPLE__) && (TARGET_OS_TV || TARGET_OS_WATCH))
++#if !(defined(__APPLE__) && (TARGET_OS_TV || TARGET_OS_WATCH)) && \
++    !defined(__wasi__) /* WASIX has no fork; uv_spawn returns UV_ENOSYS */
+ /* execvp is marked __WATCHOS_PROHIBITED __TVOS_PROHIBITED, so must be
+  * avoided. Since this isn't called on those targets, the function
+  * doesn't even need to be defined for them.
+@@ -966,8 +967,10 @@ static int uv__spawn_and_init_child(
+ int uv_spawn(uv_loop_t* loop,
+              uv_process_t* process,
+              const uv_process_options_t* options) {
+-#if defined(__APPLE__) && (TARGET_OS_TV || TARGET_OS_WATCH)
+-  /* fork is marked __WATCHOS_PROHIBITED __TVOS_PROHIBITED. */
++#if (defined(__APPLE__) && (TARGET_OS_TV || TARGET_OS_WATCH)) || \
++    defined(__wasi__)
++  /* fork is marked __WATCHOS_PROHIBITED __TVOS_PROHIBITED.
++   * WASIX has no fork. */
+   return UV_ENOSYS;
+ #else
+   int pipes_storage[8][2];

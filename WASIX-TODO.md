@@ -63,6 +63,17 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
 - wasmer starts processes with `TERM` unset (verified); terminal programs
   degrade. Fix: a runtime default.
 
+### `getifaddrs`/`freeifaddrs` misnamed in wasix-libc 🟡
+- wasix-libc's `ifaddrs.h` declares the standard `getifaddrs`/`freeifaddrs`,
+  but `libc.a` only defines `getif_addrs`/`freeif_addrs` (verified with nm;
+  python3.wasm exports only the underscored names). Callers compile, then die
+  with undefined symbols at link or dylib import. `if_indextoname` and
+  `if_nametoindex` are declared in `net/if.h` but not defined at all.
+- Workaround: libuv's `libuv-0013-wasix-ifaddrs-names-no-if_index.patch` maps
+  the names and stubs the `if_*` lookups.
+- Fix: define the standard names in wasix-libc (alias or rename), and
+  implement/stub `if_indextoname`/`if_nametoindex`.
+
 ## Toolchain
 
 ### asyncify can't process Wasm-EH instructions 🟡
@@ -80,6 +91,22 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
   (`TEST_PROGRAMS=`, `CLAR_TEST_PROG=`), which contain setjmp and can never
   run in a cross build.
 - Fix: binaryen asyncify support for EH; upstream the wasixcc setting.
+
+### wasixcc hoists linker flags away from the inputs 🟡
+- wasixcc buckets `-Wl,*`/`-Xlinker` args into `linker_args` (emitted before
+  its own flags) and file inputs into `linker_inputs` (emitted at the end):
+  any position-sensitive linker construct is destroyed. Notably
+  `-Wl,--whole-archive foo.a -Wl,--no-whole-archive` puts both markers up
+  front and the archive at the back, bracketing nothing (verified: zbar's
+  dylib came out 633 bytes; pyarrow's libarrow_python.so silently lacked most
+  arrow symbols and failed at import with `GOT.mem ... Missing export`,
+  because `--unresolved-symbols=import-dynamic` defers underlinking to load).
+- Workaround: link dylibs from loose objects instead of archives (zbar
+  extracts with `$AR x`, pyarrow by-instance `$AR xN` since libarrow.a holds
+  duplicate member names).
+- Fix: keep link-stage tokens in one ordered list, as the clang driver does
+  (`cxx-linking/src/compiler/flags.rs` `process_compiler_flags` splits them,
+  `compiler.rs` `link_inputs` emits the buckets separately).
 
 ### `wasm-opt` corrupts autoconf feature detection 🟡 (not re-verified)
 

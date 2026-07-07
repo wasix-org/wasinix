@@ -1,0 +1,14 @@
+diff --git a/include/uv/unix.h b/include/uv/unix.h
+index c6ba419..dfbfcca 100644
+--- a/include/uv/unix.h
++++ b/include/uv/unix.h
+@@ -66,7 +66,8 @@
+       defined(__MSYS__)   || \
+       defined(__HAIKU__)  || \
+       defined(__QNX__)    || \
+-      defined(__GNU__)
++      defined(__GNU__)    || \
++      defined(__wasi__)
+ # include "uv/posix.h"
+ #endif
+ 

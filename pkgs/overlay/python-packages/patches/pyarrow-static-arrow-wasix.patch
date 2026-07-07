@@ -1,0 +1,55 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -478,12 +478,13 @@
+                PROPERTY COMPILE_FLAGS " -Wno-cast-qual ")
+ endif()
+ 
+-if(NOT PYARROW_CPP_LINK_LIBS)
+-  if(ARROW_BUILD_SHARED)
++if(ARROW_BUILD_SHARED)
++  if(NOT PYARROW_CPP_LINK_LIBS)
+     list(APPEND PYARROW_CPP_LINK_LIBS Arrow::arrow_shared)
+-  else()
+-    list(APPEND PYARROW_CPP_LINK_LIBS Arrow::arrow_static)
+   endif()
++else()
++  # static builds always link arrow itself (as extracted objects below)
++  list(APPEND PYARROW_CPP_LINK_LIBS Arrow::arrow_static)
+ endif()
+ 
+ add_library(arrow_python SHARED ${PYARROW_CPP_SRCS})
+@@ -497,7 +498,23 @@
+ if(ARROW_BUILD_SHARED)
+   target_link_libraries(arrow_python PUBLIC ${PYARROW_CPP_LINK_LIBS})
+ else()
+-  target_link_libraries(arrow_python PRIVATE ${PYARROW_CPP_LINK_LIBS})
++  # static build: every arrow symbol must land in (and be exported from)
++  # libarrow_python.so; the cython modules link only arrow_python. wasixcc
++  # hoists -Wl flags away from the inputs (see WASIX-TODO.md), so a
++  # --whole-archive bracket cannot survive; instead the derivation extracts
++  # libarrow.a into $PYARROW_ARROW_OBJ_DIR and the objects are linked as
++  # plain inputs. The target still follows for its usage requirements
++  # (includes, transitive codec libs); its lazily-linked archive then
++  # contributes nothing (all symbols are already defined).
++  file(GLOB _arrow_static_objs "$ENV{PYARROW_ARROW_OBJ_DIR}/*.o"
++       "$ENV{PYARROW_ARROW_OBJ_DIR}/*.obj")
++  list(LENGTH _arrow_static_objs _n_arrow_objs)
++  message(STATUS "arrow objects from $ENV{PYARROW_ARROW_OBJ_DIR}: ${_n_arrow_objs}")
++  if(_n_arrow_objs EQUAL 0)
++    message(FATAL_ERROR "PYARROW_ARROW_OBJ_DIR unset or empty")
++  endif()
++  target_sources(arrow_python PRIVATE ${_arrow_static_objs})
++  target_link_libraries(arrow_python PRIVATE ${PYARROW_CPP_LINK_LIBS})
+ endif()
+ target_link_libraries(arrow_python PUBLIC Python3::NumPy)
+ target_compile_definitions(arrow_python PRIVATE ARROW_PYTHON_EXPORTING)
+@@ -917,6 +933,9 @@
+   set_source_files_properties(${module_SRC} PROPERTIES CYTHON_IS_CXX TRUE)
+ 
+   cython_add_module(${module_name} ${module_name}_pyx ${module_name}_output ${module_SRC})
++  # static build: arrow headers aren't propagated through arrow_python's
++  # PRIVATE link, include them directly
++  target_include_directories(${module_name} PRIVATE ${ARROW_INCLUDE_DIR})
+ 
+   if(directories)
+     string(REPLACE ";" "/" module_output_directory ${directories})

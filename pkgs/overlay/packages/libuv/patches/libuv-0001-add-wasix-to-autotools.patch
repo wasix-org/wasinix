@@ -1,0 +1,32 @@
+diff --git a/Makefile.am b/Makefile.am
+index cc70ffe..2c4bf96 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -485,6 +485,15 @@ libuv_la_SOURCES += src/unix/bsd-ifaddrs.c \
+                     src/unix/hurd.c
+ endif
+ 
++if WASI
++uvinclude_HEADERS += include/uv/posix.h
++libuv_la_CFLAGS += -D_GNU_SOURCE
++libuv_la_SOURCES += src/unix/no-fsevents.c \
++                    src/unix/no-proctitle.c \
++                    src/unix/posix-hrtime.c \
++                    src/unix/posix-poll.c
++endif
++
+ if LINUX
+ uvinclude_HEADERS += include/uv/linux.h
+ libuv_la_CFLAGS += -D_GNU_SOURCE
+diff --git a/configure.ac b/configure.ac
+index c524611..43385f5 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -72,6 +72,7 @@ AM_CONDITIONAL([OPENBSD],  [AS_CASE([$host_os],[openbsd*],      [true], [false])
+ AM_CONDITIONAL([OS390],    [AS_CASE([$host_os],[openedition*],  [true], [false])])
+ AM_CONDITIONAL([OS400],    [AS_CASE([$host_os],[os400],         [true], [false])])
+ AM_CONDITIONAL([SUNOS],    [AS_CASE([$host_os],[solaris*],      [true], [false])])
++AM_CONDITIONAL([WASI],     [AS_CASE([$host_os],[wasi*],         [true], [false])])
+ AM_CONDITIONAL([WINNT],    [AS_CASE([$host_os],[mingw*],        [true], [false])])
+ AS_CASE([$host_os],[mingw*], [
+     LIBS="$LIBS -lws2_32 -lpsapi -liphlpapi -luserenv -luser32 -ldbghelp -lole32 -lshell32"

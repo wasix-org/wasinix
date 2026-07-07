@@ -3,12 +3,21 @@
 # CFLAGS=-fwasm-exceptions (ehpic PIC needs wasm-EH); plus the shared
 # maturin/pyo3 wiring (PYO3_CROSS_LIB_DIR, pyo3/extension-module,
 # target-lexicon dl env; see lib/rust.nix).
+#
+# The archive link leaves ~1000 openssl symbols as dylib imports
+# (import-dynamic swallows the unresolved tail). Since the python main module
+# started exporting its own statically linked libcrypto (_ssl/_hashlib),
+# those imports bind to python's copy and _rust ends up straddling two
+# half-initialized libcryptos: the default provider fails init the moment
+# python's copy initialized first (hashlib before cryptography). Whole-archive
+# libssl+libcrypto into the dylib so every openssl reference resolves inside.
 {
   pyprev,
   final,
   helpers,
   ...
 }: let
+  lib = final.lib;
   rust = import ./lib/rust.nix {inherit final;};
 in
   helpers.libTweaks {
@@ -18,6 +27,20 @@ in
       OPENSSL_NO_VENDOR = "1";
       PYO3_CROSS_LIB_DIR = rust.pyo3CrossLibDir;
       CFLAGS = "-fwasm-exceptions";
+      # The extension links through rustc's own wasm rust-lld, which keeps
+      # -C link-arg order (the wasixcc reordering of WASIX-TODO.md is not in
+      # this path), so the bracketing survives. -Bsymbolic binds the included
+      # definitions locally instead of the main module's exports.
+      RUSTFLAGS = toString [
+        "-C link-arg=-Bsymbolic"
+        "-C link-arg=--whole-archive"
+        "-C link-arg=${lib.getLib final.openssl}/lib/libssl.a"
+        "-C link-arg=${lib.getLib final.openssl}/lib/libcrypto.a"
+        "-C link-arg=--no-whole-archive"
+        # openssl-sys's own -lssl/-lcrypto lazily pull some of the same
+        # members; first definition wins and both are the same objects.
+        "-C link-arg=--allow-multiple-definition"
+      ];
     };
     maturinBuildFlags = ["--features" "pyo3/extension-module"];
   }

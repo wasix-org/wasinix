@@ -1,0 +1,95 @@
+diff -ruN a/include/grpc/event_engine/port.h b/include/grpc/event_engine/port.h
+--- a/include/grpc/event_engine/port.h	2026-07-06 12:57:47.115198113 +0200
++++ b/include/grpc/event_engine/port.h	2026-07-06 12:58:40.199754015 +0200
+@@ -20,7 +20,8 @@
+ #if defined(GPR_ANDROID) || defined(GPR_LINUX) || defined(GPR_APPLE) ||     \
+     defined(GPR_FREEBSD) || defined(GPR_OPENBSD) || defined(GPR_SOLARIS) || \
+     defined(GPR_AIX) || defined(GPR_NACL) || defined(GPR_FUCHSIA) ||        \
+-    defined(GRPC_POSIX_SOCKET) || defined(GPR_NETBSD)
++    defined(GRPC_POSIX_SOCKET) || defined(GPR_NETBSD) ||     \
++    defined(GPR_WASIX)
+ #define GRPC_EVENT_ENGINE_POSIX
+ #include <arpa/inet.h>
+ #include <netdb.h>
+diff -ruN a/include/grpc/support/port_platform.h b/include/grpc/support/port_platform.h
+--- a/include/grpc/support/port_platform.h	2026-07-06 12:57:47.109588266 +0200
++++ b/include/grpc/support/port_platform.h	2026-07-06 12:58:40.196701224 +0200
+@@ -523,6 +523,37 @@
+ #else /* _LP64 */
+ #define GPR_ARCH_32 1
+ #endif /* _LP64 */
++#elif defined(__wasi__)
++// wasix; clang has no wasix target yet, so probe __wasi__
++#define GPR_PLATFORM_STRING "wasix"
++#ifndef _BSD_SOURCE
++#define _BSD_SOURCE
++#endif
++#ifndef _DEFAULT_SOURCE
++#define _DEFAULT_SOURCE
++#endif
++#ifndef _GNU_SOURCE
++#define _GNU_SOURCE
++#endif
++#define GPR_WASIX 1
++#define GPR_CPU_POSIX 1
++#define GPR_GCC_ATOMIC 1
++#define GPR_POSIX_ENV 1
++#define GPR_POSIX_STRING 1
++#define GPR_POSIX_SYNC 1
++// no GPR_POSIX_SUBPROCESS: would need fork+exec
++// no GPR_HAS_PTHREAD_H: breaks the build (see wasix port notes)
++#define GPR_GETPID_IN_UNISTD_H 1
++#define GPR_POSIX_LOG 1
++#define GPR_POSIX_TMPFILE 1
++#define GPR_POSIX_STAT 1
++#define GPR_POSIX_TIME 1
++#define GPR_LINUX_PTHREAD_NAME 1
++#ifdef _LP64
++#define GPR_ARCH_64 1
++#else /* _LP64 */
++#define GPR_ARCH_32 1
++#endif /* _LP64 */
+ #else
+ #error "Could not auto-detect platform"
+ #endif
+diff -ruN a/src/core/lib/iomgr/port.h b/src/core/lib/iomgr/port.h
+--- a/src/core/lib/iomgr/port.h	2026-07-06 12:57:47.313138697 +0200
++++ b/src/core/lib/iomgr/port.h	2026-07-06 12:58:40.199448020 +0200
+@@ -226,6 +226,24 @@
+ #define GRPC_POSIX_NO_SPECIAL_WAKEUP_FD 1
+ #define GRPC_POSIX_SOCKETUTILS 1
+ #define GRPC_POSIX_SYSCONF 1
++#elif defined(GPR_WASIX)
++#define GRPC_HAVE_ARPA_NAMESER 1
++#define GRPC_HAVE_IFADDRS 1
++#define GRPC_HAVE_IPV6_RECVPKTINFO 1
++#define GRPC_HAVE_IP_PKTINFO 1
++#define GRPC_HAVE_MSG_NOSIGNAL 1
++#define GRPC_HAVE_UNIX_SOCKET 1
++// no GRPC_HAVE_TCP_INQ: missing CMSG_NEXTHDR and friends
++// no GRPC_LINUX_ERRQUEUE / GRPC_HAVE_VSOCK / GRPC_LINUX_TCP_H: missing headers
++// no GRPC_POSIX_FORK: wasix does not fork
++#define GRPC_POSIX_HOST_NAME_MAX 1
++#define GRPC_POSIX_SOCKET 1
++#define GRPC_POSIX_WAKEUP_FD 1
++#define GRPC_LINUX_EPOLL 1
++#define GRPC_LINUX_EPOLL_CREATE1 1
++#define GRPC_LINUX_EVENTFD 1
++#define GRPC_MSG_IOVLEN_TYPE int
++#define GRPC_POSIX_SOCKETUTILS 1
+ #elif !defined(GPR_NO_AUTODETECT_PLATFORM)
+ #error "Platform not recognized"
+ #endif
+diff -ruN a/third_party/abseil-cpp/absl/base/config.h b/third_party/abseil-cpp/absl/base/config.h
+--- a/third_party/abseil-cpp/absl/base/config.h	2026-07-06 12:57:46.996139638 +0200
++++ b/third_party/abseil-cpp/absl/base/config.h	2026-07-06 12:58:40.200175504 +0200
+@@ -377,7 +377,8 @@
+     defined(__asmjs__) || defined(__EMSCRIPTEN__) || defined(__Fuchsia__) || \
+     defined(__sun) || defined(__myriad2__) || defined(__HAIKU__) ||          \
+     defined(__OpenBSD__) || defined(__NetBSD__) || defined(__QNX__) ||       \
+-    defined(__VXWORKS__) || defined(__hexagon__) || defined(__XTENSA__)
++    defined(__VXWORKS__) || defined(__hexagon__) || defined(__XTENSA__) || \
++    defined(__wasi__)
+ #define ABSL_HAVE_MMAP 1
+ #endif
+ 

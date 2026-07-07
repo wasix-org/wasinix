@@ -56,6 +56,30 @@
   {attr = "qrcode";}
   {attr = "sqlalchemy";}
   {attr = "requests";}
+  {attr = "aiojobs";}
+  {attr = "aioresponses";}
+  {attr = "bytecode";}
+  {attr = "pydantic";}
+  {
+    attr = "pyopenssl";
+    pyImport = "OpenSSL";
+  }
+  {
+    attr = "pypng";
+    pyImport = "png";
+  }
+  {attr = "greenback";}
+  {attr = "eventlet";} # needs the stdlib ssl module (greendns imports it)
+  {
+    attr = "psycopg-pool";
+    pyImport = "psycopg_pool";
+  }
+  {
+    attr = "protobuf";
+    # the compiled upb backend: a clean import proves the .so loads (the pure
+    # `google.protobuf` would silently fall back to the python impl).
+    pyImport = "google._upb._message";
+  }
 
   # ── C extensions with no external C library ────────────────────────────────────
   {attr = "cffi";} # overlay/python-packages/cffi.nix (libffi ffi_closure_alloc)
@@ -82,6 +106,8 @@
     pyImport = "charset_normalizer";
   }
   {attr = "greenlet";}
+  {attr = "gevent";} # overlay/python-packages/gevent.nix (embedded libev, no libuv/c-ares)
+  {attr = "uvloop";} # libuv; overlay/packages/libuv/package.nix
   {
     attr = "zope-interface";
     pyImport = "zope.interface";
@@ -91,6 +117,14 @@
   {attr = "fastavro";}
   {attr = "zstandard";}
   {attr = "brotlicffi";}
+  {
+    attr = "cython";
+    pyImport = "Cython";
+  }
+  {
+    attr = "clickhouse-connect";
+    pyImport = "clickhouse_connect";
+  }
 
   # ── meson-built wheels ─────────────────────────────────────────────────────────
   {attr = "contourpy";}
@@ -115,15 +149,34 @@
     attr = "lz4";
     pyImport = "lz4.frame";
   } # lz4
-  # NOTE: pycurl deferred: its setup.py links the native curl's libcurl.so via
-  # curl-config (wrong file type for wasm-ld). Needs a curl-config-pointing
-  # override like gitMinimal's.
+  {attr = "pycurl";} # curl; overlay/python-packages/pycurl.nix
   {attr = "jq";} # jq + oniguruma
+  {attr = "jqpy";} # spawns the jq CLI; overlay/python-packages/jqpy.nix
   {attr = "apsw";} # sqlite
   {
     attr = "pynacl";
     pyImport = "nacl.bindings";
   } # libsodium; overlay/python-packages/pynacl.nix
+  {attr = "psycopg";} # libpq via psycopg-c; overlay/python-packages/psycopg.nix
+  {
+    attr = "pyzbar";
+    # loads libzbar.so via ctypes at this import, exercising the dylib.
+    pyImport = "pyzbar.pyzbar";
+  } # zbar (the overlay's one shared lib); overlay/python-packages/pyzbar.nix
+  {attr = "shapely";} # geos; overlay/packages/geos.nix
+  {
+    attr = "google-crc32c";
+    pyImport = "google_crc32c";
+  } # crc32c; overlay/packages/crc32c.nix
+  {
+    attr = "mysqlclient";
+    pyImport = "MySQLdb";
+  } # libmysqlclient; overlay/packages/mariadb-connector-c_3_3.nix
+  {
+    attr = "grpcio";
+    pyImport = "grpc";
+  } # overlay/python-packages/grpcio.nix (vendored grpc core + abseil/boringssl/cares/re2/zlib)
+  {attr = "pyarrow";} # arrow-cpp; overlay/python-packages/pyarrow.nix
 
   # ── async / cython, no external C library ──────────────────────────────────────
   {attr = "aiohttp";} # vendored llhttp; deps multidict/yarl/frozenlist/aiosignal/…

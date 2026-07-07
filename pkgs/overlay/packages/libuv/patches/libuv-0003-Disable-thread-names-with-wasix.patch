@@ -1,0 +1,28 @@
+diff --git a/src/unix/thread.c b/src/unix/thread.c
+index 001b6d7..6cef3bd 100644
+--- a/src/unix/thread.c
++++ b/src/unix/thread.c
+@@ -924,6 +924,10 @@ int uv__thread_setname(const char* name) {
+   pthread_set_name_np(pthread_self(), namebuf);
+   return 0;
+ }
++#elif defined(__wasi__) /* WASI does not support custom thread names. */
++int uv__thread_setname(const char* name) {
++  return UV_ENOSYS;
++}
+ #else
+ int uv__thread_setname(const char* name) {
+   char namebuf[UV_PTHREAD_MAX_NAMELEN_NP];
+@@ -958,6 +962,12 @@ int uv__thread_getname(uv_thread_t* tid, char* name, size_t size) {
+   name[size - 1] = '\0';
+   return 0;
+ }
++#elif defined(__wasi__) /* WASI does not support custom thread names. */
++int uv__thread_getname(uv_thread_t* tid, char* name, size_t size) {
++  snprintf(name, size - 1, "Thread %p", (void*)*tid);
++  name[size - 1] = '\0';
++  return 0;
++}
+ #else
+ int uv__thread_getname(uv_thread_t* tid, char* name, size_t size) {
+   int r;

@@ -1,0 +1,52 @@
+diff --git a/src/unix/getaddrinfo.c b/src/unix/getaddrinfo.c
+index 5d90c7a..bf118d2 100644
+--- a/src/unix/getaddrinfo.c
++++ b/src/unix/getaddrinfo.c
+@@ -235,8 +235,14 @@ int uv_if_indextoname(unsigned int ifindex, char* buffer, size_t* size) {
+   if (buffer == NULL || size == NULL || *size == 0)
+     return UV_EINVAL;
+ 
++#ifdef __wasi__
++  /* wasix-libc has no if_indextoname */
++  (void) ifname_buf;
++  return UV_ENOSYS;
++#else
+   if (if_indextoname(ifindex, ifname_buf) == NULL)
+     return UV__ERR(errno);
++#endif
+ 
+   len = strnlen(ifname_buf, sizeof(ifname_buf));
+ 
+diff --git a/src/unix/tcp.c b/src/unix/tcp.c
+index aa81c16..7fcac2a 100644
+--- a/src/unix/tcp.c
++++ b/src/unix/tcp.c
+@@ -253,6 +253,15 @@ static int uv__ipv6_link_local_scope_id(void) {
+   struct ifaddrs* ifa;
+   struct ifaddrs* p;
+ 
++#ifdef __wasi__
++  /* wasix-libc names these getif_addrs/freeif_addrs; its ifaddrs.h declares
++   * the standard names but the library does not define them. */
++  int getif_addrs(struct ifaddrs**);
++  void freeif_addrs(struct ifaddrs*);
++#define getifaddrs getif_addrs
++#define freeifaddrs freeif_addrs
++#endif
++
+   if (getifaddrs(&ifa))
+     return 0;
+ 
+diff --git a/src/uv-common.c b/src/uv-common.c
+index e5a7632..1e131f3 100644
+--- a/src/uv-common.c
++++ b/src/uv-common.c
+@@ -286,7 +286,7 @@ int uv_ip6_addr(const char* ip, int port, struct sockaddr_in6* addr) {
+ 
+     zone_index++; /* skip '%' */
+     /* NOTE: unknown interface (id=0) is silently ignored */
+-#ifdef _WIN32
++#if defined(_WIN32) || defined(__wasi__) /* wasix-libc has no if_nametoindex */
+     addr->sin6_scope_id = atoi(zone_index);
+ #else
+     addr->sin6_scope_id = if_nametoindex(zone_index);

@@ -146,10 +146,40 @@
                 substituteInPlace Lib/subprocess.py \
                   --replace-fail '${final.buildPackages.bashNonInteractive}/bin/sh' '${preferredProfilePackages.bash}/bin/sh'
 
+                # configure's WASI block puts -lwasi-emulated-signal into LIBS; wasix libc has
+                # real signals and no such archive, so EVERY subsequent AC_LINK_IFELSE lib probe
+                # failed (openssl/sqlite/readline -> "missing" _ssl/_hashlib/_sqlite3/readline).
+                # The wrapper already links the emulated getpid/process-clocks libs itself.
+                substituteInPlace configure.ac \
+                  --replace-fail ' -lwasi-emulated-signal -lwasi-emulated-getpid -lwasi-emulated-process-clocks' \
+                                 ' -lwasi-emulated-getpid -lwasi-emulated-process-clocks'
+
                 # configure hardcodes py_cv_module_mmap=n/a for WASI (and regenerates from
                 # configure.ac, so patching configure doesn't stick); force the mmap module via
                 # Setup.local. wasix has mmap and pandas imports it at load.
                 echo "mmap mmapmodule.c" >> Modules/Setup.local
+
+                # fcntl is n/a'd the same way ("WASI SDK does not support file locking"), but
+                # wasix libc has real fcntl/ioctl; only the POSIX lock commands are missing
+                # (no F_SETLK/F_GETLK, no flock/lockf). Give the module the Linux values so it
+                # compiles: fd-flag fcntl/ioctl work, lock calls fail at runtime with EINVAL.
+                # gevent.subprocess needs the module for F_GETFL/F_SETFL.
+                echo "fcntl fcntlmodule.c" >> Modules/Setup.local
+                substituteInPlace Modules/fcntlmodule.c \
+                  --replace-fail '#include <sys/ioctl.h>            // ioctl()' \
+                    '#include <sys/ioctl.h>            // ioctl()
+        #ifdef __wasi__
+        #  ifndef F_GETLK
+        #    define F_GETLK 5
+        #    define F_SETLK 6
+        #    define F_SETLKW 7
+        #  endif
+        #  ifndef F_RDLCK
+        #    define F_RDLCK 0
+        #    define F_WRLCK 1
+        #    define F_UNLCK 2
+        #  endif
+        #endif'
 
                 # the #else wasi hits defines my_getpagesize but leaves my_getallocationgranularity
                 # undefined → link error; alias it too (wasi has getpagesize).

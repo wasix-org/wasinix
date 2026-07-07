@@ -1,0 +1,57 @@
+diff --git a/src/unix/core.c b/src/unix/core.c
+index 73027cb..de8cc08 100644
+--- a/src/unix/core.c
++++ b/src/unix/core.c
+@@ -1681,8 +1681,8 @@ int uv_cpumask_size(void) {
+ }
+ 
+ int uv_os_getpriority(uv_pid_t pid, int* priority) {
+-#if defined(__QNX__)
+-  /* QNX priority is not process-based */
++#if defined(__QNX__) || defined(__wasi__)
++  /* QNX priority is not process-based; WASIX has no getpriority */
+   return UV_ENOSYS;
+ #else
+   int r;
+@@ -1703,8 +1703,8 @@ int uv_os_getpriority(uv_pid_t pid, int* priority) {
+ 
+ 
+ int uv_os_setpriority(uv_pid_t pid, int priority) {
+-#if defined(__QNX__)
+-  /* QNX priority is not process-based */
++#if defined(__QNX__) || defined(__wasi__)
++  /* QNX priority is not process-based; WASIX has no setpriority */
+   return UV_ENOSYS;
+ #else
+   if (priority < UV_PRIORITY_HIGHEST || priority > UV_PRIORITY_LOW)
+@@ -1724,6 +1724,13 @@ int uv_os_setpriority(uv_pid_t pid, int priority) {
+  * So the output parameter priority is actually the nice value.
+ */
+ int uv_thread_getpriority(uv_thread_t tid, int* priority) {
++#if defined(__wasi__)
++  /* WASIX does not support thread priorities */
++  if (priority == NULL)
++    return UV_EINVAL;
++  *priority = 0;
++  return 0;
++#else
+   int r;
+   int policy;
+   struct sched_param param;
+@@ -1751,6 +1758,7 @@ int uv_thread_getpriority(uv_thread_t tid, int* priority) {
+ 
+   *priority = param.sched_priority;
+   return 0;
++#endif
+ }
+ 
+ #ifdef __linux__
+@@ -1775,7 +1783,7 @@ static int set_nice_for_calling_thread(int priority) {
+  * If the function fails, the return value is non-zero.
+ */
+ int uv_thread_setpriority(uv_thread_t tid, int priority) {
+-#if !defined(__GNU__)
++#if !defined(__GNU__) && !defined(__wasi__) /* WASIX does not support thread priorities */
+   int r;
+   int min;
+   int max;
