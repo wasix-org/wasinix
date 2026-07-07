@@ -17,12 +17,12 @@
 }: let
   env = import ../env.nix {inherit lib;};
 
-  version = "0.1.28";
+  version = "0.1.29";
   src = fetchFromGitHub {
     owner = "wasix-org";
     repo = "cargo-wasix";
     tag = "v${version}";
-    hash = "sha256-PQUQtvaoKUoNeITQ47gNPMvj9Odbaz9x3538f1D4WUE=";
+    hash = "sha256-Gj0Qa3UXOCLQO0Ntyq8Zal5m5ro2CmEPXWT4cNBwkZI=";
   };
 
   cargoWasixUnwrapped = rustPlatform.buildRustPackage {
