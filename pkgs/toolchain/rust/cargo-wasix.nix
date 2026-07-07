@@ -28,16 +28,9 @@
   cargoWasixUnwrapped = rustPlatform.buildRustPackage {
     pname = "cargo-wasix-unwrapped";
     inherit version src;
-    # Upstream ships no Cargo.lock and cargoHash/fetchCargoVendor requires one,
-    # so vendor from a committed lock via importCargoLock.
-    cargoLock.lockFile = ./cargo-wasix.Cargo.lock;
+    cargoHash = "sha256-cLX98sT0AZKlLy/KPqHdyYH+Ldmr05Lz8L8aZDYYfcU=";
 
     doCheck = false;
-    # cargoSetupHook doesn't write Cargo.lock into the lockless source; the
-    # offline cargo build needs it there.
-    prePatch = ''
-      cp ${./cargo-wasix.Cargo.lock} Cargo.lock
-    '';
 
     # TODO: Is this necessary?
     installPhase = ''
@@ -86,15 +79,9 @@ in
       # nix-update needs version + src on the drv it evals: the wrapper has
       # neither, so point it at the unwrapped package
       updateScript = {
-        # --src-only: upstream ships no Cargo.lock, so nix-update's lockfile
-        # extraction cannot work; the vendored lock is the regen hook's job
-        command = nix-update-script {extraArgs = ["--flake" "--src-only"];};
+        command = nix-update-script {extraArgs = ["--flake"];};
         attrPath = "toolchain.cargo-wasix.unwrapped";
       };
-      # default predicate: fires in the change that bumps cargo-wasix
-      wasix.updateNotes = [
-        {message = "upstream may ship its own Cargo.lock; try dropping the vendored cargo-wasix.Cargo.lock, the regen hook in update.py, and the importCargoLock plumbing";}
-      ];
     };
 
     meta = {

@@ -30,7 +30,7 @@ package's own bindings) fires on every run until resolved.
 | target | updates | also regenerates |
 |---|---|---|
 | `rust-toolchain` | `wasix-org/rust` release | bootstrap pin from the fork's `src/stage0` |
-| `cargo-wasix` | `wasix-org/cargo-wasix` release | the committed `Cargo.lock` |
+| `cargo-wasix` | `wasix-org/cargo-wasix` release | `cargoHash` (nix-update) |
 | `wasix-libc` | `wasix-org/wasix-libc` release | the witx spec pins |
 | `wasixcc` | `wasix-org/wasixcc` release | |
 | `llvm` | fork release tag | |
@@ -56,9 +56,9 @@ nixpkgs' patches. Never bump `llvmVersion` mechanically, only when the fork
 rebases onto a newer LLVM. An LLVM bump also rebuilds the sysroot. Check:
 `nix build .#wasix-llvm .#wasixcc`.
 
-**cargo-wasix**: upstream has no `Cargo.lock`; the committed one is
-regenerated on update (delete it if upstream adds one). Wrapper env belongs
-in `pkgs/toolchain/env.nix`. Check: `nix build .#cargo-wasix`, then crabsay.
+**cargo-wasix**: a standard `buildRustPackage` with a nix-update-managed
+`cargoHash`. Wrapper env belongs in `pkgs/toolchain/env.nix`. Check:
+`nix build .#cargo-wasix`, then crabsay.
 
 **wasix-libc**: the witx interface specs are submodules (absent from archive
 downloads), pinned separately in `sysroot/libc.nix` and synced on update; a

@@ -3,9 +3,9 @@
 # package as passthru.updateScript (nix-update-script), discovered by eval;
 # this script only drives:
 # it runs each target isolated, adds the flake-input targets (which have no
-# package file), runs the cross-file regen hooks after a bump (cargo-wasix's
-# committed Cargo.lock, the rust fork's stage0 bootstrap pin, wasix-libc's
-# witx submodule pins), and reports the summary plus fired updateNotes.
+# package file), runs the cross-file regen hooks after a bump (the rust fork's
+# stage0 bootstrap pin, wasix-libc's witx submodule pins), and reports the
+# summary plus fired updateNotes.
 #
 # Usage (or `nix run .#update -- ...`):
 #   scripts/update.py              # update everything
@@ -16,11 +16,8 @@ import argparse
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
-import tarfile
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from urllib import request
@@ -75,18 +72,6 @@ def raw_file(owner, repo, rev, path):
         return r.read().decode()
 
 
-def fetch_source(owner, repo, rev):
-    # Archives omit submodules, which is fine for the regens.
-    url = f"https://github.com/{owner}/{repo}/archive/{rev}.tar.gz"
-    tmp = Path(tempfile.mkdtemp(prefix="wasinix-update-"))
-    tarball = tmp / "src.tar.gz"
-    with request.urlopen(url) as r, open(tarball, "wb") as f:
-        shutil.copyfileobj(r, f)
-    with tarfile.open(tarball) as t:
-        t.extractall(tmp, filter="data")
-    return next(p for p in tmp.iterdir() if p.is_dir())
-
-
 @dataclass
 class Target:
     name: str
@@ -97,21 +82,6 @@ class Target:
     attr: str = ""
     command: tuple = ()
     file: str = ""  # repo-relative pin file, from meta.position
-
-
-def regen_cargo_wasix_lock(t):
-    # cargo-wasix ships no Cargo.lock; we carry one and vendor from it. Resolve a
-    # fresh lock against the just-bumped src so the offline build stays buildable.
-    path = REPO / "pkgs/toolchain/rust/cargo-wasix.nix"
-    version = re.search(r'version = "([^"]+)"', path.read_text()).group(1)
-    src = fetch_source("wasix-org", "cargo-wasix", f"v{version}")
-    run(["cargo", "generate-lockfile", "--manifest-path", str(src / "Cargo.toml")])
-    dst = REPO / "pkgs/toolchain/rust/cargo-wasix.Cargo.lock"
-    new = (src / "Cargo.lock").read_text()
-    if dst.read_text() == new:
-        return None
-    dst.write_text(new)
-    return f"regenerated cargo-wasix.Cargo.lock at v{version}"
 
 
 def regen_rust_bootstrap(t):
@@ -178,7 +148,6 @@ def regen_libc_witx(t):
 # bump and how lives in each package as passthru.updateScript.
 REGEN_BY_NAME = {
     "rust-toolchain": regen_rust_bootstrap,
-    "cargo-wasix": regen_cargo_wasix_lock,
     "wasix-libc": regen_libc_witx,
 }
 
