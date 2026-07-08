@@ -102,6 +102,12 @@
         ac_cv_func_sigwaitinfo = "yes";
         # wasix has real pthreads; configure defaults WASI to clashing stubs. (NOT --enable-wasm-pthreads.)
         ac_cv_pthread = "yes";
+        # readline.pc has Requires.private: termcap with no termcap.pc, so pkg-config can't
+        # resolve it and the -lreadline-only fallback misses ncurses' termcap symbols. Seed
+        # PKG_CHECK_MODULES's result vars directly (both set -> pkg-config is skipped) with the
+        # ncurses link added, so the module builds. readline + ncurses are already buildInputs.
+        LIBREADLINE_CFLAGS = "-I${lib.getDev final.readline}/include";
+        LIBREADLINE_LIBS = "-lreadline -lncurses";
         # clang 16+ makes implicit-decl/int-conversion hard errors → autoconf conftests fail; relax to warn.
         NIX_CFLAGS_COMPILE = "-Wno-implicit-function-declaration -Wno-implicit-int -Wno-int-conversion -Wno-deprecated-non-prototype";
       };
@@ -117,8 +123,9 @@
         ./patches/subprocess-posix-spawn-wasi.patch
       ];
 
-      # wasix-libc declares but doesn't implement the pty fns → cpython compiles os.openpty etc. →
-      # undefined at link. Link ENOSYS stubs (survives the autoreconf re-configure). TODO: upstream.
+      # wasix-libc declares but doesn't implement some libc fns → cpython compiles the callers
+      # (os.openpty, the forced pwd/grp modules) → undefined at link. Link ENOSYS/no-op stubs
+      # (survives the autoreconf re-configure). TODO: upstream.
       preBuild = ''
         cat > wasix_pty_stubs.c <<'STUBS'
         #include <errno.h>
@@ -129,6 +136,13 @@
         int openpty(int *a, int *b, char *c, const void *d, const void *e) {
           (void)a; (void)b; (void)c; (void)d; (void)e; errno = ENOSYS; return -1;
         }
+        // pwd/grp enumeration: declared in pwd.h/grp.h, absent from libc.a. wasix has no
+        // passwd/group database, so the getent iterators return nothing and end/set no-op.
+        void endpwent(void) {}
+        void endgrent(void) {}
+        // libuuid (_uuid) locks its clock-state file with flock; declared in sys/file.h,
+        // absent from libc.a. Single-process wasm needs no lock, so succeed.
+        int flock(int fd, int op) { (void)fd; (void)op; return 0; }
         STUBS
         $CC -c wasix_pty_stubs.c -o wasix_pty_stubs.o
         export NIX_LDFLAGS="''${NIX_LDFLAGS:-} $PWD/wasix_pty_stubs.o"
@@ -187,6 +201,21 @@
                   --replace-fail "#define my_getpagesize getpagesize" \
                     "#define my_getpagesize getpagesize
         #define my_getallocationgranularity my_getpagesize"
+
+                # More modules configure n/a's for WASI but whose libc backing wasix actually has:
+                #   termios  - tc*/cf* all in libc.a
+                #   pwd/grp  - getpw*/getgr* present; endpwent/endgrent stubbed in preBuild (no
+                #              passwd/group db, so the iterators are empty at runtime)
+                #   _curses/_curses_panel - ncurses + libpanel are inputs
+                # Forced via Setup.local (configure regenerates from configure.ac, so a patch
+                # wouldn't stick), the mmap/fcntl precedent above.
+                {
+                  echo "termios termios.c"
+                  echo "pwd pwdmodule.c"
+                  echo "grp grpmodule.c"
+                  echo "_curses _cursesmodule.c -lncurses"
+                  echo "_curses_panel _curses_panel.c -lpanel -lncurses"
+                } >> Modules/Setup.local
       '';
 
       # Point the dangling python/python3 symlinks at the installed .wasm, and scrub the phantom
@@ -232,6 +261,15 @@
           # (--with-tzpath bakes it into _sysconfigdata, not the .wasm; else zoneinfo raises
           # "No time zone found").
           selfMounts = [preferredProfilePackages.bash final.buildPackages.tzdata];
+          # Bundle a CA set so stdlib ssl verifies out of the box (else ssl has no default
+          # trust store and https raises SSLCertVerificationError). SSL_CERT_FILE is honored
+          # by openssl's default SSLContext. Keyed by the sole command name (bin/*.wasm ->
+          # python3.13.wasm; python/python3 are symlinks and don't become commands).
+          fs."/etc/ssl" = "${final.cacert}/etc/ssl";
+          commandEnv."python${pyVer}" = {
+            SSL_CERT_FILE = "/etc/ssl/certs/ca-bundle.crt";
+            SSL_CERT_DIR = "/etc/ssl/certs";
+          };
         };
       };
     } (prev.python3.override {
@@ -240,6 +278,9 @@
       # the webc mounts it via selfMounts above.
       tzdata = final.buildPackages.tzdata;
       gdbm = null;
+      # libuuid backs the _uuid module; nixpkgs sets it null off Linux. The
+      # overlay util-linux ships libuuid-only (see packages/util-linux.nix).
+      libuuid = final.util-linux;
       bashNonInteractive = final.buildPackages.bashNonInteractive;
       # `self = py` makes python3.pkgs.<pkg> build against THIS python, not the unfixed python313.
       self = py;
