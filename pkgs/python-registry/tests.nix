@@ -123,7 +123,10 @@ in {
       done
 
       export PYTHONPATH="$PWD/site"
-      ${guestPython} ${./e2e/main.py} | tee e2e.log
+      # copy the script into the mounted test dir: the guest has no /nix/store,
+      # so it can't run main.py from its store path.
+      cp ${./e2e/main.py} main.py
+      ${guestPython} main.py | tee e2e.log
       grep -q "E2E_ALL_OK" e2e.log
     '';
   };

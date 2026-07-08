@@ -201,6 +201,10 @@
     inherit pkgs lib mkTestGroup;
     python3 = nixpkgsByProfile.ehpic.python3;
     wasmer = wasmerRuntime;
+    # the self-contained python webc; the import test runs on it with the wheel
+    # copied into a plain dir and NO /nix/store mount, as `pip install` would.
+    # Lazy: wasmerLayer doesn't depend on pythonWheels, so no eval cycle.
+    pythonWebc = wasmerLayer.wasmerPackages.python.webc;
   };
 
   makeWasmerPackage = pkgs.callPackage ./wasmer/make-wasmer-package.nix {

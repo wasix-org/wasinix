@@ -202,7 +202,7 @@ in rec {
       for _v in ${forwardEnvNames}; do
         _val=\$(printenv "\$_v" 2>/dev/null) && env_flags="\$env_flags --env \$_v=\$_val"
       done
-      export WASMER_FLAGS="--volume /nix/store:/nix/store --volume \$HOME:\$HOME --volume \$WASIX_TEST_ROOT:\$WASIX_TEST_ROOT --cwd \$(pwd)\$env_flags ${extraFlags}"
+      export WASMER_FLAGS="--volume \$HOME:\$HOME --volume \$WASIX_TEST_ROOT:\$WASIX_TEST_ROOT --cwd \$(pwd)\$env_flags ${extraFlags}"
       exec "$original_bin" "\$@"
       SHIMEOF
                 chmod +x "$shim_dir/$bin_name"
