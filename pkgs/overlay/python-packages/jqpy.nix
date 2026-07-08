@@ -1,11 +1,9 @@
-# jqpy for wasix (not in nixpkgs): a pure wrapper that spawns the jq binary
-# via shutil.which; point it at the wasix jq CLI instead (subprocess works
-# via posix_spawn, and the smoke-test store mount makes the path loadable).
-{
-  pyfinal,
-  preferredProfilePackages,
-  ...
-}:
+# jqpy for wasix (not in nixpkgs): a thin wrapper that spawns the `jq` binary
+# found via shutil.which. Upstream's contract is "jq must be installed and on
+# PATH", so we keep that (no baked /nix/store path -> the wheel stays
+# relocatable for pip); a consumer provides jq (the webc mounts the jq command,
+# a pip user installs it). Import does not spawn jq, so it works standalone.
+{pyfinal, ...}:
 pyfinal.buildPythonPackage rec {
   pname = "jqpy";
   version = "1.0.0";
@@ -17,9 +15,4 @@ pyfinal.buildPythonPackage rec {
   };
 
   build-system = [pyfinal.flit-core];
-
-  postPatch = ''
-    substituteInPlace jqpy.py \
-      --replace-fail "shutil.which('jq')" '"${preferredProfilePackages.jq}/bin/jq.wasm"'
-  '';
 }

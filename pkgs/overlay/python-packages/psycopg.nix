@@ -44,6 +44,16 @@
   });
 in
   base.overridePythonAttrs (o: {
+    # nixpkgs bakes libpq's store path into the pure-python ctypes fallback
+    # (_pq_ctypes.py). That impl is never reached (psycopg_c is present) and
+    # the path is dead anyway (libpq is static, no libpq.so), so scrub it to a
+    # bare name: the wheel ships no /nix/store ref and stays pip-relocatable.
+    postPatch =
+      (o.postPatch or "")
+      + ''
+        substituteInPlace psycopg/pq/_pq_ctypes.py \
+          --replace-quiet "${lib.getLib final.libpq}/lib/libpq.so" "libpq.so"
+      '';
     propagatedBuildInputs = map (d:
       if (d.pname or "") == "psycopg-c"
       then psycopg-c
