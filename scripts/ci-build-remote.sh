@@ -33,12 +33,24 @@ push=1 ssh_key="" attr="" local_result="" remote=""
 while [ $# -gt 0 ]; do
   case "$1" in
   --no-push) push=0 ;;
-  -i | --ssh-key) ssh_key="${2:?missing argument for $1}"; shift ;;
-  -a | --attr) attr="${2:?missing argument for $1}"; shift ;;
-  -r | --result-file) local_result="${2:?missing argument for $1}"; shift ;;
+  -i | --ssh-key)
+    ssh_key="${2:?missing argument for $1}"
+    shift
+    ;;
+  -a | --attr)
+    attr="${2:?missing argument for $1}"
+    shift
+    ;;
+  -r | --result-file)
+    local_result="${2:?missing argument for $1}"
+    shift
+    ;;
   -h | --help) usage ;;
   -*) usage ;;
-  *) [ -z "$remote" ] || usage; remote="$1" ;;
+  *)
+    [ -z "$remote" ] || usage
+    remote="$1"
+    ;;
   esac
   shift
 done

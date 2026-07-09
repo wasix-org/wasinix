@@ -30,7 +30,8 @@ def run(cmd, **kw):
     p = subprocess.run(cmd, text=True, capture_output=True, **kw)
     if p.returncode != 0:
         raise RuntimeError(
-            f"{cmd[0]} exited {p.returncode}:\n{(p.stderr or p.stdout).strip()}")
+            f"{cmd[0]} exited {p.returncode}:\n{(p.stderr or p.stdout).strip()}"
+        )
     return p
 
 
@@ -38,8 +39,12 @@ def repo_root():
     # Prefer the git working tree: under `nix run .#update` this file lives in the
     # store, but the pins we edit are in the checkout `nix run` was invoked from.
     try:
-        out = subprocess.run(["git", "rev-parse", "--show-toplevel"],
-                             check=True, text=True, capture_output=True)
+        out = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            check=True,
+            text=True,
+            capture_output=True,
+        )
         return Path(out.stdout.strip())
     except (subprocess.CalledProcessError, FileNotFoundError):
         return Path(__file__).resolve().parent.parent
@@ -95,20 +100,26 @@ def regen_rust_bootstrap(t):
     kv = dict(re.findall(r"^(\w+)=(.+)$", stage0, re.M))
     date, ver, server = kv["compiler_date"], kv["compiler_version"], kv["dist_server"]
 
-    cur = re.search(r'pname = "rust-bootstrap";\s*\n\s*version = "([^"]+)"', text).group(1)
+    cur = re.search(
+        r'pname = "rust-bootstrap";\s*\n\s*version = "([^"]+)"', text
+    ).group(1)
     if cur == ver:
         return None
 
-    url_literal = f'{server}/dist/{date}/rust-{ver}-${{hostTriple}}.tar.xz'
+    url_literal = f"{server}/dist/{date}/rust-{ver}-${{hostTriple}}.tar.xz"
     new_hash = prefetch_url(
-        f"{server}/dist/{date}/rust-{ver}-x86_64-unknown-linux-gnu.tar.xz")
-    old_hash = re.search(r'rust-bootstrap";.*?(sha256-[A-Za-z0-9+/=]+)',
-                         text, re.S).group(1)
+        f"{server}/dist/{date}/rust-{ver}-x86_64-unknown-linux-gnu.tar.xz"
+    )
+    old_hash = re.search(
+        r'rust-bootstrap";.*?(sha256-[A-Za-z0-9+/=]+)', text, re.S
+    ).group(1)
 
-    text = re.sub(r'(pname = "rust-bootstrap";\s*\n\s*version = ")[^"]+(")',
-                  rf'\g<1>{ver}\g<2>', text)
-    text = re.sub(r'url = "[^"]*rust-[^"]*\.tar\.xz";',
-                  f'url = "{url_literal}";', text)
+    text = re.sub(
+        r'(pname = "rust-bootstrap";\s*\n\s*version = ")[^"]+(")',
+        rf"\g<1>{ver}\g<2>",
+        text,
+    )
+    text = re.sub(r'url = "[^"]*rust-[^"]*\.tar\.xz";', f'url = "{url_literal}";', text)
     text = text.replace(old_hash, new_hash, 1)
     path.write_text(text)
     return f"synced rust bootstrap -> {ver} ({date})"
@@ -129,7 +140,8 @@ def regen_libc_witx(t):
     ]:
         sha = gh(f"wasix-org/wasix-libc/contents/{sub}?ref={tag}")["sha"]
         m = re.search(
-            rf'repo = "{repo}";\s*\n\s*rev = "([^"]+)";\s*\n\s*hash = "([^"]+)"', text)
+            rf'repo = "{repo}";\s*\n\s*rev = "([^"]+)";\s*\n\s*hash = "([^"]+)"', text
+        )
         if not m:
             raise RuntimeError(f"{repo}: witx pin block not found in libc.nix")
         if m.group(1) == sha:
@@ -151,17 +163,26 @@ def regen_prune_wheel_rels(t):
     rels = json.loads(path.read_text())
     if not rels:
         return None
-    out = run(["nix", "eval", "--json",
-               f".#legacyPackages.{SYSTEM}.pythonRegistry.wheelVersions"]).stdout
+    out = run(
+        [
+            "nix",
+            "eval",
+            "--json",
+            f".#legacyPackages.{SYSTEM}.pythonRegistry.wheelVersions",
+        ]
+    ).stdout
     versions = json.loads(out)
-    dropped = [f"{name} {v}"
-               for name, by_version in sorted(rels.items())
-               for v in sorted(by_version)
-               if versions.get(name) != v]
-    pruned = {name: kept
-              for name, by_version in rels.items()
-              if (kept := {v: n for v, n in by_version.items()
-                           if versions.get(name) == v})}
+    dropped = [
+        f"{name} {v}"
+        for name, by_version in sorted(rels.items())
+        for v in sorted(by_version)
+        if versions.get(name) != v
+    ]
+    pruned = {
+        name: kept
+        for name, by_version in rels.items()
+        if (kept := {v: n for v, n in by_version.items() if versions.get(name) == v})
+    }
     if not dropped:
         return None
     path.write_text(json.dumps(pruned, indent=2, sort_keys=True) + "\n")
@@ -201,8 +222,9 @@ def repo_relative(path):
 def discovered_targets():
     # passthru.updateScript declarations (flake attr `updateScripts`), one
     # target per package, deduped across the per-profile ci attrs.
-    out = run(["nix", "eval", "--json",
-               f".#legacyPackages.{SYSTEM}.updateScripts"]).stdout
+    out = run(
+        ["nix", "eval", "--json", f".#legacyPackages.{SYSTEM}.updateScripts"]
+    ).stdout
     targets = {}
     for attr, s in sorted(json.loads(out).items()):
         name = s.get("name") or attr.rsplit(".", 1)[-1]
@@ -210,7 +232,8 @@ def discovered_targets():
             continue
         pos = s.get("position")
         targets[name] = Target(
-            name, "updateScript",
+            name,
+            "updateScript",
             # attrPath: the declared target attr (e.g. the unwrapped package
             # behind a wrapper), else the attr the declaration was found on
             attr=f"legacyPackages.{SYSTEM}.{s.get('attrPath') or attr}",
@@ -245,8 +268,8 @@ def run_update_script(t):
         print(f"  {line}")
     if p.returncode != 0:
         raise RuntimeError(
-            f"{t.command[0]} exited {p.returncode}:"
-            f"\n{(p.stderr or p.stdout).strip()}")
+            f"{t.command[0]} exited {p.returncode}:\n{(p.stderr or p.stdout).strip()}"
+        )
     # nix-update reports an early "Update a -> b in file" line; take the
     # last line that looks like an outcome, else fall back to the
     # tree-changed heuristic in main()
@@ -279,8 +302,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", nargs="*", metavar="NAME")
     ap.add_argument("--list", action="store_true")
-    ap.add_argument("--summary-out", metavar="FILE",
-                    help="write a markdown summary (the auto-update PR body)")
+    ap.add_argument(
+        "--summary-out",
+        metavar="FILE",
+        help="write a markdown summary (the auto-update PR body)",
+    )
     args = ap.parse_args()
 
     targets = discovered_targets() + TARGETS
@@ -298,8 +324,11 @@ def main():
         return
 
     def repo_status():
-        return subprocess.run(["git", "-C", str(REPO), "status", "--porcelain"],
-                              text=True, capture_output=True).stdout
+        return subprocess.run(
+            ["git", "-C", str(REPO), "status", "--porcelain"],
+            text=True,
+            capture_output=True,
+        ).stdout
 
     backends = {
         "updateScript": run_update_script,
@@ -358,8 +387,9 @@ def note_versions():
     # versions of the packages carrying updateNotes, from before the run:
     # the `prior` side of each note's predicate
     try:
-        out = run(["nix", "eval", "--json",
-                   f".#legacyPackages.{SYSTEM}.updateNotes.versions"]).stdout
+        out = run(
+            ["nix", "eval", "--json", f".#legacyPackages.{SYSTEM}.updateNotes.versions"]
+        ).stdout
         return json.loads(out)
     except Exception as e:
         print(f"WARN: note version eval failed: {e}", file=sys.stderr)
@@ -373,10 +403,21 @@ def fired_notes(priors):
     env["NOTE_PRIORS"] = json.dumps(priors)
     try:
         p = subprocess.run(
-            ["nix", "eval", "--json", "--impure",
-             f".#legacyPackages.{SYSTEM}.updateNotes.fired",
-             "--apply", 'f: f (builtins.fromJSON (builtins.getEnv "NOTE_PRIORS"))'],
-            cwd=REPO, env=env, text=True, capture_output=True, check=True)
+            [
+                "nix",
+                "eval",
+                "--json",
+                "--impure",
+                f".#legacyPackages.{SYSTEM}.updateNotes.fired",
+                "--apply",
+                'f: f (builtins.fromJSON (builtins.getEnv "NOTE_PRIORS"))',
+            ],
+            cwd=REPO,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
         fired = json.loads(p.stdout)
     except Exception as e:
         print(f"WARN: note check failed: {e}", file=sys.stderr)

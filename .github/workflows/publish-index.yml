@@ -48,34 +48,16 @@ jobs:
             extra-trusted-public-keys = wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI=
             trusted-users = root runner
 
-      - name: Build index and patched wasmer
-        run: |
-          nix build .#pythonRegistry -o registry-result --option accept-flake-config true
-          # the patched wasmer (rotateS3Credentials fix), substituted from the
-          # cache the CI run populated
-          nix build .#wasmer-bin -o wasmer-result --option accept-flake-config true
+      - name: Build index
+        run: nix build .#pythonRegistry -o registry-result --option accept-flake-config true
 
+      # the patched wasmer, rclone, and python3 come from .#scripts.publish;
       # skipped until the WASMER_TOKEN secret is configured
       - name: Publish wheels to the index volume
         if: env.WASMER_TOKEN != ''
         run: |
-          sudo apt-get install -y -qq rclone
-          w=./wasmer-result/bin/wasmer
-          # the rclone remote name `wasmer app volume credentials` emits
-          remote="edge-${WASMER_APP#*/}"
-          mkdir -p ~/.config/rclone
-          # the credentials read path works once provisioned; the first run has
-          # none, so provision with the patched rotate-secrets (per AppVolume)
-          # and read again. rotate prints the creds on stdout, so discard it and
-          # re-read into a file to keep them out of the log.
-          if ! "$w" app volume credentials "$WASMER_APP" --registry wasmer.io --format rclone >block.conf 2>/dev/null; then
-            "$w" app volume rotate-secrets "$WASMER_APP" --volume "$INDEX_VOLUME" --registry wasmer.io >/dev/null
-            "$w" app volume credentials "$WASMER_APP" --registry wasmer.io --format rclone >block.conf
-          fi
-          cat block.conf >>~/.config/rclone/rclone.conf
-          python3 pkgs/python-registry/publish.py \
+          nix run .#scripts.publish -- \
             --registry "$(readlink -f registry-result)" \
-            --remote "$remote:$INDEX_VOLUME" \
             --rev "${{ github.event.workflow_run.head_sha }}"
 
       # the Pages site must exist with build_type=workflow; creating it needs

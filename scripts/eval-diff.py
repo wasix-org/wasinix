@@ -42,7 +42,9 @@ def log(msg):
 def default_flake():
     system = subprocess.run(
         ["nix", "eval", "--raw", "--impure", "--expr", "builtins.currentSystem"],
-        check=True, text=True, capture_output=True,
+        check=True,
+        text=True,
+        capture_output=True,
     ).stdout.strip()
     return f".#legacyPackages.{system}.ci"
 
@@ -53,13 +55,19 @@ def eval_jobs(flake, jobs_path):
     # (broken flake): that becomes report content, not a step crash; the
     # build step fails the job on the same error.
     cmd = [
-        "nix", "run", "nixpkgs#nix-eval-jobs", "--",
-        "--flake", flake,
+        "nix",
+        "run",
+        "nixpkgs#nix-eval-jobs",
+        "--",
+        "--flake",
+        flake,
         "--check-cache-status",
         # meta rides along for ci-report.py: meta.position anchors failure
         # annotations at the package definition
         "--meta",
-        "--option", "accept-flake-config", "true",
+        "--option",
+        "accept-flake-config",
+        "true",
     ]
     log(f"$ {' '.join(cmd)}")
     with open(jobs_path, "w") as f:
@@ -130,9 +138,7 @@ def section(title, attrs):
     more = len(attrs) - len(shown)
     if more:
         lines += f"\n- ... and {more} more"
-    return (
-        f"\n<details><summary>{title} ({len(attrs)})</summary>\n\n{lines}\n\n</details>\n"
-    )
+    return f"\n<details><summary>{title} ({len(attrs)})</summary>\n\n{lines}\n\n</details>\n"
 
 
 def diff_of(base, head):
@@ -166,9 +172,7 @@ def render(base, head):
         f" · {len(new_errors)} new eval failures\n"
     )
 
-    mass = sorted(
-        a for a in rebuilt + added if a.startswith(MASS_REBUILD_PREFIXES)
-    )
+    mass = sorted(a for a in rebuilt + added if a.startswith(MASS_REBUILD_PREFIXES))
     if mass:
         md += (
             f"\n> [!WARNING]\n> Toolchain drvs moved ({', '.join(f'`{a}`' for a in mass[:5])}"
@@ -200,9 +204,15 @@ def main():
     ap.add_argument("--summary-out", help="counts as json, for ci-report.py")
     ap.add_argument("--base-rev", nargs="*", default=[])
     ap.add_argument("--base-map", help="local base map file, for testing")
-    ap.add_argument("--base-map-out", help="save the fetched base map, for content-diff.py")
-    ap.add_argument("--note-versions", help="updateNotes.versions json, published in the map")
-    ap.add_argument("--priors-out", help="write the base map's note versions, for updateNotes.fired")
+    ap.add_argument(
+        "--base-map-out", help="save the fetched base map, for content-diff.py"
+    )
+    ap.add_argument(
+        "--note-versions", help="updateNotes.versions json, published in the map"
+    )
+    ap.add_argument(
+        "--priors-out", help="write the base map's note versions, for updateNotes.fired"
+    )
     args = ap.parse_args()
 
     jobs_path = args.jobs
@@ -227,9 +237,12 @@ def main():
         log("eval failed; wrote error report")
         return
 
-    rev = args.rev or subprocess.run(
-        ["git", "rev-parse", "HEAD"], check=True, text=True, capture_output=True
-    ).stdout.strip()
+    rev = (
+        args.rev
+        or subprocess.run(
+            ["git", "rev-parse", "HEAD"], check=True, text=True, capture_output=True
+        ).stdout.strip()
+    )
     head = load_map_from_jobs(jobs_path, rev)
     if args.note_versions:
         try:
@@ -239,7 +252,9 @@ def main():
             log(f"WARN: no note versions ({e})")
     with open(args.map_out, "w") as f:
         json.dump(head, f)
-    log(f"{len(head['jobs'])} jobs, {len(head['errors'])} eval errors -> {args.map_out}")
+    log(
+        f"{len(head['jobs'])} jobs, {len(head['errors'])} eval errors -> {args.map_out}"
+    )
 
     base = fetch_base_map(args.base_rev, args.base_map)
     if base is not None and args.base_map_out:

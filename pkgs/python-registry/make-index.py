@@ -36,7 +36,9 @@ def normalize(name: str) -> str:
 
 def wheel_metadata(whl: Path) -> bytes:
     with zipfile.ZipFile(whl) as zf:
-        names = [n for n in zf.namelist() if re.fullmatch(r"[^/]+\.dist-info/METADATA", n)]
+        names = [
+            n for n in zf.namelist() if re.fullmatch(r"[^/]+\.dist-info/METADATA", n)
+        ]
         if len(names) != 1:
             sys.exit(f"{whl}: expected exactly one *.dist-info/METADATA, found {names}")
         return zf.read(names[0])
@@ -54,7 +56,9 @@ def requires_python(metadata: bytes) -> str | None:
 
 def record_hash(data: bytes) -> str:
     # RECORD hash spelling (PEP 376/427): urlsafe base64, no padding
-    return "sha256=" + base64.urlsafe_b64encode(hashlib.sha256(data).digest()).decode().rstrip("=")
+    return "sha256=" + base64.urlsafe_b64encode(
+        hashlib.sha256(data).digest()
+    ).decode().rstrip("=")
 
 
 def bump_metadata_version(metadata: bytes, version: str, new_version: str) -> bytes:
@@ -65,7 +69,9 @@ def bump_metadata_version(metadata: bytes, version: str, new_version: str) -> by
         key, _, value = line.partition(b":")
         if key.strip().lower() == b"version":
             if value.strip().decode() != version:
-                sys.exit(f"METADATA Version {value.strip().decode()!r} != filename version {version!r}")
+                sys.exit(
+                    f"METADATA Version {value.strip().decode()!r} != filename version {version!r}"
+                )
             lines[i] = f"Version: {new_version}".encode()
             return b"\n".join(lines)
     sys.exit("METADATA has no Version header")
@@ -79,19 +85,35 @@ def rewrite_wheel(src: Path, dest_dir: Path, rel: int) -> Path:
     new_version = f"{version}+wasix.{rel}"
 
     with zipfile.ZipFile(src) as zin:
-        dist_infos = {n.split("/", 1)[0] for n in zin.namelist() if re.match(r"[^/]+\.dist-info/", n)}
+        dist_infos = {
+            n.split("/", 1)[0]
+            for n in zin.namelist()
+            if re.match(r"[^/]+\.dist-info/", n)
+        }
         if len(dist_infos) != 1:
-            sys.exit(f"{src.name}: expected exactly one *.dist-info dir, found {sorted(dist_infos)}")
+            sys.exit(
+                f"{src.name}: expected exactly one *.dist-info dir, found {sorted(dist_infos)}"
+            )
         old_di = dist_infos.pop()
         if not old_di.endswith(f"-{version}.dist-info"):
-            sys.exit(f"{src.name}: dist-info dir {old_di!r} does not match filename version {version!r}")
-        new_di = old_di.removesuffix(f"-{version}.dist-info") + f"-{new_version}.dist-info"
-        rename = lambda n: new_di + n.removeprefix(old_di) if n.startswith(f"{old_di}/") else n
+            sys.exit(
+                f"{src.name}: dist-info dir {old_di!r} does not match filename version {version!r}"
+            )
+        new_di = (
+            old_di.removesuffix(f"-{version}.dist-info") + f"-{new_version}.dist-info"
+        )
+        rename = lambda n: (
+            new_di + n.removeprefix(old_di) if n.startswith(f"{old_di}/") else n
+        )
 
-        entries = [(rename(i.filename), i, zin.read(i.filename)) for i in zin.infolist()]
+        entries = [
+            (rename(i.filename), i, zin.read(i.filename)) for i in zin.infolist()
+        ]
 
     files = {n: data for n, _, data in entries}
-    files[f"{new_di}/METADATA"] = bump_metadata_version(files[f"{new_di}/METADATA"], version, new_version)
+    files[f"{new_di}/METADATA"] = bump_metadata_version(
+        files[f"{new_di}/METADATA"], version, new_version
+    )
 
     # RECORD: renamed paths, plus the refreshed METADATA hash/size
     rows = list(csv.reader(io.StringIO(files[f"{new_di}/RECORD"].decode())))
@@ -192,14 +214,20 @@ def main() -> None:
             (pdir / f"{fname}.metadata").write_bytes(metadata)
             md_digest = hashlib.sha256(metadata).hexdigest()
             digest = hashlib.sha256(src.read_bytes()).hexdigest()
-            anchors.append(wheel_anchor(fname, digest, md_digest, requires_python(metadata)))
+            anchors.append(
+                wheel_anchor(fname, digest, md_digest, requires_python(metadata))
+            )
         (pdir / "index.html").write_text(page(f"Links for {project}", anchors))
 
     root = [f'    <a href="{p}/">{p}</a><br/>' for p in sorted(projects)]
     (out / "simple" / "index.html").write_text(page("Simple index", root))
     (out / "index.html").write_text(landing())
-    (out / "provenance.json").write_text(json.dumps(provenance, indent=2, sort_keys=True) + "\n")
-    print(f"indexed {sum(map(len, projects.values()))} wheels across {len(projects)} projects")
+    (out / "provenance.json").write_text(
+        json.dumps(provenance, indent=2, sort_keys=True) + "\n"
+    )
+    print(
+        f"indexed {sum(map(len, projects.values()))} wheels across {len(projects)} projects"
+    )
 
 
 if __name__ == "__main__":

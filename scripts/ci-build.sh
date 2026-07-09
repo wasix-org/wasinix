@@ -41,7 +41,7 @@ if [ -n "${NIX_SIGNING_KEY:-}" ]; then
     PUSH_DRVS=$(jq -r '.neededBuilds[]?' "$JOBS_FILE" | sort -u)
   else
     PUSH_DRVS=$(
-      nix run nixpkgs#nix-eval-jobs -- \
+      nix-eval-jobs \
         --flake "$CI_ATTR" --check-cache-status --option accept-flake-config true 2>/dev/null |
         jq -r '.neededBuilds[]?' | sort -u
     )
@@ -51,7 +51,7 @@ fi
 echo "Building all packages under $CI_ATTR independently..."
 
 # --skip-cached: on a warm cache only changed packages rebuild.
-nix run nixpkgs#nix-fast-build -- \
+nix-fast-build \
   --flake "$CI_ATTR" \
   --skip-cached \
   --retries 3 \

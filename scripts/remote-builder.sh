@@ -14,12 +14,16 @@
 
 set -euo pipefail
 
-die() { echo "remote-builder: $*" >&2; exit 1; }
+die() {
+  echo "remote-builder: $*" >&2
+  exit 1
+}
 
 find_config() {
   if [ -n "${WASINIX_BUILDER:-}" ]; then
     [ -f "$WASINIX_BUILDER" ] || die "WASINIX_BUILDER=$WASINIX_BUILDER is not a file"
-    printf '%s\n' "$WASINIX_BUILDER"; return
+    printf '%s\n' "$WASINIX_BUILDER"
+    return
   fi
   local top
   top=$(git rev-parse --show-toplevel 2>/dev/null) || die "not in a git checkout and WASINIX_BUILDER unset"
@@ -29,12 +33,13 @@ find_config() {
 }
 
 load() {
-  local cfg; cfg=$(find_config)
+  local cfg
+  cfg=$(find_config)
   # shellcheck disable=SC1090
   . "$cfg"
   [ -n "${HOST:-}" ] || die "HOST unset in $cfg"
-  [ -n "${KEY:-}" ]  || die "KEY unset in $cfg"
-  KEY="${KEY/#\~/$HOME}"                       # expand a leading ~
+  [ -n "${KEY:-}" ] || die "KEY unset in $cfg"
+  KEY="${KEY/#\~/$HOME}" # expand a leading ~
   DAEMON_KEY="${DAEMON_KEY:-$KEY}"
   SYSTEM="${SYSTEM:-x86_64-linux}"
   MAXJOBS="${MAXJOBS:-1}"
@@ -44,17 +49,30 @@ load() {
 
 mode="${1:-}"
 case "$mode" in
-host)     load; printf '%s\n' "$HOST" ;;
-key)      load; printf '%s\n' "$KEY" ;;
-store)    load; printf 'ssh-ng://%s?ssh-key=%s\n' "$HOST" "$KEY" ;;
-builders) load; printf 'ssh-ng://%s %s %s %s 2 %s - %s\n' \
-            "$HOST" "$SYSTEM" "$DAEMON_KEY" "$MAXJOBS" "$FEATURES" "$HOSTKEY" ;;
+host)
+  load
+  printf '%s\n' "$HOST"
+  ;;
+key)
+  load
+  printf '%s\n' "$KEY"
+  ;;
+store)
+  load
+  printf 'ssh-ng://%s?ssh-key=%s\n' "$HOST" "$KEY"
+  ;;
+builders)
+  load
+  printf 'ssh-ng://%s %s %s %s 2 %s - %s\n' \
+    "$HOST" "$SYSTEM" "$DAEMON_KEY" "$MAXJOBS" "$FEATURES" "$HOSTKEY"
+  ;;
 check)
   load
   ssh -i "$KEY" -o BatchMode=yes -o ConnectTimeout=8 \
-      -o StrictHostKeyChecking=accept-new "$HOST" true \
-    || die "cannot reach $HOST with $KEY"
-  echo "ok: $HOST reachable" ;;
+    -o StrictHostKeyChecking=accept-new "$HOST" true ||
+    die "cannot reach $HOST with $KEY"
+  echo "ok: $HOST reachable"
+  ;;
 *)
   cat >&2 <<USAGE
 usage: $0 {store|builders|host|key|check}
@@ -64,5 +82,6 @@ usage: $0 {store|builders|host|key|check}
   key       your ssh key path
   check     verify the builder is configured and reachable
 USAGE
-  exit 64 ;;
+  exit 64
+  ;;
 esac

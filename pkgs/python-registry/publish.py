@@ -31,7 +31,8 @@ import tempfile
 from pathlib import Path
 
 _spec = importlib.util.spec_from_file_location(
-    "make_index", Path(__file__).with_name("make-index.py"))
+    "make_index", Path(__file__).with_name("make-index.py")
+)
 make_index = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(make_index)
 
@@ -62,9 +63,13 @@ def main():
     if fetch.returncode == 3:
         print("no published manifests yet (first publish)", file=sys.stderr)
     elif fetch.returncode != 0:
-        sys.exit(f"fetching published manifests failed (rclone exit {fetch.returncode})")
-    published = {p.name.removesuffix(".json"): json.loads(p.read_text())
-                 for p in published_dir.glob("*.json")}
+        sys.exit(
+            f"fetching published manifests failed (rclone exit {fetch.returncode})"
+        )
+    published = {
+        p.name.removesuffix(".json"): json.loads(p.read_text())
+        for p in published_dir.glob("*.json")
+    }
 
     staging = tmp / "staging"
     conflicts, new = [], []
@@ -93,13 +98,16 @@ def main():
         (pdir / f"{whl.name}.metadata").write_bytes(metadata)
         (staging / "manifests").mkdir(parents=True, exist_ok=True)
         (staging / "manifests" / f"{whl.name}.json").write_text(
-            json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+        )
         manifests[whl.name] = manifest
         new.append(whl.name)
 
     if conflicts:
-        sys.exit("published wheels are immutable, refusing to overwrite:\n  "
-                 + "\n  ".join(conflicts))
+        sys.exit(
+            "published wheels are immutable, refusing to overwrite:\n  "
+            + "\n  ".join(conflicts)
+        )
 
     # regenerate the HTML over everything published, old and new
     projects: dict[str, dict[str, dict]] = {}
@@ -110,18 +118,23 @@ def main():
         pdir.mkdir(parents=True, exist_ok=True)
         anchors = [
             make_index.wheel_anchor(
-                f, m["sha256"], m["metadata_sha256"], m["requires_python"])
+                f, m["sha256"], m["metadata_sha256"], m["requires_python"]
+            )
             for f, m in sorted(wheels.items())
         ]
         (pdir / "index.html").write_text(
-            make_index.page(f"Links for {project}", anchors))
+            make_index.page(f"Links for {project}", anchors)
+        )
     root = [f'    <a href="{p}/">{p}</a><br/>' for p in sorted(projects)]
     (staging / "simple" / "index.html").write_text(
-        make_index.page("Simple index", root))
+        make_index.page("Simple index", root)
+    )
     (staging / "index.html").write_text(make_index.landing())
 
-    print(f"publishing {len(new)} new wheels "
-          f"({len(manifests)} total across {len(projects)} projects)")
+    print(
+        f"publishing {len(new)} new wheels "
+        f"({len(manifests)} total across {len(projects)} projects)"
+    )
     for n in new:
         print(f"  + {n}")
     # staging holds only new wheels plus regenerated HTML/manifests;

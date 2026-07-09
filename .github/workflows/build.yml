@@ -54,41 +54,9 @@ jobs:
       # build or the report (the build step fails the job on real breakage)
       - name: Rebuild diff
         continue-on-error: true
-        shell: bash
-        run: |
-          candidates=()
-          base_ref=""
-          case "${{ github.event_name }}" in
-            pull_request) base_ref="${{ github.event.pull_request.base.ref }}" ;;
-            merge_group) base_ref="${{ github.event.merge_group.base_ref }}" ;;
-          esac
-          if [ -n "$base_ref" ]; then
-            # walk back: the newest base commits may not have published yet
-            git fetch --quiet --depth=30 origin "$base_ref"
-            mapfile -t candidates < <(git rev-list -n 30 FETCH_HEAD)
-          fi
-          # update notes: current versions ride in the map; the base map's
-          # copy comes back as the `prior` side of each note's predicate
-          sys=$(nix eval --raw --impure --expr 'builtins.currentSystem')
-          nix eval --json ".#legacyPackages.$sys.updateNotes.versions" \
-            --option accept-flake-config true >note-versions.json ||
-            echo '{}' >note-versions.json
-          ./scripts/eval-diff.py \
-            --rev "${{ github.sha }}" \
-            --jobs-out eval-jobs.jsonl \
-            --map-out eval-map.json \
-            --md-out rebuild-diff.md \
-            --summary-out diff-summary.json \
-            --base-map-out base-map.json \
-            --note-versions note-versions.json \
-            --priors-out note-priors.json \
-            --base-rev "${candidates[@]}"
-          cat rebuild-diff.md >>"$GITHUB_STEP_SUMMARY"
-          NOTE_PRIORS=$(cat note-priors.json) nix eval --json --impure \
-            ".#legacyPackages.$sys.updateNotes.fired" \
-            --apply 'f: f (builtins.fromJSON (builtins.getEnv "NOTE_PRIORS"))' \
-            --option accept-flake-config true >update-notes.json ||
-            echo '{}' >update-notes.json
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.merge_group.base_ref }}
+        run: nix run .#scripts.rebuild-diff
 
       # consumed by test-report.yml (workflow_run, so fork PRs get the check
       # run and sticky comment too); uploaded before the build so a timeout
@@ -119,27 +87,18 @@ jobs:
       # publish the eval map so future PRs can diff against this commit
       - name: Publish eval map
         if: github.event_name == 'push'
-        shell: bash
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
-        run: |
-          # absent when the eval failed; never publish a broken base
-          if [ -f eval-map.json ]; then
-            aws s3 cp --no-progress eval-map.json \
-              "s3://wasinix-cache/eval-maps/${{ github.sha }}.json" \
-              --endpoint-url https://1541b1e8a3fc6ad155ce67ef38899700.r2.cloudflarestorage.com
-          else
-            echo "no eval map (eval failed); skipping publish"
-          fi
+        run: nix run .#scripts.publish-eval-map
 
       # per-package build + JUnit report; uploads to cache as it builds when
       # credentials are present (forks build keyless), so timeouts don't lose work
       - name: Build packages
         id: build
         shell: bash
-        run: ./scripts/ci-build.sh
+        run: nix run .#scripts.ci-build
         # empty on fork PRs → build runs without uploading
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
@@ -154,7 +113,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          ./scripts/content-diff.py \
+          nix run .#scripts.content-diff -- \
             --base-map base-map.json \
             --head-map eval-map.json \
             --junit nix-fast-build-result.xml \
@@ -168,7 +127,7 @@ jobs:
         if: ${{ always() && steps.build.conclusion != 'skipped' }}
         shell: bash
         run: |
-          ./scripts/ci-report.py \
+          nix run .#scripts.ci-report -- \
             --junit nix-fast-build-result.xml \
             --jobs eval-jobs.jsonl \
             --diff-summary diff-summary.json \

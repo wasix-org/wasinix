@@ -53,7 +53,22 @@
 
     treefmtEval = treefmt-nix.lib.evalModule wasix.pkgs {
       projectRootFile = "flake.nix";
-      programs.alejandra.enable = true;
+      programs = {
+        alejandra.enable = true; # nix
+        ruff-format.enable = true; # python
+        shfmt = {
+          enable = true;
+          indent_size = 2;
+        };
+        taplo.enable = true; # toml
+        clang-format.enable = true; # c/c++ (.clang-format pins the style)
+        # js + yaml + markdown
+        # json stays out, as the only json in this repo is machine-generated
+        prettier = {
+          enable = true;
+          includes = ["*.js" "*.yml" "*.yaml" "*.md"];
+        };
+      };
     };
 
     # Collect every package's passthru.tests into the flake checks. Wheels get a
@@ -157,6 +172,32 @@
         allWasm = wasix.allWasm;
 
         inherit ci;
+
+        # CI shell steps as runnable apps with nix-pinned deps: `nix run
+        # .#scripts.<name>`. Each runs the checkout's script (like .#update
+        # below), so relative paths and siblings resolve; only the deps come
+        # from nix. The local-dev remote-builder scripts are $0-relative and
+        # stay out.
+        scripts = let
+          p = wasix.pkgs;
+          run = name: runtimeInputs: cmd:
+            p.writeShellApplication {
+              inherit name;
+              runtimeInputs = runtimeInputs ++ [p.git];
+              text = ''
+                cd "$(git rev-parse --show-toplevel)"
+                exec ${cmd} "$@"
+              '';
+            };
+        in {
+          ci-build = run "ci-build" [p.jq p.nix-eval-jobs p.nix-fast-build] "bash scripts/ci-build.sh";
+          rebuild-diff = run "rebuild-diff" [p.python3] "bash scripts/rebuild-diff.sh";
+          content-diff = run "content-diff" [p.python3] "python3 scripts/content-diff.py";
+          ci-report = run "ci-report" [p.python3] "python3 scripts/ci-report.py";
+          publish-eval-map = run "publish-eval-map" [p.awscli2] "bash scripts/publish-eval-map.sh";
+          bump-rel = run "bump-rel" [p.python3] "python3 pkgs/python-registry/bump-rel.py";
+          publish = run "publish" [wasmerRuntime p.rclone p.python3] "bash scripts/publish.sh";
+        };
 
         # passthru.wasix.updateNotes (see pkgs/lib/default.nix): things to
         # check when a package moves. `versions` is published in the eval

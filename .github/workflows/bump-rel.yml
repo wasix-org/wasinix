@@ -40,7 +40,7 @@ jobs:
         run: |
           read -ra wheels <<<"${WHEELS//,/ }"
           summary="$RUNNER_TEMP/bump-summary.md"
-          python3 pkgs/python-registry/bump-rel.py "${wheels[@]}" >"$summary"
+          nix run .#scripts.bump-rel -- "${wheels[@]}" >"$summary"
           {
             echo 'summary<<EOF'
             cat "$summary"

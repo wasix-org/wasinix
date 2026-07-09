@@ -33,7 +33,9 @@ class PublishedPackageVersion:
     webc_sha256: str | None
 
 
-def run(cmd: list[str], *, cwd: Path | None = None, capture_output: bool = False) -> subprocess.CompletedProcess[str]:
+def run(
+    cmd: list[str], *, cwd: Path | None = None, capture_output: bool = False
+) -> subprocess.CompletedProcess[str]:
     print(f"+ {' '.join(cmd)}")
     return subprocess.run(
         cmd,
@@ -89,10 +91,14 @@ def read_packages(pkg_root: Path) -> dict[str, Package]:
         full_name = package.get("name")
         version = package.get("version")
         if not isinstance(full_name, str) or not isinstance(version, str):
-            raise SystemExit(f"Missing/invalid package.name or package.version in {toml_path}")
+            raise SystemExit(
+                f"Missing/invalid package.name or package.version in {toml_path}"
+            )
 
         if full_name in packages:
-            raise SystemExit(f"Duplicate package name {full_name} in {toml_path} and {packages[full_name].path / 'wasmer.toml'}")
+            raise SystemExit(
+                f"Duplicate package name {full_name} in {toml_path} and {packages[full_name].path / 'wasmer.toml'}"
+            )
 
         packages[full_name] = Package(
             full_name=full_name,
@@ -131,13 +137,20 @@ def sha256_file(path: Path) -> str:
 def build_local_webc_sha256(pkg: Package) -> str:
     with tempfile.TemporaryDirectory(prefix="wasmer-publish-all-") as tmpdir:
         out = Path(tmpdir) / "package.webc"
-        run(["wasmer", "package", "build", "--quiet", "--out", str(out), "."], cwd=pkg.path)
+        run(
+            ["wasmer", "package", "build", "--quiet", "--out", str(out), "."],
+            cwd=pkg.path,
+        )
         if not out.is_file():
-            raise SystemExit(f"Expected local .webc output missing for {pkg.full_name}@{pkg.version}: {out}")
+            raise SystemExit(
+                f"Expected local .webc output missing for {pkg.full_name}@{pkg.version}: {out}"
+            )
         return sha256_file(out)
 
 
-def get_published_package_version(graphql_url: str, full_name: str, version: str) -> PublishedPackageVersion:
+def get_published_package_version(
+    graphql_url: str, full_name: str, version: str
+) -> PublishedPackageVersion:
     payload = {
         "query": (
             "query GetPackageVersion($name: String!, $version: String!) { "
@@ -161,27 +174,39 @@ def get_published_package_version(graphql_url: str, full_name: str, version: str
         with request.urlopen(req) as resp:
             body = resp.read().decode("utf-8")
     except error.HTTPError as exc:
-        raise SystemExit(f"GraphQL request failed ({exc.code}) for {full_name}@{version}: {exc.reason}") from exc
+        raise SystemExit(
+            f"GraphQL request failed ({exc.code}) for {full_name}@{version}: {exc.reason}"
+        ) from exc
     except error.URLError as exc:
-        raise SystemExit(f"GraphQL request failed for {full_name}@{version}: {exc.reason}") from exc
+        raise SystemExit(
+            f"GraphQL request failed for {full_name}@{version}: {exc.reason}"
+        ) from exc
 
     try:
         doc = json.loads(body)
     except json.JSONDecodeError as exc:
-        raise SystemExit(f"Invalid GraphQL JSON response for {full_name}@{version}: {exc}") from exc
+        raise SystemExit(
+            f"Invalid GraphQL JSON response for {full_name}@{version}: {exc}"
+        ) from exc
 
     if "errors" in doc and doc["errors"]:
-        raise SystemExit(f"GraphQL returned errors for {full_name}@{version}: {doc['errors']}")
+        raise SystemExit(
+            f"GraphQL returned errors for {full_name}@{version}: {doc['errors']}"
+        )
 
     data = doc.get("data")
     if not isinstance(data, dict):
-        raise SystemExit(f"GraphQL response missing data for {full_name}@{version}: {doc}")
+        raise SystemExit(
+            f"GraphQL response missing data for {full_name}@{version}: {doc}"
+        )
 
     package_version = data.get("getPackageVersion")
     if package_version is None:
         return PublishedPackageVersion(exists=False, webc_sha256=None)
     if not isinstance(package_version, dict):
-        raise SystemExit(f"GraphQL getPackageVersion has unexpected shape for {full_name}@{version}: {package_version}")
+        raise SystemExit(
+            f"GraphQL getPackageVersion has unexpected shape for {full_name}@{version}: {package_version}"
+        )
 
     webc_sha256: str | None = None
 
@@ -218,7 +243,9 @@ def get_published_package_version(graphql_url: str, full_name: str, version: str
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build and publish all Wasmer packages from result/pkg.")
+    parser = argparse.ArgumentParser(
+        description="Build and publish all Wasmer packages from result/pkg."
+    )
     parser.add_argument(
         "--registry",
         required=True,
@@ -239,7 +266,10 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parents[1]
     pkg_root = repo_root / "result" / "pkg"
 
-    run(["nix", "build", ".#legacyPackages.x86_64-linux.allWasmerPackages"], cwd=repo_root)
+    run(
+        ["nix", "build", ".#legacyPackages.x86_64-linux.allWasmerPackages"],
+        cwd=repo_root,
+    )
 
     packages = read_packages(pkg_root)
     ordered = [packages[name] for name in sorted(packages)]
@@ -258,7 +288,9 @@ def main() -> int:
     published = 0
     skipped = 0
     for pkg in ordered:
-        published_info = get_published_package_version(graphql_url, pkg.full_name, pkg.version)
+        published_info = get_published_package_version(
+            graphql_url, pkg.full_name, pkg.version
+        )
         if published_info.exists:
             if args.skip_sha_validation:
                 print(
@@ -286,12 +318,17 @@ def main() -> int:
             continue
 
         if args.dry_run:
-            print(f"PUBLISH {pkg.full_name}@{pkg.version} path={pkg.path} (would publish)")
+            print(
+                f"PUBLISH {pkg.full_name}@{pkg.version} path={pkg.path} (would publish)"
+            )
             published += 1
             continue
 
         print(f"PUBLISH {pkg.full_name}@{pkg.version} path={pkg.path}")
-        run(["wasmer", "publish", "--non-interactive", "--registry", publish_registry], cwd=pkg.path)
+        run(
+            ["wasmer", "publish", "--non-interactive", "--registry", publish_registry],
+            cwd=pkg.path,
+        )
         published += 1
 
     print(f"Done. published={published} skipped={skipped} total={len(ordered)}")

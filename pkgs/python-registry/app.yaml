@@ -3,6 +3,6 @@ name: wasinix-python-index
 owner: wasmer
 package: wasmer/static-web-server
 volumes:
-- name: python-index
-  mount: /public
+  - name: python-index
+    mount: /public
 app_id: da_K53IxtPU6Nra

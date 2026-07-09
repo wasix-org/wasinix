@@ -29,13 +29,15 @@ def parse_junit(path):
         return None
     for tc in root.iter("testcase"):
         failure = tc.find("failure")
-        cases.append({
-            # nix-eval-jobs quotes the dotted flat attr names
-            "attr": tc.get("name", "").strip('"'),
-            "class": tc.get("classname", ""),
-            "message": failure.get("message", "") if failure is not None else None,
-            "log": (failure.text or "") if failure is not None else None,
-        })
+        cases.append(
+            {
+                # nix-eval-jobs quotes the dotted flat attr names
+                "attr": tc.get("name", "").strip('"'),
+                "class": tc.get("classname", ""),
+                "message": failure.get("message", "") if failure is not None else None,
+                "log": (failure.text or "") if failure is not None else None,
+            }
+        )
     return cases
 
 
@@ -96,7 +98,8 @@ def local_log(drv):
         return None
     p = subprocess.run(
         ["nix", "log", "--option", "substituters", "", drv],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     # log exists but is unreadable: still a direct failure, just no excerpt
     return p.stdout if p.returncode == 0 else ""
@@ -125,7 +128,8 @@ def classify(cases, index):
 def outputs_valid(drv):
     p = subprocess.run(
         ["nix-store", "--query", "--outputs", drv],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     return p.returncode == 0 and any(os.path.exists(o) for o in p.stdout.split())
 
@@ -144,7 +148,8 @@ def dependency_root_causes(failed, index):
             continue
         p = subprocess.run(
             ["nix-store", "--query", "--requisites", index[c["attr"]]["drv"]],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         if p.returncode != 0:
             print(f"WARN: requisites of {c['attr']}: {p.stderr}", file=sys.stderr)
@@ -171,9 +176,7 @@ def dedupe_notes(fired):
     merged = {}
     for attr, notes in (fired or {}).items():
         for n in notes:
-            merged.setdefault(
-                n["message"], {"name": attr.rsplit(".", 1)[-1], **n}
-            )
+            merged.setdefault(n["message"], {"name": attr.rsplit(".", 1)[-1], **n})
     return sorted(merged.values(), key=lambda n: n["name"])
 
 
@@ -192,8 +195,13 @@ def title_of(counts, failed, roots, diff, content):
             if direct:
                 parts.append(f"{direct} failed")
             if transitive:
-                via = roots[0]["name"] if len(roots) == 1 else \
-                    f"{len(roots)} deps" if roots else "deps"
+                via = (
+                    roots[0]["name"]
+                    if len(roots) == 1
+                    else f"{len(roots)} deps"
+                    if roots
+                    else "deps"
+                )
                 parts.append(f"{len(transitive)} failed via {via}")
         if other_failed:
             parts.append(f"{other_failed} eval/upload failures")
@@ -273,7 +281,9 @@ def render_md(title, counts, failed, roots):
     if len(roots) > MAX_FAILURES_SHOWN:
         md += f"\n... and {len(roots) - MAX_FAILURES_SHOWN} more failed dependencies.\n"
     if transitive:
-        names = "\n".join(f"- `{c['attr']}`" for c in transitive[:MAX_FAILURES_SHOWN * 10])
+        names = "\n".join(
+            f"- `{c['attr']}`" for c in transitive[: MAX_FAILURES_SHOWN * 10]
+        )
         if len(transitive) > MAX_FAILURES_SHOWN * 10:
             names += f"\n- ... and {len(transitive) - MAX_FAILURES_SHOWN * 10} more"
         md += (
@@ -330,15 +340,19 @@ def main():
         pos = repo_relative_position((index.get(c["attr"]) or {}).get("position"))
         if pos is None:
             continue
-        annotations.append({
-            "path": pos["path"],
-            "line": pos["line"],
-            "title": f"{c['attr']} [{c['class']}]",
-            "message": (c["message"] + "\n\n" + excerpt(c["log"]))[:2000],
-        })
+        annotations.append(
+            {
+                "path": pos["path"],
+                "line": pos["line"],
+                "title": f"{c['attr']} [{c['class']}]",
+                "message": (c["message"] + "\n\n" + excerpt(c["log"]))[:2000],
+            }
+        )
 
     with open(args.json_out, "w") as f:
-        json.dump({"title": title, "failed": len(failed), "annotations": annotations}, f)
+        json.dump(
+            {"title": title, "failed": len(failed), "annotations": annotations}, f
+        )
     with open(args.md_out, "w") as f:
         f.write(render_md(title, counts, failed, roots) + render_notes(notes))
     print(title, file=sys.stderr)

@@ -85,16 +85,27 @@ def normalize_pair(old, new):
     # cache), then compare with self-references rewritten to content hashes.
     # explicit cache: raw nix-store does not read the flake's nixConfig
     r = subprocess.run(
-        ["nix-store", "--realise", old, new,
-         "--option", "extra-substituters", CACHE_URL,
-         "--option", "extra-trusted-public-keys", CACHE_PUB_KEY],
-        capture_output=True, text=True,
+        [
+            "nix-store",
+            "--realise",
+            old,
+            new,
+            "--option",
+            "extra-substituters",
+            CACHE_URL,
+            "--option",
+            "extra-trusted-public-keys",
+            CACHE_PUB_KEY,
+        ],
+        capture_output=True,
+        text=True,
     )
     if r.returncode != 0:
         return None, f"realise failed: {r.stderr.strip().splitlines()[-1][:120]}"
     p = subprocess.run(
         ["nix", "store", "make-content-addressed", "--json", old, new],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if p.returncode != 0:
         return None, f"normalize failed: {p.stderr.strip().splitlines()[-1][:120]}"
@@ -124,8 +135,7 @@ def compare_all(pairs):
         elif old_info["narHash"] == new_info["narHash"]:
             identical.append(p)
         elif not (
-            self_referential(p["old"], old_info)
-            or self_referential(p["new"], new_info)
+            self_referential(p["old"], old_info) or self_referential(p["new"], new_info)
         ):
             changed.append(p)
         elif max(old_info["narSize"], new_info["narSize"]) > NAR_SIZE_CAP:
@@ -168,7 +178,9 @@ def render(pairs, identical, changed, skipped):
         "Identical is definitive. Changed may only be rebuilt store paths"
         " embedded in an otherwise-equal output.\n"
     )
-    md += section("Changed", [f"- {label(p)}" for p in changed], open_=len(changed) <= 20)
+    md += section(
+        "Changed", [f"- {label(p)}" for p in changed], open_=len(changed) <= 20
+    )
     md += section("Bit-identical", [f"- {label(p)}" for p in identical])
     md += section("Not comparable", [f"- {label(p)}: {r}" for p, r in skipped])
     return md
@@ -224,12 +236,19 @@ def main():
     if not pairs:
         return done(
             f"### Content diff\n\nNothing built to compare.\n{not_built_note}",
-            {"pairs": 0, "identical": 0, "changed": 0, "skipped": 0,
-             "notBuilt": not_built},
+            {
+                "pairs": 0,
+                "identical": 0,
+                "changed": 0,
+                "skipped": 0,
+                "notBuilt": not_built,
+            },
         )
 
     identical, changed, skipped = compare_all(pairs)
-    log(f"{len(pairs)} pairs: {len(identical)} identical, {len(changed)} changed, {len(skipped)} skipped")
+    log(
+        f"{len(pairs)} pairs: {len(identical)} identical, {len(changed)} changed, {len(skipped)} skipped"
+    )
     done(
         render(pairs, identical, changed, skipped) + not_built_note,
         {

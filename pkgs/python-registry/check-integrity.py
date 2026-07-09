@@ -26,7 +26,9 @@ def fail(msg: str) -> None:
 
 def main() -> None:
     simple = Path(sys.argv[1]) / "simple"
-    listed = set(re.findall(r'<a href="([^"]+)/">', (simple / "index.html").read_text()))
+    listed = set(
+        re.findall(r'<a href="([^"]+)/">', (simple / "index.html").read_text())
+    )
     on_disk = {d.name for d in simple.iterdir() if d.is_dir()}
     if listed != on_disk:
         fail(f"root index vs project dirs differ: {sorted(listed ^ on_disk)}")
@@ -58,7 +60,9 @@ def main() -> None:
             total += 1
         wheels_on_disk = {f.name for f in pdir.glob("*.whl")}
         if anchored != wheels_on_disk:
-            fail(f"{pdir.name}: anchors vs wheels on disk differ: {sorted(anchored ^ wheels_on_disk)}")
+            fail(
+                f"{pdir.name}: anchors vs wheels on disk differ: {sorted(anchored ^ wheels_on_disk)}"
+            )
 
     if total == 0:
         fail("no wheels indexed at all")

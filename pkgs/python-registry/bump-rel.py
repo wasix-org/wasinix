@@ -24,17 +24,31 @@ def main():
     if not names:
         sys.exit("usage: bump-rel.py <wheel> [<wheel> ...]")
 
-    repo = Path(subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        text=True, capture_output=True, check=True).stdout.strip())
+    repo = Path(
+        subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout.strip()
+    )
     path = repo / "pkgs/python-registry/rels.json"
     rels = json.loads(path.read_text())
 
     # current upstream version of every wheel in the registry
-    versions = json.loads(subprocess.run(
-        ["nix", "eval", "--json",
-         f".#legacyPackages.{SYSTEM}.pythonRegistry.wheelVersions"],
-        text=True, capture_output=True, check=True).stdout)
+    versions = json.loads(
+        subprocess.run(
+            [
+                "nix",
+                "eval",
+                "--json",
+                f".#legacyPackages.{SYSTEM}.pythonRegistry.wheelVersions",
+            ],
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout
+    )
 
     unknown = sorted(set(names) - versions.keys())
     if unknown:

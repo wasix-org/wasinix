@@ -8,13 +8,13 @@ name = "wasix-registry-e2e"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
-  "requests", # pure; drags urllib3/idna/certifi/charset-normalizer off the index
-  "numpy", # meson C extension
-  "pandas", # meson C++; drags python-dateutil/pytz/tzdata/six
-  "pillow", # C extension linking zlib/libjpeg/…
-  "lxml", # C extension linking libxml2 + libxslt
-  "markupsafe", # small setuptools C extension
+  "requests",     # pure; drags urllib3/idna/certifi/charset-normalizer off the index
+  "numpy",        # meson C extension
+  "pandas",       # meson C++; drags python-dateutil/pytz/tzdata/six
+  "pillow",       # C extension linking zlib/libjpeg/…
+  "lxml",         # C extension linking libxml2 + libxslt
+  "markupsafe",   # small setuptools C extension
   "cryptography", # rust/maturin + openssl; drags cffi/pycparser
-  "orjson", # rust/maturin
-  "tzdata", # pure data; feeds stdlib zoneinfo (wasix has no system tzdb)
+  "orjson",       # rust/maturin
+  "tzdata",       # pure data; feeds stdlib zoneinfo (wasix has no system tzdb)
 ]
