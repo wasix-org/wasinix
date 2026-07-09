@@ -1,0 +1,51 @@
+diff --git a/rsync.h b/rsync.h
+index 3e1d945..be0860d 100644
+--- a/rsync.h
++++ b/rsync.h
+@@ -504,4 +504,16 @@ extern int syslog_facility;
+ # endif
+ #elif defined MAJOR_IN_SYSMACROS
+ #include <sys/sysmacros.h>
++#elif defined __wasix__
++#include <errno.h>
++#include <stdint.h>
++#define major(dev) ((unsigned int)(((uint64_t)(dev) >> 8) & 0xfff))
++#define minor(dev) ((unsigned int)(((uint64_t)(dev) & 0xff) | (((uint64_t)(dev) >> 12) & 0xfff00)))
++#define makedev(maj, min) ((dev_t)(((((uint64_t)(maj)) & 0xfff) << 8) | (((uint64_t)(min)) & 0xff) \
++                            | ((((uint64_t)(min)) & 0xfff00) << 12)))
++#endif
++
++#ifdef __wasix__
++#define chroot(path) (errno = ENOSYS, -1)
++#define fchdir(fd) (errno = ENOSYS, -1)
+ #endif
+diff --git a/util1.c b/util1.c
+index d74e87f..75b0025 100644
+--- a/util1.c
++++ b/util1.c
+@@ -631,14 +631,17 @@ pid_t do_fork(void)
+ /** Lock a byte range in a open file */
+ int lock_range(int fd, int offset, int len)
+ {
++#if defined F_WRLCK && defined F_SETLK
+-	struct flock lock;
+-
+-	lock.l_type = F_WRLCK;
+-	lock.l_whence = SEEK_SET;
+-	lock.l_start = offset;
+-	lock.l_len = len;
+-	lock.l_pid = 0;
+-
+-	return fcntl(fd,F_SETLK,&lock) == 0;
++    struct flock lock;
++    lock.l_type = F_WRLCK;
++    lock.l_whence = SEEK_SET;
++    lock.l_start = offset;
++    lock.l_len = len;
++    lock.l_pid = 0;
++    return fcntl(fd,F_SETLK,&lock) == 0;
++#else
++    errno = ENOSYS;
++    return 0;
++#endif
+ }
