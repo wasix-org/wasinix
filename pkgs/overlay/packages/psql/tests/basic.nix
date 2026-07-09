@@ -1,12 +1,11 @@
 {
-  crossPkgs,
   pkgs,
   wasmerPkgs,
   testLib,
   ...
 }: let
   psql = [wasmerPkgs.psql];
-  nativePsql = [pkgs."postgresql_${toString (pkgs.lib.versions.major crossPkgs.psql.version)}"];
+  nativePsql = [pkgs."postgresql_${toString (pkgs.lib.versions.major wasmerPkgs.psql.version)}"];
 in {
   version = testLib.mkWasixRun {
     name = "psql-version";
