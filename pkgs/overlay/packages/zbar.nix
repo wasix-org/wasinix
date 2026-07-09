@@ -14,14 +14,13 @@ helpers.libTweaks {
     # no NLS: keeps gettext (broken at ehpic) out of the closure.
     "--disable-nls"
   ];
-  # Loose objects, not --whole-archive: the cc wrapper reorders linker args,
-  # losing the bracketing (the archive contributed nothing, 633-byte dylib).
-  # --export-all: the objects aren't built with dylib exports in mind, and
-  # ctypes resolves zbar_* through the wasm export table.
+  # libtool won't make wasm dylibs, so link the static archive into one by
+  # hand. --whole-archive pulls every member (nothing references them yet);
+  # --export-all publishes zbar_* to the wasm export table, where ctypes
+  # resolves them (the objects carry no dylib export metadata of their own).
   postBuild = ''
-    mkdir dylib-objs
-    (cd dylib-objs && $AR x ../zbar/.libs/libzbar.a)
-    $CC -shared -Wl,--export-all -o zbar/.libs/libzbar.so dylib-objs/*.o
+    $CC -shared -Wl,--whole-archive zbar/.libs/libzbar.a -Wl,--no-whole-archive \
+      -Wl,--export-all -o zbar/.libs/libzbar.so
   '';
   # without zbarimg there are no man pages; the output must still exist.
   postInstall = ''

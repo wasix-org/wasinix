@@ -28,9 +28,9 @@ in
       PYO3_CROSS_LIB_DIR = rust.pyo3CrossLibDir;
       CFLAGS = "-fwasm-exceptions";
       # The extension links through rustc's own wasm rust-lld, which keeps
-      # -C link-arg order (the wasixcc reordering of WASIX-TODO.md is not in
-      # this path), so the bracketing survives. -Bsymbolic binds the included
-      # definitions locally instead of the main module's exports.
+      # -C link-arg order, so the --whole-archive bracketing survives.
+      # -Bsymbolic binds the included definitions locally instead of the main
+      # module's exports.
       RUSTFLAGS = toString [
         "-C link-arg=-Bsymbolic"
         "-C link-arg=--whole-archive"
