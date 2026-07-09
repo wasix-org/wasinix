@@ -169,6 +169,7 @@ in
       shim = wrapWasmerPackage {
         package = finalAttrs.finalPackage;
         inherit name depTree;
+        version = package.version or null;
       };
     };
     buildCommand = ''
