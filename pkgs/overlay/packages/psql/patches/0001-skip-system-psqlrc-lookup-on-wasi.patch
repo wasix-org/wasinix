@@ -1,6 +1,10 @@
+psql normally derives locale and system psqlrc paths from argv[0]. Wasmer/webc
+passes "psql" rather than a stable guest executable path, so those lookups either
+log a startup warning or fatal before user-provided PSQLRC/HOME lookup can run.
+
 --- a/src/bin/psql/startup.c
 +++ b/src/bin/psql/startup.c
-@@ -133,7 +133,9 @@ main(int argc, char *argv[])
+@@ -133,7 +133,9 @@
  	pg_logging_init(argv[0]);
  	pg_logging_set_pre_callback(log_pre_callback);
  	pg_logging_set_locus_callback(log_locus_callback);
@@ -10,8 +14,14 @@
  
  	if (argc > 1)
  	{
-@@ -784,6 +786,11 @@ process_psqlrc(char *argv0)
+@@ -780,10 +782,17 @@
+ {
+ 	char		home[MAXPGPATH];
+ 	char		rc_file[MAXPGPATH];
++#ifndef __wasi__
+ 	char		my_exec_path[MAXPGPATH];
  	char		etc_path[MAXPGPATH];
++#endif
  	char	   *envrc = getenv("PSQLRC");
  
 +#ifndef __wasi__
@@ -22,7 +32,7 @@
  	if (find_my_exec(argv0, my_exec_path) < 0)
  		pg_fatal("could not find own program executable");
  
-@@ -791,6 +798,7 @@ process_psqlrc(char *argv0)
+@@ -791,6 +800,7 @@
  
  	snprintf(rc_file, MAXPGPATH, "%s/%s", etc_path, SYSPSQLRC);
  	process_psqlrc_file(rc_file);

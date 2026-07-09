@@ -35,13 +35,12 @@ in
       '';
       buildInputs =
         lib.filter
-        (i: !lib.elem (i.pname or i.name or "") ["curl" "gettext" "libkrb5" "openssl"]);
+        (i: !lib.elem (i.pname or i.name or "") ["curl" "gettext" "libkrb5"]);
       nativeBuildInputs =
         lib.filter
         (i: (i.pname or i.name or "") != "make-shell-wrapper-hook");
       configureFlags = old:
-        (lib.filter (f: f != "--with-openssl") old)
-        ++ ["--with-template=linux"];
+        old ++ ["--with-template=linux"];
       env = {
         CPPFLAGS = "-I${lib.getDev final.zlib}/include";
         LDFLAGS = "-L${lib.getLib final.zlib}/lib";
@@ -50,7 +49,7 @@ in
       curlSupport = false;
       gssSupport = false;
       nlsSupport = false;
-      openssl = final.zlib;
+      openssl = final.openssl;
       tzdata = final.buildPackages.tzdata;
     })
   )
