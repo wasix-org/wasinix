@@ -1,10 +1,12 @@
 {
+  crossPkgs,
   pkgs,
   wasmerPkgs,
   testLib,
   ...
 }: let
   psql = [wasmerPkgs.psql];
+  nativePsql = [pkgs."postgresql_${toString (pkgs.lib.versions.major crossPkgs.psql.version)}"];
 in {
   version = testLib.mkWasixRun {
     name = "psql-version";
@@ -14,7 +16,7 @@ in {
 
   query = testLib.mkWasixRun {
     name = "psql-query";
-    nativePkgs = [pkgs.postgresql_18];
+    nativePkgs = nativePsql;
     wasixPkgs = psql;
     wasmerArgs = ["--net"];
     timeout = 900;
@@ -38,10 +40,7 @@ in {
 
   tls = testLib.mkWasixRun {
     name = "psql-tls";
-    nativePkgs = [
-      pkgs.openssl
-      pkgs.postgresql_18
-    ];
+    nativePkgs = [pkgs.openssl] ++ nativePsql;
     wasixPkgs = psql;
     wasmerArgs = ["--net"];
     timeout = 900;

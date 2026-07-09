@@ -1,6 +1,4 @@
-# libpq via nixpkgs' standalone libpq.nix. --with-openssl is filtered out and
-# openssl is filtered from buildInputs; the openssl argument is deliberately
-# the (unused) zlib. tzdata is a build-platform tool.
+# libpq via nixpkgs' standalone libpq.nix. tzdata is a build-platform tool.
 {
   final,
   prev,
@@ -15,7 +13,7 @@ in
     curlSupport = false;
     gssSupport = false;
     nlsSupport = false;
-    openssl = final.zlib;
+    openssl = final.openssl;
     tzdata = final.buildPackages.tzdata;
   })
   .overrideAttrs (old: {
@@ -28,15 +26,13 @@ in
     installPhase = dropShlibClean (old.installPhase or "");
     buildInputs =
       lib.filter
-      (i: !lib.elem (i.pname or i.name or "") ["curl" "gettext" "libkrb5" "openssl"])
+      (i: !lib.elem (i.pname or i.name or "") ["curl" "gettext" "libkrb5"])
       (old.buildInputs or []);
     nativeBuildInputs =
       lib.filter
       (i: (i.pname or i.name or "") != "make-shell-wrapper-hook")
       (old.nativeBuildInputs or []);
-    configureFlags =
-      (lib.filter (f: f != "--with-openssl") (old.configureFlags or []))
-      ++ ["--with-template=linux"];
+    configureFlags = (old.configureFlags or []) ++ ["--with-template=linux"];
     env =
       (old.env or {})
       // {
