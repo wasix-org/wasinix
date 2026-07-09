@@ -10,6 +10,7 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
 ## Runtime / libc
 
 ### `fchdir` doesn't exist 🟡
+
 - wasix-libc has no `fchdir` at all: not declared in the headers, no symbol in
   `libc.a` (verified: undeclared-function error, then undefined symbol with a
   manual declaration). There is also no general fd-to-path mechanism (only
@@ -21,6 +22,7 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
 - Fix: `__wasi_fchdir` in wasmer plus libc wiring. Fixes gnulib CLIs globally.
 
 ### spawned commands and PATH 🟢
+
 - Fixed in current wasmer: `posix_spawnp` and fork + `execvp` both resolve the
   child via the guest PATH, and the child's `argv[0]` arrives correctly
   (verified with minimal C programs).
@@ -32,10 +34,12 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
   find. That is a harness/environment gap, not this issue.
 
 ### `argv[0]` 🟢
+
 - Correct on current wasmer for both directly-run and spawned programs
   (verified). Older runtimes passed `(null)`.
 
 ### `fork()` is hidden under Wasm-EH 🟡
+
 - The sysroot hides `fork`'s declaration when `__wasm_exception_handling__` is
   defined and the symbol is absent from `libc.a` (verified: undeclared under
   exnrefEh). fork also requires an asyncified binary in every profile: the
@@ -48,18 +52,21 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
 - Fix: expose fork from the sysroot under EH, or upstream the shim.
 
 ### `isatty` returns true for redirected stdout 🟡
+
 - `isatty(1)` is 1 even with stdout redirected (verified). Tools colorize into
   files (jq emits ANSI into `>file`).
 - Workaround: tests strip ANSI (`testLib.normalizers.stripAnsi`).
 - Fix: report non-TTY for regular files/pipes.
 
 ### no default `TERM` 🔴
+
 - wasmer starts processes with `TERM` unset (verified); terminal programs
   degrade. Fix: a runtime default.
 
 ## Toolchain
 
 ### asyncify can't process Wasm-EH instructions 🟡
+
 - `wasm-opt --asyncify` aborts ("unexpected expr type", Flatten.cpp) on
   modules containing EH instructions. Under the EH profiles that means C++
   exceptions or anything using setjmp/longjmp (lowered to Wasm-EH SjLj):
@@ -75,6 +82,7 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
 - Fix: binaryen asyncify support for EH; upstream the wasixcc setting.
 
 ### `wasm-opt` corrupts autoconf feature detection 🟡 (not re-verified)
+
 - A failing wasm-opt run on a throwaway conftest makes `configure`
   false-negative a feature (sqlite: "Cannot find libm functions").
 - Workaround: `disableWasmOptInConfigureHook`, opt-in per package (sqlite,
@@ -94,6 +102,7 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
 ## Rust
 
 ### library/Cargo.lock pins libc 0.2.183 from two sources 🟡
+
 - std depends on the libc fork via a direct git dependency while the other
   library crates (dlmalloc, panic_unwind, std_detect, test, unwind) stay on
   registry libc. Since the fork's port matches the version the workspace
@@ -108,6 +117,7 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
   rust-toolchain update note) with the first tag that includes it.
 
 ### Rust binaries exited 70 in std init: toolchain built on the stable channel 🟢
+
 - rustc only emits `--max-memory=4GiB` for a shared (threaded) memory off the
   stable channel; built on stable, the memory came out non-growable and the
   first allocation in std startup trapped, `_Exit(70)` before main. The
@@ -115,6 +125,7 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
   `toolchain/rust/toolchain.nix`); nothing needed per package.
 
 ### getrandom 0.3 doesn't recognise the target 🟡
+
 - "Unknown version of WASI" on `wasm32-wasmer-wasi`. CLI crates built through
   cargo-wasix need no workaround. Python wheels pulling getrandom 0.3
   (bcrypt, pydantic-core) pin the `wasix-org/getrandom` fork; its backend

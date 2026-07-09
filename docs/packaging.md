@@ -65,7 +65,7 @@ not in nixpkgs, call `final.rustPlatform.buildRustPackage` (see
    ```
 
    Programs needing fork/setjmp set `env.WASIXCC_WASM_OPT_FLAGS =
-   "--asyncify:-O2"` so wasixcc asyncifies at link (see `find`, `gitMinimal`).
+"--asyncify:-O2"` so wasixcc asyncifies at link (see `find`, `gitMinimal`).
 
 2. The webc manifest is generated; most packages need zero config. Deviations
    go in `passthru.wasmer`: `name`, `version`, `commands` (aliases),

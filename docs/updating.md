@@ -27,16 +27,16 @@ note shows up exactly in the bump PR (and update run) and nowhere else. A
 self-contained predicate (ignoring the arguments, closing over the
 package's own bindings) fires on every run until resolved.
 
-| target | updates | also regenerates |
-|---|---|---|
-| `rust-toolchain` | `wasix-org/rust` release | bootstrap pin from the fork's `src/stage0` |
-| `cargo-wasix` | `wasix-org/cargo-wasix` release | `cargoHash` (nix-update) |
-| `wasix-libc` | `wasix-org/wasix-libc` release | the witx spec pins |
-| `wasixcc` | `wasix-org/wasixcc` release | |
-| `llvm` | fork release tag | |
-| `crabsay` | branch head | hashes |
-| `nixpkgs` | flake input | stale keys out of `python-registry/rels.json` |
-| `wasmer`, `treefmt-nix` | flake inputs | |
+| target                  | updates                         | also regenerates                              |
+| ----------------------- | ------------------------------- | --------------------------------------------- |
+| `rust-toolchain`        | `wasix-org/rust` release        | bootstrap pin from the fork's `src/stage0`    |
+| `cargo-wasix`           | `wasix-org/cargo-wasix` release | `cargoHash` (nix-update)                      |
+| `wasix-libc`            | `wasix-org/wasix-libc` release  | the witx spec pins                            |
+| `wasixcc`               | `wasix-org/wasixcc` release     |                                               |
+| `llvm`                  | fork release tag                |                                               |
+| `crabsay`               | branch head                     | hashes                                        |
+| `nixpkgs`               | flake input                     | stale keys out of `python-registry/rels.json` |
+| `wasmer`, `treefmt-nix` | flake inputs                    |                                               |
 
 libffi has no pin: it follows nixpkgs' libffi with the wasix-org fork's wasi
 backend vendored as a patch (`packages/libffi/wasi-backend.patch`).

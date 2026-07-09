@@ -64,11 +64,11 @@ host or key.
 
 - `scripts/remote-builder.sh check`: configured and reachable?
 - Bulk: `nix-fast-build --skip-cached --flake
-  .#legacyPackages.x86_64-linux.ci --store "$(scripts/remote-builder.sh
-  store)"` (local eval, remote build), or `scripts/ci-build-remote.sh` for the
+.#legacyPackages.x86_64-linux.ci --store "$(scripts/remote-builder.sh
+store)"` (local eval, remote build), or `scripts/ci-build-remote.sh` for the
   signed, cache-pushing CI set.
 - Single build: `nix build <targets> --max-jobs 0 --builders
-  "$(scripts/remote-builder.sh builders)" --builders-use-substitutes`.
+"$(scripts/remote-builder.sh builders)" --builders-use-substitutes`.
   `--max-jobs 0` is required, else nix still schedules jobs onto local slots or
   the system default.
 
@@ -81,7 +81,7 @@ with `ssh "$(scripts/remote-builder.sh host)"` + `nix log`, not a rebuild.
   tracked files.
 - `nix fmt` before committing; CI rejects unformatted files.
 - Job list: `nix eval .#legacyPackages.x86_64-linux.ci --apply
-  builtins.attrNames`. For behaviour-preserving refactors, also diff
+builtins.attrNames`. For behaviour-preserving refactors, also diff
   `--apply 'j: builtins.mapAttrs (_: d: d.drvPath) j'` before/after; meta and
   passthru changes don't move drv paths.
 - A CI job name is a build path: `nix build .#librariesByProfile.exnrefEh.zlib`,
@@ -92,8 +92,8 @@ with `ssh "$(scripts/remote-builder.sh host)"` + `nix log`, not a rebuild.
 - Touching `pkgs/toolchain/` (except `llvm.nix`) rebuilds everything; use a
   remote builder or the CI cache.
 - The most thorough check is `nix-fast-build --flake
-  .#legacyPackages.x86_64-linux.ci --no-link --skip-cached --option
-  accept-flake-config true`, the same build set as CI
+.#legacyPackages.x86_64-linux.ci --no-link --skip-cached --option
+accept-flake-config true`, the same build set as CI
   (`scripts/ci-build.sh`). `--skip-cached` only helps while the change
   avoids mass rebuilds, and those are easy to trigger (anything under
   `pkgs/toolchain/`, a pin bump); expect a huge build that can OOM the
