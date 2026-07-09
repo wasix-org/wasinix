@@ -31,6 +31,7 @@
         (old.patches or [])
         ++ [
           ./patches/wasmer-offline-resolution.patch
+          ./patches/wasmer-webc-follow-symlinks.patch
         ];
     });
     wasix = import ./pkgs {
