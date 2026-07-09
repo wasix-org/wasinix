@@ -5,6 +5,9 @@
   lib = pkgs.lib;
   # Set WASMER_BIN=/path/to/wasmer and build with --impure to test against a local binary.
   localWasmerBin = builtins.getEnv "WASMER_BIN";
+  # Set WASMER_RUST_BACKTRACE=full (with --impure) to capture a wasmer panic
+  # backtrace in a wasix test's output. Bakes RUST_BACKTRACE into the run env.
+  localBacktrace = builtins.getEnv "WASMER_RUST_BACKTRACE";
 
   # Wrap the local binary in a proper nix derivation so the sandbox can access it.
   # autoPatchelfHook re-links it against nixpkgs's own copies of glibc/libffi/etc.
@@ -184,9 +187,12 @@ in rec {
       failHard = ''cat "$out" >&2; exit 1'';
     };
   in
-    pkgs.runCommand "script-run-${name}" {
-      nativeBuildInputs = [wasmer] ++ nativePkgs ++ wasixPkgs;
-    } ''
+    pkgs.runCommand "script-run-${name}" ({
+        nativeBuildInputs = [wasmer] ++ nativePkgs ++ wasixPkgs;
+      }
+      # WASMER_RUST_BACKTRACE=full (with --impure) surfaces a wasmer panic
+      # backtrace in $out. Set on the host process, not the forwarded guest env.
+      // lib.optionalAttrs (localBacktrace != "") {RUST_BACKTRACE = localBacktrace;}) ''
             export HOME=$TMPDIR/home
             mkdir -p "$HOME"
 

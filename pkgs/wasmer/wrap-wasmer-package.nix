@@ -6,6 +6,9 @@
   version ? null,
   # symlinkJoin tree of this package's [dependencies], resolved offline.
   depTree ? null,
+  # What `wasmer run` executes. null (default) runs the pkg/<name> source dir
+  # (wasmer.toml); pass the built .webc to run the packed artifact instead.
+  runTarget ? null,
 }: let
   depFlags = pkgs.lib.optionalString (depTree != null) "--offline --include-webc ${depTree}";
 in
@@ -23,9 +26,14 @@ in
         # applies the command's webc annotations (main-args/env) — e.g. gunzip =
         # gzip + "-d -f". Running the raw module skips that layer.
         pkg_dir=$(dirname "$(dirname "$wasm_path")")
+        target=${
+      if runTarget == null
+      then "\"$pkg_dir\""
+      else pkgs.lib.escapeShellArg runTarget
+    }
         cat > "$out/bin/$cmd_name" <<WRAP
     #!/bin/sh
-    exec wasmer run \$WASMER_FLAGS ${depFlags} "$pkg_dir" --entrypoint "$cmd_name" -- "\$@"
+    exec wasmer run \$WASMER_FLAGS ${depFlags} "$target" --entrypoint "$cmd_name" -- "\$@"
     WRAP
         chmod +x "$out/bin/$cmd_name"
       done

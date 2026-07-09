@@ -76,6 +76,10 @@
         // {
           inherit pkg;
           webc = pkg.webc;
+          # run-by-name wrapper, top-level like .webc; forcing it never forces
+          # .tests. Drives the packed .webc (what ships); .pkg.shim drives the
+          # wasmer.toml source dir.
+          shim = pkg.webc.shim;
         }
         // (lib.optionalAttrs (group != null) {tests = group;});
     });
@@ -90,10 +94,11 @@
     )
     shippedCommands);
 
-  # Run-by-name stubs (.pkg.shim) per package, for cross-package tests;
-  # accessing .shim does not force .tests.
+  # Run-by-name stubs per package, for cross-package tests; accessing a shim
+  # does not force .tests. Tests run the packed .webc (what ships), via
+  # .pkg.webc.shim rather than .pkg.shim (the wasmer.toml source dir).
   wrappedPackages =
-    lib.mapAttrs (_: p: p.pkg.shim)
+    lib.mapAttrs (_: p: p.pkg.webc.shim)
     (lib.filterAttrs (_: p: p.pkg ? shim) wasmerPackages);
 
   allWasmerPackages = pkgs.runCommand "wasix-all-wasmer" {} ''

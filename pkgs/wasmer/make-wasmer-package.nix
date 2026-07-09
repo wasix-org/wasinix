@@ -160,12 +160,23 @@ in
       id = {inherit owner name version;};
       inherit depWebcs;
       # The built webc at owner/name/version.webc, ready to symlinkJoin into an
-      # --include-webc tree.
-      webc = pkgs.runCommand "webc-${owner}-${name}-${version}" (pkgs.lib.optionalAttrs (packagePos != null) {pos = packagePos;}) ''
-        d="$out/${owner}/${name}"
-        mkdir -p "$d"
-        ${wasmer}/bin/wasmer package build --quiet "${finalAttrs.finalPackage}/pkg/${name}" -o "$d/${version}.webc"
-      '';
+      # --include-webc tree. Its .shim drives this packed artifact (what ships),
+      # vs the pkg .shim below which drives the wasmer.toml source dir.
+      webc = let
+        built = pkgs.runCommand "webc-${owner}-${name}-${version}" (pkgs.lib.optionalAttrs (packagePos != null) {pos = packagePos;}) ''
+          d="$out/${owner}/${name}"
+          mkdir -p "$d"
+          ${wasmer}/bin/wasmer package build --quiet "${finalAttrs.finalPackage}/pkg/${name}" -o "$d/${version}.webc"
+        '';
+      in
+        built
+        // {
+          shim = wrapWasmerPackage {
+            package = finalAttrs.finalPackage;
+            inherit name depTree;
+            runTarget = "${built}/${owner}/${name}/${version}.webc";
+          };
+        };
       shim = wrapWasmerPackage {
         package = finalAttrs.finalPackage;
         inherit name depTree;
