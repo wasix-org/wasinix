@@ -64,6 +64,7 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
   degrade. Fix: a runtime default.
 
 ### `getifaddrs`/`freeifaddrs` misnamed in wasix-libc 🟡
+
 - wasix-libc's `ifaddrs.h` declares the standard `getifaddrs`/`freeifaddrs`,
   but `libc.a` only defines `getif_addrs`/`freeif_addrs` (verified with nm;
   python3.wasm exports only the underscored names). Callers compile, then die
