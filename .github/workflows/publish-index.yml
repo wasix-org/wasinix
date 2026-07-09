@@ -75,7 +75,8 @@ jobs:
           cat block.conf >>~/.config/rclone/rclone.conf
           python3 pkgs/python-registry/publish.py \
             --registry "$(readlink -f registry-result)" \
-            --remote "$remote:$INDEX_VOLUME"
+            --remote "$remote:$INDEX_VOLUME" \
+            --rev "${{ github.event.workflow_run.head_sha }}"
 
       # the Pages site must exist with build_type=workflow; creating it needs
       # repo admin, which GITHUB_TOKEN never has:

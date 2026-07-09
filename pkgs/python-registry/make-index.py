@@ -160,6 +160,9 @@ def main() -> None:
 
     # normalized project name -> {wheel filename -> rewritten path}
     projects: dict[str, dict[str, Path]] = {}
+    # published filename -> {name, attr, drv_path}, folded into each wheel's
+    # manifest by publish.py (with the wasinix rev added there).
+    provenance: dict[str, dict] = {}
     tmp = Path(tempfile.mkdtemp(prefix="wasix-wheels-"))
     for i, entry in enumerate(dists):
         wheels = sorted(Path(entry["dist"]).glob("*.whl"))
@@ -173,6 +176,11 @@ def main() -> None:
             prev = projects.setdefault(project, {}).setdefault(moved.name, moved)
             if prev != moved and prev.read_bytes() != moved.read_bytes():
                 sys.exit(f"conflicting contents for {moved.name}:\n  {prev}\n  {moved}")
+            provenance[moved.name] = {
+                "name": entry["name"],
+                "attr": entry["attr"],
+                "drv_path": entry["drvPath"],
+            }
 
     for project, wheels in sorted(projects.items()):
         pdir = out / "simple" / project
@@ -190,6 +198,7 @@ def main() -> None:
     root = [f'    <a href="{p}/">{p}</a><br/>' for p in sorted(projects)]
     (out / "simple" / "index.html").write_text(page("Simple index", root))
     (out / "index.html").write_text(landing())
+    (out / "provenance.json").write_text(json.dumps(provenance, indent=2, sort_keys=True) + "\n")
     print(f"indexed {sum(map(len, projects.values()))} wheels across {len(projects)} projects")
 
 

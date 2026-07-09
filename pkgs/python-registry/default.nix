@@ -24,12 +24,24 @@
 
   # buildPythonPackage puts the built .whl in the `dist` output;
   # toPythonModule-wrapped non-python drvs have none and can't be served.
-  wheelDists = map (drv: rec {
-    name = drv.pname or drv.name;
-    version = drv.version;
-    rel = (rels.${name} or {}).${version} or 1;
-    dist = "${drv.dist}";
-  }) (lib.filter (drv: drv ? dist) closure);
+  servedWheels = lib.filter (drv: drv ? dist) closure;
+  wheelDists =
+    map (drv: rec {
+      name = drv.pname or drv.name;
+      version = drv.version;
+      rel = (rels.${name} or {}).${version} or 1;
+      dist = "${drv.dist}";
+      # provenance recorded per wheel: `nix build github:wasix-org/wasinix/<rev>#${attr}`
+      # rebuilds it. drvPath is a context-free fingerprint (no build dep here).
+      attr = "pythonRegistry.wheels.${name}^dist";
+      drvPath = builtins.unsafeDiscardStringContext drv.drvPath;
+    })
+    servedWheels;
+
+  # Every served wheel as a buildable attr. The index serves the whole runtime
+  # closure, so many wheels are transitive deps with no pythonWheels entry; this
+  # gives provenance a uniform attr to point at.
+  wheels = lib.listToAttrs (map (drv: lib.nameValuePair (drv.pname or drv.name) drv) servedWheels);
 
   wheelVersions = lib.listToAttrs (map (d: lib.nameValuePair d.name d.version) wheelDists);
   # rels.json keys left behind by an upstream bump; scripts/update.py drops
@@ -56,8 +68,9 @@ in
       (o.passthru or {})
       // {
         tests = mkTestGroup "python-registry" tests;
-        # read by scripts/update.py to prune rels.json after a nixpkgs bump
-        inherit wheelVersions;
+        # wheelVersions: read by scripts/update.py to prune rels.json after a
+        # nixpkgs bump. wheels: the provenance build targets (see wheelDists).
+        inherit wheelVersions wheels;
         wasix.updateNotes = lib.optional (staleRels != []) {
           message = "rels.json has stale keys (${lib.concatStringsSep ", " staleRels}); nix run .#update -- --only nixpkgs drops them";
           when = _: _: true;

@@ -9,11 +9,14 @@ bump, and nothing is ever deleted, so old lockfiles keep resolving.
 
 Volume layout (= the web root served by the app):
   index.html, simple/...     as in the nix output
-  manifests/<wheel>.json     {project, sha256, metadata_sha256, requires_python}
+  manifests/<wheel>.json     {project, sha256, metadata_sha256, requires_python,
+                              + provenance: attr, drv_path, wasinix_rev}
 The manifests carry what HTML regeneration needs, so republishing never
-downloads a wheel.
+downloads a wheel. Provenance lets `nix build
+github:wasix-org/wasinix/<wasinix_rev>#<attr>` rebuild a given wheel.
 
-Usage: publish.py --registry <path> --remote <rclone-remote:bucket> [--dry-run]
+Usage: publish.py --registry <path> --remote <rclone-remote:bucket>
+                  [--rev <wasinix git rev>] [--dry-run]
 Credentials come from rclone env vars (RCLONE_CONFIG_<NAME>_*).
 """
 
@@ -43,8 +46,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--registry", required=True, type=Path)
     ap.add_argument("--remote", required=True)
+    ap.add_argument("--rev", help="wasinix git rev that built this registry")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+
+    # published filename -> {name, attr, drv_path}, emitted by make-index.py
+    prov = json.loads((args.registry / "provenance.json").read_text())
 
     tmp = Path(tempfile.mkdtemp(prefix="wasix-publish-"))
     published_dir = tmp / "manifests"
@@ -76,7 +83,10 @@ def main():
             "sha256": sha,
             "metadata_sha256": hashlib.sha256(metadata).hexdigest(),
             "requires_python": make_index.requires_python(metadata),
+            **prov.get(whl.name, {}),
         }
+        if args.rev:
+            manifest["wasinix_rev"] = args.rev
         pdir = staging / "simple" / project
         pdir.mkdir(parents=True, exist_ok=True)
         shutil.copy(whl, pdir / whl.name)

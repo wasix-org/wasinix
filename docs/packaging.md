@@ -107,12 +107,18 @@ Every wheel is published as `<version>+wasix.<rel>` (PEP 440 local version):
 to republish a changed build, by hand or with the manual `bump-rel.yml`
 workflow (takes a list of wheels, opens a PR); an upstream version bump resets
 it by key miss (`nix run .#update` drops the stale key). Published filenames
-are immutable and accumulate. CI (`publish-index` in ci.yml) builds the patched wasmer,
-fetches the volume's S3 credentials with the `WASMER_TOKEN` secret
-(provisioning them on the first run via the vendored `rotateS3Credentials`
-fix), pushes new wheels with `publish.py`, and deploys a snapshot to GitHub
-Pages. The Edge app serving the volume is `python-registry/app.yaml`
-(static-web-server, deployed once by hand).
+are immutable and accumulate. The `publish-index` workflow (on a green Build of
+main) builds the patched wasmer, fetches the volume's S3 credentials with the
+`WASMER_TOKEN` secret (provisioning them on the first run via the vendored
+`rotateS3Credentials` fix), pushes new wheels with `publish.py`, and deploys a
+snapshot to GitHub Pages. The Edge app serving the volume is
+`python-registry/app.yaml` (static-web-server, deployed once by hand).
+
+Each wheel's `manifests/<wheel>.json` (served from the volume) records its
+build provenance: `wasinix_rev`, `attr`, and `drv_path`. So any wheel is
+reproducible with `nix build github:wasix-org/wasinix/<wasinix_rev>#<attr>`
+(e.g. `#pythonRegistry.wheels.numpy^dist`); every closure wheel, transitive
+deps included, is exposed under `pythonRegistry.wheels`.
 
 ## Tests
 
