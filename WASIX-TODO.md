@@ -92,22 +92,6 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
   run in a cross build.
 - Fix: binaryen asyncify support for EH; upstream the wasixcc setting.
 
-### wasixcc hoists linker flags away from the inputs 🟡
-- wasixcc buckets `-Wl,*`/`-Xlinker` args into `linker_args` (emitted before
-  its own flags) and file inputs into `linker_inputs` (emitted at the end):
-  any position-sensitive linker construct is destroyed. Notably
-  `-Wl,--whole-archive foo.a -Wl,--no-whole-archive` puts both markers up
-  front and the archive at the back, bracketing nothing (verified: zbar's
-  dylib came out 633 bytes; pyarrow's libarrow_python.so silently lacked most
-  arrow symbols and failed at import with `GOT.mem ... Missing export`,
-  because `--unresolved-symbols=import-dynamic` defers underlinking to load).
-- Workaround: link dylibs from loose objects instead of archives (zbar
-  extracts with `$AR x`, pyarrow by-instance `$AR xN` since libarrow.a holds
-  duplicate member names).
-- Fix: keep link-stage tokens in one ordered list, as the clang driver does
-  (`cxx-linking/src/compiler/flags.rs` `process_compiler_flags` splits them,
-  `compiler.rs` `link_inputs` emits the buckets separately).
-
 ### `wasm-opt` corrupts autoconf feature detection 🟡 (not re-verified)
 
 - A failing wasm-opt run on a throwaway conftest makes `configure`
