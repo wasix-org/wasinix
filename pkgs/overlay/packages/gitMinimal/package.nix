@@ -78,6 +78,11 @@ in
         substituteInPlace run-command.c \
           --replace-fail 'if (is_executable(buf.buf))' 'if (!access(buf.buf, F_OK))'
 
+        # WASIX has no sessions, so libc setsid() returns EINVAL; daemonize()
+        # (git gc --auto) dies on any setsid failure. Tolerate the WASIX errno.
+        substituteInPlace setup.c \
+          --replace-fail 'if (setsid() == -1)' 'if (setsid() == -1 && errno != EINVAL)'
+
         mkdir -p wasix-compat
         cp ${./wasix-compat/unistd.h} wasix-compat/unistd.h
         cp ${./wasix-compat/proc.c} wasix-compat/proc.c

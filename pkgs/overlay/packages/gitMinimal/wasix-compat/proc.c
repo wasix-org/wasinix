@@ -1,4 +1,6 @@
-/* WASIX process-primitive shims for functions absent from sysroot libc.a. */
+/* WASIX process-primitive shims for functions absent from sysroot libc.a.
+   Not setsid: libc.a defines it, so a shim here would collide; callers that
+   need it (git) tolerate its WASIX failure instead. */
 #include <wasi/api.h>
 typedef int pid_t;
 extern int errno;
@@ -10,11 +12,5 @@ pid_t fork(void) {
     errno = err;
     return -1;
   }
-  return (pid_t)pid;
-}
-
-pid_t setsid(void) {
-  __wasi_pid_t pid;
-  __wasi_proc_id(&pid);
   return (pid_t)pid;
 }
