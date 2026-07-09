@@ -1,0 +1,96 @@
+name: Publish index
+
+# Publishing mutates the append-only wheel volume, so it must never run on a PR
+# or a failed build: trigger only after a green CI run on main.
+on:
+  workflow_run:
+    workflows: [Build]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: publish-index
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish python package index
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    # A single wasmer namespace token; the job fetches the volume's S3
+    # credentials at runtime (provisioning them on the first run). Job-level so
+    # the publish step's condition can see whether it is configured.
+    env:
+      WASMER_TOKEN: ${{ secrets.WASMER_TOKEN }}
+      WASMER_APP: wasmer/wasinix-python-index
+      INDEX_VOLUME: python-index
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # workflow_run does not check out the triggering commit by default
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31.9.1
+        with:
+          extra_nix_config: |
+            extra-substituters = https://nix-cache.wasix.org
+            extra-trusted-public-keys = wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI=
+            trusted-users = root runner
+
+      - name: Build index and patched wasmer
+        run: |
+          nix build .#pythonRegistry -o registry-result --option accept-flake-config true
+          # the patched wasmer (rotateS3Credentials fix), substituted from the
+          # cache the CI run populated
+          nix build .#wasmer-bin -o wasmer-result --option accept-flake-config true
+
+      # skipped until the WASMER_TOKEN secret is configured
+      - name: Publish wheels to the index volume
+        if: env.WASMER_TOKEN != ''
+        run: |
+          sudo apt-get install -y -qq rclone
+          w=./wasmer-result/bin/wasmer
+          # the rclone remote name `wasmer app volume credentials` emits
+          remote="edge-${WASMER_APP#*/}"
+          mkdir -p ~/.config/rclone
+          # the credentials read path works once provisioned; the first run has
+          # none, so provision with the patched rotate-secrets (per AppVolume)
+          # and read again. rotate prints the creds on stdout, so discard it and
+          # re-read into a file to keep them out of the log.
+          if ! "$w" app volume credentials "$WASMER_APP" --registry wasmer.io --format rclone >block.conf 2>/dev/null; then
+            "$w" app volume rotate-secrets "$WASMER_APP" --volume "$INDEX_VOLUME" --registry wasmer.io >/dev/null
+            "$w" app volume credentials "$WASMER_APP" --registry wasmer.io --format rclone >block.conf
+          fi
+          cat block.conf >>~/.config/rclone/rclone.conf
+          python3 pkgs/python-registry/publish.py \
+            --registry "$(readlink -f registry-result)" \
+            --remote "$remote:$INDEX_VOLUME"
+
+      # the Pages site must exist with build_type=workflow; creating it needs
+      # repo admin, which GITHUB_TOKEN never has:
+      #   gh api -X POST repos/wasix-org/wasinix/pages -f build_type=workflow
+      - name: Prepare Pages snapshot
+        run: |
+          # materialize the result symlink with writable modes for the tarring action
+          mkdir site
+          cp -r --no-preserve=mode,ownership --dereference registry-result/. site/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

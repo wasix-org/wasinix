@@ -99,8 +99,20 @@ Serve the output from any static file host, or install directly:
 wheels.nix entry lands in the registry automatically. Its test suite
 (`checks.python-registry`) walks the index for hash/metadata integrity and
 pip-installs representative packages (deps resolved from the index too), then
-imports them under wasmer. CI publishes the index to GitHub Pages after every
-green main build (`publish-index` in ci.yml).
+imports them under wasmer.
+
+Every wheel is published as `<version>+wasix.<rel>` (PEP 440 local version):
+`rel` counts our builds of one upstream version and comes from
+`python-registry/rels.json`, keyed by pname then version, default 1. Bump it
+to republish a changed build, by hand or with the manual `bump-rel.yml`
+workflow (takes a list of wheels, opens a PR); an upstream version bump resets
+it by key miss (`nix run .#update` drops the stale key). Published filenames
+are immutable and accumulate. CI (`publish-index` in ci.yml) builds the patched wasmer,
+fetches the volume's S3 credentials with the `WASMER_TOKEN` secret
+(provisioning them on the first run via the vendored `rotateS3Credentials`
+fix), pushes new wheels with `publish.py`, and deploys a snapshot to GitHub
+Pages. The Edge app serving the volume is `python-registry/app.yaml`
+(static-web-server, deployed once by hand).
 
 ## Tests
 

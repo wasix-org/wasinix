@@ -1,14 +1,14 @@
 name: CI report
 
 # Fork-PR half of the CI report: in a pull_request run from a fork the token
-# is read-only, so ci.yml can't post the check run or comment itself.
+# is read-only, so build.yml can't post the check run or comment itself.
 # workflow_run re-executes in base-repo context with write perms. Same-repo
 # events (branches, the bot's pin-bump PRs, main, merge queue) are posted
-# in-job by ci.yml; bot-created PRs never fire workflow_run at all (events
+# in-job by build.yml; bot-created PRs never fire workflow_run at all (events
 # from GITHUB_TOKEN don't cascade), which is why this can't be the only path.
 on:
   workflow_run:
-    workflows: [CI]
+    workflows: [Build]
     types: [completed]
 
 permissions:

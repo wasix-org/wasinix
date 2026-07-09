@@ -1,0 +1,67 @@
+name: Bump wheel rel
+
+# Manual only: bump the publication release (+wasix.N) of the given wheels so
+# the next publish republishes them under new filenames (e.g. after a toolchain
+# fix rebuilds a wheel at the same upstream version). Opens a PR; merging it to
+# main runs the normal build + publish.
+on:
+  workflow_dispatch:
+    inputs:
+      wheels:
+        description: Wheels to bump (space- or comma-separated project names)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    name: Bump rels and open PR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31.9.1
+        with:
+          extra_nix_config: |
+            extra-substituters = https://nix-cache.wasix.org
+            extra-trusted-public-keys = wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI=
+            trusted-users = root runner
+
+      - name: Bump rels
+        id: bump
+        env:
+          WHEELS: ${{ inputs.wheels }}
+        run: |
+          read -ra wheels <<<"${WHEELS//,/ }"
+          summary="$RUNNER_TEMP/bump-summary.md"
+          python3 pkgs/python-registry/bump-rel.py "${wheels[@]}" >"$summary"
+          {
+            echo 'summary<<EOF'
+            cat "$summary"
+            echo EOF
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Format
+        run: nix fmt
+
+      # UPDATE_PR_TOKEN (a PAT / App token): without it a PR opened by the
+      # default GITHUB_TOKEN does not trigger CI, matching update.yml.
+      - name: Open PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
+          branch: auto/bump-wheel-rel
+          title: "pkgs: bump wheel publication release"
+          commit-message: "pkgs: bump wheel publication release"
+          body: |
+            Manual publication-release (+wasix.N) bump. Merging to main
+            rebuilds and republishes these wheels under new filenames.
+
+            ${{ steps.bump.outputs.summary }}
+          delete-branch: true

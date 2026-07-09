@@ -26,10 +26,19 @@
     ...
   }: let
     system = "x86_64-linux";
-    # wasmer plus PR 6768 (offline resolution: --offline and --include-webc),
-    # vendored until it merges. The patch is .rs-only, so cargo deps stay cached.
+    # wasmer plus two vendored CLI patches, until they land upstream:
+    #   PR 6768: offline resolution (--offline / --include-webc)
+    #   per-volume S3 credentials: fixes `app volume rotate-secrets` against the
+    #   current backend (rotateS3Credentials takes an AppVolume id), adds
+    #   --volume and an `enable-s3` command
+    # Both are .rs-only, so cargo deps stay cached.
     wasmerRuntime = wasmer.packages.${system}.wasmer.overrideAttrs (old: {
-      patches = (old.patches or []) ++ [./patches/wasmer-offline-resolution.patch];
+      patches =
+        (old.patches or [])
+        ++ [
+          ./patches/wasmer-offline-resolution.patch
+          ./patches/wasmer-rotate-s3-credentials.patch
+        ];
     });
     wasix = import ./pkgs {
       inherit system nixpkgs;

@@ -35,7 +35,8 @@ package's own bindings) fires on every run until resolved.
 | `wasixcc` | `wasix-org/wasixcc` release | |
 | `llvm` | fork release tag | |
 | `crabsay` | branch head | hashes |
-| `nixpkgs`, `wasmer`, `treefmt-nix` | flake inputs | |
+| `nixpkgs` | flake input | stale keys out of `python-registry/rels.json` |
+| `wasmer`, `treefmt-nix` | flake inputs | |
 
 libffi has no pin: it follows nixpkgs' libffi with the wasix-org fork's wasi
 backend vendored as a patch (`packages/libffi/wasi-backend.patch`).

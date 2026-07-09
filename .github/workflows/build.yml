@@ -1,4 +1,4 @@
-name: CI
+name: Build
 
 on:
   pull_request:
@@ -204,54 +204,3 @@ jobs:
           script: |
             const post = require('${{ github.workspace }}/scripts/post-report.js');
             await post({github, context, core});
-
-  # Publish the static python package index (.#pythonRegistry) to GitHub Pages
-  # after a green main build. The build job already built and cached it (tests
-  # included), so the nix build here is pure substitution.
-  publish-index:
-    name: Publish python package index
-    needs: build
-    if: github.event_name == 'push'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    # job-level permissions replace the workflow-level set
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    concurrency:
-      group: publish-index
-      cancel-in-progress: false
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31.9.1
-        with:
-          extra_nix_config: |
-            extra-substituters = https://nix-cache.wasix.org
-            extra-trusted-public-keys = wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI=
-            trusted-users = root runner
-
-      # the Pages site must exist with build_type=workflow; creating it needs
-      # repo admin, which GITHUB_TOKEN never has:
-      #   gh api -X POST repos/wasix-org/wasinix/pages -f build_type=workflow
-      - name: Build index
-        run: |
-          nix build .#pythonRegistry --option accept-flake-config true
-          # materialize the result symlink with writable modes for the tarring action
-          mkdir site
-          cp -r --no-preserve=mode,ownership --dereference result/. site/
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
-        with:
-          path: site
-
-      - name: Deploy to GitHub Pages
-        id: deploy
-        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

@@ -143,12 +143,38 @@ def regen_libc_witx(t):
     return "witx pins: " + ", ".join(bumped)
 
 
+def regen_prune_wheel_rels(t):
+    # The registry's publication release numbers (pkgs/python-registry/rels.json)
+    # are keyed by upstream version; a nixpkgs bump that moves a wheel leaves
+    # its old key behind (harmless: the lookup misses and rel resets to 1).
+    path = REPO / "pkgs/python-registry/rels.json"
+    rels = json.loads(path.read_text())
+    if not rels:
+        return None
+    out = run(["nix", "eval", "--json",
+               f".#legacyPackages.{SYSTEM}.pythonRegistry.wheelVersions"]).stdout
+    versions = json.loads(out)
+    dropped = [f"{name} {v}"
+               for name, by_version in sorted(rels.items())
+               for v in sorted(by_version)
+               if versions.get(name) != v]
+    pruned = {name: kept
+              for name, by_version in rels.items()
+              if (kept := {v: n for v, n in by_version.items()
+                           if versions.get(name) == v})}
+    if not dropped:
+        return None
+    path.write_text(json.dumps(pruned, indent=2, sort_keys=True) + "\n")
+    return f"dropped stale wheel rels: {', '.join(dropped)}"
+
+
 # Cross-file regen hooks, keyed by target name: they synchronize other repo
 # files with the new pin, which is driver logic, not package logic. What to
 # bump and how lives in each package as passthru.updateScript.
 REGEN_BY_NAME = {
     "rust-toolchain": regen_rust_bootstrap,
     "wasix-libc": regen_libc_witx,
+    "nixpkgs": regen_prune_wheel_rels,
 }
 
 # Flake inputs (flake.lock) have no package file to carry an updateScript.

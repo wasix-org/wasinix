@@ -10,6 +10,7 @@ import hashlib
 import re
 import sys
 from pathlib import Path
+from urllib.parse import unquote
 
 ANCHOR = re.compile(r'<a href="([^"#]+)#sha256=([0-9a-f]{64})"([^>]*)>([^<]+)</a>')
 CORE_METADATA = re.compile(r'data-core-metadata="sha256=([0-9a-f]{64})"')
@@ -37,20 +38,23 @@ def main() -> None:
         page = (pdir / "index.html").read_text()
         anchored = set()
         for href, digest, attrs, text in ANCHOR.findall(page):
-            if href != text:
+            fname = unquote(href)
+            if fname != text:
                 fail(f"{pdir.name}: link text {text!r} != href {href!r}")
-            wheel = pdir / href
+            if "+wasix." not in fname:
+                fail(f"{pdir.name}: {fname} lacks the +wasix.N publication release")
+            wheel = pdir / fname
             if not wheel.is_file():
                 fail(f"{pdir.name}: dangling link {href}")
             if sha256_of(wheel) != digest:
-                fail(f"{pdir.name}: sha256 fragment mismatch for {href}")
+                fail(f"{pdir.name}: sha256 fragment mismatch for {fname}")
             core = CORE_METADATA.search(attrs)
             if not core:
-                fail(f"{pdir.name}: {href} has no data-core-metadata")
-            metadata = pdir / f"{href}.metadata"
+                fail(f"{pdir.name}: {fname} has no data-core-metadata")
+            metadata = pdir / f"{fname}.metadata"
             if not metadata.is_file() or sha256_of(metadata) != core.group(1):
-                fail(f"{pdir.name}: metadata sidecar missing or mismatched for {href}")
-            anchored.add(href)
+                fail(f"{pdir.name}: metadata sidecar missing or mismatched for {fname}")
+            anchored.add(fname)
             total += 1
         wheels_on_disk = {f.name for f in pdir.glob("*.whl")}
         if anchored != wheels_on_disk:
