@@ -28,10 +28,13 @@
     cargoLock.lockFile = "${src}/Cargo.lock";
 
     patches = [
-      ./wasixcc-discard-undefined-version.patch
       # The no-input passthrough runs clang without pinning the linker, so probes
       # like meson's `cc -Wl,--version` fail to find wasm-ld on PATH. TODO: upstream.
       ./wasixcc-pin-linker-in-passthrough.patch
+      # Keep user `-Wl,` flags and file inputs in one ordered stream so
+      # `--whole-archive lib.a --no-whole-archive` brackets reach wasm-ld intact.
+      # Also folds in the `--undefined-version` discard. TODO: upstream, then drop.
+      ./wasixcc-preserve-link-order.patch
     ];
 
     doCheck = true;
