@@ -1,0 +1,32 @@
+--- a/src/bin/psql/startup.c
++++ b/src/bin/psql/startup.c
+@@ -133,7 +133,9 @@ main(int argc, char *argv[])
+ 	pg_logging_init(argv[0]);
+ 	pg_logging_set_pre_callback(log_pre_callback);
+ 	pg_logging_set_locus_callback(log_locus_callback);
++#ifndef __wasi__
+ 	set_pglocale_pgservice(argv[0], PG_TEXTDOMAIN("psql"));
++#endif
+ 
+ 	if (argc > 1)
+ 	{
+@@ -784,6 +786,11 @@ process_psqlrc(char *argv0)
+ 	char		etc_path[MAXPGPATH];
+ 	char	   *envrc = getenv("PSQLRC");
+ 
++#ifndef __wasi__
++	/*
++	 * WASI runners do not expose a stable executable path. User rc files still
++	 * work through PSQLRC or HOME below.
++	 */
+ 	if (find_my_exec(argv0, my_exec_path) < 0)
+ 		pg_fatal("could not find own program executable");
+ 
+@@ -791,6 +798,7 @@ process_psqlrc(char *argv0)
+ 
+ 	snprintf(rc_file, MAXPGPATH, "%s/%s", etc_path, SYSPSQLRC);
+ 	process_psqlrc_file(rc_file);
++#endif
+ 
+ 	if (envrc != NULL && strlen(envrc) > 0)
+ 	{
