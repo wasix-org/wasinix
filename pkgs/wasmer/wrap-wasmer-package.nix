@@ -1,8 +1,9 @@
 {pkgs}: {
   package,
   name,
-  # the source package's version, mirrored onto the shim so consumers (tests)
-  # can read wasmerPkgs.<pkg>.version off the run-by-name stub.
+  # the source package's pname/version, mirrored onto the shim so consumers
+  # (tests) can read wasmerPkgs.<pkg>.{pname,version} off the run-by-name stub.
+  pname ? null,
   version ? null,
   # symlinkJoin tree of this package's [dependencies], resolved offline.
   depTree ? null,
@@ -13,7 +14,9 @@
   depFlags = pkgs.lib.optionalString (depTree != null) "--offline --include-webc ${depTree}";
 in
   pkgs.runCommand "wasmer-wrapped-${package.name}"
-  ({meta.mainProgram = name;} // pkgs.lib.optionalAttrs (version != null) {inherit version;})
+  ({meta.mainProgram = name;}
+    // pkgs.lib.optionalAttrs (pname != null) {inherit pname;}
+    // pkgs.lib.optionalAttrs (version != null) {inherit version;})
   ''
       set -euo pipefail
       mkdir -p "$out/bin"

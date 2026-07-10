@@ -174,12 +174,15 @@ in
           shim = wrapWasmerPackage {
             package = finalAttrs.finalPackage;
             inherit name depTree;
+            pname = package.pname or null;
+            version = package.version or null;
             runTarget = "${built}/${owner}/${name}/${version}.webc";
           };
         };
       shim = wrapWasmerPackage {
         package = finalAttrs.finalPackage;
         inherit name depTree;
+        pname = package.pname or null;
         version = package.version or null;
       };
     };
