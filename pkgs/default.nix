@@ -199,7 +199,7 @@
   # at ehpic (ctypes/dl need PIC), so the wheels are a single set anchored there.
   pythonWheels = import ./python-wheels.nix {
     inherit pkgs lib mkTestGroup;
-    python3 = nixpkgsByProfile.ehpic.python3;
+    python3 = nixpkgsByProfile.exnrefEhpic.python3;
     wasmer = wasmerRuntime;
     # the self-contained python webc; the import test runs on it with the wheel
     # copied into a plain dir and NO /nix/store mount, as `pip install` would.
@@ -229,7 +229,7 @@
   # "simple" index; tests run against the shipped python webc.
   pythonRegistry = import ./python-registry {
     inherit pkgs lib pythonWheels mkTestGroup;
-    python3 = nixpkgsByProfile.ehpic.python3;
+    python3 = nixpkgsByProfile.exnrefEhpic.python3;
     inherit (wasmerLayer) testLib;
     pythonWebc = wasmerLayer.wrappedPackages.python;
   };
