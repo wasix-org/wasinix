@@ -152,6 +152,7 @@
   {attr = "pycurl";} # curl; overlay/python-packages/pycurl.nix
   {attr = "jq";} # jq + oniguruma
   {attr = "jqpy";} # spawns the jq CLI; overlay/python-packages/jqpy.nix
+  {attr = "pypandoc";} # spawns the pandoc CLI; overlay/python-packages/pypandoc.nix
   {attr = "apsw";} # sqlite
   {
     attr = "pynacl";
