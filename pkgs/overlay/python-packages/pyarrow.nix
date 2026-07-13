@@ -1,8 +1,9 @@
 # pyarrow for wasix, over the minimal static arrow-cpp (see
-# overlay/packages/arrow-cpp.nix): no dataset/parquet/orc/flight/cloud-fs
+# overlay/packages/arrow-cpp.nix): parquet but no dataset/orc/flight/cloud-fs
 # extensions, all of arrow linked into libarrow_python.so (wasm has no shared
-# libarrow). The patch --whole-archives libarrow.a into libarrow_python.so so
-# every arrow symbol is exported for the cython modules. setup.py drives its
+# libarrow). The patch --whole-archives libarrow.a + libparquet.a into
+# libarrow_python.so so every symbol is exported for the cython modules.
+# setup.py drives its
 # own cmake (dontUseCmakeConfigure), so the cross identity and the wasix
 # python/numpy headers are injected via PYARROW_CMAKE_OPTIONS: cmake would
 # otherwise probe the build python and compile against native (64-bit long)
@@ -28,7 +29,7 @@ in
         NIX_LDFLAGS = "--rpath=$ORIGIN";
         PYARROW_WITH_DATASET = 0;
         PYARROW_WITH_HDFS = 0;
-        PYARROW_WITH_PARQUET = 0;
+        PYARROW_WITH_PARQUET = 1;
         PYARROW_WITH_PARQUET_ENCRYPTION = 0;
         PYARROW_CMAKE_OPTIONS = toString [
           "-DCMAKE_SYSTEM_NAME=Wasi"

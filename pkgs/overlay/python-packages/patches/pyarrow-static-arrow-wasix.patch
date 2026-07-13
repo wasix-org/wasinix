@@ -1,8 +1,8 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index d550796..83ddcef 100644
+index d550796..0b8f0c0 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -478,12 +478,13 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" OR CMAKE_CXX_COMPILER_ID STREQUAL
+@@ -478,11 +478,15 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" OR CMAKE_CXX_COMPILER_ID STREQUAL
                 PROPERTY COMPILE_FLAGS " -Wno-cast-qual ")
  endif()
  
@@ -13,36 +13,37 @@ index d550796..83ddcef 100644
      list(APPEND PYARROW_CPP_LINK_LIBS Arrow::arrow_shared)
 -  else()
 -    list(APPEND PYARROW_CPP_LINK_LIBS Arrow::arrow_static)
-   endif()
++  endif()
 +else()
-+  # static builds always link arrow itself (whole-archived below)
 +  list(APPEND PYARROW_CPP_LINK_LIBS Arrow::arrow_static)
++  if(PYARROW_BUILD_PARQUET)
++    # lazy link, for usage requirements only (headers, transitive thrift)
++    list(APPEND PYARROW_CPP_LINK_LIBS Parquet::parquet_static)
+   endif()
  endif()
  
- add_library(arrow_python SHARED ${PYARROW_CPP_SRCS})
-@@ -497,6 +498,16 @@ target_include_directories(arrow_python PUBLIC ${PYARROW_CPP_ROOT_DIR}
+@@ -497,6 +501,16 @@ target_include_directories(arrow_python PUBLIC ${PYARROW_CPP_ROOT_DIR}
  if(ARROW_BUILD_SHARED)
    target_link_libraries(arrow_python PUBLIC ${PYARROW_CPP_LINK_LIBS})
  else()
-+  # static build: every arrow symbol must land in (and be exported from)
-+  # libarrow_python.so; the cython modules link only arrow_python.
-+  # --whole-archive pulls all of libarrow.a into the dylib. The target still
-+  # follows for its usage requirements (includes, transitive codec libs); its
-+  # lazily-linked archive then contributes nothing (all symbols already
-+  # defined).
++  # the cython modules link only arrow_python, so it must export every
++  # arrow/parquet symbol: whole-archive the full archives into the dylib
++  set(PYARROW_WHOLE_ARCHIVE_LIBS "$<TARGET_FILE:Arrow::arrow_static>")
++  if(PYARROW_BUILD_PARQUET)
++    list(APPEND PYARROW_WHOLE_ARCHIVE_LIBS "$<TARGET_FILE:Parquet::parquet_static>")
++  endif()
 +  target_link_options(arrow_python PRIVATE
 +                      "-Wl,--whole-archive"
-+                      "$<TARGET_FILE:Arrow::arrow_static>"
++                      ${PYARROW_WHOLE_ARCHIVE_LIBS}
 +                      "-Wl,--no-whole-archive")
    target_link_libraries(arrow_python PRIVATE ${PYARROW_CPP_LINK_LIBS})
  endif()
  target_link_libraries(arrow_python PUBLIC Python3::NumPy)
-@@ -917,6 +928,9 @@ foreach(module ${CYTHON_EXTENSIONS})
+@@ -917,6 +931,8 @@ foreach(module ${CYTHON_EXTENSIONS})
    set_source_files_properties(${module_SRC} PROPERTIES CYTHON_IS_CXX TRUE)
  
    cython_add_module(${module_name} ${module_name}_pyx ${module_name}_output ${module_SRC})
-+  # static build: arrow headers aren't propagated through arrow_python's
-+  # PRIVATE link, include them directly
++  # arrow headers aren't propagated through arrow_python's PRIVATE link
 +  target_include_directories(${module_name} PRIVATE ${ARROW_INCLUDE_DIR})
  
    if(directories)
