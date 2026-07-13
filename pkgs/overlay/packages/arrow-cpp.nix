@@ -1,10 +1,9 @@
 # arrow-cpp for wasix: a minimal static build carrying exactly what pyarrow
-# needs (compute/csv/json/filesystem/ipc + zlib/zstd/lz4 codecs). All
-# network/storage backends, allocators (jemalloc/mimalloc don't target wasm),
-# orc/parquet/dataset/acero and the test/utility executables are off. snappy
-# in this overlay is off-ABI only, so it stays disabled too. RapidJSON comes
-# BUNDLED (header-only vendor drop) because nixpkgs' rapidjson derivation
-# builds wasm gtest binaries.
+# needs (compute/csv/json/filesystem/ipc/parquet + zlib/zstd/lz4/snappy
+# codecs). All network/storage backends, allocators (jemalloc/mimalloc don't
+# target wasm), orc/dataset/acero and the test/utility executables are off.
+# RapidJSON comes BUNDLED (header-only vendor drop) because nixpkgs'
+# rapidjson derivation builds wasm gtest binaries.
 {
   final,
   prev,
@@ -26,8 +25,8 @@ in
     # replace nixpkgs' full input set (orc/boost/grpc/gtest/... don't
     # cross-build); the static stdenv mirrors buildInputs into
     # propagatedBuildInputs, so replace both.
-    buildInputs = _: [final.zlib final.zstd final.lz4];
-    propagatedBuildInputs = _: [final.zlib final.zstd final.lz4];
+    buildInputs = _: [final.zlib final.zstd final.lz4 final.snappy final.thrift];
+    propagatedBuildInputs = _: [final.zlib final.zstd final.lz4 final.snappy final.thrift];
     doInstallCheck = false;
     # appended after nixpkgs' flags; for duplicated -D options the last wins
     cmakeFlags = [
@@ -43,10 +42,12 @@ in
       "-DARROW_HDFS=OFF"
       "-DARROW_DATASET=OFF"
       "-DARROW_ACERO=OFF"
-      "-DARROW_PARQUET=OFF"
+      "-DARROW_PARQUET=ON"
       "-DPARQUET_BUILD_EXECUTABLES=OFF"
       "-DPARQUET_REQUIRE_ENCRYPTION=OFF"
-      "-DARROW_WITH_SNAPPY=OFF"
+      # thrift pulls in a headers-only boost need; native headers serve
+      "-DBoost_INCLUDE_DIR=${final.buildPackages.boost.dev}/include"
+      "-DARROW_WITH_SNAPPY=ON"
       "-DARROW_WITH_BROTLI=OFF"
       "-DARROW_WITH_BZ2=OFF"
       "-DARROW_WITH_NLOHMANN_JSON=OFF"
