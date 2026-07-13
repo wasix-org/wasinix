@@ -105,6 +105,10 @@ in
       writableTmpDirAsHomeHook
     ];
 
+    # select()/pselect() bail with ENOSYS when exceptfds is non-empty, spinning
+    # defensive callers (rsync). Ignore exceptfds instead. See WASIX-TODO.md.
+    patches = [./libc-select-exceptfds.patch];
+
     dontConfigure = true;
 
     env = {
