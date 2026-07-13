@@ -176,7 +176,10 @@
     attr = "grpcio";
     pyImport = "grpc";
   } # overlay/python-packages/grpcio.nix (vendored grpc core + abseil/boringssl/cares/re2/zlib)
-  {attr = "pyarrow";} # arrow-cpp; overlay/python-packages/pyarrow.nix
+  {
+    attr = "pyarrow";
+    pyImport = "pyarrow.parquet";
+  } # arrow-cpp; overlay/python-packages/pyarrow.nix
 
   # ── async / cython, no external C library ──────────────────────────────────────
   {attr = "aiohttp";} # vendored llhttp; deps multidict/yarl/frozenlist/aiosignal/…
