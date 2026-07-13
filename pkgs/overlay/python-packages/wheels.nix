@@ -185,6 +185,19 @@
   {attr = "aiohttp";} # vendored llhttp; deps multidict/yarl/frozenlist/aiosignal/…
 
   # ── rust (pyo3 / setuptools-rust) extensions ───────────────────────────────────
+  {attr = "jiter";} # overlay/python-packages/jiter.nix (maturin; anthropic/openai JSON core)
+  {
+    attr = "rpds-py";
+    pyImport = "rpds";
+  } # overlay/python-packages/rpds-py.nix (maturin; jsonschema core)
+  {attr = "ormsgpack";} # overlay/python-packages/ormsgpack.nix (maturin; _PyLong_AsByteArray 3.13 abi fix)
+  {attr = "tiktoken";} # overlay/python-packages/tiktoken.nix (setuptools-rust; openai token counting)
+  {
+    attr = "uuid-utils";
+    pyImport = "uuid_utils";
+  } # overlay/python-packages/uuid-utils.nix (maturin; getrandom 0.3/0.4 wasi vendor patch)
+  {attr = "fastuuid";} # overlay/python-packages/fastuuid.nix (maturin; getrandom wasi vendor patch)
+  {attr = "tokenizers";} # overlay/python-packages/tokenizers.nix (esaxx C++ + onig setjmp; legacy libc++ EH translated to exnref by the shared maturin hook, see WASIX-TODO.md)
   {attr = "bcrypt";} # overlay/python-packages/bcrypt.nix (getrandom/target-lexicon forks)
   {
     attr = "pydantic-core";
@@ -192,4 +205,28 @@
   } # overlay/python-packages/pydantic-core.nix (maturin fork + getrandom + extension-module)
   {attr = "cryptography";} # overlay/python-packages/cryptography.nix (maturin + openssl + target-lexicon dl)
   {attr = "orjson";} # overlay/python-packages/orjson.nix (maturin + target-lexicon dl)
+
+  # ── LLM / agent SDKs (pure-python; transitive deps auto-build + auto-publish) ───
+  # Each pulls its whole closure into the build + PEP 503 registry; the import
+  # smoke-test exercises it under wasmer. huggingface-hub drops hf-xet (see its
+  # override) so smolagents needs no Rust wheel.
+  {attr = "mcp";} # Model Context Protocol (jsonschema -> rpds-py)
+  {attr = "smolagents";} # huggingface smolagents (huggingface-hub, hf-xet dropped)
+  {attr = "anthropic";} # Anthropic Claude client (jiter + httpx + pydantic)
+  {attr = "openai";} # OpenAI client (jiter; sounddevice dropped, see openai.nix)
+  {
+    attr = "claude-agent-sdk";
+    pyImport = "claude_agent_sdk";
+  } # Anthropic Claude Agent SDK (mcp; no jiter)
+  {
+    attr = "openai-agents";
+    pyImport = "agents";
+  } # OpenAI Agents SDK (openai + mcp)
+  {
+    attr = "pydantic-ai-slim";
+    pyImport = "pydantic_ai";
+  } # Pydantic AI (pydantic-core; no new Rust)
+  {attr = "langgraph";} # LangGraph (ormsgpack + uuid-utils, both now fixed)
+  {attr = "langchain";} # LangChain (langgraph + langchain-core)
+  {attr = "litellm";} # LiteLLM (tokenizers + tiktoken + fastuuid + openai)
 ]
