@@ -31,6 +31,7 @@
         (old.patches or [])
         ++ [
           ./patches/wasmer-offline-resolution.patch
+          ./patches/wasmer-signal-inherit-on-fork.patch
           ./patches/wasmer-webc-follow-symlinks.patch
         ];
     });
