@@ -195,8 +195,9 @@
 
   # ── python wheels ────────────────────────────────────────────────────────────
   # Shipped Python wheels (overlay/python-packages/wheels.nix): wasm cross builds
-  # of python3.pkgs.<attr>, each with an import smoke-test. cpython only builds
-  # at ehpic (ctypes/dl need PIC), so the wheels are a single set anchored there.
+  # of python3.pkgs.<attr>, each with an import smoke-test. cpython needs PIC
+  # (ctypes/dl) and the exnref EH encoding wasmer accepts, so the wheels are a
+  # single set anchored at exnrefEhpic.
   pythonWheels = import ./python-wheels.nix {
     inherit pkgs lib mkTestGroup;
     python3 = nixpkgsByProfile.exnrefEhpic.python3;

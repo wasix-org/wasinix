@@ -39,6 +39,35 @@
   wasixMaturin = pkgsCross.buildPackages.maturin.overrideAttrs (old: {
     cargoDeps = patchVendoredTargetLexiconDl old.cargoDeps;
   });
+
+  # cargo-wasix runs `wasm-opt --translate-to-exnref` on the `.wasm` CLIs it
+  # emits, converting the legacy Wasm-EH that rustc/LLVM and the rust target's
+  # legacy-EH `-dl` sysroot libc++ produce into the exnref encoding wasmer
+  # accepts. maturin drives `cargo rustc` itself and reads cargo's artifact
+  # stream directly, so it never routes through cargo-wasix and its cdylib `.so`
+  # keeps the legacy `try` (surfaces when the crate pulls libc++ exceptions, e.g.
+  # tokenizers' esaxx-rs). A setup hook re-applies the same pass to every wheel
+  # `.so`; it is a no-op on modules that already have no legacy EH. See
+  # WASIX-TODO.md.
+  exnrefTranslateHook =
+    pkgsCross.makeSetupHook {
+      name = "wasix-translate-exnref-hook";
+      propagatedBuildInputs = [pkgsCross.buildPackages.binaryen];
+    }
+    (pkgsCross.buildPackages.writeText "wasix-translate-exnref-hook.sh" ''
+      _wasixTranslateSoToExnref() {
+        local so
+        while IFS= read -r -d "" so; do
+          echo "wasix: translating $so to exnref EH"
+          wasm-opt "$so" \
+            --enable-bulk-memory --enable-threads --enable-reference-types \
+            --enable-exception-handling --no-validation --translate-to-exnref \
+            -o "$so.exnref"
+          mv "$so.exnref" "$so"
+        done < <(find "''${prefix:-$out}" -name '*.so' -type f -print0)
+      }
+      fixupOutputHooks+=(_wasixTranslateSoToExnref)
+    '');
 in
   base
   // {
@@ -56,6 +85,7 @@ in
           wasixMaturin
           cargoWasixCargo
           wasixRustToolchain
+          exnrefTranslateHook
         ];
         substitutions = {
           rustcTargetSpec = "wasm32-wasmer-wasi-dl";
