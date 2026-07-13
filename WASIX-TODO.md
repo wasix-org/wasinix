@@ -38,6 +38,19 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
 - Correct on current wasmer for both directly-run and spawned programs
   (verified). Older runtimes passed `(null)`.
 
+### exec'ing a symlinked helper in a webc fails ENOEXEC 🟢
+
+- `WebcVolumeFileSystem::open()` read raw (non-following) metadata, so a symlink
+  resolved to `Err(NotAFile)`. Exec'ing a symlinked binary
+  (git's `libexec/git-core/git-upload-pack -> ../../bin/git.wasm`, and the other
+  git helpers) therefore failed with ENOEXEC ("cannot execute binary file"),
+  breaking every git transport test (clone/fetch/push over local/http/https/net)
+  while the same tree on a real fs works.
+- Fixed: `patches/wasmer-webc-follow-symlinks.patch` resolves symlinks (relative
+  targets against the link's parent, bounded loop) before opening, matching
+  real-fs semantics. Verified: `checks.git` (all transport tests) passes with it.
+  Vendored from python-pkgs; upstream to wasmerio/wasmer and drop once merged.
+
 ### `fork()` is hidden under Wasm-EH 🟡
 
 - The sysroot hides `fork`'s declaration when `__wasm_exception_handling__` is
@@ -76,6 +89,50 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
   implement/stub `if_indextoname`/`if_nametoindex`.
 
 ## Toolchain
+
+### Rust cdylib wheels ship legacy Wasm-EH from the rust `-dl` sysroot 🟡
+
+- A maturin/pyo3 wheel whose closure pulls libc++ exception code (or any legacy
+  Wasm-EH) loads with `Validate("legacy_exceptions feature required for try
+instruction")` under the pinned wasmer (7.2.0), which only accepts the new
+  (`try_table`/exnref) encoding. Hit on `tokenizers` (esaxx-rs C++ throws, which
+  links libc++'s `std::runtime_error`/`std::logic_error` ctors).
+- Root cause (disassembled `tokenizers.abi3.so` at the failing offset 0x66b5c1):
+  the legacy `try` sits in libc++'s own compiled exception helpers, NOT
+  compiler-rt SjLj. The rust toolchain's std targets link the **legacy-EH**
+  sysroots (`toolchain/rust/toolchain.nix`: `wasm32-wasmer-wasi` ->
+  `wasixSysrootEh`, `wasm32-wasmer-wasi-dl` -> `wasixSysrootEhpic`), so an
+  extension module (built on the `-dl`/PIC target) links the ehpic `libc++.a`,
+  whose `stdexcept.cpp.o` carries 6 legacy `try` (verified: the exnref-ehpic
+  `libc++.a` has 0 legacy / 15 `try_table`; the ehpic one has 6 legacy / 0).
+  This is why the legacy `try` was invariant to per-crate `--wasm-use-legacy-eh`
+  cc flags (those only reach the wheel's OWN C/C++, which came out `try_table`)
+  and to the python profile switch (the rust `-dl` sysroot is fixed regardless).
+- Why CLIs don't hit it: cargo-wasix runs `wasm-opt --translate-to-exnref` on
+  every `.wasm` it emits (lib.rs `run_wasm_opt`), converting all legacy EH to
+  exnref. A maturin cdylib is a `.so`, so that pass (keyed on the `.wasm`
+  extension) never runs on it. Pure-rust wheels (jiter, pydantic-core) import
+  fine because panic=abort leaves no EH to translate.
+- Workaround (in place): a setup hook on the shared `maturinBuildHook`
+  (`set/rust-platform.nix`, `exnrefTranslateHook`) re-applies
+  `wasm-opt --translate-to-exnref` to every wheel `.so` in `fixupOutputHooks`,
+  so EVERY maturin wheel gets the same pass cargo-wasix gives CLIs, not just
+  tokenizers. Same binaryen 129 cargo-wasix uses; a no-op on wheels with no
+  legacy EH (verified: tokenizers -> 0 legacy `try`, wasmer 7.2.0 validates +
+  imports; jiter/pydantic-core unaffected). Unblocks tokenizers -> litellm.
+- Why not routed through cargo-wasix: maturin drives `cargo rustc` and parses
+  cargo's artifact JSON itself; cargo-wasix also drives+consumes that stream and
+  has no `rustc` subcommand, so putting it in the middle hides the artifact from
+  maturin. The hook is the maturin analogue of cargo-wasix's CLI pass.
+- Proper fix (upstream): (a) point the rust std targets at the **exnref**
+  sysroots (`variants.exnrefEh`/`exnrefEhpic`) so linked libc++ is already
+  `try_table` — rebuilds std, and the wheels' own rust EH still needs the
+  translate pass unless panic=abort; or (b) teach cargo-wasix to post-process
+  cdylib artifacts (e.g. a standalone `opt` subcommand the hook calls), moving
+  the pass's ownership back into cargo-wasix. Then drop `exnrefTranslateHook`.
+- Not covered: setuptools-rust wheels (tiktoken) don't use `maturinBuildHook`;
+  they're fine today (pure Rust, no legacy EH) but a C++-using one would need the
+  same hook wired into that path.
 
 ### asyncify can't process Wasm-EH instructions 🟡
 
@@ -145,7 +202,83 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
 ### getrandom 0.3 doesn't recognise the target 🟡
 
 - "Unknown version of WASI" on `wasm32-wasmer-wasi`. CLI crates built through
-  cargo-wasix need no workaround. Python wheels pulling getrandom 0.3
-  (bcrypt, pydantic-core) pin the `wasix-org/getrandom` fork; its backend
-  adds a dependency on the `wasix` crate, which a vendor patch can't
-  introduce (see `overlay/python-packages/lib/rust.nix`).
+  cargo-wasix need no workaround. Some python wheels pulling getrandom 0.3
+  (bcrypt, pydantic-core) still pin the `wasix-org/getrandom` fork; its
+  backend adds a dependency on the `wasix` crate, which a vendor patch can't
+  introduce (see `overlay/python-packages/lib/rust.nix`). The fork-free vendor
+  patch below is preferred and has replaced the fork for jiter.
+
+### getrandom 0.3/0.4 fixed fork-free by selecting the p1 backend 🟡
+
+- Both getrandom 0.3.4 and 0.4.3 ship a `wasi_p1` backend that is a raw
+  `extern "C" random_get` from `wasi_snapshot_preview1` (which wasix libc
+  provides) with **no crate dependency** — but their `backends.rs` only picks
+  it under `#[cfg(target_env = "p1")]`, and our target's env isn't p1, so they
+  fall to the component-model backend and `compile_error!` ("Unknown version of
+  WASI"). No fork or `wasix` crate is needed; just reroute the selection.
+- Workaround: `lib/vendor-getrandom-wasi.nix` (helper
+  `rust.patchVendoredGetrandomWasi`) patches vendored getrandom 0.3/0.4
+  `backends.rs` to use `wasi_p1` for anything that isn't p2/p3, and refreshes
+  the checksum. Used by `jiter.nix`/`uuid-utils.nix`/`fastuuid.nix` with no
+  `[patch.crates-io]` fork and no shipped lock. This is simpler than the
+  getrandom-0.3 fork above and should replace it for bcrypt/pydantic-core too.
+- Fix: our wasix rust target should report `target_env = "p1"` in its target
+  spec; then getrandom (and any preview1 crate) picks the right backend with no
+  patch at all.
+
+### `select()` with exceptfds returns ENOSYS; callers spin 🟢
+
+- wasix-libc's `select()`/`pselect()` returned `-1`/`ENOSYS` (errno 52) whenever
+  `exceptfds` was non-empty. The bug was purely in libc, not the runtime:
+  `libc-bottom-half/cloudlibc/src/libc/sys/select/pselect.c` hardcoded
+  `if (errorfds && errorfds->__nfds > 0) { errno = ENOSYS; return -1; }` BEFORE
+  it built any subscriptions or called `__wasi_poll_oneoff` (that is why the WASI
+  trace showed no `poll_oneoff`). `poll_oneoff` genuinely has no exceptional-
+  condition event type, so TRUE exceptfds semantics (TCP OOB) would need runtime
+  support — but callers like rsync only pass exceptfds defensively.
+- This is what stalled `rsync`'s transfer (NOT a fork/pipe IPC deadlock — that
+  all works). rsync's one IO multiplexer `perform_io()` (io.c) always passes an
+  exceptfds set (`FD_SET(iobuf.in_fd, &e_fds)`), and its error handling only
+  special-cases `EBADF`; the ENOSYS was treated as transient, so it zeroed the
+  fd sets and looped — a pure-compute 100% CPU spin with ZERO syscalls (verified
+  via strace + WASI trace), hanging on the first IO (the version exchange).
+- Fixed: `sysroot/libc-select-exceptfds.patch` makes `pselect()` ignore
+  exceptfds (and `FD_ZERO` it) instead of failing. Verified: `rsync -rv src/
+dst/` now transfers all files correctly (`diff -rq src dst` clean, incl. nested
+  dirs). Fixes every select+exceptfds caller, not just rsync. Upstream this to
+  wasix-org/wasix-libc and drop the patch once merged.
+
+### rsync copies files but hangs at exit: SIGUSR2 ignored for forked children 🟢
+
+- With the select fix, rsync completes the whole transfer (files land correctly)
+  but never exits. Root cause: rsync's shutdown is signal-driven — the sender /
+  generator processes only terminate when they receive SIGUSR2 (`main.c`
+  `sigusr2_handler` -> `_exit(0)`), and the receiver does `kill(pid, SIGUSR2)`
+  then `wait_process`. Under wasix the runtime logs `state::env: Signal ignored
+pid=3 sig=Sigusr2` for the forked children, so nobody exits and all three
+  processes (pid1 -> waits pid2 -> waits pid3) spin in a `proc_join` poll-loop
+  (verified: 1073 `proc_join` + a 21ms-timeout `poll_oneoff` clock loop, no
+  `proc_exit`).
+- Precise mechanism (two layers, both in the wasix-org forks):
+  - wasmer `lib/wasix/src/state/env.rs` `process_signals_and_exit` only invokes
+    the guest handler when `inner.signal_set` is true; otherwise a non-fatal
+    signal is "ignored". `signal_set`/`signal` (the `__wasm_signal` export) are
+    set ONLY by the `callback_signal` syscall (`syscalls/wasix/callback_signal.rs`).
+    `WasiEnv::fork()` builds the child with `inner: Default::default()`
+    (`signal_set=false`, `signal=None`) and `proc_fork` never re-propagates them
+    — so a forked child's instance has no signal callback.
+  - wasix-libc `libc-top-half/musl/src/signal/sigaction.c` calls
+    `__wasi_callback_signal("__wasm_signal")` exactly once, guarded by the static
+    `__eintr_callback_registered` (CAS 0->1). fork copies that static into the
+    child's memory as already-set, so the child's libc never re-registers. rsync
+    forks via the raw `__wasi_proc_fork` shim (no libc `fork()` wrapper), so
+    there is no atfork hook to reset it either.
+- Fixed: `patches/wasmer-signal-inherit-on-fork.patch` makes `proc_fork` inherit
+  the signal disposition — captures the parent's `signal_set` before forking, and
+  in the child (proc_fork.rs `run`, once the instance is live) re-resolves
+  `__wasm_signal` and sets `inner.signal`/`inner.signal_set` when the parent had
+  it. Matches POSIX (fork inherits handlers); fixes every fork+signal program.
+  Layered onto the wasmer input via the flake's `overrideAttrs` patch list.
+  Verified: under the patched wasmer `rsync -a src/ dst/` exits 0 (was 124/hang)
+  with files copied and the final stats summary printed; stock wasmer still hangs
+  (control). Upstream to wasmerio/wasmer and drop the patch once merged.
