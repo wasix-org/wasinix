@@ -93,13 +93,19 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
   run in a cross build.
 - Fix: binaryen asyncify support for EH; upstream the wasixcc setting.
 
-### `wasm-opt` corrupts autoconf feature detection 🟡 (not re-verified)
+### `wasm-opt` corrupts autoconf/cmake feature detection 🟡
 
 - A failing wasm-opt run on a throwaway conftest makes `configure`
   false-negative a feature (sqlite: "Cannot find libm functions").
+- Root cause (re-verified 2026-07-13, thrift at eh): function-exists probes
+  declare wrong signatures (`char strerror_r();`); wasm-ld silently links
+  that into invalid wasm, and wasm-opt fatals parsing it. Only eh is hit:
+  wasixcc always appends `--emit-exnref` there, so wasm-opt runs even for
+  -O0 probes; the other profiles skip it (no passes at -O0).
 - Workaround: `disableWasmOptInConfigureHook`, opt-in per package (sqlite,
-  libzip).
-- Fix: skip or tolerate wasm-opt during configure.
+  libzip, thrift).
+- Fix: wasm-ld should reject signature-mismatched direct calls (LLVM fork),
+  or wasixcc's autoconf workarounds mode skips post-link wasm-opt.
 
 ## Packages that don't cross-build
 
