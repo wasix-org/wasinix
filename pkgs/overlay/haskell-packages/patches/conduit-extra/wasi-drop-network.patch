@@ -1,0 +1,41 @@
+diff --git a/conduit-extra.cabal b/conduit-extra.cabal
+index 6370404..322bf07 100644
+--- a/conduit-extra.cabal
++++ b/conduit-extra.cabal
+@@ -26,18 +26,25 @@ Library
+                        Data.Conduit.Filesystem
+                        Data.Conduit.Foldl
+                        Data.Conduit.Lazy
+-                       Data.Conduit.Network
+-                       Data.Conduit.Network.UDP
+-                       Data.Conduit.Network.Unix
+                        Data.Conduit.Process
+                        Data.Conduit.Process.Typed
+                        Data.Conduit.Text
+                        Data.Conduit.Zlib
+ 
++  -- wasm has no sockets (wasi-libc lacks netdb.h); drop the network modules.
++  if !arch(wasm32)
++      Exposed-modules:   Data.Conduit.Network
++                         Data.Conduit.Network.UDP
++  if !os(windows) && !arch(wasm32)
++      Exposed-modules:   Data.Conduit.Network.Unix
++
+   if arch(x86_64) || arch(i386)
+       -- These architectures are able to perform unaligned memory accesses
+       cpp-options: -DALLOW_UNALIGNED_ACCESS
+ 
++  if !arch(wasm32)
++      Build-depends:     network >= 2.3
++
+   Build-depends:       base                     >= 4.12         && < 5
+                      , conduit                  >= 1.3          && < 1.4
+ 
+@@ -49,7 +56,6 @@ Library
+                      , attoparsec               >= 0.10
+                      , directory
+                      , filepath
+-                     , network                  >= 2.3
+                      , primitive                >= 0.5
+                      , process
+                      , resourcet                >= 1.1

@@ -1,0 +1,13 @@
+diff --git a/jira-wiki-markup.cabal b/jira-wiki-markup.cabal
+index 11aac00..9050df0 100644
+--- a/jira-wiki-markup.cabal
++++ b/jira-wiki-markup.cabal
+@@ -73,7 +73,7 @@ executable jira-wiki-markup
+   hs-source-dirs:      app
+   main-is:             Main.hs
+   build-depends:       jira-wiki-markup
+-  ghc-options:         -threaded
++  ghc-options:         
+                        -rtsopts
+                        -with-rtsopts=-N
+ 

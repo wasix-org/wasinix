@@ -1,0 +1,188 @@
+diff --git a/pandoc.cabal b/pandoc.cabal
+index 43f659b..c8ff338 100644
+--- a/pandoc.cabal
++++ b/pandoc.cabal
+@@ -501,7 +501,6 @@ library
+                  commonmark-pandoc     >= 0.2.3    && < 0.3,
+                  containers            >= 0.6.0.1  && < 0.9,
+                  crypton               >= 0.30     && < 1.1,
+-                 crypton-connection    >= 0.3.1    && < 0.5,
+                  data-default          >= 0.4      && < 0.9,
+                  deepseq               >= 1.3      && < 1.6,
+                  directory             >= 1.2.3    && < 1.4,
+@@ -513,14 +512,11 @@ library
+                  filepath              >= 1.1      && < 1.6,
+                  gridtables            >= 0.1      && < 0.2,
+                  haddock-library       >= 1.10     && < 1.12,
+-                 http-client           >= 0.4.30   && < 0.8,
+-                 http-client-tls       >= 0.2.4    && < 0.4,
+                  http-types            >= 0.8      && < 0.13,
+                  ipynb                 >= 0.2      && < 0.3,
+                  jira-wiki-markup      >= 1.5.1    && < 1.6,
+                  mime-types            >= 0.1.1    && < 0.2,
+                  mtl                   >= 2.2      && < 2.4,
+-                 network               >= 2.6      && < 3.3,
+                  network-uri           >= 2.6      && < 2.8,
+                  pandoc-types          >= 1.23.1   && < 1.24,
+                  parsec                >= 3.1      && < 3.2,
+@@ -549,9 +545,17 @@ library
+                  xml                   >= 1.3.12   && < 1.4,
+                  typst                 >= 0.8.0.1  && < 0.9,
+                  vector                >= 0.12     && < 0.14,
+-                 djot                  >= 0.1.2.2  && < 0.2,
+-                 tls                   >= 2.0.1    && < 2.2,
+-                 crypton-x509-system   >= 1.6.7    && < 1.7
++                 djot                  >= 0.1.2.2  && < 0.2
++
++  -- wasm has no sockets/DNS (wasi-libc lacks netdb.h); drop the HTTP/TLS stack.
++  -- openURL and the PandocHttpError paths are stubbed under wasm32_HOST_ARCH.
++  if !arch(wasm32)
++    build-depends: http-client         >= 0.4.30   && < 0.8,
++                   http-client-tls     >= 0.2.4    && < 0.4,
++                   network             >= 2.6      && < 3.3,
++                   tls                 >= 2.0.1    && < 2.2,
++                   crypton-connection  >= 0.3.1    && < 0.5,
++                   crypton-x509-system >= 1.6.7    && < 1.7
+ 
+   if !os(windows)
+     build-depends:  unix >= 2.4 && < 2.9
+diff --git a/src/Text/Pandoc/Class/IO.hs b/src/Text/Pandoc/Class/IO.hs
+index 2d337d9..6df6269 100644
+--- a/src/Text/Pandoc/Class/IO.hs
++++ b/src/Text/Pandoc/Class/IO.hs
+@@ -41,6 +41,7 @@ import Data.ByteString.Lazy (toChunks)
+ import Data.Text (Text, pack, unpack)
+ import Data.Time (TimeZone, UTCTime)
+ import Data.Unique (hashUnique)
++#if !defined(wasm32_HOST_ARCH)
+ import Network.Connection (TLSSettings(..))
+ import qualified Network.TLS as TLS
+ import qualified Network.TLS.Extra as TLS
+@@ -49,8 +50,9 @@ import Network.HTTP.Client
+         Request(port, host, requestHeaders), parseRequest, newManager)
+ import Network.HTTP.Client.Internal (addProxy)
+ import Network.HTTP.Client.TLS (mkManagerSettings)
+-import Network.HTTP.Types.Header ( hContentType )
+ import Network.Socket (withSocketsDo)
++#endif
++import Network.HTTP.Types.Header ( hContentType )
+ import Network.URI (URI(..), parseURI, unEscapeString)
+ import System.Directory (createDirectoryIfMissing)
+ import System.Environment (getEnv)
+@@ -83,7 +85,9 @@ import qualified System.FilePath.Glob
+ import qualified System.Random
+ import qualified Text.Pandoc.UTF8 as UTF8
+ import Data.Default (def)
++#if !defined(wasm32_HOST_ARCH)
+ import System.X509 (getSystemCertificateStore)
++#endif
+ #ifndef EMBED_DATA_FILES
+ import qualified Paths_pandoc as Paths
+ #endif
+@@ -129,6 +133,9 @@ openURL u
+  | Just (URI{ uriScheme = "data:",
+               uriPath = upath }) <- parseURI (T.unpack u)
+      = pure $ extractURIData upath
++#if defined(wasm32_HOST_ARCH)
++ | otherwise = error "Text.Pandoc.Class.IO.openURL"
++#else
+  | otherwise = do
+      let toReqHeader (n, v) = (CI.mk (UTF8.fromText n), UTF8.fromText v)
+      customHeaders <- map toReqHeader <$> getsCommonState stRequestHeaders
+@@ -168,6 +175,7 @@ openURL u
+      case res of
+           Right r -> return r
+           Left e  -> throwError $ PandocHttpError u e
++#endif
+ 
+ -- | Read the lazy ByteString contents from a file path, raising an error on
+ -- failure.
+diff --git a/src/Text/Pandoc/Class/PandocMonad.hs b/src/Text/Pandoc/Class/PandocMonad.hs
+index 850aff5..c238be0 100644
+--- a/src/Text/Pandoc/Class/PandocMonad.hs
++++ b/src/Text/Pandoc/Class/PandocMonad.hs
+@@ -496,11 +496,13 @@ fillMediaBag d = walkM handleImage d
+                             "replacing image with description"
+                   -- emit alt text
+                   return $ replacementSpan attr src tit lab
++#if !defined(wasm32_HOST_ARCH)
+                 PandocHttpError u er -> do
+                   report $ CouldNotFetchResource u
+                             (T.pack $ show er ++ "\rReplacing image with description.")
+                   -- emit alt text
+                   return $ replacementSpan attr src tit lab
++#endif
+                 _ -> throwError e)
+         handleImage x = return x
+ 
+diff --git a/src/Text/Pandoc/Error.hs b/src/Text/Pandoc/Error.hs
+index f9c9aea..d6ae3ca 100644
+--- a/src/Text/Pandoc/Error.hs
++++ b/src/Text/Pandoc/Error.hs
+@@ -1,3 +1,4 @@
++{-# LANGUAGE CPP #-}
+ {-# LANGUAGE DeriveDataTypeable #-}
+ {-# LANGUAGE DeriveGeneric      #-}
+ {-# LANGUAGE OverloadedStrings  #-}
+@@ -25,7 +26,9 @@ import Data.Word (Word8)
+ import Data.Text (Text)
+ import qualified Data.Text as T
+ import GHC.Generics (Generic)
++#if !defined(wasm32_HOST_ARCH)
+ import Network.HTTP.Client (HttpException)
++#endif
+ import System.Exit (ExitCode (..), exitWith)
+ import System.IO (stderr)
+ import qualified Text.Pandoc.UTF8 as UTF8
+@@ -34,7 +37,9 @@ import Text.Pandoc.Shared (tshow)
+ import Citeproc (CiteprocError, prettyCiteprocError)
+ 
+ data PandocError = PandocIOError Text IOError
++#if !defined(wasm32_HOST_ARCH)
+                  | PandocHttpError Text HttpException
++#endif
+                  | PandocShouldNeverHappenError Text
+                  | PandocSomeError Text
+                  | PandocParseError Text
+@@ -73,8 +78,10 @@ renderError :: PandocError -> Text
+ renderError e =
+   case e of
+     PandocIOError _ err' -> T.pack $ displayException err'
++#if !defined(wasm32_HOST_ARCH)
+     PandocHttpError u err' ->
+       "Could not fetch " <> u <> "\n" <> tshow err'
++#endif
+     PandocShouldNeverHappenError s ->
+       "Something we thought was impossible happened!\n" <>
+       "Please report this to pandoc's developers: " <> s
+@@ -170,7 +177,9 @@ handleError (Left e) =
+       PandocPDFError{} -> 43
+       PandocXMLError{} -> 44
+       PandocPDFProgramNotFoundError{} -> 47
++#if !defined(wasm32_HOST_ARCH)
+       PandocHttpError{} -> 61
++#endif
+       PandocShouldNeverHappenError{} -> 62
+       PandocSomeError{} -> 63
+       PandocParseError{} -> 64
+diff --git a/src/Text/Pandoc/SelfContained.hs b/src/Text/Pandoc/SelfContained.hs
+index 909a9d2..9455fac 100644
+--- a/src/Text/Pandoc/SelfContained.hs
++++ b/src/Text/Pandoc/SelfContained.hs
+@@ -1,3 +1,4 @@
++{-# LANGUAGE CPP #-}
+ {-# LANGUAGE ScopedTypeVariables #-}
+ {-# LANGUAGE OverloadedStrings #-}
+ {-# LANGUAGE LambdaCase        #-}
+@@ -424,9 +425,11 @@ getData mimetype src
+                  PandocResourceNotFound r -> do
+                    report $ CouldNotFetchResource r ""
+                    return $ CouldNotFetch e
++#if !defined(wasm32_HOST_ARCH)
+                  PandocHttpError u er -> do
+                    report $ CouldNotFetchResource u (tshow er)
+                    return $ CouldNotFetch e
++#endif
+                  _ -> throwError e
+ 
+ 

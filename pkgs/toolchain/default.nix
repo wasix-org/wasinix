@@ -1,6 +1,12 @@
 # The wasix toolchain: LLVM fork, per-variant sysroot, and the wrappers that
 # drive them (wasixcc, cargo-wasix, binaryen). Everything is built from source.
-{pkgs}: let
+# Also carries the wasi haskell toolchain (`haskell`), a separate ghc-wasm bindist
+# GHC + nixpkgs haskellPackages; see haskell/.
+{
+  pkgs,
+  ghcWasm,
+}: let
+  haskell = import ./haskell {inherit pkgs ghcWasm;};
   inherit (import ./llvm.nix {inherit pkgs;}) llvm llvmTree version;
   sysroots = import ./sysroot {
     inherit pkgs llvm;
@@ -31,4 +37,5 @@ in {
   inherit wasixLlvm wasixSysroot wasixRustToolchain binaryen wasixcc cargoWasix;
   # Compiler, per-variant sysroot components, and smoke tests.
   inherit llvm variants sysroot tests libc compiler-rt libcxx;
+  inherit haskell; # the wasi haskell toolchain (exposes hp)
 }

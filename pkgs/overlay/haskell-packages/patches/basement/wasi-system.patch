@@ -1,0 +1,14 @@
+diff --git a/cbits/foundation_system.h b/cbits/foundation_system.h
+index 2419b43..f1cc8a9 100644
+--- a/cbits/foundation_system.h
++++ b/cbits/foundation_system.h
+@@ -53,6 +53,9 @@
+ #elif defined(_POSIX_VERSION)
+     #define FOUNDATION_SYSTEM_UNIX
+     // POSIX
++#elif defined(wasm32_HOST_ARCH)
++    #define FOUNDATION_SYSTEM_UNIX
++    // wasm32-wasi: POSIX-like
+ #else
+ #   error "foundation: system: Unknown compiler"
+ #endif

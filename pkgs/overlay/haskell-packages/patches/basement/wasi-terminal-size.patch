@@ -1,0 +1,25 @@
+diff --git a/Basement/Terminal/Size.hsc b/Basement/Terminal/Size.hsc
+index 62c315e..07c80d2 100644
+--- a/Basement/Terminal/Size.hsc
++++ b/Basement/Terminal/Size.hsc
+@@ -31,6 +31,14 @@ import           Graphics.Win32.Misc (getStdHandle, sTD_OUTPUT_HANDLE, StdHandle
+ #let alignment t = "%lu", (unsigned long)offsetof(struct {char x__; t (y__); }, y__)
+ #endif
+ 
++#if defined(wasm32_HOST_ARCH)
++
++-- wasm32-wasi has no ioctl/TIOCGWINSZ; fall back to the default size.
++getDimensions :: IO (CountOf Char, CountOf Char)
++getDimensions = pure (CountOf 80, CountOf 24)
++
++#else
++
+ #ifdef FOUNDATION_SYSTEM_UNIX
+ data Winsize = Winsize
+     { ws_row    :: !Word16
+@@ -188,3 +196,5 @@ getDimensions =
+ #endif
+   where
+     defaultSize = (80, 24)
++
++#endif

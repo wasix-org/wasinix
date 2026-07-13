@@ -3,11 +3,13 @@
   nixpkgs,
   # wasmer runtime for the behavioural tests; null falls back to nixpkgs' wasmer.
   wasmerRuntime ? null,
+  # ghc-wasm-meta bindist GHC, for toolchain.haskell.
+  ghcWasm,
 }: let
   pkgs = import nixpkgs {inherit system;};
   inherit (pkgs) lib;
   wasixLib = import ./lib {inherit lib;};
-  toolchain = import ./toolchain {inherit pkgs;};
+  toolchain = import ./toolchain {inherit pkgs ghcWasm;};
 
   # The wasix cross target. Defined here (not derived from a profile) so
   # pkgsCross can be built before the profiles, which consume it for their

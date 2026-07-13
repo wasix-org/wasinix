@@ -16,6 +16,9 @@
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # The wasm32-wasi GHC toolchain (used by pkgs/toolchain/haskell). nixpkgs left
+    # un-followed on purpose: its pinned node is load-bearing for TH.
+    ghc-wasm-meta.url = "gitlab:haskell-wasm/ghc-wasm-meta?host=gitlab.haskell.org";
   };
 
   outputs = {
@@ -23,6 +26,7 @@
     nixpkgs,
     wasmer,
     treefmt-nix,
+    ghc-wasm-meta,
     ...
   }: let
     system = "x86_64-linux";
@@ -39,6 +43,10 @@
       inherit system nixpkgs;
       # runs the behavioural passthru.tests on the webc packages.
       inherit wasmerRuntime;
+      # bindist GHC for the wasi haskell toolchain (toolchain.haskell); pandoc
+      # (overlay/packages/pandoc) builds against it. TemplateHaskell works under
+      # node there (memory: wasix-haskell-th-blocked).
+      ghcWasm = ghc-wasm-meta.packages.${system};
     };
     lib = wasix.pkgs.lib;
     wasixLib = import ./pkgs/lib {inherit lib;};

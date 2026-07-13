@@ -114,11 +114,19 @@
         mkTrivial = n: helpers.libTweaks {} prev.${n};
         trivialPosition = ./trivial.nix;
       });
+
+  # `final.haskellPackages`, like nixpkgs' top-level attr: the toolchain's base
+  # wasi set plus the per-package overrides in ./haskell-packages (loaded like
+  # ./packages, the way python3.pkgs takes packageOverrides from ./python-packages).
+  haskellPackages = toolchain.haskell.packages.extend (import ./haskell-packages {
+    callArgs = {inherit final prev helpers lib toolchain;};
+  });
 in
   packages
   // rustSupport
   // wrapperFix
   // lib.optionalAttrs isWasixHost {
+    inherit haskellPackages;
     # Opt-in setup hook: disables wasm-opt during configurePhase so a wasm-opt
     # failure on a throwaway conftest can't corrupt feature detection (e.g.
     # sqlite/libzip's libm checks).

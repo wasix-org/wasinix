@@ -205,6 +205,9 @@ TARGETS = [
     Target("nixpkgs", "flake", input="nixpkgs"),
     Target("wasmer", "flake", input="wasmer"),
     Target("treefmt-nix", "flake", input="treefmt-nix"),
+    # bumping this rebuilds the whole haskell closure and needs the wasm patches
+    # re-verified (see docs/updating.md).
+    Target("ghc-wasm-meta", "flake", input="ghc-wasm-meta"),
 ]
 
 

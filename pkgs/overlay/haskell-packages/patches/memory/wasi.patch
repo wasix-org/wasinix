@@ -1,0 +1,123 @@
+diff --git a/Data/Memory/MemMap/Posix.hsc b/Data/Memory/MemMap/Posix.hsc
+index 16bc246..4cf63a4 100644
+--- a/Data/Memory/MemMap/Posix.hsc
++++ b/Data/Memory/MemMap/Posix.hsc
+@@ -17,7 +17,9 @@
+ --
+ -----------------------------------------------------------------------------
+ 
++#if !defined(wasm32_HOST_ARCH)
+ #include <sys/mman.h>
++#endif
+ #include <unistd.h>
+ 
+ {-# LANGUAGE ForeignFunctionInterface #-}
+@@ -117,18 +119,26 @@ data MemorySyncFlag =
+     deriving (Show,Read,Eq)
+ 
+ cvalueOfMemoryProts :: [MemoryProtection] -> CInt
++#if defined(wasm32_HOST_ARCH)
++cvalueOfMemoryProts _ = error "Data.Memory.MemMap.cvalueOfMemoryProts"
++#else
+ cvalueOfMemoryProts = foldl (.|.) 0 . map toProt
+   where toProt :: MemoryProtection -> CInt
+         toProt MemoryProtectionNone    = (#const PROT_NONE)
+         toProt MemoryProtectionRead    = (#const PROT_READ)
+         toProt MemoryProtectionWrite   = (#const PROT_WRITE)
+         toProt MemoryProtectionExecute = (#const PROT_EXEC)
++#endif
+ 
+ cvalueOfMemorySync :: [MemorySyncFlag] -> CInt
++#if defined(wasm32_HOST_ARCH)
++cvalueOfMemorySync _ = error "Data.Memory.MemMap.cvalueOfMemorySync"
++#else
+ cvalueOfMemorySync = foldl (.|.) 0 . map toSync
+   where toSync MemorySyncAsync      = (#const MS_ASYNC)
+         toSync MemorySyncSync       = (#const MS_SYNC)
+         toSync MemorySyncInvalidate = (#const MS_INVALIDATE)
++#endif
+ 
+ -- | Map pages of memory.
+ --
+@@ -139,10 +149,13 @@ cvalueOfMemorySync = foldl (.|.) 0 . map toSync
+ memoryMap :: Maybe (Ptr a)      -- ^ The address to map to if MapFixed is used.
+           -> CSize              -- ^ The length of the mapping
+           -> [MemoryProtection] -- ^ the memory protection associated with the mapping
+-          -> MemoryMapFlag      -- ^ 
++          -> MemoryMapFlag      -- ^
+           -> Maybe Fd
+           -> COff
+           -> IO (Ptr a)
++#if defined(wasm32_HOST_ARCH)
++memoryMap _ _ _ _ _ _ = error "Data.Memory.MemMap.memoryMap"
++#else
+ memoryMap initPtr sz prots flag mfd off =
+     throwErrnoIf (== m1ptr) "mmap" (c_mmap (maybe nullPtr id initPtr) sz cprot cflags fd off)
+   where m1ptr  = nullPtr `plusPtr` (-1)
+@@ -161,6 +174,7 @@ memoryMap initPtr sz prots flag mfd off =
+ 
+         toMapFlag MemoryMapShared  = (#const MAP_SHARED)
+         toMapFlag MemoryMapPrivate = (#const MAP_PRIVATE)
++#endif
+ 
+ -- | Unmap pages of memory
+ --
+@@ -172,6 +186,9 @@ memoryUnmap ptr sz = throwErrnoIfMinus1_ "munmap" (c_munmap ptr sz)
+ --
+ -- call 'madvise'
+ memoryAdvise :: Ptr a -> CSize -> MemoryAdvice -> IO ()
++#if defined(wasm32_HOST_ARCH)
++memoryAdvise _ _ _ = error "Data.Memory.MemMap.memoryAdvise"
++#else
+ memoryAdvise ptr sz adv = throwErrnoIfMinus1_ "madvise" (c_madvise ptr sz cadv)
+   where cadv = toAdvice adv
+ #if defined(POSIX_MADV_NORMAL)
+@@ -187,6 +204,7 @@ memoryAdvise ptr sz adv = throwErrnoIfMinus1_ "madvise" (c_madvise ptr sz cadv)
+         toAdvice MemoryAdviceWillNeed = (#const MADV_WILLNEED)
+         toAdvice MemoryAdviceDontNeed = (#const MADV_DONTNEED)
+ #endif
++#endif
+ 
+ -- | lock a range of process address space
+ --
+@@ -216,7 +234,7 @@ memorySync ptr sz flags = throwErrnoIfMinus1_ "msync" (c_msync ptr sz cflags)
+   where cflags = cvalueOfMemorySync flags
+ 
+ -- | Return the operating system page size.
+--- 
++--
+ -- call 'sysconf'
+ sysconfPageSize :: Int
+ sysconfPageSize = fromIntegral $ c_sysconf (#const _SC_PAGESIZE)
+diff --git a/Data/Memory/PtrMethods.hs b/Data/Memory/PtrMethods.hs
+index 88b4328..76c7bd5 100644
+--- a/Data/Memory/PtrMethods.hs
++++ b/Data/Memory/PtrMethods.hs
+@@ -35,7 +35,7 @@ memCreateTemporary :: Int -> (Ptr Word8 -> IO a) -> IO a
+ memCreateTemporary size f = allocaBytesAligned size 8 f
+ 
+ -- | xor bytes from source1 and source2 to destination
+--- 
++--
+ -- d = s1 xor s2
+ --
+ -- s1, nor s2 are modified unless d point to s1 or s2
+@@ -63,7 +63,7 @@ memXorWith destination !v source bytes
+ 
+ -- | Copy a set number of bytes from @src to @dst
+ memCopy :: Ptr Word8 -> Ptr Word8 -> Int -> IO ()
+-memCopy dst src n = c_memcpy dst src (fromIntegral n)
++memCopy dst src n = c_memcpy dst src (fromIntegral n) >>= \_ -> return ()
+ {-# INLINE memCopy #-}
+ 
+ -- | Set @n number of bytes to the same value @v
+@@ -114,7 +114,7 @@ memConstEqual p1 p2 n = loop 0 0
+             loop (i+1) (acc .|. e)
+ 
+ foreign import ccall unsafe "memset"
+-    c_memset :: Ptr Word8 -> Word8 -> CSize -> IO ()
++    c_memset :: Ptr Word8 -> Word8 -> CSize -> IO (Ptr Word8)
+ 
+ foreign import ccall unsafe "memcpy"
+-    c_memcpy :: Ptr Word8 -> Ptr Word8 -> CSize -> IO ()
++    c_memcpy :: Ptr Word8 -> Ptr Word8 -> CSize -> IO (Ptr Word8)

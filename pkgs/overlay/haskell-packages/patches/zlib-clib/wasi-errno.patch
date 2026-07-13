@@ -1,0 +1,14 @@
+diff --git a/cbits/gzguts.h b/cbits/gzguts.h
+index eba7208..083e2dc 100644
+--- a/cbits/gzguts.h
++++ b/cbits/gzguts.h
+@@ -127,8 +127,8 @@
+ #  include <windows.h>
+ #  define zstrerror() gz_strwinerror((DWORD)GetLastError())
+ #else
++#  include <errno.h>
+ #  ifndef NO_STRERROR
+-#    include <errno.h>
+ #    define zstrerror() strerror(errno)
+ #  else
+ #    define zstrerror() "stdio error (consult errno)"

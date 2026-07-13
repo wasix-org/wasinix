@@ -37,6 +37,7 @@ package's own bindings) fires on every run until resolved.
 | `crabsay`               | branch head                     | hashes                                        |
 | `nixpkgs`               | flake input                     | stale keys out of `python-registry/rels.json` |
 | `wasmer`, `treefmt-nix` | flake inputs                    |                                               |
+| `ghc-wasm-meta`         | flake input (wasm GHC bindist)  | full haskell rebuild + wasm-patch re-verify   |
 
 libffi has no pin: it follows nixpkgs' libffi with the wasix-org fork's wasi
 backend vendored as a patch (`packages/libffi/wasi-backend.patch`).

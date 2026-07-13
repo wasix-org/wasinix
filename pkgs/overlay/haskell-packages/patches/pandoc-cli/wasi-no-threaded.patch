@@ -1,0 +1,13 @@
+diff --git a/pandoc-cli.cabal b/pandoc-cli.cabal
+index 958be7b..9c60f94 100644
+--- a/pandoc-cli.cabal
++++ b/pandoc-cli.cabal
+@@ -61,7 +61,7 @@ common common-options
+ 
+ common common-executable
+   import:           common-options
+-  ghc-options:      -rtsopts -with-rtsopts=-A8m -threaded
++  ghc-options:      -rtsopts -with-rtsopts=-A8m
+ 
+ executable pandoc
+   import:          common-executable
