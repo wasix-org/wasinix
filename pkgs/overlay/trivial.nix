@@ -12,11 +12,13 @@
   "libdeflate"
   "libpng"
   "libsodium"
+  "libyaml" # pyyaml C ext (langchain/litellm/smolagents pull pyyaml)
   "lz4"
   "lzo"
   "mpfr"
   "oniguruma"
   "openjpeg"
+  "popt" # rsync
   "tinyxml-2"
   "xz"
 ]
