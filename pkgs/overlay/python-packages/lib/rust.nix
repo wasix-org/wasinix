@@ -10,14 +10,20 @@
   wasixRustDlTarget = "wasm32-wasmer-wasi-dl";
   rustLld = "${final.rustc}/lib/rustlib/${final.stdenv.buildPlatform.rust.rustcTarget}/bin/rust-lld";
 
-  # getrandom stays a fork (bcrypt/pydantic-core pull getrandom 0.3, no wasix backend upstream):
-  # its backend adds a dep on the `wasix` crate, which the vendor-patch can't introduce.
-  # target-lexicon needs no new dep, so it's vendored instead (patchVendoredTargetLexiconDl).
+  # The getrandom fork is still used by bcrypt/pydantic-core/jiter (kept as-is);
+  # patchVendoredGetrandomWasi below is the simpler, fork-free path for new crates.
   getrandomForkBranch = "wasix-0.3.3";
 
   # Patch a wheel's cargoDeps so vendored target-lexicon parses the wasix `dl`
   # env (no fork needed). See ../../../lib/vendor-target-lexicon-dl.nix.
   patchVendoredTargetLexiconDl = import ../../../lib/vendor-target-lexicon-dl.nix {
+    pkgs = final.buildPackages;
+  };
+
+  # Patch a wheel's cargoDeps so vendored getrandom 0.3/0.4 use their WASI
+  # Preview 1 backend on our target (no fork; a raw preview1 import). See
+  # ../../../lib/vendor-getrandom-wasi.nix.
+  patchVendoredGetrandomWasi = import ../../../lib/vendor-getrandom-wasi.nix {
     pkgs = final.buildPackages;
   };
 }
