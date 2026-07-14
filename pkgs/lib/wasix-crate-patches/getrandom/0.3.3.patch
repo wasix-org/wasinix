@@ -1,0 +1,13 @@
+diff --git a/src/backends.rs b/src/backends.rs
+index 2c539df..6789d92 100644
+--- a/src/backends.rs
++++ b/src/backends.rs
+@@ -133,7 +133,7 @@ cfg_if! {
+         pub use apple_other::*;
+     } else if #[cfg(all(target_arch = "wasm32", target_os = "wasi"))] {
+         cfg_if! {
+-            if #[cfg(target_env = "p1")] {
++            if #[cfg(not(any(target_env = "p2", target_env = "p3")))] {
+                 mod wasi_p1;
+                 pub use wasi_p1::*;
+             } else if #[cfg(target_env = "p2")] {

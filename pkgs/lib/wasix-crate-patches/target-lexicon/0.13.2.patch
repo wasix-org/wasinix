@@ -1,0 +1,28 @@
+diff --git a/src/targets.rs b/src/targets.rs
+index 83c0eac..9399df2 100644
+--- a/src/targets.rs
++++ b/src/targets.rs
+@@ -800,6 +800,7 @@ pub enum Environment {
+     Androideabi,
+     Eabi,
+     Eabihf,
++    Dl,
+     Gnu,
+     Gnuabi64,
+     Gnueabi,
+@@ -843,6 +844,7 @@ impl Environment {
+             Androideabi => Cow::Borrowed("androideabi"),
+             Eabi => Cow::Borrowed("eabi"),
+             Eabihf => Cow::Borrowed("eabihf"),
++            Dl => Cow::Borrowed("dl"),
+             Gnu => Cow::Borrowed("gnu"),
+             Gnuabi64 => Cow::Borrowed("gnuabi64"),
+             Gnueabi => Cow::Borrowed("gnueabi"),
+@@ -1592,6 +1594,7 @@ impl FromStr for Environment {
+             "androideabi" => Androideabi,
+             "eabi" => Eabi,
+             "eabihf" => Eabihf,
++            "dl" => Dl,
+             "gnu" => Gnu,
+             "gnuabi64" => Gnuabi64,
+             "gnueabi" => Gnueabi,

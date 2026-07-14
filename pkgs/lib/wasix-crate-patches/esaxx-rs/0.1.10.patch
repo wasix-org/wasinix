@@ -1,0 +1,22 @@
+diff --git a/build.rs b/build.rs
+index 3b0ea12..3d3370c 100644
+--- a/build.rs
++++ b/build.rs
+@@ -3,7 +3,7 @@
+ fn main() {
+     cc::Build::new()
+         .cpp(true)
+-        .flag("-std=c++11")
++        .flag("-std=c++11").flag("-fexceptions").flag("-fwasm-exceptions")
+         .static_crt(true)
+         .file("src/esaxx.cpp")
+         .include("src")
+@@ -15,7 +15,7 @@ fn main() {
+ fn main() {
+     cc::Build::new()
+         .cpp(true)
+-        .flag("-std=c++11")
++        .flag("-std=c++11").flag("-fexceptions").flag("-fwasm-exceptions")
+         .flag("-stdlib=libc++")
+         .static_crt(true)
+         .file("src/esaxx.cpp")

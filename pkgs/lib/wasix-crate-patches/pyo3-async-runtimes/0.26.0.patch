@@ -1,0 +1,25 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index c700008..a9fe242 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -232,7 +232,6 @@ optional = true
+ version = "1.13"
+ features = [
+     "rt",
+-    "rt-multi-thread",
+     "time",
+ ]
+ optional = true
+diff --git a/src/tokio.rs b/src/tokio.rs
+index 96fc7ee..ec7004f 100644
+--- a/src/tokio.rs
++++ b/src/tokio.rs
+@@ -197,7 +197,7 @@ pub fn get_runtime<'a>() -> &'a Runtime {
+ }
+ 
+ fn multi_thread() -> Builder {
+-    let mut builder = Builder::new_multi_thread();
++    let mut builder = Builder::new_current_thread();
+     builder.enable_all();
+     builder
+ }
