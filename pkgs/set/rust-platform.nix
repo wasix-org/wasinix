@@ -30,14 +30,10 @@
     cargo = cargoWasixCargo;
   };
 
-  # maturin rejects the wasix `dl` triple via target-lexicon. The wasix-org/maturin
-  # fork was only a target-lexicon [patch] (source == upstream), so patch nixpkgs'
-  # maturin's vendored target-lexicon instead.
-  patchVendoredTargetLexiconDl = import ../lib/vendor-target-lexicon-dl.nix {
-    pkgs = pkgsCross.buildPackages;
-  };
+  # maturin panics parsing the wasix `dl` triple; the vendor-patch hook adds the
+  # `dl` variant to its vendored target-lexicon from the same tree the wheels use.
   wasixMaturin = pkgsCross.buildPackages.maturin.overrideAttrs (old: {
-    cargoDeps = patchVendoredTargetLexiconDl old.cargoDeps;
+    nativeBuildInputs = (old.nativeBuildInputs or []) ++ [wasixVendorPatchHook];
   });
 
   # cargo-wasix runs `wasm-opt --translate-to-exnref` on the `.wasm` CLIs it
@@ -68,12 +64,25 @@
       }
       fixupOutputHooks+=(_wasixTranslateSoToExnref)
     '');
+
+  # Applies the crate-patch tree to vendored sources at preBuild. See
+  # ../lib/wasix-vendor-patch-hook.sh.
+  wasixVendorPatchHook =
+    pkgsCross.makeSetupHook {
+      name = "wasix-vendor-patch-hook";
+      propagatedBuildInputs = [pkgsCross.buildPackages.jq];
+      substitutions.patchesDir = "${../lib/wasix-crate-patches}";
+    }
+    ../lib/wasix-vendor-patch-hook.sh;
 in
   base
   // {
     # Expose cargo/rustc at top level so consumers avoid the deprecated rustPlatform.rust.* aliases.
     cargo = cargoWasixCargo;
     rustc = wasixRustToolchain;
+
+    # for the setuptools-rust hook to propagate too (maturin/buildRustPackage pull it in directly)
+    inherit wasixVendorPatchHook;
 
     # Re-template maturinBuildHook for the dl target + rust-lld (nixpkgs bakes in
     # wasm32-wasip1, which our toolchain has no std for). Uses nixpkgs' own hook
@@ -86,6 +95,7 @@ in
           cargoWasixCargo
           wasixRustToolchain
           exnrefTranslateHook
+          wasixVendorPatchHook
         ];
         substitutions = {
           rustcTargetSpec = "wasm32-wasmer-wasi-dl";
@@ -106,6 +116,8 @@ in
         doInstallCheck = false;
         # cargo-auditable would re-link via the host rustc; unneeded for wasm.
         auditable = false;
+
+        nativeBuildInputs = (prevArgs.nativeBuildInputs or []) ++ [wasixVendorPatchHook];
 
         # setEnv points CARGO_TARGET_<wasm>_LINKER at the wasi clang, which can't
         # take rustc's raw wasm-ld flags; override it with the toolchain's rust-lld

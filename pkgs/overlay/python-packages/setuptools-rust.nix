@@ -9,7 +9,9 @@
 }: let
   rust = import ./lib/rust.nix {inherit final;};
 in
-  pyprev.setuptools-rust.overrideAttrs (_: {
+  pyprev.setuptools-rust.overrideAttrs (old: {
+    # setuptools-rust wheels skip maturinBuildHook, so propagate the vendor-patch hook here too.
+    propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ [final.rustPlatform.wasixVendorPatchHook];
     # cargoSetupHook sets a linker only for the stock rustcTarget, not our custom
     # cargoBuildTarget, and its linker is the clang cc wrapper, wrong for rustc's wasm-ld.
     setupHook = final.replaceVars "${final.path}/pkgs/development/python-modules/setuptools-rust/setuptools-rust-hook.sh" {

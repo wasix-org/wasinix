@@ -9,17 +9,4 @@
   # the toolchain's build-host rust triple; derive it so it can't drift.
   wasixRustDlTarget = "wasm32-wasmer-wasi-dl";
   rustLld = "${final.rustc}/lib/rustlib/${final.stdenv.buildPlatform.rust.rustcTarget}/bin/rust-lld";
-
-  # Patch a wheel's cargoDeps so vendored target-lexicon parses the wasix `dl`
-  # env (no fork needed). See ../../../lib/vendor-target-lexicon-dl.nix.
-  patchVendoredTargetLexiconDl = import ../../../lib/vendor-target-lexicon-dl.nix {
-    pkgs = final.buildPackages;
-  };
-
-  # Patch a wheel's cargoDeps so vendored getrandom 0.3/0.4 use their WASI
-  # Preview 1 backend on our target (no fork; a raw preview1 import). See
-  # ../../../lib/vendor-getrandom-wasi.nix.
-  patchVendoredGetrandomWasi = import ../../../lib/vendor-getrandom-wasi.nix {
-    pkgs = final.buildPackages;
-  };
 }

@@ -1,16 +1,13 @@
-# maturin/pyo3 wheel with a `cc`-crate OpenSSL shim. CC is the wasix cc so the
-# shim cross-compiles; OPENSSL_NO_VENDOR links our cross openssl;
-# CFLAGS=-fwasm-exceptions (ehpic PIC needs wasm-EH); plus the shared
-# maturin/pyo3 wiring (PYO3_CROSS_LIB_DIR, pyo3/extension-module,
-# target-lexicon dl env; see lib/rust.nix).
+# maturin/pyo3 wheel with a `cc`-crate OpenSSL shim. CC is the wasix cc so the shim
+# cross-compiles; OPENSSL_NO_VENDOR links our cross openssl; CFLAGS=-fwasm-exceptions
+# (ehpic PIC needs wasm-EH); plus the shared maturin/pyo3 wiring (see lib/rust.nix).
 #
-# The archive link leaves ~1000 openssl symbols as dylib imports
-# (import-dynamic swallows the unresolved tail). Since the python main module
-# started exporting its own statically linked libcrypto (_ssl/_hashlib),
-# those imports bind to python's copy and _rust ends up straddling two
-# half-initialized libcryptos: the default provider fails init the moment
-# python's copy initialized first (hashlib before cryptography). Whole-archive
-# libssl+libcrypto into the dylib so every openssl reference resolves inside.
+# The archive link leaves ~1000 openssl symbols as dylib imports (import-dynamic
+# swallows the unresolved tail). Since the python main module exports its own static
+# libcrypto (_ssl/_hashlib), those imports bind to python's copy and _rust straddles
+# two half-initialized libcryptos: the default provider fails init when python's copy
+# initialized first (hashlib before cryptography). Whole-archive libssl+libcrypto into
+# the dylib so every openssl reference resolves inside.
 {
   pyprev,
   final,
@@ -21,7 +18,6 @@
   rust = import ./lib/rust.nix {inherit final;};
 in
   helpers.libTweaks {
-    cargoDeps = rust.patchVendoredTargetLexiconDl;
     env = {
       CC = "${final.stdenv.cc}/bin/${final.stdenv.cc.targetPrefix}cc";
       OPENSSL_NO_VENDOR = "1";

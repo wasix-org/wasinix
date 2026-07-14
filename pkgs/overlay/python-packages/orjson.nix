@@ -10,7 +10,6 @@
   rust = import ./lib/rust.nix {inherit final;};
 in
   helpers.libTweaks {
-    cargoDeps = rust.patchVendoredTargetLexiconDl;
     env = {
       PYO3_CROSS_LIB_DIR = rust.pyo3CrossLibDir;
       CFLAGS = "-fwasm-exceptions";
