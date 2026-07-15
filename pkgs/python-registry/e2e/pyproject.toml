@@ -10,7 +10,7 @@ requires-python = ">=3.13"
 dependencies = [
   "requests",     # pure; drags urllib3/idna/certifi/charset-normalizer off the index
   "numpy",        # meson C extension
-  "pandas",       # meson C++; drags python-dateutil/pytz/tzdata/six
+  "pandas",       # meson C++; drags python-dateutil/tzdata/six (3.0 dropped pytz for zoneinfo)
   "pillow",       # C extension linking zlib/libjpeg/…
   "lxml",         # C extension linking libxml2 + libxslt
   "markupsafe",   # small setuptools C extension

@@ -232,6 +232,13 @@
           "$out"/bin/python${pyVer}-config; do
           [ -e "$f" ] && sed -i 's/-lwasi-emulated-signal//g; s/-latomic//g' "$f"
         done
+
+        # PEP 739 build-details.json (new in 3.14) is generated from the build
+        # interpreter on cross builds, so abi.extension_suffix is absent and
+        # suffixes.extensions carries the build-host suffix. maturin (the rust
+        # wheels) requires abi.extension_suffix, so rewrite abi/suffixes from the
+        # target's real EXT_SUFFIX.
+        ${final.buildPackages.python3.interpreter} -c "import json,glob,sys; L=sys.argv[1]; g={}; exec(open(glob.glob(L+'/_sysconfigdata*.py')[0]).read(),g); e=g['build_time_vars']['EXT_SUFFIX']; p=L+'/build-details.json'; d=json.load(open(p)); d['abi']['extension_suffix']=e; d['abi'].setdefault('stable_abi_suffix','.abi3.so'); d['suffixes']['extensions']=[e,'.abi3.so','.so']; json.dump(d,open(p,'w'),indent=2)" "$out/lib/python${pyVer}"
       '';
 
       dontCheckForBrokenSymlinks = true;
@@ -254,7 +261,7 @@
         wasix.supportedProfiles = ["ehpic"];
         wasmer = {
           name = "python";
-          entrypoint = "python3.13";
+          entrypoint = "python${pyVer}";
           autoSelfMount = true;
           # autoSelfMount only scans bin/*.wasm, so paths living in a .py or the sysconfig are
           # mounted explicitly: the wasix bash (baked into subprocess.py) and tzdata

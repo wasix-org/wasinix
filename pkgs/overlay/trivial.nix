@@ -5,7 +5,6 @@
   "brotli"
   "bzip2"
   "expat"
-  "giflib"
   "gmp"
   "jansson"
   "libb2"

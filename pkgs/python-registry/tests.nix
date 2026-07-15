@@ -114,8 +114,9 @@ in {
       ')
       python3 -m pip install ${pipFlags} --target site "''${deps[@]}"
 
-      # transitive-only modules can only arrive through resolver metadata
-      for mod in urllib3 idna certifi charset_normalizer dateutil pytz six.py cffi pycparser; do
+      # transitive-only modules can only arrive through resolver metadata. pandas 3.0 dropped its
+      # pytz dependency (it uses stdlib zoneinfo + tzdata now), so pytz is no longer resolved here.
+      for mod in urllib3 idna certifi charset_normalizer dateutil six.py cffi pycparser; do
         if [ ! -e "site/$mod" ]; then
           echo "transitive dependency '$mod' was not resolved from the registry" >&2
           exit 1

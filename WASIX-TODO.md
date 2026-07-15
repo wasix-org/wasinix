@@ -173,6 +173,19 @@ instruction")` under the pinned wasmer (7.2.0), which only accepts the new
   `wasix-org/libffi` fork adds one.
 - **pcre2grep callout-fork** 🟡: uses fork();
   `--disable-pcre2grep-callout-fork` (the library is unaffected).
+- **glib** 🟡: never built on wasix. Its bundled gnulib builds broken math
+  replacements (meson `cc.links` fails wholesale on this cross-static stdenv, so
+  every math fn is "missing"; `isinf.c` is Visual-Studio-only) and GIO needs
+  socket ancillary data (`struct cmsghdr`/`CMSG_*`/`SCM_RIGHTS` sit behind
+  `__wasilibc_unmodified_upstream`, which wasi-libc compiles out), plus fork for
+  GSpawn/GResolver. Pulled only by matplotlib → libraqm → harfbuzz's optional
+  hb-glib; `packages/harfbuzz.nix` disables harfbuzz's glib/gobject features and
+  drops the input (libraqm uses harfbuzz's core shaping API, not hb-glib). Fix:
+  port glib (substantial) or keep hb-glib off.
+- **graphite2** 🟡: its docs build a `python3.withPackages` env that
+  cross-instantiates and fails to compile on wasix (`--ld-path` unused, then
+  `-Werror`). Only pulled by harfbuzz's Graphite shaping, which libraqm doesn't
+  use; `packages/harfbuzz.nix` sets `withGraphite2 = false`.
 
 ## Rust
 
