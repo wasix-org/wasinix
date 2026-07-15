@@ -61,6 +61,9 @@ That builder is machine-specific, so it lives in a gitignored `.remote-builder`
 (copy `.remote-builder.example` and fill in host, key, system, features).
 `scripts/remote-builder.sh` turns it into ready-made flags; never hardcode a
 host or key.
+Note that, as it is gitignored, new worktrees may be missing the file.
+Check in other worktrees and copy the file over in that case. Tell the user
+when you do this.
 
 - `scripts/remote-builder.sh check`: configured and reachable?
 - Bulk: `nix-fast-build --skip-cached --flake
