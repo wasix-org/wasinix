@@ -16,9 +16,10 @@
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # The wasm32-wasi GHC toolchain (used by pkgs/toolchain/haskell). nixpkgs left
-    # un-followed on purpose: its pinned node is load-bearing for TH.
-    ghc-wasm-meta.url = "gitlab:haskell-wasm/ghc-wasm-meta?host=gitlab.haskell.org";
+    ghc-wasm-meta = {
+      url = "gitlab:haskell-wasm/ghc-wasm-meta?host=gitlab.haskell.org";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {

@@ -54,15 +54,17 @@
     "ghc-wasm-meta": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": [
+          "nixpkgs"
+        ]
       },
       "locked": {
         "host": "gitlab.haskell.org",
-        "lastModified": 1736549295,
-        "narHash": "sha256-a9rXRaQcSnW2Sxsn0RD4hIlCpNC7R63jAJAyyjBviaw=",
+        "lastModified": 1783919537,
+        "narHash": "sha256-YBXYe6BXFmwhQ4cJXwsknv3SCsNWUs8iGE2bUaaS9J8=",
         "owner": "haskell-wasm",
         "repo": "ghc-wasm-meta",
-        "rev": "6a8b8457df83025bed2a8759f5502725a827104b",
+        "rev": "1da639656e710abae174e7f736507461d1b5bca5",
         "type": "gitlab"
       },
       "original": {
@@ -74,27 +76,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1736344531,
-        "narHash": "sha256-8YVQ9ZbSfuUk2bUf2KRj60NRraLPKPS0Q4QFTbc+c2c=",
+        "lastModified": 1784120854,
+        "narHash": "sha256-KesHgItiZPgGX740axSiQLcIQ8D24MDqNpkKYWIek8k=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "bffc22eb12172e6db3c5dde9e3e5628f8e3e7912",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_2": {
-      "locked": {
-        "lastModified": 1783776592,
-        "narHash": "sha256-UgCQzxeWI75XM8G+hPrPh+MKzEPjG3SpAj7dtqSbksA=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3",
+        "rev": "753cc8a3a87467296ddd1fa93f0cc3e81120ee46",
         "type": "github"
       },
       "original": {
@@ -107,7 +93,7 @@
     "root": {
       "inputs": {
         "ghc-wasm-meta": "ghc-wasm-meta",
-        "nixpkgs": "nixpkgs_2",
+        "nixpkgs": "nixpkgs",
         "treefmt-nix": "treefmt-nix",
         "wasmer": "wasmer"
       }
@@ -215,11 +201,11 @@
         "wasinix": "wasinix"
       },
       "locked": {
-        "lastModified": 1783618531,
-        "narHash": "sha256-EhOO3j6K7ce20F2gOivucEN458ppLJK4E8HDaLaP0bg=",
+        "lastModified": 1784193289,
+        "narHash": "sha256-YNIXA1V2y5zyRNFxty8w6Q2nOgrxHBfGz5tnVRHDriU=",
         "ref": "refs/heads/main",
-        "rev": "fb434bd22ad14903806a93357406fbed1a6edaee",
-        "revCount": 20744,
+        "rev": "503f53f829d5b4524ac7dd6f8217e919d7bbf8c4",
+        "revCount": 20745,
         "submodules": true,
         "type": "git",
         "url": "https://github.com/wasmerio/wasmer"
