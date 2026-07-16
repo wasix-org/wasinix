@@ -200,18 +200,21 @@
   # of python3.pkgs.<attr>, each with an import smoke-test. cpython needs PIC
   # (ctypes/dl) and the exnref EH encoding wasmer accepts, so the wheels are a
   # single set anchored at exnrefEhpic.
-  # Built per python version (nested pythonWheels.py313/.py314.<attr>); each wheel's import test
-  # runs on that version's own python webc. Lazy on wasmerLayer (no eval cycle).
-  mkPythonWheels = pyAttr: webcName:
+  # Wheels split three ways: noarch (python-version-independent, e.g. a redistributed binary) built
+  # ONCE on the default python; everything else per interpreter (cp313/cp314). Each import test runs
+  # on its python webc. Lazy on wasmerLayer. Nothing is noarch yet; the split is ready for it.
+  mkPythonWheels = pyAttr: webcName: select:
     import ./python-wheels.nix {
-      inherit pkgs lib mkTestGroup;
+      inherit pkgs lib mkTestGroup select;
       python3 = nixpkgsByProfile.exnrefEhpic.${pyAttr};
       wasmer = wasmerRuntime;
       pythonWebc = wasmerLayer.wasmerPackages.${webcName}.webc;
     };
+  isNoarch = e: e.noarch or false;
   pythonWheels = {
-    py313 = mkPythonWheels "python313" "python3.13";
-    py314 = mkPythonWheels "python314" "python3.14";
+    noarch = mkPythonWheels "python314" "python3.14" isNoarch;
+    py313 = mkPythonWheels "python313" "python3.13" (e: !isNoarch e);
+    py314 = mkPythonWheels "python314" "python3.14" (e: !isNoarch e);
   };
 
   makeWasmerPackage = pkgs.callPackage ./wasmer/make-wasmer-package.nix {
@@ -239,13 +242,15 @@
   pythonRegistry = import ./python-registry {
     inherit pkgs lib mkTestGroup;
     pythonSets = {
+      # 314 carries the full set (noarch + its version-specific), so its closure has every
+      # noarch + cp314 wheel; 313 adds only version-specific (cp313), pure deps dedupe.
+      py314 = {
+        python3 = nixpkgsByProfile.exnrefEhpic.python314;
+        pythonWheels = pythonWheels.noarch // pythonWheels.py314;
+      };
       py313 = {
         python3 = nixpkgsByProfile.exnrefEhpic.python313;
         pythonWheels = pythonWheels.py313;
-      };
-      py314 = {
-        python3 = nixpkgsByProfile.exnrefEhpic.python314;
-        pythonWheels = pythonWheels.py314;
       };
     };
     inherit (wasmerLayer) testLib;

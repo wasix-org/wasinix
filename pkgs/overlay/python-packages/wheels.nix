@@ -6,6 +6,11 @@
 #   attr      python3.pkgs.<attr> (also the build-target / CI key)
 #   pyImport  module the smoke-test imports (default: attr with '-' -> '_')
 #   skipTest  ship without an import test (rare; note why)
+#   noarch    build ONCE on the default python instead of per interpreter. Only for
+#             genuinely python-version-independent packages that ship no python code
+#             (a redistributed binary, e.g. pandoc-binary). A py3-none-any tag alone
+#             is NOT enough: a pure-python library still depends on python. The
+#             noarch-tag check enforces the tag; the "no python code" call is yours.
 [
   # ── pure-python (no C extension) ───────────────────────────────────────────────
   {attr = "six";}
@@ -152,7 +157,7 @@
   {attr = "pycurl";} # curl; overlay/python-packages/pycurl.nix
   {attr = "jq";} # jq + oniguruma
   {attr = "jqpy";} # spawns the jq CLI; overlay/python-packages/jqpy.nix
-  {attr = "pypandoc";} # spawns the pandoc CLI; overlay/python-packages/pypandoc.nix
+  {attr = "pypandoc";} # spawns the wasm pandoc CLI; overlay/python-packages/pypandoc.nix
   {attr = "apsw";} # sqlite
   {
     attr = "pynacl";

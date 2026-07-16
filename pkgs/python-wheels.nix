@@ -12,6 +12,10 @@
   # wasmer runtime for the smoke-tests (flake input; null -> pkgs.wasmer).
   wasmer ? null,
   mkTestGroup,
+  # Which worklist entries this call builds. noarch wheels (python-version-independent: they ship
+  # no python code, e.g. a redistributed binary) build once on the default python; everything else
+  # builds per interpreter. See pkgs/default.nix.
+  select ? (_: true),
 }: let
   effWasmer =
     if wasmer != null
@@ -98,6 +102,33 @@
       echo "OK ${e.attr}" > "$out"
     '';
 
+  # Guards a `noarch` mark (a python-version-independent package, e.g. a redistributed binary): the
+  # wheel AND its whole python-dep closure must be py3-none-any. A version-specific (cp-tagged)
+  # member builds only on the default python, so the other interpreter can't resolve it from the
+  # merged registry. Runs on the default python.
+  noarchClosureTest = e: let
+    wheel = python3.pkgs.${e.attr};
+    members = lib.filter (m: m ? dist) ([wheel] ++ python3.pkgs.requiredPythonModules [wheel]);
+  in
+    pkgs.runCommand "wheel-noarch-closure-${e.attr}" {} ''
+      fail=
+      for dist in ${lib.escapeShellArgs (map (m: "${m.dist}") members)}; do
+        whl=$(${pkgs.findutils}/bin/find "$dist" -name '*.whl' | head -1)
+        case "$(basename "$whl")" in
+          *-py3-none-any.whl | *-py2.py3-none-any.whl) ;;
+          *)
+            echo "noarch '${e.attr}': closure member $(basename "$whl") is version-specific" >&2
+            fail=1
+            ;;
+        esac
+      done
+      if [ -n "$fail" ]; then
+        echo "-> a noarch wheel's whole closure must be py3-none-any; make the dep noarch or drop the mark." >&2
+        exit 1
+      fi
+      echo "OK ${e.attr}: closure all py3-none-any" > "$out"
+    '';
+
   # python3.pkgs.<attr> with .tests added (passthru-only, so the store path is
   # unchanged). Inherited nixpkgs passthru.tests are dropped: they are x86 test
   # suites that would leak into `checks`.
@@ -106,11 +137,12 @@
       passthru =
         removeAttrs (o.passthru or {}) ["tests"]
         // lib.optionalAttrs (!(e.skipTest or false)) {
-          tests = mkTestGroup "wheel-${e.attr}" {
-            import = importTest e;
-            self-contained = selfContainedTest e;
-          };
+          tests = mkTestGroup "wheel-${e.attr}" ({
+              import = importTest e;
+              self-contained = selfContainedTest e;
+            }
+            // lib.optionalAttrs (e.noarch or false) {noarch-closure = noarchClosureTest e;});
         };
     });
 in
-  lib.listToAttrs (map (e: lib.nameValuePair e.attr (mkWheel e)) wheelList)
+  lib.listToAttrs (map (e: lib.nameValuePair e.attr (mkWheel e)) (lib.filter select wheelList))
