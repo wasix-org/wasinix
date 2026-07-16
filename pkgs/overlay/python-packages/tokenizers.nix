@@ -6,7 +6,6 @@
 {
   pyprev,
   final,
-  wasixPython,
   helpers,
   ...
 }: let
@@ -29,7 +28,6 @@ in
         --replace-fail 'Builder::new_multi_thread()' 'Builder::new_current_thread()'
     '';
     env = {
-      PYO3_CROSS_LIB_DIR = wasixPython.crossLibDir;
       CC = cc;
       CXX = cxx;
       # onig_sys (oniguruma, C) builds PIC (needs wasm-EH) and uses setjmp/longjmp

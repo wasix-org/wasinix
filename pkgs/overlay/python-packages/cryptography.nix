@@ -11,7 +11,6 @@
 {
   pyprev,
   final,
-  wasixPython,
   helpers,
   ...
 }: let
@@ -21,7 +20,6 @@ in
     env = {
       CC = "${final.stdenv.cc}/bin/${final.stdenv.cc.targetPrefix}cc";
       OPENSSL_NO_VENDOR = "1";
-      PYO3_CROSS_LIB_DIR = wasixPython.crossLibDir;
       CFLAGS = "-fwasm-exceptions";
       # The extension links through rustc's own wasm rust-lld, which keeps
       # -C link-arg order, so the --whole-archive bracketing survives.

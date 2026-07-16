@@ -8,12 +8,10 @@
 # to the correct 6-arg signature (pyo3-ffi's unused 5-arg decl is then dead).
 {
   pyprev,
-  wasixPython,
   helpers,
   ...
 }:
 helpers.libTweaks {
-  env.PYO3_CROSS_LIB_DIR = wasixPython.crossLibDir;
   postPatch = ''
     cat >> src/serialize/uuid.rs <<'RS'
 

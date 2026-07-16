@@ -3,13 +3,11 @@
 # and pyo3-ffi/extension-module so the cdylib doesn't link libpython.
 {
   pyprev,
-  wasixPython,
   helpers,
   ...
 }:
 helpers.libTweaks {
   env = {
-    PYO3_CROSS_LIB_DIR = wasixPython.crossLibDir;
     CFLAGS = "-fwasm-exceptions";
   };
   maturinBuildFlags = ["--features" "pyo3-ffi/extension-module"];

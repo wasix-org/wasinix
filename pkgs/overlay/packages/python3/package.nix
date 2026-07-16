@@ -242,6 +242,7 @@
             if [ -e "$out/lib/python${pyVer}/build-details.json" ]; then
               ${final.buildPackages.python3.interpreter} -c "import json,glob,sys; L=sys.argv[1]; g={}; exec(open(glob.glob(L+'/_sysconfigdata*.py')[0]).read(),g); e=g['build_time_vars']['EXT_SUFFIX']; p=L+'/build-details.json'; d=json.load(open(p)); d['abi']['extension_suffix']=e; d['abi'].setdefault('stable_abi_suffix','.abi3.so'); d['suffixes']['extensions']=[e,'.abi3.so','.so']; json.dump(d,open(p,'w'),indent=2)" "$out/lib/python${pyVer}"
             fi
+
           '';
 
           dontCheckForBrokenSymlinks = true;
@@ -302,12 +303,35 @@
           # extension wheels cross-build against the python they target (a 3.13 wheel vs 3.13, not
           # the default 3.14), else the .so gets the wrong cpython-XYZ soabi (rust) or compiles
           # against the wrong headers (pyarrow) and won't import. final.python3 would pin the default.
-          packageOverrides = import ../../python-packages {
-            callArgs = {
-              inherit final prev preferredProfilePackages helpers lib;
-              wasixPython = py;
+          packageOverrides = pyfinal: pyprev:
+            (import ../../python-packages {
+              callArgs = {
+                inherit final prev preferredProfilePackages helpers lib;
+                wasixPython = py;
+              };
+            })
+            pyfinal
+            pyprev
+            // {
+              # PYO3_CROSS_LIB_DIR for every rust/pyo3 wheel, set once on the python's own builder
+              # instead of per wheel. It points at THIS interpreter's sysconfig (version-specific), so
+              # it can't be a static value in the shared profile stdenv; buildPythonPackage is the
+              # per-python build-env home. extendMkDerivation keeps the functor set intact (a bare
+              # lambda breaks the cross-splice/.override machinery), as set/rust-platform.nix does.
+              # Only for the wasix set: packageOverrides also reach the native build python (splicing),
+              # and PYO3_CROSS_LIB_DIR there would make pyo3 cross-compile native build tools (e.g.
+              # ast-serialize) against the wasm python, breaking them.
+              buildPythonPackage =
+                if pyprev.python.stdenv.hostPlatform.isWasix or false
+                then
+                  lib.extendMkDerivation {
+                    constructDrv = pyprev.buildPythonPackage;
+                    extendDrvArgs = _finalAttrs: prevArgs: {
+                      env = {PYO3_CROSS_LIB_DIR = "${py}/lib/${py.libPrefix}";} // (prevArgs.env or {});
+                    };
+                  }
+                else pyprev.buildPythonPackage;
             };
-          };
         });
     in
       py;
