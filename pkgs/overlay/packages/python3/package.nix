@@ -304,14 +304,16 @@
           # the default 3.14), else the .so gets the wrong cpython-XYZ soabi (rust) or compiles
           # against the wrong headers (pyarrow) and won't import. final.python3 would pin the default.
           #
-          # Gate the WHOLE set on the wasix host: `.override` also applies packageOverrides to this
-          # interpreter's own native build python (pythonForBuild) via splicing, but these are all
-          # wasix-specific fixes (PYO3_CROSS_LIB_DIR, the setuptools-rust wasm hook, ...). Applied to
-          # native build tools they break them (a wasm PYO3_CROSS_LIB_DIR makes pyo3 cross-compile
-          # native ast-serialize). So the build python stays vanilla, mirroring overlay/default.nix's
-          # isWasixHost gate for the top-level package set.
-          packageOverrides = pyfinal: pyprev:
-            lib.optionalAttrs (pyprev.python.stdenv.hostPlatform.isWasix or false) (
+          # `.override` also applies packageOverrides to this interpreter's own native build python
+          # (pythonForBuild) via splicing. Most overrides are wasix host fixes (PYO3_CROSS_LIB_DIR,
+          # extension-wheel tweaks) that break native build tools when applied there (a wasm
+          # PYO3_CROSS_LIB_DIR makes pyo3 cross-compile native ast-serialize), so the build python
+          # stays vanilla, mirroring overlay/default.nix's isWasixHost gate. The exception is
+          # setuptools-rust: it is a build TOOL that runs on the build host to compile rust FOR wasix
+          # wheels, so it must keep our wasm-target hook natively (else bcrypt/tiktoken build against
+          # wasm32-wasip1, which our rustc has no std for). See python-packages/setuptools-rust.nix.
+          packageOverrides = pyfinal: pyprev: let
+            wasixOverrides =
               (import ../../python-packages {
                 callArgs = {
                   inherit final prev preferredProfilePackages helpers lib;
@@ -331,8 +333,11 @@
                     env = {PYO3_CROSS_LIB_DIR = "${py}/lib/${py.libPrefix}";} // (prevArgs.env or {});
                   };
                 };
-              }
-            );
+              };
+          in
+            if pyprev.python.stdenv.hostPlatform.isWasix or false
+            then wasixOverrides
+            else {inherit (wasixOverrides) setuptools-rust;};
         });
     in
       py;
