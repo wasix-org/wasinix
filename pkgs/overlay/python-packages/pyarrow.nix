@@ -13,13 +13,13 @@
 # arrow's SetupCxxFlags fatals ("Unknown system processor") without ARROW_CPU_FLAG.
 {
   pyprev,
-  final,
+  wasixPython,
   lib,
   helpers,
   ...
 }: let
   wheels = import ./lib/wheels.nix {inherit lib;};
-  py = final.python3;
+  py = wasixPython;
   crossNumpyInc = "${py.pkgs.numpy}/lib/${py.libPrefix}/site-packages/numpy/_core/include";
 in
   wheels.onlyOnWasix pyprev.pyarrow (

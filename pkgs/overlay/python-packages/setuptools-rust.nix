@@ -5,6 +5,7 @@
 {
   pyprev,
   final,
+  wasixPython,
   ...
 }: let
   rust = import ./lib/rust.nix {inherit final;};
@@ -15,7 +16,7 @@ in
     # cargoSetupHook sets a linker only for the stock rustcTarget, not our custom
     # cargoBuildTarget, and its linker is the clang cc wrapper, wrong for rustc's wasm-ld.
     setupHook = final.replaceVars "${final.path}/pkgs/development/python-modules/setuptools-rust/setuptools-rust-hook.sh" {
-      pyLibDir = rust.pyo3CrossLibDir;
+      pyLibDir = wasixPython.crossLibDir;
       cargoBuildTarget = rust.wasixRustDlTarget;
       cargoLinkerVar = "WASM32_WASMER_WASI_DL";
       targetLinker = rust.rustLld;

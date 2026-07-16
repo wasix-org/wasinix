@@ -11,17 +11,17 @@
 {
   pyprev,
   final,
+  wasixPython,
   helpers,
   ...
 }: let
   lib = final.lib;
-  rust = import ./lib/rust.nix {inherit final;};
 in
   helpers.libTweaks {
     env = {
       CC = "${final.stdenv.cc}/bin/${final.stdenv.cc.targetPrefix}cc";
       OPENSSL_NO_VENDOR = "1";
-      PYO3_CROSS_LIB_DIR = rust.pyo3CrossLibDir;
+      PYO3_CROSS_LIB_DIR = wasixPython.crossLibDir;
       CFLAGS = "-fwasm-exceptions";
       # The extension links through rustc's own wasm rust-lld, which keeps
       # -C link-arg order, so the --whole-archive bracketing survives.

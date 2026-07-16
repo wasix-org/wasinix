@@ -94,7 +94,8 @@
     flakeChecks =
       collectTests wasix.wasmerPackages
       // collectTests wasix.toolchainTestPkgs
-      // collectTestsPrefixed "wheel-" wasix.pythonWheels
+      # pythonWheels is nested by version (py313/py314); collect as wheel-py314-<attr>.
+      // lib.concatMapAttrs (pv: wheelSet: collectTestsPrefixed "wheel-${pv}-" wheelSet) wasix.pythonWheels
       // collectTests {python-registry = wasix.pythonRegistry;}
       // lib.mapAttrs' (p: lib.nameValuePair "abi-${p}") wasix.abiChecks
       // {treefmt = treefmtEval.config.build.check self;};

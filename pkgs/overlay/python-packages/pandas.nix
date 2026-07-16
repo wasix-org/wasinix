@@ -3,13 +3,13 @@
 # so its cython buffers fail to import ("Buffer dtype mismatch"). Point it at the cross numpy.
 {
   pyprev,
-  final,
+  wasixPython,
   lib,
   helpers,
   ...
 }: let
   wheels = import ./lib/wheels.nix {inherit lib;};
-  crossNumpyInc = "${final.python3.pkgs.numpy}/lib/${final.python3.libPrefix}/site-packages/numpy/_core/include";
+  crossNumpyInc = "${wasixPython.pkgs.numpy}/lib/${wasixPython.libPrefix}/site-packages/numpy/_core/include";
 in
   # wasm build only: a native pandas must keep its own np.get_include().
   wheels.onlyOnWasix pyprev.pandas (

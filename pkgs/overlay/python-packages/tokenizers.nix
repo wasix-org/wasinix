@@ -6,10 +6,10 @@
 {
   pyprev,
   final,
+  wasixPython,
   helpers,
   ...
 }: let
-  rust = import ./lib/rust.nix {inherit final;};
   cc = "${final.stdenv.cc}/bin/${final.stdenv.cc.targetPrefix}cc";
   cxx = "${final.stdenv.cc}/bin/${final.stdenv.cc.targetPrefix}c++";
 in
@@ -29,7 +29,7 @@ in
         --replace-fail 'Builder::new_multi_thread()' 'Builder::new_current_thread()'
     '';
     env = {
-      PYO3_CROSS_LIB_DIR = rust.pyo3CrossLibDir;
+      PYO3_CROSS_LIB_DIR = wasixPython.crossLibDir;
       CC = cc;
       CXX = cxx;
       # onig_sys (oniguruma, C) builds PIC (needs wasm-EH) and uses setjmp/longjmp

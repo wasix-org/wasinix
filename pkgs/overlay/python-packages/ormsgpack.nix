@@ -8,32 +8,30 @@
 # to the correct 6-arg signature (pyo3-ffi's unused 5-arg decl is then dead).
 {
   pyprev,
-  final,
+  wasixPython,
   helpers,
   ...
-}: let
-  rust = import ./lib/rust.nix {inherit final;};
-in
-  helpers.libTweaks {
-    env.PYO3_CROSS_LIB_DIR = rust.pyo3CrossLibDir;
-    postPatch = ''
-      cat >> src/serialize/uuid.rs <<'RS'
+}:
+helpers.libTweaks {
+  env.PYO3_CROSS_LIB_DIR = wasixPython.crossLibDir;
+  postPatch = ''
+    cat >> src/serialize/uuid.rs <<'RS'
 
-      extern "C" {
-          #[link_name = "_PyLong_AsByteArray"]
-          fn wasix_pylong_as_byte_array(
-              v: *mut pyo3::ffi::PyLongObject,
-              bytes: *mut u8,
-              n: usize,
-              little_endian: i32,
-              is_signed: i32,
-              with_exceptions: i32,
-          ) -> i32;
-      }
-      RS
-      substituteInPlace src/serialize/uuid.rs \
-        --replace-fail 'pyo3::ffi::_PyLong_AsByteArray(' 'wasix_pylong_as_byte_array(' \
-        --replace-fail '0, // is_signed' '0, /* is_signed */ 1,'
-    '';
-  }
-  pyprev.ormsgpack
+    extern "C" {
+        #[link_name = "_PyLong_AsByteArray"]
+        fn wasix_pylong_as_byte_array(
+            v: *mut pyo3::ffi::PyLongObject,
+            bytes: *mut u8,
+            n: usize,
+            little_endian: i32,
+            is_signed: i32,
+            with_exceptions: i32,
+        ) -> i32;
+    }
+    RS
+    substituteInPlace src/serialize/uuid.rs \
+      --replace-fail 'pyo3::ffi::_PyLong_AsByteArray(' 'wasix_pylong_as_byte_array(' \
+      --replace-fail '0, // is_signed' '0, /* is_signed */ 1,'
+  '';
+}
+pyprev.ormsgpack

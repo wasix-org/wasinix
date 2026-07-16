@@ -200,14 +200,18 @@
   # of python3.pkgs.<attr>, each with an import smoke-test. cpython needs PIC
   # (ctypes/dl) and the exnref EH encoding wasmer accepts, so the wheels are a
   # single set anchored at exnrefEhpic.
-  pythonWheels = import ./python-wheels.nix {
-    inherit pkgs lib mkTestGroup;
-    python3 = nixpkgsByProfile.exnrefEhpic.python3;
-    wasmer = wasmerRuntime;
-    # the self-contained python webc; the import test runs on it with the wheel
-    # copied into a plain dir and NO /nix/store mount, as `pip install` would.
-    # Lazy: wasmerLayer doesn't depend on pythonWheels, so no eval cycle.
-    pythonWebc = wasmerLayer.wasmerPackages.python.webc;
+  # Built per python version (nested pythonWheels.py313/.py314.<attr>); each wheel's import test
+  # runs on that version's own python webc. Lazy on wasmerLayer (no eval cycle).
+  mkPythonWheels = pyAttr: webcName:
+    import ./python-wheels.nix {
+      inherit pkgs lib mkTestGroup;
+      python3 = nixpkgsByProfile.exnrefEhpic.${pyAttr};
+      wasmer = wasmerRuntime;
+      pythonWebc = wasmerLayer.wasmerPackages.${webcName}.webc;
+    };
+  pythonWheels = {
+    py313 = mkPythonWheels "python313" "python3.13";
+    py314 = mkPythonWheels "python314" "python3.14";
   };
 
   makeWasmerPackage = pkgs.callPackage ./wasmer/make-wasmer-package.nix {
@@ -230,10 +234,23 @@
 
   # The shipped wheels (+ their transitive python deps) as a static PEP 503
   # "simple" index; tests run against the shipped python webc.
+  # One merged PEP 503 index over BOTH python versions' wheels: a resolver picks the right file by
+  # its cp313/cp314 tag, so the versions share an index (not split). e2e tests run on the default webc.
   pythonRegistry = import ./python-registry {
-    inherit pkgs lib pythonWheels mkTestGroup;
-    python3 = nixpkgsByProfile.exnrefEhpic.python3;
+    inherit pkgs lib mkTestGroup;
+    pythonSets = {
+      py313 = {
+        python3 = nixpkgsByProfile.exnrefEhpic.python313;
+        pythonWheels = pythonWheels.py313;
+      };
+      py314 = {
+        python3 = nixpkgsByProfile.exnrefEhpic.python314;
+        pythonWheels = pythonWheels.py314;
+      };
+    };
     inherit (wasmerLayer) testLib;
+    # default python interpreter + its webc, both from the top-level `python3`.
+    python3 = nixpkgsByProfile.exnrefEhpic.python3;
     pythonWebc = wasmerLayer.wrappedPackages.python;
   };
 

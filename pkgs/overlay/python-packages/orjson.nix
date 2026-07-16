@@ -3,28 +3,26 @@
 # and pyo3-ffi/extension-module so the cdylib doesn't link libpython.
 {
   pyprev,
-  final,
+  wasixPython,
   helpers,
   ...
-}: let
-  rust = import ./lib/rust.nix {inherit final;};
-in
-  helpers.libTweaks {
-    env = {
-      PYO3_CROSS_LIB_DIR = rust.pyo3CrossLibDir;
-      CFLAGS = "-fwasm-exceptions";
-    };
-    maturinBuildFlags = ["--features" "pyo3-ffi/extension-module"];
-    # nixpkgs' cross-arch-compat.patch is stale for 3.11.9's build.rs (fails to
-    # apply). build.rs gates x86_64/aarch64 SIMD (inline_int/str, avx512) on
-    # #[cfg(target_arch=...)], evaluated for the x86_64 BUILD host, so it wrongly
-    # enables them for the wasm target. wasm needs none: drop the patch and
-    # compile those blocks out.
-    patches = _: [];
-    postPatch = ''
-      substituteInPlace build.rs \
-        --replace-fail '#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]' '#[cfg(any())]' \
-        --replace-fail '#[cfg(all(target_arch = "x86_64", not(target_os = "macos")))]' '#[cfg(any())]'
-    '';
-  }
-  pyprev.orjson
+}:
+helpers.libTweaks {
+  env = {
+    PYO3_CROSS_LIB_DIR = wasixPython.crossLibDir;
+    CFLAGS = "-fwasm-exceptions";
+  };
+  maturinBuildFlags = ["--features" "pyo3-ffi/extension-module"];
+  # nixpkgs' cross-arch-compat.patch is stale for 3.11.9's build.rs (fails to
+  # apply). build.rs gates x86_64/aarch64 SIMD (inline_int/str, avx512) on
+  # #[cfg(target_arch=...)], evaluated for the x86_64 BUILD host, so it wrongly
+  # enables them for the wasm target. wasm needs none: drop the patch and
+  # compile those blocks out.
+  patches = _: [];
+  postPatch = ''
+    substituteInPlace build.rs \
+      --replace-fail '#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]' '#[cfg(any())]' \
+      --replace-fail '#[cfg(all(target_arch = "x86_64", not(target_os = "macos")))]' '#[cfg(any())]'
+  '';
+}
+pyprev.orjson

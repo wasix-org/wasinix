@@ -3,14 +3,12 @@
 # `-l python3.13` and the cdylib link fails (no libpython at build time).
 {
   pyprev,
-  final,
+  wasixPython,
   helpers,
   ...
-}: let
-  rust = import ./lib/rust.nix {inherit final;};
-in
-  helpers.libTweaks {
-    env.PYO3_CROSS_LIB_DIR = rust.pyo3CrossLibDir;
-    maturinBuildFlags = ["--features" "pyo3/extension-module"];
-  }
-  pyprev.pydantic-core
+}:
+helpers.libTweaks {
+  env.PYO3_CROSS_LIB_DIR = wasixPython.crossLibDir;
+  maturinBuildFlags = ["--features" "pyo3/extension-module"];
+}
+pyprev.pydantic-core
