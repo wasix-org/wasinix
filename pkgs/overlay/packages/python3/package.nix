@@ -303,35 +303,36 @@
           # extension wheels cross-build against the python they target (a 3.13 wheel vs 3.13, not
           # the default 3.14), else the .so gets the wrong cpython-XYZ soabi (rust) or compiles
           # against the wrong headers (pyarrow) and won't import. final.python3 would pin the default.
+          #
+          # Gate the WHOLE set on the wasix host: `.override` also applies packageOverrides to this
+          # interpreter's own native build python (pythonForBuild) via splicing, but these are all
+          # wasix-specific fixes (PYO3_CROSS_LIB_DIR, the setuptools-rust wasm hook, ...). Applied to
+          # native build tools they break them (a wasm PYO3_CROSS_LIB_DIR makes pyo3 cross-compile
+          # native ast-serialize). So the build python stays vanilla, mirroring overlay/default.nix's
+          # isWasixHost gate for the top-level package set.
           packageOverrides = pyfinal: pyprev:
-            (import ../../python-packages {
-              callArgs = {
-                inherit final prev preferredProfilePackages helpers lib;
-                wasixPython = py;
-              };
-            })
-            pyfinal
-            pyprev
-            // {
-              # PYO3_CROSS_LIB_DIR for every rust/pyo3 wheel, set once on the python's own builder
-              # instead of per wheel. It points at THIS interpreter's sysconfig (version-specific), so
-              # it can't be a static value in the shared profile stdenv; buildPythonPackage is the
-              # per-python build-env home. extendMkDerivation keeps the functor set intact (a bare
-              # lambda breaks the cross-splice/.override machinery), as set/rust-platform.nix does.
-              # Only for the wasix set: packageOverrides also reach the native build python (splicing),
-              # and PYO3_CROSS_LIB_DIR there would make pyo3 cross-compile native build tools (e.g.
-              # ast-serialize) against the wasm python, breaking them.
-              buildPythonPackage =
-                if pyprev.python.stdenv.hostPlatform.isWasix or false
-                then
-                  lib.extendMkDerivation {
-                    constructDrv = pyprev.buildPythonPackage;
-                    extendDrvArgs = _finalAttrs: prevArgs: {
-                      env = {PYO3_CROSS_LIB_DIR = "${py}/lib/${py.libPrefix}";} // (prevArgs.env or {});
-                    };
-                  }
-                else pyprev.buildPythonPackage;
-            };
+            lib.optionalAttrs (pyprev.python.stdenv.hostPlatform.isWasix or false) (
+              (import ../../python-packages {
+                callArgs = {
+                  inherit final prev preferredProfilePackages helpers lib;
+                  wasixPython = py;
+                };
+              })
+              pyfinal
+              pyprev
+              // {
+                # PYO3_CROSS_LIB_DIR for every rust/pyo3 wheel, set once on the python's own builder
+                # instead of per wheel: version-specific (this interpreter's sysconfig), so not a static
+                # value in the shared profile stdenv. extendMkDerivation keeps the functor set intact (a
+                # bare lambda breaks the cross-splice/.override machinery), as set/rust-platform.nix does.
+                buildPythonPackage = lib.extendMkDerivation {
+                  constructDrv = pyprev.buildPythonPackage;
+                  extendDrvArgs = _finalAttrs: prevArgs: {
+                    env = {PYO3_CROSS_LIB_DIR = "${py}/lib/${py.libPrefix}";} // (prevArgs.env or {});
+                  };
+                };
+              }
+            );
         });
     in
       py;
