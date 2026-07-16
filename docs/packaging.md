@@ -106,7 +106,7 @@ Every wheel is published as `<version>+wasix.<rel>` (PEP 440 local version):
 `python-registry/rels.json`, keyed by pname then version, default 1. Bump it
 to republish a changed build, by hand or with the manual `bump-rel.yml`
 workflow (takes a list of wheels, opens a PR); an upstream version bump resets
-it by key miss (`nix run .#update` drops the stale key). Published filenames
+it by key miss (`nix run .#scripts.update` drops the stale key). Published filenames
 are immutable and accumulate. The `publish-index` workflow (on a green Build of
 main) builds the patched wasmer, fetches the volume's S3 credentials with the
 `WASMER_TOKEN` secret (provisioning them on the first run via the vendored

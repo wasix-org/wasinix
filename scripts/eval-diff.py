@@ -50,15 +50,15 @@ def default_flake():
 
 
 def eval_jobs(flake, jobs_path):
+    # nix-eval-jobs comes from PATH (the .#scripts.rebuild-diff wrapper and the
+    # devShell both pin it to the locked nixpkgs); `nix run nixpkgs#` would
+    # fetch and unpack the registry's channel tarball on every CI run.
     # --check-cache-status so ci-build.sh can reuse this eval for its
     # build-dep push list. Returns the nix error on a top-level eval failure
     # (broken flake): that becomes report content, not a step crash; the
     # build step fails the job on the same error.
     cmd = [
-        "nix",
-        "run",
-        "nixpkgs#nix-eval-jobs",
-        "--",
+        "nix-eval-jobs",
         "--flake",
         flake,
         "--check-cache-status",

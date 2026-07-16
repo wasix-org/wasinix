@@ -55,7 +55,7 @@ jobs:
           # Summary outside the checkout so create-pull-request doesn't commit it.
           summary="$RUNNER_TEMP/update-summary.md"
           set +e
-          nix run .#update -- "${args[@]}" --summary-out "$summary"
+          nix run .#scripts.update -- "${args[@]}" --summary-out "$summary"
           code=$?
           set -e
           {

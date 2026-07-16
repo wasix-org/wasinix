@@ -75,7 +75,7 @@ in
         tests = mkTestGroup "python-registry" tests;
         inherit wheelVersions wheels;
         wasix.updateNotes = lib.optional (staleRels != []) {
-          message = "rels.json has stale keys (${lib.concatStringsSep ", " staleRels}); nix run .#update -- --only nixpkgs drops them";
+          message = "rels.json has stale keys (${lib.concatStringsSep ", " staleRels}); nix run .#scripts.update -- --only nixpkgs drops them";
           when = _: _: true;
         };
       };

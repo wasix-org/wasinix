@@ -1,9 +1,9 @@
 # Updating pins
 
 ```sh
-nix run .#update                    # everything
-nix run .#update -- --list          # targets + current pins
-nix run .#update -- --only llvm wasix-libc
+nix run .#scripts.update                    # everything
+nix run .#scripts.update -- --list          # targets + current pins
+nix run .#scripts.update -- --only llvm wasix-libc
 ```
 
 How a pin is bumped is declared next to the pin, as the package's

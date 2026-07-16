@@ -15,7 +15,7 @@ pkgs/set/            per-profile cross sets (stdenv, rustPlatform)
 pkgs/toolchain/      llvm.nix, sysroot/, rust/, wasixcc.nix, env.nix, tests/
 pkgs/overlay/        packages/, trivial.nix, python-packages/
 pkgs/wasmer/         webc packaging + test harness
-scripts/update.py    pin updater (nix run .#update)
+scripts/update.py    pin updater (nix run .#scripts.update)
 ```
 
 ## Rules
@@ -41,7 +41,7 @@ scripts/update.py    pin updater (nix run .#update)
 - All `WASIXCC_*`/`CC=wasixcc` environment comes from
   `pkgs/toolchain/env.nix`; never write the exports by hand.
 - Patches live next to the file that applies them.
-- Pins: `nix run .#update` (`docs/updating.md`).
+- Pins: `nix run .#scripts.update` (`docs/updating.md`).
 - We control wasmer and the wasix-org forks: root-cause their bugs and
   quirks and suggest an upstream fix rather than only working around them.
   Vendor pending fixes as `.patch` files (placed per the patches rule

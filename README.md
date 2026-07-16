@@ -22,7 +22,7 @@ nix build .#legacyPackages.x86_64-linux.pythonWheels.numpy          # a wheel
 nix build .#legacyPackages.x86_64-linux.pythonRegistry              # static wheel index
 nix build .#legacyPackages.x86_64-linux.allWasmerPackages                   # all webcs
 
-nix run .#update                  # bump the source pins
+nix run .#scripts.update                  # bump the source pins
 ```
 
 CI builds every package as its own job (`.#legacyPackages.<system>.ci`,

@@ -82,13 +82,14 @@
     collectTestsPrefixed = prefix:
       lib.foldlAttrs (
         acc: name: pkg: let
-          entry = builtins.tryEval (lib.optionalAttrs (pkg ? tests) {"${prefix}${name}" = pkg.tests;});
+          testAttr = {"${prefix}${name}" = pkg.tests;};
+          entry = builtins.tryEval (lib.optionalAttrs (pkg ? tests) testAttr);
         in
           acc
           // (
             if entry.success
             then entry.value
-            else {"${prefix}${name}" = pkg.tests;}
+            else testAttr
           )
       ) {};
     collectTests = collectTestsPrefixed "";
@@ -201,20 +202,36 @@
         # stay out.
         scripts = let
           p = wasix.pkgs;
+          # inheritPath = false: PATH is exactly the declared deps, so a script
+          # reaching for an undeclared tool fails loudly instead of silently
+          # picking up the ambient one. Common to every wrapper: git, coreutils,
+          # a pinned nix, and the interpreter (which must be on PATH itself now
+          # that we don't inherit it). Per-script lists carry only the extras.
           run = name: runtimeInputs: interp: file:
             p.writeShellApplication {
               inherit name;
-              runtimeInputs = runtimeInputs ++ [p.git];
+              inheritPath = false;
+              runtimeInputs =
+                runtimeInputs
+                ++ [p.git p.coreutils p.nixVersions.latest]
+                ++ [
+                  (
+                    if interp == "python3"
+                    then p.python3
+                    else p.bash
+                  )
+                ];
               text = ''exec ${interp} ${file} "$@"'';
             };
         in {
-          ci-build = run "ci-build" [p.jq p.nix-eval-jobs p.nix-fast-build] "bash" ./scripts/ci-build.sh;
-          rebuild-diff = run "rebuild-diff" [p.python3] "bash" ./scripts/rebuild-diff.sh;
-          content-diff = run "content-diff" [p.python3] "python3" ./scripts/content-diff.py;
-          ci-report = run "ci-report" [p.python3] "python3" ./scripts/ci-report.py;
+          ci-build = run "ci-build" [p.jq p.nix-eval-jobs p.nix-fast-build p.findutils] "bash" ./scripts/ci-build.sh;
+          rebuild-diff = run "rebuild-diff" [p.python3 p.nix-eval-jobs] "bash" ./scripts/rebuild-diff.sh;
+          content-diff = run "content-diff" [] "python3" ./scripts/content-diff.py;
+          ci-report = run "ci-report" [] "python3" ./scripts/ci-report.py;
           publish-eval-map = run "publish-eval-map" [p.awscli2] "bash" ./scripts/publish-eval-map.sh;
-          bump-rel = run "bump-rel" [p.python3] "python3" ./pkgs/python-registry/bump-rel.py;
-          publish = run "publish" [wasmerRuntime p.rclone p.python3] "bash" ./scripts/publish.sh;
+          bump-rel = run "bump-rel" [] "python3" ./pkgs/python-registry/bump-rel.py;
+          publish = run "publish" [wasmerRuntime p.rclone p.python3 p.gawk p.gnused] "bash" ./scripts/publish.sh;
+          update = run "update" [p.nix-update p.nix-prefetch-git p.cargo] "python3" ./scripts/update.py;
         };
 
         # passthru.wasix.updateNotes (see pkgs/lib/default.nix): things to
@@ -291,11 +308,11 @@
 
         nixpkgs.legacyPackages.${system}.nix-fast-build
         nixpkgs.legacyPackages.${system}.nix-eval-jobs
+        nixpkgs.legacyPackages.${system}.nixVersions.latest
       ];
       shellHook = ''
         ${wasix.toolchainByProfile.${wasix.defaultProfileName}.toolchainEnv}
         ${wasix.toolchainByProfile.${wasix.defaultProfileName}.ccEnv}
-        echo "WASIX shell ready. Build with: nix build"
       '';
     };
 
@@ -323,26 +340,6 @@
       # (per-variant sysroot smoke tests are checks.wasix-sysroot-<variant>)
 
       wasmer-bin = wasmerRuntime;
-    };
-
-    # `nix run .#update`: bump the source pins of the repo's own packages (not
-    # the prev.X nixpkgs passthroughs) and regenerate derived files: cargo
-    # regenerates cargo-wasix's Cargo.lock, nix-prefetch-git hashes the rust
-    # fork's fetchSubmodules tree (src/llvm-project). Per-package backends live
-    # in scripts/update.py.
-    apps.${system}.update = {
-      type = "app";
-      program = lib.getExe (wasix.pkgs.writeShellApplication {
-        name = "wasinix-update";
-        runtimeInputs = [
-          wasix.pkgs.python3
-          wasix.pkgs.nix-update
-          wasix.pkgs.nix-prefetch-git
-          wasix.pkgs.cargo
-          wasix.pkgs.git
-        ];
-        text = ''exec python3 "$(git rev-parse --show-toplevel)/scripts/update.py" "$@"'';
-      });
     };
   };
 }

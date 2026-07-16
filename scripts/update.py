@@ -7,7 +7,7 @@
 # stage0 bootstrap pin, wasix-libc's witx submodule pins), and reports the
 # summary plus fired updateNotes.
 #
-# Usage (or `nix run .#update -- ...`):
+# Usage (or `nix run .#scripts.update -- ...`):
 #   scripts/update.py              # update everything
 #   scripts/update.py --only llvm wasix-libc
 #   scripts/update.py --list       # show targets, no changes
@@ -36,7 +36,7 @@ def run(cmd, **kw):
 
 
 def repo_root():
-    # Prefer the git working tree: under `nix run .#update` this file lives in the
+    # Prefer the git working tree: under `nix run .#scripts.update` this file lives in the
     # store, but the pins we edit are in the checkout `nix run` was invoked from.
     try:
         out = subprocess.run(
