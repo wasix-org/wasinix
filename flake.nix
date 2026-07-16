@@ -76,8 +76,9 @@
 
     # Collect every package's passthru.tests into the flake checks. Wheels get a
     # "wheel-" prefix (their attr names share the flat check namespace with the
-    # shipped packages). tryEval per entry: one attr that throws on eval would
-    # otherwise abort the whole `checks` output, so drop it instead.
+    # shipped packages). tryEval guards the `pkg ? tests` probe (it forces pkg):
+    # a throwing pkg must not abort the whole `checks` output, but its entry is
+    # KEPT so the error surfaces as a failed check instead of vanishing.
     collectTestsPrefixed = prefix:
       lib.foldlAttrs (
         acc: name: pkg: let
@@ -87,7 +88,7 @@
           // (
             if entry.success
             then entry.value
-            else {}
+            else {"${prefix}${name}" = pkg.tests;}
           )
       ) {};
     collectTests = collectTestsPrefixed "";
@@ -136,11 +137,19 @@
       # through plain attrsets, stop at a drv, but also emit a shipped package's
       # passthru.webc as "<key>.webc".
       #
-      # nix-eval-jobs reports any leaf that throws or is meta.broken (fd/tokei,
-      # via passthru.wasix.broken) as a failed job, so drop such leaves here.
-      # Only `ci` filters; the `.#` build targets keep the attrs. Unsupported-
-      # profile leaves are already filtered out of librariesByProfile in pkgs/default.nix.
-      drvOk = drv: (builtins.tryEval (drv.drvPath != null && !(drv.meta.broken or false) && (drv.meta.available or true))).value;
+      # Declared breakage (meta.broken via passthru.wasix.broken, fd/tokei) is
+      # dropped from the job set; unsupported-profile leaves are already
+      # filtered out of librariesByProfile in pkgs/default.nix. Only meta is
+      # read (never drvPath): the key set must stay cheap, since every
+      # nix-eval-jobs worker computes it before its first job, and probing
+      # drvPath would instantiate the whole matrix per worker. A leaf that
+      # throws is KEPT: nix-eval-jobs evaluates attrs independently, so it
+      # surfaces as one failed job with the error at its attr path instead of
+      # silently vanishing from CI.
+      drvOk = drv: let
+        r = builtins.tryEval (!(drv.meta.broken or false) && (drv.meta.available or true));
+      in
+        !r.success || r.value;
       flattenDrvs = prefix:
         lib.concatMapAttrs (
           name: val: let
@@ -148,17 +157,23 @@
               if prefix == ""
               then name
               else "${prefix}.${name}";
-            # Force val behind tryEval first: a throwing attr (broken access)
-            # must not abort the whole CI eval before drvOk can filter it.
-            forced = builtins.tryEval (lib.seq val val);
+            # Classification forces val shallowly and can throw; keep such a
+            # leaf under its key so the error is attributed to it.
+            kind = builtins.tryEval (
+              if lib.isDerivation val
+              then "drv"
+              else if lib.isAttrs val
+              then "set"
+              else "other"
+            );
           in
-            if !forced.success
-            then {}
-            else if lib.isDerivation val
+            if !kind.success
+            then {${key} = val;}
+            else if kind.value == "drv"
             then
               lib.optionalAttrs (drvOk val) {${key} = val;}
               // lib.optionalAttrs (val ? webc && drvOk val.webc) {"${key}.webc" = val.webc;}
-            else if lib.isAttrs val
+            else if kind.value == "set"
             then flattenDrvs key val
             else {}
         );
