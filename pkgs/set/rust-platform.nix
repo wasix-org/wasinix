@@ -5,11 +5,58 @@
   lib,
   pkgsCross,
   wasixRustToolchain,
+  wasixcc,
   cargo,
   cargoWasix,
 }: let
   hostTriple = "x86_64-unknown-linux-gnu";
   rustLld = "${wasixRustToolchain}/lib/rustlib/${hostTriple}/bin/rust-lld";
+
+  # cc-rs (a dependency's build.rs compiling a vendored C library, e.g. ring's
+  # BoringSSL) resolves the compiler from CC_<target>, defaulting to the nix cc
+  # wrapper, which rejects the `-dl` rustc target triple and the PIC-without-EH
+  # combination cc-rs derives from cargo's relocation-model. Point it at wasixcc
+  # instead, with the same profile the `-dl` std is built at (toolchain.nix:
+  # mkClang "wasm32-wasmer-wasi-dl" wasixSysrootEhpic "-fPIC" == the ehpic
+  # profile); the shared exnref hook translates the linked .so afterwards, so
+  # the C objects match the rust ones. Sourced from the profile table, not
+  # hand-typed; WASIXCC_* comes from toolchain/env.nix, never hand-written.
+  env = import ../toolchain/env.nix {inherit lib;};
+  dlProfile = (import ../profiles.nix).profiles.ehpic;
+  depCcEnv = env.exportsOf (env.profileEnv {
+    inherit (dlProfile) wasmExceptions;
+    pic = dlProfile.wasmPic or false;
+  });
+  # cc-rs unconditionally passes -fno-exceptions (and -fno-rtti for C++); wasixcc
+  # rejects those with PIC, which needs wasm EH (same reason crc32c.nix seds them
+  # out of its cmake build). Drop them so WASIXCC_WASM_EXCEPTIONS stands.
+  mkDepCc = binName: tool:
+    pkgsCross.buildPackages.writeShellScriptBin binName ''
+      ${depCcEnv}
+      args=()
+      for a in "$@"; do
+        case "$a" in
+          -fno-exceptions | -fno-rtti) ;;
+          *) args+=("$a") ;;
+        esac
+      done
+      exec ${wasixcc}/bin/${tool} "''${args[@]}"
+    '';
+  depCc = pkgsCross.buildPackages.symlinkJoin {
+    name = "wasix-dep-cc";
+    paths = [
+      (mkDepCc "cc" "wasixcc")
+      (mkDepCc "c++" "wasix++")
+    ];
+  };
+  # cc-rs also reads the dash triple with dashes replaced by underscores, the
+  # only form bash can export.
+  wasixDepCcHook =
+    pkgsCross.makeSetupHook {name = "wasix-dep-cc-hook";}
+    (pkgsCross.buildPackages.writeText "wasix-dep-cc-hook.sh" ''
+      export CC_wasm32_wasmer_wasi_dl=${depCc}/bin/cc
+      export CXX_wasm32_wasmer_wasi_dl=${depCc}/bin/c++
+    '');
 
   # `cargo build` goes through cargo-wasix, everything else (metadata, etc.)
   # to the real cargo.
@@ -82,7 +129,7 @@ in
     rustc = wasixRustToolchain;
 
     # for the setuptools-rust hook to propagate too (maturin/buildRustPackage pull it in directly)
-    inherit wasixVendorPatchHook;
+    inherit wasixVendorPatchHook wasixDepCcHook;
 
     # Re-template maturinBuildHook for the dl target + rust-lld (nixpkgs bakes in
     # wasm32-wasip1, which our toolchain has no std for). Uses nixpkgs' own hook
@@ -96,6 +143,7 @@ in
           wasixRustToolchain
           exnrefTranslateHook
           wasixVendorPatchHook
+          wasixDepCcHook
         ];
         substitutions = {
           rustcTargetSpec = "wasm32-wasmer-wasi-dl";
@@ -117,7 +165,7 @@ in
         # cargo-auditable would re-link via the host rustc; unneeded for wasm.
         auditable = false;
 
-        nativeBuildInputs = (prevArgs.nativeBuildInputs or []) ++ [wasixVendorPatchHook];
+        nativeBuildInputs = (prevArgs.nativeBuildInputs or []) ++ [wasixVendorPatchHook wasixDepCcHook];
 
         # setEnv points CARGO_TARGET_<wasm>_LINKER at the wasi clang, which can't
         # take rustc's raw wasm-ld flags; override it with the toolchain's rust-lld

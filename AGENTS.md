@@ -42,6 +42,10 @@ scripts/update.py    pin updater (nix run .#scripts.update)
   `pkgs/toolchain/env.nix`; never write the exports by hand.
 - Patches live next to the file that applies them.
 - Pins: `nix run .#scripts.update` (`docs/updating.md`).
+- "Recheck/drop this on the next version bump" (a vendored patch, a
+  regenerated lock): `passthru.wasix.updateNotes`, which surfaces in the bump
+  PR via `scripts/update.py` and the CI report. Not a code comment or
+  `WASIX-TODO.md`.
 - We control wasmer and the wasix-org forks: root-cause their bugs and
   quirks and suggest an upstream fix rather than only working around them.
   Vendor pending fixes as `.patch` files (placed per the patches rule

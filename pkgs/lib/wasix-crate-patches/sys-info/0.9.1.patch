@@ -1,0 +1,38 @@
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' a/build.rs b/build.rs
+--- a/build.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/build.rs	2026-07-17 11:38:21.335181183 +0200
+@@ -3,6 +3,9 @@
+ use std::env;
+ 
+ fn main() {
++    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("wasi") {
++        return;
++    }
+     let target = env::var("TARGET").unwrap();
+     let target_os = target.split('-').nth(2).unwrap();
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' a/lib.rs b/lib.rs
+--- a/lib.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/lib.rs	2026-07-17 11:41:10.617653759 +0200
+@@ -784,7 +784,7 @@
+ }
+ 
+ /// Get hostname.
+-#[cfg(target_family = "unix")]
++#[cfg(all(target_family = "unix", not(target_os = "wasi")))]
+ pub fn hostname() -> Result<String, Error> {
+     unsafe {
+         let buf_size = libc::sysconf(libc::_SC_HOST_NAME_MAX) as usize;
+@@ -798,6 +798,12 @@
+     }
+ }
+ 
++#[cfg(target_os = "wasi")]
++pub fn hostname() -> Result<String, Error> {
++    // wasi sandboxes away the host name; report a stable placeholder.
++    Ok("localhost".to_string())
++}
++
+ #[cfg(target_family = "windows")]
+ pub fn hostname() -> Result<String, Error> {
+     use std::process::Command;

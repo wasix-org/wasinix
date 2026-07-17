@@ -1,0 +1,216 @@
+diff --git a/ddtrace/vendor/psutil/_psutil_linux.c b/ddtrace/vendor/psutil/_psutil_linux.c
+index 0d16eb42761..2c2599b99f5 100644
+--- a/ddtrace/vendor/psutil/_psutil_linux.c
++++ b/ddtrace/vendor/psutil/_psutil_linux.c
+@@ -12,15 +12,17 @@
+ #include <Python.h>
+ #include <errno.h>
+ #include <stdlib.h>
+-#include <mntent.h>
+ #include <features.h>
+-#include <utmp.h>
+ #include <sched.h>
+-#include <linux/version.h>
+ #include <sys/syscall.h>
+ #include <sys/sysinfo.h>
+ #include <sys/ioctl.h>
+ #include <sys/socket.h>
++
++#ifndef __wasi__
++#include <mntent.h>
++#include <utmp.h>
++#include <linux/version.h>
+ #include <linux/sockios.h>
+ #include <linux/if.h>
+ 
+@@ -35,10 +37,12 @@
+ /* Avoid redefinition of struct sysinfo with musl libc */
+ #define _LINUX_SYSINFO_H
+ #include <linux/ethtool.h>
++#endif
+ 
+ /* The minimum number of CPUs allocated in a cpu_set_t */
+ static const int NCPUS_START = sizeof(unsigned long) * CHAR_BIT;
+ 
++#ifndef __wasi__
+ // Linux >= 2.6.13
+ #define PSUTIL_HAVE_IOPRIO defined(__NR_ioprio_get) && defined(__NR_ioprio_set)
+ 
+@@ -47,6 +51,7 @@ static const int NCPUS_START = sizeof(unsigned long) * CHAR_BIT;
+     (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)) && \
+     (__GLIBC__ >= 2 && __GLIBC_MINOR__ >= 13) && \
+     defined(__NR_prlimit64)
++#endif
+ 
+ #if PSUTIL_HAVE_PRLIMIT
+     #define _FILE_OFFSET_BITS 64
+@@ -54,10 +59,12 @@ static const int NCPUS_START = sizeof(unsigned long) * CHAR_BIT;
+     #include <sys/resource.h>
+ #endif
+ 
++#ifndef __wasi__
+ // Should exist starting from CentOS 6 (year 2011).
+ #ifdef CPU_ALLOC
+     #define PSUTIL_HAVE_CPU_AFFINITY
+ #endif
++#endif
+ 
+ #include "_psutil_common.h"
+ #include "_psutil_posix.h"
+@@ -191,7 +198,7 @@ psutil_linux_prlimit(PyObject *self, PyObject *args) {
+ }
+ #endif
+ 
+-
++#ifndef __wasi__
+ /*
+  * Return disk mounted partitions as a list of tuples including device,
+  * mount point and filesystem type
+@@ -257,7 +264,7 @@ psutil_disk_partitions(PyObject *self, PyObject *args) {
+     Py_DECREF(py_retlist);
+     return NULL;
+ }
+-
++#endif
+ 
+ /*
+  * A wrapper around sysinfo(), return system memory usage statistics.
+@@ -408,7 +415,7 @@ psutil_proc_cpu_affinity_set(PyObject *self, PyObject *args) {
+ }
+ #endif  /* PSUTIL_HAVE_CPU_AFFINITY */
+ 
+-
++#ifndef __wasi__
+ /*
+  * Return currently connected users as a list of tuples.
+  */
+@@ -471,8 +478,9 @@ psutil_users(PyObject *self, PyObject *args) {
+     endutent();
+     return NULL;
+ }
++#endif
+ 
+-
++#ifndef __wasi__
+ /*
+  * Return stats about a particular network
+  * interface.  References:
+@@ -534,7 +542,7 @@ psutil_net_if_duplex_speed(PyObject* self, PyObject* args) {
+         close(sock);
+     return NULL;
+ }
+-
++#endif
+ 
+ /*
+  * Module init.
+@@ -557,7 +565,7 @@ static PyMethodDef mod_methods[] = {
+ #endif
+ 
+     // --- system related functions
+-
++#ifndef __wasi__
+     {"disk_partitions", psutil_disk_partitions, METH_VARARGS,
+      "Return disk mounted partitions as a list of tuples including "
+      "device, mount point and filesystem type"},
+@@ -565,6 +573,7 @@ static PyMethodDef mod_methods[] = {
+      "Return currently connected users as a list of tuples"},
+     {"net_if_duplex_speed", psutil_net_if_duplex_speed, METH_VARARGS,
+      "Return duplex and speed info about a NIC"},
++#endif
+ 
+     // --- linux specific
+ 
+@@ -656,9 +665,11 @@ static PyMethodDef mod_methods[] = {
+         INITERR;
+ #endif
+ #endif
++#ifndef __wasi__
+     if (PyModule_AddIntConstant(mod, "DUPLEX_HALF", DUPLEX_HALF)) INITERR;
+     if (PyModule_AddIntConstant(mod, "DUPLEX_FULL", DUPLEX_FULL)) INITERR;
+     if (PyModule_AddIntConstant(mod, "DUPLEX_UNKNOWN", DUPLEX_UNKNOWN)) INITERR;
++#endif
+ 
+     if (mod == NULL)
+         INITERR;
+diff --git a/ddtrace/vendor/psutil/_psutil_posix.c b/ddtrace/vendor/psutil/_psutil_posix.c
+index aa600849176..908b0d02e19 100644
+--- a/ddtrace/vendor/psutil/_psutil_posix.c
++++ b/ddtrace/vendor/psutil/_psutil_posix.c
+@@ -24,7 +24,9 @@
+     #include <ifaddrs.h>
+ #endif
+ 
+-#if defined(PSUTIL_LINUX)
++#if defined(__wasi__)
++    #include <netdb.h>
++#elif defined(PSUTIL_LINUX)
+     #include <netdb.h>
+     #include <linux/types.h>
+     #include <linux/if_packet.h>
+@@ -143,7 +145,9 @@ psutil_posix_getpriority(PyObject *self, PyObject *args) {
+     if (! PyArg_ParseTuple(args, "l", &pid))
+         return NULL;
+ 
+-#ifdef PSUTIL_OSX
++#if defined(__wasi__)
++    priority = 0; // Wasi does not support getpriority
++#elif defined(PSUTIL_OSX)
+     priority = getpriority(PRIO_PROCESS, (id_t)pid);
+ #else
+     priority = getpriority(PRIO_PROCESS, pid);
+@@ -166,7 +170,9 @@ psutil_posix_setpriority(PyObject *self, PyObject *args) {
+     if (! PyArg_ParseTuple(args, "li", &pid, &priority))
+         return NULL;
+ 
+-#ifdef PSUTIL_OSX
++#if defined(__wasi__)
++    retval = 0; // Wasi does not support getpriority
++#elif defined(PSUTIL_OSX)
+     retval = setpriority(PRIO_PROCESS, (id_t)pid, priority);
+ #else
+     retval = setpriority(PRIO_PROCESS, pid, priority);
+@@ -215,7 +221,7 @@ psutil_convert_ipaddr(struct sockaddr *addr, int family) {
+             return Py_BuildValue("s", buf);
+         }
+     }
+-#ifdef PSUTIL_LINUX
++#if defined(PSUTIL_LINUX) && !defined(__wasi__)
+     else if (family == AF_PACKET) {
+         struct sockaddr_ll *lladdr = (struct sockaddr_ll *)addr;
+         len = lladdr->sll_halen;
+@@ -369,7 +375,12 @@ psutil_net_if_mtu(PyObject *self, PyObject *args) {
+     if (sock == -1)
+         goto error;
+ 
+-#ifdef PSUTIL_SUNOS10
++#if defined(__wasi__)
++    PyErr_SetString(PyExc_NotImplementedError,
++                    "psutil.net_if_mtu() is not implemented on this platform");
++    close(sock);
++    return NULL;
++#elif defined(PSUTIL_SUNOS10)
+     strncpy(lifr.lifr_name, nic_name, sizeof(lifr.lifr_name));
+     ret = ioctl(sock, SIOCGIFMTU, &lifr);
+ #else
+@@ -408,6 +419,12 @@ psutil_net_if_flags(PyObject *self, PyObject *args) {
+     if (! PyArg_ParseTuple(args, "s", &nic_name))
+         return NULL;
+ 
++#ifdef __wasi__
++    PyErr_SetString(PyExc_NotImplementedError,
++                    "psutil.net_if_flags() is not implemented on this platform");
++    return NULL;
++#else
++
+     sock = socket(AF_INET, SOCK_DGRAM, 0);
+     if (sock == -1)
+         goto error;
+@@ -427,6 +444,7 @@ psutil_net_if_flags(PyObject *self, PyObject *args) {
+     if (sock != -1)
+         close(sock);
+     return PyErr_SetFromErrno(PyExc_OSError);
++#endif
+ }
+ 
+ 

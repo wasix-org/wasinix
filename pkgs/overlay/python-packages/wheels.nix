@@ -74,10 +74,17 @@
     pyImport = "png";
   }
   {attr = "greenback";}
+  {attr = "envier";} # overlay/python-packages/envier.nix (not in nixpkgs; ddtrace's config lib)
   {attr = "eventlet";} # needs the stdlib ssl module (greendns imports it)
   {
     attr = "psycopg-pool";
     pyImport = "psycopg_pool";
+  }
+  {
+    attr = "watchdog";
+    # pure on non-macOS; wasix has no inotify, the polling observer is the
+    # usable path, so the smoke-test imports it directly.
+    pyImport = "watchdog.observers.polling";
   }
   {
     attr = "protobuf";
@@ -110,6 +117,7 @@
     attr = "charset-normalizer";
     pyImport = "charset_normalizer";
   }
+  {attr = "tornado";} # tornado/speedups.c (websocket xor masking); overlay/python-packages/tornado.nix (no abi3, per-interpreter)
   {attr = "greenlet";}
   {attr = "gevent";} # overlay/python-packages/gevent.nix (embedded libev, no libuv/c-ares)
   {attr = "uvloop";} # libuv; overlay/packages/libuv/package.nix
@@ -158,12 +166,23 @@
   {attr = "jq";} # jq + oniguruma
   {attr = "jqpy";} # spawns the jq CLI; overlay/python-packages/jqpy.nix
   {attr = "pypandoc";} # spawns the wasm pandoc CLI; overlay/python-packages/pypandoc.nix
+  {
+    attr = "pypandoc-binary";
+    # dist is pypandoc_binary but the module stays pypandoc (as upstream).
+    pyImport = "pypandoc";
+  } # pypandoc + bundled wasm pandoc; overlay/python-packages/pypandoc-binary.nix
   {attr = "apsw";} # sqlite
   {
     attr = "pynacl";
     pyImport = "nacl.bindings";
   } # libsodium; overlay/python-packages/pynacl.nix
   {attr = "psycopg";} # libpq via psycopg-c; overlay/python-packages/psycopg.nix
+  {
+    attr = "psycopg-binary";
+    # upstream guards psycopg_binary against being imported before psycopg;
+    # the explicit .pq import then exercises the compiled module.
+    pyImport = "psycopg, psycopg_binary.pq";
+  } # renamed psycopg-c (pip's `psycopg[binary]`); overlay/python-packages/psycopg-binary.nix
   {
     attr = "pyzbar";
     # loads libzbar.so via ctypes at this import, exercising the dylib.
@@ -189,9 +208,11 @@
 
   # ── async / cython, no external C library ──────────────────────────────────────
   {attr = "aiohttp";} # vendored llhttp; deps multidict/yarl/frozenlist/aiosignal/…
+  {attr = "httptools";} # cython + vendored llhttp; overlay/python-packages/httptools.nix (llhttp __wasm__ guard)
 
   # ── rust (pyo3 / setuptools-rust) extensions ───────────────────────────────────
   {attr = "jiter";} # overlay/python-packages/jiter.nix (maturin; anthropic/openai JSON core)
+  {attr = "watchfiles";} # overlay/python-packages/watchfiles.nix (maturin; uvicorn --reload watcher)
   {
     attr = "rpds-py";
     pyImport = "rpds";
@@ -211,6 +232,7 @@
   } # overlay/python-packages/pydantic-core.nix (maturin fork + getrandom + extension-module)
   {attr = "cryptography";} # overlay/python-packages/cryptography.nix (maturin + openssl + target-lexicon dl)
   {attr = "orjson";} # overlay/python-packages/orjson.nix (maturin + target-lexicon dl)
+  {attr = "ddtrace";} # overlay/python-packages/ddtrace/package.nix (cython/C + IAST cmake + rust _native + bundled libddwaf)
 
   # ── LLM / agent SDKs (pure-python; transitive deps auto-build + auto-publish) ───
   # Each pulls its whole closure into the build + PEP 503 registry; the import

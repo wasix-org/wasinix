@@ -1,0 +1,996 @@
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml	1970-01-01 01:00:01.000000000 +0100
++++ b/Cargo.toml	2026-07-17 12:21:36.889747486 +0200
+@@ -853,7 +853,7 @@
+ [target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dev-dependencies.rand]
+ version = "0.9"
+ 
+-[target.'cfg(not(target_family = "wasm"))'.dependencies.socket2]
++[target.'cfg(any(not(target_family = "wasm"), target_vendor = "wasmer"))'.dependencies.socket2]
+ version = "0.6.0"
+ features = ["all"]
+ optional = true
+@@ -877,11 +877,11 @@
+ optional = true
+ default-features = false
+ 
+-[target."cfg(unix)".dependencies.libc]
++[target.'cfg(any(unix, target_vendor = "wasmer"))'.dependencies.libc]
+ version = "0.2.168"
+ optional = true
+ 
+-[target."cfg(unix)".dependencies.signal-hook-registry]
++[target.'cfg(any(unix, target_vendor = "wasmer"))'.dependencies.signal-hook-registry]
+ version = "1.1.1"
+ optional = true
+ 
+@@ -922,3 +922,4 @@
+     "cfg(tokio_unstable)",
+     'cfg(target_os, values("cygwin"))',
+ ]
++
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/fs/file.rs b/src/fs/file.rs
+--- a/src/fs/file.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/fs/file.rs	2026-07-17 12:16:42.716955900 +0200
+@@ -898,14 +898,14 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ impl std::os::unix::io::AsRawFd for File {
+     fn as_raw_fd(&self) -> std::os::unix::io::RawFd {
+         self.std.as_raw_fd()
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ impl std::os::unix::io::AsFd for File {
+     fn as_fd(&self) -> std::os::unix::io::BorrowedFd<'_> {
+         unsafe {
+@@ -914,7 +914,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ impl std::os::unix::io::FromRawFd for File {
+     unsafe fn from_raw_fd(fd: std::os::unix::io::RawFd) -> Self {
+         StdFile::from_raw_fd(fd).into()
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/fs/mocks.rs b/src/fs/mocks.rs
+--- a/src/fs/mocks.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/fs/mocks.rs	2026-07-17 12:16:42.717783647 +0200
+@@ -45,12 +45,12 @@
+     impl std::os::windows::io::FromRawHandle for File {
+         unsafe fn from_raw_handle(h: std::os::windows::io::RawHandle) -> Self;
+     }
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     impl std::os::unix::io::AsRawFd for File {
+         fn as_raw_fd(&self) -> std::os::unix::io::RawFd;
+     }
+ 
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     impl std::os::unix::io::FromRawFd for File {
+         unsafe fn from_raw_fd(h: std::os::unix::io::RawFd) -> Self;
+     }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/fs/open_options/mock_open_options.rs b/src/fs/open_options/mock_open_options.rs
+--- a/src/fs/open_options/mock_open_options.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/fs/open_options/mock_open_options.rs	2026-07-17 12:16:42.718625399 +0200
+@@ -3,7 +3,7 @@
+ use mockall::mock;
+ 
+ use crate::fs::mocks::MockFile;
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ use std::os::unix::fs::OpenOptionsExt;
+ #[cfg(windows)]
+ use std::os::windows::fs::OpenOptionsExt;
+@@ -23,7 +23,7 @@
+     impl Clone for OpenOptions {
+         fn clone(&self) -> Self;
+     }
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     impl OpenOptionsExt for OpenOptions {
+         fn custom_flags(&mut self, flags: i32) -> &mut Self;
+         fn mode(&mut self, mode: u32) -> &mut Self;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/fs/open_options.rs b/src/fs/open_options.rs
+--- a/src/fs/open_options.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/fs/open_options.rs	2026-07-17 12:16:42.717955897 +0200
+@@ -1,3 +1,5 @@
++#![cfg_attr(target_os = "wasi", allow(unused))]
++
+ use crate::fs::{asyncify, File};
+ 
+ use std::io;
+@@ -18,6 +20,9 @@
+ 
+ #[cfg(unix)]
+ use std::os::unix::fs::OpenOptionsExt;
++#[allow(unused_imports)]
++#[cfg(target_os = "wasi")]
++use std::os::wasi::fs::OpenOptionsExt;
+ #[cfg(windows)]
+ use std::os::windows::fs::OpenOptionsExt;
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/fs/read_dir.rs b/src/fs/read_dir.rs
+--- a/src/fs/read_dir.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/fs/read_dir.rs	2026-07-17 12:16:42.718955894 +0200
+@@ -1,3 +1,5 @@
++#![cfg_attr(target_os = "wasi", allow(unused))]
++
+ use crate::fs::asyncify;
+ 
+ use std::collections::VecDeque;
+@@ -350,7 +352,7 @@
+     }
+ 
+     /// Returns a reference to the underlying `std::fs::DirEntry`.
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     pub(super) fn as_inner(&self) -> &std::fs::DirEntry {
+         &self.std
+     }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/io/stderr.rs b/src/io/stderr.rs
+--- a/src/io/stderr.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/io/stderr.rs	2026-07-17 12:16:42.719447283 +0200
+@@ -77,7 +77,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/io/stdin.rs b/src/io/stdin.rs
+--- a/src/io/stdin.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/io/stdin.rs	2026-07-17 12:16:42.719552025 +0200
+@@ -52,7 +52,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/io/stdout.rs b/src/io/stdout.rs
+--- a/src/io/stdout.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/io/stdout.rs	2026-07-17 12:16:42.719955890 +0200
+@@ -126,7 +126,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/lib.rs	2026-07-17 12:16:42.721035186 +0200
+@@ -19,6 +19,10 @@
+ #![cfg_attr(docsrs, allow(unused_attributes))]
+ #![cfg_attr(loom, allow(dead_code, unreachable_pub))]
+ #![cfg_attr(windows, allow(rustdoc::broken_intra_doc_links))]
++#![cfg_attr(
++    all(feature = "fs", target_os = "wasi", target_vendor = "wasmer"),
++    feature(wasi_ext)
++)]
+ 
+ //! A runtime for writing reliable network applications without compromising speed.
+ //!
+@@ -468,7 +472,7 @@
+ 
+ #[cfg(all(
+     not(tokio_unstable),
+-    target_family = "wasm",
++    all(target_family = "wasm", not(target_vendor = "wasmer")),
+     any(
+         feature = "fs",
+         feature = "io-std",
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/macros/cfg.rs b/src/macros/cfg.rs
+--- a/src/macros/cfg.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/macros/cfg.rs	2026-07-17 12:16:42.721955883 +0200
+@@ -139,8 +139,8 @@
+         $(
+             #[cfg(any(
+                 feature = "net",
+-                all(unix, feature = "process"),
+-                all(unix, feature = "signal"),
++                all(any(unix, target_os = "wasi"), feature = "process"),
++                all(any(unix, target_os = "wasi"), feature = "signal"),
+                 all(
+                     tokio_unstable,
+                     feature = "io-uring",
+@@ -151,8 +151,8 @@
+             ))]
+             #[cfg_attr(docsrs, doc(cfg(any(
+                 feature = "net",
+-                all(unix, feature = "process"),
+-                all(unix, feature = "signal"),
++                all(any(unix, target_os = "wasi"), feature = "process"),
++                all(any(unix, target_os = "wasi"), feature = "signal"),
+                 all(
+                     tokio_unstable,
+                     feature = "io-uring",
+@@ -171,8 +171,8 @@
+         $(
+             #[cfg(any(
+                 feature = "net",
+-                all(unix, feature = "process"),
+-                all(unix, feature = "signal"),
++                all(any(unix, target_os = "wasi"), feature = "process"),
++                all(any(unix, target_os = "wasi"), feature = "signal"),
+                 all(
+                     tokio_unstable,
+                     feature = "io-uring",
+@@ -191,8 +191,8 @@
+         $(
+             #[cfg(not(any(
+                 feature = "net",
+-                all(unix, feature = "process"),
+-                all(unix, feature = "signal"),
++                all(any(unix, target_os = "wasi"), feature = "process"),
++                all(any(unix, target_os = "wasi"), feature = "signal"),
+                 all(
+                     tokio_unstable,
+                     feature = "io-uring",
+@@ -385,7 +385,7 @@
+             #[cfg(feature = "process")]
+             #[cfg_attr(docsrs, doc(cfg(feature = "process")))]
+             #[cfg(not(loom))]
+-            #[cfg(not(target_os = "wasi"))]
++            #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+             $item
+         )*
+     }
+@@ -393,7 +393,7 @@
+ 
+ macro_rules! cfg_process_driver {
+     ($($item:item)*) => {
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_vendor = "wasmer"))]
+         #[cfg(not(loom))]
+         cfg_process! { $($item)* }
+     }
+@@ -402,7 +402,7 @@
+ macro_rules! cfg_not_process_driver {
+     ($($item:item)*) => {
+         $(
+-            #[cfg(not(all(unix, not(loom), feature = "process")))]
++            #[cfg(not(all(any(unix, target_vendor = "wasmer"), not(loom), feature = "process")))]
+             $item
+         )*
+     }
+@@ -414,7 +414,7 @@
+             #[cfg(feature = "signal")]
+             #[cfg_attr(docsrs, doc(cfg(feature = "signal")))]
+             #[cfg(not(loom))]
+-            #[cfg(not(target_os = "wasi"))]
++            #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+             $item
+         )*
+     }
+@@ -437,6 +437,13 @@
+     }
+ }
+ 
++macro_rules! cfg_signal_internal_and_unix_or_wasix {
++    ($($item:item)*) => {
++        #[cfg(any(unix, target_vendor = "wasmer"))]
++        cfg_signal_internal! { $($item)* }
++    }
++}
++
+ macro_rules! cfg_not_signal_internal {
+     ($($item:item)*) => {
+         $(
+@@ -446,6 +453,15 @@
+     }
+ }
+ 
++macro_rules! cfg_not_signal_internal_or_unix_or_wasix {
++    ($($item:item)*) => {
++        $(
++            #[cfg(any(loom, not(any(unix, target_vendor = "wasmer")), not(any(feature = "signal", all(unix, feature = "process")))))]
++            $item
++        )*
++    }
++}
++
+ macro_rules! cfg_sync {
+     ($($item:item)*) => {
+         $(
+@@ -672,6 +688,15 @@
+             $item
+         )*
+     }
++}
++
++macro_rules! cfg_not_wasi_classic {
++    ($($item:item)*) => {
++        $(
++            #[cfg(not(all(target_os = "wasi", not(target_vendor = "wasmer"))))]
++            $item
++        )*
++    }
+ }
+ 
+ macro_rules! cfg_is_wasm_not_wasi {
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/net/mod.rs b/src/net/mod.rs
+--- a/src/net/mod.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/net/mod.rs	2026-07-17 12:16:42.722988302 +0200
+@@ -29,7 +29,7 @@
+ //! [`AsyncFd`]: crate::io::unix::AsyncFd
+ 
+ mod addr;
+-cfg_not_wasi! {
++cfg_not_wasi_classic! {
+     #[cfg(feature = "net")]
+     pub(crate) use addr::to_socket_addrs;
+ }
+@@ -42,7 +42,7 @@
+     pub mod tcp;
+     pub use tcp::listener::TcpListener;
+     pub use tcp::stream::TcpStream;
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         pub use tcp::socket::TcpSocket;
+ 
+         mod udp;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/net/tcp/listener.rs b/src/net/tcp/listener.rs
+--- a/src/net/tcp/listener.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/net/tcp/listener.rs	2026-07-17 12:16:42.723356704 +0200
+@@ -2,7 +2,7 @@
+ use crate::net::tcp::TcpStream;
+ use crate::util::check_socket_for_blocking;
+ 
+-cfg_not_wasi! {
++cfg_not_wasi_classic! {
+     use crate::net::{to_socket_addrs, ToSocketAddrs};
+ }
+ 
+@@ -60,7 +60,7 @@
+ }
+ 
+ impl TcpListener {
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         /// Creates a new `TcpListener`, which will be bound to the specified address.
+         ///
+         /// The returned listener is ready for accepting connections.
+@@ -300,7 +300,7 @@
+         }
+     }
+ 
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         pub(crate) fn new(listener: mio::net::TcpListener) -> io::Result<TcpListener> {
+             let io = PollEvented::new(listener)?;
+             Ok(TcpListener { io })
+@@ -405,7 +405,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use super::TcpListener;
+     use std::os::unix::prelude::*;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/net/tcp/mod.rs b/src/net/tcp/mod.rs
+--- a/src/net/tcp/mod.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/net/tcp/mod.rs	2026-07-17 12:16:42.723530957 +0200
+@@ -2,7 +2,7 @@
+ 
+ pub(crate) mod listener;
+ 
+-cfg_not_wasi! {
++cfg_not_wasi_classic! {
+     pub(crate) mod socket;
+ }
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/net/tcp/socket.rs b/src/net/tcp/socket.rs
+--- a/src/net/tcp/socket.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/net/tcp/socket.rs	2026-07-17 12:16:42.723955877 +0200
+@@ -4,7 +4,7 @@
+ use std::io;
+ use std::net::SocketAddr;
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, RawFd};
+ use std::time::Duration;
+ 
+@@ -659,7 +659,7 @@
+     /// ```
+     pub async fn connect(self, addr: SocketAddr) -> io::Result<TcpStream> {
+         if let Err(err) = self.inner.connect(&addr.into()) {
+-            #[cfg(unix)]
++            #[cfg(any(unix, target_vendor = "wasmer"))]
+             if err.raw_os_error() != Some(libc::EINPROGRESS) {
+                 return Err(err);
+             }
+@@ -668,7 +668,7 @@
+                 return Err(err);
+             }
+         }
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_vendor = "wasmer"))]
+         let mio = {
+             use std::os::unix::io::{FromRawFd, IntoRawFd};
+ 
+@@ -724,7 +724,7 @@
+     /// ```
+     pub fn listen(self, backlog: u32) -> io::Result<TcpListener> {
+         self.inner.listen(backlog as i32)?;
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_vendor = "wasmer"))]
+         let mio = {
+             use std::os::unix::io::{FromRawFd, IntoRawFd};
+ 
+@@ -778,7 +778,7 @@
+     /// }
+     /// ```
+     pub fn from_std_stream(std_stream: std::net::TcpStream) -> TcpSocket {
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_vendor = "wasmer"))]
+         {
+             use std::os::unix::io::{FromRawFd, IntoRawFd};
+ 
+@@ -814,37 +814,38 @@
+ 
+ // These trait implementations can't be build on Windows, so we completely
+ // ignore them, even when building documentation.
+-#[cfg(unix)]
+-cfg_unix! {
+-    impl AsRawFd for TcpSocket {
+-        fn as_raw_fd(&self) -> RawFd {
+-            self.inner.as_raw_fd()
+-        }
++#[cfg(any(unix, target_vendor = "wasmer"))]
++impl AsRawFd for TcpSocket {
++    fn as_raw_fd(&self) -> RawFd {
++        self.inner.as_raw_fd()
+     }
++}
+ 
+-    impl AsFd for TcpSocket {
+-        fn as_fd(&self) -> BorrowedFd<'_> {
+-            unsafe { BorrowedFd::borrow_raw(self.as_raw_fd()) }
+-        }
++#[cfg(any(unix, target_vendor = "wasmer"))]
++impl AsFd for TcpSocket {
++    fn as_fd(&self) -> BorrowedFd<'_> {
++        unsafe { BorrowedFd::borrow_raw(self.as_raw_fd()) }
+     }
++}
+ 
+-    impl FromRawFd for TcpSocket {
+-        /// Converts a `RawFd` to a `TcpSocket`.
+-        ///
+-        /// # Notes
+-        ///
+-        /// The caller is responsible for ensuring that the socket is in
+-        /// non-blocking mode.
+-        unsafe fn from_raw_fd(fd: RawFd) -> TcpSocket {
+-            let inner = socket2::Socket::from_raw_fd(fd);
+-            TcpSocket { inner }
+-        }
++#[cfg(any(unix, target_vendor = "wasmer"))]
++impl FromRawFd for TcpSocket {
++    /// Converts a `RawFd` to a `TcpSocket`.
++    ///
++    /// # Notes
++    ///
++    /// The caller is responsible for ensuring that the socket is in
++    /// non-blocking mode.
++    unsafe fn from_raw_fd(fd: RawFd) -> TcpSocket {
++        let inner = socket2::Socket::from_raw_fd(fd);
++        TcpSocket { inner }
+     }
++}
+ 
+-    impl IntoRawFd for TcpSocket {
+-        fn into_raw_fd(self) -> RawFd {
+-            self.inner.into_raw_fd()
+-        }
++#[cfg(any(unix, target_vendor = "wasmer"))]
++impl IntoRawFd for TcpSocket {
++    fn into_raw_fd(self) -> RawFd {
++        self.inner.into_raw_fd()
+     }
+ }
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/net/tcp/stream.rs b/src/net/tcp/stream.rs
+--- a/src/net/tcp/stream.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/net/tcp/stream.rs	2026-07-17 12:16:42.724914618 +0200
+@@ -1,4 +1,4 @@
+-cfg_not_wasi! {
++cfg_not_wasi_classic! {
+     use crate::net::{to_socket_addrs, ToSocketAddrs};
+     use std::future::poll_fn;
+     use std::time::Duration;
+@@ -73,7 +73,7 @@
+ }
+ 
+ impl TcpStream {
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         /// Opens a TCP connection to a remote host.
+         ///
+         /// `addr` is an address of the remote host. Anything which implements the
+@@ -1245,7 +1245,7 @@
+         socket2::SockRef::from(self).set_tcp_quickack(quickack)
+     }
+ 
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         /// Reads the linger duration for this socket by getting the `SO_LINGER`
+         /// option.
+         ///
+@@ -1469,7 +1469,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use super::TcpStream;
+     use std::os::unix::prelude::*;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/net/udp.rs b/src/net/udp.rs
+--- a/src/net/udp.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/net/udp.rs	2026-07-17 12:16:42.725955870 +0200
+@@ -254,7 +254,7 @@
+     /// [`std::net::UdpSocket`]: std::net::UdpSocket
+     /// [`set_nonblocking`]: fn@std::net::UdpSocket::set_nonblocking
+     pub fn into_std(self) -> io::Result<std::net::UdpSocket> {
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_vendor = "wasmer"))]
+         {
+             use std::os::unix::io::{FromRawFd, IntoRawFd};
+             self.io
+@@ -2168,7 +2168,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use super::UdpSocket;
+     use std::os::unix::prelude::*;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/process/mod.rs b/src/process/mod.rs
+--- a/src/process/mod.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/process/mod.rs	2026-07-17 12:16:42.726955867 +0200
+@@ -227,10 +227,10 @@
+ //! [`Child`]: crate::process::Child
+ 
+ #[path = "unix/mod.rs"]
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod imp;
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ pub(crate) mod unix {
+     pub(crate) use super::imp::*;
+ }
+@@ -681,7 +681,7 @@
+     /// Sets the child process's user ID. This translates to a
+     /// `setuid` call in the child process. Failure in the `setuid`
+     /// call will cause the spawn to fail.
+-    #[cfg(unix)]
++    #[cfg(any(unix))]
+     #[cfg_attr(docsrs, doc(cfg(unix)))]
+     pub fn uid(&mut self, id: u32) -> &mut Command {
+         #[cfg(target_os = "nto")]
+@@ -692,7 +692,7 @@
+ 
+     /// Similar to `uid` but sets the group ID of the child process. This has
+     /// the same semantics as the `uid` field.
+-    #[cfg(unix)]
++    #[cfg(any(unix))]
+     #[cfg_attr(docsrs, doc(cfg(unix)))]
+     pub fn gid(&mut self, id: u32) -> &mut Command {
+         #[cfg(target_os = "nto")]
+@@ -705,7 +705,7 @@
+     ///
+     /// Set the first process argument, `argv[0]`, to something other than the
+     /// default executable path.
+-    #[cfg(unix)]
++    #[cfg(any(unix))]
+     #[cfg_attr(docsrs, doc(cfg(unix)))]
+     pub fn arg0<S>(&mut self, arg: S) -> &mut Command
+     where
+@@ -744,7 +744,7 @@
+     /// When this closure is run, aspects such as the stdio file descriptors and
+     /// working directory have successfully been changed, so output to these
+     /// locations may not appear where intended.
+-    #[cfg(unix)]
++    #[cfg(any(unix))]
+     #[cfg_attr(docsrs, doc(cfg(unix)))]
+     pub unsafe fn pre_exec<F>(&mut self, f: F) -> &mut Command
+     where
+@@ -785,10 +785,13 @@
+     /// ```
+     ///
+     /// [signal handler]: crate::signal
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     #[cfg_attr(docsrs, doc(cfg(unix)))]
+     pub fn process_group(&mut self, pgroup: i32) -> &mut Command {
+-        self.std.process_group(pgroup);
++        #[cfg(not(target_vendor = "wasmer"))]
++        {
++            self.std.process_group(pgroup);
++        }
+         self
+     }
+ 
+@@ -1347,11 +1350,11 @@
+     ///
+     /// ```
+     /// # #[cfg(not(unix))]fn main(){}
+-    /// # #[cfg(unix)]
++    /// # #[cfg(any(unix, target_vendor = "wasmer"))]
+     /// use tokio::io::AsyncWriteExt;
+-    /// # #[cfg(unix)]
++    /// # #[cfg(any(unix, target_vendor = "wasmer"))]
+     /// use tokio::process::Command;
+-    /// # #[cfg(unix)]
++    /// # #[cfg(any(unix, target_vendor = "wasmer"))]
+     /// use std::process::Stdio;
+     ///
+     /// # #[cfg(unix)]
+@@ -1620,7 +1623,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ #[cfg_attr(docsrs, doc(cfg(unix)))]
+ mod sys {
+     use std::{
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/runtime/driver.rs b/src/runtime/driver.rs
+--- a/src/runtime/driver.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/runtime/driver.rs	2026-07-17 12:16:42.727955863 +0200
+@@ -1,3 +1,5 @@
++#![cfg_attr(target_os = "wasi", allow(unused, dead_code))]
++
+ //! Abstracts out the entire chain of runtime sub-drivers into common types.
+ 
+ // Eventually, this file will see significant refactoring / cleanup. For now, we
+@@ -93,7 +95,7 @@
+         }
+     }
+ 
+-    cfg_signal_internal_and_unix! {
++    cfg_signal_internal_and_unix_or_wasix! {
+         #[track_caller]
+         pub(crate) fn signal(&self) -> &crate::runtime::signal::Handle {
+             self.signal
+@@ -230,7 +232,7 @@
+ 
+ // ===== signal driver =====
+ 
+-cfg_signal_internal_and_unix! {
++cfg_signal_internal_and_unix_or_wasix! {
+     type SignalDriver = crate::runtime::signal::Driver;
+     pub(crate) type SignalHandle = Option<crate::runtime::signal::Handle>;
+ 
+@@ -241,7 +243,7 @@
+     }
+ }
+ 
+-cfg_not_signal_internal! {
++cfg_not_signal_internal_or_unix_or_wasix! {
+     pub(crate) type SignalHandle = ();
+ 
+     cfg_io_driver! {
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/runtime/handle.rs b/src/runtime/handle.rs
+--- a/src/runtime/handle.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/runtime/handle.rs	2026-07-17 12:16:42.728955860 +0200
+@@ -613,7 +613,7 @@
+         pub async fn dump(&self) -> crate::runtime::Dump {
+             match &self.inner {
+                 scheduler::Handle::CurrentThread(handle) => handle.dump(),
+-                #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 scheduler::Handle::MultiThread(handle) => {
+                     // perform the trace in a separate thread so that the
+                     // trace itself does not appear in the taskdump.
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/runtime/io/driver/signal.rs b/src/runtime/io/driver/signal.rs
+--- a/src/runtime/io/driver/signal.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/runtime/io/driver/signal.rs	2026-07-17 12:16:42.729955856 +0200
+@@ -1,3 +1,5 @@
++#![cfg_attr(target_os = "wasi", allow(unused_imports))]
++
+ use super::{Driver, Handle, TOKEN_SIGNAL};
+ 
+ use std::io;
+@@ -5,8 +7,10 @@
+ impl Handle {
+     pub(crate) fn register_signal_receiver(
+         &self,
++        #[cfg(not(target_os = "wasi"))]
+         receiver: &mut mio::net::UnixStream,
+     ) -> io::Result<()> {
++        #[cfg(not(target_os = "wasi"))]
+         self.registry
+             .register(receiver, TOKEN_SIGNAL, mio::Interest::READABLE)?;
+         Ok(())
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/runtime/io/driver.rs b/src/runtime/io/driver.rs
+--- a/src/runtime/io/driver.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/runtime/io/driver.rs	2026-07-17 12:16:42.729894794 +0200
+@@ -1,5 +1,7 @@
++#![cfg_attr(target_os = "wasi", allow(unused, dead_code))]
++
+ // Signal handling
+-cfg_signal_internal_and_unix! {
++cfg_signal_internal_and_unix_or_wasix! {
+     mod signal;
+ }
+ cfg_io_uring! {
+@@ -45,8 +47,8 @@
+     synced: Mutex<registration_set::Synced>,
+ 
+     /// Used to wake up the reactor from a call to `turn`.
+-    /// Not supported on `Wasi` due to lack of threading support.
+-    #[cfg(not(target_os = "wasi"))]
++    /// Not supported on classic `Wasi` due to lack of threading support.
++    #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+     waker: mio::Waker,
+ 
+     pub(crate) metrics: IoDriverMetrics,
+@@ -116,7 +118,7 @@
+     /// creation.
+     pub(crate) fn new(nevents: usize) -> io::Result<(Driver, Handle)> {
+         let poll = mio::Poll::new()?;
+-        #[cfg(not(target_os = "wasi"))]
++        #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+         let waker = mio::Waker::new(poll.registry(), TOKEN_WAKEUP)?;
+         let registry = poll.registry().try_clone()?;
+ 
+@@ -132,7 +134,7 @@
+             registry,
+             registrations,
+             synced: Mutex::new(synced),
+-            #[cfg(not(target_os = "wasi"))]
++            #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+             waker,
+             metrics: IoDriverMetrics::default(),
+             #[cfg(all(
+@@ -256,7 +258,7 @@
+     /// blocked in `turn`, then the next call to `turn` will not block and
+     /// return immediately.
+     pub(crate) fn unpark(&self) {
+-        #[cfg(not(target_os = "wasi"))]
++        #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+         self.waker.wake().expect("failed to wake I/O driver");
+     }
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/runtime/io/registration.rs b/src/runtime/io/registration.rs
+--- a/src/runtime/io/registration.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/runtime/io/registration.rs	2026-07-17 12:16:42.730793819 +0200
+@@ -118,7 +118,7 @@
+ 
+     // Uses the poll path, requiring the caller to ensure mutual exclusion for
+     // correctness. Only the last task to call this function is notified.
+-    #[cfg(not(target_os = "wasi"))]
++    #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+     pub(crate) fn poll_read_io<R>(
+         &self,
+         cx: &mut Context<'_>,
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/runtime/mod.rs b/src/runtime/mod.rs
+--- a/src/runtime/mod.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/runtime/mod.rs	2026-07-17 12:16:42.730955853 +0200
+@@ -393,7 +393,7 @@
+     pub(crate) mod time;
+ }
+ 
+-cfg_signal_internal_and_unix! {
++cfg_signal_internal_and_unix_or_wasix! {
+     pub(crate) mod signal;
+ }
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/runtime/signal/mod.rs b/src/runtime/signal/mod.rs
+--- a/src/runtime/signal/mod.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/runtime/signal/mod.rs	2026-07-17 12:16:42.732811793 +0200
+@@ -1,10 +1,12 @@
+ #![cfg_attr(not(feature = "rt"), allow(dead_code))]
++#![cfg_attr(target_os = "wasi", allow(unused, dead_code))]
+ 
+ //! Signal driver
+ 
+ use crate::runtime::{driver, io};
+ use crate::signal::registry::globals;
+ 
++#[cfg(not(target_os = "wasi"))]
+ use mio::net::UnixStream;
+ use std::io::{self as std_io, Read};
+ use std::sync::{Arc, Weak};
+@@ -21,6 +23,7 @@
+     io: io::Driver,
+ 
+     /// A pipe for receiving wake events from the signal handler
++    #[cfg(not(target_os = "wasi"))]
+     receiver: UnixStream,
+ 
+     /// Shared state. The driver keeps a strong ref and the handle keeps a weak
+@@ -62,19 +65,24 @@
+         // with registering dups with the same reactor. In this case, duping is
+         // safe as each dup is registered with separate reactors **and** we
+         // only expect at least one dup to receive the notification.
+-
+-        // Manually drop as we don't actually own this instance of UnixStream.
+-        let receiver_fd = globals().receiver.as_raw_fd();
+-
+-        // safety: there is nothing unsafe about this, but the `from_raw_fd` fn is marked as unsafe.
+-        let original =
+-            ManuallyDrop::new(unsafe { std::os::unix::net::UnixStream::from_raw_fd(receiver_fd) });
+-        let mut receiver = UnixStream::from_std(original.try_clone()?);
+-
+-        io_handle.register_signal_receiver(&mut receiver)?;
++        #[cfg(not(target_os = "wasi"))]
++        let receiver = {
++            // Manually drop as we don't actually own this instance of UnixStream.
++            let receiver_fd = globals().receiver.as_raw_fd();
++
++            // safety: there is nothing unsafe about this, but the `from_raw_fd` fn is marked as unsafe.
++            let original = ManuallyDrop::new(unsafe {
++                std::os::unix::net::UnixStream::from_raw_fd(receiver_fd)
++            });
++            let mut receiver = UnixStream::from_std(original.try_clone()?);
++
++            io_handle.register_signal_receiver(&mut receiver)?;
++            receiver
++        };
+ 
+         Ok(Self {
+             io,
++            #[cfg(not(target_os = "wasi"))]
+             receiver,
+             inner: Arc::new(()),
+         })
+@@ -111,14 +119,17 @@
+ 
+         // Drain the pipe completely so we can receive a new readiness event
+         // if another signal has come in.
+-        let mut buf = [0; 128];
+-        #[allow(clippy::unused_io_amount)]
+-        loop {
+-            match self.receiver.read(&mut buf) {
+-                Ok(0) => panic!("EOF on self-pipe"),
+-                Ok(_) => continue, // Keep reading
+-                Err(e) if e.kind() == std_io::ErrorKind::WouldBlock => break,
+-                Err(e) => panic!("Bad read on self-pipe: {e}"),
++        #[cfg(not(target_os = "wasi"))]
++        {
++            let mut buf = [0; 128];
++            #[allow(clippy::unused_io_amount)]
++            loop {
++                match self.receiver.read(&mut buf) {
++                    Ok(0) => panic!("EOF on self-pipe"),
++                    Ok(_) => continue, // Keep reading
++                    Err(e) if e.kind() == std_io::ErrorKind::WouldBlock => break,
++                    Err(e) => panic!("Bad read on self-pipe: {}", e),
++                }
+             }
+         }
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/signal/ctrl_c.rs b/src/signal/ctrl_c.rs
+--- a/src/signal/ctrl_c.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/signal/ctrl_c.rs	2026-07-17 12:16:42.732978055 +0200
+@@ -1,4 +1,4 @@
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ use super::unix::{self as os_impl};
+ #[cfg(windows)]
+ use super::windows::{self as os_impl};
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/signal/mod.rs b/src/signal/mod.rs
+--- a/src/signal/mod.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/signal/mod.rs	2026-07-17 12:16:42.733308677 +0200
+@@ -26,7 +26,7 @@
+ //! Wait for `SIGHUP` on Unix
+ //!
+ //! ```rust,no_run
+-//! # #[cfg(unix)] {
++//! # #[cfg(any(unix, target_vendor = "wasmer"))] {
+ //! use tokio::signal::unix::{signal, SignalKind};
+ //!
+ //! #[tokio::main]
+@@ -53,7 +53,7 @@
+ pub(crate) mod registry;
+ 
+ mod os {
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     pub(crate) use super::unix::{OsExtraData, OsStorage};
+ 
+     #[cfg(windows)]
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/signal/registry.rs b/src/signal/registry.rs
+--- a/src/signal/registry.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/signal/registry.rs	2026-07-17 12:16:42.733770098 +0200
+@@ -142,7 +142,7 @@
+         self.registry.broadcast()
+     }
+ 
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     pub(crate) fn storage(&self) -> &OsStorage {
+         &self.registry.storage
+     }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/signal/unix.rs b/src/signal/unix.rs
+--- a/src/signal/unix.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/signal/unix.rs	2026-07-17 12:16:42.733955843 +0200
+@@ -3,8 +3,9 @@
+ //! This module is only defined on Unix platforms and contains the primary
+ //! `Signal` type for receiving notifications of signals.
+ 
+-#![cfg(unix)]
++#![cfg(any(unix, target_vendor = "wasmer"))]
+ #![cfg_attr(docsrs, doc(cfg(all(unix, feature = "signal"))))]
++#![cfg_attr(target_os = "wasi", allow(unused))]
+ 
+ use crate::runtime::scheduler;
+ use crate::runtime::signal::Handle;
+@@ -12,6 +13,7 @@
+ use crate::signal::RxFuture;
+ use crate::sync::watch;
+ 
++#[cfg(not(target_os = "wasi"))]
+ use mio::net::UnixStream;
+ use std::io::{self, Error, ErrorKind, Write};
+ use std::sync::atomic::{AtomicBool, Ordering};
+@@ -51,16 +53,24 @@
+ 
+ #[derive(Debug)]
+ pub(crate) struct OsExtraData {
++    #[cfg(not(target_os = "wasi"))]
+     sender: UnixStream,
++    #[cfg(not(target_os = "wasi"))]
+     pub(crate) receiver: UnixStream,
+ }
+ 
+ impl Init for OsExtraData {
++    #[cfg(not(target_os = "wasi"))]
+     fn init() -> Self {
+         let (receiver, sender) = UnixStream::pair().expect("failed to create UnixStream");
+ 
+         Self { sender, receiver }
+     }
++
++    #[cfg(target_os = "wasi")]
++    fn init() -> Self {
++        Self { }
++    }
+ }
+ 
+ /// Represents the specific kind of signal to listen for.
+@@ -256,8 +266,11 @@
+ 
+     // Send a wakeup, ignore any errors (anything reasonably possible is
+     // full pipe and then it will wake up anyway).
+-    let mut sender = &globals.sender;
+-    drop(sender.write(&[1]));
++    #[cfg(not(target_os = "wasi"))]
++    {
++        let mut sender = &globals.sender;
++        drop(sender.write(&[1]));
++    }
+ }
+ 
+ /// Enables this module to receive signal notifications for the `signal`
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' a/src/util/markers.rs b/src/util/markers.rs
+--- a/src/util/markers.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/util/markers.rs	2026-07-17 12:16:42.735016307 +0200
+@@ -1,3 +1,5 @@
++#![cfg_attr(target_os = "wasi", allow(unused, dead_code))]
++
+ /// Marker for types that are `Sync` but not `Send`
+ #[allow(dead_code)]
+ pub(crate) struct SyncNotSend(#[allow(dead_code)] *mut ());

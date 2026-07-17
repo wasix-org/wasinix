@@ -34,7 +34,7 @@
   # rustPlatform.buildRustPackage, like C/C++ do via the wasixcc stdenv.
   wasixRustPlatform = import ./set/rust-platform.nix {
     inherit lib pkgsCross;
-    inherit (toolchain) wasixRustToolchain cargoWasix;
+    inherit (toolchain) wasixRustToolchain wasixcc cargoWasix;
     cargo = pkgs.cargo;
   };
 

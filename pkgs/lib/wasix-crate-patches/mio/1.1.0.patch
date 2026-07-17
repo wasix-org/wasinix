@@ -1,0 +1,2170 @@
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml	1970-01-01 01:00:01.000000000 +0100
++++ b/Cargo.toml	2026-07-17 12:32:07.064371459 +0200
+@@ -127,12 +127,15 @@
+ [target.'cfg(target_os = "hermit")'.dependencies.libc]
+ version = "0.2.159"
+ 
++[target.'cfg(all(target_os = "wasi", target_vendor = "unknown"))'.dependencies.wasi]
++version = "0.11.0"
++
++[target.'cfg(all(target_os = "wasi", target_vendor = "wasmer"))'.dependencies.wasix]
++version = "0.13"
++
+ [target.'cfg(target_os = "wasi")'.dependencies.libc]
+ version = "0.2.159"
+ 
+-[target.'cfg(target_os = "wasi")'.dependencies.wasi]
+-version = "0.11.0"
+-
+ [target."cfg(unix)".dependencies.libc]
+ version = "0.2.159"
+ 
+@@ -157,3 +160,4 @@
+     "cfg(mio_unsupported_force_poll_poll)",
+     "cfg(mio_unsupported_force_waker_pipe)",
+ ]
++
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/lib.rs	2026-07-17 12:27:49.941624497 +0200
+@@ -43,6 +43,10 @@
+ #[cfg(all(target_family = "wasm", not(target_os = "wasi")))]
+ compile_error!("This wasm target is unsupported by mio. If using Tokio, disable the net feature.");
+ 
++// WASIX requires os-poll when using the feature net
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer", feature = "net", not(feature = "os-poll")))]
++compile_error!("WASIX requires os-poll when using the feature net");
++
+ // macros used internally
+ #[macro_use]
+ mod macros;
+@@ -51,8 +55,10 @@
+ mod poll;
+ mod sys;
+ mod token;
+-#[cfg(not(target_os = "wasi"))]
+-mod waker;
++
++cfg_os_poll! {
++    mod waker;
++}
+ 
+ pub mod event;
+ 
+@@ -69,14 +75,25 @@
+ pub use interest::Interest;
+ pub use poll::{Poll, Registry};
+ pub use token::Token;
+-#[cfg(not(target_os = "wasi"))]
+-pub use waker::Waker;
+ 
+-#[cfg(all(unix, feature = "os-ext"))]
+-#[cfg_attr(docsrs, doc(cfg(all(unix, feature = "os-ext"))))]
++mod wasi {
++    #[allow(unused)]
++    #[cfg(all(target_os = "wasi", target_vendor = "unknown"))]
++    pub use ::wasi::*;
++    #[allow(unused)]
++    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++    pub use ::wasix::*;
++}
++
++cfg_os_poll! {
++    pub use waker::Waker;
++}
++
++#[cfg(all(any(unix, target_vendor = "wasmer"), feature = "os-ext"))]
++#[cfg_attr(docsrs, doc(cfg(all(any(unix, target_vendor = "wasmer"), feature = "os-ext"))))]
+ pub mod unix {
+     //! Unix only extensions.
+-
++    #[cfg(unix)]
+     pub mod pipe {
+         //! Unix pipe.
+         //!
+@@ -85,6 +102,7 @@
+         pub use crate::sys::pipe::{new, Receiver, Sender};
+     }
+ 
++    #[allow(unused)]
+     pub use crate::sys::SourceFd;
+ }
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/net/mod.rs b/src/net/mod.rs
+--- a/src/net/mod.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/net/mod.rs	2026-07-17 12:27:49.941751587 +0200
+@@ -28,9 +28,9 @@
+ mod tcp;
+ pub use self::tcp::{TcpListener, TcpStream};
+ 
+-#[cfg(not(target_os = "wasi"))]
++#[cfg(not(all(target_os = "wasi", target_vendor = "unknown")))]
+ mod udp;
+-#[cfg(not(target_os = "wasi"))]
++#[cfg(not(all(target_os = "wasi", target_vendor = "unknown")))]
+ pub use self::udp::UdpSocket;
+ 
+ #[cfg(unix)]
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/net/tcp/listener.rs b/src/net/tcp/listener.rs
+--- a/src/net/tcp/listener.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/net/tcp/listener.rs	2026-07-17 12:28:42.997917985 +0200
+@@ -13,9 +13,13 @@
+ 
+ use crate::io_source::IoSource;
+ use crate::net::TcpStream;
+-#[cfg(any(unix, target_os = "hermit"))]
++#[cfg(any(
++    unix,
++    target_os = "hermit",
++    all(target_os = "wasi", target_vendor = "wasmer")
++))]
+ use crate::sys::tcp::set_reuseaddr;
+-#[cfg(not(target_os = "wasi"))]
++#[cfg(not(all(target_os = "wasi", target_vendor = "unknown")))]
+ use crate::sys::{
+     tcp::{bind, listen, new_for_addr},
+     LISTEN_BACKLOG_SIZE,
+@@ -62,11 +66,13 @@
+     /// 2. Set the `SO_REUSEADDR` option on the socket on Unix.
+     /// 3. Bind the socket to the specified address.
+     /// 4. Calls `listen` on the socket to prepare it to receive new connections.
+-    #[cfg(not(target_os = "wasi"))]
++    #[cfg(not(all(target_os = "wasi", target_vendor = "unknown")))]
+     pub fn bind(addr: SocketAddr) -> io::Result<TcpListener> {
+         let socket = new_for_addr(addr)?;
+         #[cfg(any(unix, target_os = "hermit"))]
+         let listener = unsafe { TcpListener::from_raw_fd(socket) };
++        #[cfg(target_os = "wasi")]
++        let listener = unsafe { TcpListener::from_raw_fd(socket) };
+         #[cfg(windows)]
+         let listener = unsafe { TcpListener::from_raw_socket(socket as _) };
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/net/tcp/stream.rs b/src/net/tcp/stream.rs
+--- a/src/net/tcp/stream.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/net/tcp/stream.rs	2026-07-17 12:27:49.942652026 +0200
+@@ -13,7 +13,7 @@
+ };
+ 
+ use crate::io_source::IoSource;
+-#[cfg(not(target_os = "wasi"))]
++#[cfg(not(all(target_os = "wasi", target_vendor = "unknown")))]
+ use crate::sys::tcp::{connect, new_for_addr};
+ use crate::{event, Interest, Registry, Token};
+ 
+@@ -82,16 +82,19 @@
+     ///     went wrong.
+     ///  6. Now the stream can be used.
+     ///
++    /// [read interest]: Interest::READABLE
+     /// This may return a `WouldBlock` in which case the socket connection
+     /// cannot be completed immediately, it usually means there are insufficient
+     /// entries in the routing cache.
+     ///
+     /// [write interest]: Interest::WRITABLE
+-    #[cfg(not(target_os = "wasi"))]
++    #[cfg(not(all(target_os = "wasi", target_vendor = "unknown")))]
+     pub fn connect(addr: SocketAddr) -> io::Result<TcpStream> {
+         let socket = new_for_addr(addr)?;
+         #[cfg(any(unix, target_os = "hermit"))]
+         let stream = unsafe { TcpStream::from_raw_fd(socket) };
++        #[cfg(target_os = "wasi")]
++        let stream = unsafe { TcpStream::from_raw_fd(socket) };
+         #[cfg(windows)]
+         let stream = unsafe { TcpStream::from_raw_socket(socket as _) };
+         connect(&stream.inner, addr)?;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/poll.rs b/src/poll.rs
+--- a/src/poll.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/poll.rs	2026-07-17 12:27:49.942707344 +0200
+@@ -16,7 +16,7 @@
+ ))]
+ use std::os::fd::{AsRawFd, RawFd};
+ #[cfg(all(debug_assertions, not(target_os = "wasi")))]
+-use std::sync::atomic::{AtomicBool, Ordering};
++use std::sync::atomic::AtomicBool;
+ #[cfg(all(debug_assertions, not(target_os = "wasi")))]
+ use std::sync::Arc;
+ use std::time::Duration;
+@@ -719,17 +719,22 @@
+ 
+     /// Internal check to ensure only a single `Waker` is active per [`Poll`]
+     /// instance.
+-    #[cfg(all(debug_assertions, not(target_os = "wasi")))]
+-    pub(crate) fn register_waker(&self) {
++    #[allow(dead_code)]
++    #[cfg(all(debug_assertions))]
++    pub fn register_waker(&self) {
++        #[cfg(all(debug_assertions, not(target_os = "wasi")))]
+         assert!(
+-            !self.has_waker.swap(true, Ordering::AcqRel),
++            !self
++                .has_waker
++                .swap(true, std::sync::atomic::Ordering::AcqRel),
+             "Only a single `Waker` can be active per `Poll` instance"
+         );
+     }
+ 
+     /// Get access to the `sys::Selector`.
+-    #[cfg(any(not(target_os = "wasi"), feature = "net"))]
+-    pub(crate) fn selector(&self) -> &sys::Selector {
++    #[allow(dead_code)]
++    #[cfg(any(not(target_os = "wasi"), feature = "net", feature = "os-poll"))]
++    pub fn selector(&self) -> &sys::Selector {
+         &self.selector
+     }
+ }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/mod.rs b/src/sys/mod.rs
+--- a/src/sys/mod.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/sys/mod.rs	2026-07-17 12:30:17.483595693 +0200
+@@ -14,6 +14,7 @@
+ //! * `Waker`: see [`crate::Waker`].
+ 
+ cfg_os_poll! {
++    #[allow(unused_macros)]
+     macro_rules! debug_detail {
+         (
+             $type: ident ($event_type: ty), $test: path,
+@@ -67,12 +68,29 @@
+ cfg_os_poll! {
+     mod wasi;
+     pub(crate) use self::wasi::*;
++
++    #[allow(unused_imports)]
++    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++    pub use self::wasi::SourceFd;
++
++    #[allow(unused_imports)]
++    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++    pub use std::net::SocketAddr;
+ }
+ 
+ cfg_not_os_poll! {
+     mod shell;
+     pub(crate) use self::shell::*;
+ 
++    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++    cfg_any_os_ext! {
++        mod wasi;
++        pub use self::wasi::SourceFd;
++    }
++    #[allow(unused_imports)]
++    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++    pub use std::net::SocketAddr;
++
+     #[cfg(unix)]
+     cfg_any_os_ext! {
+         mod unix;
+@@ -119,6 +137,10 @@
+ pub(crate) const LISTEN_BACKLOG_SIZE: i32 = 1024;
+ 
+ #[allow(dead_code)]
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++pub(crate) const LISTEN_BACKLOG_SIZE: i32 = 128;
++
++#[allow(dead_code)]
+ #[cfg(any(
+     // Silently capped to `/proc/sys/net/core/somaxconn`.
+     target_os = "linux",
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/shell/mod.rs b/src/sys/shell/mod.rs
+--- a/src/sys/shell/mod.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/sys/shell/mod.rs	2026-07-17 12:27:49.943665792 +0200
+@@ -9,6 +9,7 @@
+ 
+ #[cfg(not(target_os = "wasi"))]
+ mod waker;
++#[allow(unused_imports)]
+ #[cfg(not(target_os = "wasi"))]
+ pub(crate) use self::waker::Waker;
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/shell/selector.rs b/src/sys/shell/selector.rs
+--- a/src/sys/shell/selector.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/sys/shell/selector.rs	2026-07-17 12:27:49.943737982 +0200
+@@ -18,6 +18,12 @@
+     pub fn select(&self, _: &mut Events, _: Option<Duration>) -> io::Result<()> {
+         os_required!();
+     }
++
++    #[allow(dead_code)]
++    #[cfg(all(debug_assertions))]
++    pub fn register_waker(&self) -> bool {
++        os_required!();
++    }
+ }
+ 
+ #[cfg(unix)]
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/shell/waker.rs b/src/sys/shell/waker.rs
+--- a/src/sys/shell/waker.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/sys/shell/waker.rs	2026-07-17 12:27:49.943797195 +0200
+@@ -6,10 +6,12 @@
+ pub struct Waker {}
+ 
+ impl Waker {
++    #[allow(dead_code)]
+     pub fn new(_: &Selector, _: Token) -> io::Result<Waker> {
+         os_required!();
+     }
+ 
++    #[allow(dead_code)]
+     pub fn wake(&self) -> io::Result<()> {
+         os_required!();
+     }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/unix/net.rs b/src/sys/unix/net.rs
+--- a/src/sys/unix/net.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/sys/unix/net.rs	2026-07-17 12:27:49.944008523 +0200
+@@ -20,6 +20,7 @@
+         target_os = "hurd",
+         target_os = "illumos",
+         target_os = "linux",
++        target_os = "wasi",
+         target_os = "netbsd",
+         target_os = "openbsd",
+         target_os = "solaris",
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/unix/pipe.rs b/src/sys/unix/pipe.rs
+--- a/src/sys/unix/pipe.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/sys/unix/pipe.rs	2026-07-17 12:27:49.944499208 +0200
+@@ -15,6 +15,7 @@
+         target_os = "fuchsia",
+         target_os = "hurd",
+         target_os = "linux",
++        target_os = "wasi",
+         target_os = "netbsd",
+         target_os = "openbsd",
+         target_os = "illumos",
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/unix/tcp.rs b/src/sys/unix/tcp.rs
+--- a/src/sys/unix/tcp.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/sys/unix/tcp.rs	2026-07-17 12:27:49.944707336 +0200
+@@ -70,6 +70,7 @@
+         target_os = "hurd",
+         target_os = "illumos",
+         target_os = "linux",
++        target_os = "wasi",
+         target_os = "netbsd",
+         target_os = "openbsd",
+         target_os = "solaris",
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/wasi/epoll.rs b/src/sys/wasi/epoll.rs
+--- a/src/sys/wasi/epoll.rs	1970-01-01 01:00:00.000000000 +0100
++++ b/src/sys/wasi/epoll.rs	2026-07-17 12:27:49.945212112 +0200
+@@ -0,0 +1,256 @@
++use crate::{Interest, Token};
++
++#[cfg(debug_assertions)]
++use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
++use std::time::Duration;
++use std::{i32, io, ptr};
++use std::os::fd::RawFd;
++use std::os::fd::AsRawFd;
++
++use ::wasix as wasi;
++
++/// Unique id for use as `SelectorId`.
++#[cfg(debug_assertions)]
++static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
++
++#[derive(Debug)]
++pub struct Selector {
++    #[cfg(debug_assertions)]
++    id: usize,
++    ep: wasi::Fd,
++    #[cfg(debug_assertions)]
++    has_waker: AtomicBool,
++}
++
++impl Selector {
++    pub fn new() -> io::Result<Selector> {
++        let ep = unsafe {
++            wasi::epoll_create()
++        }.map_err(io_err)?;
++        Ok(
++            Selector {
++                #[cfg(debug_assertions)]
++                id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
++                ep,
++                #[cfg(debug_assertions)]
++                has_waker: AtomicBool::new(false),
++            }
++        )
++    }
++
++    pub fn try_clone(&self) -> io::Result<Selector> {
++        let ep = unsafe {
++            wasi::fd_dup(self.ep)
++        }.map_err(io_err)?;
++        Ok(
++            Selector {
++                // It's the same selector, so we use the same id.
++                #[cfg(debug_assertions)]
++                id: self.id,
++                ep,
++                #[cfg(debug_assertions)]
++                has_waker: AtomicBool::new(self.has_waker.load(Ordering::Acquire)),
++            }
++        )
++    }
++
++    pub fn select(&self, events: &mut Events, timeout: Option<Duration>) -> io::Result<()> {
++        let timeout = timeout
++            .map(|to| to.as_nanos() as wasi::Timestamp)
++            .unwrap_or(wasi::Timestamp::MAX);
++
++        events.clear();
++        unsafe {
++            wasi::epoll_wait(
++                self.ep,
++                events.as_mut_ptr(),
++                events.capacity(),
++                timeout
++            )
++        }
++        .map_err(io_err)
++        .map(|n_events| {
++            // This is safe because `epoll_wait` ensures that `n_events` are
++            // assigned.
++            unsafe { events.set_len(n_events as usize) };
++        })
++    }
++
++    pub fn register(&self, fd: wasi::Fd, token: Token, interests: Interest) -> io::Result<()> {
++        let mut event = wasi::EpollEvent {
++            events: interests_to_epoll(interests),
++            data: wasi::EpollData {
++                ptr: 0,
++                fd: fd,
++                data1: 0,
++                data2: usize::from(token) as u64,
++            }   
++        };
++
++        unsafe {
++            wasi::epoll_ctl(
++                self.ep,
++                wasi::EPOLL_CTL_ADD,
++                fd,
++                &mut event
++            )
++            .map(|_| ())
++        }
++        .map_err(io_err)
++    }
++
++    pub fn reregister(&self, fd: wasi::Fd, token: Token, interests: Interest) -> io::Result<()> {
++        let mut event = wasi::EpollEvent {
++            events: interests_to_epoll(interests),
++            data: wasi::EpollData {
++                ptr: 0,
++                fd: fd,
++                data1: 0,
++                data2: usize::from(token) as u64,
++            }
++        };
++
++        unsafe {
++            wasi::epoll_ctl(
++                self.ep,
++                wasi::EPOLL_CTL_MOD,
++                fd,
++                &mut event
++            )
++            .map(|_| ())
++        }
++        .map_err(io_err)
++    }
++
++    pub fn deregister(&self, fd: wasi::Fd) -> io::Result<()> {
++        unsafe {
++            wasi::epoll_ctl(
++                self.ep,
++                wasi::EPOLL_CTL_DEL,
++                fd,
++                ptr::null_mut()
++            )
++            .map(|_| ())
++        }
++        .map_err(io_err)
++    }
++
++    #[cfg(debug_assertions)]
++    pub fn register_waker(&self) -> bool {
++        self.has_waker.swap(true, Ordering::AcqRel)
++    }
++}
++
++cfg_io_source! {
++    impl Selector {
++        #[cfg(debug_assertions)]
++        pub fn id(&self) -> usize {
++            self.id
++        }
++    }
++}
++
++impl AsRawFd for Selector {
++    fn as_raw_fd(&self) -> RawFd {
++        self.ep as RawFd
++    }
++}
++
++impl Drop for Selector {
++    fn drop(&mut self) {
++        if let Err(err) = unsafe {
++            wasi::fd_close(
++                self.ep,
++            )
++            .map(|_| ())
++        } {
++            #[cfg(feature = "log")]
++            log::error!("error closing epoll: {}", err);
++        }
++    }
++}
++
++fn interests_to_epoll(interests: Interest) -> u32 {
++    let mut kind = wasi::EPOLL_TYPE_EPOLLET;
++
++    if interests.is_readable() {
++        kind = kind | wasi::EPOLL_TYPE_EPOLLIN | wasi::EPOLL_TYPE_EPOLLRDHUP;
++    }
++
++    if interests.is_writable() {
++        kind |= wasi::EPOLL_TYPE_EPOLLOUT;
++    }
++
++    kind as u32
++}
++
++pub(crate) type Events = Vec<Event>;
++
++pub(crate) type Event = wasi::EpollEvent;
++
++pub(crate) mod event {
++    use std::fmt;
++    use ::wasix as wasi;
++
++    use crate::sys::Event;
++    use crate::Token;
++
++    pub(crate) fn token(event: &Event) -> Token {
++        Token(event.data.data2 as usize)
++    }
++
++    pub(crate) fn is_readable(event: &Event) -> bool {
++        (event.events & wasi::EPOLL_TYPE_EPOLLIN) != 0 ||
++        (event.events & wasi::EPOLL_TYPE_EPOLLPRI) != 0
++    }
++
++    pub(crate) fn is_writable(event: &Event) -> bool {
++        (event.events & wasi::EPOLL_TYPE_EPOLLOUT) != 0
++    }
++
++    pub(crate) fn is_error(event: &Event) -> bool {
++        (event.events & wasi::EPOLL_TYPE_EPOLLERR) != 0
++    }
++
++    pub(crate) fn is_read_closed(event: &Event) -> bool {
++        // Both halves of the socket have closed
++        (event.events & wasi::EPOLL_TYPE_EPOLLHUP) != 0
++            // Socket has received FIN or called shutdown(SHUT_RD)
++            || ((event.events & wasi::EPOLL_TYPE_EPOLLIN) != 0
++                && (event.events & wasi::EPOLL_TYPE_EPOLLRDHUP) != 0)
++    }
++
++    pub(crate) fn is_write_closed(event: &Event) -> bool {
++        // Both halves of the socket have closed
++        (event.events & wasi::EPOLL_TYPE_EPOLLHUP) != 0
++            // Unix pipe write end has closed
++            || ((event.events & wasi::EPOLL_TYPE_EPOLLOUT) != 0
++                && (event.events & wasi::EPOLL_TYPE_EPOLLERR) != 0)
++            // The other side (read end) of a Unix pipe has closed.
++            || (event.events & wasi::EPOLL_TYPE_EPOLLERR) != 0
++    }
++
++    pub(crate) fn is_priority(event: &Event) -> bool {
++        (event.events & wasi::EPOLL_TYPE_EPOLLPRI) != 0
++    }
++
++    pub(crate) fn is_aio(_: &Event) -> bool {
++        // Not supported.
++        false
++    }
++
++    pub(crate) fn is_lio(_: &Event) -> bool {
++        // Not supported.
++        false
++    }
++
++    pub(crate) fn debug_details(f: &mut fmt::Formatter<'_>, event: &Event) -> fmt::Result {
++        f.debug_struct("Event")
++            .field("fd", &event.data.fd)
++            .finish()
++    }
++}
++
++fn io_err(errno: wasi::x::Errno) -> io::Error {
++    io::Error::from_raw_os_error(errno.raw() as i32)
++}
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/wasi/mod.rs b/src/sys/wasi/mod.rs
+--- a/src/sys/wasi/mod.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/sys/wasi/mod.rs	2026-07-17 12:28:42.959499958 +0200
+@@ -13,16 +13,37 @@
+ //!
+ //! In summary, this only (barely) works using a single thread.
+ 
+-use std::cmp::min;
++#[allow(unused)]
+ use std::io;
+-#[cfg(all(feature = "net", debug_assertions))]
+-use std::sync::atomic::{AtomicUsize, Ordering};
+-use std::sync::{Arc, Mutex};
+-use std::time::Duration;
+ 
+-#[cfg(feature = "net")]
++#[cfg(target_vendor = "wasmer")]
++cfg_os_poll! {
++    pub(crate) mod sourcefd;
++    #[allow(unused)]
++    pub use self::sourcefd::SourceFd;
++
++    pub(crate) mod waker;
++    pub(crate) use self::waker::Waker;
++
++    #[cfg(target_vendor = "wasmer")]
++    #[path = "epoll.rs"]
++    pub(crate) mod poll;
++    #[cfg(not(target_vendor = "wasmer"))]
++    pub(crate) mod poll;
++    pub(crate) use poll::*;
++
++    cfg_net! {
++        mod net;
++        pub(crate) mod tcp;
++        pub(crate) mod udp;
++        pub(crate) mod pipe;
++    }
++}
++
++#[cfg(all(feature = "net", target_vendor = "unknown"))]
+ use crate::{Interest, Token};
+ 
++#[cfg(target_vendor = "unknown")]
+ cfg_net! {
+     pub(crate) mod tcp {
+         use std::io;
+@@ -36,317 +57,6 @@
+     }
+ }
+ 
+-/// Unique id for use as `SelectorId`.
+-#[cfg(all(debug_assertions, feature = "net"))]
+-static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
+-
+-pub(crate) struct Selector {
+-    #[cfg(all(debug_assertions, feature = "net"))]
+-    id: usize,
+-    /// Subscriptions (reads events) we're interested in.
+-    subscriptions: Arc<Mutex<Vec<wasi::Subscription>>>,
+-}
+-
+-impl Selector {
+-    pub(crate) fn new() -> io::Result<Selector> {
+-        Ok(Selector {
+-            #[cfg(all(debug_assertions, feature = "net"))]
+-            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
+-            subscriptions: Arc::new(Mutex::new(Vec::new())),
+-        })
+-    }
+-
+-    #[cfg(all(debug_assertions, feature = "net"))]
+-    pub(crate) fn id(&self) -> usize {
+-        self.id
+-    }
+-
+-    pub(crate) fn select(&self, events: &mut Events, timeout: Option<Duration>) -> io::Result<()> {
+-        events.clear();
+-
+-        let mut subscriptions = self.subscriptions.lock().unwrap();
+-
+-        // If we want to a use a timeout in the `wasi_poll_oneoff()` function
+-        // we need another subscription to the list.
+-        if let Some(timeout) = timeout {
+-            subscriptions.push(timeout_subscription(timeout));
+-        }
+-
+-        // `poll_oneoff` needs the same number of events as subscriptions.
+-        let length = subscriptions.len();
+-        events.reserve(length);
+-
+-        debug_assert!(events.capacity() >= length);
+-        #[cfg(debug_assertions)]
+-        if length == 0 {
+-            warn!(
+-                "calling mio::Poll::poll with empty subscriptions, this likely not what you want"
+-            );
+-        }
+-
+-        let res = unsafe { wasi::poll_oneoff(subscriptions.as_ptr(), events.as_mut_ptr(), length) };
+-
+-        // Remove the timeout subscription we possibly added above.
+-        if timeout.is_some() {
+-            let timeout_sub = subscriptions.pop();
+-            debug_assert_eq!(
+-                timeout_sub.unwrap().u.tag,
+-                wasi::EVENTTYPE_CLOCK.raw(),
+-                "failed to remove timeout subscription"
+-            );
+-        }
+-
+-        drop(subscriptions); // Unlock.
+-
+-        match res {
+-            Ok(n_events) => {
+-                // Safety: `poll_oneoff` initialises the `events` for us.
+-                unsafe { events.set_len(n_events) };
+-
+-                // Remove the timeout event.
+-                if timeout.is_some() {
+-                    if let Some(index) = events.iter().position(is_timeout_event) {
+-                        events.swap_remove(index);
+-                    }
+-                }
+-
+-                check_errors(&events)
+-            }
+-            Err(err) => Err(io_err(err)),
+-        }
+-    }
+-
+-    pub(crate) fn try_clone(&self) -> io::Result<Selector> {
+-        Ok(Selector {
+-            #[cfg(all(debug_assertions, feature = "net"))]
+-            id: self.id,
+-            subscriptions: self.subscriptions.clone(),
+-        })
+-    }
+-
+-    cfg_io_source! {
+-    pub(crate) fn register(
+-        &self,
+-        fd: wasi::Fd,
+-        token: Token,
+-        interests: Interest,
+-    ) -> io::Result<()> {
+-        let mut subscriptions = self.subscriptions.lock().unwrap();
+-
+-        if interests.is_writable() {
+-            let subscription = wasi::Subscription {
+-                userdata: token.0 as wasi::Userdata,
+-                u: wasi::SubscriptionU {
+-                    tag: wasi::EVENTTYPE_FD_WRITE.raw(),
+-                    u: wasi::SubscriptionUU {
+-                        fd_write: wasi::SubscriptionFdReadwrite {
+-                            file_descriptor: fd,
+-                        },
+-                    },
+-                },
+-            };
+-            subscriptions.push(subscription);
+-        }
+-
+-        if interests.is_readable() {
+-            let subscription = wasi::Subscription {
+-                userdata: token.0 as wasi::Userdata,
+-                u: wasi::SubscriptionU {
+-                    tag: wasi::EVENTTYPE_FD_READ.raw(),
+-                    u: wasi::SubscriptionUU {
+-                        fd_read: wasi::SubscriptionFdReadwrite {
+-                            file_descriptor: fd,
+-                        },
+-                    },
+-                },
+-            };
+-            subscriptions.push(subscription);
+-        }
+-
+-        Ok(())
+-    }
+-
+-    pub(crate) fn reregister(
+-        &self,
+-        fd: wasi::Fd,
+-        token: Token,
+-        interests: Interest,
+-    ) -> io::Result<()> {
+-        self.deregister(fd)
+-            .and_then(|()| self.register(fd, token, interests))
+-    }
+-
+-    pub(crate) fn deregister(&self, fd: wasi::Fd) -> io::Result<()> {
+-        let mut subscriptions = self.subscriptions.lock().unwrap();
+-
+-        let predicate = |subscription: &wasi::Subscription| {
+-            // Safety: `subscription.u.tag` defines the type of the union in
+-            // `subscription.u.u`.
+-            match subscription.u.tag {
+-                t if t == wasi::EVENTTYPE_FD_WRITE.raw() => unsafe {
+-                    subscription.u.u.fd_write.file_descriptor == fd
+-                },
+-                t if t == wasi::EVENTTYPE_FD_READ.raw() => unsafe {
+-                    subscription.u.u.fd_read.file_descriptor == fd
+-                },
+-                _ => false,
+-            }
+-        };
+-
+-        let mut ret = Err(io::ErrorKind::NotFound.into());
+-
+-        while let Some(index) = subscriptions.iter().position(predicate) {
+-            subscriptions.swap_remove(index);
+-            ret = Ok(())
+-        }
+-
+-        ret
+-    }
+-    }
+-}
+-
+-/// Token used to a add a timeout subscription, also used in removing it again.
+-const TIMEOUT_TOKEN: wasi::Userdata = wasi::Userdata::MAX;
+-
+-/// Returns a `wasi::Subscription` for `timeout`.
+-fn timeout_subscription(timeout: Duration) -> wasi::Subscription {
+-    wasi::Subscription {
+-        userdata: TIMEOUT_TOKEN,
+-        u: wasi::SubscriptionU {
+-            tag: wasi::EVENTTYPE_CLOCK.raw(),
+-            u: wasi::SubscriptionUU {
+-                clock: wasi::SubscriptionClock {
+-                    id: wasi::CLOCKID_MONOTONIC,
+-                    // Timestamp is in nanoseconds.
+-                    timeout: min(wasi::Timestamp::MAX as u128, timeout.as_nanos())
+-                        as wasi::Timestamp,
+-                    // Give the implementation another millisecond to coalesce
+-                    // events.
+-                    precision: Duration::from_millis(1).as_nanos() as wasi::Timestamp,
+-                    // Zero means the `timeout` is considered relative to the
+-                    // current time.
+-                    flags: 0,
+-                },
+-            },
+-        },
+-    }
+-}
+-
+-fn is_timeout_event(event: &wasi::Event) -> bool {
+-    event.type_ == wasi::EVENTTYPE_CLOCK && event.userdata == TIMEOUT_TOKEN
+-}
+-
+-/// Check all events for possible errors, it returns the first error found.
+-fn check_errors(events: &[Event]) -> io::Result<()> {
+-    for event in events {
+-        if event.error != wasi::ERRNO_SUCCESS {
+-            return Err(io_err(event.error));
+-        }
+-    }
+-    Ok(())
+-}
+-
+-/// Convert `wasi::Errno` into an `io::Error`.
+-fn io_err(errno: wasi::Errno) -> io::Error {
+-    // TODO: check if this is valid.
+-    io::Error::from_raw_os_error(errno.raw() as i32)
+-}
+-
+-pub(crate) type Events = Vec<Event>;
+-
+-pub(crate) type Event = wasi::Event;
+-
+-pub(crate) mod event {
+-    use std::fmt;
+-
+-    use crate::sys::Event;
+-    use crate::Token;
+-
+-    pub(crate) fn token(event: &Event) -> Token {
+-        Token(event.userdata as usize)
+-    }
+-
+-    pub(crate) fn is_readable(event: &Event) -> bool {
+-        event.type_ == wasi::EVENTTYPE_FD_READ
+-    }
+-
+-    pub(crate) fn is_writable(event: &Event) -> bool {
+-        event.type_ == wasi::EVENTTYPE_FD_WRITE
+-    }
+-
+-    pub(crate) fn is_error(_: &Event) -> bool {
+-        // Not supported? It could be that `wasi::Event.error` could be used for
+-        // this, but the docs say `error that occurred while processing the
+-        // subscription request`, so it's checked in `Select::select` already.
+-        false
+-    }
+-
+-    pub(crate) fn is_read_closed(event: &Event) -> bool {
+-        event.type_ == wasi::EVENTTYPE_FD_READ
+-            // Safety: checked the type of the union above.
+-            && (event.fd_readwrite.flags & wasi::EVENTRWFLAGS_FD_READWRITE_HANGUP) != 0
+-    }
+-
+-    pub(crate) fn is_write_closed(event: &Event) -> bool {
+-        event.type_ == wasi::EVENTTYPE_FD_WRITE
+-            // Safety: checked the type of the union above.
+-            && (event.fd_readwrite.flags & wasi::EVENTRWFLAGS_FD_READWRITE_HANGUP) != 0
+-    }
+-
+-    pub(crate) fn is_priority(_: &Event) -> bool {
+-        // Not supported.
+-        false
+-    }
+-
+-    pub(crate) fn is_aio(_: &Event) -> bool {
+-        // Not supported.
+-        false
+-    }
+-
+-    pub(crate) fn is_lio(_: &Event) -> bool {
+-        // Not supported.
+-        false
+-    }
+-
+-    pub(crate) fn debug_details(f: &mut fmt::Formatter<'_>, event: &Event) -> fmt::Result {
+-        debug_detail!(
+-            TypeDetails(wasi::Eventtype),
+-            PartialEq::eq,
+-            wasi::EVENTTYPE_CLOCK,
+-            wasi::EVENTTYPE_FD_READ,
+-            wasi::EVENTTYPE_FD_WRITE,
+-        );
+-
+-        #[allow(clippy::trivially_copy_pass_by_ref)]
+-        fn check_flag(got: &wasi::Eventrwflags, want: &wasi::Eventrwflags) -> bool {
+-            (got & want) != 0
+-        }
+-        debug_detail!(
+-            EventrwflagsDetails(wasi::Eventrwflags),
+-            check_flag,
+-            wasi::EVENTRWFLAGS_FD_READWRITE_HANGUP,
+-        );
+-
+-        struct EventFdReadwriteDetails(wasi::EventFdReadwrite);
+-
+-        impl fmt::Debug for EventFdReadwriteDetails {
+-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+-                f.debug_struct("EventFdReadwrite")
+-                    .field("nbytes", &self.0.nbytes)
+-                    .field("flags", &EventrwflagsDetails(self.0.flags))
+-                    .finish()
+-            }
+-        }
+-
+-        f.debug_struct("Event")
+-            .field("userdata", &event.userdata)
+-            .field("error", &event.error)
+-            .field("type", &TypeDetails(event.type_))
+-            .field("fd_readwrite", &EventFdReadwriteDetails(event.fd_readwrite))
+-            .finish()
+-    }
+-}
+-
+ cfg_os_poll! {
+     cfg_io_source! {
+         pub(crate) struct IoSourceState;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/wasi/net.rs b/src/sys/wasi/net.rs
+--- a/src/sys/wasi/net.rs	1970-01-01 01:00:00.000000000 +0100
++++ b/src/sys/wasi/net.rs	2026-07-17 12:27:49.945960109 +0200
+@@ -0,0 +1,177 @@
++#![allow(dead_code)]
++use std::io;
++use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
++#[cfg(target_vendor = "wasmer")]
++use ::wasix as wasi;
++
++pub(crate) fn new_ip_socket(addr: SocketAddr, socket_type: libc::c_int) -> io::Result<libc::c_int> {
++    let domain = match addr {
++        SocketAddr::V4(..) => libc::AF_INET,
++        SocketAddr::V6(..) => libc::AF_INET6,
++    };
++
++    new_socket(domain, socket_type)
++}
++
++pub(crate) fn wasi_address_type(domain: libc::c_int) -> io::Result<wasi::AddressFamily> {
++    Ok(
++        match domain {
++            libc::AF_INET => wasi::ADDRESS_FAMILY_INET4,
++            libc::AF_INET6 => wasi::ADDRESS_FAMILY_INET6,
++            libc::AF_UNSPEC => wasi::ADDRESS_FAMILY_UNSPEC,
++            libc::AF_UNIX => wasi::ADDRESS_FAMILY_UNIX,
++            _ => return Err(io::Error::new(
++                io::ErrorKind::InvalidInput,
++                "address family is unknown",
++            ))
++        }
++    )
++}
++
++pub(crate) fn wasi_socket_type(socket_type: libc::c_int) -> io::Result<wasi::SockType> {
++    Ok(
++        match socket_type {
++            libc::SOCK_STREAM => wasi::SOCK_TYPE_SOCKET_STREAM,
++            libc::SOCK_DGRAM => wasi::SOCK_TYPE_SOCKET_DGRAM,
++            libc::SOCK_RAW => wasi::SOCK_TYPE_SOCKET_RAW,
++            _ => return Err(io::Error::new(
++                io::ErrorKind::InvalidInput,
++                "socket type is unknown",
++            ))
++        }
++    )
++}
++
++/// Create a new non-blocking socket.
++pub(crate) fn new_socket(domain: libc::c_int, socket_type: libc::c_int) -> io::Result<libc::c_int> {
++    let proto = match socket_type {
++        libc::SOCK_STREAM => wasi::SOCK_PROTO_TCP,
++        libc::SOCK_DGRAM => wasi::SOCK_PROTO_UDP,
++        libc::SOCK_RAW if domain == libc::AF_INET => wasi::SOCK_PROTO_IP,
++        libc::SOCK_RAW if domain == libc::AF_INET6 => wasi::SOCK_PROTO_IPV6,
++        libc::SOCK_RAW if domain == libc::AF_UNSPEC => wasi::SOCK_PROTO_IPV6,
++        _ => return Err(io::Error::new(
++            io::ErrorKind::InvalidInput,
++            "unsupported socket protocol",
++        ))
++    };
++
++    let socket = unsafe {
++        wasi::sock_open(
++            wasi_address_type(domain)?,
++            wasi_socket_type(socket_type)?,
++            proto
++        ).map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
++    };
++
++    Ok(
++        socket as libc::c_int
++    )
++}
++
++/// A type with the same memory layout as `libc::sockaddr`. Used in converting Rust level
++/// SocketAddr* types into their system representation. The benefit of this specific
++/// type over using `libc::sockaddr_storage` is that this type is exactly as large as it
++/// needs to be and not a lot larger. And it can be initialized cleaner from Rust.
++#[repr(C)]
++pub(crate) union SocketAddrCRepr {
++    v4: libc::sockaddr_in,
++    v6: libc::sockaddr_in6,
++}
++
++impl SocketAddrCRepr {
++    pub(crate) fn as_ptr(&self) -> *const libc::sockaddr {
++        self as *const _ as *const libc::sockaddr
++    }
++}
++
++/// Converts a Rust `SocketAddr` into the system representation.
++pub(crate) fn socket_addr(addr: &SocketAddr) -> wasi::AddrPort {
++    match addr {
++        SocketAddr::V4(ref addr) => {
++            let o = addr.ip().octets();
++            wasi::AddrPort {
++                tag: wasi::ADDRESS_FAMILY_INET4.raw(),
++                u: wasi::AddrPortU {
++                    inet4: wasi::AddrIp4Port {
++                        port: addr.port(),
++                        addr: wasi::AddrIp4 {
++                            n0: o[0],
++                            n1: o[1],
++                            h0: o[2],
++                            h1: o[3],
++                        }
++                    }
++                }
++            }
++        }
++        SocketAddr::V6(ref addr) => {
++            let s = addr.ip().segments();
++            wasi::AddrPort {
++                tag: wasi::ADDRESS_FAMILY_INET6.raw(),
++                u: wasi::AddrPortU {
++                    inet6: wasi::AddrIp6Port {
++                        port: addr.port(),
++                        addr: wasi::AddrIp6 {
++                            n0: s[0],
++                            n1: s[1],
++                            n2: s[2],
++                            n3: s[3],
++                            h0: s[4],
++                            h1: s[5],
++                            h2: s[6],
++                            h3: s[7],
++                            flow_info0: 0,
++                            flow_info1: 0,
++                            scope_id0: 0,
++                            scope_id1: 0,
++                        },
++                    }
++                }
++            }
++        }
++    }
++}
++
++/// Converts a `libc::sockaddr` compatible struct into a native Rust `SocketAddr`.
++///
++pub(crate) fn to_socket_addr(addr: &wasi::AddrPort) -> io::Result<SocketAddr> {
++    unsafe {
++        let addr = *addr;
++        match addr.tag {
++            a if a == wasi::ADDRESS_FAMILY_INET4.raw() => {
++                let port = addr.u.inet4.port;
++                let ip = addr.u.inet4.addr;
++                Ok(SocketAddr::V4(SocketAddrV4::new(
++                    Ipv4Addr::new(
++                        ip.n0,
++                        ip.n1,
++                        ip.h0,
++                        ip.h1
++                    ),
++                    port
++                )))
++            }
++            a if a == wasi::ADDRESS_FAMILY_INET6.raw() => {
++                let port = addr.u.inet6.port;
++                let ip = addr.u.inet6.addr;
++                Ok(SocketAddr::V6(SocketAddrV6::new(
++                    Ipv6Addr::new(
++                        ip.n0,
++                        ip.n1,
++                        ip.n2,
++                        ip.n3,
++                        ip.h0,
++                        ip.h1,
++                        ip.h2,
++                        ip.h3
++                    ),
++                    port,
++                    0,
++                    0
++                )))
++            }
++            _ => Err(io::ErrorKind::InvalidInput.into()),
++        }
++    }
++}
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/wasi/pipe.rs b/src/sys/wasi/pipe.rs
+--- a/src/sys/wasi/pipe.rs	1970-01-01 01:00:00.000000000 +0100
++++ b/src/sys/wasi/pipe.rs	2026-07-17 12:27:49.946135425 +0200
+@@ -0,0 +1,230 @@
++#![allow(dead_code)]
++//! WASI pipe.
++//!
++//! See the [`new`] function for documentation.
++
++use std::fs::File;
++use std::io::{self, IoSlice, IoSliceMut, Read, Write};
++use std::os::wasi::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
++#[cfg(target_vendor = "wasmer")]
++use ::wasix as wasi;
++
++use crate::io_source::IoSource;
++use crate::{event, Interest, Registry, Token};
++
++/// Create a new non-blocking WASI pipe.
++///
++pub fn new() -> io::Result<(Sender, Receiver)> {
++    #[cfg(target_vendor = "wasmer")]
++    let (fd1, fd2) = unsafe {
++        wasi::fd_pipe()
++            .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
++    };
++
++    #[cfg(not(target_vendor = "wasmer"))]
++    let (fd1, fd2) = unsafe {
++        wasi::pipe()
++            .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
++    };
++
++    let r = unsafe { Receiver::from_raw_fd(fd1 as RawFd) };
++    let w = unsafe { Sender::from_raw_fd(fd2 as RawFd) };
++    Ok((w, r))
++}
++
++/// Sending end of an WASI pipe.
++///
++#[derive(Debug)]
++pub struct Sender {
++    inner: IoSource<File>,
++}
++
++impl Sender {
++    /// Set the `Sender` into or out of non-blocking mode.
++    pub fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()> {
++        set_nonblocking(self.inner.as_raw_fd(), nonblocking)
++    }
++
++    /// Execute an I/O operation ensuring that the socket receives more events
++    /// if it hits a [`WouldBlock`] error.
++    pub fn try_io<F, T>(&self, f: F) -> io::Result<T>
++    where
++        F: FnOnce() -> io::Result<T>,
++    {
++        self.inner.do_io(|_| f())
++    }
++}
++
++impl event::Source for Sender {
++    fn register(
++        &mut self,
++        registry: &Registry,
++        token: Token,
++        interests: Interest,
++    ) -> io::Result<()> {
++        self.inner.register(registry, token, interests)
++    }
++
++    fn reregister(
++        &mut self,
++        registry: &Registry,
++        token: Token,
++        interests: Interest,
++    ) -> io::Result<()> {
++        self.inner.reregister(registry, token, interests)
++    }
++
++    fn deregister(&mut self, registry: &Registry) -> io::Result<()> {
++        self.inner.deregister(registry)
++    }
++}
++
++impl Write for Sender {
++    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
++        self.inner.do_io(|sender| (&*sender).write(buf))
++    }
++
++    fn write_vectored(&mut self, bufs: &[IoSlice<'_>]) -> io::Result<usize> {
++        self.inner.do_io(|sender| (&*sender).write_vectored(bufs))
++    }
++
++    fn flush(&mut self) -> io::Result<()> {
++        self.inner.do_io(|sender| (&*sender).flush())
++    }
++}
++
++impl Write for &Sender {
++    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
++        self.inner.do_io(|sender| (&*sender).write(buf))
++    }
++
++    fn write_vectored(&mut self, bufs: &[IoSlice<'_>]) -> io::Result<usize> {
++        self.inner.do_io(|sender| (&*sender).write_vectored(bufs))
++    }
++
++    fn flush(&mut self) -> io::Result<()> {
++        self.inner.do_io(|sender| (&*sender).flush())
++    }
++}
++
++impl FromRawFd for Sender {
++    unsafe fn from_raw_fd(fd: RawFd) -> Sender {
++        Sender {
++            inner: IoSource::new(File::from_raw_fd(fd)),
++        }
++    }
++}
++
++impl AsRawFd for Sender {
++    fn as_raw_fd(&self) -> RawFd {
++        self.inner.as_raw_fd()
++    }
++}
++
++impl IntoRawFd for Sender {
++    fn into_raw_fd(self) -> RawFd {
++        self.inner.into_inner().into_raw_fd()
++    }
++}
++
++#[derive(Debug)]
++pub struct Receiver {
++    inner: IoSource<File>,
++}
++
++impl Receiver {
++    pub fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()> {
++        set_nonblocking(self.inner.as_raw_fd(), nonblocking)
++    }
++
++    pub fn try_io<F, T>(&self, f: F) -> io::Result<T>
++    where
++        F: FnOnce() -> io::Result<T>,
++    {
++        self.inner.do_io(|_| f())
++    }
++}
++
++impl event::Source for Receiver {
++    fn register(
++        &mut self,
++        registry: &Registry,
++        token: Token,
++        interests: Interest,
++    ) -> io::Result<()> {
++        self.inner.register(registry, token, interests)
++    }
++
++    fn reregister(
++        &mut self,
++        registry: &Registry,
++        token: Token,
++        interests: Interest,
++    ) -> io::Result<()> {
++        self.inner.reregister(registry, token, interests)
++    }
++
++    fn deregister(&mut self, registry: &Registry) -> io::Result<()> {
++        self.inner.deregister(registry)
++    }
++}
++
++impl Read for Receiver {
++    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
++        self.inner.do_io(|sender| (&*sender).read(buf))
++    }
++
++    fn read_vectored(&mut self, bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> {
++        self.inner.do_io(|sender| (&*sender).read_vectored(bufs))
++    }
++}
++
++impl Read for &Receiver {
++    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
++        self.inner.do_io(|sender| (&*sender).read(buf))
++    }
++
++    fn read_vectored(&mut self, bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> {
++        self.inner.do_io(|sender| (&*sender).read_vectored(bufs))
++    }
++}
++
++impl FromRawFd for Receiver {
++    unsafe fn from_raw_fd(fd: RawFd) -> Receiver {
++        Receiver {
++            inner: IoSource::new(File::from_raw_fd(fd)),
++        }
++    }
++}
++
++impl AsRawFd for Receiver {
++    fn as_raw_fd(&self) -> RawFd {
++        self.inner.as_raw_fd()
++    }
++}
++
++impl IntoRawFd for Receiver {
++    fn into_raw_fd(self) -> RawFd {
++        self.inner.into_inner().into_raw_fd()
++    }
++}
++
++fn set_nonblocking(fd: RawFd, nonblocking: bool) -> io::Result<()> {
++    let fdstat = unsafe {
++        wasi::fd_fdstat_get(fd.as_raw_fd() as wasi::Fd)
++            .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
++    };
++
++    let mut flags = fdstat.fs_flags;
++
++    if nonblocking {
++        flags |= wasi::FDFLAGS_NONBLOCK;
++    } else {
++        flags &= !wasi::FDFLAGS_NONBLOCK;
++    }
++
++    unsafe {
++        wasi::fd_fdstat_set_flags(fd.as_raw_fd() as wasi::Fd, flags)
++            .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))
++    }
++}
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/wasi/poll.rs b/src/sys/wasi/poll.rs
+--- a/src/sys/wasi/poll.rs	1970-01-01 01:00:00.000000000 +0100
++++ b/src/sys/wasi/poll.rs	2026-07-17 12:27:49.946230544 +0200
+@@ -0,0 +1,554 @@
++/// Internal state that the polling loop uses
++struct SelectorState {
++    /// Subscriptions (reads events) we're interested in.
++    subscriptions: Vec<wasi::Subscription>,
++    /// This file is used to wake up the poll selector
++    /// and stall it while management actions are taken
++    /// (like adding new subscriptions)
++    stall: File,
++    /// Number of times that the loop has ticked
++    /// (resets to zero when the select exits, will wake threads
++    ///  when the number changes)
++    loop_cnt: u64,
++}
++
++impl SelectorState {
++    fn remove_fd(&mut self, fd: wasi::Fd) {
++        let predicate = |subscription: &wasi::Subscription| {
++            // Safety: `subscription.u.tag` defines the type of the union in
++            // `subscription.u.u`.
++            match subscription.u.tag {
++                t if t == wasi::EVENTTYPE_FD_WRITE.raw() => unsafe {
++                    subscription.u.u.fd_write.file_descriptor == fd
++                },
++                t if t == wasi::EVENTTYPE_FD_READ.raw() => unsafe {
++                    subscription.u.u.fd_read.file_descriptor == fd
++                },
++                _ => false,
++            }
++        };    
++        while let Some(index) = self.subscriptions.iter().position(predicate) {
++            self.subscriptions.swap_remove(index);
++        }
++    }
++    fn add_fd(
++        &mut self, 
++        fd: wasi::Fd,
++        token: crate::Token,
++        interests: crate::Interest
++    )
++    {
++        if interests.is_writable() {
++            let subscription = wasi::Subscription {
++                userdata: token.0 as wasi::Userdata,
++                u: wasi::SubscriptionU {
++                    tag: wasi::EVENTTYPE_FD_WRITE.raw(),
++                    u: wasi::SubscriptionUU {
++                        fd_write: wasi::SubscriptionFdReadwrite {
++                            file_descriptor: fd,
++                        },
++                    },
++                },
++            };
++            self.subscriptions.push(subscription);
++        }
++
++        if interests.is_readable() {
++            let subscription = wasi::Subscription {
++                userdata: token.0 as wasi::Userdata,
++                u: wasi::SubscriptionU {
++                    tag: wasi::EVENTTYPE_FD_READ.raw(),
++                    u: wasi::SubscriptionUU {
++                        fd_read: wasi::SubscriptionFdReadwrite {
++                            file_descriptor: fd,
++                        },
++                    },
++                },
++            };
++            self.subscriptions.push(subscription);
++        }
++    }
++}
++
++struct SelectorStall<'a> {
++    guard: Option<std::sync::MutexGuard<'a, SelectorState>>,
++    condvar: &'a Condvar,
++}
++impl<'a> SelectorStall<'a>
++{
++    fn new(selector: &'a Selector) -> Self {
++        Self {
++            guard: Some(selector.state.0.lock().unwrap()),
++            condvar: &selector.state.1
++        }
++    }
++
++    fn new_from_guard(selector: &'a Selector, guard: std::sync::MutexGuard<'a, SelectorState>) -> Self {
++        Self {
++            guard: Some(guard),
++            condvar: &selector.state.1
++        }
++    }
++}
++impl<'a> Drop
++for SelectorStall<'a> {
++    fn drop(&mut self) {
++        if let Some(mut guard) = self.guard.take() {
++            let start = guard.loop_cnt;
++            // if the select is not running then we don't need to wait
++            if start == 0 {
++                return;
++            }
++            // the select must increment the loop cnt so we know that
++            // it has changed what it is polling for - otherwise the
++            // select might return a FD that is gone or it could
++            // miss a critical wake up event
++            while guard.loop_cnt == start {
++                let buf: [u8; 8] = 1u64.to_ne_bytes();
++                guard.stall.write(&buf).ok();
++
++                guard = self.condvar.wait(guard).unwrap();
++            }
++        }
++    }
++}
++impl<'a> Deref
++for SelectorStall<'a>
++{
++    type Target = SelectorState;
++    fn deref(&self) -> &Self::Target {
++        self.guard.as_ref().unwrap().deref()
++    }
++}
++impl<'a> DerefMut
++for SelectorStall<'a>
++{
++    fn deref_mut(&mut self) -> &mut Self::Target {
++        self.guard.as_mut().unwrap().deref_mut()
++    }
++}
++
++/// Unique id for use as `SelectorId`.
++#[cfg(all(debug_assertions, feature = "net"))]
++static NEXT_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(1);
++
++pub struct Selector {
++    #[cfg(all(debug_assertions, feature = "net"))]
++    id: usize,
++    #[cfg(debug_assertions)]
++    has_waker: std::sync::atomic::AtomicBool,
++    /// The state machine used by the select call
++    state: Arc<(Mutex<SelectorState>, Condvar)>,
++}
++
++impl fmt::Debug
++for Selector {
++    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        write!(f, "selector")
++    }
++}
++
++impl Selector {
++    pub fn new() -> io::Result<Selector> {
++        let fd = unsafe {
++            wasi::fd_event(0, 0)
++                .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
++        };
++        let fdstat = unsafe {
++            wasi::fd_fdstat_get(fd)
++                .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
++        };
++    
++        let mut flags = fdstat.fs_flags;
++        flags |= wasi::FDFLAGS_NONBLOCK;
++        unsafe {
++            wasi::fd_fdstat_set_flags(fd, flags)
++                .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
++        }
++        let file = unsafe { File::from_raw_fd(fd.try_into().unwrap()) };
++
++        let subscriptions = vec![
++            wasi::Subscription {
++                userdata: u64::MAX,
++                u: wasi::SubscriptionU {
++                    tag: wasi::EVENTTYPE_FD_READ.raw(),
++                    u: wasi::SubscriptionUU {
++                        fd_read: wasi::SubscriptionFdReadwrite {
++                            file_descriptor: fd,
++                        },
++                    },
++                },
++            }
++        ];
++
++        Ok(Selector {
++            #[cfg(all(debug_assertions, feature = "net"))]
++            id: NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
++            state: Arc::new((Mutex::new(SelectorState {
++                    subscriptions,
++                    stall: file,
++                    loop_cnt: 0,
++                }),
++                Condvar::new()
++            )),
++            #[cfg(debug_assertions)]
++            has_waker: std::sync::atomic::AtomicBool::new(false),
++        })
++    }
++
++    pub fn try_clone(&self) -> io::Result<Selector> {
++        Ok(
++            Selector {
++                #[cfg(all(debug_assertions, feature = "net"))]
++                id: self.id,
++                state: Arc::clone(&self.state),
++                #[cfg(debug_assertions)]
++                has_waker: std::sync::atomic::AtomicBool::new(self.has_waker.load(
++                    std::sync::atomic::Ordering::Acquire)),
++            }
++        )
++    }
++
++    #[cfg(all(debug_assertions, feature = "net"))]
++    pub fn id(&self) -> usize {
++        self.id
++    }
++
++    pub fn select(&self, events: &mut Events, timeout: Option<Duration>) -> io::Result<()> {
++        events.clear();
++
++        let mut loop_cnt = 1u64;
++        loop
++        {
++            // If we want to a use a timeout in the `wasi_poll_oneoff()` function
++            // we need another subscription to the list.
++            let mut subscriptions = {
++                let mut state = self.state.0.lock().unwrap();
++                state.subscriptions.retain(|sub| sub.u.tag != wasi::EVENTTYPE_CLOCK.raw());
++                state.loop_cnt = loop_cnt;
++                loop_cnt += 1;
++                self.state.1.notify_all();
++                state.subscriptions.clone()
++            };
++            if let Some(timeout) = timeout {
++                if timeout > Duration::ZERO {
++                    subscriptions.push(timeout_subscription(timeout));
++                } else {
++                    subscriptions.push(timeout_subscription_nanos(1));
++                }
++            } else {
++                subscriptions.push(timeout_subscription(Duration::ZERO));
++            }
++
++            // `poll_oneoff` needs the same number of events as subscriptions.
++            let length = subscriptions.len();
++            events.reserve(length);
++
++            debug_assert!(events.capacity() >= length);
++
++            let res = unsafe {
++                // Safety: `poll_oneoff` initialises the `events` for us.
++                let res = wasi::poll_oneoff(subscriptions.as_ptr(), events.as_mut_ptr(), length);
++                if let Ok(n_events) = res.as_ref() {
++                    events.set_len(*n_events);
++                } else {
++                    events.set_len(0);
++                }
++                res
++            };
++
++            // Clear the run count and notify waiters
++            {
++                let mut state = self.state.0.lock().unwrap();
++                state.loop_cnt = 0;
++                self.state.1.notify_all();
++            }
++
++            // Return the result
++            return match res {
++                Ok(_) => {
++                    // Remove the timeout.
++                    while let Some(index) = events.iter().position(is_timeout_event) {
++                        events.swap_remove(index);
++                    }
++
++                    // Return the events
++                    check_errors(&events)
++                }
++                Err(err) => Err(io_err(err)),
++            };
++        }
++    }
++
++    fn stall<'a>(&'a self) -> SelectorStall<'a> {
++        SelectorStall::new(self)
++    }
++
++    fn stall_from_guard<'a>(&'a self, guard: std::sync::MutexGuard<'a, SelectorState>) -> SelectorStall<'a> {
++        SelectorStall::new_from_guard(self, guard)
++    }
++
++    #[cfg(any(feature = "net", feature = "os-poll"))]
++    pub fn register(
++        &self,
++        fd: wasi::Fd,
++        token: crate::Token,
++        interests: crate::Interest,
++    ) -> io::Result<()> {
++        if interests.is_readable() == false && interests.is_writable() == false {
++            return Ok(());
++        }
++
++        // we stall the select and wake it up so that it can process
++        // the new subscriptions
++        let mut stall = self.stall();
++        Self::register_internal(&mut stall, fd, token, interests)
++    }
++
++    #[cfg(any(feature = "net", feature = "os-poll"))]
++    fn register_internal<'a>(
++        stall: &mut SelectorStall<'a>,
++        fd: wasi::Fd,
++        token: crate::Token,
++        interests: crate::Interest,
++    ) -> io::Result<()> {
++        log::trace!(
++            "select::register: fd={:?}, token={:?}, interests={:?}",
++            fd,
++            token,
++            interests
++        );
++
++        // we stall the select and wake it up so that it can process
++        // the new subscriptions
++        stall.add_fd(fd, token, interests);
++        Ok(())
++    }
++
++    #[cfg(any(feature = "net", feature = "os-poll"))]
++    fn is_registered_correctly<'a>(
++        state: &std::sync::MutexGuard<'a, SelectorState>,
++        fd: wasi::Fd,
++        interests: crate::Interest
++    ) -> bool {
++        let predicate_readable = |subscription: &wasi::Subscription| {
++            match subscription.u.tag {
++                t if t == wasi::EVENTTYPE_FD_READ.raw() => unsafe {
++                    subscription.u.u.fd_read.file_descriptor == fd
++                },
++                _ => false,
++            }
++        };
++        let predicate_writable = |subscription: &wasi::Subscription| {
++            match subscription.u.tag {
++                t if t == wasi::EVENTTYPE_FD_WRITE.raw() => unsafe {
++                    subscription.u.u.fd_write.file_descriptor == fd
++                },
++                _ => false,
++            }
++        };
++
++        let is_readable = state.subscriptions.iter().any(predicate_readable);
++        let is_writable = state.subscriptions.iter().any(predicate_writable);
++
++        return is_readable == interests.is_readable() &&
++               is_writable == interests.is_writable();
++    }
++
++    #[cfg(any(feature = "net", feature = "os-poll"))]
++    pub fn reregister(
++        &self,
++        fd: wasi::Fd,
++        token: crate::Token,
++        interests: crate::Interest,
++    ) -> io::Result<()> {
++
++        let state = self.state.0.lock().unwrap();
++        if Self::is_registered_correctly(&state, fd, interests) {
++            return Ok(())
++        }
++
++        log::trace!(
++            "select::reregister: fd={:?}, token={:?}, interests={:?}",
++            fd,
++            token,
++            interests
++        );
++
++        let mut stall = self.stall_from_guard(state);
++        Self::deregister_internal(&mut stall, fd)
++            .and_then(|()| Self::register_internal(&mut stall, fd, token, interests))
++    }
++
++    #[cfg(any(feature = "net", feature = "os-poll"))]
++    pub fn deregister(&self, fd: wasi::Fd) -> io::Result<()> {
++        // we stall the select and wake it up so that it can process
++        // the new subscriptions
++        let mut stall = self.stall();
++        Self::deregister_internal(&mut stall, fd)
++    }
++
++    #[cfg(any(feature = "net", feature = "os-poll"))]
++    fn deregister_internal<'a>(stall: &mut SelectorStall<'a>, fd: wasi::Fd) -> io::Result<()> {
++        log::trace!(
++            "select::deregister: fd={:?}",
++            fd,
++        );
++
++        // we stall the select and wake it up so that it can process
++        // the removed subscriptions
++        stall.remove_fd(fd);
++        Ok(())
++    }
++
++    #[cfg(debug_assertions)]
++    pub fn register_waker(&self) -> bool {
++        self.has_waker.swap(true, std::sync::atomic::Ordering::AcqRel)
++    }
++}
++
++/// Token used to a add a timeout subscription, also used in removing it again.
++const TIMEOUT_TOKEN: wasi::Userdata = wasi::Userdata::max_value();
++
++/// Returns a `wasi::Subscription` for `timeout`.
++fn timeout_subscription(timeout: Duration) -> wasi::Subscription {
++    timeout_subscription_nanos(timeout.as_nanos())
++}
++
++fn timeout_subscription_nanos(timeout: u128) -> wasi::Subscription {
++    wasi::Subscription {
++        userdata: TIMEOUT_TOKEN,
++        u: wasi::SubscriptionU {
++            tag: wasi::EVENTTYPE_CLOCK.raw(),
++            u: wasi::SubscriptionUU {
++                clock: wasi::SubscriptionClock {
++                    id: wasi::CLOCKID_MONOTONIC,
++                    // Timestamp is in nanoseconds.
++                    timeout: min(wasi::Timestamp::MAX as u128, timeout)
++                        as wasi::Timestamp,
++                    // Give the implementation another millisecond to coalesce
++                    // events.
++                    precision: Duration::from_millis(1).as_nanos() as wasi::Timestamp,
++                    // Zero means the `timeout` is considered relative to the
++                    // current time.
++                    flags: 0,
++                },
++            },
++        },
++    }
++}
++
++fn is_timeout_event(event: &wasi::Event) -> bool {
++    event.type_ == wasi::EVENTTYPE_CLOCK && event.userdata == TIMEOUT_TOKEN
++}
++
++/// Check all events for possible errors, it returns the first error found.
++fn check_errors(events: &[Event]) -> io::Result<()> {
++    for event in events {
++        if event.error.raw() != wasi::ERRNO_SUCCESS.raw() {
++            return Err(io_err(event.error));
++        }
++    }
++    Ok(())
++}
++
++pub(crate) type Events = Vec<Event>;
++
++pub(crate) type Event = wasi::Event;
++
++pub(crate) mod event {
++    use std::fmt;
++
++    use crate::sys::Event;
++    use crate::Token;
++
++    pub(crate) fn token(event: &Event) -> Token {
++        Token(event.userdata as usize)
++    }
++
++    pub(crate) fn is_readable(event: &Event) -> bool {
++        event.type_ == wasi::EVENTTYPE_FD_READ
++    }
++
++    pub(crate) fn is_writable(event: &Event) -> bool {
++        event.type_ == wasi::EVENTTYPE_FD_WRITE
++    }
++
++    pub(crate) fn is_error(_: &Event) -> bool {
++        // Not supported? It could be that `wasi::Event.error` could be used for
++        // this, but the docs say `error that occurred while processing the
++        // subscription request`, so it's checked in `Select::select` already.
++        false
++    }
++
++    pub(crate) fn is_read_closed(event: &Event) -> bool {
++        event.type_ == wasi::EVENTTYPE_FD_READ
++            // Safety: checked the type of the union above.
++            && (event.fd_readwrite.flags & wasi::EVENTRWFLAGS_FD_READWRITE_HANGUP) != 0
++    }
++
++    pub(crate) fn is_write_closed(event: &Event) -> bool {
++        event.type_ == wasi::EVENTTYPE_FD_WRITE
++            // Safety: checked the type of the union above.
++            && (event.fd_readwrite.flags & wasi::EVENTRWFLAGS_FD_READWRITE_HANGUP) != 0
++    }
++
++    pub(crate) fn is_priority(_: &Event) -> bool {
++        // Not supported.
++        false
++    }
++
++    pub(crate) fn is_aio(_: &Event) -> bool {
++        // Not supported.
++        false
++    }
++
++    pub(crate) fn is_lio(_: &Event) -> bool {
++        // Not supported.
++        false
++    }
++
++    pub(crate) fn debug_details(f: &mut fmt::Formatter<'_>, event: &Event) -> fmt::Result {
++        debug_detail!(
++            TypeDetails(wasi::Eventtype),
++            PartialEq::eq,
++            wasi::EVENTTYPE_CLOCK,
++            wasi::EVENTTYPE_FD_READ,
++            wasi::EVENTTYPE_FD_WRITE,
++        );
++
++        #[allow(clippy::trivially_copy_pass_by_ref)]
++        fn check_flag(got: &wasi::Eventrwflags, want: &wasi::Eventrwflags) -> bool {
++            (got & want) != 0
++        }
++        debug_detail!(
++            EventrwflagsDetails(wasi::Eventrwflags),
++            check_flag,
++            wasi::EVENTRWFLAGS_FD_READWRITE_HANGUP,
++        );
++
++        struct EventFdReadwriteDetails(wasi::EventFdReadwrite);
++
++        impl fmt::Debug for EventFdReadwriteDetails {
++            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++                f.debug_struct("EventFdReadwrite")
++                    .field("nbytes", &self.0.nbytes)
++                    .field("flags", &self.0.flags)
++                    .finish()
++            }
++        }
++
++        f.debug_struct("Event")
++            .field("userdata", &event.userdata)
++            .field("error", &event.error)
++            .field("type", &TypeDetails(event.type_))
++            .field("fd_readwrite", &EventFdReadwriteDetails(event.fd_readwrite))
++            .finish()
++    }
++}
++
++/// Convert `wasi::Errno` into an `io::Error`.
++fn io_err(errno: wasi::Errno) -> io::Error {
++    // TODO: check if this is valid.
++    io::Error::from_raw_os_error(errno.raw() as i32)
++}
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/wasi/sourcefd.rs b/src/sys/wasi/sourcefd.rs
+--- a/src/sys/wasi/sourcefd.rs	1970-01-01 01:00:00.000000000 +0100
++++ b/src/sys/wasi/sourcefd.rs	2026-07-17 12:27:49.946389541 +0200
+@@ -0,0 +1,33 @@
++use crate::{event, Interest, Registry, Token};
++
++use std::io;
++use std::os::wasi::io::RawFd;
++
++/// Adapter for [`RawFd`] providing an [`event::Source`] implementation.
++///
++#[derive(Debug)]
++pub struct SourceFd<'a>(pub &'a RawFd);
++
++impl<'a> event::Source for SourceFd<'a> {
++    fn register(
++        &mut self,
++        registry: &Registry,
++        token: Token,
++        interests: Interest,
++    ) -> io::Result<()> {
++        registry.selector().register(*self.0 as u32, token, interests)
++    }
++
++    fn reregister(
++        &mut self,
++        registry: &Registry,
++        token: Token,
++        interests: Interest,
++    ) -> io::Result<()> {
++        registry.selector().reregister(*self.0 as u32, token, interests)
++    }
++
++    fn deregister(&mut self, registry: &Registry) -> io::Result<()> {
++        registry.selector().deregister(*self.0 as u32)
++    }
++}
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/wasi/tcp.rs b/src/sys/wasi/tcp.rs
+--- a/src/sys/wasi/tcp.rs	1970-01-01 01:00:00.000000000 +0100
++++ b/src/sys/wasi/tcp.rs	2026-07-17 12:31:17.111017158 +0200
+@@ -0,0 +1,70 @@
++#![allow(dead_code)]
++use std::io;
++use std::net::{self, SocketAddr};
++use std::os::wasi::io::{AsRawFd, FromRawFd};
++#[cfg(target_vendor = "wasmer")]
++use ::wasix as wasi;
++
++use crate::sys::wasi::net::{new_socket, socket_addr, to_socket_addr};
++
++pub(crate) fn new_for_addr(address: SocketAddr) -> io::Result<libc::c_int> {
++    let domain = match address {
++        SocketAddr::V4(_) => libc::AF_INET,
++        SocketAddr::V6(_) => libc::AF_INET6,
++    };
++    new_socket(domain, libc::SOCK_STREAM)
++}
++
++pub(crate) fn bind(socket: &net::TcpListener, addr: SocketAddr) -> io::Result<()> {
++    let addr = socket_addr(&addr);
++    unsafe {
++        wasi::sock_bind(
++            socket.as_raw_fd() as u32,
++            &addr
++        ).map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))
++    }
++}
++
++pub(crate) fn connect(socket: &net::TcpStream, addr: SocketAddr) -> io::Result<()> {
++    let addr = socket_addr(&addr);
++    unsafe {
++        wasi::sock_connect(
++            socket.as_raw_fd() as u32,
++            &addr
++        ).map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))
++    }
++}
++
++pub(crate) fn listen(socket: &net::TcpListener, backlog: i32) -> io::Result<()> {
++    unsafe {
++        wasi::sock_listen(
++            socket.as_raw_fd() as u32,
++            backlog as usize
++        ).map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))
++    }
++}
++
++pub(crate) fn set_reuseaddr(socket: &net::TcpListener, reuseaddr: bool) -> io::Result<()> {
++    let val = if reuseaddr { wasi::BOOL_TRUE } else { wasi::BOOL_FALSE };
++    unsafe {
++        wasi::sock_set_opt_flag(
++            socket.as_raw_fd() as u32,
++            wasi::SOCK_OPTION_REUSE_ADDR,
++            val
++        ).map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))
++    }
++}
++
++pub(crate) fn accept(listener: &net::TcpListener) -> io::Result<(net::TcpStream, SocketAddr)> {
++    let (socket, addr) = unsafe {
++        wasi::sock_accept_v2(
++            listener.as_raw_fd() as u32,
++            wasi::FDFLAGS_NONBLOCK
++        ).map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
++    };
++
++    Ok((
++        unsafe { net::TcpStream::from_raw_fd(socket as i32) },
++        to_socket_addr(&addr)?
++    ))
++}
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/wasi/udp.rs b/src/sys/wasi/udp.rs
+--- a/src/sys/wasi/udp.rs	1970-01-01 01:00:00.000000000 +0100
++++ b/src/sys/wasi/udp.rs	2026-07-17 12:27:49.946533160 +0200
+@@ -0,0 +1,35 @@
++#![allow(dead_code)]
++use crate::sys::wasi::net::{new_ip_socket, socket_addr};
++
++use std::io;
++use std::net::{self, SocketAddr};
++use std::os::wasi::io::{AsRawFd, FromRawFd};
++#[cfg(target_vendor = "wasmer")]
++use ::wasix as wasi;
++
++pub fn bind(addr: SocketAddr) -> io::Result<net::UdpSocket> {
++    let socket = new_ip_socket(addr, libc::SOCK_DGRAM)?;
++
++    let addr = socket_addr(&addr);
++    Ok(
++        unsafe {
++            wasi::sock_bind(
++                socket.as_raw_fd() as u32,
++                &addr
++            ).map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?;
++
++            net::UdpSocket::from_raw_fd(socket)
++        }
++    )
++}
++
++pub(crate) fn only_v6(socket: &net::UdpSocket) -> io::Result<bool> {
++    let val = unsafe {
++        wasi::sock_get_opt_flag(
++            socket.as_raw_fd() as u32,
++            wasi::SOCK_OPTION_ONLY_V6,
++        ).map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))
++    }?;
++
++    Ok(val != wasi::BOOL_FALSE)
++}
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/wasi/waker.rs b/src/sys/wasi/waker.rs
+--- a/src/sys/wasi/waker.rs	1970-01-01 01:00:00.000000000 +0100
++++ b/src/sys/wasi/waker.rs	2026-07-17 12:27:49.946598848 +0200
+@@ -0,0 +1,75 @@
++mod eventfd {
++    use std::io;
++    use crate::sys::Selector;
++    use crate::{Interest, Token};
++    use std::fs::File;
++
++    use std::io::{Write, Read};
++    use std::os::wasi::io::FromRawFd;
++    use std::convert::TryInto;
++
++    #[cfg(target_vendor = "wasmer")]
++    use ::wasix as wasi;
++
++    #[derive(Debug)]
++    pub struct Waker {
++        fd: File,
++    }
++
++    #[repr(align(8))]
++    struct AlignedU64Bytes([u8; 8]);
++
++    impl Waker {
++        pub fn new(selector: &Selector, token: Token) -> io::Result<Waker> {
++            let fd = unsafe {
++                wasi::fd_event(0, 0)
++                    .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
++            };
++
++            let fdstat = unsafe {
++                wasi::fd_fdstat_get(fd)
++                    .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
++            };
++
++            let mut flags = fdstat.fs_flags;
++            flags |= wasi::FDFLAGS_NONBLOCK;
++            unsafe {
++                wasi::fd_fdstat_set_flags(fd, flags)
++                    .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
++            }
++
++            let file = unsafe { File::from_raw_fd(fd.try_into().unwrap()) };
++            selector
++                .register(fd, token, Interest::READABLE)
++                .map(|()| Waker { fd: file })
++        }
++
++        pub fn wake(&self) -> io::Result<()> {
++            let buf = AlignedU64Bytes(1u64.to_ne_bytes());
++            match (&self.fd).write(&buf.0) {
++                Ok(_) => Ok(()),
++                Err(ref err) if err.kind() == io::ErrorKind::WouldBlock => {
++                    // Writing only blocks if the counter is going to overflow.
++                    // So we'll reset the counter to 0 and wake it again.
++                    self.reset()?;
++                    self.wake()
++                }
++                Err(err) => Err(err),
++            }
++        }
++
++        /// Reset the eventfd object, only need to call this if `wake` fails.
++        fn reset(&self) -> io::Result<()> {
++            let mut buf = AlignedU64Bytes(0u64.to_ne_bytes());
++            match (&self.fd).read(&mut buf.0) {
++                Ok(_) => Ok(()),
++                // If the `Waker` hasn't been awoken yet this will return a
++                // `WouldBlock` error which we can safely ignore.
++                Err(ref err) if err.kind() == io::ErrorKind::WouldBlock => Ok(()),
++                Err(err) => Err(err),
++            }
++        }
++    }
++}
++
++pub use self::eventfd::Waker;
