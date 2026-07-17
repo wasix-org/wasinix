@@ -1,11 +1,9 @@
-# setuptools-rust for wasix. Its hook defaults PYO3_CROSS_LIB_DIR to
-# python.pythonOnTargetForTarget, whose closure pulls a cross bash that can't build (fork()
-# only on `off`). Re-template nixpkgs' own hook (by path, so it tracks upstream) with our
-# wasm python's lib dir.
+# setuptools-rust for wasix. PYO3_CROSS_LIB_DIR is set for every pyo3 wheel (maturin and
+# setuptools-rust) by the python's buildPythonPackage (packages/python3/package.nix), so this
+# override only adds the setuptools-rust-specific CARGO_BUILD_TARGET + linker.
 {
   pyprev,
   final,
-  wasixPython,
   ...
 }: let
   rust = import ./lib/rust.nix {inherit final;};
@@ -29,7 +27,6 @@ in
           exit 1
         fi
         rustc --print cfg --target "${rust.wasixRustDlTarget}" >/dev/null 2>&1 || return 0
-        export PYO3_CROSS_LIB_DIR="${wasixPython.crossLibDir}"
         export CARGO_BUILD_TARGET="${rust.wasixRustDlTarget}"
         export CARGO_TARGET_WASM32_WASMER_WASI_DL_LINKER="${rust.rustLld}"
       }
