@@ -17,6 +17,7 @@
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import urllib.error
@@ -62,6 +63,12 @@ def eval_jobs(flake, jobs_path):
         "--flake",
         flake,
         "--check-cache-status",
+        # one worker per core: the ci key set is cheap to compute (flake.nix
+        # reads meta, not drvPath), so workers share little warmup and
+        # parallelize both instantiation and the cache-status lookups.
+        # nix-eval-jobs defaults to a single worker.
+        "--workers",
+        str(os.cpu_count() or 1),
         # meta rides along for ci-report.py: meta.position anchors failure
         # annotations at the package definition
         "--meta",
