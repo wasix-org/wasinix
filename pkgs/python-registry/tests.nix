@@ -20,7 +20,7 @@
 
   # Platform tag of the wasix wheels; if the target triple drifts, re-derive
   # from a wheel filename in the registry.
-  wasiPlatform = "wasi_wasm32";
+  wasiPlatform = "wasix_wasm32";
 
   # Resolve as if targeting wasix: wheels only, matching the wasi tags.
   pipResolveFlags = lib.concatStringsSep " " [

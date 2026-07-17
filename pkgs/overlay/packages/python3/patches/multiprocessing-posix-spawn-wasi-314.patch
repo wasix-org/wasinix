@@ -1,0 +1,62 @@
+diff --git a/Lib/multiprocessing/context.py b/Lib/multiprocessing/context.py
+index 5fa6d7e..949d0b0 100644
+--- a/Lib/multiprocessing/context.py
++++ b/Lib/multiprocessing/context.py
+@@ -320,15 +320,22 @@ if sys.platform != 'win32':
+             if not reduction.HAVE_SEND_HANDLE:
+                 raise ValueError('forkserver start method not available')
+ 
+-    _concrete_contexts = {
+-        'fork': ForkContext(),
+-        'spawn': SpawnContext(),
+-        'forkserver': ForkServerContext(),
+-    }
++    if hasattr(os, 'fork'):
++        _concrete_contexts = {
++            'fork': ForkContext(),
++            'spawn': SpawnContext(),
++            'forkserver': ForkServerContext(),
++        }
++    else:
++        # wasi/wasix: no fork; processes spawn via posix_spawn
++        _concrete_contexts = {
++            'spawn': SpawnContext(),
++        }
+     # bpo-33725: running arbitrary code after fork() is no longer reliable
+     # on macOS since macOS 10.14 (Mojave). Use spawn by default instead.
+     # gh-84559: We changed everyones default to a thread safeish one in 3.14.
+-    if reduction.HAVE_SEND_HANDLE and sys.platform != 'darwin':
++    if (reduction.HAVE_SEND_HANDLE and sys.platform != 'darwin'
++            and 'forkserver' in _concrete_contexts):
+         _default_context = DefaultContext(_concrete_contexts['forkserver'])
+     else:
+         _default_context = DefaultContext(_concrete_contexts['spawn'])
+diff --git a/Lib/multiprocessing/util.py b/Lib/multiprocessing/util.py
+index 549fb07..43a7dff 100644
+--- a/Lib/multiprocessing/util.py
++++ b/Lib/multiprocessing/util.py
+@@ -516,8 +516,23 @@ def _flush_std_streams():
+ #
+ 
+ def spawnv_passfds(path, args, passfds):
+-    import _posixsubprocess
+     passfds = tuple(sorted(map(int, passfds)))
++    if not hasattr(os, 'fork'):
++        # wasi has no fork_exec; posix_spawn instead. wasix does not inherit
++        # non-stdio fds and treats the POSIX dup2-self CLOEXEC idiom as a
++        # no-op, but dup2 actions with a distinct target do inject parent fds;
++        # bounce each through a slot above every passed fd so the bounce
++        # slots cannot collide with the fds being placed (passfds is sorted).
++        base = max(128, passfds[-1] + 1) if passfds else 128
++        file_actions = []
++        for i, fd in enumerate(passfds):
++            tmp = base + i
++            file_actions.append((os.POSIX_SPAWN_DUP2, fd, tmp))
++            file_actions.append((os.POSIX_SPAWN_DUP2, tmp, fd))
++            file_actions.append((os.POSIX_SPAWN_CLOSE, tmp))
++        return os.posix_spawn(path, args, os.environ,
++                              file_actions=file_actions)
++    import _posixsubprocess
+     errpipe_read, errpipe_write = os.pipe()
+     try:
+         return _posixsubprocess.fork_exec(

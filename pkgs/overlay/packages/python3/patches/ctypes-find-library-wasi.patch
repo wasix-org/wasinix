@@ -1,8 +1,8 @@
 diff --git a/Lib/ctypes/util.py b/Lib/ctypes/util.py
-index 117bf06..53e6580 100644
+index 3b21658..273d6aa 100644
 --- a/Lib/ctypes/util.py
 +++ b/Lib/ctypes/util.py
-@@ -277,6 +277,60 @@ elif os.name == "posix":
+@@ -377,6 +377,71 @@ elif os.name == "posix":
          def find_library(name, is64 = False):
              return _get_soname(_findLib_crle(name, is64) or _findLib_gcc(name))
  
@@ -41,6 +41,16 @@ index 117bf06..53e6580 100644
 +            except OSError:
 +                return False
 +
++        def _wasi_version_key(name):
++            # Highest version wins: libfoo.so.10 beats libfoo.so.9.1 (numeric
++            # fields compare above non-numeric ones).
++            head, sep, tail = name.partition(".so.")
++            if not sep:
++                return ()
++            return tuple(
++                (1, int(f), "") if f.isdigit() else (0, 0, f)
++                for f in tail.split("."))
++
 +        def find_library(name):
 +            if os.path.isabs(name):
 +                return name
@@ -55,7 +65,8 @@ index 117bf06..53e6580 100644
 +                    return os.path.basename(f)
 +                prefix = os.path.join(d, "lib" + name)
 +                for suffix in (".so.*", ".so"):
-+                    for cand in sorted(_wasi_glob(prefix + suffix), key=len, reverse=True):
++                    for cand in sorted(_wasi_glob(prefix + suffix),
++                                       key=_wasi_version_key, reverse=True):
 +                        if _is_wasm_dylink(cand):
 +                            return os.path.basename(cand)
 +            return None

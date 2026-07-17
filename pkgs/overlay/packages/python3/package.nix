@@ -122,6 +122,20 @@
             # subprocess on wasi: drop wasi from _can_fork_exec's exclusion and route it through
             # posix_spawn (no fork). From the wasix-org/cpython fork.
             ./patches/subprocess-posix-spawn-wasi.patch
+            # multiprocessing without fork: spawn start method (the only one) via os.posix_spawn
+            # in util.spawnv_passfds; _multiprocessing itself is forced on in Setup.local below.
+            # 3.14 restructured context.py (forkserver default) and util.py, so per-version patches.
+            (
+              if lib.versionAtLeast pyVer "3.14"
+              then ./patches/multiprocessing-posix-spawn-wasi-314.patch
+              else ./patches/multiprocessing-posix-spawn-wasi.patch
+            )
+            # fpcast call trampoline via wasix reflection/call_dynamic (wasm call_indirect traps
+            # on the arity-mismatched METH_NOARGS casts common in third-party extensions).
+            # From the wasix-org/cpython fork; needs the reflect_signature/call_dynamic host
+            # functions (in our pinned wasmer). The PLATFORM_OBJS wiring lives in postPatch
+            # (the surrounding AS_CASE differs between 3.13 and 3.14).
+            ./patches/wasix-call-trampoline.patch
           ];
 
           # wasix-libc declares but doesn't implement some libc fns → cpython compiles the callers
@@ -149,10 +163,12 @@
             export NIX_LDFLAGS="''${NIX_LDFLAGS:-} $PWD/wasix_pty_stubs.o"
           '';
 
-          # configure's WASI block links phantom -lwasi-emulated-signal / -latomic (no such libs on
-          # wasix); drop them from the Makefile. The installed sysconfig carries them too (postInstall).
+          # The libatomic probe (gh-109054) puts -latomic into LIBS; wasix has no such archive.
+          # Drop it from the Makefile; the installed sysconfig carries it too (postInstall).
+          # -lwasi-emulated-signal needs no scrub here: postPatch strips its only source in
+          # configure.ac.
           postConfigure = ''
-            sed -i 's/ -lwasi-emulated-signal//g; s/ -latomic//g' Makefile
+            sed -i 's/ -latomic//g' Makefile
           '';
 
           # Point subprocess(shell=True)'s baked sh at the wasix off-profile bash (cpython bakes the
@@ -168,6 +184,23 @@
                     substituteInPlace configure.ac \
                       --replace-fail ' -lwasi-emulated-signal -lwasi-emulated-getpid -lwasi-emulated-process-clocks' \
                                      ' -lwasi-emulated-getpid -lwasi-emulated-process-clocks'
+
+                    # sys.platform = "wasix" (MACHDEP only; ac_sys_system stays WASI so all WASI
+                    # configure logic still applies). Lets code distinguish wasix (threads,
+                    # sockets, subprocess) from bare wasi; matches the wasix-org/cpython fork.
+                    # (Presetting MACHDEP via env skips the block computing ac_sys_system.)
+                    substituteInPlace configure.ac \
+                      --replace-fail 'aix*) MACHDEP="aix";;' 'aix*) MACHDEP="aix";;
+            	wasi) MACHDEP="wasix";;'
+
+                    # Link wasix_trampoline.o (wasix-call-trampoline.patch) on WASI.
+                    substituteInPlace configure.ac \
+                      --replace-fail "AC_SUBST([PLATFORM_HEADERS])" \
+                    "AS_CASE([\$ac_sys_system], [WASI], [
+              AS_VAR_APPEND([PLATFORM_OBJS], [' Python/wasix_trampoline.o'])
+              AS_VAR_APPEND([PLATFORM_HEADERS], [' \$(srcdir)/Include/internal/pycore_emscripten_trampoline.h'])
+            ])
+            AC_SUBST([PLATFORM_HEADERS])"
 
                     # configure hardcodes py_cv_module_mmap=n/a for WASI (and regenerates from
                     # configure.ac, so patching configure doesn't stick); force the mmap module via
@@ -216,13 +249,23 @@
                       echo "grp grpmodule.c"
                       echo "_curses _cursesmodule.c -lncurses"
                       echo "_curses_panel _curses_panel.c -lpanel -lncurses"
+                      # wasix libc has the full sem_*/shm_* families (probes already pass:
+                      # HAVE_SEM_OPEN etc.); process spawning comes from the multiprocessing
+                      # posix_spawn patch.
+                      echo "_multiprocessing _multiprocessing/multiprocessing.c _multiprocessing/semaphore.c"
+                      echo "_posixshmem _multiprocessing/posixshmem.c"
                     } >> Modules/Setup.local
+
+                    # Keep user site-packages disabled (upstream keys this off sys.platform,
+                    # which MACHDEP=wasix renames; the fork instead ships a fake $HOME).
+                    substituteInPlace Lib/site.py Lib/sysconfig/__init__.py \
+                      --replace-fail '"vxworks", "wasi", "watchos"' '"vxworks", "wasi", "wasix", "watchos"'
           '';
 
           # Point the dangling python/python3 symlinks at the installed .wasm, and scrub the phantom
-          # -lwasi-emulated-signal/-latomic (see postConfigure) from every place an extension build
-          # reads link flags (pkgconfig, _sysconfigdata, config Makefile, python-config), else meson
-          # feeds them to wasm-ld.
+          # -latomic (see postConfigure) from every place an extension build reads link flags
+          # (pkgconfig, _sysconfigdata, config Makefile, python-config), else meson feeds it to
+          # wasm-ld.
           postInstall = ''
             for n in python${pyVer} python3 python; do ln -sf python${pyVer}.wasm "$out/bin/$n"; done
 
@@ -231,7 +274,7 @@
               "$out"/lib/python${pyVer}/_sysconfigdata*.py \
               "$out"/lib/python${pyVer}/config-*/Makefile \
               "$out"/bin/python${pyVer}-config; do
-              [ -e "$f" ] && sed -i 's/-lwasi-emulated-signal//g; s/-latomic//g' "$f"
+              [ -e "$f" ] && sed -i 's/-latomic//g' "$f"
             done
 
             # PEP 739 build-details.json (new in 3.14) is generated from the build
@@ -243,6 +286,14 @@
               ${final.buildPackages.python3.interpreter} -c "import json,glob,sys; L=sys.argv[1]; g={}; exec(open(glob.glob(L+'/_sysconfigdata*.py')[0]).read(),g); e=g['build_time_vars']['EXT_SUFFIX']; p=L+'/build-details.json'; d=json.load(open(p)); d['abi']['extension_suffix']=e; d['abi'].setdefault('stable_abi_suffix','.abi3.so'); d['suffixes']['extensions']=[e,'.abi3.so','.so']; json.dump(d,open(p,'w'),indent=2)" "$out/lib/python${pyVer}"
             fi
 
+          '';
+
+          # nixpkgs' sysconfigdata setup-hook hardcodes _PYTHON_HOST_PLATFORM from the nix
+          # platform ("wasi-wasm32"); keep it in sync with MACHDEP=wasix so cross-built
+          # wheels get the wasix_wasm32 tag (pkgs/python-registry/tests.nix keys on it).
+          postFixup = ''
+            substituteInPlace "$out/nix-support/setup-hook" \
+              --replace-fail "_PYTHON_HOST_PLATFORM='wasi-wasm32'" "_PYTHON_HOST_PLATFORM='wasix-wasm32'"
           '';
 
           dontCheckForBrokenSymlinks = true;
@@ -284,6 +335,10 @@
               commandEnv."python${pyVer}" = {
                 SSL_CERT_FILE = "/etc/ssl/certs/ca-bundle.crt";
                 SSL_CERT_DIR = "/etc/ssl/certs";
+                # getpath can't resolve argv0 (no PATH in the guest), leaving
+                # sys.executable empty; that breaks subprocess([sys.executable, ..])
+                # and multiprocessing's spawn. The path is mounted via autoSelfMount.
+                PYTHONEXECUTABLE = "${py}/bin/python${pyVer}.wasm";
               };
             };
           };

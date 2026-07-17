@@ -21,6 +21,37 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
   getcwd + chdir.
 - Fix: `__wasi_fchdir` in wasmer plus libc wiring. Fixes gnulib CLIs globally.
 
+### `posix_spawn` fd passing 🟡
+
+- Non-stdio fds are not inherited by the child even with FD_CLOEXEC cleared,
+  and a dup2 file action onto the same fd (the POSIX idiom to clear CLOEXEC)
+  is a no-op. Both diverge from POSIX. A dup2 action with a distinct target
+  does inject the parent fd, and actions apply sequentially to the child
+  table (verified with pipe-passing tests on wasmer 7.2.0).
+- Consequence: anything passing pipes to a spawned child by fd number breaks
+  (multiprocessing's resource tracker and spawn start method).
+- Workaround: cpython's `multiprocessing-posix-spawn-wasi.patch` bounces each
+  passed fd through a slot above all passed fds (`dup2 fd->tmp`,
+  `dup2 tmp->fd`, `close tmp`; tmp starts at `max(128, max fd + 1)` so the
+  slots never collide with the fds being placed).
+- Fix: implement POSIX inheritance semantics for `proc_spawn` in wasmer:
+  inherit non-CLOEXEC fds, honor same-fd dup2 as CLOEXEC clear.
+
+### signals don't interrupt blocked pipe reads 🔴
+
+- SIGTERM/SIGKILL to a process blocked in `read()` on a pipe neither kills it
+  nor errors the read; a subsequent `waitpid` blocks forever. A child blocked
+  in `sleep()` dies fine (verified with paired spawn/kill tests on wasmer
+  7.2.0). The blocked read likely parks the instance in a host-side await
+  that signal delivery never cancels.
+- Consequence: `multiprocessing.Pool.terminate()` (and the `with Pool(...)`
+  context manager, which calls it) hangs: idle workers sit blocked in queue
+  reads and can't be killed. `pool.close(); pool.join()` works because
+  sentinels wake the workers first. Same risk for any subprocess kill/timeout
+  pattern where the child blocks on fd reads.
+- Fix: wasmer's signal delivery must cancel in-flight blocking syscalls
+  (EINTR or instance termination).
+
 ### spawned commands and PATH 🟢
 
 - Fixed in current wasmer: `posix_spawnp` and fork + `execvp` both resolve the

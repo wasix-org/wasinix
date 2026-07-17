@@ -1,0 +1,269 @@
+diff --git a/Include/internal/pycore_emscripten_trampoline.h b/Include/internal/pycore_emscripten_trampoline.h
+index e37c53a..6b3a6ef 100644
+--- a/Include/internal/pycore_emscripten_trampoline.h
++++ b/Include/internal/pycore_emscripten_trampoline.h
+@@ -47,6 +47,48 @@ _PyEM_TrampolineCall(PyCFunctionWithKeywords func,
+     _PyEM_TrampolineCall(_PyCFunctionWithKeywords_CAST(get), (obj), \
+                          (PyObject*)(closure), NULL)
+ 
++#elif defined(__wasi__)
++
++// Whether the runtime provides wasix_reflect_signature (probed once on first
++// use; wasmer has it, JS-hosted wasix runtimes may not). -1 = not yet probed.
++// Read inline so the hot call path pays a load and branch, not an extern call.
++extern int _PyWASIX_type_reflection_available;
++int _PyWASIX_ProbeTypeReflection(void);
++
++static inline int _PyWASIX_TypeReflectionAvailable(void) {
++  int available = _PyWASIX_type_reflection_available;
++  return available >= 0 ? available : _PyWASIX_ProbeTypeReflection();
++}
++
++PyObject*
++_PyWASIX_TrampolineCall_Cached(PyCFunctionWithKeywords func,
++                               PyObject* self,
++                               PyObject* args,
++                               PyObject* kw);
++
++PyObject*
++_PyWASIX_TrampolineCall_Dynamic(PyCFunctionWithKeywords func,
++                                PyObject* self,
++                                PyObject* args,
++                                PyObject* kw);
++
++#define _PyWASIX_TrampolineCall(meth, self, args, kw) \
++    ((_PyWASIX_TypeReflectionAvailable()) ? \
++        (_PyWASIX_TrampolineCall_Cached((PyCFunctionWithKeywords)(meth), (self), (args), (kw))) : \
++        (_PyWASIX_TrampolineCall_Dynamic((PyCFunctionWithKeywords)(meth), (self), (args), (kw))))
++
++#define _PyCFunction_TrampolineCall(meth, self, args) \
++    _PyWASIX_TrampolineCall( \
++        (*(PyCFunctionWithKeywords)(void(*)(void))(meth)), (self), (args), NULL)
++
++#define _PyCFunctionWithKeywords_TrampolineCall(meth, self, args, kw) \
++    _PyWASIX_TrampolineCall((meth), (self), (args), (kw))
++
++#define descr_set_trampoline_call(set, obj, value, closure) \
++    ((int)_PyWASIX_TrampolineCall((PyCFunctionWithKeywords)(set), (obj), (value), (PyObject*)(closure)))
++
++#define descr_get_trampoline_call(get, obj, closure) \
++    _PyWASIX_TrampolineCall((PyCFunctionWithKeywords)(get), (obj), (PyObject*)(closure), NULL)
+ 
+ #else // defined(__EMSCRIPTEN__) && defined(PY_CALL_TRAMPOLINE)
+ 
+diff --git a/Include/internal/pycore_object.h b/Include/internal/pycore_object.h
+index ca44b2c..f3d41c0 100644
+--- a/Include/internal/pycore_object.h
++++ b/Include/internal/pycore_object.h
+@@ -986,7 +986,7 @@ PyAPI_FUNC(PyObject*) _PyObject_GetState(PyObject *);
+  * Third party code unintentionally rely on problematic fpcasts. The call
+  * trampoline mitigates common occurrences of bad fpcasts on Emscripten.
+  */
+-#if !(defined(__EMSCRIPTEN__) && defined(PY_CALL_TRAMPOLINE))
++#if !((defined(__EMSCRIPTEN__) && defined(PY_CALL_TRAMPOLINE)) || defined(__wasi__))
+ #define _PyCFunction_TrampolineCall(meth, self, args) \
+     (meth)((self), (args))
+ #define _PyCFunctionWithKeywords_TrampolineCall(meth, self, args, kw) \
+diff --git a/Python/wasix_trampoline.c b/Python/wasix_trampoline.c
+new file mode 100644
+index 0000000..d1a94ec
+--- /dev/null
++++ b/Python/wasix_trampoline.c
+@@ -0,0 +1,197 @@
++#if defined(__wasi__)
++#include <Python.h>
++
++#include <wasix/reflection.h>
++#include <wasix/call_dynamic.h>
++
++#define CACHE_INITIAL_CAP 16
++#define CACHE_MAX_LOAD 0.5
++#define EMPTY_KEY 0
++static int empty_key_value = -1; // Special value, returned for EMPTY_KEY
++_Static_assert(EMPTY_KEY == 0,
++               "EMPTY_KEY must be 0 so we can use calloc for initialization");
++
++typedef struct {
++  int key;            // Index of the function in the indirect function table
++  int argument_count; // Number of arguments for the function
++} cache_entry_t;
++
++static cache_entry_t *argument_count_cache = NULL;
++static size_t cache_capacity = 0;    // Current capacity of the cache
++static size_t cache_entries = 0;     // Current number of entries in the cache
++static size_t cache_max_entries = 0; // Maximum size before growing
++
++static void cache_init(void) {
++  cache_entry_t *table = calloc(CACHE_INITIAL_CAP, sizeof(cache_entry_t));
++  if (table == NULL) {
++    return; // stay uncached; a later insert retries
++  }
++  argument_count_cache = table;
++  cache_capacity = CACHE_INITIAL_CAP;
++  cache_max_entries = cache_capacity * CACHE_MAX_LOAD;
++}
++
++static void cache_grow(void) {
++  assert(argument_count_cache != NULL);
++
++  size_t new_capacity = cache_capacity * 2;
++
++  cache_entry_t *new_table = calloc(new_capacity, sizeof(cache_entry_t));
++  if (new_table == NULL) {
++    return; // keep the current table; cache_insert refuses to overfill it
++  }
++
++  for (size_t i = 0; i < cache_capacity; i++) {
++    if (argument_count_cache[i].key != EMPTY_KEY) {
++      size_t index = argument_count_cache[i].key % new_capacity;
++      while (new_table[index].key != EMPTY_KEY) {
++        index = (index + 1) % new_capacity; // Linear probing
++      }
++      new_table[index] = argument_count_cache[i];
++    }
++  }
++
++  free(argument_count_cache);
++  argument_count_cache = new_table;
++  cache_capacity = new_capacity;
++  cache_max_entries = cache_capacity * CACHE_MAX_LOAD;
++}
++
++// Returns a pointer to the value associated with the key
++// Returns NULL if the key is not found
++// Returns a pointer to -1 if the key is 0
++static int *cache_get(int key) {
++  if (argument_count_cache == NULL) {
++    return NULL; // Hash table not initialized
++  }
++  if (key == EMPTY_KEY) {
++    return &empty_key_value;
++  }
++
++  size_t index = key % cache_capacity;
++  while (argument_count_cache[index].key != EMPTY_KEY) {
++    if (argument_count_cache[index].key == key) {
++      return &argument_count_cache[index].argument_count;
++    }
++    index = (index + 1) % cache_capacity; // Linear probing
++  }
++  return NULL; // Key not found
++}
++
++static int *cache_insert(int key, int value) {
++  if (key == EMPTY_KEY) {
++    return &empty_key_value;
++  }
++
++  if (argument_count_cache == NULL) {
++    cache_init();
++    if (argument_count_cache == NULL) {
++      return NULL; // allocation failed; skip caching
++    }
++  }
++
++  if (cache_entries >= cache_max_entries) {
++    cache_grow();
++    // grow fails under OOM; never fill the table completely or the probe
++    // loops would stop terminating.
++    if (cache_entries + 1 >= cache_capacity) {
++      return NULL;
++    }
++  }
++
++  size_t index = key % cache_capacity;
++  while (argument_count_cache[index].key != EMPTY_KEY) {
++    if (argument_count_cache[index].key == key) {
++      return NULL; // Key already exists, we don't do updates
++    }
++    index = (index + 1) % cache_capacity; // Linear probing
++  }
++  argument_count_cache[index].key = key;
++  argument_count_cache[index].argument_count = value;
++  cache_entries++;
++  return &argument_count_cache[index].argument_count;
++}
++
++typedef PyObject *(*zero_arg)(void);
++typedef PyObject *(*one_arg)(PyObject *);
++typedef PyObject *(*two_arg)(PyObject *, PyObject *);
++typedef PyObject *(*three_arg)(PyObject *, PyObject *, PyObject *);
++
++static bool reflection_available(void) {
++  wasix_reflection_result_t result;
++  int code = wasix_reflect_signature(
++    (wasix_function_pointer_t)1, NULL, 0, NULL, 0, &result);
++  if (code == -1 && errno == ENOTSUP) {
++    return false;
++  }
++  return true;
++}
++
++int _PyWASIX_type_reflection_available = -1;
++
++int _PyWASIX_ProbeTypeReflection(void) {
++  // Benign race: the probe is idempotent and the result a plain int store.
++  int available = reflection_available() ? 1 : 0;
++  _PyWASIX_type_reflection_available = available;
++  return available;
++}
++
++static int count_func_params(PyCFunctionWithKeywords func) {
++  int *cached = cache_get((int)(size_t)func);
++  if (cached != NULL) {
++    return *cached;
++  }
++  // The zero-sized buffers make EOVERFLOW the expected outcome; result is
++  // filled then too. On any other failure result is unspecified, so neither
++  // read nor cache it.
++  wasix_reflection_result_t result = {0};
++  int code = wasix_reflect_signature((wasix_function_pointer_t)func, NULL, 0,
++                                     NULL, 0, &result);
++  if (code != 0 && !(code == -1 && errno == EOVERFLOW)) {
++    return -1;
++  }
++  if (result.cacheable) {
++    cache_insert((int)(size_t)func, result.arguments);
++  }
++  return result.arguments;
++}
++
++PyObject *_PyWASIX_TrampolineCall_Cached(PyCFunctionWithKeywords func,
++                                         PyObject *self, PyObject *args,
++                                         PyObject *kw) {
++  switch (count_func_params(func)) {
++  case 0:
++    return ((zero_arg)func)();
++  case 1:
++    return ((one_arg)func)(self);
++  case 2:
++    return ((two_arg)func)(self, args);
++  case 3:
++    return ((three_arg)func)(self, args, kw);
++  case -1:
++    PyErr_SetString(PyExc_RuntimeError, "Failed to reflect function signature");
++    return NULL;
++  default:
++    PyErr_SetString(PyExc_RuntimeError, "Unsupported number of arguments");
++    return NULL;
++  }
++}
++
++PyObject *_PyWASIX_TrampolineCall_Dynamic(PyCFunctionWithKeywords func,
++                                          PyObject *self, PyObject *args,
++                                          PyObject *kw) {
++  // Byte-buffer call_dynamic ABI: parameters packed sequentially, missing
++  // bytes zeroed and extra ignored (strict=false). PyObject* is i32 on wasm32,
++  // so a shorter callee just reads a prefix of the buffer.
++  PyObject *values[3] = {self, args, kw};
++  PyObject *result = NULL;
++
++  if (wasix_call_dynamic((wasix_function_pointer_t)func, values, sizeof(values),
++                         &result, sizeof(result), false) != 0) {
++    PyErr_SetString(PyExc_RuntimeError, "Failed to call function dynamically");
++    return NULL;
++  }
++  return result;
++}
++
++#endif

@@ -1,7 +1,16 @@
 diff --git a/Lib/subprocess.py b/Lib/subprocess.py
-index 3a8c743..8be52c8 100644
+index 52b7b71..1c08765 100644
 --- a/Lib/subprocess.py
 +++ b/Lib/subprocess.py
+@@ -75,7 +75,7 @@ else:
+     _mswindows = True
+ 
+ # some platforms do not support subprocesses
+-_can_fork_exec = sys.platform not in {"emscripten", "wasi", "ios", "tvos", "watchos"}
++_can_fork_exec = sys.platform not in {"emscripten", "wasi", "wasix", "ios", "tvos", "watchos"}
+ 
+ if _mswindows:
+     import _winapi
 @@ -113,12 +113,14 @@ else:
              WNOHANG = os.WNOHANG
              ECHILD = errno.ECHILD
@@ -22,12 +31,12 @@ index 3a8c743..8be52c8 100644
              ECHILD = errno.ECHILD
  
      import select
-@@ -718,7 +720,7 @@ def _use_posix_spawn():
+@@ -719,7 +721,7 @@ def _use_posix_spawn():
      if ((_env := os.environ.get('_PYTHON_SUBPROCESS_USE_POSIX_SPAWN')) in ('0', '1')):
          return bool(int(_env))
  
 -    if sys.platform in ('darwin', 'sunos5'):
-+    if sys.platform in ('darwin', 'sunos5', 'wasi'):
++    if sys.platform in ('darwin', 'sunos5', 'wasi', 'wasix'):
          # posix_spawn() is a syscall on both macOS and Solaris,
          # and properly reports errors
          return True
@@ -40,7 +49,7 @@ index 3a8c743..8be52c8 100644
              raise OSError(
                  errno.ENOTSUP, f"{sys.platform} does not support processes."
              )
-@@ -1788,7 +1790,7 @@ class Popen:
+@@ -1787,7 +1789,7 @@ class Popen:
                           p2cread, p2cwrite,
                           c2pread, c2pwrite,
                           errread, errwrite):
@@ -49,7 +58,7 @@ index 3a8c743..8be52c8 100644
              kwargs = {}
              if restore_signals:
                  # See _Py_RestoreSignals() in Python/pylifecycle.c
-@@ -1812,12 +1814,18 @@ class Popen:
+@@ -1811,12 +1813,20 @@ class Popen:
                      file_actions.append((os.POSIX_SPAWN_DUP2, fd, fd2))
  
              if close_fds:
@@ -57,8 +66,10 @@ index 3a8c743..8be52c8 100644
 +                if hasattr(os, 'POSIX_SPAWN_CLOSEFROM'):
 +                    file_actions.append((os.POSIX_SPAWN_CLOSEFROM, 3))
 +                else:
-+                    # wasix lacks posix_spawn_file_actions_addclosefrom_np; fall back to closing
-+                    # fds 3..1023 individually (a hack — breaks if >1024 fds are open).
++                    # wasix lacks posix_spawn_file_actions_addclosefrom_np; close fds
++                    # 3..1023 individually (breaks if more are open). Currently a no-op:
++                    # wasmer does not inherit non-stdio fds in the first place (see
++                    # WASIX-TODO "posix_spawn fd passing"); kept for when it does.
 +                    for fd in range(3, 1024):
 +                        file_actions.append((os.POSIX_SPAWN_CLOSE, fd))
  
@@ -70,7 +81,7 @@ index 3a8c743..8be52c8 100644
              self._child_created = True
  
              self._close_pipe_fds(p2cread, p2cwrite,
-@@ -1858,21 +1866,21 @@ class Popen:
+@@ -1857,21 +1867,27 @@ class Popen:
  
              sys.audit("subprocess.Popen", executable, args, cwd, env)
  
@@ -90,20 +101,26 @@ index 3a8c743..8be52c8 100644
 -                    and uid is None
 -                    and umask < 0):
 +            if _USE_POSIX_SPAWN:
-+                # wasi has no fork(); always use posix_spawn(p). Features it can't express on wasi
-+                # are asserted off rather than silently falling back to the (absent) fork path.
-+                assert preexec_fn is None
-+                assert not pass_fds
-+                assert cwd is None
-+                assert (p2cread == -1 or p2cread > 2)
-+                assert (c2pwrite == -1 or c2pwrite > 2)
-+                assert (errwrite == -1 or errwrite > 2)
-+                assert not start_new_session
-+                assert process_group == -1
-+                assert gid is None
-+                assert gids is None
-+                assert uid is None
-+                assert umask < 0
++                # wasi has no fork(); posix_spawn(p) is the only path, so options
++                # it cannot express must fail loudly. Not asserts: -O strips those
++                # and the option would be silently ignored.
++                unsupported = (
++                    ("preexec_fn", preexec_fn is not None),
++                    ("pass_fds", bool(pass_fds)),
++                    ("cwd", cwd is not None),
++                    ("start_new_session", start_new_session),
++                    ("process_group", process_group != -1),
++                    ("user", uid is not None),
++                    ("group", gid is not None),
++                    ("extra_groups", gids is not None),
++                    ("umask", umask >= 0),
++                    ("stdio redirected to an fd <= 2",
++                     any(-1 < fd <= 2 for fd in (p2cread, c2pwrite, errwrite))),
++                )
++                for option, used in unsupported:
++                    if used:
++                        raise NotImplementedError(
++                            f"{option} is not supported on {sys.platform}")
                  self._posix_spawn(args, executable, env, restore_signals, close_fds,
                                    p2cread, p2cwrite,
                                    c2pread, c2pwrite,
