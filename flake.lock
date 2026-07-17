@@ -60,11 +60,11 @@
       },
       "locked": {
         "host": "gitlab.haskell.org",
-        "lastModified": 1783919537,
-        "narHash": "sha256-YBXYe6BXFmwhQ4cJXwsknv3SCsNWUs8iGE2bUaaS9J8=",
+        "lastModified": 1784272731,
+        "narHash": "sha256-VcoIdIlUXz7fxu7gXbwih9Wy0m+i2wq6yYsSiFMuDs0=",
         "owner": "haskell-wasm",
         "repo": "ghc-wasm-meta",
-        "rev": "1da639656e710abae174e7f736507461d1b5bca5",
+        "rev": "ec050b490a8499a1d1d1a3c093b8e760a20d4ebf",
         "type": "gitlab"
       },
       "original": {
@@ -201,11 +201,11 @@
         "wasinix": "wasinix"
       },
       "locked": {
-        "lastModified": 1784193289,
-        "narHash": "sha256-YNIXA1V2y5zyRNFxty8w6Q2nOgrxHBfGz5tnVRHDriU=",
+        "lastModified": 1784281444,
+        "narHash": "sha256-sXlFJpw9yrdM69URRIsEYEik7h8qPdehvF99d9+na2A=",
         "ref": "refs/heads/main",
-        "rev": "503f53f829d5b4524ac7dd6f8217e919d7bbf8c4",
-        "revCount": 20745,
+        "rev": "7e30650f57c4628f2a798a2492e7a6c3980475fe",
+        "revCount": 20749,
         "submodules": true,
         "type": "git",
         "url": "https://github.com/wasmerio/wasmer"
