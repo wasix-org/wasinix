@@ -25,31 +25,31 @@
   # - Neuter the redundant ranlib: settings declare `ar flags = qcls` (writes the
   #   symtab) AND a `ranlib command`; the extra re-index crashes ("malformed
   #   uleb128") in the sandbox.
-  # - GHC reads settings via the wrapper's -B<libdir>, so repoint that libdir at
-  #   the patched tree and fix the unversioned symlink (cp -as escapes it back).
+  # - The relocatable ghc locates its topdir via /proc/self/exe, which resolves
+  #   into the unpatched bindist, so add -B<patched lib> to the wrapper exec
+  #   lines. Only the two ghc entry points are wrapper scripts; their node
+  #   PATH/NODE_PATH exports must survive (the TH dyld needs that node and its
+  #   npm deps), so only the exec line is edited.
   # - dyld.mjs (the node TH linker) must be a real file, not a symlink: node
   #   resolves it back into the bindist, so relative loads escape the patched tree
   #   and some TH splices die with "remoteCall: end of file".
-  # ghcDir is globbed so a point bump needs no edit.
+  # The versioned wrapper name is globbed so a point bump needs no edit.
   patchedGhc = pkgs.runCommand "wasm32-wasi-ghc-9.12-noranlib" {} ''
     mkdir -p "$out"
     cp -as ${baseGhc}/. "$out/"
-    ghcDir=$(cd "$out/lib" && echo wasm32-wasi-ghc-*)
-    libdir="$out/lib/$ghcDir/lib"
-    chmod u+w "$out" "$out/bin" "$libdir" "$out/lib/$ghcDir/bin"
-    rm "$libdir/settings"
-    substitute ${baseGhc}/lib/"$ghcDir"/lib/settings "$libdir/settings" \
+    chmod u+w "$out" "$out/bin" "$out/lib"
+    rm "$out/lib/settings"
+    substitute ${baseGhc}/lib/settings "$out/lib/settings" \
       --replace-fail '"${wasiSdk}/bin/llvm-ranlib"' '"${pkgs.buildPackages.coreutils}/bin/true"'
-    wrapper="$out/bin/$ghcDir"
-    rm "$wrapper"
-    substitute ${baseGhc}/bin/"$ghcDir" "$wrapper" \
-      --replace-fail "libdir=\"${baseGhc}/lib/$ghcDir/lib\"" "libdir=\"$libdir\""
-    chmod +x "$wrapper"
-    rm "$out/bin/wasm32-wasi-ghc"
-    ln -s "$ghcDir" "$out/bin/wasm32-wasi-ghc"
-    rm "$libdir/dyld.mjs"
-    cp ${baseGhc}/lib/"$ghcDir"/lib/dyld.mjs "$libdir/dyld.mjs"
-    chmod +x "$libdir/dyld.mjs"
+    for name in $(cd "$out/bin" && echo wasm32-wasi-ghc wasm32-wasi-ghc-9.*); do
+      rm "$out/bin/$name"
+      substitute ${baseGhc}/bin/"$name" "$out/bin/$name" \
+        --replace-fail '"$@"' "-B$out/lib \"\$@\""
+      chmod +x "$out/bin/$name"
+    done
+    rm "$out/lib/dyld.mjs"
+    cp ${baseGhc}/lib/dyld.mjs "$out/lib/dyld.mjs"
+    chmod +x "$out/lib/dyld.mjs"
   '';
 
   wrappedGhc =
