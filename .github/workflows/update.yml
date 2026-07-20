@@ -1,8 +1,14 @@
 name: Update package pins
 
 # Bump the repo's own source pins (not the prev.X nixpkgs passthroughs),
-# scheduled and on demand. Opens a PR; the existing per-package CI validates
-# the builds.
+# scheduled and on demand. One PR per moved target (auto/update-<target>): a
+# broken bump never blocks the others, each PR carries its own CI verdict, and
+# update-notes land on the bump that fired them. Branches regenerate from
+# fresh main every run, so flake.lock overlap between open PRs heals on the
+# next run. Dispatch inputs: `only` selects targets, `batch` bundles the run
+# into one combined PR (auto/update-pins) for bumps that must land together.
+# A red run on a PR with a bumped pin means the pin's derived-file regen
+# failed and that PR is incomplete.
 on:
   schedule:
     - cron: "0 6 * * 1" # Mondays 06:00 UTC
@@ -12,16 +18,72 @@ on:
         description: "Space-separated targets to update (blank = all)"
         required: false
         default: ""
+      batch:
+        description: "One combined PR (auto/update-pins) instead of one per target"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
   pull-requests: write
 
 jobs:
+  targets:
+    name: Discover targets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      matrix: ${{ steps.list.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31.9.1
+        with:
+          extra_nix_config: |
+            extra-substituters = https://nix-cache.wasix.org
+            extra-trusted-public-keys = wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI=
+            trusted-users = root runner
+
+      - name: Cache flake inputs
+        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        with:
+          path: ~/.cache/nix
+          key: nix-flake-inputs-${{ hashFiles('flake.lock') }}
+          restore-keys: nix-flake-inputs-
+
+      - name: List targets
+        id: list
+        shell: bash
+        env:
+          ONLY: ${{ github.event.inputs.only }}
+          BATCH: ${{ github.event.inputs.batch }}
+        run: |
+          # update.py validates target names inside the update job
+          if [ "$BATCH" = "true" ]; then
+            matrix=$(jq -cn --arg t "$ONLY" '[{name: "pins", targets: $t}]')
+          elif [ -n "$ONLY" ]; then
+            matrix=$(jq -cn --arg t "$ONLY" '$t | split(" ") | map(select(. != "")) | unique | map({name: ., targets: .})')
+            if [ "$matrix" = "[]" ]; then
+              echo "no targets parsed from only='$ONLY'" >&2
+              exit 1
+            fi
+          else
+            matrix=$(nix run .#scripts.update -- --list-json | jq -c 'map({name: ., targets: .})')
+          fi
+          echo "matrix=$matrix" >>"$GITHUB_OUTPUT"
+
   update:
-    name: Bump pins and open PR
+    name: bump ${{ matrix.job.name }}
+    needs: targets
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        job: ${{ fromJSON(needs.targets.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,10 +106,14 @@ jobs:
       - name: Run updater
         id: run
         shell: bash
+        env:
+          TARGETS: ${{ matrix.job.targets }}
         run: |
+          # batch with blank `only` means everything: no --only at all
           args=()
-          if [ -n "${{ github.event.inputs.only }}" ]; then
-            args=(--only ${{ github.event.inputs.only }})
+          if [ -n "$TARGETS" ]; then
+            read -ra targets <<<"$TARGETS"
+            args=(--only "${targets[@]}")
           fi
           # A failed target must not abort the PR for the ones that bumped: capture
           # the exit code (the script already isolates targets) and re-raise it at
@@ -78,13 +144,11 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
-          branch: auto/update-pins
-          title: "pins: automated source-pin bump"
-          commit-message: "pins: bump repo source pins (automated)"
+          branch: auto/update-${{ matrix.job.name }}
+          title: "${{ matrix.job.name == 'pins' && 'pins: automated source-pin bump' || format('pins: bump {0}', matrix.job.name) }}"
+          commit-message: "${{ matrix.job.name == 'pins' && 'pins: bump repo source pins (automated)' || format('pins: bump {0} (automated)', matrix.job.name) }}"
           body: |
-            Automated bump of this repo's source pins. Failed targets keep
-            their old pins; everything else bumped anyway, so CI can validate
-            the rest.
+            Automated source-pin bump.
 
             ${{ steps.run.outputs.summary }}
           delete-branch: true
