@@ -4,7 +4,7 @@
 #   version     ? toSemver package.version          (3.12 -> 3.12.0)
 #   description ? meta.description
 #   license     ? meta.license (spdxId/shortName)
-#   owner       ? "wasinix"
+#   owner       ? "kilyanni"
 #   commands    ? null  => one command per bin/*.wasm (auto-globbed at build)
 #   commandEnv  ? {}     => { <command> = { ENV = "val"; }; } merged onto a command
 #   fs          ? {}     => mounts, e.g. { "/etc/ssl" = "${cacert}/etc/ssl"; }
@@ -34,20 +34,41 @@
   in
     lib.concatStringsSep "." padded;
 
+  # Publication release numbers (rels.json at the repo root): keyed by attr
+  # path then upstream version, so an upstream bump resets to 1 by key miss.
+  # Bump to republish a changed build of the same version; registry versions
+  # are immutable.
+  rels = builtins.fromJSON (builtins.readFile ../../rels.json);
+
   # Published webc identity (owner/name/semver) of a wasix package. Used for
   # this package and its dependencies, so a [dependencies] reference always
   # matches how the dependency itself publishes.
   webcIdent = p: let
     pw = p.passthru.wasmer or {};
     name = pw.name or p.meta.mainProgram or p.pname or p.name;
-    owner = pw.owner or "wasinix";
-    version = pw.version or (toSemver (p.version or "0.0.0"));
+    # the wasinix namespace does not exist on wasmer.io yet; publish under
+    # kilyanni until it does
+    owner = pw.owner or "kilyanni";
+    baseVersion = pw.version or (toSemver (p.version or "0.0.0"));
+    rel = (rels."wasmerPackages.${name}" or {}).${baseVersion} or 1;
+    # no version encoding for rels works on the registry yet (WASIX-TODO.md:
+    # build metadata is normalized away, prereleases hide from latest); the
+    # rel goes into [package.metadata] below as plumbing, but `wasmer package
+    # build` strips metadata from the webc too, so a bump does not yet change
+    # the published artifact at all
+    version = baseVersion;
   in {
-    inherit owner name version;
+    inherit owner name version baseVersion rel;
     fullName = "${owner}/${name}";
   };
 
-  inherit (webcIdent package) name owner version;
+  inherit (webcIdent package) name owner version baseVersion rel;
+
+  # rels.json keys left behind by an upstream bump; scripts/update.py drops
+  # them (regen hook on nixpkgs), this note covers bumps made by hand.
+  staleRels =
+    lib.filter (v: v != baseVersion)
+    (lib.attrNames (rels."wasmerPackages.${name}" or {}));
   description =
     w.description
     or (
@@ -67,7 +88,7 @@
   commands = w.commands or null;
   commandEnv = w.commandEnv or {};
   defaultRunner = w.defaultRunner or "https://webc.org/runner/wasi";
-  metadata = w.metadata or {};
+  metadata = {wasix-rel = rel;} // (w.metadata or {});
   fs = w.fs or {};
   selfMounts = w.selfMounts or [];
   autoSelfMount = w.autoSelfMount or false;
@@ -157,13 +178,19 @@ in
     name = "wasmer-package-${name}";
     pos = packagePos;
     passthru = {
-      id = {inherit owner name version;};
+      id = {inherit owner name version baseVersion;};
       inherit depWebcs;
       # The built webc at owner/name/version.webc, ready to symlinkJoin into an
       # --include-webc tree. Its .shim drives this packed artifact (what ships),
       # vs the pkg .shim below which drives the wasmer.toml source dir.
       webc = let
-        built = pkgs.runCommand "webc-${owner}-${name}-${version}" (pkgs.lib.optionalAttrs (packagePos != null) {pos = packagePos;}) ''
+        built = pkgs.runCommand "webc-${owner}-${name}-${version}" ({
+            passthru.wasix.updateNotes = lib.optional (staleRels != []) {
+              message = "rels.json has stale keys (${lib.concatMapStringsSep ", " (v: "wasmerPackages.${name} ${v}") staleRels}); nix run .#scripts.update -- --only nixpkgs drops them";
+              when = _: _: true;
+            };
+          }
+          // pkgs.lib.optionalAttrs (packagePos != null) {pos = packagePos;}) ''
           d="$out/${owner}/${name}"
           mkdir -p "$d"
           ${wasmer}/bin/wasmer package build --quiet "${finalAttrs.finalPackage}/pkg/${name}" -o "$d/${version}.webc"
@@ -201,6 +228,7 @@ in
       name = ${builtins.toJSON "${owner}/${name}"}
       version = ${builtins.toJSON version}
       description = ${builtins.toJSON description}
+      readme = "README.md"
       ${
         if license == null
         then ""
@@ -212,6 +240,21 @@ in
         else "entrypoint = ${builtins.toJSON entrypoint}"
       }
       public = true
+      EOF
+
+        # registry-visible provenance (rendered on the package page); the
+        # publish step appends the source rev and the pre-publish webc hash
+        cat > "$pkg_dir/README.md" <<'EOF'
+      # ${name}
+
+      ${description}
+
+      Built from source by [wasinix](https://github.com/wasix-org/wasinix).
+
+      ## Provenance
+
+      - attr: wasmerPackages."${name}".webc
+      - rel: ${toString rel}
       EOF
 
         ${

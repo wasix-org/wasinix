@@ -76,12 +76,22 @@ not in nixpkgs, call `final.rustPlatform.buildRustPackage` (see
 
 ## Publishing to the registry
 
-`scripts/wasmer-publish-all.py --registry wasmer.io` builds `allWasmerPackages` and
-publishes every shipped webc the registry does not already have (`--dry-run`
-previews). Existing versions are hash-verified against the registry, so a
-changed webc under an unchanged version fails loudly. Needs an authenticated
-`wasmer` CLI (`wasmer login`). Packages publish in name order; the only
-cross-package webc dependency (git → bash) is satisfied by it.
+`nix run .#scripts.publish-webc -- --registry wasmer.io [name...]` builds the
+named webcs (none = all shipped) and publishes those the registry does not
+already have (`--dry-run` previews). Existing versions are hash-verified
+against the registry, so a changed webc under an unchanged version fails
+loudly; republishing one needs a rel encoding the registry supports, which
+does not exist yet (WASIX-TODO.md). Auth: `wasmer login` or `WASMER_TOKEN`.
+Packages publish in dependency
+order; a webc dependency that is neither published nor part of the run is an
+error. Webcs publish under `kilyanni/` until the `wasinix` namespace exists on
+wasmer.io (the owner default in `make-wasmer-package.nix`). The `publish-webc`
+workflow runs the same script, manual dispatch only, with the `WASMER_TOKEN`
+secret. Provenance rides the package README on the registry: the generated
+README carries the attr and rel, and the publish step appends the source rev
+and a rebuild command. Verification restages the local build with the
+recorded rev to reproduce the published bytes, then compares registry hashes
+(`wasmer publish` can exit 0 without tagging, WASIX-TODO.md).
 
 ## A Python package or wheel
 
@@ -102,12 +112,17 @@ pip-installs representative packages (deps resolved from the index too), then
 imports them under wasmer.
 
 Every wheel is published as `<version>+wasix.<rel>` (PEP 440 local version):
-`rel` counts our builds of one upstream version and comes from
-`python-registry/rels.json`, keyed by pname then version, default 1. Bump it
-to republish a changed build, by hand or with the manual `bump-rel.yml`
-workflow (takes a list of wheels, opens a PR); an upstream version bump resets
-it by key miss (`nix run .#scripts.update` drops the stale key). Published filenames
-are immutable and accumulate. The `publish-index` workflow (on a green Build of
+`rel` counts our builds of one upstream version and comes from the root
+`rels.json`, keyed by attr path (`pythonRegistry.wheels.<pname>`,
+`wasmerPackages.<name>` for webcs) then version, default 1, shared across
+python versions (the cp tag keeps filenames distinct). Bump it to republish a
+changed build, with `nix run .#scripts.bump-rel` or the manual `bump-rel.yml`
+workflow (takes a list of packages, opens a PR); an upstream version bump
+resets it by key miss (`nix run .#scripts.update` drops the stale key).
+Published filenames are immutable and accumulate. Webc rels land in
+`[package.metadata] wasix-rel` only for now: the registry has no version
+encoding for republishing (WASIX-TODO.md), so a bumped webc still cannot
+republish. The `publish-index` workflow (on a green Build of
 main) builds the patched wasmer, fetches the volume's S3 credentials with the
 `WASMER_TOKEN` secret (provisioning them on the first run via the vendored
 `rotateS3Credentials` fix), pushes new wheels with `publish.py`, and deploys a

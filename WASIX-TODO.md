@@ -326,3 +326,21 @@ pid=3 sig=Sigusr2` for the forked children, so nobody exits and all three
   Verified: under the patched wasmer `rsync -a src/ dst/` exits 0 (was 124/hang)
   with files copied and the final stats summary printed; stock wasmer still hangs
   (control). Upstream to wasmerio/wasmer and drop the patch once merged.
+
+## Registry
+
+### no version encoding for republishing a changed webc 🔴
+
+Registry package versions are immutable tags on content hashes, and the webc
+embeds neither the version nor `[package.metadata]`: `wasmer package build`
+emits byte-identical webcs for `x`, `x+meta`, `x-pre`, and any
+`package.metadata` contents (verified with kilyanni/crabsay), and publishing
+`x+meta` over an existing `x` exits 0 without tagging anything (verified on
+wasmer.wtf). Prereleases would tag as distinct versions but hide from
+`latest`. So a changed webc at an unchanged upstream version cannot be
+republished, and the `wasix-rel` recorded in `[package.metadata]` is
+source-manifest plumbing only; a rel bump does not change the published
+artifact at all yet. Needs a registry-side decision: treat build metadata as
+version identity, or bless the CLI's `--bump` patch-bump convention (and
+ideally stop stripping `package.metadata`). Wheels are unaffected (PEP 440
+`+wasix.N`, own index).

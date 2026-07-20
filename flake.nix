@@ -35,8 +35,16 @@
       patches =
         (old.patches or [])
         ++ [
+          # proc_fork must inherit the parent's signal dispositions; see WASIX-TODO.md
           ./patches/wasmer-signal-inherit-on-fork.patch
         ];
+      passthru =
+        (old.passthru or {})
+        // {
+          wasix.updateNotes = [
+            {message = "check whether patches/wasmer-signal-inherit-on-fork.patch landed upstream (WASIX-TODO.md)";}
+          ];
+        };
     });
     wasix = import ./pkgs {
       inherit system nixpkgs;
@@ -228,10 +236,19 @@
           content-diff = run "content-diff" [] "python3" ./scripts/content-diff.py;
           ci-report = run "ci-report" [] "python3" ./scripts/ci-report.py;
           publish-eval-map = run "publish-eval-map" [p.awscli2] "bash" ./scripts/publish-eval-map.sh;
-          bump-rel = run "bump-rel" [] "python3" ./pkgs/python-registry/bump-rel.py;
-          publish = run "publish" [wasmerRuntime p.rclone p.python3 p.gawk p.gnused] "bash" ./scripts/publish.sh;
+          bump-rel = run "bump-rel" [] "python3" ./scripts/bump-rel.py;
+          publish-index = run "publish-index" [wasmerRuntime p.rclone p.python3 p.gawk p.gnused] "bash" ./scripts/publish-index.sh;
+          publish-webc = run "publish-webc" [wasmerRuntime] "python3" ./scripts/publish-webc.py;
           update = run "update" [p.nix-update p.nix-prefetch-git p.cargo] "python3" ./scripts/update.py;
         };
+
+        # rels.json key -> current upstream version. Read by scripts/update.py
+        # (prune stale keys) and scripts/bump-rel.py (validate + look up).
+        relVersions =
+          lib.mapAttrs' (n: v: lib.nameValuePair "pythonRegistry.wheels.${n}" v)
+          wasix.pythonRegistry.wheelVersions
+          // lib.mapAttrs' (n: p: lib.nameValuePair "wasmerPackages.${n}" p.pkg.id.baseVersion)
+          wasix.wasmerPackages;
 
         # passthru.wasix.updateNotes (see pkgs/lib/default.nix): things to
         # check when a package moves. `versions` is published in the eval

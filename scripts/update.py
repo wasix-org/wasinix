@@ -155,11 +155,12 @@ def regen_libc_witx(t):
     return "witx pins: " + ", ".join(bumped)
 
 
-def regen_prune_wheel_rels(t):
-    # The registry's publication release numbers (pkgs/python-registry/rels.json)
-    # are keyed by upstream version; a nixpkgs bump that moves a wheel leaves
-    # its old key behind (harmless: the lookup misses and rel resets to 1).
-    path = REPO / "pkgs/python-registry/rels.json"
+def prune_rels():
+    # Publication release numbers (rels.json) are keyed by attr path then
+    # upstream version; any bump that moves a package leaves its old key
+    # behind (harmless: the lookup misses and rel resets to 1). Runs after
+    # every update run; free while rels.json is empty.
+    path = REPO / "rels.json"
     rels = json.loads(path.read_text())
     if not rels:
         return None
@@ -168,25 +169,25 @@ def regen_prune_wheel_rels(t):
             "nix",
             "eval",
             "--json",
-            f".#legacyPackages.{SYSTEM}.pythonRegistry.wheelVersions",
+            f".#legacyPackages.{SYSTEM}.relVersions",
         ]
     ).stdout
     versions = json.loads(out)
     dropped = [
-        f"{name} {v}"
-        for name, by_version in sorted(rels.items())
+        f"{key} {v}"
+        for key, by_version in sorted(rels.items())
         for v in sorted(by_version)
-        if versions.get(name) != v
+        if versions.get(key) != v
     ]
     pruned = {
-        name: kept
-        for name, by_version in rels.items()
-        if (kept := {v: n for v, n in by_version.items() if versions.get(name) == v})
+        key: kept
+        for key, by_version in rels.items()
+        if (kept := {v: n for v, n in by_version.items() if versions.get(key) == v})
     }
     if not dropped:
         return None
     path.write_text(json.dumps(pruned, indent=2, sort_keys=True) + "\n")
-    return f"dropped stale wheel rels: {', '.join(dropped)}"
+    return f"dropped stale rels: {', '.join(dropped)}"
 
 
 # Cross-file regen hooks, keyed by target name: they synchronize other repo
@@ -195,7 +196,6 @@ def regen_prune_wheel_rels(t):
 REGEN_BY_NAME = {
     "rust-toolchain": regen_rust_bootstrap,
     "wasix-libc": regen_libc_witx,
-    "nixpkgs": regen_prune_wheel_rels,
 }
 
 # Flake inputs (flake.lock) have no package file to carry an updateScript.
@@ -206,7 +206,7 @@ TARGETS = [
     Target("wasmer", "flake", input="wasmer"),
     Target("treefmt-nix", "flake", input="treefmt-nix"),
     # bumping this rebuilds the whole haskell closure and needs the wasm patches
-    # re-verified (see docs/updating.md).
+    # re-verified.
     Target("ghc-wasm-meta", "flake", input="ghc-wasm-meta"),
 ]
 
@@ -306,6 +306,11 @@ def main():
     ap.add_argument("--only", nargs="*", metavar="NAME")
     ap.add_argument("--list", action="store_true")
     ap.add_argument(
+        "--list-json",
+        action="store_true",
+        help="target names as a JSON array (the update workflow's matrix)",
+    )
+    ap.add_argument(
         "--summary-out",
         metavar="FILE",
         help="write a markdown summary (the auto-update PR body)",
@@ -319,6 +324,10 @@ def main():
         unknown = wanted - {t.name for t in targets}
         if unknown:
             raise SystemExit(f"unknown target(s): {', '.join(sorted(unknown))}")
+
+    if args.list_json:
+        print(json.dumps([t.name for t in targets]))
+        return
 
     if args.list:
         for t in targets:
@@ -372,6 +381,14 @@ def main():
                 failures.append(f"{t.name} (regen)")
                 outcome += f"; regen FAILED: {str(e).splitlines()[0][:120]}"
         results.append((t.name, outcome))
+
+    try:
+        pruned = prune_rels()
+        if pruned:
+            results.append(("rels", pruned))
+    except Exception as e:
+        failures.append("rels prune")
+        results.append(("rels", f"FAILED: {str(e).splitlines()[0][:120]}"))
 
     notes = fired_notes(priors)
     for n in notes:
@@ -427,9 +444,16 @@ def fired_notes(priors):
         return []
     seen = {}
     for attr, notes in sorted(fired.items()):
+        # wasmerPackages.<n>.webc names as <n> (which may contain dots)
+        base = attr.removesuffix(".webc")
+        name = (
+            base.removeprefix("wasmerPackages.")
+            if base.startswith("wasmerPackages.")
+            else base.rsplit(".", 1)[-1]
+        )
         for n in notes:
             if n["message"] not in seen:
-                seen[n["message"]] = {"name": attr.rsplit(".", 1)[-1], **n}
+                seen[n["message"]] = {"name": name, **n}
     return list(seen.values())
 
 

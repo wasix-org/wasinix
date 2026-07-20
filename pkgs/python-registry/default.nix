@@ -16,10 +16,13 @@
   pythonWebc,
   mkTestGroup,
 }: let
-  # Publication release numbers (PEP 440 local version +wasix.N): keyed by pname then upstream
-  # version. Shared across python versions (same upstream version), the cp tag keeps filenames
-  # distinct. Bump when republishing a changed build; published filenames are immutable.
-  rels = builtins.fromJSON (builtins.readFile ./rels.json);
+  # Publication release numbers (PEP 440 local version +wasix.N), from the global rels.json at the
+  # repo root: keyed by attr path (pythonRegistry.wheels.<pname>) then upstream version, so an
+  # upstream bump resets to 1 by key miss. Shared across python versions (same upstream version),
+  # the cp tag keeps filenames distinct. Bump when republishing a changed build; published
+  # filenames are immutable, publish.py refuses reuse.
+  rels = builtins.fromJSON (builtins.readFile ../../rels.json);
+  relPrefix = "pythonRegistry.wheels.";
 
   # Per-version served wheels (full runtime closure, not just the worklist). buildPythonPackage puts
   # the .whl in `dist`; toPythonModule-wrapped non-python drvs have none and can't be served.
@@ -29,7 +32,7 @@
     map (drv: rec {
       name = drv.pname or drv.name;
       version = drv.version;
-      rel = (rels.${name} or {}).${version} or 1;
+      rel = (rels."${relPrefix}${name}" or {}).${version} or 1;
       dist = "${drv.dist}";
       # provenance nested by version so pname doesn't collide across py313/py314:
       # `nix build github:wasix-org/wasinix/<rev>#${attr}` rebuilds it.
@@ -47,11 +50,17 @@
 
   # name -> upstream version (same across py versions); read by scripts/update.py to prune rels.json.
   wheelVersions = lib.listToAttrs (map (d: lib.nameValuePair d.name d.version) wheelDists);
+  # rels.json keys left behind by an upstream bump; scripts/update.py drops them (regen hook on
+  # nixpkgs), this note covers bumps made by hand. Only this registry's key prefix; webc keys get
+  # the same note per package.
   staleRels = lib.concatMap (
-    name:
-      map (v: "${name} ${v}")
-      (lib.filter (v: (wheelVersions.${name} or null) != v)
-        (lib.attrNames rels.${name}))
+    key: let
+      name = lib.removePrefix relPrefix key;
+    in
+      lib.optionals (lib.hasPrefix relPrefix key)
+      (map (v: "${key} ${v}")
+        (lib.filter (v: (wheelVersions.${name} or null) != v)
+          (lib.attrNames rels.${key})))
   ) (lib.attrNames rels);
 
   registry =

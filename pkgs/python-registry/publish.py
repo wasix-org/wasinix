@@ -95,7 +95,9 @@ def main():
         prev = published.get(whl.name)
         if prev:
             if prev["sha256"] != sha:
-                conflicts.append(f"{whl.name} (bump {project} in rels.json)")
+                conflicts.append(
+                    f"{whl.name} (bump pythonRegistry.wheels.{project} in rels.json)"
+                )
             continue
         metadata = whl.with_name(whl.name + ".metadata").read_bytes()
         manifest = {

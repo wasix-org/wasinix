@@ -1,14 +1,14 @@
-name: Bump wheel rel
+name: Bump publication rel
 
-# Manual only: bump the publication release (+wasix.N) of the given wheels so
-# the next publish republishes them under new filenames (e.g. after a toolchain
-# fix rebuilds a wheel at the same upstream version). Opens a PR; merging it to
-# main runs the normal build + publish.
+# Manual only: bump the publication release (+wasix.N) of the given wheels or
+# webcs so the next publish republishes them under new versions (e.g. after a
+# toolchain fix rebuilds them at the same upstream version). Opens a PR;
+# merging it to main runs the normal build + publish.
 on:
   workflow_dispatch:
     inputs:
-      wheels:
-        description: Wheels to bump (space- or comma-separated project names)
+      packages:
+        description: Packages to bump (rels.json attr paths, unambiguous names, or fnmatch globs; space- or comma-separated)
         required: true
         type: string
 
@@ -43,11 +43,11 @@ jobs:
       - name: Bump rels
         id: bump
         env:
-          WHEELS: ${{ inputs.wheels }}
+          PACKAGES: ${{ inputs.packages }}
         run: |
-          read -ra wheels <<<"${WHEELS//,/ }"
+          read -ra packages <<<"${PACKAGES//,/ }"
           summary="$RUNNER_TEMP/bump-summary.md"
-          nix run .#scripts.bump-rel -- "${wheels[@]}" >"$summary"
+          nix run .#scripts.bump-rel -- "${packages[@]}" >"$summary"
           {
             echo 'summary<<EOF'
             cat "$summary"
@@ -63,12 +63,12 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
-          branch: auto/bump-wheel-rel
-          title: "pkgs: bump wheel publication release"
-          commit-message: "pkgs: bump wheel publication release"
+          branch: auto/bump-rel
+          title: "pkgs: bump publication release"
+          commit-message: "pkgs: bump publication release"
           body: |
             Manual publication-release (+wasix.N) bump. Merging to main
-            rebuilds and republishes these wheels under new filenames.
+            rebuilds and republishes these packages under new versions.
 
             ${{ steps.bump.outputs.summary }}
           delete-branch: true

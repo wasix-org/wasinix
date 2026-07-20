@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Provision-or-fetch the index volume's S3 credentials, then publish the built
-# registry. Run via `nix run .#scripts.publish`, which provides the patched
+# registry. Run via `nix run .#scripts.publish-index`, which provides the patched
 # wasmer, rclone, and python3. The app is identified by pkgs/python-registry/
 # app.yaml (its app_id), so no app name is needed. Env: INDEX_VOLUME,
 # WASMER_REGISTRY (which wasmer registry to talk to, default wasmer.io), +

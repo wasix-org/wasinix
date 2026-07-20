@@ -1,0 +1,71 @@
+name: Publish webc
+
+# Published versions are immutable, so nothing triggers this automatically:
+# dispatch it by hand with the packages to publish.
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: Space-separated webc names (empty = all shipped)
+        required: false
+        default: ""
+      registry:
+        description: Target registry
+        required: false
+        default: wasmer.io
+      dry-run:
+        description: Only print what would be published
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: publish-webc
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish webc packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31.9.1
+        with:
+          extra_nix_config: |
+            extra-substituters = https://nix-cache.wasix.org
+            extra-trusted-public-keys = wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI=
+            trusted-users = root runner
+
+      - name: Cache flake inputs
+        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        with:
+          path: ~/.cache/nix
+          key: nix-flake-inputs-${{ hashFiles('flake.lock') }}
+          restore-keys: nix-flake-inputs-
+
+      - name: Publish
+        env:
+          # the same token the python-index publish uses; it can publish to
+          # the target namespace
+          WASMER_TOKEN: ${{ secrets.WASMER_TOKEN }}
+          PACKAGES: ${{ inputs.packages }}
+          REGISTRY: ${{ inputs.registry }}
+          DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          if [ -z "$WASMER_TOKEN" ] && [ "$DRY_RUN" != "true" ]; then
+            echo "WASMER_TOKEN secret is not set" >&2
+            exit 1
+          fi
+          args=()
+          [ "$DRY_RUN" = "true" ] && args+=(--dry-run)
+          # shellcheck disable=SC2086
+          nix run .#scripts.publish-webc --option accept-flake-config true -- \
+            --registry "$REGISTRY" --rev "$GITHUB_SHA" \
+            "${args[@]}" $PACKAGES
