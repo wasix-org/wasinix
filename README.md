@@ -44,5 +44,5 @@ Details: [`docs/architecture.md`](docs/architecture.md).
 | [`AGENTS.md`](AGENTS.md)                       | conventions and rules for making changes     |
 | [`docs/architecture.md`](docs/architecture.md) | how the layers fit together                  |
 | [`docs/packaging.md`](docs/packaging.md)       | adding packages: C, CLI/webc, Rust, Python   |
-| [`docs/updating.md`](docs/updating.md)         | the pin updater and per-pin notes            |
+| [`docs/updating.md`](docs/updating.md)         | the pin updater                              |
 | [`WASIX-TODO.md`](WASIX-TODO.md)               | known WASIX/toolchain issues and workarounds |

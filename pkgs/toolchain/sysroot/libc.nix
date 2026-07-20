@@ -58,7 +58,9 @@
       }"
     ];
 
-  # witx specs for the header generators (cargo run generate-libc).
+  # witx specs for the header generators (cargo run generate-libc): submodule
+  # pins (absent from archive downloads), synced by scripts/update.py; a stale
+  # pin fails the build with undeclared __wasi_* functions.
   wasiWitx = fetchFromGitHub {
     owner = "WebAssembly";
     repo = "WASI";
@@ -108,6 +110,10 @@ in
     # select()/pselect() bail with ENOSYS when exceptfds is non-empty, spinning
     # defensive callers (rsync). Ignore exceptfds instead. See WASIX-TODO.md.
     patches = [./libc-select-exceptfds.patch];
+
+    passthru.wasix.updateNotes = [
+      {message = "check whether libc-select-exceptfds.patch landed upstream (WASIX-TODO.md)";}
+    ];
 
     dontConfigure = true;
 

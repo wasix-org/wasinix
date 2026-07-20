@@ -77,6 +77,9 @@ in
         command = nix-update-script {extraArgs = ["--flake" "--src-only"];};
         attrPath = "toolchain.wasixcc.unwrapped";
       };
+      wasix.updateNotes = [
+        {message = "check whether the vendored wasixcc-*.patch fixes landed upstream";}
+      ];
     };
 
     meta = {
