@@ -49,9 +49,10 @@
       version = drv.version;
       rel = (rels."${relPrefix}${name}" or {}).${version} or 1;
       dist = "${drv.dist}";
-      # provenance nested by version so pname doesn't collide across py313/py314:
+      # provenance nested by python version and upstream version, so pname collides neither
+      # across py313/py314 nor with a served history version of itself:
       # `nix build github:wasix-org/wasinix/<rev>#${attr}` rebuilds it.
-      attr = "pythonRegistry.wheels.${pv}.${name}^dist";
+      attr = ''pythonRegistry.wheels.${pv}.${name}."${version}"^dist'';
       drvPath = builtins.unsafeDiscardStringContext drv.drvPath;
       source = sourceOf drv;
       inherit drv;
@@ -61,21 +62,28 @@
   perVersion = lib.mapAttrs servedOf pythonSets;
   wheelDists = lib.concatLists (lib.attrValues perVersion);
 
-  # Provenance build targets, nested by version (pythonRegistry.wheels.py314.numpy).
-  wheels = lib.mapAttrs (_: served: lib.listToAttrs (map (d: lib.nameValuePair d.name d.drv) served)) perVersion;
+  # Provenance build targets (pythonRegistry.wheels.py314.numpy."2.5.0").
+  wheels =
+    lib.mapAttrs (
+      _: served:
+        lib.mapAttrs (_: ds: lib.listToAttrs (map (d: lib.nameValuePair d.version d.drv) ds))
+        (lib.groupBy (d: d.name) served)
+    )
+    perVersion;
 
-  # name -> upstream version (same across py versions); read by scripts/update.py to prune rels.json.
-  wheelVersions = lib.listToAttrs (map (d: lib.nameValuePair d.name d.version) wheelDists);
-  # rels.json keys left behind by an upstream bump; scripts/update.py drops them (regen hook on
-  # nixpkgs), this note covers bumps made by hand. Only this registry's key prefix; webc keys get
-  # the same note per package.
+  # name -> served upstream versions (current + history; same across py versions); read by
+  # scripts/update.py to prune rels.json.
+  wheelVersions = lib.mapAttrs (_: ds: lib.unique (map (d: d.version) ds)) (lib.groupBy (d: d.name) wheelDists);
+  # rels.json keys no served wheel carries: left behind by an upstream bump, or a dropped
+  # history entry. scripts/update.py drops them (regen hook on nixpkgs), this note covers bumps
+  # made by hand. Only this registry's key prefix; webc keys get the same note per package.
   staleRels = lib.concatMap (
     key: let
       name = lib.removePrefix relPrefix key;
     in
       lib.optionals (lib.hasPrefix relPrefix key)
       (map (v: "${key} ${v}")
-        (lib.filter (v: (wheelVersions.${name} or null) != v)
+        (lib.filter (v: !(lib.elem v (wheelVersions.${name} or [])))
           (lib.attrNames rels.${key})))
   ) (lib.attrNames rels);
 

@@ -177,12 +177,12 @@ def prune_rels():
         f"{key} {v}"
         for key, by_version in sorted(rels.items())
         for v in sorted(by_version)
-        if versions.get(key) != v
+        if v not in versions.get(key, [])
     ]
     pruned = {
         key: kept
         for key, by_version in rels.items()
-        if (kept := {v: n for v, n in by_version.items() if versions.get(key) == v})
+        if (kept := {v: n for v, n in by_version.items() if v in versions.get(key, [])})
     }
     if not dropped:
         return None

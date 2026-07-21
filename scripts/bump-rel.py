@@ -6,11 +6,13 @@ upstream version, default 1), so the next publish republishes it under a new
 version. Use after a rebuild changes contents at the same upstream version,
 which both publishers otherwise refuse to overwrite.
 
-Usage: bump-rel.py <key> [<key> ...]
+Usage: bump-rel.py <key>[==<version>] [<key>[==<version>] ...]
 Keys are rels.json attr paths (pythonRegistry.wheels.numpy, wasmerPackages.git),
 bare names unique across the prefixes (numpy, git, python3.14), or fnmatch
 globs over either form ('pythonRegistry.wheels.tok*', 'icu-data*'); quote
-globs from the shell.
+globs from the shell. A package serving several versions (registry history)
+needs the ==<version> selector; bumping all of a package's versions stays a
+deliberate per-version act.
 """
 
 import fnmatch
@@ -24,7 +26,7 @@ SYSTEM = "x86_64-linux"
 PREFIXES = ("pythonRegistry.wheels.", "wasmerPackages.")
 
 
-def resolve(name: str, versions: dict[str, str]) -> list[str]:
+def resolve(name: str, versions: dict[str, list[str]]) -> list[str]:
     if any(c in name for c in "*?["):
         hits = sorted(
             k
@@ -48,7 +50,7 @@ def resolve(name: str, versions: dict[str, str]) -> list[str]:
 def main():
     names = sys.argv[1:]
     if not names:
-        sys.exit("usage: bump-rel.py <key> [<key> ...]")
+        sys.exit("usage: bump-rel.py <key>[==<version>] [<key>[==<version>] ...]")
 
     repo = Path(
         subprocess.run(
@@ -61,7 +63,7 @@ def main():
     path = repo / "rels.json"
     rels = json.loads(path.read_text())
 
-    # current upstream version of every rels-tracked package
+    # rels-tracked package -> served upstream versions
     versions = json.loads(
         subprocess.run(
             [
@@ -76,13 +78,30 @@ def main():
         ).stdout
     )
 
-    keys = dict.fromkeys(
-        key for name in dict.fromkeys(names) for key in resolve(name, versions)
-    )
+    # (key, version) to bump; a glob/bare name expands to keys, then each key's
+    # version is the ==selector, its sole served version, or an error if it
+    # serves several (registry history) and none was picked.
+    targets = {}
+    for spec in dict.fromkeys(names):
+        base, _, picked = spec.partition("==")
+        for key in resolve(base, versions):
+            served = versions[key]
+            if picked:
+                if picked not in served:
+                    sys.exit(
+                        f"{key}=={picked}: not served (has {', '.join(sorted(served))})"
+                    )
+                targets[(key, picked)] = None
+            elif len(served) == 1:
+                targets[(key, served[0])] = None
+            else:
+                sys.exit(
+                    f"{key}: serves several versions, pick one: "
+                    + ", ".join(f"{base}=={v}" for v in sorted(served))
+                )
 
     bumps = []
-    for key in keys:
-        version = versions[key]
+    for key, version in targets:
         cur = rels.get(key, {}).get(version, 1)
         rels.setdefault(key, {})[version] = cur + 1
         bumps.append(f"- {key} {version}: wasix.{cur} -> wasix.{cur + 1}")

@@ -248,13 +248,18 @@
           update = run "update" [p.nix-update p.nix-prefetch-git p.cargo] "python3" ./scripts/update.py;
         };
 
-        # rels.json key -> current upstream version. Read by scripts/update.py
-        # (prune stale keys) and scripts/bump-rel.py (validate + look up).
+        # rels.json key -> list of served upstream versions (wheels can serve history versions
+        # besides the current one; webcs serve exactly one). Read by scripts/update.py (prune
+        # stale keys) and scripts/bump-rel.py (validate + look up).
         relVersions =
           lib.mapAttrs' (n: v: lib.nameValuePair "pythonRegistry.wheels.${n}" v)
           wasix.pythonRegistry.wheelVersions
-          // lib.mapAttrs' (n: p: lib.nameValuePair "wasmerPackages.${n}" p.pkg.id.baseVersion)
-          wasix.wasmerPackages;
+          # webcs group by published name: history versions key wasmerPackages
+          # as <name>-<semver> but publish under the same name.
+          // lib.mapAttrs' (name: ps:
+            lib.nameValuePair "wasmerPackages.${name}"
+            (lib.unique (map (p: p.pkg.id.baseVersion) ps)))
+          (lib.groupBy (p: p.pkg.id.name) (lib.attrValues wasix.wasmerPackages));
 
         # passthru.wasix.updateNotes (see pkgs/lib/default.nix): things to
         # check when a package moves. `versions` is published in the eval
