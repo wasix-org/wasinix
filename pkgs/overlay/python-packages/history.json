@@ -1,4 +1,12 @@
 {
+  "cryptography": {
+    "45.0.4": {
+      "cargoHash": "sha256-dKwNnWBzBM9QEcRbbvkNhFJnFxFakqZ/MS7rqE8/tNQ=",
+      "hash": "sha256-rKgMUVj5IdeWIdLWQ4E6zhC6dwJMi+BRHCh2JG73Zgc=",
+      "note": "served by pythonindex.wasix.org",
+      "tag": "45.0.4"
+    }
+  },
   "numpy": {
     "2.1.3": {
       "hash": "sha256-xqLRMwQz0VQpLe7xjYVMGXELtXa/wQx2KgQftBe+q/Q=",

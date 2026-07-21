@@ -198,7 +198,7 @@ def src_coords(target):
             "p: { version = p.version; tag = p.src.tag or null; "
             "rev = p.src.rev or null; url = p.src.url or null; "
             "owner = p.src.owner or null; repo = p.src.repo or null; "
-            "hasOverride = p.src ? override; }",
+            "hasOverride = p.src ? override; cargoDeps = p ? cargoDeps; }",
         ]
     ).stdout
     return json.loads(out)
@@ -259,6 +259,34 @@ def tofu_hash(target, override_args):
     return m.group(1)
 
 
+def tofu_cargo_hash(target, src_args):
+    """Vendor hash for the rebased src. A rust wheel vendors its crates from the
+    Cargo.lock inside its own source, so an older src needs its own vendor and
+    nothing derives that hash. Mirrors the rebase in pkgs/lib/load-packages.nix,
+    so what we record is what the loader will build."""
+    expr = (
+        f'let p = (builtins.getFlake "{REPO}").legacyPackages.{SYSTEM}'
+        f".{target.path}; "
+        f"newSrc = p.src.override ({nix_attrs(src_args)}); in "
+        f"p.cargoDeps.overrideAttrs (o: {{ vendorStaging = o.vendorStaging.overrideAttrs "
+        f'(_: {{ src = newSrc; outputHash = "{FAKE_HASH}"; }}); }})'
+    )
+    r = subprocess.run(
+        ["nix", "build", "--impure", "--no-link", "--expr", expr],
+        cwd=REPO,
+        text=True,
+        capture_output=True,
+    )
+    m = re.search(r"got:\s*(sha256-\S+)", r.stderr)
+    if not m:
+        raise ValueError(
+            "could not vendor rust deps for this version "
+            f"(the lock may have moved, which the package file has to correct): "
+            f"{r.stderr.strip()[-300:]}"
+        )
+    return m.group(1)
+
+
 def substitute_version(field, value, cur, version):
     """Re-point one fetcher field from `cur` to `version`. A no-op substitution
     means the current version is not spelled in the field (a bare commit rev, or
@@ -277,7 +305,16 @@ def substitute_version(field, value, cur, version):
 
 def fetch_spec(target, version, coords, files):
     """Spec that re-points the package's own fetcher at <version>: substitute the
-    version into the fetcher's version field, hash it the fetcher's way."""
+    version into the fetcher's version field, hash it the fetcher's way. A rust
+    wheel also gets a cargoHash, since its vendor follows the src."""
+    spec = _src_spec(target, version, coords, files)
+    if coords.get("cargoDeps"):
+        src_args = {k: v for k, v in spec.items() if k != "cargoHash"}
+        spec["cargoHash"] = tofu_cargo_hash(target, src_args)
+    return spec
+
+
+def _src_spec(target, version, coords, files):
     cur = coords["version"]
     for field in ("tag", "rev"):
         if coords[field] is not None:

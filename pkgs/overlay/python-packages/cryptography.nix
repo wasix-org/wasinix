@@ -15,27 +15,33 @@
   ...
 }: let
   lib = final.lib;
+  # nixpkgs' patches target the release nixpkgs packages (right now the argon2
+  # and scrypt test files); on a rebased history version they mis-apply, and
+  # tests don't run cross anyway. Keyed on the history spec rather than a
+  # version boundary so it stays right across nixpkgs bumps.
+  isHistory = (pyprev.cryptography.passthru.wasix.historySpec or null) != null;
 in
-  helpers.libTweaks {
-    env = {
-      CC = "${final.stdenv.cc}/bin/${final.stdenv.cc.targetPrefix}cc";
-      OPENSSL_NO_VENDOR = "1";
-      CFLAGS = "-fwasm-exceptions";
-      # The extension links through rustc's own wasm rust-lld, which keeps
-      # -C link-arg order, so the --whole-archive bracketing survives.
-      # -Bsymbolic binds the included definitions locally instead of the main
-      # module's exports.
-      RUSTFLAGS = toString [
-        "-C link-arg=-Bsymbolic"
-        "-C link-arg=--whole-archive"
-        "-C link-arg=${lib.getLib final.openssl}/lib/libssl.a"
-        "-C link-arg=${lib.getLib final.openssl}/lib/libcrypto.a"
-        "-C link-arg=--no-whole-archive"
-        # openssl-sys's own -lssl/-lcrypto lazily pull some of the same
-        # members; first definition wins and both are the same objects.
-        "-C link-arg=--allow-multiple-definition"
-      ];
-    };
-    maturinBuildFlags = ["--features" "pyo3/extension-module"];
-  }
+  helpers.libTweaks ({
+      env = {
+        CC = "${final.stdenv.cc}/bin/${final.stdenv.cc.targetPrefix}cc";
+        OPENSSL_NO_VENDOR = "1";
+        CFLAGS = "-fwasm-exceptions";
+        # The extension links through rustc's own wasm rust-lld, which keeps
+        # -C link-arg order, so the --whole-archive bracketing survives.
+        # -Bsymbolic binds the included definitions locally instead of the main
+        # module's exports.
+        RUSTFLAGS = toString [
+          "-C link-arg=-Bsymbolic"
+          "-C link-arg=--whole-archive"
+          "-C link-arg=${lib.getLib final.openssl}/lib/libssl.a"
+          "-C link-arg=${lib.getLib final.openssl}/lib/libcrypto.a"
+          "-C link-arg=--no-whole-archive"
+          # openssl-sys's own -lssl/-lcrypto lazily pull some of the same
+          # members; first definition wins and both are the same objects.
+          "-C link-arg=--allow-multiple-definition"
+        ];
+      };
+      maturinBuildFlags = ["--features" "pyo3/extension-module"];
+    }
+    // lib.optionalAttrs isHistory {patches = _: [];})
   pyprev.cryptography

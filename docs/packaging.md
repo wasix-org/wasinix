@@ -110,7 +110,9 @@ one shared table shape, one file per set:
 Keyed `{<attr>: {<version>: <spec>}}`. The spec re-points the package's OWN src
 fetcher at that version (its real fetcher, never an imposed one): `{version,
 hash}` for `fetchPypi`, `{tag|rev, hash}` for `fetchFromGitHub`, `{url, hash}`
-for a `fetchurl` release tarball; plus optional `note` and `variants` (the
+for a `fetchurl` release tarball, plus `cargoHash` when the package vendors
+rust crates (they come from the Cargo.lock in that src, so the vendor follows
+it; `scripts/history.py` derives the hash); plus optional `note` and `variants` (the
 set-neutral gate: the build variants an entry is limited to; for wheels a
 variant is an interpreter, e.g. `["py313"]`; a single-variant set like CLIs
 omits it).
@@ -118,7 +120,10 @@ omits it).
 The loader (`load-packages.nix`) mints a `<attr>_<version>` attr in the same
 set by re-importing the package file with the src rebased, so the package's own
 `lib.version*` conditionals carry the per-version drift (see `numpy.nix`,
-`jq/package.nix`). Wheels build at `.#pythonWheels.py313."numpy-2.1.3"`; a
+`jq/package.nix`). Drift the generic rebase can't cover is corrected in the
+package file, which reads the entry back off
+`passthru.wasix.historySpec` (see `cryptography.nix`, which drops nixpkgs'
+patches on any version they weren't written for). Wheels build at `.#pythonWheels.py313."numpy-2.1.3"`; a
 webc keys `wasmerPackages` as `<name>-<semver>` (`jq-1.6.0`) and publishes
 under the same webc name. The run-by-name stubs are keyed the same way, so a
 test asks for an older build by key: `wasmerPkgs."jq-1.6.0"`.

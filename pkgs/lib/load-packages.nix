@@ -31,7 +31,7 @@
   historyFrom ? "prev",
 }: let
   # non-fetch spec keys, stripped before the args go to the src fetcher
-  historyMeta = ["note" "variants"];
+  historyMeta = ["note" "variants" "cargoHash"];
   entries = builtins.readDir dir;
   historyUnder = v: lib.replaceStrings ["."] ["_"] v;
   historyNames = lib.concatLists (lib.mapAttrsToList
@@ -93,9 +93,35 @@
           outputHash = spec.hash;
           name = baseNameOf spec.url;
         });
-    pinned = drv.overrideAttrs (_: {
-      inherit version src;
-    });
+    # A rust wheel vendors its crates from the Cargo.lock IN its src, so a
+    # rebased src needs a rebased vendor. Nothing derives that hash, so the
+    # entry carries it (scripts/history.py TOFUs it). cargoDeps is a plain
+    # runCommand over the vendorStaging FOD, and only the FOD is re-pointable.
+    rustVendor = old:
+      lib.throwIf (!(old.cargoDeps ? vendorStaging))
+      "load-packages: ${drv.pname or drv.name} ${version}: cargoDeps has no vendorStaging, so nixpkgs' vendor mechanism moved; the history rebase needs updating"
+      (old.cargoDeps.overrideAttrs (o: {
+        vendorStaging = o.vendorStaging.overrideAttrs (_: {
+          inherit src;
+          outputHash = spec.cargoHash;
+        });
+      }));
+    pinned = drv.overrideAttrs (old:
+      {
+        inherit version src;
+        # The entry itself, for a package whose drift the generic rebase can't
+        # cover: a lock that moved (cargoRoot) has to be corrected in the
+        # package file, which then rebuilds the vendor from this spec.
+        # passthru only, so it moves no drvPath.
+        passthru =
+          (old.passthru or {})
+          // {wasix = (old.passthru.wasix or {}) // {historySpec = spec;};};
+      }
+      // lib.optionalAttrs (old ? cargoDeps) (
+        lib.throwIf (!(spec ? cargoHash))
+        "load-packages: ${drv.pname or drv.name} ${version} vendors rust deps; its history entry needs a cargoHash (nix run .#scripts.history -- add <attr>==${version} re-derives it)"
+        {cargoDeps = rustVendor old;}
+      ));
   in
     pinned // {override = args: pinToHistory version spec (drv.override args);};
 

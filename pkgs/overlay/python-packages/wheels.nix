@@ -18,7 +18,8 @@
 # keyed by attr then version. The spec re-points the package's OWN src fetcher
 # at that version (via src.override): {version;hash} for fetchPypi,
 # {tag|rev;hash} for fetchFromGitHub, {url;hash} for a fetchurl release
-# tarball; plus optional {variants ? all; note ? ""}. `variants` is the
+# tarball; a rust wheel also needs {cargoHash}, since its crates are vendored
+# from the Cargo.lock in that src; plus optional {variants ? all; note ? ""}. `variants` is the
 # set-neutral history gate (load-packages.nix); for wheels a variant is an
 # interpreter, so e.g. {"variants": ["py313"]} ships only on cp313 (cp314
 # support often starts later). JSON so tooling can edit it; maintained by
