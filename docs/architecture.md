@@ -90,7 +90,8 @@ against the native tool.
 - `apps.<system>.update`: the pin updater.
 - `legacyPackages.<system>`: the buildable trees, attr path = build target:
   `toolchain.<part>`, `librariesByProfile.<profile>.<lib>`,
-  `wasmerPackages.<name>` (with `.pkg`, `.webc`, `.tests`), `pythonWheels.<attr>`;
+  `wasmerPackages.<name>` (with `.pkg`, `.webc`, `.tests`),
+  `pythonWheels.<py>.<attr>`;
   plus `nixpkgsByProfile`, `toolchainByProfile`, `pkgsCross`, `allWasmerPackages`.
 - `ci`: the same trees flattened to dotted names, so a job name is a build
   path. Unsupported/broken packages are filtered out before becoming jobs.

@@ -92,7 +92,7 @@ builtins.attrNames`. For behaviour-preserving refactors, also diff
   `--apply 'j: builtins.mapAttrs (_: d: d.drvPath) j'` before/after; meta and
   passthru changes don't move drv paths.
 - A CI job name is a build path: `nix build .#librariesByProfile.exnrefEh.zlib`,
-  `.#wasmerPackages.git.webc`, `.#pythonWheels.numpy`.
+  `.#wasmerPackages.git.webc`, `.#pythonWheels.py314.numpy`.
 - Toolchain suites: `.#toolchain.wasixcc.tests` (compile+link+run per
   profile), `.#toolchain.sysroot.tests`; the Rust suite is
   `.#checks.x86_64-linux.rust`.

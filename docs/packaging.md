@@ -74,6 +74,9 @@ not in nixpkgs, call `final.rustPlatform.buildRustPackage` (see
    scripts, which autoSelfMount can't see). See git's package.nix for a full
    example.
 
+3. Ship an older release too (a version consumers pin): see
+   [Registry history](#registry-history).
+
 ## Publishing to the registry
 
 `nix run .#scripts.publish-webc -- --registry wasmer.io [name...]` builds the
@@ -93,6 +96,43 @@ and a rebuild command. Verification restages the local build with the
 recorded rev to reproduce the published bytes, then compares registry hashes
 (`wasmer publish` can exit 0 without tagging, WASIX-TODO.md).
 
+## Registry history
+
+Both registries are append-only and never delete, so a version we publish stays
+installable forever; a history entry keeps an older version REBUILDABLE too (for
+a version consumers still pin, so a regenerated lockfile resolves to it, or to
+rel-bump it against a toolchain fix). It works the same for every package set,
+one shared table shape, one file per set:
+
+- wheels: `overlay/python-packages/history.json`
+- CLIs / libraries: `overlay/packages/history.json`
+
+Keyed `{<attr>: {<version>: <spec>}}`. The spec re-points the package's OWN src
+fetcher at that version (its real fetcher, never an imposed one): `{version,
+hash}` for `fetchPypi`, `{tag|rev, hash}` for `fetchFromGitHub`, `{url, hash}`
+for a `fetchurl` release tarball; plus optional `note` and `variants` (the
+set-neutral gate: the build variants an entry is limited to; for wheels a
+variant is an interpreter, e.g. `["py313"]`; a single-variant set like CLIs
+omits it).
+
+The loader (`load-packages.nix`) mints a `<attr>_<version>` attr in the same
+set by re-importing the package file with the src rebased, so the package's own
+`lib.version*` conditionals carry the per-version drift (see `numpy.nix`,
+`jq/package.nix`). Wheels build at `.#pythonWheels.py313."numpy-2.1.3"`; a
+webc keys `wasmerPackages` as `<name>-<semver>` (`jq-1.6.0`) and publishes
+under the same webc name. The run-by-name stubs are keyed the same way, so a
+test asks for an older build by key: `wasmerPkgs."jq-1.6.0"`.
+
+Maintain the tables with `nix run .#scripts.history`: `add <attr>==<version>`,
+or `--per-major`/`--per-minor` where the source has a version index (PyPI, or
+github tags for a `fetchFromGitHub` package); `--set wheel|cli` disambiguates a
+name in both sets (jq). A nixpkgs bump that crosses a major auto-appends the
+outgoing version, for both sets (`scripts/update.py`). Keep history to what
+consumers actually pin: latest per major, occasionally latest per minor.
+
+(icu-style `{names, packages}` families are only for packages nixpkgs itself
+carries at multiple versions, not for minting historical ones.)
+
 ## A Python package or wheel
 
 - Ship a wheel: add `{attr = "<python3.pkgs name>";}` to
@@ -101,6 +141,8 @@ recorded rev to reproduce the published bytes, then compares registry hashes
 - Fix a build: `overlay/python-packages/<attr>.nix`, same form as top-level
   plus `pyfinal`/`pyprev` for Python-set deps. Patches in
   `python-packages/patches/`, Rust-wheel helpers in `python-packages/lib/`.
+- Ship an older release too (a version consumers pin): see
+  [Registry history](#registry-history).
 
 All shipped wheels (plus their transitive python deps) are also published as a
 static PEP 503 "simple" index: `.#pythonRegistry` (`pkgs/python-registry/`).
