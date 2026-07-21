@@ -144,6 +144,26 @@
       echo "OK ${name}: closure all py3-none-any" > "$out"
     '';
 
+  # A history wheel is served under its entry's version, but the artifact's
+  # version comes from the build, and not every build takes it from the src
+  # (pandas derives it via versioneer, which cannot recover it from a tarball
+  # with no git, so it silently keeps nixpkgs'). Serving that hands a resolver
+  # asking for one version a wheel claiming another. Current wheels need no
+  # such check: their version IS the one the build derives.
+  versionTest = name: version: wheel:
+    pkgs.runCommand "wheel-version-${name}" {} ''
+      whl=$(${pkgs.findutils}/bin/find "${wheel.dist}" -name '*.whl' | head -1)
+      base=$(basename "$whl")
+      got=''${base#*-}
+      got=''${got%%-*}
+      if [ "$got" != "${version}" ]; then
+        echo "wheel '${name}' is served as ${version} but its artifact is $got ($base)" >&2
+        echo "-> the build does not take its version from the rebased src; set it in the package file" >&2
+        exit 1
+      fi
+      echo "OK ${name}: artifact is $got" > "$out"
+    '';
+
   # Per-package behavioural tests: overlay/python-packages/<attr>/tests/*.nix, each
   # a function over a subset of {wheel, runPython, lib} returning named test
   # derivations, folded into the wheel's test group -- the wheel analogue of the
@@ -170,7 +190,12 @@
   # unchanged). Inherited nixpkgs passthru.tests are dropped: they are x86 test
   # suites that would leak into `checks`. Per-package tests/ run only on the
   # primary (current) wheel (name == e.attr), not history versions.
-  mkWheel = name: e: wheel:
+  mkWheel = name: e: wheel: let
+    historyVersion =
+      if name == e.attr
+      then null
+      else lib.removePrefix "${e.attr}-" name;
+  in
     wheel.overrideAttrs (o: {
       passthru =
         removeAttrs (o.passthru or {}) ["tests"]
@@ -179,6 +204,7 @@
               import = importTest name e wheel;
               self-contained = selfContainedTest name wheel;
             }
+            // lib.optionalAttrs (historyVersion != null) {version = versionTest name historyVersion wheel;}
             // lib.optionalAttrs (e.noarch or false) {noarch-closure = noarchClosureTest name wheel;}
             // lib.optionalAttrs (name == e.attr && builtins.pathExists (pkgTestsDir e.attr)) (pkgTests e));
         };
