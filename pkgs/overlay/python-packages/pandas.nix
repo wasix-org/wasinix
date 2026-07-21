@@ -10,15 +10,37 @@
 }: let
   wheels = import ./lib/wheels.nix {inherit lib;};
   crossNumpyInc = "${wasixPython.pkgs.numpy}/lib/${wasixPython.libPrefix}/site-packages/numpy/_core/include";
+  # 3.0 spells its numpy build pin differently and carries a usable version;
+  # everything below needs both corrected.
+  pre3 = lib.versionOlder pyprev.pandas.version "3";
 in
   # wasm build only: a native pandas must keep its own np.get_include().
   wheels.onlyOnWasix pyprev.pandas (
     helpers.libTweaks {
-      postPatch = ''
-        substituteInPlace pandas/meson.build \
-          --replace-fail "incdir = os.path.relpath(np.get_include())" "incdir = os.path.relpath('${crossNumpyInc}')" \
-          --replace-fail "incdir = np.get_include()" "incdir = '${crossNumpyInc}'"
-      '';
+      # lib.const on <3: nixpkgs' postPatch relaxes a "numpy>=2.0.0" build pin
+      # that only 3.x spells that way, with --replace-fail, so on a 2.x source
+      # the miss is fatal. Replace the phase rather than appending to it.
+      postPatch = let
+        ours =
+          ''
+            substituteInPlace pandas/meson.build \
+              --replace-fail "incdir = os.path.relpath(np.get_include())" "incdir = os.path.relpath('${crossNumpyInc}')" \
+              --replace-fail "incdir = np.get_include()" "incdir = '${crossNumpyInc}'"
+          ''
+          + lib.optionalString pre3 ''
+            # nixpkgs' src postFetch seds ITS OWN version into _version.py's
+            # git_refnames, and src.override re-points the download without
+            # re-running it, so a rebased tarball arrives stamped with the
+            # current version and versioneer reports that. generate_version.py
+            # prefers an importable _version_meson over versioneer, so state the
+            # version here instead of depending on that sed.
+            printf '__version__ = "%s"\n__git_version__ = "unknown"\n' \
+              '${pyprev.pandas.version}' > _version_meson.py
+          '';
+      in
+        if pre3
+        then lib.const ours
+        else ours;
     }
     pyprev.pandas
   )
