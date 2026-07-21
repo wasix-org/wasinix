@@ -206,18 +206,18 @@
   # Wheels split three ways: noarch (python-version-independent, e.g. a redistributed binary) built
   # ONCE on the default python; everything else per interpreter (cp313/cp314). Each import test runs
   # on its python webc. Lazy on wasmerLayer. Nothing is noarch yet; the split is ready for it.
-  mkPythonWheels = pyAttr: webcName: select:
+  mkPythonWheels = pyKey: pyAttr: webcName: select:
     import ./python-wheels.nix {
-      inherit pkgs lib mkTestGroup select;
+      inherit pkgs lib mkTestGroup select pyKey;
       python3 = nixpkgsByProfile.exnrefEhpic.${pyAttr};
       wasmer = wasmerRuntime;
       pythonWebc = wasmerLayer.wasmerPackages.${webcName}.webc;
     };
   isNoarch = e: e.noarch or false;
   pythonWheels = {
-    noarch = mkPythonWheels "python314" "python3.14" isNoarch;
-    py313 = mkPythonWheels "python313" "python3.13" (e: !isNoarch e);
-    py314 = mkPythonWheels "python314" "python3.14" (e: !isNoarch e);
+    noarch = mkPythonWheels "noarch" "python314" "python3.14" isNoarch;
+    py313 = mkPythonWheels "py313" "python313" "python3.13" (e: !isNoarch e);
+    py314 = mkPythonWheels "py314" "python314" "python3.14" (e: !isNoarch e);
   };
 
   makeWasmerPackage = pkgs.callPackage ./wasmer/make-wasmer-package.nix {

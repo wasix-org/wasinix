@@ -17,6 +17,10 @@
   # "wheels" is the ship/test worklist (consumed by pkgs/python-wheels.nix),
   # not an override function; skip it.
   exclude = ["wheels"];
+  # Registry-history versions (numpy_2_1_3, ...): minted by rebasing pyprev.<name>
+  # onto the entry's src, same table pkgs/python-wheels.nix ships from.
+  history = builtins.fromJSON (builtins.readFile ./history.json);
+  historyFrom = "pyprev";
 }).mkPackages {
   callArgs = callArgs // {inherit pyfinal pyprev;};
 }

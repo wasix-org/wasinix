@@ -13,6 +13,20 @@
 #             (a redistributed binary, e.g. pandoc-binary). A py3-none-any tag alone
 #             is NOT enough: a pure-python library still depends on python. The
 #             noarch-tag check enforces the tag; the "no python code" call is yours.
+#
+# Older releases also built and served (registry history) live in history.json,
+# keyed by attr then version. The spec re-points the package's OWN src fetcher
+# at that version (via src.override): {version;hash} for fetchPypi,
+# {tag|rev;hash} for fetchFromGitHub, {url;hash} for a fetchurl release
+# tarball; plus optional {variants ? all; note ? ""}. `variants` is the
+# set-neutral history gate (load-packages.nix); for wheels a variant is an
+# interpreter, so e.g. {"variants": ["py313"]} ships only on cp313 (cp314
+# support often starts later). JSON so tooling can edit it; maintained by
+# scripts/history.py. Published wheels never disappear; an entry only keeps the
+# version REbuildable. Keep just versions consumers pin: latest per major,
+# occasionally latest per minor. Each is minted in the current python set
+# (load-packages.nix history) with the src rebased, so the package's tweak file
+# applies with its version conditionals.
 [
   # ── pure-python (no C extension) ───────────────────────────────────────────────
   {attr = "six";}

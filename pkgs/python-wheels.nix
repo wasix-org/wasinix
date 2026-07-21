@@ -16,6 +16,8 @@
   # no python code, e.g. a redistributed binary) build once on the default python; everything else
   # builds per interpreter. See pkgs/default.nix.
   select ? (_: true),
+  # This call's key in the pythonWheels set ("py313"/"py314"/"noarch"); history entries gate on it.
+  pyKey,
 }: let
   effWasmer =
     if wasmer != null
@@ -23,6 +25,15 @@
     else pkgs.wasmer;
 
   wheelList = import ./overlay/python-packages/wheels.nix;
+  # Older releases also served (registry history), keyed by worklist attr then version;
+  # JSON so scripts/history.py and update.py can edit it (schema: see wheels.nix header).
+  historyTable = builtins.fromJSON (builtins.readFile ./overlay/python-packages/history.json);
+  unknownHistory = lib.filter (n: !(lib.elem n (map (e: e.attr) wheelList))) (lib.attrNames historyTable);
+  # A noarch entry builds once on the default python, so its history versions
+  # would be gated out by every `variants` value and silently never ship.
+  noarchHistory =
+    map (e: e.attr)
+    (lib.filter (e: (e.noarch or false) && historyTable ? ${e.attr}) wheelList);
   pyImportOf = e: e.pyImport or (lib.replaceStrings ["-"] ["_"] e.attr);
 
   # Run a python `script` on the SELF-CONTAINED python webc with the wheel + its
@@ -78,10 +89,10 @@
 
   # `import <mod>` smoke-test: the runtime counterpart to the static
   # `self-contained` guard below.
-  importTest = e:
+  importTest = name: e: wheel:
     runPython {
-      name = "wheel-import-${e.attr}";
-      wheel = python3.pkgs.${e.attr};
+      name = "wheel-import-${name}";
+      inherit wheel;
       script = "import ${pyImportOf e}";
     };
 
@@ -91,40 +102,37 @@
   # the artifact instead (overlay/python-packages/lib/bundle.nix). Excludes, as
   # non-runtime: .dist-info metadata (provenance), line-1 shebangs (a lib is
   # never exec'd), and the eeee-sanitized build paths recorded by some configs.
-  selfContainedTest = e: let
-    wheel = python3.pkgs.${e.attr};
-  in
-    pkgs.runCommand "wheel-selfcontained-${e.attr}" {} ''
+  selfContainedTest = name: wheel:
+    pkgs.runCommand "wheel-selfcontained-${name}" {} ''
       site="${wheel}/${python3.sitePackages}"
       hits=$(${pkgs.gnugrep}/bin/grep -rnaE '/nix/store/[a-z0-9]{32}-' "$site" --include='*.py' \
         | ${pkgs.gnugrep}/bin/grep -vE '\.dist-info/' \
         | ${pkgs.gnugrep}/bin/grep -vE ':1:#!' \
         | ${pkgs.gnugrep}/bin/grep -v 'eeeeeeeeeeeeeeee' || true)
       if [ -n "$hits" ]; then
-        echo "wheel '${e.attr}' embeds runtime /nix/store paths (breaks pip on a bare wasix target):" >&2
+        echo "wheel '${name}' embeds runtime /nix/store paths (breaks pip on a bare wasix target):" >&2
         echo "$hits" >&2
         echo "-> bundle the artifact into the wheel, see overlay/python-packages/lib/bundle.nix" >&2
         exit 1
       fi
-      echo "OK ${e.attr}" > "$out"
+      echo "OK ${name}" > "$out"
     '';
 
   # Guards a `noarch` mark (a python-version-independent package, e.g. a redistributed binary): the
   # wheel AND its whole python-dep closure must be py3-none-any. A version-specific (cp-tagged)
   # member builds only on the default python, so the other interpreter can't resolve it from the
   # merged registry. Runs on the default python.
-  noarchClosureTest = e: let
-    wheel = python3.pkgs.${e.attr};
+  noarchClosureTest = name: wheel: let
     members = lib.filter (m: m ? dist) ([wheel] ++ python3.pkgs.requiredPythonModules [wheel]);
   in
-    pkgs.runCommand "wheel-noarch-closure-${e.attr}" {} ''
+    pkgs.runCommand "wheel-noarch-closure-${name}" {} ''
       fail=
       for dist in ${lib.escapeShellArgs (map (m: "${m.dist}") members)}; do
         whl=$(${pkgs.findutils}/bin/find "$dist" -name '*.whl' | head -1)
         case "$(basename "$whl")" in
           *-py3-none-any.whl | *-py2.py3-none-any.whl) ;;
           *)
-            echo "noarch '${e.attr}': closure member $(basename "$whl") is version-specific" >&2
+            echo "noarch '${name}': closure member $(basename "$whl") is version-specific" >&2
             fail=1
             ;;
         esac
@@ -133,7 +141,7 @@
         echo "-> a noarch wheel's whole closure must be py3-none-any; make the dep noarch or drop the mark." >&2
         exit 1
       fi
-      echo "OK ${e.attr}: closure all py3-none-any" > "$out"
+      echo "OK ${name}: closure all py3-none-any" > "$out"
     '';
 
   # Per-package behavioural tests: overlay/python-packages/<attr>/tests/*.nix, each
@@ -158,21 +166,47 @@
       (n: t: t == "regular" && lib.hasSuffix ".nix" n && n != "helpers.nix")
       (builtins.readDir dir)));
 
-  # python3.pkgs.<attr> with .tests added (passthru-only, so the store path is
+  # The wheel drv with .tests added (passthru-only, so the store path is
   # unchanged). Inherited nixpkgs passthru.tests are dropped: they are x86 test
-  # suites that would leak into `checks`.
-  mkWheel = e:
-    (python3.pkgs.${e.attr}).overrideAttrs (o: {
+  # suites that would leak into `checks`. Per-package tests/ run only on the
+  # primary (current) wheel (name == e.attr), not history versions.
+  mkWheel = name: e: wheel:
+    wheel.overrideAttrs (o: {
       passthru =
         removeAttrs (o.passthru or {}) ["tests"]
         // lib.optionalAttrs (!(e.skipTest or false)) {
-          tests = mkTestGroup "wheel-${e.attr}" ({
-              import = importTest e;
-              self-contained = selfContainedTest e;
+          tests = mkTestGroup "wheel-${name}" ({
+              import = importTest name e wheel;
+              self-contained = selfContainedTest name wheel;
             }
-            // lib.optionalAttrs (e.noarch or false) {noarch-closure = noarchClosureTest e;}
-            // lib.optionalAttrs (builtins.pathExists (pkgTestsDir e.attr)) (pkgTests e));
+            // lib.optionalAttrs (e.noarch or false) {noarch-closure = noarchClosureTest name wheel;}
+            // lib.optionalAttrs (name == e.attr && builtins.pathExists (pkgTestsDir e.attr)) (pkgTests e));
         };
     });
+
+  # History wheels (<attr>-<version>): the entry's older releases, minted in the
+  # python set as <attr>_<version> by rebasing the src (load-packages.nix history,
+  # driven by python-packages/history.json). Never noarch. `spec.variants` is the
+  # generic history gate (see load-packages.nix): the build variants an entry is
+  # limited to; for this set a variant IS an interpreter (pyKey), default both.
+  historyUnder = v: lib.replaceStrings ["."] ["_"] v;
+  historyOf = e:
+    lib.concatMap (
+      v: let
+        spec = historyTable.${e.attr}.${v};
+        name = "${e.attr}-${v}";
+      in
+        lib.optionals (lib.elem pyKey (spec.variants or ["py313" "py314"])) [
+          (lib.nameValuePair name (mkWheel name e python3.pkgs."${e.attr}_${historyUnder v}"))
+        ]
+    ) (lib.attrNames (historyTable.${e.attr} or {}));
 in
-  lib.listToAttrs (map (e: lib.nameValuePair e.attr (mkWheel e)) (lib.filter select wheelList))
+  lib.throwIf (unknownHistory != [])
+  "history.json: not in the wheels.nix worklist: ${lib.concatStringsSep ", " unknownHistory}"
+  (lib.throwIf (noarchHistory != [])
+    "history.json: noarch entries cannot carry history versions: ${lib.concatStringsSep ", " noarchHistory}"
+    (lib.listToAttrs (
+      lib.concatMap
+      (e: [(lib.nameValuePair e.attr (mkWheel e.attr e python3.pkgs.${e.attr}))] ++ historyOf e)
+      (lib.filter select wheelList)
+    )))

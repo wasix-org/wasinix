@@ -368,6 +368,8 @@
           # wheels, so it must keep our wasm-target hook natively (else bcrypt/tiktoken build against
           # wasm32-wasip1, which our rustc has no std for). See python-packages/setuptools-rust.nix.
           packageOverrides = pyfinal: pyprev: let
+            # Includes the registry-history attrs (numpy_2_1_3, ...): the loader
+            # mints them by rebasing pyprev.<name>, see python-packages/default.nix.
             wasixOverrides =
               (import ../../python-packages {
                 callArgs = {
