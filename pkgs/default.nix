@@ -258,21 +258,9 @@
     python3 = nixpkgsByProfile.exnrefEhpic.python3;
     pythonWebc = wasmerLayer.wrappedPackages.python;
   };
-
-  # All shipped .wasm binaries, collected from the leaves at their preferred
-  # profiles (curl puts curl.wasm in its `bin` output, hence the per-pkg glob).
-  allWasm = pkgs.runCommand "wasix-all-wasm" {} ''
-    mkdir -p "$out/bin"
-    ${lib.concatMapStringsSep "\n" (name: ''
-      if [ -d "${wasmerPackages.${name}}/bin" ]; then
-        ${pkgs.findutils}/bin/find "${wasmerPackages.${name}}/bin" -maxdepth 1 -type f -name '*.wasm' \
-          -exec ${pkgs.coreutils}/bin/cp -f '{}' "$out/bin/" \;
-      fi
-    '') (builtins.attrNames wasmerPackages)}
-  '';
 in {
   inherit pkgs pkgsCross defaultProfileName;
-  inherit toolchain toolchainByProfile nixpkgsByProfile preferredProfilePackages allWasm allWasmerPackages;
+  inherit toolchain toolchainByProfile nixpkgsByProfile preferredProfilePackages allWasmerPackages;
   inherit shippedCommands wasmerPackages librariesByProfile toolchainTestPkgs abiChecks;
   inherit pythonWheels pythonRegistry;
 }

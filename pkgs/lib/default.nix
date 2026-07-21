@@ -184,8 +184,8 @@ in rec {
   libTweaks = tweaks: pkg:
     pkg.overrideAttrs (old: extendDrv old ({doCheck = false;} // tweaks));
 
-  # Rename bin/<wasmName> -> <wasmName>.wasm (what allWasm collects). For
-  # shipped CLIs. Programs needing fork/setjmp set env.WASIXCC_WASM_OPT_FLAGS
+  # Rename bin/<wasmName> -> <wasmName>.wasm: the webc packaging derives one
+  # command per bin/*.wasm. For shipped CLIs. Programs needing fork/setjmp set env.WASIXCC_WASM_OPT_FLAGS
   # instead (wasixcc asyncifies at link).
   wasmRename = {wasmName}: pkg:
     pkg.overrideAttrs (old: {

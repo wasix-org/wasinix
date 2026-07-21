@@ -196,7 +196,6 @@
         inherit (wasix) nixpkgsByProfile toolchainByProfile defaultProfileName;
         pkgsCross.wasix = wasix.pkgsCross;
         allWasmerPackages = wasix.allWasmerPackages;
-        allWasm = wasix.allWasm;
 
         inherit ci;
 

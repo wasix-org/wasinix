@@ -91,7 +91,7 @@ against the native tool.
 - `legacyPackages.<system>`: the buildable trees, attr path = build target:
   `toolchain.<part>`, `librariesByProfile.<profile>.<lib>`,
   `wasmerPackages.<name>` (with `.pkg`, `.webc`, `.tests`), `pythonWheels.<attr>`;
-  plus `nixpkgsByProfile`, `toolchainByProfile`, `pkgsCross`, `allWasmerPackages`, `allWasm`.
+  plus `nixpkgsByProfile`, `toolchainByProfile`, `pkgsCross`, `allWasmerPackages`.
 - `ci`: the same trees flattened to dotted names, so a job name is a build
   path. Unsupported/broken packages are filtered out before becoming jobs.
   `scripts/ci-build.sh` runs it with nix-fast-build and incremental cache

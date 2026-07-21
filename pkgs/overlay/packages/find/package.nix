@@ -71,7 +71,7 @@ helpers.libTweaks {
   outputs = _: ["out"];
   postFixup = _: "";
   passthru.wasmer.entrypoint = "find";
-  # Rename find/xargs to *.wasm (the convention allWasm collects).
+  # Rename find/xargs to *.wasm (one webc command per bin/*.wasm).
   postInstall = ''
     for prog in find xargs; do
       if [ -f "$out/bin/$prog" ]; then
