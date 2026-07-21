@@ -1,4 +1,11 @@
 {
+  "ddtrace": {
+    "3.19.8": {
+      "hash": "sha256-N+Q4yx9iMmMW6wkXhaN/3A6Is9Bll2jnH4Pe/rV/uIU=",
+      "note": "latest 3.x (outgoing major)",
+      "tag": "v3.19.8"
+    }
+  },
   "numpy": {
     "2.1.3": {
       "hash": "sha256-xqLRMwQz0VQpLe7xjYVMGXELtXa/wQx2KgQftBe+q/Q=",

@@ -17,13 +17,13 @@
 in
   final.stdenv.mkDerivation (finalAttrs: {
     pname = "libddwaf";
-    version = "1.30.0";
+    version = "1.30.1";
 
     src = final.fetchFromGitHub {
       owner = "DataDog";
       repo = "libddwaf";
       tag = finalAttrs.version;
-      hash = "sha256-AfUuzRmFeX5F5EQZdfBTVkZKqjJHFSJe4q6X+QGwvDo=";
+      hash = "sha256-8c6gagxPNG+Wv8Fx/mmy70VcLTNtrEWgjPvu0Vp83eI=";
     };
 
     postPatch = ''
