@@ -256,7 +256,7 @@
     inherit (wasmerLayer) testLib;
     # default python interpreter + its webc, both from the top-level `python3`.
     python3 = nixpkgsByProfile.exnrefEhpic.python3;
-    pythonWebc = wasmerLayer.wrappedPackages.python;
+    pythonWebc = wasmerLayer.wasmerPackages.python.shim;
   };
 in {
   inherit pkgs pkgsCross defaultProfileName;

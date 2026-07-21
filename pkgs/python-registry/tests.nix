@@ -8,7 +8,7 @@
   registry,
   # eval-only (version tags).
   python3,
-  # run-by-name shim of the shipped python webc (wasmer layer wrappedPackages).
+  # run-by-name shim of the shipped python webc.
   pythonWebc,
   testLib,
 }: let

@@ -36,7 +36,11 @@
         else {};
       scope = {
         inherit pkgs testLib helpers crossPkgs makeWasmerPackage;
-        wasmerPkgs = wrappedPackages;
+        # run-by-name stubs, keyed like wasmerPackages. Reading a shim never
+        # forces .tests, so a test using another package (git needing bash)
+        # does not cycle. The packed .webc is what ships, hence .shim rather
+        # than .pkg.shim (which drives the wasmer.toml source dir).
+        wasmerPkgs = lib.mapAttrs (_: p: p.shim) wasmerPackages;
       };
       testFiles = lib.attrNames (lib.filterAttrs
         (n: t: t == "regular" && lib.hasSuffix ".nix" n && n != "helpers.nix")
@@ -62,8 +66,8 @@
 
   # Add .pkg (the wasmer package dir), .webc (its built webc), and (if
   # present) .tests passthru to a cross package. Forcing the package or its
-  # .pkg.shim never forces .tests, so tests referencing wrappedPackages
-  # (e.g. git tests using bash) do not cycle.
+  # .pkg.shim never forces .tests, so tests referencing other packages'
+  # shims (e.g. git tests using bash) do not cycle.
   augment = overlayName: crossPkg: let
     group = testGroupFor overlayName;
     pkg = makeWasmerPackage {package = crossPkg;};
@@ -94,13 +98,6 @@
     )
     shippedCommands);
 
-  # Run-by-name stubs per package, for cross-package tests; accessing a shim
-  # does not force .tests. Tests run the packed .webc (what ships), via
-  # .pkg.webc.shim rather than .pkg.shim (the wasmer.toml source dir).
-  wrappedPackages =
-    lib.mapAttrs (_: p: p.pkg.webc.shim)
-    (lib.filterAttrs (_: p: p.pkg ? shim) wasmerPackages);
-
   allWasmerPackages = pkgs.runCommand "wasix-all-wasmer" {} ''
     set -euo pipefail
     mkdir -p "$out/pkg"
@@ -112,5 +109,5 @@
       (builtins.attrNames wasmerPackages)}
   '';
 in {
-  inherit wasmerPackages wrappedPackages allWasmerPackages testLib;
+  inherit wasmerPackages allWasmerPackages testLib;
 }
