@@ -120,8 +120,10 @@ def publish_registry_for_wasmer(registry: str) -> str:
     return host
 
 
-def read_packages(pkg_roots: list[Path]) -> dict[str, Package]:
-    packages: dict[str, Package] = {}
+def read_packages(pkg_roots: list[Path]) -> dict[tuple[str, str], Package]:
+    # keyed by (full_name, version): one name serves several versions
+    # (registry history), each its own immutable package version
+    packages: dict[tuple[str, str], Package] = {}
     for pkg_root in pkg_roots:
         if not pkg_root.is_dir():
             raise SystemExit(f"Package directory does not exist: {pkg_root}")
@@ -145,15 +147,16 @@ def read_packages(pkg_roots: list[Path]) -> dict[str, Package]:
             ):
                 raise SystemExit(f"Invalid [dependencies] in {toml_path}")
 
-            if full_name in packages:
+            key = (full_name, version)
+            if key in packages:
                 raise SystemExit(
-                    f"Duplicate package name {full_name} in {toml_path} and {packages[full_name].path / 'wasmer.toml'}"
+                    f"Duplicate package {full_name}@{version} in {toml_path} and {packages[key].path / 'wasmer.toml'}"
                 )
 
             metadata = package.get("metadata", {})
             rel = metadata.get("wasix-rel")
             source = metadata.get("wasix-source")
-            packages[full_name] = Package(
+            packages[key] = Package(
                 full_name=full_name,
                 version=version,
                 path=pkg_dir,
@@ -168,24 +171,25 @@ def read_packages(pkg_roots: list[Path]) -> dict[str, Package]:
     return packages
 
 
-def order_packages(packages: dict[str, Package]) -> list[Package]:
-    # dependencies first, name order for determinism
+def order_packages(packages: dict[tuple[str, str], Package]) -> list[Package]:
+    # dependencies first, (name, version) order for determinism
     ordered: list[Package] = []
-    done: set[str] = set()
+    done: set[tuple[str, str]] = set()
 
-    def visit(name: str, chain: tuple[str, ...]) -> None:
-        if name in done:
+    def visit(key: tuple[str, str], chain: tuple[tuple[str, str], ...]) -> None:
+        if key in done:
             return
-        if name in chain:
-            raise SystemExit(f"Dependency cycle: {' -> '.join(chain + (name,))}")
-        for dep in sorted(packages[name].dependencies):
+        if key in chain:
+            pretty = " -> ".join(f"{n}@{v}" for n, v in chain + (key,))
+            raise SystemExit(f"Dependency cycle: {pretty}")
+        for dep in sorted(packages[key].dependencies.items()):
             if dep in packages:
-                visit(dep, chain + (name,))
-        done.add(name)
-        ordered.append(packages[name])
+                visit(dep, chain + (key,))
+        done.add(key)
+        ordered.append(packages[key])
 
-    for name in sorted(packages):
-        visit(name, ())
+    for key in sorted(packages):
+        visit(key, ())
     return ordered
 
 
@@ -447,10 +451,10 @@ def main() -> int:
 
     published = 0
     skipped = 0
-    # full names resolvable on the registry for dependents: already published
-    # (even with a hash mismatch), published this run, or would-publish in a
-    # dry run
-    available: set[str] = set()
+    # (name, version) pairs resolvable on the registry for dependents: already
+    # published (even with a hash mismatch), published this run, or
+    # would-publish in a dry run
+    available: set[tuple[str, str]] = set()
     failures: list[tuple[str, str]] = []
     # one broken package must not abort the rest: isolate each, collect
     # failures, exit non-zero at the end
@@ -460,7 +464,7 @@ def main() -> int:
                 graphql_url, pkg.full_name, pkg.version
             )
             if published_info.exists:
-                available.add(pkg.full_name)
+                available.add((pkg.full_name, pkg.version))
                 if args.skip_sha_validation:
                     print(
                         f"SKIP {pkg.full_name}@{pkg.version} path={pkg.path} "
@@ -498,13 +502,13 @@ def main() -> int:
 
             # batch deps publish earlier (dependency order); the rest must
             # already be in the registry or the published webc cannot resolve
-            # them
+            # them. Keyed by (name, version): a dependent needs its exact pin.
             for dep_name, dep_version in sorted(pkg.dependencies.items()):
-                if dep_name in available:
+                if (dep_name, dep_version) in available:
                     continue
-                if dep_name in packages:
+                if (dep_name, dep_version) in packages:
                     raise PackageError(
-                        f"dependency {dep_name} failed earlier in this run"
+                        f"dependency {dep_name}@{dep_version} failed earlier in this run"
                     )
                 if not get_published_package_version(
                     graphql_url, dep_name, dep_version
@@ -513,13 +517,13 @@ def main() -> int:
                         f"depends on {dep_name}@{dep_version}, which is neither "
                         "published nor part of this run"
                     )
-                available.add(dep_name)
+                available.add((dep_name, dep_version))
 
             if args.dry_run:
                 print(
                     f"PUBLISH {pkg.full_name}@{pkg.version} path={pkg.path} (would publish)"
                 )
-                available.add(pkg.full_name)
+                available.add((pkg.full_name, pkg.version))
                 published += 1
                 continue
 
@@ -538,7 +542,7 @@ def main() -> int:
                     cwd=staged,
                 )
             verify_published(graphql_url, pkg, staged_sha)
-            available.add(pkg.full_name)
+            available.add((pkg.full_name, pkg.version))
             published += 1
         except (PackageError, subprocess.CalledProcessError) as e:
             first = str(e).splitlines()[0][:400] if str(e) else "unknown error"

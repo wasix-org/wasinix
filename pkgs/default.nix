@@ -47,12 +47,15 @@
   profilesCfg = import ./profiles.nix;
   mkWasixStdenv = import ./set/stdenv.nix {inherit lib toolchain;};
 
-  # Package names = the overlay's package set (flat files + dirs + trivial list),
-  # enumerated eval-only via the shared loader so the two can't drift.
+  # Package names = the overlay's package set (flat files + dirs + trivial list
+  # + registry-history versions), enumerated eval-only via the shared loader so
+  # the two can't drift. Same history table the overlay builds from.
+  packagesHistory = builtins.fromJSON (builtins.readFile ./overlay/packages/history.json);
   wasixPkgNames =
     (wasixLib.loadPackageDir {
       dir = ./overlay/packages;
       trivial = import ./overlay/trivial.nix;
+      history = packagesHistory;
     }).names;
 
   # Each package at its preferred profile, read eval-only from passthru.wasix

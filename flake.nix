@@ -296,14 +296,18 @@
               then map toString (lib.toList s.command)
               else null;
             # prev.X packages inherit nixpkgs' updateScripts, which must not
-            # run against this repo; ours are the ones declared in this tree
+            # run against this repo; ours are the ones declared in this tree.
+            # Registry-history attrs (numpy_2_1_3) re-import the package file, so
+            # they inherit its in-tree updateScript too; exclude them, else
+            # nix-update would bump a version pinned on purpose.
             pos = builtins.unsafeGetAttrPos "updateScript" (drv.passthru or {});
             ours =
               command
               != null
               && command != []
               && pos != null
-              && lib.hasPrefix srcRoot pos.file;
+              && lib.hasPrefix srcRoot pos.file
+              && !(drv.passthru.wasmer.history or false);
             entry = builtins.tryEval (
               let
                 v = lib.optionalAttrs ours {

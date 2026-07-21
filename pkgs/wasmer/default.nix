@@ -68,9 +68,12 @@
   # present) .tests passthru to a cross package. Forcing the package or its
   # .pkg.shim never forces .tests, so tests referencing other packages'
   # shims (e.g. git tests using bash) do not cycle.
-  augment = overlayName: crossPkg: let
+  augment = overlayName: crossPkg: servedVersions: let
     group = testGroupFor overlayName;
-    pkg = makeWasmerPackage {package = crossPkg;};
+    pkg = makeWasmerPackage {
+      package = crossPkg;
+      inherit servedVersions;
+    };
   in
     crossPkg.overrideAttrs (o: {
       passthru =
@@ -78,6 +81,11 @@
         # into our `checks`).
         removeAttrs (o.passthru or {}) ["tests"]
         // {
+          # The overlay attr this webc was built from (gitMinimal -> "git"
+          # webc, but history.json / the loader key by overlay attr); lets
+          # scripts/history.py and scripts/update.py map a webc back to its
+          # history table entry. Passthru-only, no drvPath effect.
+          inherit overlayName;
           inherit pkg;
           webc = pkg.webc;
           # run-by-name wrapper, top-level like .webc; forcing it never forces
@@ -89,21 +97,54 @@
     });
 
   # Shipped commands keyed by webc/program name (gitMinimal -> "git").
-  wasmerPackages = lib.listToAttrs (map (
-      n: let
-        crossPkg = preferredProfilePackages.${n};
-        wname = crossPkg.passthru.wasmer.name or crossPkg.meta.mainProgram or crossPkg.pname or n;
-      in
-        lib.nameValuePair wname (augment n crossPkg)
-    )
-    shippedCommands);
+  # History versions (passthru.wasmer.history, e.g. jq_1_6) key as
+  # <name>-<semver> so the by-name key stays the current version; both
+  # publish under the same webc name at their own versions.
+  ident = import ./ident.nix {inherit lib;};
+  shippedInfo =
+    map (n: rec {
+      overlayName = n;
+      crossPkg = preferredProfilePackages.${n};
+      id = ident.webcIdent crossPkg;
+      history = crossPkg.passthru.wasmer.history or false;
+      key =
+        if history
+        then "${id.name}-${id.baseVersion}"
+        else id.name;
+    })
+    shippedCommands;
+  servedByName =
+    lib.mapAttrs (_: infos: lib.unique (map (i: i.id.baseVersion) infos))
+    (lib.groupBy (i: i.id.name) shippedInfo);
+  # Alias attrs (icu-data -> icu-data76) legitimately repeat a key with the
+  # same drv; only distinct drvs sharing a key are an error. Singletons can't
+  # conflict, so they skip the drvPath compare.
+  byKey = lib.groupBy (i: i.key) shippedInfo;
+  distinctDrvs = is: lib.length (lib.unique (map (i: i.crossPkg.drvPath) is));
+  conflicting =
+    lib.attrNames
+    (lib.filterAttrs (_: is: lib.length is > 1 && distinctDrvs is > 1) byKey);
+  wasmerPackages =
+    lib.throwIf (conflicting != [])
+    "wasmerPackages: duplicate webc keys (${lib.concatStringsSep ", " conflicting}); a second version of a name must set passthru.wasmer.history"
+    (lib.mapAttrs (
+        _: is: let
+          i = lib.head is;
+        in
+          augment i.overlayName i.crossPkg servedByName.${i.id.name}
+      )
+      byKey);
 
+  # One subtree per wasmerPackages key: two versions of one webc share the
+  # inner pkg/<name> dir name, so a flat merge would collide. The publisher
+  # globs **/wasmer.toml and doesn't care about the layout.
   allWasmerPackages = pkgs.runCommand "wasix-all-wasmer" {} ''
     set -euo pipefail
     mkdir -p "$out/pkg"
     ${lib.concatMapStringsSep "\n" (n: ''
         if [ -d "${wasmerPackages.${n}.pkg}/pkg" ]; then
-          ${pkgs.coreutils}/bin/cp -R --no-preserve=mode,ownership "${wasmerPackages.${n}.pkg}/pkg/." "$out/pkg/"
+          mkdir -p "$out/pkg/${n}"
+          ${pkgs.coreutils}/bin/cp -R --no-preserve=mode,ownership "${wasmerPackages.${n}.pkg}/pkg/." "$out/pkg/${n}/"
         fi
       '')
       (builtins.attrNames wasmerPackages)}

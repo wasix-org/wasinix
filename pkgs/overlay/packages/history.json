@@ -1,0 +1,9 @@
+{
+  "jq": {
+    "1.6": {
+      "hash": "sha256-XejI4pqqP7nMa0e7JymfJxNU67clFOOsytx9OLW7qnI=",
+      "note": "most-pinned historical jq; consumers still lock jq 1.6",
+      "url": "https://github.com/jqlang/jq/releases/download/jq-1.6/jq-1.6.tar.gz"
+    }
+  }
+}

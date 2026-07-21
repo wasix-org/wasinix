@@ -101,6 +101,9 @@
       loaded = helpers.loadPackageDir {
         dir = ./packages;
         trivial = import ./trivial.nix;
+        # Registry-history versions (jq_1_6, ...); same table pkgs/default.nix
+        # enumerates for names. See pkgs/lib/load-packages.nix.
+        history = builtins.fromJSON (builtins.readFile ./packages/history.json);
       };
       # Derive meta.badPlatforms/meta.broken from each package's
       # passthru.wasix, the only place wasix support state touches meta.
