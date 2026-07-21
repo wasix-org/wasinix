@@ -16,23 +16,36 @@ in
       wheels.dropInputsByName ["blas" "lapack"]
       // {
         nativeBuildInputs = noFortran;
-        mesonFlags = [(lib.mesonBool "allow-noblas" true)];
+        # numpy < 2.3 vendors meson 1.5, which rejects default_both_libraries
+        # (nixpkgs passes it for current numpy; meson knows it from 1.6).
+        mesonFlags = old:
+          lib.filter (
+            f:
+              lib.versionAtLeast pyprev.numpy.version "2.3"
+              || f != "-Ddefault_both_libraries=static"
+          ) (old ++ [(lib.mesonBool "allow-noblas" true)]);
         # lib.const = replace, not concat: drop upstream's site.cfg symlink (dead BLAS paths)
         # and its /bin/true→coreutils test rewrite.
         preBuild = lib.const "";
-        postPatch = lib.const ''
-          substituteInPlace numpy/meson.build \
-            --replace-fail 'py.full_path()' "'python'"
+        postPatch = lib.const (''
+            substituteInPlace numpy/meson.build \
+              --replace-fail 'py.full_path()' "'python'"
 
-          # ehpic PIC needs wasm-EH, so -fno-exceptions is rejected; keep exceptions on.
-          substituteInPlace numpy/_core/meson.build \
-            --replace-fail "'-fno-exceptions',  # no exception support" "'-fexceptions',  # wasix ehpic: PIC needs wasm-EH"
+            # ehpic PIC needs wasm-EH, so -fno-exceptions is rejected; keep exceptions on.
+            substituteInPlace numpy/_core/meson.build \
+              --replace-fail "'-fno-exceptions',  # no exception support" "'-fexceptions',  # wasix ehpic: PIC needs wasm-EH"
 
-          # long-double format is normally found by a run-probe (no exe_wrapper here); wasm32
-          # is IEEE binary128 → supply IEEE_QUAD_LE directly.
-          substituteInPlace numpy/_core/meson.build \
-            --replace-fail "meson.get_external_property('longdouble_format', 'UNKNOWN')" "meson.get_external_property('longdouble_format', 'IEEE_QUAD_LE')"
-        '';
+            # long-double format is normally found by a run-probe (no exe_wrapper here); wasm32
+            # is IEEE binary128 → supply IEEE_QUAD_LE directly.
+            substituteInPlace numpy/_core/meson.build \
+              --replace-fail "meson.get_external_property('longdouble_format', 'UNKNOWN')" "meson.get_external_property('longdouble_format', 'IEEE_QUAD_LE')"
+          ''
+          # npy_cpu.h < 2.4 only knows wasm under emscripten; clang targeting
+          # wasm32-wasi defines __wasm__ (what upstream widened the guard to in 2.4).
+          + lib.optionalString (lib.versionOlder pyprev.numpy.version "2.4") ''
+            substituteInPlace numpy/_core/include/numpy/npy_cpu.h \
+              --replace-fail '#elif defined(__EMSCRIPTEN__)' '#elif defined(__EMSCRIPTEN__) || defined(__wasm__)'
+          '');
       }
     )
     pyprev.numpy
