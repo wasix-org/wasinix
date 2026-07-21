@@ -245,6 +245,7 @@
           bump-rel = run "bump-rel" [] "python3" ./scripts/bump-rel.py;
           publish-index = run "publish-index" [wasmerRuntime p.rclone p.python3 p.gawk p.gnused] "bash" ./scripts/publish-index.sh;
           publish-webc = run "publish-webc" [wasmerRuntime] "python3" ./scripts/publish-webc.py;
+          history = run "history" [] "python3" ./scripts/history.py;
           update = run "update" [p.nix-update p.nix-prefetch-git p.cargo] "python3" ./scripts/update.py;
         };
 

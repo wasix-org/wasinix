@@ -190,12 +190,112 @@ def prune_rels():
     return f"dropped stale rels: {', '.join(dropped)}"
 
 
+WHEEL_HISTORY = REPO / "pkgs/overlay/python-packages/history.json"
+# {"wheel": {attr: version}, "cli": {overlay-attr: version}}, current (non-history)
+# versions captured in main() before the nixpkgs bump. Raw versions, matching
+# the history.json keys the loader mints from.
+history_priors = {}
+
+
+def current_versions():
+    result = {"wheel": {}, "cli": {}}
+    # wheels: exclude history entries (<attr>-<version> keys, from history.json)
+    whist = json.loads(WHEEL_HISTORY.read_text())
+    whist_keys = {f"{a}-{v}" for a, vs in whist.items() for v in vs}
+    wout = run(
+        [
+            "nix",
+            "eval",
+            "--json",
+            f".#legacyPackages.{SYSTEM}.pythonWheels",
+            "--apply",
+            "ws: builtins.mapAttrs (_: s: builtins.mapAttrs (_: w: w.version) s) ws",
+        ]
+    ).stdout
+    for versions in json.loads(wout).values():
+        for attr, v in versions.items():
+            if attr not in whist_keys:
+                result["wheel"].setdefault(attr, v)
+    # CLIs: non-history wasmerPackages, keyed by overlay attr (the history key)
+    cout = run(
+        [
+            "nix",
+            "eval",
+            "--json",
+            f".#legacyPackages.{SYSTEM}.wasmerPackages",
+            "--apply",
+            "ws: builtins.mapAttrs (_: p: { overlay = p.overlayName; "
+            "history = p.passthru.wasmer.history or false; version = p.version; }) ws",
+        ]
+    ).stdout
+    for info in json.loads(cout).values():
+        if not info["history"]:
+            result["cli"].setdefault(info["overlay"], info["version"])
+    return result
+
+
+def crossed_major(prior, now):
+    # Only plain dotted releases have a comparable major. A non-release version
+    # (bash 5.3p9, a 0-unstable-<date> pin) has no major to cross, and treating
+    # its whole string as one would fire on every bump.
+    plain = re.compile(r"\d+(\.\d+)*\Z")
+    if not (plain.match(prior) and plain.match(now)):
+        return False
+    return prior.split(".")[0] != now.split(".")[0]
+
+
+def regen_history(_t):
+    # Retention is latest-per-major: a nixpkgs bump crossing a major leaves the
+    # outgoing version behind in the registry-history table (wheels and CLIs
+    # alike), so pinned consumers keep resolving. Minor-level retention stays a
+    # manual scripts/history.py call.
+    if not history_priors:
+        return None
+    cur = current_versions()
+    lines = []
+    failed = []
+    for kind, priors in history_priors.items():
+        for attr, prior in sorted(priors.items()):
+            now = cur[kind].get(attr)
+            if not now or not crossed_major(prior, now):
+                continue
+            p = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO / "scripts/history.py"),
+                    "add",
+                    f"{attr}=={prior}",
+                    "--set",
+                    kind,
+                    "--skip-unsupported",
+                    "--note",
+                    f"latest {prior.split('.')[0]}.x (outgoing major)",
+                ],
+                cwd=REPO,
+                text=True,
+                capture_output=True,
+            )
+            report = (p.stdout or p.stderr).strip().splitlines()
+            last = report[-1] if report else f"history.py exited {p.returncode}"
+            # A failed append must not pass as a result: prune_rels runs after
+            # the regens and drops the outgoing version's rel key once nothing
+            # serves it, which is exactly what this hook exists to prevent.
+            if p.returncode != 0:
+                failed.append(f"{attr}=={prior}: {last}")
+            else:
+                lines.append(last)
+    if failed:
+        raise RuntimeError("; ".join(failed))
+    return "; ".join(lines) if lines else None
+
+
 # Cross-file regen hooks, keyed by target name: they synchronize other repo
 # files with the new pin, which is driver logic, not package logic. What to
 # bump and how lives in each package as passthru.updateScript.
 REGEN_BY_NAME = {
     "rust-toolchain": regen_rust_bootstrap,
     "wasix-libc": regen_libc_witx,
+    "nixpkgs": regen_history,
 }
 
 # Flake inputs (flake.lock) have no package file to carry an updateScript.
@@ -349,6 +449,9 @@ def main():
 
     # captured before anything bumps: the `prior` side of the update notes
     priors = note_versions()
+    # the outgoing-major side of regen_history; only nixpkgs moves these
+    if any(t.name == "nixpkgs" for t in targets):
+        history_priors.update(current_versions())
 
     # One flaky upstream must not abort the rest: isolate each target, collect
     # failures, and exit non-zero at the end so CI/the workflow notices.
