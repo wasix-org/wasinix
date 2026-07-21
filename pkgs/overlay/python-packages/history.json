@@ -18,6 +18,14 @@
     }
   },
   "pandas": {
+    "2.2.3": {
+      "hash": "sha256-9m7SQ5XWs+ExWSWW/ZGZqICiJBf2SSdqxAQnkc5aAbc=",
+      "note": "served by pythonindex.wasix.org",
+      "tag": "v2.2.3",
+      "variants": [
+        "py313"
+      ]
+    },
     "2.3.2": {
       "hash": "sha256-H+BmuvisvpSQeOfj21v86bXap2CPLSwc1pXzdM1BsBE=",
       "note": "last 2.x, served by pythonindex.wasix.org",
