@@ -76,32 +76,33 @@
     }
     else throw "load-packages: history for '${name}' needs a single-function package file";
 
-  # `<set>` with `<set>.<name>` rebased onto a history version, reusing the
-  # package's OWN fetcher: src.override with the spec's fetch args (rev/tag/
-  # version + hash). fetchurl release tarballs aren't overridable, so patch the
-  # src derivation's url + hash directly (spec carries `url`). Survives the
-  # `.override` many package files call (it re-runs the nixpkgs function, which
-  # would drop a plain overrideAttrs) by re-pinning the src after each override.
-  rebaseHistory = set: name: version: spec: let
-    base = set.${name};
+  # A drv re-pointed at a history version, reusing its OWN fetcher:
+  # src.override with the spec's fetch args (rev/tag/version + hash). fetchurl
+  # release tarballs aren't overridable, so patch the src derivation's url +
+  # hash directly (spec carries `url`). Survives the `.override` many package
+  # files call (it re-runs the nixpkgs function, which would drop a plain
+  # overrideAttrs) by re-pinning the src after each override.
+  pinToHistory = version: spec: drv: let
     fetchArgs = builtins.removeAttrs spec historyMeta;
     src =
-      if base.src ? override
-      then base.src.override fetchArgs
+      if drv.src ? override
+      then drv.src.override fetchArgs
       else
-        base.src.overrideAttrs (_: {
+        drv.src.overrideAttrs (_: {
           urls = [spec.url];
           outputHash = spec.hash;
           name = baseNameOf spec.url;
         });
-    pin = drv: let
-      pinned = drv.overrideAttrs (_: {
-        inherit version src;
-      });
-    in
-      pinned // {override = args: pin (drv.override args);};
+    pinned = drv.overrideAttrs (_: {
+      inherit version src;
+    });
   in
-    set // {${name} = pin base;};
+    pinned // {override = args: pinToHistory version spec (drv.override args);};
+
+  # `<set>` with `<set>.<name>` rebased, so a package file that derives from it
+  # re-runs its own version conditionals against the older src.
+  rebaseHistory = set: name: version: spec:
+    set // {${name} = pinToHistory version spec set.${name};};
 
   # everything this dir declares outright, before history mints anything
   declaredNames =
@@ -134,8 +135,17 @@ in {
     historyDrv = name: version: spec: let
       s = sourceOf name;
       built = s.fn (callArgs // {${historyFrom} = rebaseHistory callArgs.${historyFrom} name version spec;});
+      # Rebasing the set only reaches a package file that derives from
+      # `${historyFrom}.<name>`. A file that spells its own version and src (a
+      # package not in nixpkgs) comes back unchanged, so re-point the result
+      # with the same fetcher instead; its own conditionals cannot key on the
+      # version, so such a file has to handle both itself.
+      rebased =
+        if built.version == version
+        then built
+        else pinToHistory version spec built;
     in
-      stampPosition s.file (built.overrideAttrs (o: {
+      stampPosition s.file (rebased.overrideAttrs (o: {
         passthru =
           (o.passthru or {})
           // {wasmer = (o.passthru.wasmer or {}) // {history = true;};};

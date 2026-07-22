@@ -344,6 +344,42 @@ def write_history(path, hist, dry):
         path.write_text(text)
 
 
+def verify_mint(target, added, before):
+    """An entry is minted by rebasing <set>.<attr>'s src, which only reaches a
+    package file deriving from that set; one that spells its own version and
+    src (a package not in nixpkgs) ignores it, and load-packages throws rather
+    than serve the current version under an older name. Force the set so that
+    throw lands here, and take the new entries back out: automation must not
+    leave the table in a state nothing can evaluate."""
+    if not added:
+        return
+    sets = (
+        [f"pythonWheels.{v}" for v in INTERPRETERS]
+        if target.kind == "wheel"
+        else ["wasmerPackages"]
+    )
+    for s in sets:
+        r = subprocess.run(
+            [
+                "nix",
+                "eval",
+                f".#legacyPackages.{SYSTEM}.{s}",
+                "--apply",
+                "ws: builtins.mapAttrs (_: p: p.version) ws",
+            ],
+            cwd=REPO,
+            text=True,
+            capture_output=True,
+        )
+        if r.returncode == 0:
+            continue
+        write_history(target.history, before, False)
+        raise SystemExit(
+            f"{target.attr}: reverted {', '.join(added)}, the set no longer "
+            f"evaluates:\n{r.stderr.strip()[-600:]}"
+        )
+
+
 def add_version(target, hist, project, version, args):
     if version in hist.get(target.attr, {}):
         return f"{target.attr}=={version}: already in history.json"
@@ -442,9 +478,15 @@ def cmd_add(args):
     else:
         sys.exit("give ==<version>, --per-major, or --per-minor")
 
+    before = json.loads(target.history.read_text())
     for v in versions:
         print(add_version(target, hist, project, v, args))
     write_history(target.history, hist, args.dry_run)
+    if not args.dry_run:
+        added = [
+            v for v in hist.get(target.attr, {}) if v not in before.get(target.attr, {})
+        ]
+        verify_mint(target, added, before)
 
 
 def lockfile_pins(path):
