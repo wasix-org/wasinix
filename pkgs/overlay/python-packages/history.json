@@ -44,6 +44,16 @@
       ]
     }
   },
+  "pyarrow": {
+    "21.0.0": {
+      "hash": "sha256-6RFa4GTNgjsHSX5LYp4t6p8ynmmr7Nuotj9C7mTmvlM=",
+      "note": "served by pythonindex.wasix.org; pairs with the arrow-cpp 21 mint",
+      "rev": "apache-arrow-21.0.0",
+      "variants": [
+        "py313"
+      ]
+    }
+  },
   "xxhash": {
     "2.0.2": {
       "hash": "sha256-t76tjPYhDq35zs81bheveU9XwJOaPUIKANh+plL4e0k=",

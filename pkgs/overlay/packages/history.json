@@ -1,4 +1,11 @@
 {
+  "arrow-cpp": {
+    "21.0.0": {
+      "hash": "sha256-6RFa4GTNgjsHSX5LYp4t6p8ynmmr7Nuotj9C7mTmvlM=",
+      "note": "pairs with the pyarrow 21 wheel; pyarrow IS arrow-cpp releases",
+      "rev": "apache-arrow-21.0.0"
+    }
+  },
   "jq": {
     "1.6": {
       "hash": "sha256-XejI4pqqP7nMa0e7JymfJxNU67clFOOsytx9OLW7qnI=",
