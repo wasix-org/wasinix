@@ -1,0 +1,298 @@
+diff -ruN a/psutil/arch/linux/disk.c b/psutil/arch/linux/disk.c
+--- a/psutil/arch/linux/disk.c	2026-07-22 16:57:57.962659446 +0200
++++ b/psutil/arch/linux/disk.c	2026-07-22 16:57:58.026729486 +0200
+@@ -7,13 +7,19 @@
+ #include "../../arch/all/init.h"
+ 
+ #include <Python.h>
++#ifndef __wasi__
+ #include <mntent.h>
++#endif
+ 
+ 
+ // Return disk mounted partitions as a list of tuples including device,
+ // mount point and filesystem type.
+ PyObject *
+ psutil_disk_partitions(PyObject *self, PyObject *args) {
++#ifdef __wasi__
++    PyErr_SetString(PyExc_NotImplementedError, "not supported on wasi");
++    return NULL;
++#else
+     FILE *file = NULL;
+     struct mntent *entry;
+     char *mtab_path;
+@@ -74,4 +80,5 @@
+     Py_XDECREF(py_tuple);
+     Py_DECREF(py_retlist);
+     return NULL;
++#endif
+ }
+diff -ruN a/psutil/arch/linux/init.h b/psutil/arch/linux/init.h
+--- a/psutil/arch/linux/init.h	2026-07-22 16:57:57.962659446 +0200
++++ b/psutil/arch/linux/init.h	2026-07-22 16:57:58.027075679 +0200
+@@ -20,7 +20,7 @@
+ #endif
+ 
+ // Should exist starting from CentOS 6 (year 2011).
+-#ifdef CPU_ALLOC
++#if defined(CPU_ALLOC) && !defined(__wasi__)
+ #define PSUTIL_HAS_CPU_AFFINITY
+ PyObject *psutil_proc_cpu_affinity_get(PyObject *self, PyObject *args);
+ PyObject *psutil_proc_cpu_affinity_set(PyObject *self, PyObject *args);
+diff -ruN a/psutil/arch/linux/mem.c b/psutil/arch/linux/mem.c
+--- a/psutil/arch/linux/mem.c	2026-07-22 16:57:57.962659446 +0200
++++ b/psutil/arch/linux/mem.c	2026-07-22 16:57:58.027332596 +0200
+@@ -12,6 +12,10 @@
+ 
+ PyObject *
+ psutil_linux_sysinfo(PyObject *self, PyObject *args) {
++#ifdef __wasi__
++    PyErr_SetString(PyExc_NotImplementedError, "not supported on wasi");
++    return NULL;
++#else
+     struct sysinfo info;
+ 
+     if (sysinfo(&info) != 0)
+@@ -27,4 +31,5 @@
+         info.freeswap,  // swap free
+         info.mem_unit  // multiplier
+     );
++#endif
+ }
+diff -ruN a/psutil/arch/linux/net.c b/psutil/arch/linux/net.c
+--- a/psutil/arch/linux/net.c	2026-07-22 16:57:57.962659446 +0200
++++ b/psutil/arch/linux/net.c	2026-07-22 16:57:58.026953648 +0200
+@@ -5,6 +5,17 @@
+  */
+ 
+ #include <Python.h>
++
++#ifdef __wasi__
++// ethtool ioctls (and the linux/ uapi headers they need) do not exist under wasi
++#include "../../arch/all/init.h"
++
++PyObject *
++psutil_net_if_duplex_speed(PyObject *self, PyObject *args) {
++    PyErr_SetString(PyExc_NotImplementedError, "not supported on wasi");
++    return NULL;
++}
++#else
+ #include <linux/sockios.h>
+ #include <sys/socket.h>
+ #include <sys/ioctl.h>
+@@ -118,3 +129,4 @@
+         close(sock);
+     return NULL;
+ }
++#endif  // __wasi__
+diff -ruN a/psutil/arch/posix/net.c b/psutil/arch/posix/net.c
+--- a/psutil/arch/posix/net.c	2026-07-22 16:57:57.964598078 +0200
++++ b/psutil/arch/posix/net.c	2026-07-22 16:59:10.870626141 +0200
+@@ -21,9 +21,12 @@
+ 
+ #if defined(PSUTIL_LINUX)
+ #include <netdb.h>
++// no linux/ uapi headers in the wasix sysroot
++#ifndef __wasi__
+ #include <linux/types.h>
+ #include <linux/if_packet.h>
+ #endif
++#endif
+ 
+ #if defined(PSUTIL_BSD) || defined(PSUTIL_OSX)
+ #include <netdb.h>
+@@ -45,6 +48,15 @@
+ 
+ #include "../../arch/all/init.h"
+ 
++#ifdef __wasi__
++// wasix-libc's ifaddrs.h declares the standard names but the library only
++// defines the underscored ones (WASIX-TODO.md).
++int getif_addrs(struct ifaddrs **);
++void freeif_addrs(struct ifaddrs *);
++#define getifaddrs getif_addrs
++#define freeifaddrs freeif_addrs
++#endif
++
+ 
+ /*
+  * Translate a sockaddr struct into a Python string.
+@@ -85,7 +97,7 @@
+             return Py_BuildValue("s", buf);
+         }
+     }
+-#ifdef PSUTIL_LINUX
++#if defined(PSUTIL_LINUX) && !defined(__wasi__)
+     else if (family == AF_PACKET) {
+         struct sockaddr_ll *lladdr = (struct sockaddr_ll *)addr;
+         len = lladdr->sll_halen;
+@@ -223,6 +235,10 @@
+  */
+ PyObject *
+ psutil_net_if_mtu(PyObject *self, PyObject *args) {
++#ifdef __wasi__
++    PyErr_SetString(PyExc_NotImplementedError, "not supported on wasi");
++    return NULL;
++#else
+     char *nic_name;
+     int sock = -1;
+     int ret;
+@@ -247,6 +263,7 @@
+     if (sock != -1)
+         close(sock);
+     return psutil_oserror();
++#endif
+ }
+ 
+ static int
+@@ -270,6 +287,10 @@
+  */
+ PyObject *
+ psutil_net_if_flags(PyObject *self, PyObject *args) {
++#ifdef __wasi__
++    PyErr_SetString(PyExc_NotImplementedError, "not supported on wasi");
++    return NULL;
++#else
+     char *nic_name;
+     int sock = -1;
+     int ret;
+@@ -450,6 +471,7 @@
+     if (sock != -1)
+         close(sock);
+     return NULL;
++#endif
+ }
+ 
+ 
+@@ -460,6 +482,10 @@
+  */
+ PyObject *
+ psutil_net_if_is_running(PyObject *self, PyObject *args) {
++#ifdef __wasi__
++    PyErr_SetString(PyExc_NotImplementedError, "not supported on wasi");
++    return NULL;
++#else
+     char *nic_name;
+     int sock = -1;
+     int ret;
+@@ -487,6 +513,7 @@
+     if (sock != -1)
+         close(sock);
+     return psutil_oserror();
++#endif
+ }
+ 
+ 
+diff -ruN a/psutil/arch/posix/proc.c b/psutil/arch/posix/proc.c
+--- a/psutil/arch/posix/proc.c	2026-07-22 16:57:57.964598078 +0200
++++ b/psutil/arch/posix/proc.c	2026-07-22 16:57:58.025568156 +0200
+@@ -59,7 +59,9 @@
+     if (!PyArg_ParseTuple(args, _Py_PARSE_PID, &pid))
+         return NULL;
+ 
+-#ifdef PSUTIL_OSX
++#if defined(__wasi__)
++    priority = 0;  // no getpriority() under wasi
++#elif defined(PSUTIL_OSX)
+     priority = getpriority(PRIO_PROCESS, (id_t)pid);
+ #else
+     priority = getpriority(PRIO_PROCESS, pid);
+@@ -80,7 +82,9 @@
+     if (!PyArg_ParseTuple(args, _Py_PARSE_PID "i", &pid, &priority))
+         return NULL;
+ 
+-#ifdef PSUTIL_OSX
++#if defined(__wasi__)
++    retval = 0;  // no setpriority() under wasi
++#elif defined(PSUTIL_OSX)
+     retval = setpriority(PRIO_PROCESS, (id_t)pid, priority);
+ #else
+     retval = setpriority(PRIO_PROCESS, pid, priority);
+diff -ruN a/psutil/arch/posix/users.c b/psutil/arch/posix/users.c
+--- a/psutil/arch/posix/users.c	2026-07-22 16:57:57.964598078 +0200
++++ b/psutil/arch/posix/users.c	2026-07-22 17:05:46.564913834 +0200
+@@ -10,6 +10,14 @@
+ #include <Python.h>
+ #include <string.h>
+ 
++#ifdef __wasi__
++// no utmpx in the wasix sysroot
++PyObject *
++psutil_users(PyObject *self, PyObject *args) {
++    PyErr_SetString(PyExc_NotImplementedError, "not supported on wasi");
++    return NULL;
++}
++#else
+ #include <utmpx.h>
+ 
+ 
+@@ -102,4 +110,5 @@
+     Py_DECREF(py_retlist);
+     return NULL;
+ }
++#endif  // __wasi__
+ #endif  // PSUTIL_HAS_POSIX_USERS
+diff -ruN a/psutil/_common.py b/psutil/_common.py
+--- a/psutil/_common.py	2026-07-22 16:57:57.959834037 +0200
++++ b/psutil/_common.py	2026-07-22 16:57:58.027875819 +0200
+@@ -71,7 +71,7 @@
+ 
+ POSIX = os.name == "posix"
+ WINDOWS = os.name == "nt"
+-LINUX = sys.platform.startswith("linux")
++LINUX = sys.platform.startswith(("linux", "wasix"))
+ MACOS = sys.platform.startswith("darwin")
+ OSX = MACOS  # deprecated alias
+ FREEBSD = sys.platform.startswith(("freebsd", "midnightbsd"))
+diff -ruN a/psutil/_pslinux.py b/psutil/_pslinux.py
+--- a/psutil/_pslinux.py	2026-07-22 16:57:57.959834037 +0200
++++ b/psutil/_pslinux.py	2026-07-22 17:06:05.010037630 +0200
+@@ -12,7 +12,12 @@
+ import glob
+ import os
+ import re
+-import resource
++try:
++    import resource
++except ImportError:
++    # wasix: cpython ships no resource module; the only user below is
++    # guarded by hasattr(resource, "prlimit").
++    resource = None
+ import socket
+ import struct
+ import sys
+@@ -91,7 +96,7 @@
+ DISK_SECTOR_SIZE = 512
+ 
+ AddressFamily = enum.IntEnum(
+-    'AddressFamily', {'AF_LINK': int(socket.AF_PACKET)}
++    'AddressFamily', {"AF_LINK": int(getattr(socket, "AF_PACKET", 17))}  # no AF_PACKET on wasix
+ )
+ AF_LINK = AddressFamily.AF_LINK
+ 
+@@ -717,7 +722,7 @@
+         tcp6 = ("tcp6", socket.AF_INET6, socket.SOCK_STREAM)
+         udp4 = ("udp", socket.AF_INET, socket.SOCK_DGRAM)
+         udp6 = ("udp6", socket.AF_INET6, socket.SOCK_DGRAM)
+-        unix = ("unix", socket.AF_UNIX, None)
++        unix = ("unix", getattr(socket, "AF_UNIX", None), None)
+         self.tmap = {
+             "all": (tcp4, tcp6, udp4, udp6, unix),
+             "tcp": (tcp4, tcp6),
+diff -ruN a/psutil/_psutil_linux.c b/psutil/_psutil_linux.c
+--- a/psutil/_psutil_linux.c	2026-07-22 16:57:57.960179383 +0200
++++ b/psutil/_psutil_linux.c	2026-07-22 16:57:58.026346108 +0200
+@@ -10,7 +10,13 @@
+ #define _GNU_SOURCE 1
+ #endif
+ #include <Python.h>
++#ifdef __wasi__
++// no linux/ethtool.h in the wasix sysroot; DUPLEX_* are stable uapi values
++#define DUPLEX_HALF 0x00
++#define DUPLEX_FULL 0x01
++#else
+ #include <linux/ethtool.h>  // DUPLEX_*
++#endif
+ 
+ #include "arch/all/init.h"
+ 

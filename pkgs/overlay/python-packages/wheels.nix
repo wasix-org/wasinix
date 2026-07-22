@@ -142,6 +142,7 @@
     pyImport = "zope.interface";
   }
   {attr = "caio";}
+  {attr = "psutil";} # overlay/python-packages/psutil (the linux backend minus what wasix lacks)
   {attr = "peewee";}
   {attr = "fastavro";}
   {attr = "zstandard";}
