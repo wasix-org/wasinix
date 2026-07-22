@@ -14,6 +14,7 @@
   helpers,
   ...
 }: let
+  lib = prev.lib;
   base = prev.arrow-cpp.override {
     enableShared = false;
     enableS3 = false;
@@ -73,13 +74,20 @@ in
     # replace nixpkgs' env: it points *_HOME at cross protobuf/snappy (which
     # would be built as deps). The *_TEST_DATA paths stay: nixpkgs' pyarrow
     # eval reads them eagerly (they're plain fetched sources, never used here).
-    env = old: {
-      inherit (old) ARROW_TEST_DATA PARQUET_TEST_DATA;
-      ARROW_RAPIDJSON_URL = final.buildPackages.fetchurl {
-        url = "https://github.com/miloyip/rapidjson/archive/232389d4f1012dddec4ef84861face2d2ba85709.tar.gz";
-        hash = "sha256-uSkKmm1ETI4Em9WJq4BODM8rBdxZhKGe1a510JAGSAY=";
+    env = old:
+      {
+        inherit (old) ARROW_TEST_DATA PARQUET_TEST_DATA;
+        ARROW_RAPIDJSON_URL = final.buildPackages.fetchurl {
+          url = "https://github.com/miloyip/rapidjson/archive/232389d4f1012dddec4ef84861face2d2ba85709.tar.gz";
+          hash = "sha256-uSkKmm1ETI4Em9WJq4BODM8rBdxZhKGe1a510JAGSAY=";
+        };
+      }
+      # rapidjson's CMakeLists still asks for cmake 2.8, which cmake 4 refuses;
+      # arrow handles that itself from 21. The env form reaches the
+      # ExternalProject's own cmake, which the top-level cmakeFlags do not.
+      // lib.optionalAttrs (lib.versionOlder base.version "21") {
+        CMAKE_POLICY_VERSION_MINIMUM = "3.5";
       };
-    };
     # arrow throws (Status is the norm, but decimal/json paths do throw), and
     # io/hdfs_internal.cc includes dlfcn.h, which only the PIC sysroots ship.
     passthru.wasix.supportedProfiles = helpers.profiles.pic;

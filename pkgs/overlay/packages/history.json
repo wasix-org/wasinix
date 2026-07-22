@@ -1,5 +1,10 @@
 {
   "arrow-cpp": {
+    "19.0.1": {
+      "hash": "sha256-toHwUIOZRpgR0K7pQtT5nqWpO9G7AuHYTcvA6UVg9lA=",
+      "note": "pairs with the pyarrow 19 wheel",
+      "rev": "apache-arrow-19.0.1"
+    },
     "21.0.0": {
       "hash": "sha256-6RFa4GTNgjsHSX5LYp4t6p8ynmmr7Nuotj9C7mTmvlM=",
       "note": "pairs with the pyarrow 21 wheel; pyarrow IS arrow-cpp releases",
