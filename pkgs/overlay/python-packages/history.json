@@ -1,5 +1,14 @@
 {
   "cryptography": {
+    "43.0.3": {
+      "cargoHash": "sha256-e6V8QJAiP1EJAJxU+KchJBIyz5wUTxxK5NtXqmlVHII=",
+      "hash": "sha256-Tocm/yAA2REGpbH+8w5QA11E/yDQmgn7AuCY4pdTH9o=",
+      "note": "served by pythonindex.wasix.org; pyo3 0.22 caps at cp313",
+      "tag": "43.0.3",
+      "variants": [
+        "py313"
+      ]
+    },
     "45.0.4": {
       "cargoHash": "sha256-dKwNnWBzBM9QEcRbbvkNhFJnFxFakqZ/MS7rqE8/tNQ=",
       "hash": "sha256-rKgMUVj5IdeWIdLWQ4E6zhC6dwJMi+BRHCh2JG73Zgc=",

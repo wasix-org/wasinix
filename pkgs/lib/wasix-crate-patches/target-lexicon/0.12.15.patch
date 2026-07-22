@@ -1,0 +1,26 @@
+--- a/src/targets.rs
++++ b/src/targets.rs
+@@ -734,6 +734,7 @@
+     Androideabi,
+     Eabi,
+     Eabihf,
++    Dl,
+     Gnu,
+     Gnuabi64,
+     Gnueabi,
+@@ -777,6 +778,7 @@
+             Androideabi => Cow::Borrowed("androideabi"),
+             Eabi => Cow::Borrowed("eabi"),
+             Eabihf => Cow::Borrowed("eabihf"),
++            Dl => Cow::Borrowed("dl"),
+             Gnu => Cow::Borrowed("gnu"),
+             Gnuabi64 => Cow::Borrowed("gnuabi64"),
+             Gnueabi => Cow::Borrowed("gnueabi"),
+@@ -1473,6 +1475,7 @@
+             "androideabi" => Androideabi,
+             "eabi" => Eabi,
+             "eabihf" => Eabihf,
++            "dl" => Dl,
+             "gnu" => Gnu,
+             "gnuabi64" => Gnuabi64,
+             "gnueabi" => Gnueabi,
