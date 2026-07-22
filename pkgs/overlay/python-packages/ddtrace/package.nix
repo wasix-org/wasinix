@@ -52,9 +52,10 @@ in
     # crate-patches cover, and carries the `wasix` dep the mio patch adds.
     # library_config: stable-config path consts are OS-gated, their const fns aren't.
     # IAST cmake: prepend the wasm python's headers (build python's fail pyport LONG_BIT).
-    # psutil exts: not built, vendored psutil/__init__.py raises on sys.platform
-    # "wasix", so they could never be imported (and their linux/ uapi headers,
-    # sched_*affinity and sysinfo() are all absent from the sysroot).
+    # psutil: de-vendored onto ours, which is the same upstream release carrying
+    # the wasix port (overlay/python-packages/psutil). Building the vendored copy
+    # would mean maintaining that port twice, and its .py side cannot import here
+    # at all.
     # build_py: libddwaf is installed below, so skip the artifact wipe
     # ("if False") and the download (no network in the sandbox).
     postPatch = ''
@@ -88,6 +89,15 @@ in
       substituteInPlace ddtrace/internal/settings/asm.py \
         --replace-fail '{"Linux": "so", "Darwin": "dylib", "Windows": "dll"}' \
                        '{"Linux": "so", "Darwin": "dylib", "Windows": "dll", "wasi": "so", "wasix": "so"}'
+
+      substituteInPlace ddtrace/internal/runtime/metric_collectors.py \
+        --replace-fail '"ddtrace.vendor.psutil"' '"psutil"'
+      substituteInPlace ddtrace/internal/settings/profiling.py \
+        --replace-fail 'from ddtrace.vendor import psutil' 'import psutil'
+      substituteInPlace pyproject.toml \
+        --replace-fail '    "envier~=0.6.1",' '    "envier~=0.6.1",
+      "psutil",'
+      rm -r ddtrace/vendor/psutil
     '';
 
     build-system = with pyfinal; [
@@ -113,6 +123,7 @@ in
       bytecode
       envier
       opentelemetry-api
+      psutil
       wrapt
     ];
 
