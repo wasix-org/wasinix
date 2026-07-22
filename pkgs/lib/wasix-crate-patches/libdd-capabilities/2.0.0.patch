@@ -1,0 +1,27 @@
+# wasix is not browser wasm: libdatadog gates threads, sockets and its native
+# (hyper) HTTP stack off for every wasm32 target, while ddtrace-native only ever
+# builds NativeCapabilities. Narrow those cutouts to non-wasmer wasm32.
+
+diff -ruN '--exclude=.cargo-checksum.json' a/src/maybe_send.rs b/src/maybe_send.rs
+--- a/src/maybe_send.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/maybe_send.rs	2026-07-22 01:50:11.320975032 +0200
+@@ -31,15 +31,15 @@
+ /// A trait that is `Send` on native targets, but auto-implemented on wasm.
+ ///
+ /// Use this instead of `Send` in all capability trait bounds.
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ pub trait MaybeSend: Send {}
+ 
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ impl<T: Send> MaybeSend for T {}
+ 
+ /// On wasm, `MaybeSend` is implemented for all types (no `Send` requirement).
+-#[cfg(target_arch = "wasm32")]
++#[cfg(all(target_arch = "wasm32", not(target_vendor = "wasmer")))]
+ pub trait MaybeSend {}
+ 
+-#[cfg(target_arch = "wasm32")]
++#[cfg(all(target_arch = "wasm32", not(target_vendor = "wasmer")))]
+ impl<T> MaybeSend for T {}

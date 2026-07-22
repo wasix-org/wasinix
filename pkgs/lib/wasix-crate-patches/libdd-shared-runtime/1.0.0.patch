@@ -1,0 +1,131 @@
+# wasix is not browser wasm: libdatadog gates threads, sockets and its native
+# (hyper) HTTP stack off for every wasm32 target, while ddtrace-native only ever
+# builds NativeCapabilities. Narrow those cutouts to non-wasmer wasm32.
+
+diff -ruN '--exclude=.cargo-checksum.json' a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml	1970-01-01 01:00:01.000000000 +0100
++++ b/Cargo.toml	2026-07-22 01:50:11.331984483 +0200
+@@ -60,21 +60,21 @@
+     "libdd-common/regex-lite",
+ ]
+ 
+-[target."cfg(not(target_arch = \"wasm32\"))".dependencies.libdd-capabilities-impl]
++[target."cfg(any(not(target_arch = \"wasm32\"), target_vendor = \"wasmer\"))".dependencies.libdd-capabilities-impl]
+ path = "../libdd-capabilities-impl"
+ version = "2.0.0"
+ default-features = false
+ 
+-[target."cfg(not(target_arch = \"wasm32\"))".dependencies.tokio]
++[target."cfg(any(not(target_arch = \"wasm32\"), target_vendor = \"wasmer\"))".dependencies.tokio]
+ version = "1.23"
+ features = [
+     "rt-multi-thread",
+ ]
+ 
+-[target."cfg(target_arch = \"wasm32\")".dependencies]
++[target."cfg(all(target_arch = \"wasm32\", not(target_vendor = \"wasmer\")))".dependencies]
+ wasm-bindgen-futures = "0.4"
+ 
+-[target."cfg(target_arch = \"wasm32\")".dependencies.futures-util]
++[target."cfg(all(target_arch = \"wasm32\", not(target_vendor = \"wasmer\")))".dependencies.futures-util]
+ version = "0.3"
+ default-features = false
+ features = [
+diff -ruN '--exclude=.cargo-checksum.json' a/src/shared_runtime/mod.rs b/src/shared_runtime/mod.rs
+--- a/src/shared_runtime/mod.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/shared_runtime/mod.rs	2026-07-22 01:50:11.332765786 +0200
+@@ -22,7 +22,7 @@
+ /// Native-only runtime management, fork safety, and tokio integration.
+ ///
+ /// Gated once here so individual items inside don't need `#[cfg]`.
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ mod native {
+     use super::*;
+     use pausable_worker::tokio_spawn_fn;
+@@ -393,7 +393,7 @@
+ /// the fields in the struct. When possible avoid holding both locks simultaneously.
+ #[derive(Debug)]
+ pub struct SharedRuntime {
+-    #[cfg(not(target_arch = "wasm32"))]
++    #[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+     runtime: Arc<Mutex<Option<Arc<tokio::runtime::Runtime>>>>,
+     workers: Arc<Mutex<Vec<WorkerEntry>>>,
+     next_worker_id: AtomicU64,
+@@ -410,11 +410,11 @@
+     pub fn new() -> Result<Self, SharedRuntimeError> {
+         debug!("Creating new SharedRuntime");
+ 
+-        #[cfg(not(target_arch = "wasm32"))]
++        #[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+         {
+             Self::new_native()
+         }
+-        #[cfg(target_arch = "wasm32")]
++        #[cfg(all(target_arch = "wasm32", not(target_vendor = "wasmer")))]
+         {
+             Ok(Self {
+                 workers: Arc::new(Mutex::new(Vec::new())),
+@@ -424,7 +424,7 @@
+     }
+ 
+     /// Spawn a PausableWorker on the JS event loop (wasm variant).
+-    #[cfg(target_arch = "wasm32")]
++    #[cfg(all(target_arch = "wasm32", not(target_vendor = "wasmer")))]
+     pub fn spawn_worker<T: Worker + Sync + 'static>(
+         &self,
+         worker: T,
+diff -ruN '--exclude=.cargo-checksum.json' a/src/shared_runtime/pausable_worker.rs b/src/shared_runtime/pausable_worker.rs
+--- a/src/shared_runtime/pausable_worker.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/shared_runtime/pausable_worker.rs	2026-07-22 01:50:11.333373250 +0200
+@@ -13,20 +13,20 @@
+ use tokio_util::sync::CancellationToken;
+ use tracing::debug;
+ 
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ type WorkerFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
+-#[cfg(target_arch = "wasm32")]
++#[cfg(all(target_arch = "wasm32", not(target_vendor = "wasmer")))]
+ type WorkerFuture<T> = Pin<Box<dyn Future<Output = T> + 'static>>;
+ 
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ type WorkerJoinHandle<T> = Pin<Box<dyn Future<Output = Result<T, SpawnError>> + Send>>;
+-#[cfg(target_arch = "wasm32")]
++#[cfg(all(target_arch = "wasm32", not(target_vendor = "wasmer")))]
+ type WorkerJoinHandle<T> = Pin<Box<dyn Future<Output = Result<T, SpawnError>>>>;
+ 
+ /// Build the spawn closure used by [`PausableWorker::start`] on native, backed by
+ /// `tokio::runtime::Handle::spawn`. Maps tokio's `JoinError` into the
+ /// executor-agnostic [`SpawnError`].
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ pub(super) fn tokio_spawn_fn<T: Send + 'static>(
+     handle: &tokio::runtime::Handle,
+ ) -> impl FnOnce(WorkerFuture<T>) -> WorkerJoinHandle<T> {
+diff -ruN '--exclude=.cargo-checksum.json' a/src/worker.rs b/src/worker.rs
+--- a/src/worker.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/worker.rs	2026-07-22 01:50:11.332165301 +0200
+@@ -16,8 +16,8 @@
+ /// worker at this point will be saved and used to restart the worker. To be able to safely restart,
+ /// the worker must be in a valid state on every call to `.await` within the trigger function.
+ /// See [`tokio::select#cancellation-safety`] for more details.
+-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
++#[cfg_attr(any(not(target_arch = "wasm32"), target_vendor = "wasmer"), async_trait)]
++#[cfg_attr(all(target_arch = "wasm32", not(target_vendor = "wasmer")), async_trait(?Send))]
+ pub trait Worker: std::fmt::Debug + MaybeSend {
+     /// Main worker function
+     ///
+@@ -47,8 +47,8 @@
+ }
+ 
+ // Blanket implementation for boxed trait objects
+-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
++#[cfg_attr(any(not(target_arch = "wasm32"), target_vendor = "wasmer"), async_trait)]
++#[cfg_attr(all(target_arch = "wasm32", not(target_vendor = "wasmer")), async_trait(?Send))]
+ impl Worker for Box<dyn Worker + Sync> {
+     async fn run(&mut self) {
+         (**self).run().await

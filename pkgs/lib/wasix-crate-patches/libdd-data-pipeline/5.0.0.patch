@@ -1,0 +1,400 @@
+# wasix is not browser wasm: libdatadog gates threads, sockets and its native
+# (hyper) HTTP stack off for every wasm32 target, while ddtrace-native only ever
+# builds NativeCapabilities. Narrow those cutouts to non-wasmer wasm32.
+
+diff -ruN '--exclude=.cargo-checksum.json' a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml	1970-01-01 01:00:01.000000000 +0100
++++ b/Cargo.toml	2026-07-22 01:50:11.345892934 +0200
+@@ -107,7 +107,7 @@
+     "serialization",
+ ]
+ 
+-[target."cfg(not(target_arch = \"wasm32\"))".dependencies.tokio]
++[target."cfg(any(not(target_arch = \"wasm32\"), target_vendor = \"wasmer\"))".dependencies.tokio]
+ version = "1.23"
+ features = [
+     "time",
+@@ -115,18 +115,18 @@
+ ]
+ default-features = false
+ 
+-[target."cfg(not(target_arch = \"wasm32\"))".dependencies.libdd-capabilities-impl]
++[target."cfg(any(not(target_arch = \"wasm32\"), target_vendor = \"wasmer\"))".dependencies.libdd-capabilities-impl]
+ version = "2.0.0"
+ path = "../libdd-capabilities-impl"
+ default-features = false
+ 
+-[target."cfg(target_arch = \"wasm32\")".dependencies.getrandom]
++[target."cfg(all(target_arch = \"wasm32\", not(target_vendor = \"wasmer\")))".dependencies.getrandom]
+ version = "0.2"
+ features = [
+     "js",
+ ]
+ 
+-[target."cfg(target_arch = \"wasm32\")".dependencies.uuid]
++[target."cfg(all(target_arch = \"wasm32\", not(target_vendor = \"wasmer\")))".dependencies.uuid]
+ version = "1"
+ features = [
+     "js",
+diff -ruN '--exclude=.cargo-checksum.json' a/src/agent_info/fetcher.rs b/src/agent_info/fetcher.rs
+--- a/src/agent_info/fetcher.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/agent_info/fetcher.rs	2026-07-22 01:50:11.347120676 +0200
+@@ -234,8 +234,8 @@
+     }
+ }
+ 
+-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
++#[cfg_attr(any(not(target_arch = "wasm32"), target_vendor = "wasmer"), async_trait)]
++#[cfg_attr(all(target_arch = "wasm32", not(target_vendor = "wasmer")), async_trait(?Send))]
+ impl<C: HttpClientCapability + SleepCapability + MaybeSend + Sync + 'static> Worker
+     for AgentInfoFetcher<C>
+ {
+diff -ruN '--exclude=.cargo-checksum.json' a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/lib.rs	2026-07-22 01:50:11.346762927 +0200
+@@ -16,7 +16,7 @@
+ pub(crate) mod otlp;
+ #[cfg(feature = "telemetry")]
+ pub(crate) mod telemetry;
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ pub mod trace_buffer;
+ #[allow(missing_docs)]
+ pub mod trace_exporter;
+diff -ruN '--exclude=.cargo-checksum.json' a/src/trace_exporter/builder.rs b/src/trace_exporter/builder.rs
+--- a/src/trace_exporter/builder.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/trace_exporter/builder.rs	2026-07-22 01:50:11.349039660 +0200
+@@ -4,13 +4,13 @@
+ use crate::agent_info::AgentInfoFetcher;
+ use crate::otlp::config::{OtlpProtocol, DEFAULT_OTLP_TIMEOUT};
+ use crate::otlp::OtlpTraceConfig;
+-#[cfg(all(not(target_arch = "wasm32"), feature = "telemetry"))]
++#[cfg(all(any(not(target_arch = "wasm32"), target_vendor = "wasmer"), feature = "telemetry"))]
+ use crate::telemetry::TelemetryClientBuilder;
+ use crate::trace_exporter::agent_response::AgentResponsePayloadVersion;
+ use crate::trace_exporter::error::BuilderErrorKind;
+-#[cfg(all(not(target_arch = "wasm32"), feature = "telemetry"))]
++#[cfg(all(any(not(target_arch = "wasm32"), target_vendor = "wasmer"), feature = "telemetry"))]
+ use crate::trace_exporter::TelemetryConfig;
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ use crate::trace_exporter::TraceExporterWorkers;
+ use crate::trace_exporter::{
+     add_path, StatsComputationStatus, TelemetryInstrumentationSessions, TraceExporter,
+@@ -322,7 +322,7 @@
+         // internally (e.g. `NativeCapabilities`). Enter the SharedRuntime's tokio context
+         // so that handle is available. On wasm this is a no-op — the JS event loop is
+         // always the implicit executor.
+-        #[cfg(not(target_arch = "wasm32"))]
++        #[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+         let _guard = shared_runtime
+             .runtime_handle()
+             .map_err(|e| {
+@@ -355,17 +355,17 @@
+         // The handle is currently only tracked for shutdown on native; on wasm
+         // it is dropped here (the worker keeps running on the JS event loop
+         // until the page/module is torn down).
+-        #[cfg(target_arch = "wasm32")]
++        #[cfg(all(target_arch = "wasm32", not(target_vendor = "wasmer")))]
+         let _ = info_fetcher_handle;
+ 
+         #[allow(unused_mut)]
+         let mut stats = StatsComputationStatus::Disabled;
+-        #[cfg(not(target_arch = "wasm32"))]
++        #[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+         if let Some(bucket_size) = self.stats_bucket_size {
+             stats = StatsComputationStatus::DisabledByAgent { bucket_size };
+         }
+ 
+-        #[cfg(all(not(target_arch = "wasm32"), feature = "telemetry"))]
++        #[cfg(all(any(not(target_arch = "wasm32"), target_vendor = "wasmer"), feature = "telemetry"))]
+         let (telemetry_client, telemetry_handle) = {
+             let sessions = self.telemetry_instrumentation_sessions;
+             let telemetry = self.telemetry.map(|telemetry_config| {
+@@ -481,11 +481,11 @@
+             },
+             previous_info_state: arc_swap::ArcSwapOption::new(None),
+             info_response_observer,
+-            #[cfg(all(not(target_arch = "wasm32"), feature = "telemetry"))]
++            #[cfg(all(any(not(target_arch = "wasm32"), target_vendor = "wasmer"), feature = "telemetry"))]
+             telemetry: telemetry_client,
+             health_metrics_enabled: self.health_metrics_enabled,
+             capabilities,
+-            #[cfg(not(target_arch = "wasm32"))]
++            #[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+             workers: TraceExporterWorkers {
+                 info_fetcher: info_fetcher_handle,
+                 #[cfg(feature = "telemetry")]
+diff -ruN '--exclude=.cargo-checksum.json' a/src/trace_exporter/mod.rs b/src/trace_exporter/mod.rs
+--- a/src/trace_exporter/mod.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/trace_exporter/mod.rs	2026-07-22 01:50:11.350624103 +0200
+@@ -132,7 +132,7 @@
+ pub use libdd_trace_utils::tracer_metadata::TracerMetadata;
+ 
+ /// Handles for the background workers owned by a [`TraceExporter`].
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ #[derive(Debug)]
+ pub(crate) struct TraceExporterWorkers {
+     info_fetcher: WorkerHandle,
+@@ -189,14 +189,14 @@
+     common_stats_tags: Vec<Tag>,
+     client_computed_top_level: bool,
+     client_side_stats: StatsComputationConfig,
+-    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
++    #[cfg_attr(all(target_arch = "wasm32", not(target_vendor = "wasmer")), allow(dead_code))]
+     previous_info_state: ArcSwapOption<String>,
+     info_response_observer: ResponseObserver,
+-    #[cfg(all(not(target_arch = "wasm32"), feature = "telemetry"))]
++    #[cfg(all(any(not(target_arch = "wasm32"), target_vendor = "wasmer"), feature = "telemetry"))]
+     telemetry: Option<TelemetryClient>,
+     health_metrics_enabled: bool,
+     capabilities: C,
+-    #[cfg(not(target_arch = "wasm32"))]
++    #[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+     workers: TraceExporterWorkers,
+     agent_payload_response_version: Option<AgentResponsePayloadVersion>,
+     /// When set, traces are exported via OTLP HTTP/JSON instead of the Datadog agent.
+@@ -217,7 +217,7 @@
+     /// # Errors
+     /// Returns [`SharedRuntimeError::ShutdownTimedOut`] if a timeout was given and elapsed before
+     /// all workers finished.
+-    #[cfg(not(target_arch = "wasm32"))]
++    #[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+     pub fn shutdown(self, timeout: Option<Duration>) -> Result<(), TraceExporterError> {
+         let runtime = self.shared_runtime.clone();
+         if let Some(timeout) = timeout {
+@@ -239,7 +239,7 @@
+     }
+ 
+     async fn shutdown_workers(self) {
+-        #[cfg(not(target_arch = "wasm32"))]
++        #[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+         {
+             let mut join_set = JoinSet::new();
+ 
+@@ -267,7 +267,7 @@
+         }
+ 
+         // On wasm32 workers are no-ops, nothing to stop.
+-        #[cfg(target_arch = "wasm32")]
++        #[cfg(all(target_arch = "wasm32", not(target_vendor = "wasmer")))]
+         let _ = self;
+     }
+ 
+@@ -281,7 +281,7 @@
+     /// # Returns
+     /// * Ok(AgentResponse): The response from the agent
+     /// * Err(TraceExporterError): An error detailing what went wrong in the process
+-    #[cfg(not(target_arch = "wasm32"))]
++    #[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+     pub fn send(&self, data: &[u8]) -> Result<AgentResponse, TraceExporterError> {
+         self.check_agent_info();
+ 
+@@ -332,7 +332,7 @@
+         Ok(res)
+     }
+ 
+-    #[cfg(not(target_arch = "wasm32"))]
++    #[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+     /// Check if agent info state has changed
+     fn has_agent_info_state_changed(&self, agent_info: &Arc<AgentInfo>) -> bool {
+         Some(agent_info.state_hash.as_str())
+@@ -343,7 +343,7 @@
+                 .map(|s| s.as_str())
+     }
+ 
+-    #[cfg(not(target_arch = "wasm32"))]
++    #[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+     fn check_agent_info(&self) {
+         if let Some(agent_info) = agent_info::get_agent_info() {
+             if self.has_agent_info_state_changed(&agent_info) {
+@@ -384,7 +384,7 @@
+         }
+     }
+ 
+-    #[cfg(target_arch = "wasm32")]
++    #[cfg(all(target_arch = "wasm32", not(target_vendor = "wasmer")))]
+     fn check_agent_info(&self) {
+         // No background workers on wasm — agent info is never fetched, stats are
+         // never computed. This is intentionally a no-op.
+@@ -443,7 +443,7 @@
+     /// # Returns
+     /// * Ok(AgentResponse): The response from the agent (or Unchanged for OTLP)
+     /// * Err(TraceExporterError): An error detailing what went wrong in the process
+-    #[cfg(not(target_arch = "wasm32"))]
++    #[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+     pub fn send_trace_chunks<T: TraceData>(
+         &self,
+         trace_chunks: Vec<Vec<Span<T>>>,
+@@ -501,7 +501,7 @@
+     }
+ 
+     /// Deserializes, processes and sends trace chunks to the agent
+-    #[cfg(not(target_arch = "wasm32"))]
++    #[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+     fn send_deser(
+         &self,
+         data: &[u8],
+@@ -554,7 +554,7 @@
+         )
+         .await;
+ 
+-        #[cfg(all(not(target_arch = "wasm32"), feature = "telemetry"))]
++        #[cfg(all(any(not(target_arch = "wasm32"), target_vendor = "wasmer"), feature = "telemetry"))]
+         if let Some(telemetry) = &self.telemetry {
+             if let Err(e) = telemetry.send(&SendPayloadTelemetry::from_retry_result(
+                 &result,
+@@ -815,7 +815,7 @@
+     }
+ 
+     #[cfg(test)]
+-    #[cfg(not(target_arch = "wasm32"))]
++    #[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+     /// Test only function to check if the stats computation is active and the worker is running
+     pub fn is_stats_worker_active(&self) -> bool {
+         stats::is_stats_worker_active(&self.client_side_stats.status)
+diff -ruN '--exclude=.cargo-checksum.json' a/src/trace_exporter/stats.rs b/src/trace_exporter/stats.rs
+--- a/src/trace_exporter/stats.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/trace_exporter/stats.rs	2026-07-22 01:50:11.351323238 +0200
+@@ -7,11 +7,11 @@
+ //! including starting/stopping stats workers, managing the span concentrator,
+ //! and processing traces for stats collection.
+ 
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ use crate::agent_info::schema::AgentInfo;
+ use arc_swap::ArcSwap;
+ use libdd_capabilities::{HttpClientCapability, MaybeSend, SleepCapability};
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ use libdd_common::Endpoint;
+ use libdd_common::MutexExt;
+ use libdd_shared_runtime::{SharedRuntime, WorkerHandle};
+@@ -20,21 +20,21 @@
+ use libdd_trace_stats::span_concentrator::{
+     SharedStatsComputationObfuscationConfig, StatsComputationObfuscationConfig,
+ };
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ use libdd_trace_stats::stats_exporter::{StatsExporter, StatsMetadata};
+ use std::sync::{Arc, Mutex};
+ use std::time::Duration;
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ use tracing::{debug, error};
+ 
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ use super::add_path;
+ use super::TracerMetadata;
+ 
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ pub(crate) const DEFAULT_STATS_ELIGIBLE_SPAN_KINDS: [&str; 4] =
+     ["client", "server", "producer", "consumer"];
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ pub(crate) const STATS_ENDPOINT: &str = "/v0.6/stats";
+ 
+ /// The maximum obfuscation version this tracer supports.
+@@ -43,7 +43,7 @@
+ #[cfg(feature = "stats-obfuscation")]
+ pub(crate) const SUPPORTED_OBFUSCATION_VERSION_STR: &str = "1";
+ 
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ /// Context struct that groups immutable parameters used by stats functions
+ pub(crate) struct StatsContext<'a> {
+     pub metadata: &'a TracerMetadata,
+@@ -52,7 +52,7 @@
+ }
+ 
+ #[derive(Debug)]
+-#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
++#[cfg_attr(all(target_arch = "wasm32", not(target_vendor = "wasmer")), allow(dead_code))]
+ pub(crate) enum StatsComputationStatus {
+     /// Client-side stats has been disabled by the tracer
+     Disabled,
+@@ -68,7 +68,7 @@
+ }
+ 
+ #[derive(Debug)]
+-#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
++#[cfg_attr(all(target_arch = "wasm32", not(target_vendor = "wasmer")), allow(dead_code))]
+ pub(crate) struct StatsComputationConfig {
+     pub(crate) status: ArcSwap<StatsComputationStatus>,
+     #[cfg(feature = "stats-obfuscation")]
+@@ -88,7 +88,7 @@
+         .is_some_and(|v| v >= 1 && v <= SUPPORTED_OBFUSCATION_VERSION)
+ }
+ 
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ /// Get span kinds for stats computation with default fallback
+ fn get_span_kinds_for_stats(agent_info: &Arc<AgentInfo>) -> Vec<String> {
+     agent_info
+@@ -98,7 +98,7 @@
+         .unwrap_or_else(|| DEFAULT_STATS_ELIGIBLE_SPAN_KINDS.map(String::from).to_vec())
+ }
+ 
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ /// Start the stats exporter and enable stats computation
+ ///
+ /// Should only be used if the agent enabled stats computation
+@@ -127,7 +127,7 @@
+     Ok(())
+ }
+ 
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ /// Create stats exporter and worker, start the worker, and update the state
+ fn create_and_start_stats_worker<
+     C: HttpClientCapability + SleepCapability + MaybeSend + Sync + 'static,
+@@ -165,7 +165,7 @@
+     Ok(())
+ }
+ 
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ /// Stops the stats exporter and disable stats computation
+ ///
+ /// Used when client-side stats is disabled by the agent
+@@ -191,7 +191,7 @@
+     }
+ }
+ 
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ /// Handle stats computation when agent changes from disabled to enabled
+ pub(crate) fn handle_stats_disabled_by_agent<
+     C: HttpClientCapability + SleepCapability + MaybeSend + Sync + 'static,
+@@ -223,7 +223,7 @@
+ }
+ 
+ #[cfg(feature = "stats-obfuscation")]
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ fn update_obfuscation_config(
+     agent_info: &Arc<AgentInfo>,
+     client_side_stats: &StatsComputationConfig,
+@@ -253,7 +253,7 @@
+     }
+ }
+ 
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ /// Handle stats computation when it's already enabled
+ pub(crate) fn handle_stats_enabled(
+     ctx: &StatsContext,
+@@ -330,7 +330,7 @@
+ }
+ 
+ #[cfg(test)]
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ /// Test only function to check if the stats computation is active and the worker is running
+ pub(crate) fn is_stats_worker_active(client_side_stats: &ArcSwap<StatsComputationStatus>) -> bool {
+     matches!(

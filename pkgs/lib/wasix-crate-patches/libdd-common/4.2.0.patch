@@ -1,0 +1,134 @@
+# wasix is not browser wasm: libdatadog gates threads, sockets and its native
+# (hyper) HTTP stack off for every wasm32 target, while ddtrace-native only ever
+# builds NativeCapabilities. Narrow those cutouts to non-wasmer wasm32.
+
+diff -ruN '--exclude=.cargo-checksum.json' a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml	1970-01-01 01:00:01.000000000 +0100
++++ b/Cargo.toml	2026-07-22 01:50:11.297133431 +0200
+@@ -99,7 +99,7 @@
+ ]
+ optional = true
+ 
+-[target."cfg(not(target_arch = \"wasm32\"))".dependencies]
++[target."cfg(any(not(target_arch = \"wasm32\"), target_vendor = \"wasmer\"))".dependencies]
+ http-body = "1.0"
+ http-body-util = "0.1"
+ tower-service = "0.3"
+@@ -107,7 +107,7 @@
+ pin-project = "1"
+ libc = "0.2"
+ 
+-[target."cfg(not(target_arch = \"wasm32\"))".dependencies.hyper]
++[target."cfg(any(not(target_arch = \"wasm32\"), target_vendor = \"wasmer\"))".dependencies.hyper]
+ version = "1.6"
+ features = [
+     "http1",
+@@ -115,7 +115,7 @@
+ ]
+ default-features = false
+ 
+-[target."cfg(not(target_arch = \"wasm32\"))".dependencies.hyper-util]
++[target."cfg(any(not(target_arch = \"wasm32\"), target_vendor = \"wasmer\"))".dependencies.hyper-util]
+ version = "0.1.10"
+ features = [
+     "http1",
+@@ -123,7 +123,7 @@
+     "client-legacy",
+ ]
+ 
+-[target."cfg(not(target_arch = \"wasm32\"))".dependencies.tokio]
++[target."cfg(any(not(target_arch = \"wasm32\"), target_vendor = \"wasmer\"))".dependencies.tokio]
+ version = "1.23"
+ features = [
+     "rt",
+diff -ruN '--exclude=.cargo-checksum.json' a/src/http_common.rs b/src/http_common.rs
+--- a/src/http_common.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/http_common.rs	2026-07-22 01:50:11.299018380 +0200
+@@ -71,7 +71,7 @@
+ 
+ // --- Native-only code (hyper, Body, client builders, etc.) ---
+ 
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ mod native {
+     use super::*;
+     use std::error::Error as _;
+@@ -302,5 +302,5 @@
+     }
+ }
+ 
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ pub use native::*;
+diff -ruN '--exclude=.cargo-checksum.json' a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/lib.rs	2026-07-22 01:50:11.299437215 +0200
+@@ -14,9 +14,9 @@
+ use std::{borrow::Cow, ops::Deref, path::PathBuf, str::FromStr};
+ 
+ pub mod azure_app_services;
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ pub mod cc_utils;
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ pub mod connector;
+ #[cfg(feature = "reqwest")]
+ pub mod dump_server;
+@@ -30,14 +30,14 @@
+ pub mod error;
+ pub mod http_common;
+ pub mod multipart;
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ pub mod rate_limiter;
+ pub mod tag;
+ #[cfg(any(test, feature = "test-utils"))]
+ pub mod test_utils;
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ pub mod threading;
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ pub mod timeout;
+ pub mod unix_utils;
+ 
+@@ -194,17 +194,17 @@
+         HeaderName::from_static("x-datadog-test-session-token");
+ }
+ 
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ pub type HttpClient = http_common::GenericHttpClient<connector::Connector>;
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ pub type HttpResponse = http_common::HttpResponse;
+ pub type HttpRequestBuilder = http::request::Builder;
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ pub trait Connect:
+     hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static
+ {
+ }
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))]
+ impl<C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static> Connect
+     for C
+ {
+diff -ruN '--exclude=.cargo-checksum.json' a/src/threading.rs b/src/threading.rs
+--- a/src/threading.rs	1970-01-01 01:00:01.000000000 +0100
++++ b/src/threading.rs	2026-07-22 01:50:11.304493601 +0200
+@@ -32,5 +32,12 @@
+ }
+ 
+ /// Returns a numeric identifier for the current OS thread.
+-#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
++/// Returns a numeric identifier for the current OS thread.
++#[cfg(target_vendor = "wasmer")]
++pub fn get_current_thread_id() -> i64 {
++    // SAFETY: pthread_self() has no preconditions for the current thread.
++    unsafe { libc::pthread_self() as i64 }
++}
++
++#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows", target_vendor = "wasmer")))]
+ compile_error!("libdd_common::threading::get_current_thread_id is unsupported on this platform");

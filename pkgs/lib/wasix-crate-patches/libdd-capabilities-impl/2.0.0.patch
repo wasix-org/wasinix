@@ -1,0 +1,16 @@
+# wasix is not browser wasm: libdatadog gates threads, sockets and its native
+# (hyper) HTTP stack off for every wasm32 target, while ddtrace-native only ever
+# builds NativeCapabilities. Narrow those cutouts to non-wasmer wasm32.
+
+diff -ruN '--exclude=.cargo-checksum.json' a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml	1970-01-01 01:00:01.000000000 +0100
++++ b/Cargo.toml	2026-07-22 01:50:11.326270545 +0200
+@@ -33,7 +33,7 @@
+     "time",
+ ]
+ 
+-[target."cfg(not(target_arch = \"wasm32\"))".dependencies]
++[target."cfg(any(not(target_arch = \"wasm32\"), target_vendor = \"wasmer\"))".dependencies]
+ http-body-util = "0.1"
+ 
+ [features]

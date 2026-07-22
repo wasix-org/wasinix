@@ -270,6 +270,29 @@ instruction")` under the pinned wasmer (7.2.0), which only accepts the new
   spec; then getrandom (and any preview1 crate) picks the right backend with no
   patch at all.
 
+### libdatadog treats every wasm32 target as browser wasm 🟡
+
+- libdatadog v35 (ddtrace 4.x) cuts threads, sockets and its native hyper HTTP
+  stack out of every wasm32 build: `libdd-common`'s `connector`, `http_common`
+  and `threading`, `libdd-capabilities`' `MaybeSend` (`Send` becomes a blanket
+  impl), `libdd-shared-runtime`'s `Worker` (`async_trait(?Send)`), plus module
+  and dependency cutouts in `libdd-data-pipeline` and `libdd-trace-stats`. The
+  consumers are not cut out with them, so the v35 graph does not compile for
+  wasm32 at all: `libdd-capabilities-impl`, `datadog-remote-config` and
+  `libdd-telemetry` use the removed items unconditionally. v24 (ddtrace 3.x)
+  had no wasm32 gating and built stock.
+- Consequence: ddtrace 4.x does not build. Its `_native` module only ever
+  builds `NativeCapabilities` (hyper), so the host-provided-HTTP path upstream
+  added for browser wasm is not an option for it either.
+- Workaround: `pkgs/lib/wasix-crate-patches/libdd-*` narrow every cutout to
+  non-wasmer wasm32 (`not(wasm32)` becomes
+  `any(not(wasm32), target_vendor = "wasmer")`, `wasm32` becomes
+  `all(wasm32, not(target_vendor = "wasmer"))`) and give `threading` a
+  `pthread_self` arm. Mechanical, so regenerate them on a libdatadog rev bump.
+- Fix: upstream should gate on a capability or feature rather than
+  `target_arch`, and gate the consumers the same way it gates the providers.
+  wasix has threads and sockets, and the hyper stack builds and links there.
+
 ### `select()` with exceptfds returns ENOSYS; callers spin 🟢
 
 - wasix-libc's `select()`/`pselect()` returned `-1`/`ENOSYS` (errno 52) whenever
