@@ -35,6 +35,12 @@
       # `--whole-archive lib.a --no-whole-archive` brackets reach wasm-ld intact.
       # Also folds in the `--undefined-version` discard. TODO: upstream, then drop.
       ./wasixcc-preserve-link-order.patch
+      # Path::extension only sees the last component, so a versioned shared
+      # library (libfoo.so.1.2.3, what cmake emits for a target with SOVERSION)
+      # was partitioned as a source file: the driver then expected a compiled
+      # <tmp>/libfoo.so.1.2.3.o that nothing produces and the link failed with
+      # "cannot open". TODO: upstream, then drop.
+      ./wasixcc-versioned-soname-inputs.patch
     ];
 
     doCheck = true;

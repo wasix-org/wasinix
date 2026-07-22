@@ -126,6 +126,13 @@
                 toolchain = tc;
               }))
             toolchainByProfile)
+            # shared libraries need PIC, so only the pic profiles can host it
+            // (lib.mapAttrs' (p: tc:
+              lib.nameValuePair "versioned-soname-${p}" (pkgs.callPackage ./toolchain/tests/versioned-soname-test.nix {
+                wasmer = wasmerRuntime;
+                toolchain = tc;
+              }))
+            (lib.filterAttrs (p: _: profilesCfg.profiles.${p}.wasmPic or false) toolchainByProfile))
           );
         };
     });
