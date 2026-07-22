@@ -10,6 +10,10 @@
 # virtual_memory, pids, boot_time) raises, and users() is a stub. Worth
 # shipping anyway: plenty of wheels import psutil unconditionally and only call
 # it on demand. See tests/basic.nix for the contract.
+#
+# The limited API goes off for the same reason as tornado's: an abi3 wheel
+# carries one cp36-abi3 filename for a .so built per interpreter, which the
+# per-version registry sees as colliding filenames with differing bytes.
 {
   pyprev,
   lib,
@@ -21,6 +25,11 @@ in
   wheels.onlyOnWasix pyprev.psutil (
     helpers.libTweaks {
       patches = [./patches/psutil-wasix.patch];
+      postPatch = ''
+        substituteInPlace setup.py \
+          --replace-fail 'if setuptools and CP36_PLUS and (MACOS or LINUX) and not Py_GIL_DISABLED:' \
+                         'if False:'
+      '';
     }
     pyprev.psutil
   )
