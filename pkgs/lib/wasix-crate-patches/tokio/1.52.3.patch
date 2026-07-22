@@ -1,7 +1,28 @@
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml	2006-07-24 03:21:28.000000000 +0200
++++ b/Cargo.toml	2026-07-21 18:32:43.100402757 +0200
+@@ -978,5 +978,6 @@
+     "cfg(tokio_no_parking_lot)",
+     "cfg(tokio_no_tuning_tests)",
+     "cfg(tokio_unstable)",
++    "cfg(tokio_wasix_waker)",
+     'cfg(target_os, values("cygwin"))',
+ ]
 diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' a/src/lib.rs b/src/lib.rs
 --- a/src/lib.rs	2006-07-24 03:21:28.000000000 +0200
-+++ b/src/lib.rs	2026-07-20 14:30:31.812491334 +0200
-@@ -465,7 +465,7 @@
++++ b/src/lib.rs	2026-07-21 18:32:43.087993058 +0200
+@@ -22,6 +22,10 @@
+ #![cfg_attr(docsrs, allow(unused_attributes))]
+ #![cfg_attr(loom, allow(dead_code, unreachable_pub))]
+ #![cfg_attr(windows, allow(rustdoc::broken_intra_doc_links))]
++#![cfg_attr(
++    all(feature = "fs", target_os = "wasi", target_vendor = "wasmer"),
++    feature(wasi_ext)
++)]
+ 
+ //! A runtime for writing reliable network applications without compromising speed.
+ //!
+@@ -465,7 +469,7 @@
  
  #[cfg(all(
      not(tokio_unstable),
@@ -10,3 +31,74 @@ diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' a/src/lib.rs b
      any(
          feature = "fs",
          feature = "io-std",
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' a/src/net/tcp/stream.rs b/src/net/tcp/stream.rs
+--- a/src/net/tcp/stream.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/net/tcp/stream.rs	2026-07-21 18:32:43.088980477 +0200
+@@ -1564,7 +1564,7 @@
+     }
+ }
+ 
+-#[cfg(all(tokio_unstable, target_os = "wasi"))]
++#[cfg(target_os = "wasi")]
+ mod sys {
+     use super::TcpStream;
+     use std::os::fd::{AsFd, AsRawFd, BorrowedFd, RawFd};
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' a/src/runtime/io/driver.rs b/src/runtime/io/driver.rs
+--- a/src/runtime/io/driver.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/runtime/io/driver.rs	2026-07-21 18:32:43.095970719 +0200
+@@ -46,7 +46,7 @@
+ 
+     /// Used to wake up the reactor from a call to `turn`.
+     /// Not supported on `Wasi` due to lack of threading support.
+-    #[cfg(not(target_os = "wasi"))]
++    #[cfg(any(not(target_os = "wasi"), all(target_vendor = "wasmer", tokio_wasix_waker)))]
+     waker: mio::Waker,
+ 
+     pub(crate) metrics: IoDriverMetrics,
+@@ -116,7 +116,7 @@
+     /// creation.
+     pub(crate) fn new(nevents: usize) -> io::Result<(Driver, Handle)> {
+         let poll = mio::Poll::new()?;
+-        #[cfg(not(target_os = "wasi"))]
++        #[cfg(any(not(target_os = "wasi"), all(target_vendor = "wasmer", tokio_wasix_waker)))]
+         let waker = mio::Waker::new(poll.registry(), TOKEN_WAKEUP)?;
+         let registry = poll.registry().try_clone()?;
+ 
+@@ -132,7 +132,7 @@
+             registry,
+             registrations,
+             synced: Mutex::new(synced),
+-            #[cfg(not(target_os = "wasi"))]
++            #[cfg(any(not(target_os = "wasi"), all(target_vendor = "wasmer", tokio_wasix_waker)))]
+             waker,
+             metrics: IoDriverMetrics::default(),
+             #[cfg(all(
+@@ -189,9 +189,16 @@
+             Ok(()) => {}
+             Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {}
+             #[cfg(target_os = "wasi")]
+-            Err(e) if e.kind() == io::ErrorKind::InvalidInput => {
+-                // In case of wasm32_wasi this error happens, when trying to poll without subscriptions
+-                // just return from the park, as there would be nothing, which wakes us up.
++            Err(e)
++                if matches!(
++                    e.kind(),
++                    io::ErrorKind::InvalidInput | io::ErrorKind::Unsupported
++                ) =>
++            {
++                // wasm32-wasi: an empty subscription set has nothing to wait on.
++                // The reference runtime returns InvalidInput here; wasmer/wasix
++                // returns Unsupported (ENOTSUP). Either way just return from the
++                // park (see WASIX-TODO: wasmer poll_oneoff errno for empty sets).
+             }
+             Err(e) => panic!("unexpected error when polling the I/O driver: {e:?}"),
+         }
+@@ -256,7 +263,7 @@
+     /// blocked in `turn`, then the next call to `turn` will not block and
+     /// return immediately.
+     pub(crate) fn unpark(&self) {
+-        #[cfg(not(target_os = "wasi"))]
++        #[cfg(any(not(target_os = "wasi"), all(target_vendor = "wasmer", tokio_wasix_waker)))]
+         self.waker.wake().expect("failed to wake I/O driver");
+     }
+ 
