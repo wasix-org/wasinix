@@ -51,15 +51,18 @@
           };
         };
     });
-    wasix = import ./pkgs {
-      inherit system nixpkgs;
-      # runs the behavioural passthru.tests on the webc packages.
-      inherit wasmerRuntime;
-      # bindist GHC for the wasi haskell toolchain (toolchain.haskell); pandoc
-      # (overlay/packages/pandoc) builds against it. TemplateHaskell works under
-      # node there (memory: wasix-haskell-th-blocked).
-      ghcWasm = ghc-wasm-meta.packages.${system};
-    };
+    # spotOverlays is empty everywhere but spot.nix; see pkgs/spot.nix.
+    mkWasix = spotOverlays:
+      import ./pkgs {
+        inherit system nixpkgs spotOverlays;
+        # runs the behavioural passthru.tests on the webc packages.
+        inherit wasmerRuntime;
+        # bindist GHC for the wasi haskell toolchain (toolchain.haskell); pandoc
+        # (overlay/packages/pandoc) builds against it. TemplateHaskell works under
+        # node there (memory: wasix-haskell-th-blocked).
+        ghcWasm = ghc-wasm-meta.packages.${system};
+      };
+    wasix = mkWasix {};
     lib = wasix.pkgs.lib;
     wasixLib = import ./pkgs/lib {inherit lib;};
 
@@ -199,6 +202,15 @@
         # Escape hatches / aggregates: reachable via `.#`, but not ci jobs.
         # `.#toolchainByProfile.<profile>.{stdenv,rustPlatform}` is the per-profile build env.
         inherit (wasix) nixpkgsByProfile toolchainByProfile defaultProfileName;
+
+        # Spot-override (see ./spot.nix): given a pristine evaluation's
+        # nixpkgsByProfile, rebuild one target against the working tree with
+        # everything below it pinned to that base. A function, so it is not a
+        # build target and cannot become a ci job.
+        spotWith = import ./pkgs/spot.nix {
+          inherit lib mkWasix;
+          pkgNames = wasix.wasixPkgNames;
+        };
         pkgsCross.wasix = wasix.pkgsCross;
         allWasmerPackages = wasix.allWasmerPackages;
 

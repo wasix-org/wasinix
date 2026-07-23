@@ -385,12 +385,21 @@
                 # instead of per wheel: version-specific (this interpreter's sysconfig), so not a static
                 # value in the shared profile stdenv. extendMkDerivation keeps the functor set intact (a
                 # bare lambda breaks the cross-splice/.override machinery), as set/rust-platform.nix does.
-                buildPythonPackage = lib.extendMkDerivation {
-                  constructDrv = pyprev.buildPythonPackage;
-                  extendDrvArgs = _finalAttrs: prevArgs: {
-                    env = {PYO3_CROSS_LIB_DIR = "${py}/lib/${py.libPrefix}";} // (prevArgs.env or {});
-                  };
-                };
+                # extendMkDerivation forwards neither `override` nor the wrapper
+                # itself, so re-attach both: buildPythonPackage.override is how
+                # nixpkgs documents building a package with a different stdenv
+                # (python-packages-base.nix), and without this the API is gone.
+                buildPythonPackage = let
+                  withPyo3 = bpp:
+                    lib.extendMkDerivation {
+                      constructDrv = bpp;
+                      extendDrvArgs = _finalAttrs: prevArgs: {
+                        env = {PYO3_CROSS_LIB_DIR = "${py}/lib/${py.libPrefix}";} // (prevArgs.env or {});
+                      };
+                    };
+                in
+                  withPyo3 pyprev.buildPythonPackage
+                  // {override = args: withPyo3 (pyprev.buildPythonPackage.override args);};
               };
           in
             if pyprev.python.stdenv.hostPlatform.isWasix or false

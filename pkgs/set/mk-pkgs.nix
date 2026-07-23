@@ -8,7 +8,10 @@
   nixpkgs,
   mkWasixStdenv,
   wasixOverlay,
-}: profileSpec:
+}:
+# extraOverlays is the spot-override seam (see spot.nix): empty in every normal
+# eval, so the overlay list and every drv path are unchanged.
+extraOverlays: profileSpec:
 import nixpkgs {
   inherit system;
   crossSystem =
@@ -23,5 +26,5 @@ import nixpkgs {
     // profileSpec;
   config.allowUnsupportedSystem = true;
   config.replaceCrossStdenv = mkWasixStdenv;
-  overlays = [wasixOverlay];
+  overlays = [wasixOverlay] ++ extraOverlays;
 }

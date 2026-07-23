@@ -1,7 +1,7 @@
 # Conventions
 
 Rules for changes in this repo. Background: `docs/architecture.md`. How-tos:
-`docs/packaging.md`, `docs/updating.md`.
+`docs/packaging.md`, `docs/updating.md`, `docs/spot.md`.
 
 This flake cross-compiles software to WASIX (`wasm32-wasix`, a POSIX-flavored
 WASI extension run by Wasmer). The toolchain (LLVM fork, wasix-libc sysroot,
@@ -97,7 +97,10 @@ builtins.attrNames`. For behaviour-preserving refactors, also diff
   profile), `.#toolchain.sysroot.tests`; the Rust suite is
   `.#checks.x86_64-linux.rust`.
 - Touching `pkgs/toolchain/` (except `llvm.nix`) rebuilds everything; use a
-  remote builder or the CI cache.
+  remote builder or the CI cache. To try such a change on one package first,
+  `scripts/spot.sh <profile>.<attr>` rebuilds that attr alone against a cached
+  base revision (`docs/spot.md`). Experiments only: it mixes two toolchains, so
+  confirm at the root before keeping the change.
 - The most thorough check is `nix-fast-build --flake
 .#legacyPackages.x86_64-linux.ci --no-link --skip-cached --option
 accept-flake-config true`, the same build set as CI

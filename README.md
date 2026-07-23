@@ -45,4 +45,5 @@ Details: [`docs/architecture.md`](docs/architecture.md).
 | [`docs/architecture.md`](docs/architecture.md) | how the layers fit together                  |
 | [`docs/packaging.md`](docs/packaging.md)       | adding packages: C, CLI/webc, Rust, Python   |
 | [`docs/updating.md`](docs/updating.md)         | the pin updater                              |
+| [`docs/spot.md`](docs/spot.md)                 | experimenting without rebuilding the world   |
 | [`WASIX-TODO.md`](WASIX-TODO.md)               | known WASIX/toolchain issues and workarounds |

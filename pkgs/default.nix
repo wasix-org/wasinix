@@ -5,6 +5,12 @@
   wasmerRuntime ? null,
   # ghc-wasm-meta bindist GHC, for toolchain.haskell.
   ghcWasm,
+  # Per-profile extra overlays, keyed by profile name. The spot-override seam
+  # (see spot.nix): profile sets reference each other through
+  # preferredProfilePackages, so a pin has to be injected here, where all of
+  # them are built, rather than by extending one set from outside. Empty in
+  # every normal eval; nothing that ships may set it.
+  spotOverlays ? {},
 }: let
   pkgs = import nixpkgs {inherit system;};
   inherit (pkgs) lib;
@@ -71,7 +77,7 @@
     inherit (pkgs) nix-update-script;
   };
   mkWasixPkgs = import ./set/mk-pkgs.nix {inherit system nixpkgs mkWasixStdenv wasixOverlay;};
-  nixpkgsByProfile = lib.mapAttrs (_: spec: mkWasixPkgs spec) profilesCfg.profiles;
+  nixpkgsByProfile = lib.mapAttrs (name: spec: mkWasixPkgs (spotOverlays.${name} or []) spec) profilesCfg.profiles;
 
   # ── toolchainByProfile: per-profile build environments ────────────────────────────────
   # Per-profile layer over the profile-independent `toolchain`: each profile's
@@ -269,7 +275,7 @@
     pythonWebc = wasmerLayer.wasmerPackages.python.shim;
   };
 in {
-  inherit pkgs pkgsCross defaultProfileName;
+  inherit pkgs pkgsCross defaultProfileName wasixPkgNames;
   inherit toolchain toolchainByProfile nixpkgsByProfile preferredProfilePackages allWasmerPackages;
   inherit shippedCommands wasmerPackages librariesByProfile toolchainTestPkgs abiChecks;
   inherit pythonWheels pythonRegistry;
