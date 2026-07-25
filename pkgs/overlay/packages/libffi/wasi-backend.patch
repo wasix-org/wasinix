@@ -1,12 +1,5 @@
-wasix-org/libffi's wasi backend on upstream libffi: replaces the
-emscripten-specific src/wasm backend (the fork still calls the dir
-src/wasm32; upstream renamed it) and adapts closures.c for wasi.
-Regenerate from
-https://github.com/libffi/libffi/compare/v3.5.2...wasix-org:libffi:master
-when it stops applying.
-
 diff --git a/src/closures.c b/src/closures.c
-index 02cf78fa2..15c484bdb 100644
+index c1fbcf8..82acc23 100644
 --- a/src/closures.c
 +++ b/src/closures.c
 @@ -31,7 +31,7 @@
@@ -18,17 +11,17 @@ index 02cf78fa2..15c484bdb 100644
  
  #include <fficonfig.h>
  #include <ffi.h>
-@@ -1104,4 +1104,4 @@ ffi_tramp_is_present (__attribute__((unused)) void *ptr)
+@@ -1102,4 +1102,4 @@ ffi_tramp_is_present (__attribute__((unused)) void *ptr)
  #endif /* FFI_CLOSURES */
  
  #endif /* NetBSD with PROT_MPROTECT */
 -#endif /* __EMSCRIPTEN__ */
 +#endif /* __wasm__ */
 diff --git a/src/wasm/ffi.c b/src/wasm/ffi.c
-index 486ffa7..ddcd859 100644
+index b631b1b..4b03243 100644
 --- a/src/wasm/ffi.c
 +++ b/src/wasm/ffi.c
-@@ -30,19 +30,54 @@
+@@ -31,19 +31,54 @@
  #include <stdlib.h>
  #include <stdint.h>
  
@@ -86,7 +79,7 @@ index 486ffa7..ddcd859 100644
  #define DEREF_U8(addr, offset) HEAPU8[addr + offset]
  #define DEREF_S8(addr, offset) HEAP8[addr + offset]
  #define DEREF_U16(addr, offset) HEAPU16[(addr >> 1) + offset]
-@@ -54,98 +89,24 @@ EM_JS_DEPS(libffi, "$getWasmTableEntry,$setWasmTableEntry,$getEmptyTableSlot,$co
+@@ -55,115 +90,33 @@ EM_JS_DEPS(libffi, "$getWasmTableEntry,$setWasmTableEntry,$getEmptyTableSlot,$co
  #define DEREF_F64(addr, offset) HEAPF64[(addr >> 3) + offset]
  #define DEREF_U64(addr, offset) HEAPU64[(addr >> 3) + offset]
  
@@ -105,6 +98,13 @@ index 486ffa7..ddcd859 100644
 -
 -#define DEREF_PTR(addr, offset) DEREF_U32(addr, offset)
 -#define DEREF_PTR_NUMBER(addr, offset) DEREF_PTR(addr, offset)
+-
+-// Store an integral return value widened to ffi_arg (32 bits on wasm32), as
+-// the libffi API promises for integral returns narrower than a register.
+-// The typed-array store wraps modulo 2^32, so a sign-extended negative
+-// Number is stored correctly by both variants.
+-#define STORE_ARG_WIDENED_UNSIGNED(rvalue, x) (DEREF_U32(rvalue, 0) = (x))
+-#define STORE_ARG_WIDENED_SIGNED(rvalue, x) (DEREF_U32(rvalue, 0) = (x))
 -
 -CHECK_FIELD_OFFSET(ffi_cif, abi, 4*0);
 -CHECK_FIELD_OFFSET(ffi_cif, nargs, 4*1);
@@ -145,6 +145,16 @@ index 486ffa7..ddcd859 100644
 -#define DEREF_PTR(addr, offset) DEREF_U64(addr, offset)
 -#define DEREF_PTR_NUMBER(addr, offset) DEC_PTR(DEREF_PTR(addr, offset))
 -
+-// Store an integral return value widened to ffi_arg (64 bits on wasm64), as
+-// the libffi API promises for integral returns narrower than a register.
+-// BigInt masking treats the value as infinite-precision two's complement, so
+-// the unsigned variant zero-extends a possibly-negative i32 Number, while
+-// the BigUint64Array store wraps the signed variant modulo 2^64, which is
+-// sign extension.
+-#define STORE_ARG_WIDENED_UNSIGNED(rvalue, x) \
+-  (DEREF_U64(rvalue, 0) = BigInt(x) & BigInt(4294967295))
+-#define STORE_ARG_WIDENED_SIGNED(rvalue, x) (DEREF_U64(rvalue, 0) = BigInt(x))
+-
 -CHECK_FIELD_OFFSET(ffi_cif, abi, 0);
 -CHECK_FIELD_OFFSET(ffi_cif, nargs, 4);
 -CHECK_FIELD_OFFSET(ffi_cif, arg_types, 8);
@@ -172,7 +182,15 @@ index 486ffa7..ddcd859 100644
 -#else
 -#error "Unknown pointer size"
 -#endif
--
++// wasm32-only wasi backend: a pointer is a 32-bit Number, so the emscripten
++// wasm64 pointer encode/decode collapse to identities. STORE_ARG_WIDENED
++// stores an integral return widened to ffi_arg (32 bits here); the typed-array
++// store wraps modulo 2^32, so a sign-extended negative Number lands correctly.
++#define DEC_PTR(p) p
++#define ENC_PTR(p) p
++#define STORE_ARG_WIDENED_UNSIGNED(rvalue, x) (DEREF_U32(rvalue, 0) = (x))
++#define STORE_ARG_WIDENED_SIGNED(rvalue, x) (DEREF_U32(rvalue, 0) = (x))
+ 
  #define ALIGN_ADDRESS(addr, align) (addr &= (~((align) - 1)))
  #define STACK_ALLOC(stack, size, align) ((stack -= (size)), ALIGN_ADDRESS(stack, align))
  
@@ -189,7 +207,7 @@ index 486ffa7..ddcd859 100644
  
  #define FFI_OK_MACRO 0
  _Static_assert(FFI_OK_MACRO == FFI_OK, "FFI_OK must be 0");
-@@ -153,36 +114,7 @@ _Static_assert(FFI_OK_MACRO == FFI_OK, "FFI_OK must be 0");
+@@ -171,36 +124,7 @@ _Static_assert(FFI_OK_MACRO == FFI_OK, "FFI_OK must be 0");
  #define FFI_BAD_TYPEDEF_MACRO 1
  _Static_assert(FFI_BAD_TYPEDEF_MACRO == FFI_BAD_TYPEDEF, "FFI_BAD_TYPEDEF must be 1");
  
@@ -227,7 +245,7 @@ index 486ffa7..ddcd859 100644
  
  /**
   * A Javascript helper function. This takes an argument typ which is a wasm
-@@ -200,7 +132,6 @@ ffi_prep_cif_machdep_var(ffi_cif *cif, unsigned nfixedargs, unsigned ntotalargs)
+@@ -218,7 +142,6 @@ ffi_prep_cif_machdep_var(ffi_cif *cif, unsigned nfixedargs, unsigned ntotalargs)
  EM_JS_MACROS(
  void,
  unbox_small_structs, (ffi_type type_ptr), {
@@ -235,7 +253,7 @@ index 486ffa7..ddcd859 100644
    var type_id = FFI_TYPE__TYPEID(type_ptr);
    while (type_id === FFI_TYPE_STRUCT) {
      // Don't unbox single element structs if they are bigger than 16 bytes. This
-@@ -213,15 +144,15 @@ unbox_small_structs, (ffi_type type_ptr), {
+@@ -231,15 +154,15 @@ unbox_small_structs, (ffi_type type_ptr), {
      //
      // See the Python comment here:
      // https://github.com/python/cpython/blob/a16a9f978f42b8a09297c1efbf33877f6388c403/Modules/_ctypes/stgdict.c#L718-L779
@@ -255,7 +273,7 @@ index 486ffa7..ddcd859 100644
        type_ptr = first_element;
        type_id = FFI_TYPE__TYPEID(first_element);
      } else {
-@@ -235,15 +166,10 @@ EM_JS_MACROS(
+@@ -253,15 +176,10 @@ EM_JS_MACROS(
  void,
  ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
  {
@@ -272,16 +290,7 @@ index 486ffa7..ddcd859 100644
    var rtype_unboxed = unbox_small_structs(CIF__RTYPE(cif));
    var rtype_ptr = rtype_unboxed[0];
    var rtype_id = rtype_unboxed[1];
-@@ -267,7 +193,7 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
-   // just use this. We also mark a flag that we don't need to convert the return
-   // value of the dynamic call back to C.
-   if (rtype_id === FFI_TYPE_LONGDOUBLE || rtype_id === FFI_TYPE_STRUCT) {
--    args.push(ENC_PTR(rvalue));
-+    args.push(rvalue);
-     ret_by_arg = true;
-   }
- 
-@@ -276,8 +202,8 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+@@ -307,8 +225,8 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
    // Javascript to C automatically, here we manually do the inverse conversion
    // from C to Javascript.
    for (var i = 0; i < nfixedargs; i++) {
@@ -292,7 +301,7 @@ index 486ffa7..ddcd859 100644
      var arg_type_ptr = arg_unboxed[0];
      var arg_type_id = arg_unboxed[1];
  
-@@ -288,6 +214,7 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+@@ -319,6 +237,7 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
      case FFI_TYPE_INT:
      case FFI_TYPE_SINT32:
      case FFI_TYPE_UINT32:
@@ -300,7 +309,7 @@ index 486ffa7..ddcd859 100644
        args.push(DEREF_U32(arg_ptr, 0));
        break;
      case FFI_TYPE_FLOAT:
-@@ -321,14 +248,11 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+@@ -352,14 +271,11 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
        // Nontrivial structs are passed by pointer.
        // Have to copy the struct onto the stack though because C ABI says it's
        // call by value.
@@ -317,7 +326,7 @@ index 486ffa7..ddcd859 100644
        break;
      case FFI_TYPE_COMPLEX:
        throw new Error('complex marshalling nyi');
-@@ -346,11 +270,11 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+@@ -377,11 +293,11 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
    // We don't have any way of knowing how many args were actually passed, so we
    // just always copy extra nonsense past the end. The ownwards call will know
    // not to look at it.
@@ -332,7 +341,7 @@ index 486ffa7..ddcd859 100644
        var arg_type_ptr = arg_unboxed[0];
        var arg_type_id = arg_unboxed[1];
        switch (arg_type_id) {
-@@ -367,6 +291,7 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+@@ -398,6 +314,7 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
        case FFI_TYPE_INT:
        case FFI_TYPE_UINT32:
        case FFI_TYPE_SINT32:
@@ -340,7 +349,7 @@ index 486ffa7..ddcd859 100644
        case FFI_TYPE_FLOAT:
          STACK_ALLOC(cur_stack_ptr, 4, 4);
          DEREF_U32(cur_stack_ptr, 0) = DEREF_U32(arg_ptr, 0);
-@@ -389,12 +314,8 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+@@ -420,12 +337,8 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
          // Again, struct must be passed by pointer.
          // But ABI is by value, so have to copy struct onto stack.
          // Currently arguments are going onto stack so we can't put it there now. Come back for this.
@@ -355,7 +364,7 @@ index 486ffa7..ddcd859 100644
          break;
        case FFI_TYPE_COMPLEX:
          throw new Error('complex arg marshalling nyi');
-@@ -403,7 +324,7 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+@@ -434,7 +347,7 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
        }
      }
      // extra normal argument which is the pointer to the varargs.
@@ -364,7 +373,7 @@ index 486ffa7..ddcd859 100644
      // Now allocate variable struct args on stack too.
      for (var i = 0; i < struct_arg_info.length; i++) {
        var struct_info = struct_arg_info[i];
-@@ -413,7 +334,7 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+@@ -444,7 +357,7 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
        var align = struct_info[3];
        STACK_ALLOC(cur_stack_ptr, size, align);
        HEAP8.subarray(cur_stack_ptr, cur_stack_ptr+size).set(HEAP8.subarray(arg_ptr, arg_ptr + size));
@@ -373,15 +382,18 @@ index 486ffa7..ddcd859 100644
      }
    }
    stackRestore(cur_stack_ptr);
-@@ -438,6 +359,7 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
-   case FFI_TYPE_INT:
-   case FFI_TYPE_UINT32:
-   case FFI_TYPE_SINT32:
-+  case FFI_TYPE_POINTER:
-     DEREF_U32(rvalue, 0) = result;
+@@ -474,6 +387,10 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+   switch (rtype_id) {
+   case FFI_TYPE_VOID:
      break;
-   case FFI_TYPE_FLOAT:
-@@ -458,9 +380,6 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
++  case FFI_TYPE_POINTER:
++    // A pointer is register-width on wasm32, so it is never widened.
++    DEREF_U32(rvalue, 0) = result;
++    break;
+   case FFI_TYPE_INT:
+   case FFI_TYPE_SINT32:
+     if (rtype_widen)
+@@ -521,9 +438,6 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
    case FFI_TYPE_SINT64:
      DEREF_U64(rvalue, 0) = result;
      break;
@@ -391,7 +403,7 @@ index 486ffa7..ddcd859 100644
    case FFI_TYPE_COMPLEX:
      throw new Error('complex ret marshalling nyi');
    default:
-@@ -468,79 +387,30 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+@@ -531,79 +445,30 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
    }
  });
  
@@ -476,7 +488,7 @@ index 486ffa7..ddcd859 100644
    var rtype_unboxed = unbox_small_structs(CIF__RTYPE(cif));
    var rtype_ptr = rtype_unboxed[0];
    var rtype_id = rtype_unboxed[1];
-@@ -556,7 +426,7 @@ ffi_prep_closure_loc_js,
+@@ -619,7 +484,7 @@ ffi_prep_closure_loc_js,
    case FFI_TYPE_STRUCT:
    case FFI_TYPE_LONGDOUBLE:
      // Return via a first pointer argument.
@@ -485,7 +497,7 @@ index 486ffa7..ddcd859 100644
      ret_by_arg = true;
      break;
    case FFI_TYPE_INT:
-@@ -566,6 +436,7 @@ ffi_prep_closure_loc_js,
+@@ -629,6 +494,7 @@ ffi_prep_closure_loc_js,
    case FFI_TYPE_SINT16:
    case FFI_TYPE_UINT32:
    case FFI_TYPE_SINT32:
@@ -493,7 +505,7 @@ index 486ffa7..ddcd859 100644
      sig = 'i';
      break;
    case FFI_TYPE_FLOAT:
-@@ -578,9 +449,6 @@ ffi_prep_closure_loc_js,
+@@ -641,9 +507,6 @@ ffi_prep_closure_loc_js,
    case FFI_TYPE_SINT64:
      sig = 'j';
      break;
@@ -503,7 +515,7 @@ index 486ffa7..ddcd859 100644
    case FFI_TYPE_COMPLEX:
      throw new Error('complex ret marshalling nyi');
    default:
-@@ -589,11 +457,11 @@ ffi_prep_closure_loc_js,
+@@ -652,11 +515,11 @@ ffi_prep_closure_loc_js,
    var unboxed_arg_type_id_list = [];
    var unboxed_arg_type_info_list = [];
    for (var i = 0; i < nargs; i++) {
@@ -517,7 +529,7 @@ index 486ffa7..ddcd859 100644
    }
    for (var i = 0; i < nfixedargs; i++) {
      switch (unboxed_arg_type_id_list[i]) {
-@@ -604,6 +472,8 @@ ffi_prep_closure_loc_js,
+@@ -667,6 +530,8 @@ ffi_prep_closure_loc_js,
      case FFI_TYPE_SINT16:
      case FFI_TYPE_UINT32:
      case FFI_TYPE_SINT32:
@@ -526,7 +538,7 @@ index 486ffa7..ddcd859 100644
        sig += 'i';
        break;
      case FFI_TYPE_FLOAT:
-@@ -619,10 +489,6 @@ ffi_prep_closure_loc_js,
+@@ -682,10 +547,6 @@ ffi_prep_closure_loc_js,
      case FFI_TYPE_SINT64:
        sig += 'j';
        break;
@@ -537,7 +549,7 @@ index 486ffa7..ddcd859 100644
      case FFI_TYPE_COMPLEX:
        throw new Error('complex marshalling nyi');
      default:
-@@ -631,7 +497,7 @@ ffi_prep_closure_loc_js,
+@@ -694,7 +555,7 @@ ffi_prep_closure_loc_js,
    }
    if (nfixedargs < nargs) {
      // extra pointer to varargs stack
@@ -546,7 +558,7 @@ index 486ffa7..ddcd859 100644
    }
    LOG_DEBUG("CREATE_CLOSURE", "sig:", sig);
    function trampoline() {
-@@ -650,7 +516,7 @@ ffi_prep_closure_loc_js,
+@@ -713,7 +574,7 @@ ffi_prep_closure_loc_js,
        STACK_ALLOC(cur_ptr, 8, 8);
        ret_ptr = cur_ptr;
      }
@@ -555,7 +567,7 @@ index 486ffa7..ddcd859 100644
      var args_ptr = cur_ptr;
      var carg_idx = 0;
      // Here we either have the actual argument, or a pair of BigInts for long
-@@ -671,62 +537,58 @@ ffi_prep_closure_loc_js,
+@@ -734,62 +595,58 @@ ffi_prep_closure_loc_js,
        case FFI_TYPE_SINT8:
          // Bad things happen if we don't align to 4 here
          STACK_ALLOC(cur_ptr, 1, 4);
@@ -629,7 +641,7 @@ index 486ffa7..ddcd859 100644
      // We have no way of knowing how many varargs were actually provided, this
      // fills the rest of the stack space allocated with nonsense. The onward
      // call will know to ignore the nonsense.
-@@ -742,20 +604,20 @@ ffi_prep_closure_loc_js,
+@@ -805,20 +662,20 @@ ffi_prep_closure_loc_js,
        if (arg_type_id === FFI_TYPE_STRUCT) {
          // In this case varargs is a pointer to pointer to struct so we need to
          // deref once
@@ -655,7 +667,7 @@ index 486ffa7..ddcd859 100644
          CLOSURE__user_data(closure)
      );
      stackRestore(orig_stack_ptr);
-@@ -780,19 +642,745 @@ ffi_prep_closure_loc_js,
+@@ -843,19 +700,745 @@ ffi_prep_closure_loc_js,
      return FFI_BAD_TYPEDEF_MACRO;
    }
    setWasmTableEntry(codeloc, wasm_trampoline);
