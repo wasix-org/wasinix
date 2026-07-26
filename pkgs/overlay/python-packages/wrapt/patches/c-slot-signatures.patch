@@ -1,128 +1,184 @@
---- a/src/wrapt/_wrappers.c	2026-07-17 11:08:24.826884823 +0200
-+++ b/src/wrapt/_wrappers.c	2026-07-17 11:08:24.893562804 +0200
-@@ -1393,7 +1393,7 @@
+diff --git a/src/wrapt/_wrappers.c b/src/wrapt/_wrappers.c
+index ec1fdd2..8822176 100644
+--- a/src/wrapt/_wrappers.c
++++ b/src/wrapt/_wrappers.c
+@@ -2605,7 +2605,7 @@ static PyObject *WraptObjectProxy_mro_entries(WraptObjectProxyObject *self,
+ 
  /* ------------------------------------------------------------------------- */
  
- static PyObject *WraptObjectProxy_get_name(
--        WraptObjectProxyObject *self)
-+        WraptObjectProxyObject *self, void *Py_UNUSED(closure))
+-static PyObject *WraptObjectProxy_get_name(WraptObjectProxyObject *self)
++static PyObject *WraptObjectProxy_get_name(WraptObjectProxyObject *self, void *Py_UNUSED(closure))
  {
-     if (!self->wrapped) {
-       PyErr_SetString(PyExc_ValueError, "wrapper has not been initialized");
-@@ -1406,7 +1406,7 @@
+   if (!self->wrapped)
+   {
+@@ -2623,7 +2623,7 @@ static PyObject *WraptObjectProxy_get_name(WraptObjectProxyObject *self)
  /* ------------------------------------------------------------------------- */
  
  static int WraptObjectProxy_set_name(WraptObjectProxyObject *self,
--        PyObject *value)
-+        PyObject *value, void *Py_UNUSED(closure))
+-                                     PyObject *value)
++                                     PyObject *value, void *Py_UNUSED(closure))
  {
-     if (!self->wrapped) {
-       PyErr_SetString(PyExc_ValueError, "wrapper has not been initialized");
-@@ -1419,7 +1419,7 @@
+   if (!self->wrapped)
+   {
+@@ -2640,7 +2640,7 @@ static int WraptObjectProxy_set_name(WraptObjectProxyObject *self,
+ 
  /* ------------------------------------------------------------------------- */
  
- static PyObject *WraptObjectProxy_get_qualname(
--        WraptObjectProxyObject *self)
-+        WraptObjectProxyObject *self, void *Py_UNUSED(closure))
+-static PyObject *WraptObjectProxy_get_qualname(WraptObjectProxyObject *self)
++static PyObject *WraptObjectProxy_get_qualname(WraptObjectProxyObject *self, void *Py_UNUSED(closure))
  {
-     if (!self->wrapped) {
-       PyErr_SetString(PyExc_ValueError, "wrapper has not been initialized");
-@@ -1432,7 +1432,7 @@
+   if (!self->wrapped)
+   {
+@@ -2658,7 +2658,7 @@ static PyObject *WraptObjectProxy_get_qualname(WraptObjectProxyObject *self)
  /* ------------------------------------------------------------------------- */
  
  static int WraptObjectProxy_set_qualname(WraptObjectProxyObject *self,
--        PyObject *value)
-+        PyObject *value, void *Py_UNUSED(closure))
+-                                         PyObject *value)
++                                         PyObject *value, void *Py_UNUSED(closure))
  {
-     if (!self->wrapped) {
-       PyErr_SetString(PyExc_ValueError, "wrapper has not been initialized");
-@@ -1445,7 +1445,7 @@
+   if (!self->wrapped)
+   {
+@@ -2751,7 +2751,7 @@ static int WraptObjectProxy_set_doc(WraptObjectProxyObject *self,
+ 
  /* ------------------------------------------------------------------------- */
  
- static PyObject *WraptObjectProxy_get_module(
--        WraptObjectProxyObject *self)
-+        WraptObjectProxyObject *self, void *Py_UNUSED(closure))
+-static PyObject *WraptObjectProxy_get_class(WraptObjectProxyObject *self)
++static PyObject *WraptObjectProxy_get_class(WraptObjectProxyObject *self, void *Py_UNUSED(closure))
  {
-     if (!self->wrapped) {
-       PyErr_SetString(PyExc_ValueError, "wrapper has not been initialized");
-@@ -1458,7 +1458,7 @@
- /* ------------------------------------------------------------------------- */
- 
- static int WraptObjectProxy_set_module(WraptObjectProxyObject *self,
--        PyObject *value)
-+        PyObject *value, void *Py_UNUSED(closure))
- {
-     if (!self->wrapped) {
-       PyErr_SetString(PyExc_ValueError, "wrapper has not been initialized");
-@@ -1474,7 +1474,7 @@
- /* ------------------------------------------------------------------------- */
- 
- static PyObject *WraptObjectProxy_get_doc(
--        WraptObjectProxyObject *self)
-+        WraptObjectProxyObject *self, void *Py_UNUSED(closure))
- {
-     if (!self->wrapped) {
-       PyErr_SetString(PyExc_ValueError, "wrapper has not been initialized");
-@@ -1487,7 +1487,7 @@
- /* ------------------------------------------------------------------------- */
- 
- static int WraptObjectProxy_set_doc(WraptObjectProxyObject *self,
--        PyObject *value)
-+        PyObject *value, void *Py_UNUSED(closure))
- {
-     if (!self->wrapped) {
-       PyErr_SetString(PyExc_ValueError, "wrapper has not been initialized");
-@@ -1503,7 +1503,7 @@
- /* ------------------------------------------------------------------------- */
- 
- static PyObject *WraptObjectProxy_get_class(
--        WraptObjectProxyObject *self)
-+        WraptObjectProxyObject *self, void *Py_UNUSED(closure))
- {
-     if (!self->wrapped) {
-       PyErr_SetString(PyExc_ValueError, "wrapper has not been initialized");
-@@ -1516,7 +1516,7 @@
+   if (!self->wrapped)
+   {
+@@ -2769,7 +2769,7 @@ static PyObject *WraptObjectProxy_get_class(WraptObjectProxyObject *self)
  /* ------------------------------------------------------------------------- */
  
  static int WraptObjectProxy_set_class(WraptObjectProxyObject *self,
--        PyObject *value)
-+        PyObject *value, void *Py_UNUSED(closure))
+-                                      PyObject *value)
++                                      PyObject *value, void *Py_UNUSED(closure))
  {
-     if (!self->wrapped) {
-       PyErr_SetString(PyExc_ValueError, "wrapper has not been initialized");
-@@ -1529,7 +1529,7 @@
+   if (!self->wrapped)
+   {
+@@ -2787,7 +2787,7 @@ static int WraptObjectProxy_set_class(WraptObjectProxyObject *self,
  /* ------------------------------------------------------------------------- */
  
- static PyObject *WraptObjectProxy_get_annotations(
--        WraptObjectProxyObject *self)
-+        WraptObjectProxyObject *self, void *Py_UNUSED(closure))
+ static PyObject *
+-WraptObjectProxy_get_annotations(WraptObjectProxyObject *self)
++WraptObjectProxy_get_annotations(WraptObjectProxyObject *self, void *Py_UNUSED(closure))
  {
-     if (!self->wrapped) {
-       PyErr_SetString(PyExc_ValueError, "wrapper has not been initialized");
-@@ -1542,7 +1542,7 @@
+   if (!self->wrapped)
+   {
+@@ -2805,7 +2805,7 @@ WraptObjectProxy_get_annotations(WraptObjectProxyObject *self)
  /* ------------------------------------------------------------------------- */
  
  static int WraptObjectProxy_set_annotations(WraptObjectProxyObject *self,
--        PyObject *value)
-+        PyObject *value, void *Py_UNUSED(closure))
+-                                            PyObject *value)
++                                            PyObject *value, void *Py_UNUSED(closure))
  {
-     if (!self->wrapped) {
-       PyErr_SetString(PyExc_ValueError, "wrapper has not been initialized");
-@@ -1555,7 +1555,7 @@
+   if (!self->wrapped)
+   {
+@@ -2822,7 +2822,7 @@ static int WraptObjectProxy_set_annotations(WraptObjectProxyObject *self,
+ 
  /* ------------------------------------------------------------------------- */
  
- static PyObject *WraptObjectProxy_get_wrapped(
--        WraptObjectProxyObject *self)
-+        WraptObjectProxyObject *self, void *Py_UNUSED(closure))
+-static PyObject *WraptObjectProxy_get_dict(WraptObjectProxyObject *self)
++static PyObject *WraptObjectProxy_get_dict(WraptObjectProxyObject *self, void *Py_UNUSED(closure))
  {
-     if (!self->wrapped) {
-       PyErr_SetString(PyExc_ValueError, "wrapper has not been initialized");
-@@ -1569,7 +1569,7 @@
+   if (!self->wrapped)
+   {
+@@ -2840,7 +2840,7 @@ static PyObject *WraptObjectProxy_get_dict(WraptObjectProxyObject *self)
+ /* ------------------------------------------------------------------------- */
+ 
+ static int WraptObjectProxy_set_dict(WraptObjectProxyObject *self,
+-                                     PyObject *value)
++                                     PyObject *value, void *Py_UNUSED(closure))
+ {
+   if (!value)
+   {
+@@ -2856,7 +2856,7 @@ static int WraptObjectProxy_set_dict(WraptObjectProxyObject *self,
+ 
+ /* ------------------------------------------------------------------------- */
+ 
+-static PyObject *WraptObjectProxy_get_self_dict(WraptObjectProxyObject *self)
++static PyObject *WraptObjectProxy_get_self_dict(WraptObjectProxyObject *self, void *Py_UNUSED(closure))
+ {
+   if (!self->dict)
+   {
+@@ -2871,7 +2871,7 @@ static PyObject *WraptObjectProxy_get_self_dict(WraptObjectProxyObject *self)
+ 
+ /* ------------------------------------------------------------------------- */
+ 
+-static PyObject *WraptObjectProxy_get_wrapped(WraptObjectProxyObject *self)
++static PyObject *WraptObjectProxy_get_wrapped(WraptObjectProxyObject *self, void *Py_UNUSED(closure))
+ {
+   if (!self->wrapped)
+   {
+@@ -2885,7 +2885,7 @@ static PyObject *WraptObjectProxy_get_wrapped(WraptObjectProxyObject *self)
+ 
+ /* ------------------------------------------------------------------------- */
+ 
+-static PyObject *WraptObjectProxy_get_object_proxy(WraptObjectProxyObject *self)
++static PyObject *WraptObjectProxy_get_object_proxy(WraptObjectProxyObject *self, void *Py_UNUSED(closure))
+ {
+   wrapt_module_state *state = wrapt_state_from_type(Py_TYPE(self));
+   if (!state)
+@@ -2897,7 +2897,7 @@ static PyObject *WraptObjectProxy_get_object_proxy(WraptObjectProxyObject *self)
  /* ------------------------------------------------------------------------- */
  
  static int WraptObjectProxy_set_wrapped(WraptObjectProxyObject *self,
--        PyObject *value)
-+        PyObject *value, void *Py_UNUSED(closure))
+-                                        PyObject *value)
++                                        PyObject *value, void *Py_UNUSED(closure))
  {
-     if (!value) {
-         PyErr_SetString(PyExc_TypeError, "__wrapped__ must be an object");
+   wrapt_module_state *state = wrapt_state_from_type(Py_TYPE(self));
+   if (!state)
+@@ -3982,7 +3982,7 @@ WraptFunctionWrapperBase_set_name(WraptFunctionWrapperObject *self,
+ 
+ static PyObject *
+ WraptFunctionWrapperBase_get_self_instance(WraptFunctionWrapperObject *self,
+-                                           void *closure)
++                                           void *closure, void *Py_UNUSED(closure))
+ {
+   if (!self->instance)
+   {
+@@ -3997,7 +3997,7 @@ WraptFunctionWrapperBase_get_self_instance(WraptFunctionWrapperObject *self,
+ 
+ static PyObject *
+ WraptFunctionWrapperBase_get_self_wrapper(WraptFunctionWrapperObject *self,
+-                                          void *closure)
++                                          void *closure, void *Py_UNUSED(closure))
+ {
+   if (!self->wrapper)
+   {
+@@ -4012,7 +4012,7 @@ WraptFunctionWrapperBase_get_self_wrapper(WraptFunctionWrapperObject *self,
+ 
+ static PyObject *
+ WraptFunctionWrapperBase_get_self_enabled(WraptFunctionWrapperObject *self,
+-                                          void *closure)
++                                          void *closure, void *Py_UNUSED(closure))
+ {
+   if (!self->enabled)
+   {
+@@ -4027,7 +4027,7 @@ WraptFunctionWrapperBase_get_self_enabled(WraptFunctionWrapperObject *self,
+ 
+ static PyObject *
+ WraptFunctionWrapperBase_get_self_binding(WraptFunctionWrapperObject *self,
+-                                          void *closure)
++                                          void *closure, void *Py_UNUSED(closure))
+ {
+   if (!self->binding)
+   {
+@@ -4042,7 +4042,7 @@ WraptFunctionWrapperBase_get_self_binding(WraptFunctionWrapperObject *self,
+ 
+ static PyObject *
+ WraptFunctionWrapperBase_get_self_parent(WraptFunctionWrapperObject *self,
+-                                         void *closure)
++                                         void *closure, void *Py_UNUSED(closure))
+ {
+   if (!self->parent)
+   {
+@@ -4057,7 +4057,7 @@ WraptFunctionWrapperBase_get_self_parent(WraptFunctionWrapperObject *self,
+ 
+ static PyObject *
+ WraptFunctionWrapperBase_get_self_owner(WraptFunctionWrapperObject *self,
+-                                        void *closure)
++                                        void *closure, void *Py_UNUSED(closure))
+ {
+   if (!self->owner)
+   {
