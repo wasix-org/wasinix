@@ -16,6 +16,13 @@
       "tag": "45.0.4"
     }
   },
+  "gevent": {
+    "25.9.1": {
+      "hash": "sha256-rfnNVS3kSk5nVMUf8ueNkZO3+m6rEj25V4ohDmVyNd0=",
+      "note": "latest 25.x (outgoing major)",
+      "version": "25.9.1"
+    }
+  },
   "numpy": {
     "2.1.3": {
       "hash": "sha256-xqLRMwQz0VQpLe7xjYVMGXELtXa/wQx2KgQftBe+q/Q=",
@@ -60,6 +67,14 @@
       "variants": [
         "py313"
       ]
+    }
+  },
+  "rpds-py": {
+    "0.30.0": {
+      "cargoHash": "sha256-2m2DW1rknZR+UztgUcRaQk4gY19eXmT089U2YlV16d8=",
+      "hash": "sha256-3Y/3z5ABSvDA94fuo0eU6/ZBUkLuHW+pHqunJcxEHoQ=",
+      "note": "latest 0.x (outgoing major)",
+      "version": "0.30.0"
     }
   },
   "xxhash": {

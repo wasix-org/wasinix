@@ -4,8 +4,5 @@
   },
   "pythonRegistry.wheels.tokenizers": {
     "0.22.2": 3
-  },
-  "pythonRegistry.wheels.wrapt": {
-    "1.17.2": 2
   }
 }
