@@ -42,7 +42,7 @@ in
       name = "${pname}-${version}-cargo-deps";
       sourceRoot = "${src.name}/src/native";
       postPatch = "cp ${./Cargo.lock} Cargo.lock";
-      hash = "sha256-5D/FJpVz9KaTZaPg3OMGQU28nH6qXUoOC37epy9C0vA=";
+      hash = "sha256-jjk7EaHEjDti/pGE6cm5WuWjVYEW7UAzZh2xodX5AgE=";
     };
 
     # Cargo.lock: upstream's resolves mio 1.2.0, whose wasi backend upstream

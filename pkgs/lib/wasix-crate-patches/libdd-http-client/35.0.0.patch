@@ -1,0 +1,20 @@
+# reqwest picks its browser (wasm-bindgen/fetch) backend on every wasm32 target,
+# which drops ClientBuilder::timeout and Error::is_connect, so this crate's
+# default reqwest backend does not compile; the fetch backend would not run
+# under wasmer either. The hyper backend goes through libdd-common's connector,
+# already enabled for wasmer by libdd-common's patch, so select it instead.
+# Feature defaults are not target-gated, hence the blanket flip: this vendored
+# copy is only ever built for wasix.
+
+diff -ruN '--exclude=.cargo-checksum.json' a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml	1970-01-01 01:00:01.000000000 +0100
++++ b/Cargo.toml	2026-07-27 12:00:00.000000000 +0100
+@@ -17,7 +17,7 @@
+ [features]
+ default = [
+     "https",
+-    "reqwest-backend",
++    "hyper-backend",
+ ]
+ https = [
+     "dep:reqwest",

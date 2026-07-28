@@ -1,0 +1,24 @@
+object_builder's all_types variant lists uint32_t and uint64_t, i.e. unsigned
+int and unsigned long long. On wasm32 size_t is unsigned long, a third type
+that converts to both without narrowing, so the variant's converting
+constructor is ambiguous and node->length has no viable alternative. Casting at
+the call site fixes it for every ILP32 target whose size_t is unsigned long.
+Upstream candidate; not yet filed.
+
+--- a/src/processor/extract_schema.cpp
++++ b/src/processor/extract_schema.cpp
+@@ -220,11 +220,11 @@ owned_object node_serialize::operator()(const node_array_ptr &node) const
+         types.emplace_back(std::move(res));
+     }
+
++    const auto len = static_cast<uint64_t>(node->length);
+     if (node->truncated) {
+-        array.emplace_back(
+-            object_builder::map({{"len", node->length}, {"truncated", true}}, alloc));
++        array.emplace_back(object_builder::map({{"len", len}, {"truncated", true}}, alloc));
+     } else {
+-        array.emplace_back(object_builder::map({{"len", node->length}}, alloc));
++        array.emplace_back(object_builder::map({{"len", len}}, alloc));
+     }
+
+     return array;
