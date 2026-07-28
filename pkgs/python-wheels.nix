@@ -72,12 +72,15 @@
       cp ${file} "$site/__pyrun__.py"
 
       log=$(mktemp)
+      # stdin from /dev/null: a guest that touches a socket makes wasmer prompt for
+      # the networking capability, and the prompt blocks until the 600s timeout kills
+      # it, losing python's buffered stdout (ddtrace imports such a socket).
       if timeout 600 wasmer run \
         --volume "$site":/site \
         --mapdir /home:"$HOME" \
         --env HOME=/home \
         --env PYTHONPATH=/site \
-        "$webc" -- /site/__pyrun__.py >"$log" 2>&1 \
+        "$webc" -- /site/__pyrun__.py >"$log" 2>&1 </dev/null \
         && ${pkgs.gnugrep}/bin/grep -q ${lib.escapeShellArg marker} "$log"; then
         cp "$log" "$out"
       else
