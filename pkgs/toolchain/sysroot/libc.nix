@@ -24,12 +24,12 @@
   pic ? false,
   exnref ? false,
 }: let
-  version = "2026-07-03.1";
+  version = "2026-07-30.1";
   src = fetchFromGitHub {
     owner = "wasix-org";
     repo = "wasix-libc";
     tag = "v${version}";
-    hash = "sha256-6xpQdtb3GjF9MnepHuZXxsdQssEP8m3ZK8MavLfFU2o=";
+    hash = "sha256-UGBHCYuUlNE6fAAUJnPxIgfJ7ujiUKGUrWU+BFKQfsQ=";
   };
 
   # EH picks Makefile-eh (+ EXNREF_EH), else the base Makefile; PIC is
