@@ -60,11 +60,11 @@
       },
       "locked": {
         "host": "gitlab.haskell.org",
-        "lastModified": 1785316227,
-        "narHash": "sha256-cBDwi0ezsww59QpU7BSSrAuWqdlXguGpIqcM8HZINLw=",
+        "lastModified": 1785434061,
+        "narHash": "sha256-F+eX/SggOa1mcCedfSfPZYzh7K7QZQdRsAqYIwdcXl4=",
         "owner": "haskell-wasm",
         "repo": "ghc-wasm-meta",
-        "rev": "02b504397afdb8035a2a063870f4b7795acb96d0",
+        "rev": "ce99eb6bc65d935ee5cb0e7563deb893793dc947",
         "type": "gitlab"
       },
       "original": {
