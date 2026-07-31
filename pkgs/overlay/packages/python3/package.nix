@@ -301,11 +301,12 @@
           '';
 
           # nixpkgs' sysconfigdata setup-hook hardcodes _PYTHON_HOST_PLATFORM from the nix
-          # platform ("wasi-wasm32"); keep it in sync with MACHDEP=wasix so cross-built
-          # wheels get the wasix_wasm32 tag (pkgs/python-registry/tests.nix keys on it).
+          # platform ("wasip1-wasm32" since the wasi->wasip1 kernel rename); keep it in
+          # sync with MACHDEP=wasix so cross-built wheels get the wasix_wasm32 tag
+          # (pkgs/python-registry/tests.nix keys on it).
           postFixup = ''
             substituteInPlace "$out/nix-support/setup-hook" \
-              --replace-fail "_PYTHON_HOST_PLATFORM='wasi-wasm32'" "_PYTHON_HOST_PLATFORM='wasix-wasm32'"
+              --replace-fail "_PYTHON_HOST_PLATFORM='wasip1-wasm32'" "_PYTHON_HOST_PLATFORM='wasix-wasm32'"
           '';
 
           dontCheckForBrokenSymlinks = true;
