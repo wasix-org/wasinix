@@ -26,14 +26,14 @@
 in
   pyfinal.buildPythonPackage rec {
     pname = "ddtrace";
-    version = "4.12.0";
+    version = "4.12.2";
     pyproject = true;
 
     src = final.fetchFromGitHub {
       owner = "DataDog";
       repo = "dd-trace-py";
       tag = "v${version}";
-      hash = "sha256-VWjgOmKUS46SfykWmX3r2eK+5P7yr24z6ypxXChevXU=";
+      hash = "sha256-ato59J68s+6wljGsfJWW6qqocdUjz7O4Glf1O6wToBg=";
     };
 
     cargoRoot = "src/native";
