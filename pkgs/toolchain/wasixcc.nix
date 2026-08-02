@@ -14,37 +14,26 @@
 }: let
   env = import ./env.nix {inherit lib;};
 
-  version = "0.4.3";
+  version = "0.4.4";
   src = fetchFromGitHub {
     owner = "wasix-org";
     repo = "wasixcc";
     tag = "v${version}";
-    hash = "sha256-y3NXxRqdgTaFa/C6Kt+pZao6c8q0nRrRge8w6uSjrs8=";
+    hash = "sha256-8ifkYmPoKLlTeZHww+wMyFRYWkK3hOKx3vOlEP+4bYo=";
   };
 
   wasixccUnwrapped = rustPlatform.buildRustPackage {
     pname = "wasixcc-unwrapped";
     inherit version src;
-    # Vendored by fetchCargoVendor, which reads the in-source lockfile at build
-    # time; `cargoLock.lockFile = "${src}/Cargo.lock"` would read it during eval
-    # (import-from-derivation), forcing the fetch before any attr can be listed.
-    cargoHash = "sha256-JBuSAfDv1MlZt2tXR6bh+4ZlzH6joFjD5JXH+ZuuD+A=";
 
-    patches = [
-      # The no-input passthrough runs clang without pinning the linker, so probes
-      # like meson's `cc -Wl,--version` fail to find wasm-ld on PATH. TODO: upstream.
-      ./wasixcc-pin-linker-in-passthrough.patch
-      # Keep user `-Wl,` flags and file inputs in one ordered stream so
-      # `--whole-archive lib.a --no-whole-archive` brackets reach wasm-ld intact.
-      # Also folds in the `--undefined-version` discard. TODO: upstream, then drop.
-      ./wasixcc-preserve-link-order.patch
-      # Path::extension only sees the last component, so a versioned shared
-      # library (libfoo.so.1.2.3, what cmake emits for a target with SOVERSION)
-      # was partitioned as a source file: the driver then expected a compiled
-      # <tmp>/libfoo.so.1.2.3.o that nothing produces and the link failed with
-      # "cannot open". TODO: upstream, then drop.
-      ./wasixcc-versioned-soname-inputs.patch
-    ];
+    # Upstream's lock + .cargo/config.toml resolve through the WASIX overlay
+    # registry (+wasix.N versions 403 on crates.io, and the in-source config
+    # outranks the vendored source replacement); this host build needs neither.
+    cargoLock.lockFile = ./wasixcc.Cargo.lock;
+    postPatch = ''
+      cp ${./wasixcc.Cargo.lock} Cargo.lock
+      rm .cargo/config.toml
+    '';
 
     doCheck = true;
 
@@ -86,7 +75,7 @@ in
         attrPath = "toolchain.wasixcc.unwrapped";
       };
       wasix.updateNotes = [
-        {message = "check whether the vendored wasixcc-*.patch fixes landed upstream";}
+        {message = "regenerate wasixcc.Cargo.lock: delete upstream's Cargo.lock and .cargo/config.toml, then `cargo generate-lockfile`; drop the override once upstream keeps the WASIX registry out of the default build";}
       ];
     };
 
