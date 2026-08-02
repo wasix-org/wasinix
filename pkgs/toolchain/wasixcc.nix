@@ -14,12 +14,12 @@
 }: let
   env = import ./env.nix {inherit lib;};
 
-  version = "0.4.3";
+  version = "0.4.4";
   src = fetchFromGitHub {
     owner = "wasix-org";
     repo = "wasixcc";
     tag = "v${version}";
-    hash = "sha256-y3NXxRqdgTaFa/C6Kt+pZao6c8q0nRrRge8w6uSjrs8=";
+    hash = "sha256-8ifkYmPoKLlTeZHww+wMyFRYWkK3hOKx3vOlEP+4bYo=";
   };
 
   wasixccUnwrapped = rustPlatform.buildRustPackage {
