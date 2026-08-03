@@ -7,12 +7,13 @@ version. Use after a rebuild changes contents at the same upstream version,
 which both publishers otherwise refuse to overwrite.
 
 Usage: bump-rel.py <key>[==<version>] [<key>[==<version>] ...]
-Keys are rels.json attr paths (pythonRegistry.wheels.numpy, wasmerPackages.git),
-bare names unique across the prefixes (numpy, git, python3.14), or fnmatch
-globs over either form ('pythonRegistry.wheels.tok*', 'icu-data*'); quote
-globs from the shell. A package serving several versions (registry history)
-needs the ==<version> selector; bumping all of a package's versions stays a
-deliberate per-version act.
+Keys are rels.json attr paths (pythonRegistry.wheels.numpy, wasmerPackages.git,
+cargoRegistry.crates.tokio), bare names unique across the prefixes (numpy, git,
+tokio), or fnmatch globs over either form ('pythonRegistry.wheels.tok*',
+'icu-data*'); quote globs from the shell. A package serving several versions
+(registry history, or a crate with several minted upstreams) needs the
+==<version> selector; bumping all of a package's versions stays a deliberate
+per-version act.
 """
 
 import fnmatch
@@ -23,7 +24,7 @@ from pathlib import Path
 
 SYSTEM = "x86_64-linux"
 
-PREFIXES = ("pythonRegistry.wheels.", "wasmerPackages.")
+PREFIXES = ("pythonRegistry.wheels.", "wasmerPackages.", "cargoRegistry.crates.")
 
 
 def resolve(name: str, versions: dict[str, list[str]]) -> list[str]:

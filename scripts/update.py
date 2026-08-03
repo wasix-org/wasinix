@@ -226,6 +226,9 @@ TARGETS = [
     # bumping this rebuilds the whole haskell closure and needs the wasm patches
     # re-verified.
     Target("ghc-wasm-meta", "flake", input="ghc-wasm-meta"),
+    # the overlay registry's crates.json, refreshed from crates.io against each
+    # mintable crate's `versions` constraint (no package file to carry it).
+    Target("crate-pins", "crate-pins"),
 ]
 
 
@@ -358,6 +361,19 @@ def update_flake_input(t):
     return outcome
 
 
+def update_crate_pins(t):
+    # The overlay registry's crates.json is a pin: crate-pins re-enumerates
+    # crates.io for each mintable crate's `versions` constraint, adding new
+    # matching releases and pruning gone ones so the mint tracks upstream.
+    p = run([sys.executable, str(REPO / "scripts/crate-pins.py")])
+    line = next(
+        (ln for ln in p.stdout.splitlines() if ln.startswith("crate-pins:")), None
+    )
+    if line:
+        print(f"  {line}")
+    return line.split(":", 1)[1].strip() if line else None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", nargs="*", metavar="NAME")
@@ -402,6 +418,7 @@ def main():
     backends = {
         "updateScript": run_update_script,
         "flake": update_flake_input,
+        "crate-pins": update_crate_pins,
     }
 
     # captured before anything bumps: the `prior` side of the update notes

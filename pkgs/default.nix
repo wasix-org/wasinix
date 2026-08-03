@@ -237,6 +237,14 @@
     py314 = mkPythonWheels "py314" "python314" "python3.14" (e: !isNoarch e);
   };
 
+  # The overlay cargo registry: the minted +wasix.N payload and its checks. The
+  # server itself ships as the overlay package wasmerPackages.wasix-cargo-registry
+  # (only ever wasm on Edge); its end-to-end serve check lives with that package
+  # (overlay/packages/cargo-registry/tests), and the serve app runs the same wasm.
+  cargoRegistry = import ./cargo-registry {
+    inherit pkgs lib mkTestGroup crateEdits;
+  };
+
   makeWasmerPackage = pkgs.callPackage ./wasmer/make-wasmer-package.nix {
     self = makeWasmerPackage;
     wasmer = wasmerRuntime;
@@ -282,5 +290,5 @@ in {
   inherit pkgs pkgsCross defaultProfileName wasixPkgNames;
   inherit toolchain toolchainByProfile nixpkgsByProfile preferredProfilePackages allWasmerPackages;
   inherit shippedCommands wasmerPackages librariesByProfile toolchainTestPkgs abiChecks;
-  inherit pythonWheels pythonRegistry;
+  inherit pythonWheels pythonRegistry cargoRegistry;
 }

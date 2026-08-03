@@ -114,6 +114,7 @@
       # pythonWheels is nested by version (py313/py314); collect as wheel-py314-<attr>.
       // lib.concatMapAttrs (pv: wheelSet: collectTestsPrefixed "wheel-${pv}-" wheelSet) wasix.pythonWheels
       // collectTests {python-registry = wasix.pythonRegistry;}
+      // collectTests {cargo-registry = wasix.cargoRegistry;}
       // lib.mapAttrs' (p: lib.nameValuePair "abi-${p}") wasix.abiChecks
       // {treefmt = treefmtEval.config.build.check self;};
   in {
@@ -147,6 +148,8 @@
         pythonWheels = wasix.pythonWheels;
         # all shipped wheels + transitive deps as a static PEP 503 index
         pythonRegistry = wasix.pythonRegistry;
+        # the crate patch tree minted as publishable +wasix.N fork builds
+        cargoRegistry = wasix.cargoRegistry;
       };
 
       # Flatten nested attrsets of derivations to {"a.b.c" = drv;}: recurse
@@ -270,6 +273,13 @@
           preview-diff = run "preview-diff" [] "python3" "preview-diff.py";
           preview-index-deploy = run "preview-index-deploy" [wasmerRuntime p.jq] "bash" "preview-index-deploy.sh";
           update = run "update" [p.nix-update p.nix-prefetch-git p.cargo] "python3" "update.py";
+          # Runs the wasix server (overlay package) under wasmer, seeded from the
+          # fresh mint; cargo relocks/builds against the local instance.
+          cargo-registry-serve = run "cargo-registry-serve" [p.nixVersions.latest p.cargo wasmerRuntime] "python3" "cargo-registry-serve.py";
+          # Regenerate pkgs/cargo-registry/crates.json: the concrete fork version
+          # set (patch versions + supportedVersions constraints enumerated against
+          # the crates.io index) and each crate's hash (.#cargoRegistry.pinInputs).
+          crate-pins = run "crate-pins" [p.nixVersions.latest] "python3" "crate-pins.py";
         };
 
         # rels.json key -> list of served upstream versions (wheels can serve history versions
@@ -283,7 +293,10 @@
           // lib.mapAttrs' (name: ps:
             lib.nameValuePair "wasmerPackages.${name}"
             (lib.unique (map (p: p.pkg.id.baseVersion) ps)))
-          (lib.groupBy (p: p.pkg.id.name) (lib.attrValues wasix.wasmerPackages));
+          (lib.groupBy (p: p.pkg.id.name) (lib.attrValues wasix.wasmerPackages))
+          # minted forks key by upstream version under cargoRegistry.crates.<name>.
+          // lib.mapAttrs' (n: v: lib.nameValuePair "cargoRegistry.crates.${n}" v)
+          wasix.cargoRegistry.crateVersions;
 
         # passthru.wasix.updateNotes (see pkgs/lib/default.nix): things to
         # check when a package moves. `versions` is published in the eval
