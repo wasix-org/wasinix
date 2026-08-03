@@ -17,8 +17,16 @@ helpers.libTweaks {
 
   postPatch = ''
     substituteInPlace configure \
-      --replace-fail 'as_fn_error $? "could not determine how to read list of mounted file systems" "$LINENO" 5' \
-                     'printf "%s\n" "configure: WARNING: could not determine how to read list of mounted file systems; continuing without mountlist support" >&2; ac_list_mounted_fs=found'
+      --replace-fail 'printf "%s\n" "#define MOUNTED_NOT_PORTED 1" >>confdefs.h' \
+                     'ac_list_mounted_fs=found'
+    # wasix-libc is musl, but gnulib gates its musl branch (nl_langinfo_l with
+    # NL_LOCALE_NAME) and the <langinfo.h> include on __linux__, so wasm32-wasi
+    # falls through to the "Please port gnulib getlocalename_l-unsafe.c" #error.
+    substituteInPlace gl/lib/getlocalename_l-unsafe.c \
+      --replace-fail '(defined __linux__ && HAVE_LANGINFO_H)' \
+                     '((defined __linux__ || defined __wasi__) && HAVE_LANGINFO_H)' \
+      --replace-fail '#elif defined __linux__ && HAVE_LANGINFO_H && defined NL_LOCALE_NAME' \
+                     '#elif (defined __linux__ || defined __wasi__) && HAVE_LANGINFO_H && defined NL_LOCALE_NAME'
     substituteInPlace gl/lib/mountlist.c \
       --replace-fail 'struct mount_entry *mount_list;' \
                      'struct mount_entry *mount_list = NULL;'
