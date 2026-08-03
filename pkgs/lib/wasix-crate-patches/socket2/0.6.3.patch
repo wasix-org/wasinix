@@ -1,3 +1,0 @@
-# Sentinel (no hunks): socket2 >= 0.6.3 builds stock for wasix. Upstream ships
-# the sys/wasi.rs backend our 0.6.1 patch added. Overrides the 0.6.1 floor
-# patch so it is not applied to 0.6.3.

@@ -1,0 +1,15 @@
+--- a/src/threading.rs
++++ b/src/threading.rs
+@@ -32,5 +32,12 @@
+ }
+ 
+ /// Returns a numeric identifier for the current OS thread.
++/// Returns a numeric identifier for the current OS thread.
++#[cfg(target_vendor = "wasmer")]
++pub fn get_current_thread_id() -> i64 {
++    // SAFETY: pthread_self() has no preconditions for the current thread.
++    unsafe { libc::pthread_self() as i64 }
++}
++
+ #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+ compile_error!("libdd_common::threading::get_current_thread_id is unsupported on this platform");

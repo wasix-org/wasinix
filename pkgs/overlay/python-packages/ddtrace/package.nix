@@ -42,14 +42,16 @@ in
       name = "${pname}-${version}-cargo-deps";
       sourceRoot = "${src.name}/src/native";
       postPatch = "cp ${./Cargo.lock} Cargo.lock";
-      hash = "sha256-jjk7EaHEjDti/pGE6cm5WuWjVYEW7UAzZh2xodX5AgE=";
+      hash = "sha256-V2MLgPNxrYGmzmWw9jTF1nt8nOvgQ3qJx7OkI+kfSh0=";
     };
 
     # Cargo.lock: upstream's resolves mio 1.2.0, whose wasi backend upstream
     # renamed to wasip1 and gated on target_env = "p1" (not ours), leaving the
     # stub selector that panics the tokio I/O driver at runtime. Ours moves mio
     # to 1.2.2 and tokio to 1.52.3, the versions the wasix backend and Waker
-    # crate-patches cover, and carries the `wasix` dep the mio patch adds.
+    # crate-patches cover. The committed lock carries no `wasix` crate: the mio
+    # fork adds that dep and the patch machinery writes it into the lock (vendor
+    # and source alike), so the committed lock stays a plain resolution.
     # library_config: stable-config path consts are OS-gated, their const fns aren't.
     # IAST cmake: prepend the wasm python's headers (build python's fail pyport LONG_BIT).
     # psutil: de-vendored onto ours, which is the same upstream release carrying
@@ -145,7 +147,7 @@ in
       ++ nix-update-script {extraArgs = ["--flake"];};
     passthru.wasix.updateNotes = [
       {message = "re-hash cargoDeps: nix-update bumps version+src but not a fetchCargoVendor hash spelled inside the package";}
-      {message = "regenerate ./Cargo.lock from upstream's src/native lock: keep mio >= 1.2.2 and tokio >= 1.52.3 (the versions the wasix backend and Waker patches cover) and keep the `wasix` dep the mio patch adds; drop the override if upstream resolves such a mio itself";}
-      {message = "regenerate lib/wasix-crate-patches/libdd-* if the libdatadog rev moved: they narrow libdatadog's browser-wasm cutouts to non-wasmer wasm32 (see WASIX-TODO.md), mechanically, and are keyed by libdatadog's own crate versions";}
+      {message = "regenerate ./Cargo.lock from upstream's src/native lock: keep mio >= 1.2.2 and tokio >= 1.52.3 (the versions the wasix backend and Waker patches cover); the `wasix` crate the mio patch adds is injected at vendor time, so leave it out of the lock; drop the override if upstream resolves such a mio itself";}
+      {message = "lib/wasix-crate-patches/libdd-* are now version-independent wasmerAsNative transforms (they narrow libdatadog's browser-wasm cutouts to non-wasmer wasm32) and re-apply to any libdatadog rev automatically; only libdd-common/thread-id.patch (the get_current_thread_id insert) needs a look if upstream restructures threading.rs";}
     ];
   }

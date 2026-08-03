@@ -94,18 +94,30 @@
           name = baseNameOf spec.url;
         });
     # A rust wheel vendors its crates from the Cargo.lock IN its src, so a
-    # rebased src needs a rebased vendor. Nothing derives that hash, so the
-    # entry carries it (scripts/history.py TOFUs it). cargoDeps is a plain
-    # runCommand over the vendorStaging FOD, and only the FOD is re-pointable.
+    # rebased src needs a rebased vendor. Two vendor shapes (set/rust-platform.nix):
+    # a granular importCargoLock vendor carries `wasixRebuildVendor`, which
+    # re-vendors the rebased src's lock directly (per-crate hashes live in the
+    # lock, so no stored cargoHash). A monolithic fetchCargoVendor vendor is a
+    # runCommand over one re-pointable vendorStaging FOD; nothing derives its
+    # hash, so the entry carries it (scripts/history.py TOFUs it).
     rustVendor = old:
-      lib.throwIf (!(old.cargoDeps ? vendorStaging))
-      "load-packages: ${drv.pname or drv.name} ${version}: cargoDeps has no vendorStaging, so nixpkgs' vendor mechanism moved; the history rebase needs updating"
-      (old.cargoDeps.overrideAttrs (o: {
-        vendorStaging = o.vendorStaging.overrideAttrs (_: {
+      if old.cargoDeps ? wasixRebuildVendor
+      then
+        old.cargoDeps.wasixRebuildVendor {
           inherit src;
-          outputHash = spec.cargoHash;
-        });
-      }));
+          cargoHash = spec.cargoHash or null;
+        }
+      else
+        lib.throwIf (!(spec ? cargoHash))
+        "load-packages: ${drv.pname or drv.name} ${version} vendors rust deps; its history entry needs a cargoHash (nix run .#scripts.history -- add <attr>==${version} re-derives it)"
+        (lib.throwIf (!(old.cargoDeps ? vendorStaging))
+          "load-packages: ${drv.pname or drv.name} ${version}: cargoDeps has no vendorStaging, so nixpkgs' vendor mechanism moved; the history rebase needs updating"
+          (old.cargoDeps.overrideAttrs (o: {
+            vendorStaging = o.vendorStaging.overrideAttrs (_: {
+              inherit src;
+              outputHash = spec.cargoHash;
+            });
+          })));
     pinned = drv.overrideAttrs (old:
       {
         inherit version src;
@@ -117,11 +129,7 @@
           (old.passthru or {})
           // {wasix = (old.passthru.wasix or {}) // {historySpec = spec;};};
       }
-      // lib.optionalAttrs (old ? cargoDeps) (
-        lib.throwIf (!(spec ? cargoHash))
-        "load-packages: ${drv.pname or drv.name} ${version} vendors rust deps; its history entry needs a cargoHash (nix run .#scripts.history -- add <attr>==${version} re-derives it)"
-        {cargoDeps = rustVendor old;}
-      ));
+      // lib.optionalAttrs (old ? cargoDeps) {cargoDeps = rustVendor old;});
   in
     pinned // {override = args: pinToHistory version spec (drv.override args);};
 

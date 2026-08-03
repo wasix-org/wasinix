@@ -9,13 +9,15 @@
   rust = import ./lib/rust.nix {inherit final;};
 in
   pyprev.setuptools-rust.overrideAttrs (old: {
-    # setuptools-rust wheels skip maturinBuildHook, so propagate the vendor-patch
-    # and dep-cc hooks here too.
+    # setuptools-rust wheels skip maturinBuildHook, so propagate the dep-cc hook
+    # and the source-lock amend hook (a fork adding a crate dep -> wasix) here
+    # too. Crate patches are baked into cargoDeps at vendor time (via the wasix
+    # rustPlatform.fetchCargoVendor), so no vendor-patch hook is needed.
     propagatedBuildInputs =
       (old.propagatedBuildInputs or [])
       ++ [
-        final.rustPlatform.wasixVendorPatchHook
         final.rustPlatform.wasixDepCcHook
+        final.rustPlatform.wasixLockAmendHook
       ];
     # cargoSetupHook sets a linker only for the stock rustcTarget, not our custom cargoBuildTarget,
     # and its linker is the clang cc wrapper, wrong for rustc's wasm-ld.

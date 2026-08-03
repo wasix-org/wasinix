@@ -17,18 +17,21 @@
 }: let
   env = import ../env.nix {inherit lib;};
 
-  version = "0.1.29";
+  # Untagged rev: the overlay-registry switch, the wasixcc CC/EH auto-config and
+  # the binaryen 130 bump all landed after v0.1.29, and upstream has cut no tag
+  # for 0.1.30/0.1.31.
+  version = "0.1.31";
   src = fetchFromGitHub {
     owner = "wasix-org";
     repo = "cargo-wasix";
-    tag = "v${version}";
-    hash = "sha256-Gj0Qa3UXOCLQO0Ntyq8Zal5m5ro2CmEPXWT4cNBwkZI=";
+    rev = "89980447bc9b6c001f5631c1598780d3dcb6f17d";
+    hash = "sha256-0spEK/HmE7qdglHBMxhzUc/O/otKu5imPsEta1y39v4=";
   };
 
   cargoWasixUnwrapped = rustPlatform.buildRustPackage {
     pname = "cargo-wasix-unwrapped";
     inherit version src;
-    cargoHash = "sha256-cLX98sT0AZKlLy/KPqHdyYH+Ldmr05Lz8L8aZDYYfcU=";
+    cargoHash = "sha256-mOPo9sNAOflMY2hHpKpzUlKMFXYr0O8r/7QGtOoDtUU=";
 
     doCheck = false;
 
@@ -67,7 +70,15 @@ in
         env.locationEnv {inherit wasixLlvm binaryen wasixSysroot;}
         // env.autoconfEnv
         // env.ccEnv
-        // {CARGO_WASIX_OFFLINE = "1";}
+        // {
+          CARGO_WASIX_OFFLINE = "1";
+          # Since 0.1.30 cargo-wasix writes overlay-registry source replacement
+          # into the workspace .cargo/config.toml on build. Nix resolves from a
+          # vendored `directory` source instead, so the write is at best a
+          # warning about cargoSetupHook's own replace-with and at worst points
+          # resolution at a network registry the sandbox can't reach.
+          CARGO_WASIX_NO_REGISTRY_CONFIG = "1";
+        }
       )} \
         --set-default WASM_OPT "${binaryen}/bin/wasm-opt" \
         --run ${lib.escapeShellArg rustupLink}
@@ -82,6 +93,10 @@ in
         command = nix-update-script {extraArgs = ["--flake"];};
         attrPath = "toolchain.cargo-wasix.unwrapped";
       };
+
+      wasix.updateNotes = [
+        {message = "cargo-wasix is pinned to an untagged rev; go back to `tag = \"v\${version}\"` once upstream tags 0.1.31 or later";}
+      ];
     };
 
     meta = {

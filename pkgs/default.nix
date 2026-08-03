@@ -38,9 +38,13 @@
   # makeRustPlatform with a cargo shim that routes builds through cargo-wasix.
   # The overlay injects it into each profile set so Rust crates build via
   # rustPlatform.buildRustPackage, like C/C++ do via the wasixcc stdenv.
+  # crate-edits.nix view of wasix-crate-patches/, shared by the vendor-time
+  # patching (rust-platform.nix) and the cargo-registry mint.
+  crateEdits = import ./lib/crate-edits.nix {inherit pkgs;} ./lib/wasix-crate-patches;
+
   wasixRustPlatform = import ./set/rust-platform.nix {
-    inherit lib pkgsCross;
-    inherit (toolchain) wasixRustToolchain wasixcc cargoWasix;
+    inherit lib pkgsCross crateEdits;
+    inherit (toolchain) wasixRustToolchain wasixcc cargoWasix binaryen;
     cargo = pkgs.cargo;
   };
 

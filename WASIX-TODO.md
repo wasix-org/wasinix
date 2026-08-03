@@ -148,7 +148,7 @@ instruction")` under the pinned wasmer (7.2.0), which only accepts the new
   (`set/rust-platform.nix`, `exnrefTranslateHook`) re-applies
   `wasm-opt --translate-to-exnref` to every wheel `.so` in `fixupOutputHooks`,
   so EVERY maturin wheel gets the same pass cargo-wasix gives CLIs, not just
-  tokenizers. Same binaryen 129 cargo-wasix uses; a no-op on wheels with no
+  tokenizers. Same `toolchain.binaryen` cargo-wasix uses; a no-op on wheels with no
   legacy EH (verified: tokenizers -> 0 legacy `try`, wasmer 7.2.0 validates +
   imports; jiter/pydantic-core unaffected). Unblocks tokenizers -> litellm.
 - Why not routed through cargo-wasix: maturin drives `cargo rustc` and parses

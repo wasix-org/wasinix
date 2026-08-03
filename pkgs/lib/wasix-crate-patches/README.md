@@ -1,42 +1,60 @@
 # wasix-crate-patches
 
-Versioned wasix patches for vendored Rust crates, applied automatically by
-`../wasix-vendor-patch-hook.sh` (a preBuild hook in the rust build platform).
-Packages stay plain `buildRustPackage { cargoHash = ...; }`; the hook patches the
-vendored sources in the sandbox before `cargo build`.
-
-Interim rust-app path: patch the real-code leaf crates and let cargo's
-one-copy-per-version vendoring propagate the fix, so stock upstream builds
-unchanged. Cheap to delete once the WASIX v2 toolchain (`cfg(unix)`) lands.
+The wasix edits for upstream Rust crates, applied at vendor time by
+`patchVendor` (set/rust-platform.nix) and republished by the cargo-registry
+mint. Both resolve the same spec through `crate-edits.nix`, so an edit is
+defined once. Packages stay plain `buildRustPackage { cargoHash = ...; }`; the
+edits are baked into the vendored sources before `cargo build` sees them.
 
 ## Layout
 
-    <crate>/<version>.patch     e.g. tokio/1.47.0.patch
+```
+<crate>/edits.nix        the spec (below)
+<crate>/<version>.patch  floor patches, named by the version authored against
+rewriters/<name>.nix     reusable source rewriters, one script drv each
+```
 
-`<crate>` is the exact crate name; `<version>` a bare semver.
+## `edits.nix`
 
-## Version selection (semver floor)
+```nix
+{ lib, rewriters, adds }: {
+  edited     = [ ">=1.0.3" ];            # versions we patch (floored)
+  stock      = [ ">=1.2.2" ];            # optional: versions known good unpatched
+  notMinted  = null;                     # optional reason to skip the registry
+  forVersion = { version, floorPatch }: {
+    patches    = [ ./thread-id.patch ] ++ lib.optional (floorPatch != null) floorPatch;
+    patchPhase = ''${rewriters.wasmerAsNative}'';
+    adds       = [ adds.wasix ];
+  };
+}
+```
 
-For a vendored `<crate>-<V>`, the highest patch version `<= V` is applied; a patch
-at `X` covers `[X, next-patch)`. When upstream moves out from under it the build
-fails loud -- add a new `<V>.patch`. Versions below the lowest patch are stock.
+Each resolved version of an edited crate is `edited`, `stock`, or `unsupported`;
+the last hard-fails the vendor, so a version drifting past its coverage surfaces
+loudly instead of miscompiling downstream.
 
-A `<V>.patch` with no diff hunks (comment only) is a sentinel: it declares the
-crate stock at `>= V` (upstream landed the fix) and overrides a lower floor
-patch, which otherwise would apply and fail. Use it when a newer version than
-an existing patch needs no change.
+- `edited` (constant): the versions we patch, a semver constraint (comparator
+  terms `>= <= < > =`, comma-AND per element, the array OR-ed). Prefer an
+  open-ended floor range (`>=X`): `floorFor` applies the highest `<version>.patch`
+  at or below the resolved version, and a version the patch no longer fits
+  hard-fails for a fresh patch. It is the coverage the vendor patches and the
+  registry publishes.
+- `stock` (constant, optional): versions deliberately left as upstream ships
+  them. Set it only for versions known good unpatched: a durable upstream fix (a
+  boundary like `>=0.6.3`), or one you have built green. Never an optimistic
+  range.
+- `notMinted` (constant): keep a crate off the registry (git-sourced libdd,
+  vendor-only rewrites) with a reason.
+- `forVersion`: per-version, may branch on `version`. `patches` is the stack
+  (residuals prepend, the engine-selected `floorPatch` last; all compose).
+  `patchPhase` is postPatch shell that runs the `rewriters` drvs. `adds` are deps
+  the edit pulls in that upstream lacks (declared once in `adds.nix`).
 
-## Authoring
+A crate with only `<version>.patch` files needs just `{ edited = [...]; }`.
 
-Export the delta from the crate's `wasix-*` fork branch, relative to the crate
-root so it applies with `patch -p1`:
+## Rewriters
 
-    git -C <fork> diff [--relative=<member>] <upstream-tag> <wasix-branch> \
-      > <crate>/<version>.patch
-
-## Scope
-
-Any vendored crate needing a real wasix source change: `getrandom`,
-`target-lexicon`, `esaxx-rs`, `pyo3-async-runtimes`, and the leaves apps hit
-transitively (`tokio`, `mio`, `socket2`, TLS). Not `hyper`/`tower`/`reqwest`/etc.
--- those build stock once the leaves are patched.
+`rewriters/<name>.nix` is a `writeShellScript` derivation run against the crate
+dir (`$PWD`), failing loud if its target is gone. A `patchPhase` runs one by
+interpolating its store path (`${rewriters.wasmerAsNative}`), so editing a
+rewriter rebuilds only the crates that use it and adding one rebuilds nothing.
