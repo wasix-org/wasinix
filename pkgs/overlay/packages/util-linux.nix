@@ -1,9 +1,5 @@
-# util-linux for wasix, built for libuuid only (cpython's _uuid backend;
-# nixpkgs sets libuuid = null off Linux). Everything else is disabled: only
-# libuuid.a + uuid/uuid.h are needed, and the programs pull in far more
-# Linux-only syscalls. gen_uuid.c's MAC-address node-id path uses SIOCGIFCONF
-# (no network-interface enumeration on wasix); gating it off leaves the
-# random-node-id fallback, which uuid_generate_time already handles.
+# util-linux for wasix, built for libuuid only (cpython's _uuid backend; nixpkgs
+# sets libuuid = null off Linux).
 {
   prev,
   helpers,
@@ -13,6 +9,9 @@
 in
   helpers.libTweaks {
     configureFlags = [
+      # Every program links libcommon, and libcommon does not compile here:
+      # lib/configs.c wants sys/syslog.h, lib/fileutils.c calls fork, and
+      # lib/sysfs.c + lib/path.c call major/minor/makedev.
       "--disable-all-programs"
       "--enable-libuuid"
       "--disable-nls"
@@ -29,10 +28,8 @@ in
     buildInputs = lib.const [];
     nativeBuildInputs = old:
       lib.filter (x: (x.pname or "") != "python3") old;
-    # single output: nixpkgs splits bin/lib/dev/man/login and routes libuuid.a
-    # to the `lib` placeholder via makeFlags; with programs disabled most of
-    # those come out empty. Collapse to `out` and redirect the exec dirs there
-    # (last make assignment wins over nixpkgs' placeholder ones).
+    # nixpkgs splits bin/lib/dev/man/login and routes libuuid.a to the `lib`
+    # placeholder via makeFlags; with programs disabled most come out empty.
     outputs = lib.const ["out"];
     makeFlags = [
       "usrlib_execdir=${placeholder "out"}/lib"
@@ -44,6 +41,8 @@ in
     doInstallCheck = false;
     postInstall = lib.const "";
     postFixup = lib.const "";
+    # gen_uuid.c's MAC node-id path needs SIOCGIFCONF interface enumeration, which
+    # wasix has none of; gating that off leaves the random-node-id fallback.
     postPatch = ''
       substituteInPlace libuuid/src/gen_uuid.c \
         --replace-fail '#ifdef HAVE_NET_IF_H' '#if defined(HAVE_NET_IF_H) && !defined(__wasi__)'
