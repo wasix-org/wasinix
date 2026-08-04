@@ -54,7 +54,12 @@ A crate with only `<version>.patch` files needs just `{ edited = [...]; }`.
 
 ## Rewriters
 
-`rewriters/<name>.nix` is a `writeShellScript` derivation run against the crate
-dir (`$PWD`), failing loud if its target is gone. A `patchPhase` runs one by
-interpolating its store path (`${rewriters.wasmerAsNative}`), so editing a
-rewriter rebuilds only the crates that use it and adding one rebuilds nothing.
+`rewriters/<name>.nix` is a script derivation run against the crate dir (`$PWD`),
+failing loud if its target or expected source shape is gone. A `patchPhase` runs
+one by interpolating its store path (`${rewriters.wasmerAsNative}`), so editing
+a rewriter rebuilds only the crates that use it and adding one rebuilds nothing.
+
+Large files that are mostly stable across releases can live next to the crate's
+`edits.nix` and be copied explicitly from its `patchPhase`. Keep only upstream
+integration hunks in floor patches, and overlay payload variants at explicit
+API boundaries from that phase.

@@ -1,5 +1,5 @@
 diff --git a/src/lib.rs b/src/lib.rs
-index 17a97d4..36ab22a 100644
+index 7a84cc0..36ab22a 100644
 --- a/src/lib.rs
 +++ b/src/lib.rs
 @@ -43,6 +43,10 @@
@@ -17,7 +17,7 @@ index 17a97d4..36ab22a 100644
  mod poll;
  mod sys;
  mod token;
--#[cfg(not(target_os = "wasi"))]
+-#[cfg(not(any(target_os = "horizon", target_os = "wasi")))]
 -mod waker;
 +cfg_os_poll! {
 +    mod waker;
@@ -29,7 +29,7 @@ index 17a97d4..36ab22a 100644
  pub use interest::Interest;
  pub use poll::{Poll, Registry};
  pub use token::Token;
--#[cfg(not(target_os = "wasi"))]
+-#[cfg(not(any(target_os = "horizon", target_os = "wasi")))]
 -pub use waker::Waker;
 +cfg_os_poll! {
 +    pub use waker::Waker;
@@ -55,14 +55,14 @@ index 17a97d4..36ab22a 100644
  }
  
 diff --git a/src/poll.rs b/src/poll.rs
-index 0b9497a..cc7893f 100644
+index 347a793..a1a16dd 100644
 --- a/src/poll.rs
 +++ b/src/poll.rs
-@@ -722,16 +722,21 @@ impl Registry {
+@@ -724,17 +724,21 @@ impl Registry {
  
      /// Internal check to ensure only a single `Waker` is active per [`Poll`]
      /// instance.
--    #[cfg(all(debug_assertions, not(target_os = "wasi")))]
+-    #[cfg(all(debug_assertions, not(any(target_os = "wasi", target_os = "horizon"))))]
 +    #[allow(dead_code)]
 +    #[cfg(debug_assertions)]
      pub(crate) fn register_waker(&self) {
@@ -78,6 +78,7 @@ index 0b9497a..cc7893f 100644
  
      /// Get access to the `sys::Selector`.
 -    #[cfg(any(not(target_os = "wasi"), feature = "net"))]
+-    #[cfg_attr(target_os = "horizon", allow(dead_code))]
 +    #[allow(dead_code)]
 +    #[cfg(any(not(target_os = "wasi"), feature = "net", feature = "os-poll"))]
      pub(crate) fn selector(&self) -> &sys::Selector {

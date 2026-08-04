@@ -1,67 +1,10 @@
-diff --git a/Cargo.toml b/Cargo.toml
-index 517f4fe..79bae6f 100644
---- a/Cargo.toml
-+++ b/Cargo.toml
-@@ -75,6 +75,16 @@ features = [
-     "net",
- ]
- 
-+[features]
-+default = ["log"]
-+net = []
-+os-ext = [
-+    "os-poll",
-+    "windows-sys/Win32_System_Pipes",
-+    "windows-sys/Win32_Security",
-+]
-+os-poll = []
-+
- [lib]
- name = "mio"
- path = "src/lib.rs"
-@@ -114,27 +124,23 @@ default-features = false
- [dev-dependencies.rand]
- version = "0.8"
- 
--[features]
--default = ["log"]
--net = []
--os-ext = [
--    "os-poll",
--    "windows-sys/Win32_System_Pipes",
--    "windows-sys/Win32_Security",
--]
--os-poll = []
-+[target.'cfg(all(target_os = "wasi", target_vendor = "unknown"))'.dependencies.wasi]
-+version = "^0.11"
-+
-+[target.'cfg(all(target_os = "wasi", target_vendor = "wasmer"))'.dependencies.wasix]
-+version = "0.13"
- 
- [target.'cfg(target_os = "hermit")'.dependencies.libc]
--version = "0.2.159"
-+version = "0.2.169"
- 
- [target.'cfg(target_os = "wasi")'.dependencies.libc]
--version = "0.2.159"
-+version = "0.2.169"
- 
- [target.'cfg(target_os = "wasi")'.dependencies.wasi]
- version = "0.11.0"
- 
- [target."cfg(unix)".dependencies.libc]
--version = "0.2.159"
-+version = "0.2.169"
- 
- [target."cfg(windows)".dependencies.windows-sys]
- version = "0.52"
 diff --git a/src/lib.rs b/src/lib.rs
-index 8004ee2..d5cea68 100644
+index 9bd2944..7ea1f9b 100644
 --- a/src/lib.rs
 +++ b/src/lib.rs
-@@ -40,6 +40,10 @@
- //!
- //! The available features are described in the [`features`] module.
+@@ -43,6 +43,10 @@
+ #[cfg(all(target_family = "wasm", not(target_os = "wasi")))]
+ compile_error!("This wasm target is unsupported by mio. If using Tokio, disable the net feature.");
  
 +// WASIX requires os-poll when using the feature net
 +#[cfg(all(target_os = "wasi", target_vendor = "wasmer", feature = "net", not(feature = "os-poll")))]
@@ -70,7 +13,7 @@ index 8004ee2..d5cea68 100644
  // macros used internally
  #[macro_use]
  mod macros;
-@@ -48,8 +52,10 @@ mod interest;
+@@ -51,8 +55,10 @@ mod interest;
  mod poll;
  mod sys;
  mod token;
@@ -83,7 +26,7 @@ index 8004ee2..d5cea68 100644
  
  pub mod event;
  
-@@ -66,14 +72,25 @@ pub use event::Events;
+@@ -69,14 +75,25 @@ pub use event::Events;
  pub use interest::Interest;
  pub use poll::{Poll, Registry};
  pub use token::Token;
@@ -114,7 +57,7 @@ index 8004ee2..d5cea68 100644
      pub mod pipe {
          //! Unix pipe.
          //!
-@@ -82,6 +99,7 @@ pub mod unix {
+@@ -85,6 +102,7 @@ pub mod unix {
          pub use crate::sys::pipe::{new, Receiver, Sender};
      }
  
@@ -208,7 +151,7 @@ index f3db74f..04bbf51 100644
          let stream = unsafe { TcpStream::from_raw_socket(socket as _) };
          connect(&stream.inner, addr)?;
 diff --git a/src/poll.rs b/src/poll.rs
-index a175cdd..3a52d9c 100644
+index f212661..a7c9b89 100644
 --- a/src/poll.rs
 +++ b/src/poll.rs
 @@ -15,7 +15,7 @@
@@ -249,10 +192,10 @@ index a175cdd..3a52d9c 100644
      }
  }
 diff --git a/src/sys/mod.rs b/src/sys/mod.rs
-index 5f1ee9c..af0a475 100644
+index 8bfbdd9..f931cd1 100644
 --- a/src/sys/mod.rs
 +++ b/src/sys/mod.rs
-@@ -15,6 +15,7 @@
+@@ -14,6 +14,7 @@
  //! * `Waker`: see [`crate::Waker`].
  
  cfg_os_poll! {
@@ -260,7 +203,7 @@ index 5f1ee9c..af0a475 100644
      macro_rules! debug_detail {
          (
              $type: ident ($event_type: ty), $test: path,
-@@ -68,12 +69,28 @@ cfg_os_poll! {
+@@ -67,12 +68,28 @@ cfg_os_poll! {
  cfg_os_poll! {
      mod wasi;
      pub(crate) use self::wasi::*;
@@ -336,7 +279,7 @@ index bbdd7c3..c27717e 100644
          os_required!();
      }
 diff --git a/src/sys/unix/net.rs b/src/sys/unix/net.rs
-index 82d4bb5..cb0e2cd 100644
+index 76451e9..f19c278 100644
 --- a/src/sys/unix/net.rs
 +++ b/src/sys/unix/net.rs
 @@ -20,6 +20,7 @@ pub(crate) fn new_socket(domain: libc::c_int, socket_type: libc::c_int) -> io::R
@@ -348,7 +291,7 @@ index 82d4bb5..cb0e2cd 100644
          target_os = "openbsd",
          target_os = "solaris",
 diff --git a/src/sys/unix/pipe.rs b/src/sys/unix/pipe.rs
-index 8e86753..a8b1d58 100644
+index 0a3be9a..a69cc14 100644
 --- a/src/sys/unix/pipe.rs
 +++ b/src/sys/unix/pipe.rs
 @@ -15,6 +15,7 @@ pub(crate) fn new_raw() -> io::Result<[RawFd; 2]> {
@@ -360,7 +303,7 @@ index 8e86753..a8b1d58 100644
          target_os = "openbsd",
          target_os = "illumos",
 diff --git a/src/sys/unix/tcp.rs b/src/sys/unix/tcp.rs
-index f8dfa58..61655d9 100644
+index 1d1965d..3af27de 100644
 --- a/src/sys/unix/tcp.rs
 +++ b/src/sys/unix/tcp.rs
 @@ -72,6 +72,7 @@ pub(crate) fn accept(listener: &net::TcpListener) -> io::Result<(net::TcpStream,
@@ -371,3 +314,33 @@ index f8dfa58..61655d9 100644
          target_os = "netbsd",
          target_os = "openbsd",
          target_os = "solaris",
+
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -124,17 +124,23 @@
+ [dev-dependencies.rand]
+ version = "0.8"
+ 
++[target.'cfg(all(target_os = "wasi", target_vendor = "unknown"))'.dependencies.wasi]
++version = "^0.11"
++
++[target.'cfg(all(target_os = "wasi", target_vendor = "wasmer"))'.dependencies.wasix]
++version = "0.13"
++
+ [target.'cfg(target_os = "hermit")'.dependencies.libc]
+-version = "0.2.159"
++version = "0.2.169"
+ 
+ [target.'cfg(target_os = "wasi")'.dependencies.libc]
+-version = "0.2.159"
++version = "0.2.169"
+ 
+ [target.'cfg(target_os = "wasi")'.dependencies.wasi]
+ version = "0.11.0"
+ 
+ [target."cfg(unix)".dependencies.libc]
+-version = "0.2.159"
++version = "0.2.169"
+ 
+ [target."cfg(windows)".dependencies.windows-sys]
+ version = "0.59"

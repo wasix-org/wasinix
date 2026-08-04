@@ -1,0 +1,12 @@
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/lib.rs	2026-07-20 14:30:31.812491334 +0200
+@@ -465,7 +465,7 @@
+ 
+ #[cfg(all(
+     not(tokio_unstable),
+-    target_family = "wasm",
++    all(target_family = "wasm", not(target_vendor = "wasmer")),
+     any(
+         feature = "fs",
+         feature = "io-std",

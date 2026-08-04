@@ -1,0 +1,1179 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 988f5b3..09b7d16 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -876,7 +876,7 @@ features = [
+ [target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dev-dependencies.rand]
+ version = "0.9"
+ 
+-[target.'cfg(not(target_family = "wasm"))'.dependencies.socket2]
++[target.'cfg(any(not(target_family = "wasm"), target_vendor = "wasmer"))'.dependencies.socket2]
+ version = "0.6.0"
+ features = ["all"]
+ optional = true
+@@ -900,11 +900,11 @@ features = ["std"]
+ optional = true
+ default-features = false
+ 
+-[target."cfg(unix)".dependencies.libc]
++[target.'cfg(any(unix, target_vendor = "wasmer"))'.dependencies.libc]
+ version = "0.2.168"
+ optional = true
+ 
+-[target."cfg(unix)".dependencies.signal-hook-registry]
++[target.'cfg(any(unix, target_vendor = "wasmer"))'.dependencies.signal-hook-registry]
+ version = "1.1.1"
+ optional = true
+ 
+@@ -945,3 +945,4 @@ check-cfg = [
+     "cfg(tokio_unstable)",
+     'cfg(target_os, values("cygwin"))',
+ ]
++
+diff --git a/src/fs/file.rs b/src/fs/file.rs
+index 3579f11..6f238d8 100644
+--- a/src/fs/file.rs
++++ b/src/fs/file.rs
+@@ -898,14 +898,14 @@ impl fmt::Debug for File {
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ impl std::os::unix::io::AsRawFd for File {
+     fn as_raw_fd(&self) -> std::os::unix::io::RawFd {
+         self.std.as_raw_fd()
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ impl std::os::unix::io::AsFd for File {
+     fn as_fd(&self) -> std::os::unix::io::BorrowedFd<'_> {
+         unsafe {
+@@ -914,7 +914,7 @@ impl std::os::unix::io::AsFd for File {
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ impl std::os::unix::io::FromRawFd for File {
+     unsafe fn from_raw_fd(fd: std::os::unix::io::RawFd) -> Self {
+         // Safety: exactly the same safety contract as
+diff --git a/src/fs/mocks.rs b/src/fs/mocks.rs
+index ae5d7e5..5155783 100644
+--- a/src/fs/mocks.rs
++++ b/src/fs/mocks.rs
+@@ -45,12 +45,12 @@ mock! {
+     impl std::os::windows::io::FromRawHandle for File {
+         unsafe fn from_raw_handle(h: std::os::windows::io::RawHandle) -> Self;
+     }
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     impl std::os::unix::io::AsRawFd for File {
+         fn as_raw_fd(&self) -> std::os::unix::io::RawFd;
+     }
+ 
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     impl std::os::unix::io::FromRawFd for File {
+         unsafe fn from_raw_fd(h: std::os::unix::io::RawFd) -> Self;
+     }
+diff --git a/src/fs/open_options.rs b/src/fs/open_options.rs
+index 27e98b5..9d3650c 100644
+--- a/src/fs/open_options.rs
++++ b/src/fs/open_options.rs
+@@ -1,3 +1,5 @@
++#![cfg_attr(target_os = "wasi", allow(unused))]
++
+ use crate::fs::{asyncify, File};
+ 
+ use std::io;
+@@ -18,6 +20,9 @@ use std::fs::OpenOptions as StdOpenOptions;
+ 
+ #[cfg(unix)]
+ use std::os::unix::fs::OpenOptionsExt;
++#[allow(unused_imports)]
++#[cfg(target_os = "wasi")]
++use std::os::wasi::fs::OpenOptionsExt;
+ #[cfg(windows)]
+ use std::os::windows::fs::OpenOptionsExt;
+ 
+diff --git a/src/fs/open_options/mock_open_options.rs b/src/fs/open_options/mock_open_options.rs
+index 2fbdd28..099286b 100644
+--- a/src/fs/open_options/mock_open_options.rs
++++ b/src/fs/open_options/mock_open_options.rs
+@@ -3,7 +3,7 @@
+ use mockall::mock;
+ 
+ use crate::fs::mocks::MockFile;
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ use std::os::unix::fs::OpenOptionsExt;
+ #[cfg(windows)]
+ use std::os::windows::fs::OpenOptionsExt;
+@@ -23,7 +23,7 @@ mock! {
+     impl Clone for OpenOptions {
+         fn clone(&self) -> Self;
+     }
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     impl OpenOptionsExt for OpenOptions {
+         fn custom_flags(&mut self, flags: i32) -> &mut Self;
+         fn mode(&mut self, mode: u32) -> &mut Self;
+diff --git a/src/fs/read_dir.rs b/src/fs/read_dir.rs
+index 2e7288a..3283841 100644
+--- a/src/fs/read_dir.rs
++++ b/src/fs/read_dir.rs
+@@ -1,3 +1,5 @@
++#![cfg_attr(target_os = "wasi", allow(unused))]
++
+ use crate::fs::asyncify;
+ 
+ use std::collections::VecDeque;
+@@ -350,7 +352,7 @@ impl DirEntry {
+     }
+ 
+     /// Returns a reference to the underlying `std::fs::DirEntry`.
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     pub(super) fn as_inner(&self) -> &std::fs::DirEntry {
+         &self.std
+     }
+diff --git a/src/io/stderr.rs b/src/io/stderr.rs
+index 43388c3..346c700 100644
+--- a/src/io/stderr.rs
++++ b/src/io/stderr.rs
+@@ -91,7 +91,7 @@ cfg_io_std! {
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
+ 
+diff --git a/src/io/stdin.rs b/src/io/stdin.rs
+index 877c48b..d648bc4 100644
+--- a/src/io/stdin.rs
++++ b/src/io/stdin.rs
+@@ -52,7 +52,7 @@ cfg_io_std! {
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
+ 
+diff --git a/src/io/stdout.rs b/src/io/stdout.rs
+index 32bcdbf..daa0cc3 100644
+--- a/src/io/stdout.rs
++++ b/src/io/stdout.rs
+@@ -140,7 +140,7 @@ cfg_io_std! {
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
+ 
+diff --git a/src/lib.rs b/src/lib.rs
+index d1e9ba0..c799865 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -19,6 +19,10 @@
+ #![cfg_attr(docsrs, allow(unused_attributes))]
+ #![cfg_attr(loom, allow(dead_code, unreachable_pub))]
+ #![cfg_attr(windows, allow(rustdoc::broken_intra_doc_links))]
++#![cfg_attr(
++    all(feature = "fs", target_os = "wasi", target_vendor = "wasmer"),
++    feature(wasi_ext)
++)]
+ 
+ //! A runtime for writing reliable network applications without compromising speed.
+ //!
+@@ -462,7 +466,7 @@ compile_error! {
+ 
+ #[cfg(all(
+     not(tokio_unstable),
+-    target_family = "wasm",
++    all(target_family = "wasm", not(target_vendor = "wasmer")),
+     any(
+         feature = "fs",
+         feature = "io-std",
+diff --git a/src/macros/cfg.rs b/src/macros/cfg.rs
+index 9af23b0..88ed33a 100644
+--- a/src/macros/cfg.rs
++++ b/src/macros/cfg.rs
+@@ -139,8 +139,8 @@ macro_rules! cfg_io_driver {
+         $(
+             #[cfg(any(
+                 feature = "net",
+-                all(unix, feature = "process"),
+-                all(unix, feature = "signal"),
++                all(any(unix, target_os = "wasi"), feature = "process"),
++                all(any(unix, target_os = "wasi"), feature = "signal"),
+                 all(
+                     tokio_unstable,
+                     feature = "io-uring",
+@@ -151,8 +151,8 @@ macro_rules! cfg_io_driver {
+             ))]
+             #[cfg_attr(docsrs, doc(cfg(any(
+                 feature = "net",
+-                all(unix, feature = "process"),
+-                all(unix, feature = "signal"),
++                all(any(unix, target_os = "wasi"), feature = "process"),
++                all(any(unix, target_os = "wasi"), feature = "signal"),
+                 all(
+                     tokio_unstable,
+                     feature = "io-uring",
+@@ -171,8 +171,8 @@ macro_rules! cfg_io_driver_impl {
+         $(
+             #[cfg(any(
+                 feature = "net",
+-                all(unix, feature = "process"),
+-                all(unix, feature = "signal"),
++                all(any(unix, target_os = "wasi"), feature = "process"),
++                all(any(unix, target_os = "wasi"), feature = "signal"),
+                 all(
+                     tokio_unstable,
+                     feature = "io-uring",
+@@ -191,8 +191,8 @@ macro_rules! cfg_not_io_driver {
+         $(
+             #[cfg(not(any(
+                 feature = "net",
+-                all(unix, feature = "process"),
+-                all(unix, feature = "signal"),
++                all(any(unix, target_os = "wasi"), feature = "process"),
++                all(any(unix, target_os = "wasi"), feature = "signal"),
+                 all(
+                     tokio_unstable,
+                     feature = "io-uring",
+@@ -385,7 +385,7 @@ macro_rules! cfg_process {
+             #[cfg(feature = "process")]
+             #[cfg_attr(docsrs, doc(cfg(feature = "process")))]
+             #[cfg(not(loom))]
+-            #[cfg(not(target_os = "wasi"))]
++            #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+             $item
+         )*
+     }
+@@ -393,7 +393,7 @@ macro_rules! cfg_process {
+ 
+ macro_rules! cfg_process_driver {
+     ($($item:item)*) => {
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_vendor = "wasmer"))]
+         #[cfg(not(loom))]
+         cfg_process! { $($item)* }
+     }
+@@ -402,7 +402,7 @@ macro_rules! cfg_process_driver {
+ macro_rules! cfg_not_process_driver {
+     ($($item:item)*) => {
+         $(
+-            #[cfg(not(all(unix, not(loom), feature = "process")))]
++            #[cfg(not(all(any(unix, target_vendor = "wasmer"), not(loom), feature = "process")))]
+             $item
+         )*
+     }
+@@ -414,7 +414,7 @@ macro_rules! cfg_signal {
+             #[cfg(feature = "signal")]
+             #[cfg_attr(docsrs, doc(cfg(feature = "signal")))]
+             #[cfg(not(loom))]
+-            #[cfg(not(target_os = "wasi"))]
++            #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+             $item
+         )*
+     }
+@@ -437,6 +437,13 @@ macro_rules! cfg_signal_internal_and_unix {
+     }
+ }
+ 
++macro_rules! cfg_signal_internal_and_unix_or_wasix {
++    ($($item:item)*) => {
++        #[cfg(any(unix, target_vendor = "wasmer"))]
++        cfg_signal_internal! { $($item)* }
++    }
++}
++
+ macro_rules! cfg_not_signal_internal {
+     ($($item:item)*) => {
+         $(
+@@ -446,6 +453,15 @@ macro_rules! cfg_not_signal_internal {
+     }
+ }
+ 
++macro_rules! cfg_not_signal_internal_or_unix_or_wasix {
++    ($($item:item)*) => {
++        $(
++            #[cfg(any(loom, not(any(unix, target_vendor = "wasmer")), not(any(feature = "signal", all(unix, feature = "process")))))]
++            $item
++        )*
++    }
++}
++
+ macro_rules! cfg_sync {
+     ($($item:item)*) => {
+         $(
+@@ -674,6 +690,15 @@ macro_rules! cfg_not_wasi {
+     }
+ }
+ 
++macro_rules! cfg_not_wasi_classic {
++    ($($item:item)*) => {
++        $(
++            #[cfg(not(all(target_os = "wasi", not(target_vendor = "wasmer"))))]
++            $item
++        )*
++    }
++}
++
+ macro_rules! cfg_is_wasm_not_wasi {
+     ($($item:item)*) => {
+         $(
+diff --git a/src/net/mod.rs b/src/net/mod.rs
+index bc0cac3..7d68de0 100644
+--- a/src/net/mod.rs
++++ b/src/net/mod.rs
+@@ -29,7 +29,7 @@
+ //! [`AsyncFd`]: crate::io::unix::AsyncFd
+ 
+ mod addr;
+-cfg_not_wasi! {
++cfg_not_wasi_classic! {
+     #[cfg(feature = "net")]
+     pub(crate) use addr::to_socket_addrs;
+ }
+@@ -42,7 +42,7 @@ cfg_net! {
+     pub mod tcp;
+     pub use tcp::listener::TcpListener;
+     pub use tcp::stream::TcpStream;
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         pub use tcp::socket::TcpSocket;
+ 
+         mod udp;
+diff --git a/src/net/tcp/listener.rs b/src/net/tcp/listener.rs
+index 34f4771..1f069a1 100644
+--- a/src/net/tcp/listener.rs
++++ b/src/net/tcp/listener.rs
+@@ -2,7 +2,7 @@ use crate::io::{Interest, PollEvented};
+ use crate::net::tcp::TcpStream;
+ use crate::util::check_socket_for_blocking;
+ 
+-cfg_not_wasi! {
++cfg_not_wasi_classic! {
+     use crate::net::{to_socket_addrs, ToSocketAddrs};
+ }
+ 
+@@ -60,7 +60,7 @@ cfg_net! {
+ }
+ 
+ impl TcpListener {
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         /// Creates a new `TcpListener`, which will be bound to the specified address.
+         ///
+         /// The returned listener is ready for accepting connections.
+@@ -300,7 +300,7 @@ impl TcpListener {
+         }
+     }
+ 
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         pub(crate) fn new(listener: mio::net::TcpListener) -> io::Result<TcpListener> {
+             let io = PollEvented::new(listener)?;
+             Ok(TcpListener { io })
+@@ -405,7 +405,7 @@ impl fmt::Debug for TcpListener {
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use super::TcpListener;
+     use std::os::unix::prelude::*;
+diff --git a/src/net/tcp/mod.rs b/src/net/tcp/mod.rs
+index 734eabe..1be5660 100644
+--- a/src/net/tcp/mod.rs
++++ b/src/net/tcp/mod.rs
+@@ -2,7 +2,7 @@
+ 
+ pub(crate) mod listener;
+ 
+-cfg_not_wasi! {
++cfg_not_wasi_classic! {
+     pub(crate) mod socket;
+ }
+ 
+diff --git a/src/net/tcp/socket.rs b/src/net/tcp/socket.rs
+index 48dde0d..67d8eac 100644
+--- a/src/net/tcp/socket.rs
++++ b/src/net/tcp/socket.rs
+@@ -4,7 +4,7 @@ use std::fmt;
+ use std::io;
+ use std::net::SocketAddr;
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, RawFd};
+ use std::time::Duration;
+ 
+@@ -597,7 +597,8 @@ impl TcpSocket {
+         target_os = "redox",
+         target_os = "solaris",
+         target_os = "illumos",
+-        target_os = "haiku"
++        target_os = "haiku",
++        target_os = "wasi"
+     )))]
+     #[cfg_attr(
+         docsrs,
+@@ -606,7 +607,8 @@ impl TcpSocket {
+             target_os = "redox",
+             target_os = "solaris",
+             target_os = "illumos",
+-            target_os = "haiku"
++            target_os = "haiku",
++            target_os = "wasi"
+         ))))
+     )]
+     pub fn tos_v4(&self) -> io::Result<u32> {
+@@ -625,7 +627,8 @@ impl TcpSocket {
+         target_os = "redox",
+         target_os = "solaris",
+         target_os = "illumos",
+-        target_os = "haiku"
++        target_os = "haiku",
++        target_os = "wasi"
+     )))]
+     #[cfg_attr(
+         docsrs,
+@@ -634,7 +637,8 @@ impl TcpSocket {
+             target_os = "redox",
+             target_os = "solaris",
+             target_os = "illumos",
+-            target_os = "haiku"
++            target_os = "haiku",
++            target_os = "wasi"
+         ))))
+     )]
+     pub fn tos(&self) -> io::Result<u32> {
+@@ -657,7 +661,8 @@ impl TcpSocket {
+         target_os = "redox",
+         target_os = "solaris",
+         target_os = "illumos",
+-        target_os = "haiku"
++        target_os = "haiku",
++        target_os = "wasi"
+     )))]
+     #[cfg_attr(
+         docsrs,
+@@ -666,7 +671,8 @@ impl TcpSocket {
+             target_os = "redox",
+             target_os = "solaris",
+             target_os = "illumos",
+-            target_os = "haiku"
++            target_os = "haiku",
++            target_os = "wasi"
+         ))))
+     )]
+     pub fn set_tos_v4(&self, tos: u32) -> io::Result<()> {
+@@ -685,7 +691,8 @@ impl TcpSocket {
+         target_os = "redox",
+         target_os = "solaris",
+         target_os = "illumos",
+-        target_os = "haiku"
++        target_os = "haiku",
++        target_os = "wasi"
+     )))]
+     #[cfg_attr(
+         docsrs,
+@@ -694,7 +701,8 @@ impl TcpSocket {
+             target_os = "redox",
+             target_os = "solaris",
+             target_os = "illumos",
+-            target_os = "haiku"
++            target_os = "haiku",
++            target_os = "wasi"
+         ))))
+     )]
+     pub fn set_tos(&self, tos: u32) -> io::Result<()> {
+@@ -826,7 +834,7 @@ impl TcpSocket {
+     /// ```
+     pub async fn connect(self, addr: SocketAddr) -> io::Result<TcpStream> {
+         if let Err(err) = self.inner.connect(&addr.into()) {
+-            #[cfg(unix)]
++            #[cfg(any(unix, target_vendor = "wasmer"))]
+             if err.raw_os_error() != Some(libc::EINPROGRESS) {
+                 return Err(err);
+             }
+@@ -835,7 +843,7 @@ impl TcpSocket {
+                 return Err(err);
+             }
+         }
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_vendor = "wasmer"))]
+         let mio = {
+             use std::os::unix::io::{FromRawFd, IntoRawFd};
+ 
+@@ -891,7 +899,7 @@ impl TcpSocket {
+     /// ```
+     pub fn listen(self, backlog: u32) -> io::Result<TcpListener> {
+         self.inner.listen(backlog as i32)?;
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_vendor = "wasmer"))]
+         let mio = {
+             use std::os::unix::io::{FromRawFd, IntoRawFd};
+ 
+@@ -945,7 +953,7 @@ impl TcpSocket {
+     /// }
+     /// ```
+     pub fn from_std_stream(std_stream: std::net::TcpStream) -> TcpSocket {
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_vendor = "wasmer"))]
+         {
+             use std::os::unix::io::{FromRawFd, IntoRawFd};
+ 
+@@ -981,39 +989,40 @@ impl fmt::Debug for TcpSocket {
+ 
+ // These trait implementations can't be build on Windows, so we completely
+ // ignore them, even when building documentation.
+-#[cfg(unix)]
+-cfg_unix! {
+-    impl AsRawFd for TcpSocket {
+-        fn as_raw_fd(&self) -> RawFd {
+-            self.inner.as_raw_fd()
+-        }
++#[cfg(any(unix, target_vendor = "wasmer"))]
++impl AsRawFd for TcpSocket {
++    fn as_raw_fd(&self) -> RawFd {
++        self.inner.as_raw_fd()
+     }
++}
+ 
+-    impl AsFd for TcpSocket {
+-        fn as_fd(&self) -> BorrowedFd<'_> {
+-            unsafe { BorrowedFd::borrow_raw(self.as_raw_fd()) }
+-        }
++#[cfg(any(unix, target_vendor = "wasmer"))]
++impl AsFd for TcpSocket {
++    fn as_fd(&self) -> BorrowedFd<'_> {
++        unsafe { BorrowedFd::borrow_raw(self.as_raw_fd()) }
+     }
++}
+ 
+-    impl FromRawFd for TcpSocket {
+-        /// Converts a `RawFd` to a `TcpSocket`.
+-        ///
+-        /// # Notes
+-        ///
+-        /// The caller is responsible for ensuring that the socket is in
+-        /// non-blocking mode.
+-        unsafe fn from_raw_fd(fd: RawFd) -> TcpSocket {
+-            // Safety: exactly the same safety requirements as the
+-            // `FromRawFd::from_raw_fd` trait method.
+-            let inner = unsafe { socket2::Socket::from_raw_fd(fd) };
+-            TcpSocket { inner }
+-        }
++#[cfg(any(unix, target_vendor = "wasmer"))]
++impl FromRawFd for TcpSocket {
++    /// Converts a `RawFd` to a `TcpSocket`.
++    ///
++    /// # Notes
++    ///
++    /// The caller is responsible for ensuring that the socket is in
++    /// non-blocking mode.
++    unsafe fn from_raw_fd(fd: RawFd) -> TcpSocket {
++        // Safety: exactly the same safety requirements as the
++        // `FromRawFd::from_raw_fd` trait method.
++        let inner = unsafe { socket2::Socket::from_raw_fd(fd) };
++        TcpSocket { inner }
+     }
++}
+ 
+-    impl IntoRawFd for TcpSocket {
+-        fn into_raw_fd(self) -> RawFd {
+-            self.inner.into_raw_fd()
+-        }
++#[cfg(any(unix, target_vendor = "wasmer"))]
++impl IntoRawFd for TcpSocket {
++    fn into_raw_fd(self) -> RawFd {
++        self.inner.into_raw_fd()
+     }
+ }
+ 
+diff --git a/src/net/tcp/stream.rs b/src/net/tcp/stream.rs
+index 32a1fce..bb5cb8e 100644
+--- a/src/net/tcp/stream.rs
++++ b/src/net/tcp/stream.rs
+@@ -1,4 +1,4 @@
+-cfg_not_wasi! {
++cfg_not_wasi_classic! {
+     use crate::net::{to_socket_addrs, ToSocketAddrs};
+     use std::future::poll_fn;
+     use std::time::Duration;
+@@ -73,7 +73,7 @@ cfg_net! {
+ }
+ 
+ impl TcpStream {
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         /// Opens a TCP connection to a remote host.
+         ///
+         /// `addr` is an address of the remote host. Anything which implements the
+@@ -1252,7 +1252,7 @@ impl TcpStream {
+         socket2::SockRef::from(self).set_tcp_quickack(quickack)
+     }
+ 
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         /// Reads the linger duration for this socket by getting the `SO_LINGER`
+         /// option.
+         ///
+@@ -1527,7 +1527,7 @@ impl AsRef<Self> for TcpStream {
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use super::TcpStream;
+     use std::os::unix::prelude::*;
+diff --git a/src/net/udp.rs b/src/net/udp.rs
+index a858dad..8647c4e 100644
+--- a/src/net/udp.rs
++++ b/src/net/udp.rs
+@@ -254,7 +254,7 @@ impl UdpSocket {
+     /// [`std::net::UdpSocket`]: std::net::UdpSocket
+     /// [`set_nonblocking`]: fn@std::net::UdpSocket::set_nonblocking
+     pub fn into_std(self) -> io::Result<std::net::UdpSocket> {
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_vendor = "wasmer"))]
+         {
+             use std::os::unix::io::{FromRawFd, IntoRawFd};
+             self.io
+@@ -2084,7 +2084,8 @@ impl UdpSocket {
+         target_os = "redox",
+         target_os = "solaris",
+         target_os = "illumos",
+-        target_os = "haiku"
++        target_os = "haiku",
++        target_os = "wasi"
+     )))]
+     #[cfg_attr(
+         docsrs,
+@@ -2093,7 +2094,8 @@ impl UdpSocket {
+             target_os = "redox",
+             target_os = "solaris",
+             target_os = "illumos",
+-            target_os = "haiku"
++            target_os = "haiku",
++            target_os = "wasi"
+         ))))
+     )]
+     pub fn tos_v4(&self) -> io::Result<u32> {
+@@ -2112,7 +2114,8 @@ impl UdpSocket {
+         target_os = "redox",
+         target_os = "solaris",
+         target_os = "illumos",
+-        target_os = "haiku"
++        target_os = "haiku",
++        target_os = "wasi"
+     )))]
+     #[cfg_attr(
+         docsrs,
+@@ -2121,7 +2124,8 @@ impl UdpSocket {
+             target_os = "redox",
+             target_os = "solaris",
+             target_os = "illumos",
+-            target_os = "haiku"
++            target_os = "haiku",
++            target_os = "wasi"
+         ))))
+     )]
+     pub fn tos(&self) -> io::Result<u32> {
+@@ -2144,7 +2148,8 @@ impl UdpSocket {
+         target_os = "redox",
+         target_os = "solaris",
+         target_os = "illumos",
+-        target_os = "haiku"
++        target_os = "haiku",
++        target_os = "wasi"
+     )))]
+     #[cfg_attr(
+         docsrs,
+@@ -2153,7 +2158,8 @@ impl UdpSocket {
+             target_os = "redox",
+             target_os = "solaris",
+             target_os = "illumos",
+-            target_os = "haiku"
++            target_os = "haiku",
++            target_os = "wasi"
+         ))))
+     )]
+     pub fn set_tos_v4(&self, tos: u32) -> io::Result<()> {
+@@ -2172,7 +2178,8 @@ impl UdpSocket {
+         target_os = "redox",
+         target_os = "solaris",
+         target_os = "illumos",
+-        target_os = "haiku"
++        target_os = "haiku",
++        target_os = "wasi"
+     )))]
+     #[cfg_attr(
+         docsrs,
+@@ -2181,7 +2188,8 @@ impl UdpSocket {
+             target_os = "redox",
+             target_os = "solaris",
+             target_os = "illumos",
+-            target_os = "haiku"
++            target_os = "haiku",
++            target_os = "wasi"
+         ))))
+     )]
+     pub fn set_tos(&self, tos: u32) -> io::Result<()> {
+@@ -2297,7 +2305,7 @@ impl fmt::Debug for UdpSocket {
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use super::UdpSocket;
+     use std::os::unix::prelude::*;
+diff --git a/src/process/mod.rs b/src/process/mod.rs
+index aa57a9d..1017360 100644
+--- a/src/process/mod.rs
++++ b/src/process/mod.rs
+@@ -227,10 +227,10 @@
+ //! [`Child`]: crate::process::Child
+ 
+ #[path = "unix/mod.rs"]
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod imp;
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ pub(crate) mod unix {
+     pub(crate) use super::imp::*;
+ }
+@@ -681,7 +681,7 @@ impl Command {
+     /// Sets the child process's user ID. This translates to a
+     /// `setuid` call in the child process. Failure in the `setuid`
+     /// call will cause the spawn to fail.
+-    #[cfg(unix)]
++    #[cfg(any(unix))]
+     #[cfg_attr(docsrs, doc(cfg(unix)))]
+     pub fn uid(&mut self, id: u32) -> &mut Command {
+         #[cfg(target_os = "nto")]
+@@ -692,7 +692,7 @@ impl Command {
+ 
+     /// Similar to `uid` but sets the group ID of the child process. This has
+     /// the same semantics as the `uid` field.
+-    #[cfg(unix)]
++    #[cfg(any(unix))]
+     #[cfg_attr(docsrs, doc(cfg(unix)))]
+     pub fn gid(&mut self, id: u32) -> &mut Command {
+         #[cfg(target_os = "nto")]
+@@ -705,7 +705,7 @@ impl Command {
+     ///
+     /// Set the first process argument, `argv[0]`, to something other than the
+     /// default executable path.
+-    #[cfg(unix)]
++    #[cfg(any(unix))]
+     #[cfg_attr(docsrs, doc(cfg(unix)))]
+     pub fn arg0<S>(&mut self, arg: S) -> &mut Command
+     where
+@@ -744,7 +744,7 @@ impl Command {
+     /// When this closure is run, aspects such as the stdio file descriptors and
+     /// working directory have successfully been changed, so output to these
+     /// locations may not appear where intended.
+-    #[cfg(unix)]
++    #[cfg(any(unix))]
+     #[cfg_attr(docsrs, doc(cfg(unix)))]
+     pub unsafe fn pre_exec<F>(&mut self, f: F) -> &mut Command
+     where
+@@ -785,10 +785,13 @@ impl Command {
+     /// ```
+     ///
+     /// [signal handler]: crate::signal
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     #[cfg_attr(docsrs, doc(cfg(unix)))]
+     pub fn process_group(&mut self, pgroup: i32) -> &mut Command {
+-        self.std.process_group(pgroup);
++        #[cfg(not(target_vendor = "wasmer"))]
++        {
++            self.std.process_group(pgroup);
++        }
+         self
+     }
+ 
+@@ -1347,11 +1350,11 @@ impl Child {
+     ///
+     /// ```
+     /// # #[cfg(not(unix))]fn main(){}
+-    /// # #[cfg(unix)]
++    /// # #[cfg(any(unix, target_vendor = "wasmer"))]
+     /// use tokio::io::AsyncWriteExt;
+-    /// # #[cfg(unix)]
++    /// # #[cfg(any(unix, target_vendor = "wasmer"))]
+     /// use tokio::process::Command;
+-    /// # #[cfg(unix)]
++    /// # #[cfg(any(unix, target_vendor = "wasmer"))]
+     /// use std::process::Stdio;
+     ///
+     /// # #[cfg(unix)]
+@@ -1620,7 +1623,7 @@ impl TryInto<Stdio> for ChildStderr {
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ #[cfg_attr(docsrs, doc(cfg(unix)))]
+ mod sys {
+     use std::{
+diff --git a/src/runtime/driver.rs b/src/runtime/driver.rs
+index 92b2350..ffacd92 100644
+--- a/src/runtime/driver.rs
++++ b/src/runtime/driver.rs
+@@ -1,3 +1,5 @@
++#![cfg_attr(target_os = "wasi", allow(unused, dead_code))]
++
+ //! Abstracts out the entire chain of runtime sub-drivers into common types.
+ 
+ // Eventually, this file will see significant refactoring / cleanup. For now, we
+@@ -95,7 +97,7 @@ impl Handle {
+         }
+     }
+ 
+-    cfg_signal_internal_and_unix! {
++    cfg_signal_internal_and_unix_or_wasix! {
+         #[track_caller]
+         pub(crate) fn signal(&self) -> &crate::runtime::signal::Handle {
+             self.signal
+@@ -240,7 +242,7 @@ cfg_not_io_driver! {
+ 
+ // ===== signal driver =====
+ 
+-cfg_signal_internal_and_unix! {
++cfg_signal_internal_and_unix_or_wasix! {
+     type SignalDriver = crate::runtime::signal::Driver;
+     pub(crate) type SignalHandle = Option<crate::runtime::signal::Handle>;
+ 
+@@ -251,7 +253,7 @@ cfg_signal_internal_and_unix! {
+     }
+ }
+ 
+-cfg_not_signal_internal! {
++cfg_not_signal_internal_or_unix_or_wasix! {
+     pub(crate) type SignalHandle = ();
+ 
+     cfg_io_driver! {
+diff --git a/src/runtime/handle.rs b/src/runtime/handle.rs
+index 230e6a0..5cd6642 100644
+--- a/src/runtime/handle.rs
++++ b/src/runtime/handle.rs
+@@ -610,7 +610,7 @@ cfg_taskdump! {
+         pub async fn dump(&self) -> crate::runtime::Dump {
+             match &self.inner {
+                 scheduler::Handle::CurrentThread(handle) => handle.dump(),
+-                #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 scheduler::Handle::MultiThread(handle) => {
+                     // perform the trace in a separate thread so that the
+                     // trace itself does not appear in the taskdump.
+diff --git a/src/runtime/io/driver.rs b/src/runtime/io/driver.rs
+index ab7c931..02c95e6 100644
+--- a/src/runtime/io/driver.rs
++++ b/src/runtime/io/driver.rs
+@@ -1,5 +1,7 @@
++#![cfg_attr(target_os = "wasi", allow(unused, dead_code))]
++
+ // Signal handling
+-cfg_signal_internal_and_unix! {
++cfg_signal_internal_and_unix_or_wasix! {
+     mod signal;
+ }
+ cfg_io_uring! {
+@@ -45,8 +47,8 @@ pub(crate) struct Handle {
+     synced: Mutex<registration_set::Synced>,
+ 
+     /// Used to wake up the reactor from a call to `turn`.
+-    /// Not supported on `Wasi` due to lack of threading support.
+-    #[cfg(not(target_os = "wasi"))]
++    /// Not supported on classic `Wasi` due to lack of threading support.
++    #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+     waker: mio::Waker,
+ 
+     pub(crate) metrics: IoDriverMetrics,
+@@ -116,7 +118,7 @@ impl Driver {
+     /// creation.
+     pub(crate) fn new(nevents: usize) -> io::Result<(Driver, Handle)> {
+         let poll = mio::Poll::new()?;
+-        #[cfg(not(target_os = "wasi"))]
++        #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+         let waker = mio::Waker::new(poll.registry(), TOKEN_WAKEUP)?;
+         let registry = poll.registry().try_clone()?;
+ 
+@@ -132,7 +134,7 @@ impl Driver {
+             registry,
+             registrations,
+             synced: Mutex::new(synced),
+-            #[cfg(not(target_os = "wasi"))]
++            #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+             waker,
+             metrics: IoDriverMetrics::default(),
+             #[cfg(all(
+@@ -256,7 +258,7 @@ impl Handle {
+     /// blocked in `turn`, then the next call to `turn` will not block and
+     /// return immediately.
+     pub(crate) fn unpark(&self) {
+-        #[cfg(not(target_os = "wasi"))]
++        #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+         self.waker.wake().expect("failed to wake I/O driver");
+     }
+ 
+diff --git a/src/runtime/io/driver/signal.rs b/src/runtime/io/driver/signal.rs
+index ea3ef07..11cff99 100644
+--- a/src/runtime/io/driver/signal.rs
++++ b/src/runtime/io/driver/signal.rs
+@@ -1,3 +1,5 @@
++#![cfg_attr(target_os = "wasi", allow(unused_imports))]
++
+ use super::{Driver, Handle, TOKEN_SIGNAL};
+ 
+ use std::io;
+@@ -5,8 +7,10 @@ use std::io;
+ impl Handle {
+     pub(crate) fn register_signal_receiver(
+         &self,
++        #[cfg(not(target_os = "wasi"))]
+         receiver: &mut mio::net::UnixStream,
+     ) -> io::Result<()> {
++        #[cfg(not(target_os = "wasi"))]
+         self.registry
+             .register(receiver, TOKEN_SIGNAL, mio::Interest::READABLE)?;
+         Ok(())
+diff --git a/src/runtime/io/registration.rs b/src/runtime/io/registration.rs
+index c6e4e32..9d00283 100644
+--- a/src/runtime/io/registration.rs
++++ b/src/runtime/io/registration.rs
+@@ -118,7 +118,7 @@ impl Registration {
+ 
+     // Uses the poll path, requiring the caller to ensure mutual exclusion for
+     // correctness. Only the last task to call this function is notified.
+-    #[cfg(not(target_os = "wasi"))]
++    #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+     pub(crate) fn poll_read_io<R>(
+         &self,
+         cx: &mut Context<'_>,
+diff --git a/src/runtime/mod.rs b/src/runtime/mod.rs
+index 77cf183..bba2ac1 100644
+--- a/src/runtime/mod.rs
++++ b/src/runtime/mod.rs
+@@ -539,7 +539,7 @@ cfg_time! {
+     }
+ }
+ 
+-cfg_signal_internal_and_unix! {
++cfg_signal_internal_and_unix_or_wasix! {
+     pub(crate) mod signal;
+ }
+ 
+diff --git a/src/runtime/signal/mod.rs b/src/runtime/signal/mod.rs
+index 8055c09..ac3f5ed 100644
+--- a/src/runtime/signal/mod.rs
++++ b/src/runtime/signal/mod.rs
+@@ -1,10 +1,12 @@
+ #![cfg_attr(not(feature = "rt"), allow(dead_code))]
++#![cfg_attr(target_os = "wasi", allow(unused, dead_code))]
+ 
+ //! Signal driver
+ 
+ use crate::runtime::{driver, io};
+ use crate::signal::registry::globals;
+ 
++#[cfg(not(target_os = "wasi"))]
+ use mio::net::UnixStream;
+ use std::io::{self as std_io, Read};
+ use std::sync::{Arc, Weak};
+@@ -21,6 +23,7 @@ pub(crate) struct Driver {
+     io: io::Driver,
+ 
+     /// A pipe for receiving wake events from the signal handler
++    #[cfg(not(target_os = "wasi"))]
+     receiver: UnixStream,
+ 
+     /// Shared state. The driver keeps a strong ref and the handle keeps a weak
+@@ -62,19 +65,24 @@ impl Driver {
+         // with registering dups with the same reactor. In this case, duping is
+         // safe as each dup is registered with separate reactors **and** we
+         // only expect at least one dup to receive the notification.
++        #[cfg(not(target_os = "wasi"))]
++        let receiver = {
++            // Manually drop as we don't actually own this instance of UnixStream.
++            let receiver_fd = globals().receiver.as_raw_fd();
+ 
+-        // Manually drop as we don't actually own this instance of UnixStream.
+-        let receiver_fd = globals().receiver.as_raw_fd();
++            // safety: there is nothing unsafe about this, but the `from_raw_fd` fn is marked as unsafe.
++            let original = ManuallyDrop::new(unsafe {
++                std::os::unix::net::UnixStream::from_raw_fd(receiver_fd)
++            });
++            let mut receiver = UnixStream::from_std(original.try_clone()?);
+ 
+-        // safety: there is nothing unsafe about this, but the `from_raw_fd` fn is marked as unsafe.
+-        let original =
+-            ManuallyDrop::new(unsafe { std::os::unix::net::UnixStream::from_raw_fd(receiver_fd) });
+-        let mut receiver = UnixStream::from_std(original.try_clone()?);
+-
+-        io_handle.register_signal_receiver(&mut receiver)?;
++            io_handle.register_signal_receiver(&mut receiver)?;
++            receiver
++        };
+ 
+         Ok(Self {
+             io,
++            #[cfg(not(target_os = "wasi"))]
+             receiver,
+             inner: Arc::new(()),
+         })
+@@ -111,14 +119,17 @@ impl Driver {
+ 
+         // Drain the pipe completely so we can receive a new readiness event
+         // if another signal has come in.
+-        let mut buf = [0; 128];
+-        #[allow(clippy::unused_io_amount)]
+-        loop {
+-            match self.receiver.read(&mut buf) {
+-                Ok(0) => panic!("EOF on self-pipe"),
+-                Ok(_) => continue, // Keep reading
+-                Err(e) if e.kind() == std_io::ErrorKind::WouldBlock => break,
+-                Err(e) => panic!("Bad read on self-pipe: {e}"),
++        #[cfg(not(target_os = "wasi"))]
++        {
++            let mut buf = [0; 128];
++            #[allow(clippy::unused_io_amount)]
++            loop {
++                match self.receiver.read(&mut buf) {
++                    Ok(0) => panic!("EOF on self-pipe"),
++                    Ok(_) => continue, // Keep reading
++                    Err(e) if e.kind() == std_io::ErrorKind::WouldBlock => break,
++                    Err(e) => panic!("Bad read on self-pipe: {}", e),
++                }
+             }
+         }
+ 
+diff --git a/src/signal/ctrl_c.rs b/src/signal/ctrl_c.rs
+index e1e92fa..57bf657 100644
+--- a/src/signal/ctrl_c.rs
++++ b/src/signal/ctrl_c.rs
+@@ -1,4 +1,4 @@
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ use super::unix::{self as os_impl};
+ #[cfg(windows)]
+ use super::windows::{self as os_impl};
+diff --git a/src/signal/mod.rs b/src/signal/mod.rs
+index e79f480..704c132 100644
+--- a/src/signal/mod.rs
++++ b/src/signal/mod.rs
+@@ -26,7 +26,7 @@
+ //! Wait for `SIGHUP` on Unix
+ //!
+ //! ```rust,no_run
+-//! # #[cfg(unix)] {
++//! # #[cfg(any(unix, target_vendor = "wasmer"))] {
+ //! use tokio::signal::unix::{signal, SignalKind};
+ //!
+ //! #[tokio::main]
+diff --git a/src/signal/registry.rs b/src/signal/registry.rs
+index b2fd4c7..93ef7f8 100644
+--- a/src/signal/registry.rs
++++ b/src/signal/registry.rs
+@@ -136,7 +136,7 @@ impl Globals {
+         self.registry.broadcast()
+     }
+ 
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     pub(crate) fn storage(&self) -> &OsStorage {
+         &self.registry.storage
+     }
+diff --git a/src/signal/unix.rs b/src/signal/unix.rs
+index 85727ad..2531ba0 100644
+--- a/src/signal/unix.rs
++++ b/src/signal/unix.rs
+@@ -3,8 +3,9 @@
+ //! This module is only defined on Unix platforms and contains the primary
+ //! `Signal` type for receiving notifications of signals.
+ 
+-#![cfg(unix)]
++#![cfg(any(unix, target_vendor = "wasmer"))]
+ #![cfg_attr(docsrs, doc(cfg(all(unix, feature = "signal"))))]
++#![cfg_attr(target_os = "wasi", allow(unused))]
+ 
+ use crate::runtime::scheduler;
+ use crate::runtime::signal::Handle;
+@@ -12,6 +13,7 @@ use crate::signal::registry::{globals, EventId, EventInfo, Globals, Storage};
+ use crate::signal::RxFuture;
+ use crate::sync::watch;
+ 
++#[cfg(not(target_os = "wasi"))]
+ use mio::net::UnixStream;
+ use std::io::{self, Error, ErrorKind, Write};
+ use std::sync::OnceLock;
+@@ -62,16 +64,24 @@ impl Storage for OsStorage {
+ 
+ #[derive(Debug)]
+ pub(crate) struct OsExtraData {
++    #[cfg(not(target_os = "wasi"))]
+     sender: UnixStream,
++    #[cfg(not(target_os = "wasi"))]
+     pub(crate) receiver: UnixStream,
+ }
+ 
+ impl Default for OsExtraData {
++    #[cfg(not(target_os = "wasi"))]
+     fn default() -> Self {
+         let (receiver, sender) = UnixStream::pair().expect("failed to create UnixStream");
+ 
+         Self { sender, receiver }
+     }
++
++    #[cfg(target_os = "wasi")]
++    fn default() -> Self {
++        Self {}
++    }
+ }
+ 
+ /// Represents the specific kind of signal to listen for.
+@@ -257,8 +267,11 @@ fn action(globals: &'static Globals, signal: libc::c_int) {
+ 
+     // Send a wakeup, ignore any errors (anything reasonably possible is
+     // full pipe and then it will wake up anyway).
+-    let mut sender = &globals.sender;
+-    drop(sender.write(&[1]));
++    #[cfg(not(target_os = "wasi"))]
++    {
++        let mut sender = &globals.sender;
++        drop(sender.write(&[1]));
++    }
+ }
+ 
+ /// Enables this module to receive signal notifications for the `signal`
+diff --git a/src/util/markers.rs b/src/util/markers.rs
+index fee1d1c..0694d2e 100644
+--- a/src/util/markers.rs
++++ b/src/util/markers.rs
+@@ -1,3 +1,5 @@
++#![cfg_attr(target_os = "wasi", allow(unused, dead_code))]
++
+ /// Marker for types that are `Sync` but not `Send`
+ #[allow(dead_code)]
+ pub(crate) struct SyncNotSend(#[allow(dead_code)] *mut ());
