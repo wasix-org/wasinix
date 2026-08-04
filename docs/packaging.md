@@ -168,6 +168,7 @@ local version. The app is deleted when the PR closes or drops the label
   `python-packages/patches/`, Rust-wheel helpers in `python-packages/lib/`.
 - Ship an older release too (a version consumers pin): see
   [Registry history](#registry-history).
+- Which wheel to add next, and what it unblocks: `python-coverage.md`.
 
 All shipped wheels (plus their transitive python deps) are also published as a
 static PEP 503 "simple" index: `.#pythonRegistry` (`pkgs/python-registry/`).

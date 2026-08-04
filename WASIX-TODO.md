@@ -48,7 +48,9 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
   context manager, which calls it) hangs: idle workers sit blocked in queue
   reads and can't be killed. `pool.close(); pool.join()` works because
   sentinels wake the workers first. Same risk for any subprocess kill/timeout
-  pattern where the child blocks on fd reads.
+  pattern where the child blocks on fd reads. Also why hf-xet's SIGINT handler
+  is a no-op on wasix (hf-xet-wasi-sigint.patch): a native handler would be
+  inert until delivery is fixed, and CPython owns Ctrl-C at the Python boundary.
 - Fix: wasmer's signal delivery must cancel in-flight blocking syscalls
   (EINTR or instance termination).
 
@@ -60,14 +62,30 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
   Older runtimes could not resolve by name, which is why git execs absolute
   baked paths; that approach still works and stays.
 - The find suite's `-exec`/xargs tests stay `broken` regardless: the spawned
-  tools (cat/echo) aren't on the guest PATH at all — the test harness forwards
-  an env allowlist, not the host PATH — so there is nothing for resolution to
+  tools (cat/echo) aren't on the guest PATH at all, because the test harness
+  forwards an env allowlist rather than the host PATH, so nothing exists for
   find. That is a harness/environment gap, not this issue.
 
 ### `argv[0]` 🟢
 
 - Correct on current wasmer for both directly-run and spawned programs
   (verified). Older runtimes passed `(null)`.
+
+### no process-table introspection 🟡
+
+- There is no `/proc` and no process-query call, so `psutil.Process()` raises
+  `NoSuchProcess process PID not found (pid=1)` for the calling process itself
+  (verified under wasmer; `overlay/python-packages/psutil/tests/basic.nix`).
+  `os.sched_getaffinity` does not answer either.
+- Consequence: joblib/loky's `cpu_count(only_physical_cores=True)` falls through
+  both to that `psutil.Process()` and propagates the error, since its `try` only
+  catches `ImportError`. scikit-learn's `_openmp_effective_n_threads()` calls it
+  whenever `OMP_NUM_THREADS` is unset, so every OpenMP-parallel estimator needs
+  that variable in the environment on wasix; with it set sklearn takes the
+  `omp_get_max_threads()` branch and never reaches psutil. Both directions are
+  pinned by `overlay/python-packages/scikit-learn/tests/basic.nix`.
+- Fix: answer self-inspection in wasmer (pid 1 exists, so `Process()` should
+  resolve it), which also gets loky off the fallback path.
 
 ### exec'ing a symlinked helper in a webc fails ENOEXEC 🟢
 
@@ -119,7 +137,132 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
 - Fix: define the standard names in wasix-libc (alias or rename), and
   implement/stub `if_indextoname`/`if_nametoindex`.
 
+### `mlock`/`munlock`/`madvise`/`sched_getcpu`/`sched_getaffinity` declared but unimplemented 🟢
+
+- wasix-libc's headers declared `mlock`/`munlock`/`madvise` (`sys/mman.h`),
+  `sched_getcpu`/`sched_getaffinity` (`sched.h`) but `libc.a` defined none of
+  them, so callers linked an undefined dynamic import that traps at runtime
+  (duckdb key pinning / allocator `madvise` / task-scheduler CPU id; opencv's
+  `cv::getNumberOfCPUs()` -> `sched_getaffinity`).
+- Fixed in `pkgs/toolchain/sysroot/wasix-libc-stubs.c` (globbed into the build
+  via `libc-bottom-half/sources/`): best-effort no-ops (mlock/munlock/madvise
+  return 0, sched_getcpu returns 0, sched_getaffinity fills the mask from
+  `sysconf(_SC_NPROCESSORS_ONLN)`, and `__sched_cpucount`, which `CPU_COUNT()`
+  lowers to and the libc build omits, counts the mask bits). The
+  duckdb/opencv `__wasi__` guard patches are now redundant and removed. Upstream
+  this stub file into wasix-libc.
+
+### `<fenv.h>` omits the directed-rounding and exception-flag macros 🟡
+
+- wasix-libc's `<fenv.h>` defines `FE_TONEAREST` and `FE_ALL_EXCEPT` (both 0)
+  but not the directed-rounding modes `FE_UPWARD`/`FE_DOWNWARD`/`FE_TOWARDZERO`
+  nor the individual exception-flag macros `FE_INVALID`/`FE_DIVBYZERO`/
+  `FE_OVERFLOW`/`FE_UNDERFLOW`/`FE_INEXACT` (wasm has no dynamic rounding-mode
+  control and no FP exceptions). The `fe*` functions (`feholdexcept`,
+  `feclearexcept`, `feupdateenv`, ...) are declared and link as no-ops, but C
+  code that names any missing macro gets "use of undeclared identifier" and
+  fails to compile, even where it only calls it at runtime and would tolerate a
+  failure/no-op.
+- Consequence: `scipy.special._test_internal` (a test-only extension that probes
+  directed rounding with `fesetround(FE_UPWARD/FE_DOWNWARD)`) won't compile;
+  HDF5's `H5T__init_native_float_types` masks FP exceptions around NaN "don't
+  care" bit probing with `feholdexcept`/`feclearexcept(FE_INVALID)`/
+  `feupdateenv` and won't compile (`FE_INVALID` undeclared).
+- Workaround: `overlay/python-packages/scipy.nix` drops the `_test_internal`
+  module (test-only, `install_tag 'tests'`, not imported by normal scipy);
+  `overlay/packages/hdf5/patches/hdf5-wasi-fenv.patch` guards the fe\* dance for
+  `__wasi__` (nothing to mask on wasm).
+- Fix: define the missing rounding-mode and exception-flag macros in wasix-libc
+  (distinct int values), have `fesetround` return nonzero for anything but
+  `FE_TONEAREST`, and keep `feclearexcept`/`fetestexcept` as no-ops, matching
+  glibc/musl on FPUs without directed rounding or exceptions. Downstream then
+  compiles unchanged.
+
+### POSIX advisory record locking is not implemented 🟡
+
+- WASIX supports threads and multiple processes through `thread_spawn`,
+  `proc_fork`, and `proc_spawn*`, but the Wasmer WASIX ABI has no operation for
+  coordinating POSIX record locks between them.
+- The vendored wasix-libc patch exposes `F_GETLK`/`F_SETLK`/`F_SETLKW`, the lock
+  types, and `struct flock` so feature-detected consumers compile. The operations
+  return `ENOSYS`; reporting success would falsely claim exclusion and risk
+  cross-process corruption.
+- Workaround: h5py's runtime test sets `HDF5_USE_FILE_LOCKING=FALSE`; DuckDB skips
+  its lock calls on WASI in `duckdb-wasi-no-file-lock.patch`.
+- Upstream fix: add record-lock operations and shared per-file lock state to
+  Wasmer's WASIX filesystem ABI, then implement the fcntl commands in wasix-libc
+  and remove the package workarounds.
+
+### `dladdr` missing from wasix's dyld 🟡
+
+- wasix provides `dlopen`/`dlsym`/`dlclose`/`dlerror`, but not `dladdr` (the
+  reverse lookup: address -> containing shared object + path). A wheel whose
+  extension module references `dladdr` loads fine until the symbol is resolved,
+  then wasmer aborts import with "Dynamically-linked symbol not found or has bad
+  type: dladdr". Distinct from the link-time libc gaps above: the symbol is a
+  dynamic (dyld) import, so it surfaces only when the `.so` is loaded under
+  wasmer, not at build.
+- Consequence: onnxruntime's `Env::GetRuntimePath` calls `dladdr` to find the
+  directory of its own binary (to locate provider shared libraries beside it);
+  `import onnxruntime` traps.
+- Workaround: `overlay/packages/onnxruntime/patches/onnxruntime-wasi-no-dladdr.patch`
+  guards the `dladdr` path on `__wasi__` (as onnxruntime already does for AIX),
+  taking the non-`dladdr` fallback. Fine for a static single-EP build that loads
+  no provider `.so`.
+- Fix: implement `dladdr` in wasix's dyld (fill `Dl_info` from the module table),
+  or at least export a weak stub returning 0 so consumers take their own
+  fallback instead of failing to import.
+
+### `dlfcn.h` ships for `off` but not the non-PIC EH sysroots 🟡
+
+- `Makefile-eh` omits the header when PIC is off (`MUSL_OMIT_HEADERS +=
+"dlfcn.h"` under `ifeq ($(PIC), no)`), while the plain `Makefile` the `off`
+  profile uses has no such rule. So `sysroot` (off), `sysroot-ehpic` and
+  `sysroot-exnref-ehpic` carry `dlfcn.h`; `sysroot-eh` and `sysroot-exnref-eh`
+  do not (verified against the built sysroots).
+- Consequence: a package that includes `<dlfcn.h>` unconditionally compiles at
+  `off` and the PIC profiles but fails at `eh`/`exnrefEh` with "'dlfcn.h' file
+  not found", which reads as a missing feature rather than a header-install
+  rule. duckdb hits this in `src/include/duckdb/common/dl.hpp`, so it is
+  restricted to the PIC profiles.
+- The gate is defensible (wasm `dlopen` needs side modules, hence PIC), but the
+  two makefiles disagree, and `off` is non-PIC too.
+- Fix: make the rule consistent across both makefiles. If the header is meant to
+  track dlopen support, omit it for `off` as well; if it is meant to track the
+  declarations, ship it everywhere and let the link fail instead.
+
+### `sys/syslog.h` and `sys/sysmacros.h` absent 🟡
+
+- `syslog.h` ships, but the legacy `sys/syslog.h` spelling does not (verified
+  against the built sysroot), and `sys/sysmacros.h` is missing entirely, so
+  `makedev`/`major`/`minor` have no declaration. `sync()` is also undeclared.
+- Consequence: util-linux's `libcommon` does not compile, and every util-linux
+  program links it, so the package builds `libuuid` only (cpython's `_uuid`
+  backend). `lib/configs.c` needs `sys/syslog.h`; `lib/path.c` and `lib/sysfs.c`
+  need `makedev`/`minor` (they compile in under `HAVE_OPENAT && HAVE_DIRFD`,
+  which wasix satisfies). `libblkid`, `libfdisk`, and `fsck.minix` additionally
+  need `sync()`.
+- Fix: add a `sys/syslog.h` wrapper including `syslog.h`, a `sys/sysmacros.h`
+  with the usual `makedev`/`major`/`minor` macros, and a `sync()` stub in
+  `wasix-libc-stubs.c`. That unblocks most util-linux programs; the rest need
+  `fork` (`off` only), `sys/ipc.h`, or `PRIO_*`/`get,setpriority`.
+
 ## Toolchain
+
+### wasixcc rejects `-fno-exceptions` under forced EH; stripped in the shim 🟡
+
+- wasixcc hard-errors on `-fno-exceptions`/`-fno-cxx-exceptions` in the PIC
+  profiles ("PIC without wasm exceptions is not a valid build configuration"):
+  PIC needs wasm EH. Many exception-free C/C++ libraries pass those flags.
+- Workaround (in place): `set/stdenv.nix`'s shim strips both flags in every EH
+  profile (the `off` profile keeps them, where a throwing TU genuinely can't
+  build). Mirrors `set/rust-platform.nix`'s `mkDepCc` for cc-rs. It STRIPS (not
+  a last-wins `-fexceptions`): wasixcc errors on merely seeing the flag. Must
+  also rewrite the cc-wrapper's `@response-file` (long compiles collapse flags
+  into it, so argv-only stripping misses them: crc32c). Deleted the per-package
+  seds (crc32c, libhwy, libjxl, numpy).
+- Root fix: wasixcc should tolerate `-fno-exceptions` as a no-op under forced EH
+  (like `WASIXCC_DISCARD_UNSUPPORTED_FLAGS`), then the shim strip can go.
 
 ### Rust cdylib wheels ship legacy Wasm-EH from the rust `-dl` sysroot 🟡
 
@@ -157,7 +300,7 @@ instruction")` under the pinned wasmer (7.2.0), which only accepts the new
   maturin. The hook is the maturin analogue of cargo-wasix's CLI pass.
 - Proper fix (upstream): (a) point the rust std targets at the **exnref**
   sysroots (`variants.exnrefEh`/`exnrefEhpic`) so linked libc++ is already
-  `try_table` — rebuilds std, and the wheels' own rust EH still needs the
+  `try_table`, though that rebuilds std, and the wheels' own rust EH still needs the
   translate pass unless panic=abort; or (b) teach cargo-wasix to post-process
   cdylib artifacts (e.g. a standalone `opt` subcommand the hook calls), moving
   the pass's ownership back into cargo-wasix. Then drop `exnrefTranslateHook`.
@@ -195,6 +338,133 @@ instruction")` under the pinned wasmer (7.2.0), which only accepts the new
 - Fix: wasm-ld should reject signature-mismatched direct calls (LLVM fork),
   or wasixcc's autoconf workarounds mode skips post-link wasm-opt.
 
+### non-default python splices a wasm `pyproject-build` in nativeBuildInputs 🟡
+
+- The default python is py314. A package that runs `pyproject-build` directly
+  (from `build` in nativeBuildInputs, as the C++ onnx does in preBuild, rather
+  than via `pypaBuildHook`) builds fine on py314 but on py313 (non-default) `build`
+  splices to the wasm target: its `.pyproject-build-wrapped` is a python script,
+  and bash runs it and chokes on the `lambda` in the site-init line. The
+  pythonOnBuildForHost native `build` exists; the nativeBuildInputs splice just
+  does not pick it in the non-default python's package set.
+- Consequence: the C++ onnx re-instantiated in the python313 set fails; and it is
+  re-instantiated per interpreter because the python onnx wheel pulls `onnx`
+  (C++) through its own set. (An earlier abi3-dist `.override` that forced the
+  py314 C++ onnx worked for py314 but dragged its py314 python + protobuf onto
+  the py313 wheel's PYTHONPATH, which shadowed py313's build tools, so the
+  `packaging`/`installer` failures seen then were that pollution, not a real
+  py313 provisioning gap.)
+- Workaround: `overlay/python-packages/onnx.nix` repackages only the abi3 wheel
+  FILE from the top-level (native) py314 C++ onnx and drops the onnx package from
+  build/propagated inputs, so no per-interpreter C++ onnx is built and no py314
+  python leaks. Both py313 and py314 wheels import green.
+- Fix: make the non-default python's package set splice `build` (and peer pypa
+  tools) to `pythonOnBuildForHost` in nativeBuildInputs, matching the default, so
+  a package that must genuinely build a wheel on py313 works.
+
+### flang cross-compiles wasm32 with the host ABI 🟡
+
+- flang assumes host and target share an ABI, which breaks a 64-bit host
+  targeting 32-bit wasm32. Building and linking Fortran hit three gaps, all in
+  the flang frontend (patched in `toolchain/flang.nix`, which builds a
+  wasm32-only cross flang):
+  - No wasm case in flang's per-arch ABI lowering
+    (`Optimizer/CodeGen/Target.cpp`); `flang-wasm32-target.patch` adds
+    `TargetWasm32` (complex byval/sret, clang's WebAssembly ABI).
+  - The `_FortranA*` runtime interface sizes `size_t`/`long` from the _host_
+    compiler's `sizeof` (`RTBuilder.h`), so a 64-bit host emits i64 lengths
+    where the wasm32 flang-rt uses i32: a wasm-ld signature mismatch on
+    `_FortranAioOutputAscii` etc. `flang-wasm32-runtime-abi.patch` pins those
+    pointer-width runtime types to 32 bits.
+  - flang emits a 3-arg POSIX `main(argc,argv,envp)`; wasi-libc's `__main_void`
+    calls a 2-arg `main(argc,argv)`, an unresolvable signature mismatch
+    ("undefined symbol: main"). `flang-wasm32-main.patch` emits a 2-arg main on
+    wasm and hands ProgramStart a null envp (the runtime ignores it and reads
+    libc `environ`).
+- These patches hardcode wasm32 widths / a 2-arg main; safe only because
+  `toolchain.flang` targets wasm32 exclusively.
+- The runtime itself (`toolchain.flangRt`, `flang-rt.nix`) cross-builds with two
+  more fixes: `-Wno-c++11-narrowing` (flang-rt narrows uint64 byte sizes into
+  32-bit size_t in braced initializers, ill-formed on wasm32; every value fits
+  the 4 GiB heap so the truncation is lossless) and
+  `flang-rt-execute-no-fork-on-wasi.patch` (async EXECUTE_COMMAND_LINE forks,
+  but fork is hidden under Wasm-EH, above, and there is no shell to exec; report
+  it unsupported).
+- Fix: upstream flang should derive the runtime-interface integer widths from
+  the target data layout (not host `sizeof`) and emit a target-appropriate main
+  entry; then all four workarounds drop.
+
+### scipy calls the flang reference BLAS/LAPACK without F77 hidden CHARACTER lengths 🟢
+
+- Reference BLAS/LAPACK routines take `CHARACTER*1` flags (`TRANSA`, `UPLO`, …).
+  flang emits them with the standard F77 hidden-string-length ABI: each character
+  argument adds a trailing `size_t` length parameter (i32 on wasm32), appended
+  after all explicit args. Much of scipy's C/Cython glue declares the Fortran
+  symbols WITHOUT those hidden lengths, calling e.g. `dgemm_(char*, char*,
+int*, …)` with 13 args, while flang's `dgemm_` is a 15-arg wasm function. On x86
+  harmless (the extra slots are ignored), but wasm `call_indirect` is strictly
+  typed: wasm-ld emits a trapping stub and the call dies at runtime
+  (`signature_mismatch:dgemm_`). f2py's wrappers (`_fblas`/`_flapack`) already
+  pass the hidden lengths, so the f2py path (`scipy.linalg.solve/lstsq/eig`, so
+  `LinearRegression`) is fine; 15-arg is the correct target everywhere. Never an
+  OpenMP issue (libomp runs; the trap is in the BLAS call).
+- Fixed: the `cython_blas`/`cython_lapack` path. `scipy-cython-blas-fortran-charlen.patch`
+  (in `scipy.nix`) patches scipy's `_generate_pyx.py` so the generated
+  `_fortran_<name>` externs and calls carry the hidden lengths (value 1: every
+  wrapped char arg is CHARACTER\*1 and LSAME ignores the length; ilaenv/xerbla are
+  not wrapped). Only the internal Fortran calls change; the public `cdef` wrapper
+  signatures are untouched, so downstream `cython_blas`/`cython_lapack` consumers
+  stay ABI-compatible. Verified by scikit-learn's fit check (direct
+  `cython_blas._test_dgemm` + `KMeans.fit`). This is what scikit-learn /
+  statsmodels reach, so the downstream story is green.
+- Also fixed: scipy's OWN hand-C/C++ modules (which declare the Fortran symbols
+  themselves and called 13-arg) via `scipy-hand-c-blas-fortran-charlen.patch`,
+  covering `_lbfgsb`/`_slsqplib` (optimize.minimize L-BFGS-B/SLSQP),
+  `_odepack`/`_vode` (integrate.odeint/ode), `_batched_linalg`,
+  `_internal_matfuncs` (expm/sqrtm), and the three vendored solvers that ship
+  their own BLAS decls: `_propack`, arpack (arnaud), and SuperLU. 10 header files.
+  Same shape as the cython patch, plus one extra class: `?getrf`/`?getri` are
+  declared CBLAS_INT-returning but flang's subroutines return void (a return-type
+  mismatch). Technique: bind the true flang symbol to a private name via an
+  `__asm__` label (with the hidden `size_t` lengths), define a DISTINCT-named
+  `static inline` wrapper that appends `1` per char arg, and `#(re)define` the
+  mangled name to the wrapper. The distinct name matters: a wrapper reusing the
+  true symbol name makes the asm label bind the call back into the wrapper
+  (verified self-recursion under wasm-ld). All gated on `__wasi__`/`__wasm__`;
+  lengths/void-returns verified against the reference lib arities. Warnings
+  426 -> 1. Verified by `scipy/tests/basic.nix` under wasmer (optimize L-BFGS-B/
+  SLSQP, integrate odeint/LSODA, expm/sqrtm, batched svd/lu/qr/cholesky/eig,
+  PROPACK svds).
+- Left: `chla_transtype_` in `cython_lapack` (the last warning), a
+  CHARACTER-returning helper with a distinct hidden-result-buffer ABI that scipy
+  never calls directly.
+- Upstream: a latent scipy portability bug where the glue relies on a lax C ABI that
+  strict targets (wasm) reject. Upstream scipy could pass the hidden lengths
+  unconditionally, as its own f2py wrappers already do.
+
+### `clang-scan-deps` breaks cmake try-compiles 🟡
+
+- The wasix cross cc is `isClang` (set/stdenv.nix), so nixpkgs puts
+  `clang-scan-deps` on PATH and cmake turns on C++ module scanning for Ninja
+  C++20 builds. cmake then scans not just real sources but the throwaway
+  `check_cxx_source_compiles`/`try_compile` probes it runs at configure time.
+  `clang-scan-deps` fails on those probe compiles for our wasm target (it is
+  invoked directly by cmake, not through the wasixcc shim, so it does not get
+  the sysroot/target flags the shim injects), and cmake reads every failed scan
+  as "the probe did not compile."
+- Consequence: a package whose configure does try-compiles aborts with a
+  misleading message. rapidfuzz's LLVM-style atomic check fatals with "No
+  native support for std::atomic<int>" though the probes compile fine with
+  scanning off (all HAVE*CXX_ATOMICS*\* pass). duckdb and pyzmq have no such
+  probe and build with scanning on.
+- Workaround: a set-wide setup hook in `set/stdenv.nix` defaults
+  `-DCMAKE_CXX_SCAN_FOR_MODULES=OFF` for every cmake build (harmless where cmake
+  never scans; no per-package opt-out needed).
+- Fix: make `clang-scan-deps` see the wasix sysroot/target on try-compiles (wire
+  it through the shim, or export the flags cmake forwards to it) so scanning
+  actually works, then drop the hook. Scanning is off because it misreports
+  probes, not because C++20 modules are unwanted.
+
 ## Packages that don't cross-build
 
 - **tzdata** 🟡: `localtime.c` needs getresuid/tzname/…, absent on WASIX.
@@ -217,6 +487,18 @@ instruction")` under the pinned wasmer (7.2.0), which only accepts the new
   cross-instantiates and fails to compile on wasix (`--ld-path` unused, then
   `-Werror`). Only pulled by harfbuzz's Graphite shaping, which libraqm doesn't
   use; `packages/harfbuzz.nix` sets `withGraphite2 = false`.
+- **boost** 🟡: Boost.Build (b2) rejects `architecture=wasm` ("not a known
+  value of feature <architecture>"), so nixpkgs' cross boost never configures.
+  Its only wasix consumer so far is scipy, which needs the header-only
+  boost.math; `python-packages/scipy.nix` uses the build-host boost's headers
+  (`BOOST_INCLUDEDIR`/`BOOST_LIBRARYDIR`, both required by meson's boost
+  detection) instead of cross-building. Fix (for a real wasix boost): teach b2 a
+  `wasm`/`wasm32` architecture value (or map it to a no-op), then build
+  header-only or the subset that compiles.
+- **qhull** (not broken, packaging quirk) 🟢: the static-only wasix build makes
+  `libqhullstatic_r.a`, but qhull_r.pc and consumers link `-lqhull_r` (the
+  shared-build name); `packages/qhull.nix` aliases the static archives under the
+  `-lqhull_r`/`-lqhull` names.
 
 ## Rust
 
@@ -256,7 +538,7 @@ instruction")` under the pinned wasmer (7.2.0), which only accepts the new
 
 - Both getrandom 0.3.4 and 0.4.3 ship a `wasi_p1` backend that is a raw
   `extern "C" random_get` from `wasi_snapshot_preview1` (which wasix libc
-  provides) with **no crate dependency** — but their `backends.rs` only picks
+  provides) with **no crate dependency**, but their `backends.rs` only picks
   it under `#[cfg(target_env = "p1")]`, and our target's env isn't p1, so they
   fall to the component-model backend and `compile_error!` ("Unknown version of
   WASI"). No fork or `wasix` crate is needed; just reroute the selection.
@@ -302,12 +584,12 @@ instruction")` under the pinned wasmer (7.2.0), which only accepts the new
   it built any subscriptions or called `__wasi_poll_oneoff` (that is why the WASI
   trace showed no `poll_oneoff`). `poll_oneoff` genuinely has no exceptional-
   condition event type, so TRUE exceptfds semantics (TCP OOB) would need runtime
-  support — but callers like rsync only pass exceptfds defensively.
-- This is what stalled `rsync`'s transfer (NOT a fork/pipe IPC deadlock — that
+  support, but callers like rsync only pass exceptfds defensively.
+- This is what stalled `rsync`'s transfer (NOT a fork/pipe IPC deadlock, which
   all works). rsync's one IO multiplexer `perform_io()` (io.c) always passes an
   exceptfds set (`FD_SET(iobuf.in_fd, &e_fds)`), and its error handling only
   special-cases `EBADF`; the ENOSYS was treated as transient, so it zeroed the
-  fd sets and looped — a pure-compute 100% CPU spin with ZERO syscalls (verified
+  fd sets and looped into a pure-compute 100% CPU spin with ZERO syscalls (verified
   via strace + WASI trace), hanging on the first IO (the version exchange).
 - Fixed: `sysroot/libc-select-exceptfds.patch` makes `pselect()` ignore
   exceptfds (and `FD_ZERO` it) instead of failing. Verified: `rsync -rv src/
@@ -318,7 +600,7 @@ dst/` now transfers all files correctly (`diff -rq src dst` clean, incl. nested
 ### rsync copies files but hangs at exit: SIGUSR2 ignored for forked children 🟢
 
 - With the select fix, rsync completes the whole transfer (files land correctly)
-  but never exits. Root cause: rsync's shutdown is signal-driven — the sender /
+  but never exits. Root cause: rsync's shutdown is signal-driven, so the sender /
   generator processes only terminate when they receive SIGUSR2 (`main.c`
   `sigusr2_handler` -> `_exit(0)`), and the receiver does `kill(pid, SIGUSR2)`
   then `wait_process`. Under wasix the runtime logs `state::env: Signal ignored
@@ -333,7 +615,7 @@ pid=3 sig=Sigusr2` for the forked children, so nobody exits and all three
     set ONLY by the `callback_signal` syscall (`syscalls/wasix/callback_signal.rs`).
     `WasiEnv::fork()` builds the child with `inner: Default::default()`
     (`signal_set=false`, `signal=None`) and `proc_fork` never re-propagates them
-    — so a forked child's instance has no signal callback.
+    so a forked child's instance has no signal callback.
   - wasix-libc `libc-top-half/musl/src/signal/sigaction.c` calls
     `__wasi_callback_signal("__wasm_signal")` exactly once, guarded by the static
     `__eintr_callback_registered` (CAS 0->1). fork copies that static into the
@@ -341,7 +623,7 @@ pid=3 sig=Sigusr2` for the forked children, so nobody exits and all three
     forks via the raw `__wasi_proc_fork` shim (no libc `fork()` wrapper), so
     there is no atfork hook to reset it either.
 - Fixed: `patches/wasmer-signal-inherit-on-fork.patch` makes `proc_fork` inherit
-  the signal disposition — captures the parent's `signal_set` before forking, and
+  the signal disposition. It captures the parent's `signal_set` before forking, and
   in the child (proc_fork.rs `run`, once the instance is live) re-resolves
   `__wasm_signal` and sets `inner.signal`/`inner.signal_set` when the parent had
   it. Matches POSIX (fork inherits handlers); fixes every fork+signal program.
