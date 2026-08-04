@@ -22,15 +22,6 @@ diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' a/src/lib.rs b
  
  //! A runtime for writing reliable network applications without compromising speed.
  //!
-@@ -465,7 +469,7 @@
- 
- #[cfg(all(
-     not(tokio_unstable),
--    target_family = "wasm",
-+    all(target_family = "wasm", not(target_vendor = "wasmer")),
-     any(
-         feature = "fs",
-         feature = "io-std",
 diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' a/src/net/tcp/stream.rs b/src/net/tcp/stream.rs
 --- a/src/net/tcp/stream.rs	2006-07-24 03:21:28.000000000 +0200
 +++ b/src/net/tcp/stream.rs	2026-07-21 18:32:43.088980477 +0200
