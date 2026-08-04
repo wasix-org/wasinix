@@ -1,7 +1,5 @@
-# The wasmer (webc) layer. Each shipped CLI is its wasm cross build plus two
-# passthru attrs: .pkg (the wasmer package from make-wasmer-package, configured
-# via passthru.wasmer) and .tests (tests discovered from the package's
-# overlay/packages/<name>/tests/ dir, run under wasmer via test-lib).
+# The wasmer (webc) layer: each shipped CLI is its wasm cross build plus .pkg
+# (the wasmer package) and .tests (from overlay/packages/<name>/tests/).
 {
   lib,
   pkgs,
@@ -10,9 +8,10 @@
   makeWasmerPackage,
   posOf,
   preferredProfilePackages,
-  # the default-profile cross set, for tests that cross-build a consumer
-  # program (e.g. icu-data's smoke test).
+  # the default-profile cross set, for tests that cross-build a consumer program
   crossPkgs,
+  # for tests whose subject is PIC-only
+  crossPkgsPic,
   # overlay attr names of the CLIs to ship, resolved at their preferred profile.
   shippedCommands,
   # overlay/packages dir, used to locate each package's tests/.
@@ -21,9 +20,8 @@
   testLib = import ./test-lib.nix {inherit pkgs wasmer;};
   mkTestGroup = import ../lib/test-group.nix {inherit pkgs lib posOf;};
 
-  # Collect tests from packages/<overlayName>/tests/: every *.nix file except
-  # helpers.nix contributes tests, called with only the args it declares. The
-  # group derivation runs all tests and exposes each one as a sub-attribute.
+  # Every *.nix except helpers.nix contributes tests, called with only the args it
+  # declares. The group runs all of them and exposes each as a sub-attribute.
   testGroupFor = overlayName: let
     dir = packagesDir + "/${overlayName}/tests";
   in
@@ -35,11 +33,9 @@
         then import (dir + "/helpers.nix") {inherit pkgs;}
         else {};
       scope = {
-        inherit pkgs testLib helpers crossPkgs makeWasmerPackage;
-        # run-by-name stubs, keyed like wasmerPackages. Reading a shim never
-        # forces .tests, so a test using another package (git needing bash)
-        # does not cycle. The packed .webc is what ships, hence .shim rather
-        # than .pkg.shim (which drives the wasmer.toml source dir).
+        inherit pkgs testLib helpers crossPkgs crossPkgsPic makeWasmerPackage;
+        # Reading a shim never forces .tests, so a test using another package does
+        # not cycle. .shim drives the packed .webc, .pkg.shim the source dir.
         wasmerPkgs = lib.mapAttrs (_: p: p.shim) wasmerPackages;
       };
       testFiles = lib.attrNames (lib.filterAttrs
@@ -49,7 +45,6 @@
         builtins.foldl' (
           acc: fname: let
             f = import (dir + "/${fname}");
-            # each test drv points at the file defining it
             stamp = drv:
               drv.overrideAttrs (_old: {
                 pos = {
@@ -64,10 +59,8 @@
     in
       mkTestGroup overlayName tests;
 
-  # Add .pkg (the wasmer package dir), .webc (its built webc), and (if
-  # present) .tests passthru to a cross package. Forcing the package or its
-  # .pkg.shim never forces .tests, so tests referencing other packages'
-  # shims (e.g. git tests using bash) do not cycle.
+  # Forcing the package or its .pkg.shim never forces .tests, so tests referencing
+  # other packages' shims do not cycle.
   augment = overlayName: crossPkg: servedVersions: let
     group = testGroupFor overlayName;
     pkg = makeWasmerPackage {
@@ -77,29 +70,22 @@
   in
     crossPkg.overrideAttrs (o: {
       passthru =
-        # Drop inherited nixpkgs passthru.tests (native tests that would leak
-        # into our `checks`).
+        # nixpkgs' own passthru.tests are native, and would leak into `checks`
         removeAttrs (o.passthru or {}) ["tests"]
         // {
-          # The overlay attr this webc was built from (gitMinimal -> "git"
-          # webc, but history.json / the loader key by overlay attr); lets
-          # scripts/history.py and scripts/update.py map a webc back to its
-          # history table entry. Passthru-only, no drvPath effect.
+          # gitMinimal -> "git" webc, but history.json keys by overlay attr, so
+          # scripts/{history,update}.py need this to map a webc back to its entry.
           inherit overlayName;
           inherit pkg;
           webc = pkg.webc;
-          # run-by-name wrapper, top-level like .webc; forcing it never forces
-          # .tests. Drives the packed .webc (what ships); .pkg.shim drives the
-          # wasmer.toml source dir.
+          # run-by-name wrapper; forcing it never forces .tests
           shim = pkg.webc.shim;
         }
         // (lib.optionalAttrs (group != null) {tests = group;});
     });
 
-  # Shipped commands keyed by webc/program name (gitMinimal -> "git").
-  # History versions (passthru.wasmer.history, e.g. jq_1_6) key as
-  # <name>-<semver> so the by-name key stays the current version; both
-  # publish under the same webc name at their own versions.
+  # Keyed by webc/program name (gitMinimal -> "git"); a history version keys as
+  # <name>-<semver>, so the by-name key stays the current version.
   ident = import ./ident.nix {inherit lib;};
   shippedInfo =
     map (n: rec {
@@ -116,9 +102,8 @@
   servedByName =
     lib.mapAttrs (_: infos: lib.unique (map (i: i.id.baseVersion) infos))
     (lib.groupBy (i: i.id.name) shippedInfo);
-  # Alias attrs (icu-data -> icu-data76) legitimately repeat a key with the
-  # same drv; only distinct drvs sharing a key are an error. Singletons can't
-  # conflict, so they skip the drvPath compare.
+  # Alias attrs (icu-data -> icu-data76) repeat a key with the same drv; only
+  # distinct drvs sharing a key are an error.
   byKey = lib.groupBy (i: i.key) shippedInfo;
   distinctDrvs = is: lib.length (lib.unique (map (i: i.crossPkg.drvPath) is));
   conflicting =
@@ -135,9 +120,8 @@
       )
       byKey);
 
-  # One subtree per wasmerPackages key: two versions of one webc share the
-  # inner pkg/<name> dir name, so a flat merge would collide. The publisher
-  # globs **/wasmer.toml and doesn't care about the layout.
+  # One subtree per key: two versions of one webc share the inner pkg/<name> dir
+  # name, so a flat merge would collide.
   allWasmerPackages = pkgs.runCommand "wasix-all-wasmer" {} ''
     set -euo pipefail
     mkdir -p "$out/pkg"
@@ -149,6 +133,28 @@
       '')
       (builtins.attrNames wasmerPackages)}
   '';
+  # Non-shipped library packages use the same tests/ convention as shipped CLIs but
+  # have no webc to hang .tests off, so the group attaches to the package itself.
+  libraryTestPkgs = let
+    entries = builtins.readDir packagesDir;
+    names =
+      lib.filter (
+        n:
+          entries.${n}
+          == "directory"
+          && !(lib.elem n shippedCommands)
+          && builtins.pathExists (packagesDir + "/${n}/tests")
+      )
+      (lib.attrNames entries);
+  in
+    lib.genAttrs names (
+      n:
+        (preferredProfilePackages.${n}).overrideAttrs (o: {
+          passthru =
+            removeAttrs (o.passthru or {}) ["tests"]
+            // {tests = testGroupFor n;};
+        })
+    );
 in {
-  inherit wasmerPackages allWasmerPackages testLib;
+  inherit wasmerPackages allWasmerPackages testLib libraryTestPkgs;
 }

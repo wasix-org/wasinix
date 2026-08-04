@@ -5,11 +5,9 @@
   wasmerRuntime ? null,
   # ghc-wasm-meta bindist GHC, for toolchain.haskell.
   ghcWasm,
-  # Per-profile extra overlays, keyed by profile name. The spot-override seam
-  # (see spot.nix): profile sets reference each other through
-  # preferredProfilePackages, so a pin has to be injected here, where all of
-  # them are built, rather than by extending one set from outside. Empty in
-  # every normal eval; nothing that ships may set it.
+  # The spot-override seam (spot.nix): profile sets reference each other through
+  # preferredProfilePackages, so a pin must be injected here, where all of them
+  # are built. Empty in every normal eval; nothing that ships may set it.
   spotOverlays ? {},
 }: let
   pkgs = import nixpkgs {
@@ -27,17 +25,14 @@
   wasixLib = import ./lib {inherit lib;};
   toolchain = import ./toolchain {inherit pkgs ghcWasm;};
 
-  # The wasix cross target. Defined here (not derived from a profile) so
-  # pkgsCross can be built before the profiles, which consume it for their
-  # cc-wrapper stdenvs.
+  # Defined here, not derived from a profile, so pkgsCross can be built before the
+  # profiles, which consume it for their cc-wrapper stdenvs.
   crossSystem = {
-    # Keep nixpkgs parser-compatible triple and pin WASIX tooling explicitly.
-    config = "wasm32-unknown-wasi";
+    config = "wasm32-unknown-wasi"; # nixpkgs' triple parser rejects -wasix
     useLLVM = true;
     isWasix = true;
-    # Rust builds for the fork's target. pkgsCross hosts the wasix rustPlatform:
-    # its default stdenv has a real libc, which the cargo hooks' tooling needs
-    # (the wasixcc profile stdenv is libc-less). C/C++ ignore this field.
+    # Rust only. pkgsCross hosts the wasix rustPlatform, whose cargo hooks need a
+    # stdenv with a real libc (the wasixcc profile stdenv is libc-less).
     rust.rustcTarget = "wasm32-wasmer-wasi";
   };
   pkgsCross = import nixpkgs {
@@ -61,15 +56,13 @@
   defaultProfileName = "exnrefEh";
 
   # ── Per-profile cross package sets ───────────────────────────────────────────
-  # Each profile is a full nixpkgs cross set (like pkgsStatic) with the wasixcc
-  # stdenv injected via replaceCrossStdenv plus the wasix overlay; linked deps
-  # resolve within the profile.
+  # Each profile is a full nixpkgs cross set with the wasixcc stdenv injected via
+  # replaceCrossStdenv plus the wasix overlay; linked deps resolve within the profile.
   profilesCfg = import ./profiles.nix;
   mkWasixStdenv = import ./set/stdenv.nix {inherit lib toolchain;};
 
-  # Package names = the overlay's package set (flat files + dirs + trivial list
-  # + registry-history versions), enumerated eval-only via the shared loader so
-  # the two can't drift. Same history table the overlay builds from.
+  # Enumerated eval-only through the same loader and history table the overlay
+  # builds from, so the two can't drift.
   packagesHistory = builtins.fromJSON (builtins.readFile ./overlay/packages/history.json);
   wasixPkgNames =
     (wasixLib.loadPackageDir {
@@ -78,10 +71,8 @@
       history = packagesHistory;
     }).names;
 
-  # Each package at its preferred profile, read eval-only from passthru.wasix
-  # (preferredProfile, or derived from supportedProfiles; see pkgs/lib). Used
-  # for non-linked, runtime-invoked deps so e.g. bash resolves at "off"
-  # regardless of the consumer's profile. Lazy, mutually recursive with nixpkgsByProfile.
+  # For non-linked, runtime-invoked deps, so e.g. bash resolves at "off" whatever
+  # the consumer's profile. Lazy, mutually recursive with nixpkgsByProfile.
   preferredProfileOf = name:
     wasixLib.preferredProfileOf nixpkgsByProfile.${defaultProfileName}.${name};
   preferredProfilePackages = lib.genAttrs wasixPkgNames (name: nixpkgsByProfile.${preferredProfileOf name}.${name});
@@ -95,9 +86,7 @@
 
   # ── toolchainByProfile: per-profile build environments ────────────────────────────────
   # Per-profile layer over the profile-independent `toolchain`: each profile's
-  # stdenv and rustPlatform (from nixpkgsByProfile), plus the dev-env shell fragments
-  # and ABI metadata the link/stdenv tests and devShell need. Rust is only
-  # supported on the profiles its toolchain targets (see pkgs/lib).
+  # stdenv and rustPlatform, plus the dev-env fragments the tests and devShell need.
   devEnvFor = import ./toolchain/dev-env.nix {inherit pkgs toolchain;};
   toolchainByProfile =
     lib.mapAttrs (
@@ -108,6 +97,8 @@
         (devEnvFor {inherit wasmExceptions pic;})
         // {
           inherit profileName wasmExceptions pic;
+          inherit (toolchain.variants.${profileName}) sysroot libc compiler-rt libcxx flangRt openmp;
+          wasixflang = toolchain.wasixflangByProfile.${profileName};
           stdenv = nixpkgsByProfile.${profileName}.stdenv;
           rustPlatform = nixpkgsByProfile.${profileName}.rustPlatform;
           host = "wasm32-wasix";
@@ -117,10 +108,13 @@
     profilesCfg.profiles;
   defaultToolchain = toolchainByProfile.${defaultProfileName};
 
-  # Toolchain tests as passthru.tests, so the flake collects them like the
-  # shipped-package tests: per-variant sysroot smoke tests on `sysroot`,
-  # per-profile link + stdenv tests on `wasixcc`. Built here (not in the flake)
-  # because they need the per-profile toolchain and the wasmer runtime.
+  # Profiles whose executables wasmer can execute, for the compile+link+run tests:
+  # everything except legacy EH, whose `try` opcode wasmer has no feature flag for.
+  # Same gate link-test.nix and openmp-test.nix apply internally.
+  runnableProfiles = lib.filterAttrs (_: tc: tc.wasmExceptions != "legacy") toolchainByProfile;
+
+  # Toolchain tests as passthru.tests, so the flake collects them like the shipped
+  # ones. Built here: they need the per-profile toolchain and the wasmer runtime.
   mkTestGroup = import ./lib/test-group.nix {
     inherit pkgs lib;
     inherit (wasixLib) posOf;
@@ -156,9 +150,40 @@
           );
         };
     });
-    # Rust analogue of the link/stdenv tests: build hello-world through the wasix
-    # rustPlatform and run it under wasmer. Single test, since Rust only targets
-    # the eh variant.
+    # compile+link+run a tiny .f90 through flang + the cross-built flang-rt.
+    flangRt = defaultToolchain.flangRt.overrideAttrs (o: {
+      passthru =
+        (o.passthru or {})
+        // {
+          tests = mkTestGroup "flangRt" (
+            lib.mapAttrs' (p: tc:
+              lib.nameValuePair "hello-${p}" (pkgs.callPackage ./toolchain/tests/flang-rt-test.nix {
+                wasmer = wasmerRuntime;
+                toolchain = tc;
+                wasixflang = tc.wasixflang;
+              }))
+            runnableProfiles
+          );
+        };
+    });
+    # compile+link a `#pragma omp parallel` C program against the cross-built libomp
+    # on every profile; the test itself runs it where wasmer can execute the module.
+    openmp = defaultToolchain.openmp.overrideAttrs (o: {
+      passthru =
+        (o.passthru or {})
+        // {
+          tests = mkTestGroup "openmp" (
+            lib.mapAttrs' (p: tc:
+              lib.nameValuePair "hello-${p}" (pkgs.callPackage ./toolchain/tests/openmp-test.nix {
+                wasmer = wasmerRuntime;
+                toolchain = tc;
+                openmp = tc.openmp;
+              }))
+            toolchainByProfile
+          );
+        };
+    });
+    # Single test: Rust only targets the eh variant.
     rust = toolchain.wasixRustToolchain.overrideAttrs (o: {
       passthru =
         (o.passthru or {})
@@ -175,25 +200,19 @@
 
   # ── package matrices for CI / consumers ──────────────────────────────────────
   # Libraries (the non-shipped overlay packages), built across all profiles.
-  # A package that doesn't target a profile declares it via passthru.wasix.
   libPkgNames = lib.filter (n: !(lib.elem n shippedCommands)) wasixPkgNames;
   librariesByProfile =
     lib.genAttrs (lib.attrNames profilesCfg.profiles)
     (profile:
-      # Skip libs whose passthru.wasix.supportedProfiles excludes this profile
-      # (snappy at PIC profiles, rust packages outside eh/ehpic). Reads passthru,
-      # not meta.availableOn, so libs with merely unix-only meta.platforms
-      # (which still build under allowUnsupportedSystem) aren't dropped.
+      # Reads passthru, not meta.availableOn, so libs whose meta.platforms is
+      # merely unix-only are kept.
         lib.filterAttrs
         (_: wasixLib.supportedIn profile)
         (lib.genAttrs libPkgNames (n: nixpkgsByProfile.${profile}.${n})));
 
-  # One ABI check per profile over that profile's whole column (matrix libs +
-  # shipped packages preferring the profile, minus broken): objects must carry
-  # the profile's exception-handling feature and PIC relocation flavor, linked
-  # wasm the right module kind. Guards against flags moving a build to another
-  # profile's sysroot. Asyncify expectations are per-package, checked in the
-  # packages' own tests instead.
+  # One check per profile over that profile's whole column: objects must carry the
+  # profile's exception-handling feature and PIC relocation flavor, guarding against
+  # flags moving a build onto another profile's sysroot.
   abiCheck = pkgs.callPackage ./toolchain/tests/abi-check.nix {
     inherit (toolchain) wasixLlvm binaryen;
   };
@@ -217,22 +236,17 @@
     )
     profilesCfg.sysrootEncodings;
 
-  # Packages shipped as webc, by overlay attr name: everything declaring
-  # passthru.wasix.shipped. Built at their preferred profile (bash -> off,
-  # rest -> default); the wasmer layer adds .pkg/.webc + .tests.
+  # Everything declaring passthru.wasix.shipped, at its preferred profile; the
+  # wasmer layer adds .pkg/.webc + .tests.
   shippedCommands =
     lib.filter
     (n: wasixLib.shippedOf nixpkgsByProfile.${defaultProfileName}.${n})
     wasixPkgNames;
 
   # ── python wheels ────────────────────────────────────────────────────────────
-  # Shipped Python wheels (overlay/python-packages/wheels.nix): wasm cross builds
-  # of python3.pkgs.<attr>, each with an import smoke-test. cpython needs PIC
-  # (ctypes/dl) and the exnref EH encoding wasmer accepts, so the wheels are a
-  # single set anchored at exnrefEhpic.
-  # Wheels split three ways: noarch (python-version-independent, e.g. a redistributed binary) built
-  # ONCE on the default python; everything else per interpreter (cp313/cp314). Each import test runs
-  # on its python webc. Lazy on wasmerLayer. Nothing is noarch yet; the split is ready for it.
+  # Shipped Python wheels (overlay/python-packages/wheels.nix). cpython needs PIC
+  # (ctypes/dl) and the exnref EH encoding wasmer accepts, so the wheels are one set
+  # anchored at exnrefEhpic. noarch builds once, everything else per interpreter.
   mkPythonWheels = pyKey: pyAttr: webcName: select:
     import ./python-wheels.nix {
       inherit pkgs lib mkTestGroup select pyKey;
@@ -266,22 +280,20 @@
     inherit pkgs makeWasmerPackage preferredProfilePackages shippedCommands;
     inherit (wasixLib) posOf;
     crossPkgs = nixpkgsByProfile.${defaultProfileName};
+    # for tests whose subject is PIC-only
+    crossPkgsPic = nixpkgsByProfile.exnrefEhpic;
     wasmer = wasmerRuntime;
     packagesDir = ./overlay/packages;
   };
-  # wasmerPackages.<name> = the wasm cross build (keyed by program name), each
-  # carrying passthru.pkg (the wasmer package), passthru.webc (its webc) + passthru.tests.
-  inherit (wasmerLayer) wasmerPackages allWasmerPackages;
+  # keyed by program name, each carrying passthru.pkg / .webc / .tests
+  inherit (wasmerLayer) wasmerPackages allWasmerPackages libraryTestPkgs;
 
-  # The shipped wheels (+ their transitive python deps) as a static PEP 503
-  # "simple" index; tests run against the shipped python webc.
-  # One merged PEP 503 index over BOTH python versions' wheels: a resolver picks the right file by
-  # its cp313/cp314 tag, so the versions share an index (not split). e2e tests run on the default webc.
+  # The shipped wheels plus their transitive deps as one static PEP 503 index over
+  # both interpreters: a resolver picks the right file by its cp313/cp314 tag.
   pythonRegistry = import ./python-registry {
     inherit pkgs lib mkTestGroup;
     pythonSets = {
-      # 314 carries the full set (noarch + its version-specific), so its closure has every
-      # noarch + cp314 wheel; 313 adds only version-specific (cp313), pure deps dedupe.
+      # 314's closure covers every noarch + cp314 wheel; 313 adds only cp313.
       py314 = {
         python3 = nixpkgsByProfile.exnrefEhpic.python314;
         pythonWheels = pythonWheels.noarch // pythonWheels.py314;
@@ -300,5 +312,6 @@ in {
   inherit pkgs pkgsCross nixUpdate defaultProfileName wasixPkgNames;
   inherit toolchain toolchainByProfile nixpkgsByProfile preferredProfilePackages allWasmerPackages;
   inherit shippedCommands wasmerPackages librariesByProfile toolchainTestPkgs abiChecks;
+  inherit libraryTestPkgs;
   inherit pythonWheels pythonRegistry cargoRegistry;
 }

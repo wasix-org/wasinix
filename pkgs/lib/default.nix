@@ -1,33 +1,42 @@
-# Helpers for wasix package files, and the passthru.wasix declaration (all
-# optional): supportedProfiles = profiles the package is built for (default
-# all; others skip it silently), preferredProfile = where it ships (default
-# exnrefEh, else first supported), shipped = packaged as webc (at the
-# preferred profile) instead of built across the librariesByProfile,
-# broken = "reason" for a real defect,
-# retention = registry-history retention when a bump moves this served version:
-# "major" (default) keeps the outgoing latest-per-major rebuildable, "minor"
-# latest-per-minor, "none" opts out (scripts/update.py),
-# retentionHook = a command scripts/update.py runs after the repo-wide
-# history/prune steps, for a package to re-sync a listing it derives from the
-# pins (icu regenerates versions.nix from the nixpkgs majors),
-# updateNotes = [{message; when ? prior: current: ...}] = things to check
-# when the package moves, surfaced by scripts/update.py and the CI report.
-# `when` gets the base branch's version (null when unknown) and the current
-# one; the default fires when this change bumps the package. Self-contained
-# predicates (closing over the package's own bindings, ignoring the
-# arguments) fire on every run until resolved.
-# Pin updates use the standard passthru.updateScript convention
-# (nix-update-script; sidecar fields: name = display/regen key, attrPath =
-# eval target, e.g. a wrapper's unwrapped). scripts/update.py discovers and
-# drives them. See docs/updating.md.
-# applyWasixMeta below is the only writer of meta.badPlatforms/meta.broken.
+# Helpers for wasix package files, and the optional passthru.wasix declaration:
+# supportedProfiles, preferredProfile, shipped, broken, retention, retentionHook,
+# updateNotes (docs/packaging.md, docs/updating.md). applyWasixMeta below is the
+# only writer of meta.badPlatforms/meta.broken.
 {lib}: let
   profilesCfg = import ../profiles.nix;
+  # extendDrv hands the filters below `null` for an attr the package never set.
+  orEmpty = xs:
+    if xs == null
+    then []
+    else xs;
 in rec {
-  # Merge non-empty script fragments.
   mergeScript = frags: lib.concatStringsSep "\n" (lib.filter (f: f != "" && f != null) frags);
 
-  # Auto-import for package dirs (top-level overlay and python set).
+  # Exact match, unlike dropInputsByNameInfix. Nulls (nixpkgs' disabled optional
+  # deps) go with the named inputs, since getName cannot read them.
+  dropInputsByName = names: xs:
+    builtins.filter (x: x != null && !(builtins.elem (lib.getName x) names)) (orEmpty xs);
+
+  # Substring match.
+  dropInputsByNameInfix = names: xs:
+    builtins.filter (x: x != null && !(lib.any (n: lib.hasInfix n (lib.getName x)) names)) (orEmpty xs);
+
+  # The static cross layer mirrors buildInputs into propagatedBuildInputs (a static
+  # archive records no link deps), so an input filter has to cover both.
+  linkInputs = f: {
+    buildInputs = f;
+    propagatedBuildInputs = f;
+  };
+
+  # Patches are paths, so they match on the file name.
+  dropPatchesByNameInfix = names:
+    builtins.filter (p: !(lib.any (n: lib.hasInfix n (baseNameOf (toString p))) names));
+
+  # Build-system flags ("-Dblas=openblas"), matched on their option prefix.
+  dropFlagsByPrefix = prefixes: builtins.filter (f: !(lib.any (p: lib.hasPrefix p f) prefixes));
+
+  python = import ./python.nix {inherit lib dropInputsByName dropInputsByNameInfix;};
+
   loadPackageDir = import ./load-packages.nix {inherit lib;};
 
   # Profile name for a host platform (from wasmExceptions/wasmPic).
@@ -44,9 +53,8 @@ in rec {
 
   wasixMetaOf = drv: (drv.passthru or {}).wasix or {};
 
-  # meta.position ("file:line") as a mkDerivation `pos` argument, so
-  # generated drvs (test groups, webc packaging) inherit their subject's
-  # position and `nix edit` lands somewhere useful.
+  # meta.position ("file:line") as a mkDerivation `pos` argument, so generated
+  # drvs inherit their subject's position and `nix edit` lands somewhere useful.
   posOf = drv: let
     p = drv.meta.position or null;
     m =
@@ -66,10 +74,8 @@ in rec {
   in
     r.success && r.value;
 
-  # What an updateNote's predicate compares. Defaults to the package version,
-  # but a package pinned by a flake input keeps upstream's version across our
-  # rev bumps, so it declares a version that moves with the pin
-  # (passthru.wasix.noteVersion).
+  # What an updateNote's predicate compares. A package pinned by a flake input
+  # keeps upstream's version across rev bumps, hence the noteVersion escape.
   noteVersionOf = drv: (wasixMetaOf drv).noteVersion or drv.version or null;
 
   # updateNotes whose predicate fires for (prior, current).
@@ -93,15 +99,12 @@ in rec {
     then forced.value
     else [];
 
-  # Is `drv` built for this profile? Reads passthru, not meta, so the answer
-  # is the same before and after applyWasixMeta.
+  # Reads passthru, not meta, so the answer is unchanged by applyWasixMeta.
   supportedIn = profileName: drv:
     builtins.elem profileName ((wasixMetaOf drv).supportedProfiles or profiles.all);
 
-  # Does `drv` ship as a webc package?
   shippedOf = drv: (wasixMetaOf drv).shipped or false;
 
-  # Declared preferredProfile, else the repo default, else first supported.
   preferredProfileOf = drv: let
     w = wasixMetaOf drv;
     supported = w.supportedProfiles or profiles.all;
@@ -113,10 +116,8 @@ in rec {
       else builtins.head supported
     );
 
-  # passthru.wasix -> meta, applied to every package by the overlay loader:
-  # unsupported here -> badPlatforms += [hp.system] (all profiles share one
-  # system string, so this is only meaningful within the setting profile set);
-  # wasix.broken -> meta.broken = true.
+  # Applied to every package by the overlay loader. All profiles share one system
+  # string, so badPlatforms is only meaningful within the setting profile's set.
   applyWasixMeta = profileName: hostSystem: drv: let
     w = wasixMetaOf drv;
     unsupported = !(supportedIn profileName drv);
@@ -165,9 +166,8 @@ in rec {
     "postDist"
   ];
 
-  # Merge tweaks onto old drv attrs by kind, for overrideAttrs: functions get
-  # the old value, phases concatenate, lists append, attrsets merge
-  # recursively, everything else replaces.
+  # Merge by kind: functions get the old value, phases concatenate, lists append,
+  # attrsets merge recursively, everything else replaces.
   extendDrv = old: new:
     lib.mapAttrs (
       name: val: let
@@ -191,19 +191,15 @@ in rec {
     )
     new;
 
-  # Apply tweaks (merged per extendDrv). doCheck defaults to false: cross
-  # builds can't run target tests.
+  # doCheck defaults to false: cross builds can't run target tests.
   libTweaks = tweaks: pkg:
     pkg.overrideAttrs (old: extendDrv old ({doCheck = false;} // tweaks));
 
-  # Rename bin/<wasmName> -> <wasmName>.wasm: the webc packaging derives one
-  # command per bin/*.wasm. For shipped CLIs. Programs needing fork/setjmp set env.WASIXCC_WASM_OPT_FLAGS
-  # instead (wasixcc asyncifies at link).
+  # The webc packaging derives one command per bin/*.wasm.
   wasmRename = {wasmName}: pkg:
     pkg.overrideAttrs (old: {
-      # mergeScript, not `+` (indented strings drop their leading newline, so
-      # `+` would glue onto old.postInstall). bin/ is usually in $out but can
-      # be in $bin (curl).
+      # Indented strings drop their leading newline, so `+` would glue onto
+      # old.postInstall. bin/ is usually in $out but can be in $bin (curl).
       postInstall = mergeScript [
         (old.postInstall or "")
         ''

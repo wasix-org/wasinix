@@ -7,6 +7,7 @@
 #   nix-update-script }
 # returning the wasix derivation. Use `final.<lib>` for linked (same-profile)
 # deps and `preferredProfilePackages.<tool>` for non-linked or runtime-invoked deps.
+# `toolchain` arrives with its per-profile members resolved to this set's profile.
 {
   toolchain,
   nixpkgs,
@@ -18,6 +19,18 @@
 }: final: prev: let
   lib = prev.lib;
   helpers = import ../lib {inherit lib;};
+
+  # The per-profile toolchain members picked once, so no package file repeats it.
+  profileToolchain = let
+    profileName = helpers.profileOf prev.stdenv.hostPlatform;
+  in
+    toolchain
+    // {
+      flangRt = toolchain.flangRtByProfile.${profileName};
+      openmp = toolchain.openmpByProfile.${profileName};
+      wasixflang = toolchain.wasixflangByProfile.${profileName};
+    };
+
   # Two gates (read prev.stdenv; gating on final.stdenv would be a fixpoint
   # cycle). Package overrides apply only when the HOST is wasix: overlays
   # otherwise hit every stage (including buildPackages), rebuilding the native
@@ -71,6 +84,18 @@
       # (sd/ripgrep) don't read these.
       cargo = wasixRustPlatform.cargo;
       rustc = wasixRustPlatform.rustc;
+
+      # A Fortran recipe names its compiler `gfortran` and gcc has no wasm
+      # backend, so the set's gfortran is wasixflang wrapped like any other
+      # cc-wrapper compiler. langFortran pulls in fortran-hook.sh, which exports
+      # FC, and that is how cmake and meson find it with no per-package flag.
+      # isClang=false because the driver inspects its own argv, and a clang
+      # wrapper collapses the command line into an @response-file it cannot read.
+      # The target's profile, not the host's: this resolves in pkgsBuildHost.
+      gfortran = final.targetPackages.stdenv.cc.override {
+        cc = toolchain.wasixflangByProfile.${helpers.profileOf prev.stdenv.targetPlatform};
+        isClang = false;
+      };
     }
     # In the build stage (host x86, target wasm), python-rust build hooks are
     # spliced from `rustPlatform`. nixpkgs' maturinBuildHook targets stock
@@ -113,7 +138,10 @@
         prev.stdenv.hostPlatform.system;
     in
       lib.mapAttrs (_: applyWasixMeta) (loaded.mkPackages {
-        callArgs = {inherit final prev helpers toolchain preferredProfilePackages nixpkgs nix-update-script;};
+        callArgs = {
+          inherit final prev helpers preferredProfilePackages nixpkgs nix-update-script;
+          toolchain = profileToolchain;
+        };
         mkTrivial = n: helpers.libTweaks {} prev.${n};
         trivialPosition = ./trivial.nix;
       });
@@ -122,7 +150,10 @@
   # wasi set plus the per-package overrides in ./haskell-packages (loaded like
   # ./packages, the way python3.pkgs takes packageOverrides from ./python-packages).
   haskellPackages = toolchain.haskell.packages.extend (import ./haskell-packages {
-    callArgs = {inherit final prev helpers lib toolchain;};
+    callArgs = {
+      inherit final prev helpers lib;
+      toolchain = profileToolchain;
+    };
   });
 in
   packages

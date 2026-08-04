@@ -42,8 +42,7 @@
         (old.passthru or {})
         // {
           wasix = {
-            # upstream's version stands still across our rev bumps, so the
-            # notes compare the pin instead
+            # upstream's version stands still across our rev bumps
             noteVersion = "${old.version}-${wasmer.shortRev or "dirty"}";
             updateNotes = [
               {message = "check whether patches/wasmer-signal-inherit-on-fork.patch landed upstream (WASIX-TODO.md)";}
@@ -57,9 +56,7 @@
         inherit system nixpkgs spotOverlays;
         # runs the behavioural passthru.tests on the webc packages.
         inherit wasmerRuntime;
-        # bindist GHC for the wasi haskell toolchain (toolchain.haskell); pandoc
-        # (overlay/packages/pandoc) builds against it. TemplateHaskell works under
-        # node there (memory: wasix-haskell-th-blocked).
+        # bindist GHC for toolchain.haskell; overlay/packages/pandoc builds against it
         ghcWasm = ghc-wasm-meta.packages.${system};
       };
     wasix = mkWasix {};
@@ -80,7 +77,6 @@
         };
         taplo.enable = true; # toml
         clang-format.enable = true; # c/c++ (.clang-format pins the style)
-        # js + yaml + markdown
         # json stays out, as the only json in this repo is machine-generated
         prettier = {
           enable = true;
@@ -89,11 +85,9 @@
       };
     };
 
-    # Collect every package's passthru.tests into the flake checks. Wheels get a
-    # "wheel-" prefix (their attr names share the flat check namespace with the
-    # shipped packages). tryEval guards the `pkg ? tests` probe (it forces pkg):
-    # a throwing pkg must not abort the whole `checks` output, but its entry is
-    # KEPT so the error surfaces as a failed check instead of vanishing.
+    # Collect every package's passthru.tests into the flake checks. tryEval guards
+    # the `pkg ? tests` probe, which forces pkg; a throwing pkg keeps its entry, so
+    # the error surfaces as a failed check instead of aborting the whole output.
     collectTestsPrefixed = prefix:
       lib.foldlAttrs (
         acc: name: pkg: let
@@ -116,6 +110,8 @@
       // collectTests {python-registry = wasix.pythonRegistry;}
       // collectTests {cargo-registry = wasix.cargoRegistry;}
       // lib.mapAttrs' (p: lib.nameValuePair "abi-${p}") wasix.abiChecks
+      # non-shipped library packages carrying a tests/ dir
+      // collectTests wasix.libraryTestPkgs
       // {treefmt = treefmtEval.config.build.check self;};
   in {
     formatter.${system} = treefmtEval.config.build.wrapper;
@@ -124,13 +120,12 @@
     # make `nix flake check` warn.
     legacyPackages.${system} = let
       # These attr paths are both the `.#` build targets and, flattened to dotted
-      # keys, the `ci` job names, so the two cannot drift, e.g.
-      #   nix build .#toolchain.llvm.clang  <->  ci."toolchain.llvm.clang"
+      # keys, the `ci` job names, so the two cannot drift.
       buildable = {
-        # The flat, profile-independent compilers (the per-profile stdenv/rustPlatform
-        # build envs live under the non-buildable `.#toolchainByProfile.<profile>`).
+        # Profile-independent tools. Sysroot libraries and their Fortran/OpenMP
+        # drivers live under `.#toolchainByProfile.<profile>`.
         toolchain = {
-          # sysroot + wasixcc carry their link/stdenv/sysroot suites as passthru.tests.
+          # These carry their test suites as passthru.tests.
           inherit (wasix.toolchainTestPkgs) sysroot wasixcc;
 
           cargo-wasix = toolchain.cargoWasix;
@@ -139,6 +134,7 @@
           compiler-rt = toolchain.compiler-rt;
           libcxx = toolchain.libcxx;
           llvm = {inherit (toolchain.llvm) clang lld;};
+          flang = toolchain.flang; # host Fortran->wasm compiler (wasm32 target patch)
           runtime = wasmerRuntime; # the wasmer runtime (input, patched)
         };
         librariesByProfile = wasix.librariesByProfile; # <profile>.<lib>
@@ -152,19 +148,10 @@
         cargoRegistry = wasix.cargoRegistry;
       };
 
-      # Flatten nested attrsets of derivations to {"a.b.c" = drv;}: recurse
-      # through plain attrsets, stop at a drv, but also emit a shipped package's
-      # passthru.webc as "<key>.webc".
-      #
-      # Declared breakage (meta.broken via passthru.wasix.broken, fd/tokei) is
-      # dropped from the job set; unsupported-profile leaves are already
-      # filtered out of librariesByProfile in pkgs/default.nix. Only meta is
-      # read (never drvPath): the key set must stay cheap, since every
-      # nix-eval-jobs worker computes it before its first job, and probing
-      # drvPath would instantiate the whole matrix per worker. A leaf that
-      # throws is KEPT: nix-eval-jobs evaluates attrs independently, so it
-      # surfaces as one failed job with the error at its attr path instead of
-      # silently vanishing from CI.
+      # Flatten nested attrsets of derivations to {"a.b.c" = drv;}, also emitting a
+      # shipped package's passthru.webc as "<key>.webc". Only meta is read, never
+      # drvPath: every nix-eval-jobs worker computes the key set before its first
+      # job. A throwing leaf is KEPT, so it surfaces as one failed job.
       drvOk = drv: let
         r = builtins.tryEval (!(drv.meta.broken or false) && (drv.meta.available or true));
       in
@@ -176,8 +163,7 @@
               if prefix == ""
               then name
               else "${prefix}.${name}";
-            # Classification forces val shallowly and can throw; keep such a
-            # leaf under its key so the error is attributed to it.
+            # forcing val to classify it can throw; keep the leaf under its key
             kind = builtins.tryEval (
               if lib.isDerivation val
               then "drv"
@@ -196,20 +182,16 @@
             then flattenDrvs key val
             else {}
         );
-      # One derivation per dotted key for nix-eval-jobs / nix-fast-build; names
-      # mirror the `.#` paths above, plus checks.<name> from the flake checks.
+      # One derivation per dotted key for nix-eval-jobs / nix-fast-build.
       ci = flattenDrvs "" buildable // flattenDrvs "checks" flakeChecks;
     in
       buildable
       // {
         # Escape hatches / aggregates: reachable via `.#`, but not ci jobs.
-        # `.#toolchainByProfile.<profile>.{stdenv,rustPlatform}` is the per-profile build env.
         inherit (wasix) nixpkgsByProfile toolchainByProfile defaultProfileName;
 
-        # Spot-override (see ./spot.nix): given a pristine evaluation's
-        # nixpkgsByProfile, rebuild one target against the working tree with
-        # everything below it pinned to that base. A function, so it is not a
-        # build target and cannot become a ci job.
+        # Rebuild one target against the working tree with everything below it
+        # pinned to a pristine base (./spot.nix). A function, so never a ci job.
         spotWith = import ./pkgs/spot.nix {
           inherit lib mkWasix;
           pkgNames = wasix.wasixPkgNames;
@@ -220,23 +202,15 @@
         inherit ci;
 
         # CI shell steps as runnable apps with nix-pinned deps: `nix run
-        # .#scripts.<name>`. The scripts dir is store-copied, so this needs no
-        # git checkout (the remote CI builder runs ci-build over the
-        # store-copied flake source) and a python script imports its siblings
-        # from the same copy (update.py -> updater_lib); a script's DATA paths
-        # still resolve against the caller's CWD, which in CI is the checkout
-        # root. Only the deps come from nix. The local-dev remote-builder
-        # scripts are $0-relative and stay out.
+        # .#scripts.<name>`. The dir is store-copied, so no git checkout is needed
+        # and a script imports its siblings from the same copy; DATA paths still
+        # resolve against the caller's CWD.
         scripts = let
           p = wasix.pkgs;
-          # the whole dir, not the single file: any script edit re-derives
-          # every wrapper, which is cheap (they only write a shell stub)
+          # the whole dir, not the single file: cheap, they only write a shell stub
           dir = ./scripts;
           # inheritPath = false: PATH is exactly the declared deps, so a script
-          # reaching for an undeclared tool fails loudly instead of silently
-          # picking up the ambient one. Common to every wrapper: git, coreutils,
-          # a pinned nix, and the interpreter (which must be on PATH itself now
-          # that we don't inherit it). Per-script lists carry only the extras.
+          # reaching for an undeclared tool fails loudly. Per-script lists are extras.
           run = name: runtimeInputs: interp: file:
             p.writeShellApplication {
               inherit name;
@@ -253,8 +227,7 @@
                 ];
               text = ''
                 ${
-                  # CI log capture block-buffers python stdout, hiding all
-                  # progress until exit (or forever on cancel)
+                  # CI log capture block-buffers python stdout, hiding progress until exit
                   lib.optionalString (interp == "python3") "export PYTHONUNBUFFERED=1"
                 }
                 exec ${interp} ${dir}/${file} "$@"
@@ -282,14 +255,12 @@
           crate-pins = run "crate-pins" [p.nixVersions.latest] "python3" "crate-pins.py";
         };
 
-        # rels.json key -> list of served upstream versions (wheels can serve history versions
-        # besides the current one; webcs serve exactly one). Read by scripts/update.py (prune
+        # rels.json key -> served upstream versions. Read by scripts/update.py (prune
         # stale keys) and scripts/bump-rel.py (validate + look up).
         relVersions =
           lib.mapAttrs' (n: v: lib.nameValuePair "pythonRegistry.wheels.${n}" v)
           wasix.pythonRegistry.wheelVersions
-          # webcs group by published name: history versions key wasmerPackages
-          # as <name>-<semver> but publish under the same name.
+          # history versions key wasmerPackages as <name>-<semver> but publish under one name
           // lib.mapAttrs' (name: ps:
             lib.nameValuePair "wasmerPackages.${name}"
             (lib.unique (map (p: p.pkg.id.baseVersion) ps)))
@@ -298,11 +269,9 @@
           // lib.mapAttrs' (n: v: lib.nameValuePair "cargoRegistry.crates.${n}" v)
           wasix.cargoRegistry.crateVersions;
 
-        # passthru.wasix.updateNotes (see pkgs/lib/default.nix): things to
-        # check when a package moves. `versions` is published in the eval
-        # maps; `fired` gets the base branch's copy of it back as the `prior`
-        # side of each note's predicate. Read by scripts/update.py and the CI
-        # report; consumers dedupe the per-profile repeats.
+        # passthru.wasix.updateNotes: things to check when a package moves.
+        # `versions` is published in the eval maps; `fired` gets the base branch's
+        # copy back as the `prior` side of each note's predicate.
         updateNotes = let
           noted = lib.filterAttrs (_: wasixLib.hasUpdateNotes) ci;
           versionOf = drv: let
@@ -318,10 +287,8 @@
             (lib.mapAttrs (attr: wasixLib.firedNotesOf (priors.${attr} or null)) noted);
         };
 
-        # passthru.updateScript declarations (standard nixpkgs convention),
-        # collected for scripts/update.py: the command, an optional display
-        # name, and meta.position (the file the pin lives in; the overlay
-        # loader stamps it to our files). Consumers dedupe per-profile repeats.
+        # passthru.updateScript declarations collected for scripts/update.py, with
+        # meta.position (the file the pin lives in).
         updateScripts = let
           srcRoot = toString self;
           scriptOf = attr: drv: let
@@ -377,11 +344,8 @@
         in
           lib.concatMapAttrs scriptOf ci;
 
-        # passthru.wasix.retentionHook (see pkgs/lib/default.nix): a command
-        # scripts/update.py runs after the repo-wide history/prune steps, for a
-        # package to re-sync a listing it derives from the pins (icu regenerates
-        # versions.nix from the nixpkgs majors). In-tree only; the driver
-        # dedupes the per-profile repeats by command.
+        # passthru.wasix.retentionHook: a command scripts/update.py runs after the
+        # repo-wide history/prune steps. In-tree only; the driver dedupes repeats.
         retentionHooks = let
           srcRoot = toString self;
           hookOf = attr: drv: let
@@ -433,25 +397,19 @@
     checks.${system} = flakeChecks;
 
     packages.${system} = {
-      # The toolchain, buildable directly (the webc packages and
-      # the merged registry live under legacyPackages).
+      # the webc packages and the merged registry live under legacyPackages
       wasixcc = toolchain.wasixcc;
       cargo-wasix = toolchain.cargoWasix;
       wasix-rust-toolchain = toolchain.wasixRustToolchain;
       default = toolchain.wasixcc;
 
-      # From-source toolchain parts, buildable in isolation:
-      #   nix build .#wasix-libc    (fast)
-      #   nix build .#wasix-llvm    (from-source LLVM, slow)
+      # From-source toolchain parts, buildable in isolation.
       wasix-libc = toolchain.libc;
       wasix-llvm = toolchain.llvm.clang;
-      # Runtimes built upstream-style (direct cmake of llvm-project driven by
-      # wasix-libc's committed clang-wasix*.cmake_toolchain files):
+      # direct cmake of llvm-project, driven by wasix-libc's clang-wasix*.cmake_toolchain
       wasix-compiler-rt = toolchain.compiler-rt;
       wasix-libcxx = toolchain.libcxx;
-      # The assembled multi-variant sysroot:
       wasix-sysroot = toolchain.sysroot;
-      # (per-variant sysroot smoke tests are checks.wasix-sysroot-<variant>)
 
       wasmer-bin = wasmerRuntime;
     };
