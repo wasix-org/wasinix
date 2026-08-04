@@ -34,7 +34,21 @@
   noarchHistory =
     map (e: e.attr)
     (lib.filter (e: (e.noarch or false) && historyTable ? ${e.attr}) wheelList);
-  pyImportOf = e: e.pyImport or (lib.replaceStrings ["-"] ["_"] e.attr);
+  # Import target: nixpkgs' own pythonImportsCheck names the real module, and
+  # often a compiled submodule too; the attr with '-' -> '_' is the guess for
+  # the packages nixpkgs sets none on. An explicit pyImport still wins, which is
+  # how an entry reaches a compiled module nixpkgs' list would let fall back to
+  # a pure impl (pyyaml, protobuf), or skips one wasix can't run (watchdog).
+  pyImportOf = e: wheel:
+    e.pyImport
+    or (
+      let
+        ic = wheel.pythonImportsCheck or [];
+      in
+        if ic != []
+        then lib.concatStringsSep ", " ic
+        else lib.replaceStrings ["-"] ["_"] e.attr
+    );
 
   # Run a python `script` on the SELF-CONTAINED python webc with the wheel + its
   # dep closure copied into a plain (non-store) dir and NO /nix/store mounted -- as
@@ -96,7 +110,7 @@
     runPython {
       name = "wheel-import-${name}";
       inherit wheel;
-      script = "import ${pyImportOf e}";
+      script = "import ${pyImportOf e wheel}";
     };
 
   # Static guard: a wheel must not bake a /nix/store path it loads at runtime
