@@ -1,9 +1,7 @@
-# The WASIXCC_* environment variables as data, shared by every consumer that
-# drives wasixcc: wasixcc.nix, rust/cargo-wasix.nix, set/stdenv.nix, dev-env.nix.
+# The WASIXCC_* environment as data, shared by every consumer that drives wasixcc.
 # Render with `exportsOf` (shell exports) or `makeWrapperFlagsOf` (--set flags).
 {lib}: rec {
-  # Toolchain locations. Install dirs, NOT bin/: wasixcc appends bin/<tool>
-  # itself (src/args.rs get_tool_path).
+  # Install dirs, NOT bin/: wasixcc appends bin/<tool> itself (src/args.rs).
   locationEnv = {
     wasixLlvm,
     binaryen,
@@ -14,15 +12,9 @@
     WASIXCC_SYSROOT_PREFIX = "${wasixSysroot}";
   };
 
-  # Per-profile ABI settings; wasmExceptions is passed through verbatim, and
-  # wasixcc selects the sysroot variant from EH/PIC.
-  #
-  # WASIXCC_PIC is a default, not a pin: wasixcc documents that a -fPIC flag
-  # enables PIC, silently switching to the PIC sysroot (and erroring at off,
-  # which has none). Build systems pass -fPIC unconditionally (cmake,
-  # hardening), so the profile pins its PIC mode with a countermanding
-  # COMPILER_POST_FLAGS entry, which wasixcc appends after all arguments
-  # (response files included) and resolves last-wins.
+  # WASIXCC_PIC is a default, not a pin: a stray -fPIC enables PIC and silently
+  # switches the sysroot variant. COMPILER_POST_FLAGS countermands it, since
+  # wasixcc appends it after every argument and resolves last-wins.
   profileEnv = {
     wasmExceptions ? null,
     pic ? false,
@@ -39,11 +31,9 @@
         else "-fno-PIC";
     };
 
-  # Autoconf conftest workarounds, for driving arbitrary build systems.
   autoconfEnv = {WASIXCC_AUTOCONF_WORKAROUNDS = "yes";};
 
-  # Route a build's toolchain through wasixcc. wasm-opt stays off here; the
-  # stdenv runs it per-package instead.
+  # wasm-opt stays off here; the stdenv runs it per-package instead.
   ccEnv = {
     CC = "wasixcc";
     CXX = "wasix++";
@@ -54,7 +44,6 @@
     WASIXCC_RUN_WASM_OPT = "no";
   };
 
-  # Renderers.
   exportsOf = env:
     lib.concatStringsSep "\n"
     (lib.mapAttrsToList (k: v: "export ${k}=${lib.escapeShellArg v}") env);
