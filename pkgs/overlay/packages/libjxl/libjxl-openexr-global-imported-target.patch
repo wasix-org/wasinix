@@ -1,0 +1,13 @@
+diff --git a/lib/jxl_extras.cmake b/lib/jxl_extras.cmake
+index 0f8df98..f15f9f0 100644
+--- a/lib/jxl_extras.cmake
++++ b/lib/jxl_extras.cmake
+@@ -76,7 +76,7 @@ if(PNG_FOUND)
+ endif()
+ 
+ if (JPEGXL_ENABLE_OPENEXR)
+-  pkg_check_modules(OpenEXR IMPORTED_TARGET OpenEXR)
++  pkg_check_modules(OpenEXR IMPORTED_TARGET GLOBAL OpenEXR)
+   if (OpenEXR_FOUND)
+     target_include_directories(jxl_extras_core-obj PRIVATE
+       "${OpenEXR_INCLUDE_DIRS}"

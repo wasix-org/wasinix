@@ -1,0 +1,61 @@
+diff --git a/hwy/contrib/thread_pool/futex.h b/hwy/contrib/thread_pool/futex.h
+index 0b87d1a..63fe567 100644
+--- a/hwy/contrib/thread_pool/futex.h
++++ b/hwy/contrib/thread_pool/futex.h
+@@ -51,7 +51,7 @@
+ #include <windows.h>
+ #endif
+ 
+-#if HWY_ARCH_WASM
++#if HWY_ARCH_WASM && defined(__EMSCRIPTEN__)
+ #include <emscripten/threading.h>
+ #include <math.h>  // INFINITY
+ 
+@@ -152,7 +152,7 @@ static inline uint32_t BlockUntilDifferent(
+     const uint32_t prev, const std::atomic<uint32_t>& current) {
+   const auto acq = std::memory_order_acquire;
+ 
+-#if HWY_ARCH_WASM
++#if HWY_ARCH_WASM && defined(__EMSCRIPTEN__)
+   // It is always safe to cast to void.
+   volatile void* address =
+       const_cast<volatile void*>(static_cast<const volatile void*>(&current));
+@@ -241,7 +241,7 @@ static inline uint32_t BlockUntilDifferent(
+ // Wakes all threads, if any, that are waiting because they called
+ // `BlockUntilDifferent` with the same `current`.
+ static inline void WakeAll(std::atomic<uint32_t>& current) {
+-#if HWY_ARCH_WASM
++#if HWY_ARCH_WASM && defined(__EMSCRIPTEN__)
+   // It is always safe to cast to void.
+   volatile void* address = static_cast<volatile void*>(&current);
+   const int max_to_wake = INT_MAX;  // actually signed
+diff --git a/hwy/contrib/thread_pool/topology.cc b/hwy/contrib/thread_pool/topology.cc
+index d731705..5f98416 100644
+--- a/hwy/contrib/thread_pool/topology.cc
++++ b/hwy/contrib/thread_pool/topology.cc
+@@ -67,14 +67,14 @@
+ #include <sys/cpuset.h>
+ #endif  // HWY_OS_FREEBSD
+ 
+-#if HWY_ARCH_WASM
++#if HWY_ARCH_WASM && defined(__EMSCRIPTEN__)
+ #include <emscripten/threading.h>
+ #endif
+ 
+ namespace hwy {
+ 
+ HWY_CONTRIB_DLLEXPORT bool HaveThreadingSupport() {
+-#if HWY_ARCH_WASM
++#if HWY_ARCH_WASM && defined(__EMSCRIPTEN__)
+   return emscripten_has_threading_support() != 0;
+ #else
+   return true;
+@@ -199,7 +199,7 @@ bool Sysctl(const char* name, size_t div, int& err, T* out) {
+ 
+ HWY_CONTRIB_DLLEXPORT size_t TotalLogicalProcessors() {
+   size_t total_lps = 0;
+-#if HWY_ARCH_WASM
++#if HWY_ARCH_WASM && defined(__EMSCRIPTEN__)
+   const int num_cores = emscripten_num_logical_cores();
+   if (num_cores > 0) total_lps = static_cast<size_t>(num_cores);
+ #elif HWY_OS_WIN
