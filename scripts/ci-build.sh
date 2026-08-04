@@ -40,6 +40,7 @@ fi
 # the bottleneck is daemon/SQLite contention, not CPU, so callers there set a
 # small EVAL_WORKERS (ci-build-remote.sh).
 EVAL_WORKERS="${EVAL_WORKERS:-$(nproc)}"
+MAX_JOBS="${MAX_JOBS:-$(nproc)}"
 
 PUSH_DRVS=""
 if [ -n "${NIX_SIGNING_KEY:-}" ]; then
@@ -66,6 +67,7 @@ nix-fast-build \
   --retries 3 \
   --no-nom \
   --no-link \
+  --max-jobs "$MAX_JOBS" \
   --eval-workers "$EVAL_WORKERS" \
   --result-file "$RESULT_FILE" \
   --result-format junit \

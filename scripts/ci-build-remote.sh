@@ -112,9 +112,7 @@ status=0
 # shellcheck disable=SC2087 # client-side expansion is the point, see above
 ssh "${ssh_opts[@]}" "$remote" 'bash -l -s' <<REMOTE || status=$?
 set -uo pipefail
-# EVAL_WORKERS=8: the builder is shared and its store is on EBS; per-core eval
-# workers stall on daemon/SQLite contention (see ci-build.sh).
-export CI_ATTR="path:$src#$attr" RESULT_FILE="$remote_result" EVAL_WORKERS=8
+export CI_ATTR="path:$src#$attr" RESULT_FILE="$remote_result" EVAL_WORKERS=8 MAX_JOBS=32
 $runner nix run --accept-flake-config "path:$src#scripts.ci-build"
 REMOTE
 
