@@ -26,12 +26,12 @@ index d550796..0b8f0c0 100644
  if(ARROW_BUILD_SHARED)
    target_link_libraries(arrow_python PUBLIC ${PYARROW_CPP_LINK_LIBS})
  else()
-+  # the cython modules link only arrow_python, so it must export every
-+  # arrow/parquet symbol: whole-archive the full archives into the dylib
-+  set(PYARROW_WHOLE_ARCHIVE_LIBS "$<TARGET_FILE:Arrow::arrow_static>")
-+  if(PYARROW_BUILD_PARQUET)
-+    list(APPEND PYARROW_WHOLE_ARCHIVE_LIBS "$<TARGET_FILE:Parquet::parquet_static>")
-+  endif()
++  # the cython modules link only arrow_python, so it must export every symbol
++  # from each enabled static component into the dylib
++  set(PYARROW_WHOLE_ARCHIVE_LIBS)
++  foreach(PYARROW_CPP_LINK_LIB IN LISTS PYARROW_CPP_LINK_LIBS)
++    list(APPEND PYARROW_WHOLE_ARCHIVE_LIBS "$<TARGET_FILE:${PYARROW_CPP_LINK_LIB}>")
++  endforeach()
 +  target_link_options(arrow_python PRIVATE
 +                      "-Wl,--whole-archive"
 +                      ${PYARROW_WHOLE_ARCHIVE_LIBS}
