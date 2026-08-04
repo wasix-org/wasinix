@@ -15,6 +15,8 @@
   crateEdits,
 }: let
   hostPkgs = pkgsCross.buildPackages;
+  # Vendoring runs host-side metadata operations and must not pull in the WASIX toolchain.
+  vendorPlatform = hostPkgs.rustPlatform;
   # the toolchain's build-host rust triple; derive it so it can't drift.
   hostTriple = hostPkgs.stdenv.hostPlatform.rust.rustcTarget;
   rustLld = "${wasixRustToolchain}/lib/rustlib/${hostTriple}/bin/rust-lld";
@@ -308,7 +310,7 @@
   # hits `set // function` and dies for any consumer forced through the
   # multi-position splice (jiter, pulled in as a propagated dep). Match the
   # functor shape so the splice stays consistent.
-  patchedPlatform = base.overrideScope (final: prev: let
+  patchedPlatform = base.overrideScope (final: _: let
     # wasixRebuildVendor: the versioned-history rebase (pkgs/lib/load-packages.nix)
     # calls this to re-vendor a pinned older src (patchInPlace keeps raw's
     # vendorStaging, but the rebase re-runs the wrapper so an older release's
@@ -318,8 +320,8 @@
   in {
     importCargoLock = lib.makeOverridable (
       args:
-        attach (patchFarm (prev.importCargoLock args))
-        ({src, ...}: patchFarm (prev.importCargoLock {lockFileContents = builtins.readFile "${src}/Cargo.lock";}))
+        attach (patchFarm (vendorPlatform.importCargoLock args))
+        ({src, ...}: patchFarm (vendorPlatform.importCargoLock {lockFileContents = builtins.readFile "${src}/Cargo.lock";}))
     );
     fetchCargoVendor = lib.makeOverridable (
       args: let
@@ -329,7 +331,7 @@
         }:
           final.fetchCargoVendor (args // {inherit src;} // lib.optionalAttrs (cargoHash != null) {hash = cargoHash;});
       in
-        attach (patchInPlace (prev.fetchCargoVendor args)) rebuild
+        attach (patchInPlace (vendorPlatform.fetchCargoVendor args)) rebuild
     );
   });
 in
