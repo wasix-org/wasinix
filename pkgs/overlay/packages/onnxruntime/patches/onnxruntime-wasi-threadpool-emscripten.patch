@@ -1,0 +1,45 @@
+Route onnxruntime's __wasm__ threadpool paths to a wasi branch.
+
+threadpool.cc assumes wasm means Emscripten: it includes <emscripten/threading.h>
+and calls emscripten_num_logical_cores() under bare defined(__wasm__). WASIX has
+neither, but its libc provides sched_getcpu, so route it through the generic path.
+
+Upstream fix: gate these on Emscripten instead of treating every wasm target as
+Emscripten. This WASIX-only build routes the wasm branch to sched_getcpu.
+
+diff --git a/onnxruntime/core/common/threadpool.cc b/onnxruntime/core/common/threadpool.cc
+--- a/onnxruntime/core/common/threadpool.cc
++++ b/onnxruntime/core/common/threadpool.cc
+@@ -32,8 +32,8 @@ limitations under the License.
+ #if defined(__x86_64__) || defined(__i386__)
+ #include <cpuid.h>
+ #endif
+-#elif defined(__wasm__)
+-#include <emscripten/threading.h>
++#elif defined(__wasm__)
++#include <sched.h>
+ #else
+ #include <sched.h>
+ #endif
+@@ -135,8 +135,8 @@ void ThreadPoolProfiler::MainThreadStat::LogCore() {
+     core_ = (unsigned)CPUInfo[1] >> 24;
+   }
+ #endif
+-#elif defined(__wasm__)
+-  core_ = emscripten_num_logical_cores();
++#elif defined(__wasm__)
++  core_ = sched_getcpu();
+ #elif defined(_AIX)
+   core_ = mycpu();
+ #else
+@@ -219,8 +219,8 @@ void ThreadPoolProfiler::LogRun(int thread_idx) {
+         child_thread_stats_[thread_idx].core_ = (unsigned)CPUInfo[1] >> 24;
+       }
+ #endif
+-#elif defined(__wasm__)
+-      child_thread_stats_[thread_idx].core_ = emscripten_num_logical_cores();
++#elif defined(__wasm__)
++      child_thread_stats_[thread_idx].core_ = sched_getcpu();
+ #elif defined(_AIX)
+       child_thread_stats_[thread_idx].core_ = mycpu();
+ #else

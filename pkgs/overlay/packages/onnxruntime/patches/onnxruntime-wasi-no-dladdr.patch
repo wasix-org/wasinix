@@ -1,0 +1,25 @@
+Skip dladdr in GetRuntimePath on wasi.
+
+Env::GetRuntimePath uses dladdr() to find the directory of the onnxruntime
+binary, in order to locate provider shared libraries next to it. wasix's dyld
+provides dlopen/dlsym/dlclose but no dladdr, so the module fails to load
+("Dynamically-linked symbol not found: dladdr"). Our build is static with a
+single CPU EP and loads no provider .so, so take the existing non-dladdr
+fallback (as AIX already does).
+
+Upstream fix: also guard the dladdr path on __wasi__.
+
+diff --git a/onnxruntime/core/platform/posix/env.cc b/onnxruntime/core/platform/posix/env.cc
+--- a/onnxruntime/core/platform/posix/env.cc
++++ b/onnxruntime/core/platform/posix/env.cc
+@@ -569,8 +569,8 @@ class PosixEnv : public Env {
+   }
+
+   PathString GetRuntimePath() const override {
+-// In AIX, dladdr is not supported.
+-#if !defined(_AIX)
++// In AIX, dladdr is not supported. wasix's dyld provides no dladdr either.
++#if !defined(_AIX) && !defined(__wasi__)
+     // Use dladdr() to look up the file that contains an address from this binary.
+     const void* const address_from_this_binary = reinterpret_cast<const void*>(Env::Default);
+

@@ -1,0 +1,38 @@
+Skip the onnxruntime_providers_shared bridge library on wasi.
+
+It is a runtime-loaded shared object exporting the provider-bridge symbols via a
+platform-specific linker script / .def, and its else() branch fatally errors on
+any platform that is not Apple/Unix/Windows. wasm has no such shared provider
+bridge (we build a single static CPU EP), exactly as Emscripten/Android are
+already excluded. Treat wasi the same.
+
+Upstream fix: add wasi to this guard (and the Emscripten guards generally) so an
+Emscripten-independent wasm build configures.
+
+diff --git a/cmake/onnxruntime_providers_cpu.cmake b/cmake/onnxruntime_providers_cpu.cmake
+index f6efcb3..7329212 100644
+--- a/cmake/onnxruntime_providers_cpu.cmake
++++ b/cmake/onnxruntime_providers_cpu.cmake
+@@ -218,7 +218,8 @@ set_target_properties(onnxruntime_providers PROPERTIES FOLDER "ONNXRuntime")
+ if (NOT onnxruntime_MINIMAL_BUILD AND NOT onnxruntime_EXTENDED_MINIMAL_BUILD
+                                   AND NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin|iOS|visionOS|tvOS"
+                                   AND NOT CMAKE_SYSTEM_NAME STREQUAL "Android"
+-                                  AND NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
++                                  AND NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten"
++                                  AND NOT CMAKE_SYSTEM_NAME MATCHES "Wasi")
+   file(GLOB onnxruntime_providers_shared_cc_srcs CONFIGURE_DEPENDS
+   "${ONNXRUNTIME_ROOT}/core/providers/shared/*.h"
+   "${ONNXRUNTIME_ROOT}/core/providers/shared/*.cc"
+diff --git a/cmake/onnxruntime_python.cmake b/cmake/onnxruntime_python.cmake
+--- a/cmake/onnxruntime_python.cmake
++++ b/cmake/onnxruntime_python.cmake
+@@ -802,7 +802,8 @@ endif()
+ if (NOT onnxruntime_MINIMAL_BUILD AND NOT onnxruntime_EXTENDED_MINIMAL_BUILD
+                                   AND NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin|iOS|visionOS|tvOS"
+                                   AND NOT CMAKE_SYSTEM_NAME STREQUAL "Android"
+-                                  AND NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
++                                  AND NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten"
++                                  AND NOT CMAKE_SYSTEM_NAME MATCHES "Wasi")
+   add_custom_command(
+     TARGET onnxruntime_pybind11_state POST_BUILD
+     COMMAND ${CMAKE_COMMAND} -E copy
