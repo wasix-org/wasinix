@@ -7,7 +7,9 @@
 {
   pkgs,
   lib,
-  # {py313 = {python3; pythonWheels;}; py314 = {...};}: one closure + wheel set per version.
+  # {py313 = {python3; pythonWheels; omitFromRegistry ? [];}; py314 = {...};}:
+  # one closure + wheel set per version. omitFromRegistry removes only the named
+  # artifacts after computing the closure, so their version-specific deps remain.
   pythonSets,
   testLib,
   # the default python interpreter + its webc (both from the top-level `python3`). The e2e installs
@@ -57,7 +59,9 @@
       source = sourceOf drv;
       inherit drv;
     })
-    (lib.filter (drv: drv ? dist) closure);
+    (lib.filter
+      (drv: drv ? dist && !(lib.elem (drv.pname or drv.name) (set.omitFromRegistry or [])))
+      closure);
 
   perVersion = lib.mapAttrs servedOf pythonSets;
   wheelDists = lib.concatLists (lib.attrValues perVersion);

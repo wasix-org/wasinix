@@ -255,6 +255,9 @@
       pythonWebc = wasmerLayer.wasmerPackages.${webcName}.webc;
     };
   isNoarch = e: e.noarch or false;
+  publishOnceWheelNames =
+    map (e: e.attr)
+    (lib.filter (e: e.publishOnce or false) (import ./overlay/python-packages/wheels.nix));
   pythonWheels = {
     noarch = mkPythonWheels "noarch" "python314" "python3.14" isNoarch;
     py313 = mkPythonWheels "py313" "python313" "python3.13" (e: !isNoarch e);
@@ -301,6 +304,7 @@
       py313 = {
         python3 = nixpkgsByProfile.exnrefEhpic.python313;
         pythonWheels = pythonWheels.py313;
+        omitFromRegistry = publishOnceWheelNames;
       };
     };
     inherit (wasmerLayer) testLib;
