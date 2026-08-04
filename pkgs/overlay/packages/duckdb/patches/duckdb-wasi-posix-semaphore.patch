@@ -1,0 +1,22 @@
+diff --git a/third_party/concurrentqueue/lightweightsemaphore.h b/third_party/concurrentqueue/lightweightsemaphore.h
+index 904275d..22656a8 100644
+--- a/third_party/concurrentqueue/lightweightsemaphore.h
++++ b/third_party/concurrentqueue/lightweightsemaphore.h
+@@ -24,7 +24,7 @@ extern "C" {
+ }
+ #elif defined(__MACH__)
+ #include <mach/mach.h>
+-#elif defined(__unix__)
++#elif defined(__unix__) || defined(__wasi__)
+ #include <semaphore.h>
+ #include <chrono>
+ #elif defined(__MVS__)
+@@ -163,7 +163,7 @@ public:
+ 		}
+ 	}
+ };
+-#elif defined(__unix__) || defined(__MVS__)
++#elif defined(__unix__) || defined(__MVS__) || defined(__wasi__)
+ //---------------------------------------------------------
+ // Semaphore (POSIX, Linux, zOS aka MVS)
+ //---------------------------------------------------------

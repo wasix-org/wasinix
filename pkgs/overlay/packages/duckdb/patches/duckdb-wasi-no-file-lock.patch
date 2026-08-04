@@ -1,0 +1,20 @@
+diff --git a/src/common/local_file_system.cpp b/src/common/local_file_system.cpp
+index 29f0473..dbf6e04 100644
+--- a/src/common/local_file_system.cpp
++++ b/src/common/local_file_system.cpp
+@@ -394,6 +394,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
+ 	}
+ #endif
+ 
++#if !defined(__wasi__) // Wasmer has no cross-process advisory record-lock implementation.
+ 	if (flags.Lock() != FileLockType::NO_LOCK) {
+ 		// set lock on file
+ 		// but only if it is not an input/output stream
+@@ -454,6 +455,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
+ 		}
+ 	}
+ 
++#endif
+ 	auto file_handle = make_uniq<UnixFileHandle>(*this, path, fd, flags);
+ 	if (opener) {
+ 		file_handle->TryAddLogger(*opener);
