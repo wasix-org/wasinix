@@ -1,47 +1,38 @@
-# numpy for wasix. openblas doesn't cross-build (throws "unsupported system: wasm32-wasi");
-# use the bundled reference BLAS (-Dallow-noblas) and drop blas/lapack + gfortran + the site.cfg.
+# numpy for wasix. openblas throws "unsupported system: wasm32-wasi" at eval, so
+# build against the bundled reference BLAS (-Dallow-noblas).
 {
   pyprev,
   lib,
   helpers,
   ...
-}: let
-  wheels = import ./lib/wheels.nix {inherit lib;};
-  # gfortran only compiles the Fortran BLAS wrappers; allow-noblas leaves nothing to compile.
-  noFortran = lib.filter (x: !(lib.hasInfix "gfortran" (lib.getName x)));
-in
-  # wasm build only: the noblas/-fexceptions/no-gfortran variant breaks the native checkPhase.
-  wheels.onlyOnWasix pyprev.numpy (
+}:
+# crossInclude names a path inside numpy's own output, so the definition is a fixpoint.
+lib.fix (
+  self:
     helpers.libTweaks (
-      wheels.dropInputsByName ["blas" "lapack"]
+      helpers.linkInputs (helpers.dropInputsByNameInfix ["blas" "lapack"])
       // {
-        nativeBuildInputs = noFortran;
-        # numpy < 2.3 vendors meson 1.5, which rejects default_both_libraries
-        # (nixpkgs passes it for current numpy; meson knows it from 1.6).
+        # What wasm C extensions must compile against: the build python's numpy
+        # headers set NPY_SIZEOF_LONG=8, which mis-sizes npy_intp on wasm32.
+        passthru.crossInclude = "${self}/lib/${pyprev.python.libPrefix}/site-packages/numpy/_core/include";
+        # numpy < 2.3 vendors meson 1.5, which rejects default_both_libraries.
         mesonFlags = old:
           lib.filter (
             f:
               lib.versionAtLeast pyprev.numpy.version "2.3"
               || f != "-Ddefault_both_libraries=static"
           ) (old ++ [(lib.mesonBool "allow-noblas" true)]);
-        # lib.const = replace, not concat: drop upstream's site.cfg symlink (dead BLAS paths)
-        # and its /bin/true→coreutils test rewrite.
-        preBuild = lib.const "";
-        postPatch = lib.const (''
+        # Replaces upstream's preBuild: its site.cfg symlink has dead BLAS paths.
+        preBuild = _: "";
+        # The long-double format is normally a run-probe; wasm32 is IEEE binary128.
+        postPatch = _: (''
             substituteInPlace numpy/meson.build \
               --replace-fail 'py.full_path()' "'python'"
 
-            # ehpic PIC needs wasm-EH, so -fno-exceptions is rejected; keep exceptions on.
-            substituteInPlace numpy/_core/meson.build \
-              --replace-fail "'-fno-exceptions',  # no exception support" "'-fexceptions',  # wasix ehpic: PIC needs wasm-EH"
-
-            # long-double format is normally found by a run-probe (no exe_wrapper here); wasm32
-            # is IEEE binary128 → supply IEEE_QUAD_LE directly.
             substituteInPlace numpy/_core/meson.build \
               --replace-fail "meson.get_external_property('longdouble_format', 'UNKNOWN')" "meson.get_external_property('longdouble_format', 'IEEE_QUAD_LE')"
           ''
-          # npy_cpu.h < 2.4 only knows wasm under emscripten; clang targeting
-          # wasm32-wasi defines __wasm__ (what upstream widened the guard to in 2.4).
+          # npy_cpu.h before 2.4 recognises wasm only under __EMSCRIPTEN__.
           + lib.optionalString (lib.versionOlder pyprev.numpy.version "2.4") ''
             substituteInPlace numpy/_core/include/numpy/npy_cpu.h \
               --replace-fail '#elif defined(__EMSCRIPTEN__)' '#elif defined(__EMSCRIPTEN__) || defined(__wasm__)'
@@ -49,4 +40,4 @@ in
       }
     )
     pyprev.numpy
-  )
+)
