@@ -1,0 +1,24 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 044996e..e40476f 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -144,6 +144,19 @@ if(CMAKE_CROSSCOMPILING)
+   endif()
+   find_package(Python REQUIRED COMPONENTS Interpreter)
+   set(ONNX_PYTHON_INTERPRETER Python::Interpreter)
++  # nanobind wants the Python:: dev targets/vars, but cross-compiling splits the
++  # native interpreter (Python) from the target dev (Python3). Alias the target
++  # dev over so nanobind sees Python::Module / Python::SABIModule and the target
++  # include dir / SOABI rather than the missing native ones.
++  if(ONNX_BUILD_PYTHON AND NOT TARGET Python::Module)
++    add_library(Python::Module ALIAS Python3::Module)
++    if(TARGET Python3::SABIModule)
++      add_library(Python::SABIModule ALIAS Python3::SABIModule)
++    endif()
++    set(Python_INCLUDE_DIRS "${Python3_INCLUDE_DIRS}")
++    set(Python_SOABI "${Python3_SOABI}")
++    set(Python_SOSABI "${Python3_SOSABI}")
++  endif()
+ else()
+   find_package(Python3 REQUIRED COMPONENTS Interpreter ${python_dev_component})
+   # Find Python for nanobind
