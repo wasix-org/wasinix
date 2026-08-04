@@ -1,0 +1,48 @@
+wasm has no floating-point exception support, so wasix-libc's <fenv.h> defines
+no exception-flag macros (FE_INVALID etc.); only FE_ALL_EXCEPT/FE_TONEAREST
+(both 0) and no-op fe* stubs exist. H5T__init_native_float_types() masks FP
+exceptions with feholdexcept()/feclearexcept(FE_INVALID)/feupdateenv() while
+probing "don't care" bits of NaNs; FE_INVALID is undeclared and the masking is
+pointless on wasm. Guard the whole fe* dance (and its saved_fenv, else unused)
+for __wasi__.
+
+Recheck if wasix-libc grows FP exception support (FE_INVALID and real fe*).
+--- a/src/H5Tinit_float.c
++++ b/src/H5Tinit_float.c
+@@ -463,7 +463,9 @@
+ herr_t H5_NO_UBSAN
+ H5T__init_native_float_types(void)
+ {
++#ifndef __wasi__
+     fenv_t           saved_fenv;
++#endif
+     H5T_fpoint_det_t det;
+     H5T_t           *dt        = NULL;
+     herr_t           ret_value = SUCCEED;
+@@ -473,8 +475,10 @@
+     /* Turn off floating-point exceptions while initializing to avoid
+      * tripping over signaling NaNs while looking at "don't care" bits.
+      */
++#ifndef __wasi__
+     if (feholdexcept(&saved_fenv) != 0)
+         HSYS_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, FAIL, "can't save floating-point environment");
++#endif
+
+     /* H5T_NATIVE_FLOAT */
+
+@@ -608,6 +612,7 @@
+ #endif
+
+ done:
++#ifndef __wasi__
+     /* Clear any FE_INVALID exceptions from NaN handling */
+     if (feclearexcept(FE_INVALID) != 0)
+         HSYS_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, FAIL, "can't clear floating-point exceptions");
+@@ -615,6 +620,7 @@
+     /* Restore the original environment */
+     if (feupdateenv(&saved_fenv) != 0)
+         HSYS_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, FAIL, "can't restore floating-point environment");
++#endif
+
+     if (ret_value < 0) {
+         if (dt != NULL) {
