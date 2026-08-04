@@ -1,28 +1,26 @@
-# mariadb-connector-c (libmysqlclient) for wasix, mysqlclient's C backend.
-# libmariadb.a itself builds clean; only the unit-test binaries fail to link
-# (getlogin is absent from wasix libc), and they could never run cross anyway.
-# curl is only used by the remote_io plugin; off, so consumers linking the
-# static archive don't have to close libcurl's references too.
+# mariadb-connector-c for wasix, mysqlclient's C backend. Its unit tests need getlogin.
 {
   prev,
   helpers,
   ...
 }:
 helpers.libTweaks {
+  # remote_io defaults to a loadable module, which the static build drops
+  # entirely; STATIC compiles it into libmariadb.a and puts curl on the link.
   cmakeFlags = [
     "-DWITH_UNIT_TESTS=OFF"
-    "-DWITH_CURL=OFF"
+    "-DCLIENT_PLUGIN_REMOTE_IO=STATIC"
   ];
-  # The generated libmariadb.pc records its static deps as "-l/nix/store/.../
-  # libFOO.a" - a -l with an absolute archive path, which no linker accepts.
-  # Strip the -l so the path stands alone (linkers take absolute .a paths), so
-  # `pkg-config --static --libs libmariadb` is usable (see mysqlclient.nix).
-  # postFixup: the pkgconfig files have settled in $dev by now.
+  # The generated libmariadb.pc records static deps as "-l/nix/store/...libFOO.a", an
+  # absolute archive path behind a -l, which no linker accepts. It also omits curl:
+  # the connector gates that on REMOTEIO_PLUGIN_TYPE, which its cmake never sets, so
+  # a static consumer would link libmariadb.a with curl_easy_* undefined.
   postFixup = ''
     for pc in "$dev"/lib/pkgconfig/*.pc; do
       [ -f "$pc" ] || continue
       sed -i 's#-l\(/nix/store/[^ ]*\.a\)#\1#g' "$pc"
     done
+    echo "Requires.private: libcurl" >>"$dev/lib/pkgconfig/libmariadb.pc"
   '';
   # pvio_socket.c needs poll/POLLIN, which only the PIC sysroots declare.
   passthru.wasix.supportedProfiles = helpers.profiles.pic;
