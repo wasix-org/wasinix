@@ -1,0 +1,25 @@
+diff --git a/libc-top-half/musl/include/time.h b/libc-top-half/musl/include/time.h
+--- a/libc-top-half/musl/include/time.h
++++ b/libc-top-half/musl/include/time.h
+@@ -139,19 +139,17 @@
+ int timer_getoverrun (timer_t);
+ #endif
+ 
+-#ifdef __wasilibc_unmodified_upstream /* WASI has no timezone tables */
++/* wasix: tzname is defined+weak_aliased in __tz.c (stub: always UTC), so declare it */
+ extern char *tzname[2];
+-#endif
+ 
+ #endif
+ 
+ 
+ #if defined(_XOPEN_SOURCE) || defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
+ char *strptime (const char *__restrict, const char *__restrict, struct tm *__restrict);
+-#ifdef __wasilibc_unmodified_upstream /* WASI has no timezone tables */
++/* wasix: daylight/timezone are defined+weak_aliased in __tz.c (stub: 0/UTC) */
+ extern int daylight;
+ extern long timezone;
+-#endif
+ extern int getdate_err;
+ struct tm *getdate (const char *);
+ #endif

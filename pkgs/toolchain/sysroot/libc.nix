@@ -1,8 +1,5 @@
-# One ABI variant of the wasix libc (musl-based), built from source. The
-# {eh, pic, exnref} booleans mirror build32-general.sh:wasix_libc (Makefile vs
-# Makefile-eh, PIC=, EXNREF_EH=). It only needs *a* clang, not the fork LLVM, so
-# it builds with nixpkgs' llvmPackages_21; the Makefile supplies the ABI flags.
-# Output is sysroot-shaped: lib/wasm32-wasi/ + include/.
+# One ABI variant of the wasix libc, built from source. It needs *a* clang, not the
+# fork LLVM, since the Makefile supplies the ABI flags itself.
 {
   lib,
   stdenv,
@@ -17,9 +14,7 @@
   cargo,
   rustc,
   coreutils,
-  # cargo wants a writable HOME.
   writableTmpDirAsHomeHook,
-  # ABI variant selectors.
   eh ? false,
   pic ? false,
   exnref ? false,
@@ -32,8 +27,7 @@
     hash = "sha256-UGBHCYuUlNE6fAAUJnPxIgfJ7ujiUKGUrWU+BFKQfsQ=";
   };
 
-  # EH picks Makefile-eh (+ EXNREF_EH), else the base Makefile; PIC is
-  # orthogonal; `exnref` only matters when `eh`.
+  # PIC is orthogonal to EH; `exnref` only matters when `eh`.
   variant =
     if !eh
     then "off"
@@ -58,9 +52,9 @@
       }"
     ];
 
-  # witx specs for the header generators (cargo run generate-libc): submodule
-  # pins (absent from archive downloads), synced by scripts/update.py; a stale
-  # pin fails the build with undeclared __wasi_* functions.
+  # witx specs for the header generators: submodule pins absent from archive
+  # downloads, synced by scripts/update.py. A stale pin fails the build with
+  # undeclared __wasi_* functions.
   wasiWitx = fetchFromGitHub {
     owner = "WebAssembly";
     repo = "WASI";
@@ -89,14 +83,13 @@ in
     inherit version src;
 
     passthru.updateScript = {
-      name = "wasix-libc"; # attr tail is `libc`; keep the familiar target name
-      # bumps, then re-derives the witx submodule pins at the new tag (the
-      # nix-update command is passed through as its argv)
+      name = "wasix-libc"; # the attr tail is `libc`
+      # Wraps nix-update (passed through as argv) to re-derive the witx pins at the new tag.
       command = ["pkgs/toolchain/sysroot/update.py"] ++ nix-update-script {extraArgs = ["--flake"];};
     };
 
     nativeBuildInputs = [
-      # raw (unwrapped) clang + llvm tools: wasix-libc drives the target itself.
+      # Unwrapped: wasix-libc drives the target itself.
       llvmPackages_21.clang-unwrapped
       llvmPackages_21.llvm
       llvmPackages_21.lld
@@ -110,8 +103,18 @@ in
     ];
 
     # select()/pselect() bail with ENOSYS when exceptfds is non-empty, spinning
-    # defensive callers (rsync). Ignore exceptfds instead. See WASIX-TODO.md.
-    patches = [./libc-select-exceptfds.patch];
+    # defensive callers. tzname, inet-addr and sched unhide declarations sitting
+    # behind __wasilibc_unmodified_upstream while the symbols themselves link, so a
+    # consumer naming one gets "undeclared identifier"; inet-addr also adds musl's
+    # inet_addr.c, missing from the Makefile source list. fcntl-locking exposes the
+    # record-lock API but returns ENOSYS until Wasmer provides shared lock state.
+    patches = [
+      ./libc-select-exceptfds.patch
+      ./wasix-libc-tzname.patch
+      ./wasix-libc-inet-addr.patch
+      ./wasix-libc-sched.patch
+      ./wasix-libc-fcntl-locking.patch
+    ];
 
     passthru.wasix.updateNotes = [
       {message = "check whether libc-select-exceptfds.patch landed upstream (WASIX-TODO.md)";}
@@ -125,7 +128,11 @@ in
       TARGET_OS = "wasix";
     };
 
+    # Stubs for declared-but-unbuilt POSIX functions (mlock, madvise, sched_*); the
+    # Makefile globs libc-bottom-half/sources/*.c. See WASIX-TODO.md.
     postPatch = ''
+      cp ${./wasix-libc-stubs.c} libc-bottom-half/sources/wasix-stubs.c
+
       rm -rf tools/wasi-headers/WASI tools/wasix-headers/WASI
       cp -r --no-preserve=mode,ownership ${wasiWitx}  tools/wasi-headers/WASI
       cp -r --no-preserve=mode,ownership ${wasixWitx} tools/wasix-headers/WASI
@@ -134,7 +141,7 @@ in
       cp ${cargoConfig} .cargo/config.toml
     '';
 
-    # Regenerate the wasi/wasix api headers (build32-general.sh:prepare_wasix_libc).
+    # Regenerate the wasi/wasix api headers, as build32-general.sh does.
     preBuild = ''
       cargo run --manifest-path tools/wasix-headers/Cargo.toml generate-libc
       cp -f libc-bottom-half/headers/public/wasi/api.h libc-bottom-half/headers/public/wasi/api_wasix.h
@@ -147,10 +154,9 @@ in
         > libc-bottom-half/headers/public/wasi/api.h
     '';
 
-    # Stock make buildPhase. The toolchain goes on the make COMMAND LINE, not the
-    # environment: the stdenv's cc-wrapper hook exports CC=gcc after env attrs are
-    # applied, and command-line variables are the one thing that overrides it
-    # (clang is the unwrapped nixpkgs one from nativeBuildInputs).
+    # The toolchain goes on the make COMMAND LINE, not the environment: the stdenv's
+    # cc-wrapper hook exports CC=gcc after env attrs, and command-line variables are
+    # the one thing that overrides it.
     makefile = makeFile;
     makeFlags =
       [
@@ -164,23 +170,20 @@ in
       ++ makeVariantArgs;
     enableParallelBuilding = true;
 
+    # Generate libc.imports, the host-imported symbols wasixcc feeds to wasm-ld as
+    # --allow-undefined-file. CHECK_SYMBOLS=no skips the Makefile target producing it.
     postBuild = ''
       rm -f sysroot/lib/wasm32-wasi/libc-printscan-long-double.a
 
-      # Generate libc.imports — the list of host-imported (undefined) wasix symbols
-      # wasixcc feeds to wasm-ld as --allow-undefined-file. The Makefile's
-      # check-symbols target produces it, but we skip that (CHECK_SYMBOLS=no) to
-      # avoid its brittle sanity checks, so reproduce just the imports extraction.
       lib_dir=sysroot/lib/wasm32-wasi
       llvm-nm --undefined-only "$lib_dir"/libc.a "$lib_dir"/libc-*.a "$lib_dir"/*.o 2>/dev/null \
         | grep ' U ' | sed 's/.* U //' | LC_ALL=C sort | uniq \
         | grep '^_*imported_wasix_' > "$lib_dir/libc.imports" || true
     '';
 
+    # Sysroot-shaped output, as wasix-libc's Makefile installs it under sysroot/.
     installPhase = ''
       runHook preInstall
-      # Sysroot-shaped output: lib/wasm32-wasi/ + include/ (+ share/), exactly as
-      # wasix-libc's Makefile installs it under sysroot/.
       mkdir -p "$out"
       cp -r sysroot/lib "$out/lib"
       cp -r sysroot/include "$out/include"

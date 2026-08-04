@@ -1,0 +1,25 @@
+diff --git a/Makefile b/Makefile
+--- a/Makefile
++++ b/Makefile
+@@ -140,6 +140,7 @@
+ 	    network/inet_ntoa.c \
+         network/inet_pton.c \
+         network/inet_aton.c \
++        network/inet_addr.c \
+         network/in6addr_any.c \
+         network/in6addr_loopback.c \
+         network/proto.c \
+diff --git a/libc-top-half/musl/include/arpa/inet.h b/libc-top-half/musl/include/arpa/inet.h
+--- a/libc-top-half/musl/include/arpa/inet.h
++++ b/libc-top-half/musl/include/arpa/inet.h
+@@ -13,8 +13,9 @@
+ uint32_t ntohl(uint32_t);
+ uint16_t ntohs(uint16_t);
+ 
+-#ifdef __wasilibc_unmodified_upstream /* WASI has no inet_addr */
++/* wasix: inet_addr is built from musl's network/inet_addr.c */
+ in_addr_t inet_addr (const char *);
++#ifdef __wasilibc_unmodified_upstream /* WASI has no inet_network */
+ in_addr_t inet_network (const char *);
+ #endif
+ char *inet_ntoa (struct in_addr);
