@@ -1,0 +1,28 @@
+# soundfile for wasix. It cffi-dlopens libsndfile at import, so the library is
+# bundled into the wheel rather than referenced by a store path a bare wasix target
+# lacks. Upstream already ships that machinery through _soundfile_data; only its
+# runtime platform switch needs a wasix branch, sys.platform being unknown to it.
+{
+  final,
+  lib,
+  pyprev,
+  helpers,
+  ...
+}:
+helpers.libTweaks {
+  # setup.py derives the bundled libname from these; keep the runtime name below in step
+  env = {
+    PYSOUNDFILE_PLATFORM = "linux";
+    PYSOUNDFILE_ARCHITECTURE = "wasm32";
+  };
+  # _soundfile_data must be a real package, not a namespace one: the loader reads
+  # its __file__. `_:` replaces nixpkgs' postPatch, which bakes a store path.
+  postPatch = _: ''
+    install -Dm644 ${lib.getLib final.libsndfile}/lib/libsndfile.so _soundfile_data/libsndfile_wasm32.so
+    touch _soundfile_data/__init__.py
+    substituteInPlace soundfile.py \
+      --replace-fail "raise OSError('no packaged library for this platform')" \
+                     "_packaged_libname = 'libsndfile_wasm32.so'"
+  '';
+}
+pyprev.soundfile
