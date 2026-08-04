@@ -1,33 +1,8 @@
 # Python wheels wasinix ships (nixpkgs python3.pkgs attr names); drives the
-# pythonWheels build targets and import smoke-tests. Build fixes, when needed,
-# live in overlay/python-packages/<attr>.nix and fold in automatically.
-# Behavioural tests beyond the bare import live in
-# overlay/python-packages/<attr>/tests/*.nix (see pkgs/python-wheels.nix runPython).
-#
-# Each entry:
-#   attr      python3.pkgs.<attr> (also the build-target / CI key)
-#   pyImport  module the smoke-test imports (default: attr with '-' -> '_')
-#   skipTest  ship without an import test (rare; note why)
-#   noarch    build ONCE on the default python instead of per interpreter. Only for
-#             genuinely python-version-independent packages that ship no python code
-#             (a redistributed binary, e.g. pandoc-binary). A py3-none-any tag alone
-#             is NOT enough: a pure-python library still depends on python. The
-#             noarch-tag check enforces the tag; the "no python code" call is yours.
-#
-# Older releases also built and served (registry history) live in history.json,
-# keyed by attr then version. The spec re-points the package's OWN src fetcher
-# at that version (via src.override): {version;hash} for fetchPypi,
-# {tag|rev;hash} for fetchFromGitHub, {url;hash} for a fetchurl release
-# tarball; a rust wheel also needs {cargoHash}, since its crates are vendored
-# from the Cargo.lock in that src; plus optional {variants ? all; note ? ""}. `variants` is the
-# set-neutral history gate (load-packages.nix); for wheels a variant is an
-# interpreter, so e.g. {"variants": ["py313"]} ships only on cp313 (cp314
-# support often starts later). JSON so tooling can edit it; maintained by
-# scripts/history.py. Published wheels never disappear; an entry only keeps the
-# version REbuildable. Keep just versions consumers pin: latest per major,
-# occasionally latest per minor. Each is minted in the current python set
-# (load-packages.nix history) with the src rebased, so the package's tweak file
-# applies with its version conditionals.
+# pythonWheels targets and import smoke-tests. Entry: {attr, pyImport ? nixpkgs'
+# pythonImportsCheck, skipTest, noarch = build once for packages shipping no
+# python code, publishOnce = publish the default interpreter's ABI3 artifact}.
+# Fixes in <attr>.nix, tests in <attr>/tests/, docs/packaging.md.
 [
   # ── pure-python (no C extension) ───────────────────────────────────────────────
   {attr = "six";}
@@ -91,6 +66,11 @@
     pyImport = "png";
   }
   {attr = "greenback";}
+  {attr = "chardet";}
+  {attr = "tomli";}
+  {attr = "pytokens";}
+  {attr = "black";} # mypyc speedups optional; ships a pure fallback
+  {attr = "thrift";} # fastbinary C accelerator optional; pure fallback
   {attr = "envier";} # overlay/python-packages/envier.nix (not in nixpkgs; ddtrace's config lib)
   {attr = "eventlet";} # needs the stdlib ssl module (greendns imports it)
   {
@@ -116,8 +96,68 @@
     pyImport = "google._upb._message";
   }
 
+  {attr = "boto3";}
+  {attr = "botocore";}
+  {attr = "jmespath";}
+  {attr = "s3transfer";}
+  {attr = "pytest";}
+  {attr = "pluggy";}
+  {attr = "iniconfig";}
+  {attr = "beautifulsoup4";} # imports bs4 (nixpkgs pythonImportsCheck)
+  {
+    attr = "soupsieve";
+    # imports bs4 at top level, absent from its own closure; the beautifulsoup4
+    # test above already exercises this cross build (bs4 pulls soupsieve).
+    skipTest = true;
+  }
+  {attr = "more-itertools";}
+  {attr = "tomlkit";}
+  {attr = "exceptiongroup";}
+  {attr = "cachetools";}
+  {attr = "pyasn1";}
+  {attr = "pyasn1-modules";}
+  {attr = "oauthlib";}
+  {attr = "requests-oauthlib";}
+  {attr = "h11";}
+  {attr = "httpcore";}
+  {attr = "httpx";}
+  {attr = "anyio";}
+  {attr = "starlette";}
+  {attr = "fastapi";}
+  {attr = "click";}
+  {attr = "pygments";}
+  {attr = "mdurl";}
+  {attr = "markdown-it-py";} # imports markdown_it
+  {attr = "rich";}
+  {attr = "colorama";}
+  {attr = "wcwidth";}
+  {attr = "decorator";}
+  {attr = "sortedcontainers";}
+  {attr = "docutils";}
+  {
+    attr = "websocket-client";
+    pyImport = "websocket";
+  }
+  {attr = "openpyxl";}
+  {attr = "et-xmlfile";}
+  {attr = "networkx";}
+  {attr = "werkzeug";}
+  {attr = "redis";}
+  {attr = "prompt-toolkit";}
+  {attr = "pytest-asyncio";}
+  {attr = "rsa";}
+  {attr = "textual";}
+
   # ── C extensions with no external C library ────────────────────────────────────
   {attr = "cffi";} # overlay/python-packages/cffi.nix (libffi ffi_closure_alloc)
+  {attr = "argon2-cffi-bindings";} # cffi + vendored argon2 C; imports _argon2_cffi_bindings
+  {
+    attr = "ruamel-yaml-clib";
+    # the _ruamel_yaml module init imports the ruamel.yaml companion, absent from
+    # a standalone closure; ruamel.yaml consumers exercise the load.
+    skipTest = true;
+  }
+  {attr = "debugpy";}
   {attr = "markupsafe";}
   {attr = "msgpack";}
   {attr = "regex";}
@@ -162,6 +202,38 @@
     attr = "clickhouse-connect";
     pyImport = "clickhouse_connect";
   }
+  {attr = "mmh3";}
+  {attr = "msgspec";}
+  {attr = "pybase64";}
+  {attr = "setproctitle";} # no prctl and no argv to rewrite; falls back to its no-op pure module
+  {attr = "ijson";} # the pure default backend; the C one needs yajl
+  {attr = "tree-sitter";} # vendored tree-sitter core
+  {attr = "ujson";} # vendored double-conversion; -lstdc++ mapped by wasixcc
+  {attr = "pymongo";} # optional bson C speedups, vendored
+  # spaCy's cython C++ support libs; each drops a hand-added host include (cymem.nix).
+  {attr = "cymem";}
+  {attr = "murmurhash";}
+  {attr = "preshed";}
+  {attr = "srsly";}
+  # both ship a pure fallback upstream, so target the compiled module.
+  {
+    attr = "simplejson";
+    pyImport = "simplejson._speedups";
+  }
+  {
+    attr = "coverage";
+    pyImport = "coverage.tracer";
+  }
+  {
+    attr = "cbor2";
+    # the Rust accelerator is the submodule cbor2._cbor2, not a top-level _cbor2.
+    pyImport = "cbor2";
+  }
+  {attr = "lazy-object-proxy";}
+  {
+    attr = "rapidfuzz";
+    pyImport = "rapidfuzz.fuzz";
+  } # scikit-build-core + C++20; overlay/python-packages/rapidfuzz.nix
 
   # ── meson-built wheels ─────────────────────────────────────────────────────────
   {attr = "contourpy";}
@@ -171,9 +243,30 @@
     attr = "matplotlib";
     pyImport = "matplotlib.pyplot";
   } # overlay/python-packages/matplotlib.nix
+  {
+    attr = "scipy";
+    # scipy.linalg loads _fblas/_flapack, exercising the reference BLAS link.
+    pyImport = "scipy.linalg";
+  } # lapack-reference + flang-rt; overlay/python-packages/scipy.nix
+  {
+    attr = "scikit-learn";
+    # sklearn.cluster loads the OpenMP-parallel KMeans extension.
+    pyImport = "sklearn.cluster";
+  } # libomp; overlay/python-packages/scikit-learn
+  {
+    attr = "statsmodels";
+    # statsmodels.api pulls the compiled extensions, which cimport
+    # scipy.linalg.cython_blas/cython_lapack.
+    pyImport = "statsmodels.api";
+  }
 
   # ── C extensions linking a C library already in the overlay ────────────────────
   # import targets reach the compiled module so the smoke-test exercises the .so.
+  {
+    attr = "pyyaml";
+    # only yaml._yaml proves libyaml linked; plain `yaml` has a pure fallback.
+    pyImport = "yaml._yaml";
+  } # libyaml
   {
     attr = "pillow";
     pyImport = "PIL.Image";
@@ -200,19 +293,49 @@
     attr = "pynacl";
     pyImport = "nacl.bindings";
   } # libsodium; overlay/python-packages/pynacl.nix
-  {attr = "psycopg";} # libpq via psycopg-c; overlay/python-packages/psycopg.nix
+  {
+    attr = "psycopg";
+    # nixpkgs' check also imports psycopg_c/psycopg_pool, absent from this closure.
+    pyImport = "psycopg";
+  } # libpq via psycopg-c; overlay/python-packages/psycopg.nix
   {
     attr = "psycopg-binary";
     # upstream guards psycopg_binary against being imported before psycopg;
     # the explicit .pq import then exercises the compiled module.
     pyImport = "psycopg, psycopg_binary.pq";
   } # renamed psycopg-c (pip's `psycopg[binary]`); overlay/python-packages/psycopg-binary.nix
+  {attr = "psycopg2";} # libpq via native pg_config splice; overlay/python-packages/psycopg2.nix
   {
     attr = "pyzbar";
     # loads libzbar.so via ctypes at this import, exercising the dylib.
     pyImport = "pyzbar.pyzbar";
   } # zbar (the overlay's one shared lib); overlay/python-packages/pyzbar.nix
   {attr = "shapely";} # geos; overlay/packages/geos.nix
+  {attr = "soundfile";} # libsndfile bundled into the wheel; overlay/python-packages/soundfile.nix
+  {attr = "sentencepiece";} # SWIG ext links overlay/packages/sentencepiece.nix (static)
+  {
+    attr = "pyzmq";
+    pyImport = "zmq";
+  } # static libzmq; overlay/packages/zeromq.nix + overlay/python-packages/pyzmq (scikit-build-core)
+  {attr = "duckdb";} # scikit-build-core; overlay/python-packages/duckdb.nix (unity engine build)
+  {attr = "h5py";} # cython ext links static libhdf5; overlay/packages/hdf5.nix + overlay/python-packages/h5py.nix
+  {
+    attr = "opencv-python";
+    # nixpkgs' opencv-python is a metapackage over the python `opencv4` module.
+    pyImport = "cv2";
+  } # overlay/packages/opencv4 + overlay/python-packages/opencv4.nix
+  {attr = "snowflake-connector-python";} # bundled nanoarrow C++ result-parser ext; overlay/python-packages/snowflake-connector-python.nix (dontCheckRuntimeDeps)
+  {
+    attr = "onnx";
+    # The cp312-abi3 artifact works on both interpreters. Keep both wrappers for
+    # tests and dependency closures, but publish only the default one's wheel.
+    publishOnce = true;
+  } # overlay/packages/{protobuf,onnx} + ml-dtypes
+  {
+    attr = "onnxruntime";
+    # the pybind11 inference engine, built per interpreter (it is not abi3).
+    pyImport = "onnxruntime";
+  } # overlay/packages/onnxruntime + overlay/python-packages/onnxruntime.nix
   {
     attr = "google-crc32c";
     pyImport = "google_crc32c";
@@ -235,6 +358,22 @@
   {attr = "httptools";} # cython + vendored llhttp; overlay/python-packages/httptools.nix (llhttp __wasm__ guard)
 
   # ── rust (pyo3 / setuptools-rust) extensions ───────────────────────────────────
+  {
+    attr = "pendulum";
+    # ships a pure fallback upstream, so reach the compiled module.
+    pyImport = "pendulum._pendulum";
+  } # maturin
+  {attr = "safetensors";} # maturin (pyo3)
+  {attr = "cachebox";} # maturin/pyo3 (not in nixpkgs); overlay/python-packages/cachebox.nix
+  {
+    attr = "dbt-extractor";
+    pyImport = "dbt_extractor";
+  } # maturin/pyo3 (dbt jinja parser)
+  {attr = "libcst";} # setuptools-rust (native CST parser)
+  {
+    attr = "hf-xet";
+    pyImport = "hf_xet";
+  } # maturin; overlay/python-packages/hf-xet.nix (tokio/mio + wasm->browser cfg)
   {attr = "jiter";} # overlay/python-packages/jiter.nix (maturin; anthropic/openai JSON core)
   {attr = "watchfiles";} # overlay/python-packages/watchfiles.nix (maturin; uvicorn --reload watcher)
   {
@@ -279,7 +418,7 @@
     attr = "pydantic-ai-slim";
     pyImport = "pydantic_ai";
   } # Pydantic AI (pydantic-core; no new Rust)
-  {attr = "langgraph";} # LangGraph (ormsgpack + uuid-utils, both now fixed)
+  {attr = "langgraph";} # LangGraph (ormsgpack + uuid-utils)
   {attr = "langchain";} # LangChain (langgraph + langchain-core)
   {attr = "litellm";} # LiteLLM (tokenizers + tiktoken + fastuuid + openai)
 ]
