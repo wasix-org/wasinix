@@ -1,0 +1,38 @@
+--- a/include/flang/Optimizer/Builder/Runtime/RTBuilder.h
++++ b/include/flang/Optimizer/Builder/Runtime/RTBuilder.h
+@@ -87,7 +87,7 @@
+       auto voidTy = fir::LLVMPointerType::get(                                 \
+           context, mlir::IntegerType::get(context, 8));                        \
+       auto size_tTy =                                                          \
+-          mlir::IntegerType::get(context, 8 * sizeof(std::size_t));            \
++          mlir::IntegerType::get(context, /*wasm32 pointer-width*/ 32);            \
+       auto refTy = fir::ReferenceType::get(f(context));                        \
+       return mlir::FunctionType::get(                                          \
+           context, {refTy, size_tTy, refTy, refTy, size_tTy, size_tTy},        \
+@@ -261,7 +261,7 @@
+ template <>
+ constexpr TypeBuilderFunc getModel<long>() {
+   return [](mlir::MLIRContext *context) -> mlir::Type {
+-    return mlir::IntegerType::get(context, 8 * sizeof(long));
++    return mlir::IntegerType::get(context, /*wasm32 pointer-width*/ 32);
+   };
+ }
+ template <>
+@@ -310,7 +310,7 @@
+ template <>
+ constexpr TypeBuilderFunc getModel<unsigned long>() {
+   return [](mlir::MLIRContext *context) -> mlir::Type {
+-    return mlir::IntegerType::get(context, 8 * sizeof(unsigned long));
++    return mlir::IntegerType::get(context, /*wasm32 pointer-width*/ 32);
+   };
+ }
+ template <>
+@@ -450,7 +450,7 @@
+ constexpr TypeBuilderFunc getModel<unsigned long *>() {
+   return [](mlir::MLIRContext *context) -> mlir::Type {
+     return fir::ReferenceType::get(
+-        mlir::IntegerType::get(context, 8 * sizeof(unsigned long)));
++        mlir::IntegerType::get(context, /*wasm32 pointer-width*/ 32));
+   };
+ }
+ template <>

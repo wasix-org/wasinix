@@ -1,0 +1,40 @@
+--- a/lib/Optimizer/Builder/Runtime/Main.cpp
++++ b/lib/Optimizer/Builder/Runtime/Main.cpp
+@@ -13,6 +13,7 @@
+ #include "flang/Optimizer/Builder/Runtime/EnvironmentDefaults.h"
+ #include "flang/Optimizer/Builder/Runtime/RTBuilder.h"
+ #include "flang/Optimizer/Dialect/FIROps.h"
++#include "flang/Optimizer/Dialect/Support/FIRContext.h"
+ #include "flang/Optimizer/Dialect/FIRType.h"
+ #include "flang/Runtime/CUDA/init.h"
+ #include "flang/Runtime/main.h"
+@@ -39,10 +40,17 @@
+       builder.createFunction(loc, RTNAME_STRING(ProgramEndStatement),
+                              mlir::FunctionType::get(context, {}, {}));
+ 
+-  // int main(int argc, char** argv, char** envp)
++  // WASI's crt calls __main_argc_argv(argc, argv) -- the symbol clang gives a
++  // two-argument main on wasi -- and passes no envp. A three-argument main
++  // named "main" leaves that reference unresolved. Emit __main_argc_argv(argc,
++  // argv) on wasm and hand ProgramStart a null envp; keep POSIX main elsewhere.
++  const bool isWasm = fir::getTargetTriple(builder.getModule()).isWasm();
++  llvm::StringRef mainName = isWasm ? "__main_argc_argv" : "main";
++  llvm::SmallVector<mlir::Type> mainArgTys{argcTy, ptrTy};
++  if (!isWasm)
++    mainArgTys.push_back(ptrTy); // envp
+   auto mainFn = builder.createFunction(
+-      loc, "main",
+-      mlir::FunctionType::get(context, {argcTy, ptrTy, ptrTy}, argcTy));
++      loc, mainName, mlir::FunctionType::get(context, mainArgTys, argcTy));
+   // void _QQmain()
+   auto qqMainFn = builder.createFunction(
+       loc, "_QQmain", mlir::FunctionType::get(context, {}, {}));
+@@ -60,6 +68,8 @@
+   auto env = fir::runtime::genEnvironmentDefaults(builder, loc, defs);
+ 
+   llvm::SmallVector<mlir::Value, 4> args(block->getArguments());
++  if (isWasm)
++    args.push_back(builder.create<fir::ZeroOp>(loc, ptrTy)); // null envp
+   args.push_back(env);
+ 
+   builder.create<fir::CallOp>(loc, startFn, args);
