@@ -1,0 +1,55 @@
+flang emits the standard F77 hidden-length ABI for CHARACTER dummy arguments:
+one trailing size_t per char arg, appended after all explicit args. scipy's
+cython_blas/cython_lapack wrappers declare and call the Fortran symbols without
+those hidden lengths, which is harmless where a lax C ABI ignores extra
+arguments but traps under wasm's strictly-typed call_indirect
+(signature_mismatch:dgemm_). Regenerate the wrappers so the wasm signature
+matches the flang reference BLAS/LAPACK. Every wrapped char arg is a CHARACTER*1
+flag (ilaenv/xerbla are not wrapped, and LSAME ignores the length), so length 1
+is always correct. Only the internal _fortran_<name> extern and its call change;
+the public cdef wrapper signature is untouched, so cython_blas/cython_lapack
+consumers (scikit-learn, ...) stay ABI-compatible.
+
+--- a/scipy/linalg/_generate_pyx.py
++++ b/scipy/linalg/_generate_pyx.py
+@@ -538,6 +538,18 @@
+     if name in WRAPPED_FUNCS:
+         pyx_call_args[0] = ''.join([arg_casts(c_argtypes[0]), '&', argnames[0]])
+     pyx_call_args = ', '.join(pyx_call_args)
++    # WASIX: flang emits the standard F77 hidden-length ABI for CHARACTER args
++    # (one trailing size_t per char arg). These cython wrappers omit them, which
++    # is harmless where a lax C ABI ignores extra args but traps under wasm's
++    # strictly-typed call_indirect. Append them so the wasm signature matches the
++    # flang reference BLAS/LAPACK. Every wrapped char arg is a CHARACTER*1 flag
++    # (ilaenv/xerbla are not wrapped), so the length is always 1 and LSAME reads
++    # only the first character regardless. The public wrapper signature
++    # (pyx_input_args) is untouched, so consumers stay ABI-compatible.
++    n_charlen = c_argtypes.count('char')
++    if n_charlen:
++        c_proto += ''.join(f', size_t _charlen{i}' for i in range(n_charlen))
++        pyx_call_args += ', ' + ', '.join(['1'] * n_charlen)
+     blas_macro, blas_name = get_blas_macro_and_name(name, accelerate, ilp64)
+     return f"""
+ cdef extern from "{header_name}":
+@@ -692,6 +704,10 @@
+         c_return_type = 'void'
+     blas_macro, blas_name = get_blas_macro_and_name(name, accelerate, ilp64)
+     c_args = ', '.join(f'{t} *{n}' for t, n in zip(c_argtypes, argnames))
++    # WASIX: match flang's hidden CHARACTER-length args (see generate_decl_pyx).
++    n_charlen = c_argtypes.count('char')
++    if n_charlen:
++        c_args += ''.join(f', size_t _charlen{i}' for i in range(n_charlen))
+     return f"{c_return_type} {blas_macro}({blas_name})({c_args});\n"
+
+
+@@ -703,7 +719,9 @@
+         preamble = [C_PREAMBLE, LAPACK_DECLS]
+     else:
+         raise RuntimeError(f'Unrecognized lib_name: {lib_name}.')
+-    preamble = ['/*\n', *COMMENT_TEXT, '*/\n'] + preamble + [CPP_GUARD_BEGIN]
++    preamble = ['/*\n', *COMMENT_TEXT, '*/\n',
++                '#include <stddef.h>  /* WASIX: size_t for hidden charlen args */\n'
++                ] + preamble + [CPP_GUARD_BEGIN]
+     decls = [generate_decl_c(**sig, accelerate=accelerate, ilp64=ilp64)
+              for sig in sigs]
+     content = preamble + decls + [CPP_GUARD_END]

@@ -1,0 +1,1438 @@
+flang emits the standard F77 hidden-length ABI for CHARACTER dummy arguments:
+one trailing size_t per CHARACTER*1 flag arg (TRANS/UPLO/DIAG/SIDE/JOBZ/...),
+appended after all explicit args. scipy's hand-written C/C++ glue and every
+vendored solver it bundles (SuperLU, PROPACK, the ARPACK "arnaud" C port)
+declare and call the Fortran BLAS/LAPACK symbols WITHOUT those hidden lengths,
+which is harmless where a lax C ABI ignores extra args but traps under wasm's
+strictly typed call_indirect / dylib import (signature_mismatch:<sym>). scipy's
+_batched_linalg additionally declares ?getrf/?getri as CBLAS_INT-returning
+though flang's subroutines return void, a return-type mismatch under the same
+strict typing. The f2py and cython_blas/cython_lapack paths already pass the
+lengths (the latter via scipy-cython-blas-fortran-charlen.patch); this patch
+brings every remaining hand-C declaration site to the same 15-arg-everywhere ABI.
+
+For every affected routine each header now binds the true flang symbol to a
+private C name via an asm label (carrying the hidden size_t lengths, and a void
+return for the mis-declared ?getrf/?getri), defines a static inline wrapper
+under a DISTINCT name that forwards and appends length 1 per char arg (every
+wrapped arg is CHARACTER*1; LSAME reads only the first character, so the length
+is always 1), and #(re)defines the public mangled name to the wrapper so
+existing call sites bind to it with no edits. The wrapper must NOT reuse the true
+symbol name: an asm label pointing at a same-named static inline makes the call
+bind back to the wrapper, i.e. infinite self-recursion under wasm-ld. The whole
+transform is gated on __wasi__/__wasm__, so non-wasm builds are unchanged.
+
+Sites, by module: optimize _lbfgsb/_slsqp/nnls (optimize/src/blaslapack_
+declarations.h); integrate _odepack/_vode (integrate/src/blaslapack_declarations.h);
+linalg _internal_matfuncs expm/sqrtm (_common_array_utils.h) and _batched_linalg
+(_common_array_utils.hh, incl. the getrf/getri return-type fix); sparse _superlu
+(SuperLU/SRC/slu_[sdcz]defs.h, whose vendor-BLAS names are config-remapped, so
+the redirect #undefs first); sparse _propack (PROPACK/src/include/blaslapack_
+declarations.h); sparse arpack _arpacklib (arnaud/src/blaslapack_declarations.h,
+ARNAUD_BLAS == BLAS_FUNC). Hidden-length counts and void returns were verified
+against the flang-built reference lib arities (dgemm_ 15, dgemv_ 12, dgees_ 17,
+dtrsyl_ 15, dtrevc_ 16, dgetri_ 7-void, ...).
+
+The one remaining wasm-ld warning, cython_lapack chla_transtype_, is a CHARACTER-
+RETURNING helper (a different hidden result-buffer ABI) that scipy never calls
+directly; left as-is. Assumes the Fortran suffix is `_` (our reference build).
+--- a/scipy/optimize/src/blaslapack_declarations.h
++++ b/scipy/optimize/src/blaslapack_declarations.h
+@@ -24,4 +24,79 @@
+ void   BLAS_FUNC(dpotrf)(char* uplo, CBLAS_INT* n, double* a, CBLAS_INT* lda, CBLAS_INT* info);
+ void   BLAS_FUNC(dtrtrs)(char* uplo, char* trans, char* diag, CBLAS_INT* n, CBLAS_INT* nrhs, double* a, CBLAS_INT* lda, double* b, CBLAS_INT* ldb, CBLAS_INT* info);
+ 
++
++/*
++ * WASIX: flang compiles the Netlib reference BLAS/LAPACK with the standard F77
++ * hidden-CHARACTER-length ABI: one trailing size_t per CHARACTER*1 flag arg
++ * (TRANS/UPLO/DIAG/SIDE/JOBZ/...), appended after ALL explicit args. These
++ * declarations omit those lengths (and declare ?getrf/?getri as CBLAS_INT-
++ * returning though the flang subroutines return void), which is harmless where a
++ * lax C ABI ignores the difference but traps under wasm's strictly typed
++ * call_indirect / dylib import (signature_mismatch:<sym>). For each affected
++ * routine, bind the true flang symbol to a private C name via an asm label (with
++ * the hidden lengths / void return), then redirect the public name to a static
++ * inline wrapper that appends length 1 per char arg (every wrapped arg is
++ * CHARACTER*1; LSAME reads only the first character). The wrapper needs a
++ * DISTINCT name from the true symbol: reusing it makes the asm label bind the
++ * call back to the wrapper (self-recursion under wasm-ld). Counts/return types
++ * verified against the flang-built reference lib arities. See scipy.nix.
++ */
++#if defined(__wasi__) || defined(__wasm__)
++#include <stddef.h>
++#ifndef SCIPY_WASIX_STR
++#define SCIPY_WASIX_STR2(x) #x
++#define SCIPY_WASIX_STR(x) SCIPY_WASIX_STR2(x)
++#endif
++
++#undef dgemv_
++extern void scipy_wasix_real_dgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, double* alpha, double* a, CBLAS_INT* lda, double* x, CBLAS_INT* incx, double* beta, double* y, CBLAS_INT* incy, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgemv)));
++static inline void scipy_wasix_dgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, double* alpha, double* a, CBLAS_INT* lda, double* x, CBLAS_INT* incx, double* beta, double* y, CBLAS_INT* incy) { scipy_wasix_real_dgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy, 1); }
++#define dgemv_ scipy_wasix_dgemv
++
++#undef dlarf_
++extern void scipy_wasix_real_dlarf(char* side, CBLAS_INT* m, CBLAS_INT* n, double* v, CBLAS_INT* incv, double* tau, double* c, CBLAS_INT* ldc, double* work, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dlarf)));
++static inline void scipy_wasix_dlarf(char* side, CBLAS_INT* m, CBLAS_INT* n, double* v, CBLAS_INT* incv, double* tau, double* c, CBLAS_INT* ldc, double* work) { scipy_wasix_real_dlarf(side, m, n, v, incv, tau, c, ldc, work, 1); }
++#define dlarf_ scipy_wasix_dlarf
++
++#undef dorm2r_
++extern void scipy_wasix_real_dorm2r(char* side, char* trans, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, double* a, CBLAS_INT* lda, double* tau, double* c, CBLAS_INT* ldc, double* work, CBLAS_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dorm2r)));
++static inline void scipy_wasix_dorm2r(char* side, char* trans, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, double* a, CBLAS_INT* lda, double* tau, double* c, CBLAS_INT* ldc, double* work, CBLAS_INT* info) { scipy_wasix_real_dorm2r(side, trans, m, n, k, a, lda, tau, c, ldc, work, info, 1, 1); }
++#define dorm2r_ scipy_wasix_dorm2r
++
++#undef dormr2_
++extern void scipy_wasix_real_dormr2(char* side, char* trans, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, double* a, CBLAS_INT* lda, double* tau, double* c, CBLAS_INT* ldc, double* work, CBLAS_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dormr2)));
++static inline void scipy_wasix_dormr2(char* side, char* trans, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, double* a, CBLAS_INT* lda, double* tau, double* c, CBLAS_INT* ldc, double* work, CBLAS_INT* info) { scipy_wasix_real_dormr2(side, trans, m, n, k, a, lda, tau, c, ldc, work, info, 1, 1); }
++#define dormr2_ scipy_wasix_dormr2
++
++#undef dtpmv_
++extern void scipy_wasix_real_dtpmv(char* uplo, char* trans, char* diag, CBLAS_INT* n, double* ap, double* x, CBLAS_INT* incx, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dtpmv)));
++static inline void scipy_wasix_dtpmv(char* uplo, char* trans, char* diag, CBLAS_INT* n, double* ap, double* x, CBLAS_INT* incx) { scipy_wasix_real_dtpmv(uplo, trans, diag, n, ap, x, incx, 1, 1, 1); }
++#define dtpmv_ scipy_wasix_dtpmv
++
++#undef dtpsv_
++extern void scipy_wasix_real_dtpsv(char* uplo, char* trans, char* diag, CBLAS_INT* n, double* ap, double* x, CBLAS_INT* incx, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dtpsv)));
++static inline void scipy_wasix_dtpsv(char* uplo, char* trans, char* diag, CBLAS_INT* n, double* ap, double* x, CBLAS_INT* incx) { scipy_wasix_real_dtpsv(uplo, trans, diag, n, ap, x, incx, 1, 1, 1); }
++#define dtpsv_ scipy_wasix_dtpsv
++
++#undef dtrsm_
++extern void scipy_wasix_real_dtrsm(char* side, char* uplo, char* transa, char* diag, CBLAS_INT* m, CBLAS_INT* n, double* alpha, double* a, CBLAS_INT* lda, double* b, CBLAS_INT* ldb, size_t, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dtrsm)));
++static inline void scipy_wasix_dtrsm(char* side, char* uplo, char* transa, char* diag, CBLAS_INT* m, CBLAS_INT* n, double* alpha, double* a, CBLAS_INT* lda, double* b, CBLAS_INT* ldb) { scipy_wasix_real_dtrsm(side, uplo, transa, diag, m, n, alpha, a, lda, b, ldb, 1, 1, 1, 1); }
++#define dtrsm_ scipy_wasix_dtrsm
++
++#undef dtrsv_
++extern void scipy_wasix_real_dtrsv(char* uplo, char* trans, char* diag, CBLAS_INT* n, double* a, CBLAS_INT* lda, double* x, CBLAS_INT* incx, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dtrsv)));
++static inline void scipy_wasix_dtrsv(char* uplo, char* trans, char* diag, CBLAS_INT* n, double* a, CBLAS_INT* lda, double* x, CBLAS_INT* incx) { scipy_wasix_real_dtrsv(uplo, trans, diag, n, a, lda, x, incx, 1, 1, 1); }
++#define dtrsv_ scipy_wasix_dtrsv
++
++#undef dpotrf_
++extern void scipy_wasix_real_dpotrf(char* uplo, CBLAS_INT* n, double* a, CBLAS_INT* lda, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dpotrf)));
++static inline void scipy_wasix_dpotrf(char* uplo, CBLAS_INT* n, double* a, CBLAS_INT* lda, CBLAS_INT* info) { scipy_wasix_real_dpotrf(uplo, n, a, lda, info, 1); }
++#define dpotrf_ scipy_wasix_dpotrf
++
++#undef dtrtrs_
++extern void scipy_wasix_real_dtrtrs(char* uplo, char* trans, char* diag, CBLAS_INT* n, CBLAS_INT* nrhs, double* a, CBLAS_INT* lda, double* b, CBLAS_INT* ldb, CBLAS_INT* info, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dtrtrs)));
++static inline void scipy_wasix_dtrtrs(char* uplo, char* trans, char* diag, CBLAS_INT* n, CBLAS_INT* nrhs, double* a, CBLAS_INT* lda, double* b, CBLAS_INT* ldb, CBLAS_INT* info) { scipy_wasix_real_dtrtrs(uplo, trans, diag, n, nrhs, a, lda, b, ldb, info, 1, 1, 1); }
++#define dtrtrs_ scipy_wasix_dtrtrs
++#endif  /* wasm charlen redirects */
++
+ #endif
+--- a/scipy/linalg/src/_common_array_utils.h
++++ b/scipy/linalg/src/_common_array_utils.h
+@@ -401,4 +401,129 @@
+     return 1;
+ }
+ 
++
++/*
++ * WASIX: flang compiles the Netlib reference BLAS/LAPACK with the standard F77
++ * hidden-CHARACTER-length ABI: one trailing size_t per CHARACTER*1 flag arg
++ * (TRANS/UPLO/DIAG/SIDE/JOBZ/...), appended after ALL explicit args. These
++ * declarations omit those lengths (and declare ?getrf/?getri as CBLAS_INT-
++ * returning though the flang subroutines return void), which is harmless where a
++ * lax C ABI ignores the difference but traps under wasm's strictly typed
++ * call_indirect / dylib import (signature_mismatch:<sym>). For each affected
++ * routine, bind the true flang symbol to a private C name via an asm label (with
++ * the hidden lengths / void return), then redirect the public name to a static
++ * inline wrapper that appends length 1 per char arg (every wrapped arg is
++ * CHARACTER*1; LSAME reads only the first character). The wrapper needs a
++ * DISTINCT name from the true symbol: reusing it makes the asm label bind the
++ * call back to the wrapper (self-recursion under wasm-ld). Counts/return types
++ * verified against the flang-built reference lib arities. See scipy.nix.
++ */
++#if defined(__wasi__) || defined(__wasm__)
++#include <stddef.h>
++#ifndef SCIPY_WASIX_STR
++#define SCIPY_WASIX_STR2(x) #x
++#define SCIPY_WASIX_STR(x) SCIPY_WASIX_STR2(x)
++#endif
++
++#undef sgees_
++extern void scipy_wasix_real_sgees(char* jobvs, char* sort, int (*select)(float*, float*), CBLAS_INT* n, float* a, CBLAS_INT* lda, CBLAS_INT* sdim, float* wr, float* wi, float* vs, CBLAS_INT* ldvs, float* work, CBLAS_INT* lwork, CBLAS_INT* bwork, CBLAS_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sgees)));
++static inline void scipy_wasix_sgees(char* jobvs, char* sort, int (*select)(float*, float*), CBLAS_INT* n, float* a, CBLAS_INT* lda, CBLAS_INT* sdim, float* wr, float* wi, float* vs, CBLAS_INT* ldvs, float* work, CBLAS_INT* lwork, CBLAS_INT* bwork, CBLAS_INT* info) { scipy_wasix_real_sgees(jobvs, sort, select, n, a, lda, sdim, wr, wi, vs, ldvs, work, lwork, bwork, info, 1, 1); }
++#define sgees_ scipy_wasix_sgees
++
++#undef sgemm_
++extern void scipy_wasix_real_sgemm(char* transa, char* transb, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, float* alpha, float* a, CBLAS_INT* lda, float* b, CBLAS_INT* ldb, float* beta, float* c, CBLAS_INT* ldc, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sgemm)));
++static inline void scipy_wasix_sgemm(char* transa, char* transb, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, float* alpha, float* a, CBLAS_INT* lda, float* b, CBLAS_INT* ldb, float* beta, float* c, CBLAS_INT* ldc) { scipy_wasix_real_sgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc, 1, 1); }
++#define sgemm_ scipy_wasix_sgemm
++
++#undef sgemv_
++extern void scipy_wasix_real_sgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, float* alpha, float* a, CBLAS_INT* lda, float* x, CBLAS_INT* incx, float* beta, float* y, CBLAS_INT* incy, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sgemv)));
++static inline void scipy_wasix_sgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, float* alpha, float* a, CBLAS_INT* lda, float* x, CBLAS_INT* incx, float* beta, float* y, CBLAS_INT* incy) { scipy_wasix_real_sgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy, 1); }
++#define sgemv_ scipy_wasix_sgemv
++
++#undef sgetrs_
++extern void scipy_wasix_real_sgetrs(char* trans, CBLAS_INT* n, CBLAS_INT* nrhs, float* a, CBLAS_INT* lda, CBLAS_INT* ipiv, float* b, CBLAS_INT* ldb, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sgetrs)));
++static inline void scipy_wasix_sgetrs(char* trans, CBLAS_INT* n, CBLAS_INT* nrhs, float* a, CBLAS_INT* lda, CBLAS_INT* ipiv, float* b, CBLAS_INT* ldb, CBLAS_INT* info) { scipy_wasix_real_sgetrs(trans, n, nrhs, a, lda, ipiv, b, ldb, info, 1); }
++#define sgetrs_ scipy_wasix_sgetrs
++
++#undef strsyl_
++extern void scipy_wasix_real_strsyl(char* trana, char* tranb, CBLAS_INT* isgn, CBLAS_INT* m, CBLAS_INT* n, float* a, CBLAS_INT* lda, float* b, CBLAS_INT* ldb, float* c, CBLAS_INT* ldc, float* scale, CBLAS_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(strsyl)));
++static inline void scipy_wasix_strsyl(char* trana, char* tranb, CBLAS_INT* isgn, CBLAS_INT* m, CBLAS_INT* n, float* a, CBLAS_INT* lda, float* b, CBLAS_INT* ldb, float* c, CBLAS_INT* ldc, float* scale, CBLAS_INT* info) { scipy_wasix_real_strsyl(trana, tranb, isgn, m, n, a, lda, b, ldb, c, ldc, scale, info, 1, 1); }
++#define strsyl_ scipy_wasix_strsyl
++
++#undef dgees_
++extern void scipy_wasix_real_dgees(char* jobvs, char* sort, int (*select)(double*, double*), CBLAS_INT* n, double* a, CBLAS_INT* lda, CBLAS_INT* sdim, double* wr, double* wi, double* vs, CBLAS_INT* ldvs, double* work, CBLAS_INT* lwork, CBLAS_INT* bwork, CBLAS_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgees)));
++static inline void scipy_wasix_dgees(char* jobvs, char* sort, int (*select)(double*, double*), CBLAS_INT* n, double* a, CBLAS_INT* lda, CBLAS_INT* sdim, double* wr, double* wi, double* vs, CBLAS_INT* ldvs, double* work, CBLAS_INT* lwork, CBLAS_INT* bwork, CBLAS_INT* info) { scipy_wasix_real_dgees(jobvs, sort, select, n, a, lda, sdim, wr, wi, vs, ldvs, work, lwork, bwork, info, 1, 1); }
++#define dgees_ scipy_wasix_dgees
++
++#undef dgemm_
++extern void scipy_wasix_real_dgemm(char* transa, char* transb, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, double* alpha, double* a, CBLAS_INT* lda, double* b, CBLAS_INT* ldb, double* beta, double* c, CBLAS_INT* ldc, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgemm)));
++static inline void scipy_wasix_dgemm(char* transa, char* transb, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, double* alpha, double* a, CBLAS_INT* lda, double* b, CBLAS_INT* ldb, double* beta, double* c, CBLAS_INT* ldc) { scipy_wasix_real_dgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc, 1, 1); }
++#define dgemm_ scipy_wasix_dgemm
++
++#undef dgemv_
++extern void scipy_wasix_real_dgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, double* alpha, double* a, CBLAS_INT* lda, double* x, CBLAS_INT* incx, double* beta, double* y, CBLAS_INT* incy, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgemv)));
++static inline void scipy_wasix_dgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, double* alpha, double* a, CBLAS_INT* lda, double* x, CBLAS_INT* incx, double* beta, double* y, CBLAS_INT* incy) { scipy_wasix_real_dgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy, 1); }
++#define dgemv_ scipy_wasix_dgemv
++
++#undef dgetrs_
++extern void scipy_wasix_real_dgetrs(char* trans, CBLAS_INT* n, CBLAS_INT* nrhs, double* a, CBLAS_INT* lda, CBLAS_INT* ipiv, double* b, CBLAS_INT* ldb, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgetrs)));
++static inline void scipy_wasix_dgetrs(char* trans, CBLAS_INT* n, CBLAS_INT* nrhs, double* a, CBLAS_INT* lda, CBLAS_INT* ipiv, double* b, CBLAS_INT* ldb, CBLAS_INT* info) { scipy_wasix_real_dgetrs(trans, n, nrhs, a, lda, ipiv, b, ldb, info, 1); }
++#define dgetrs_ scipy_wasix_dgetrs
++
++#undef dtrsyl_
++extern void scipy_wasix_real_dtrsyl(char* trana, char* tranb, CBLAS_INT* isgn, CBLAS_INT* m, CBLAS_INT* n, double* a, CBLAS_INT* lda, double* b, CBLAS_INT* ldb, double* c, CBLAS_INT* ldc, double* scale, CBLAS_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dtrsyl)));
++static inline void scipy_wasix_dtrsyl(char* trana, char* tranb, CBLAS_INT* isgn, CBLAS_INT* m, CBLAS_INT* n, double* a, CBLAS_INT* lda, double* b, CBLAS_INT* ldb, double* c, CBLAS_INT* ldc, double* scale, CBLAS_INT* info) { scipy_wasix_real_dtrsyl(trana, tranb, isgn, m, n, a, lda, b, ldb, c, ldc, scale, info, 1, 1); }
++#define dtrsyl_ scipy_wasix_dtrsyl
++
++#undef cgees_
++extern void scipy_wasix_real_cgees(char* jobvs, char* sort, int (*select)(SCIPY_C), CBLAS_INT* n, SCIPY_C* a, CBLAS_INT* lda, CBLAS_INT* sdim, SCIPY_C* w, SCIPY_C* vs, CBLAS_INT* ldvs, SCIPY_C* work, CBLAS_INT* lwork, float* rwork, CBLAS_INT* bwork, CBLAS_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cgees)));
++static inline void scipy_wasix_cgees(char* jobvs, char* sort, int (*select)(SCIPY_C), CBLAS_INT* n, SCIPY_C* a, CBLAS_INT* lda, CBLAS_INT* sdim, SCIPY_C* w, SCIPY_C* vs, CBLAS_INT* ldvs, SCIPY_C* work, CBLAS_INT* lwork, float* rwork, CBLAS_INT* bwork, CBLAS_INT* info) { scipy_wasix_real_cgees(jobvs, sort, select, n, a, lda, sdim, w, vs, ldvs, work, lwork, rwork, bwork, info, 1, 1); }
++#define cgees_ scipy_wasix_cgees
++
++#undef cgemm_
++extern void scipy_wasix_real_cgemm(char* transa, char* transb, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, SCIPY_C* alpha, SCIPY_C* a, CBLAS_INT* lda, SCIPY_C* b, CBLAS_INT* ldb, SCIPY_C* beta, SCIPY_C* c, CBLAS_INT* ldc, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cgemm)));
++static inline void scipy_wasix_cgemm(char* transa, char* transb, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, SCIPY_C* alpha, SCIPY_C* a, CBLAS_INT* lda, SCIPY_C* b, CBLAS_INT* ldb, SCIPY_C* beta, SCIPY_C* c, CBLAS_INT* ldc) { scipy_wasix_real_cgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc, 1, 1); }
++#define cgemm_ scipy_wasix_cgemm
++
++#undef cgemv_
++extern void scipy_wasix_real_cgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, SCIPY_C* alpha, SCIPY_C* a, CBLAS_INT* lda, SCIPY_C* x, CBLAS_INT* incx, SCIPY_C* beta, SCIPY_C* y, CBLAS_INT* incy, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cgemv)));
++static inline void scipy_wasix_cgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, SCIPY_C* alpha, SCIPY_C* a, CBLAS_INT* lda, SCIPY_C* x, CBLAS_INT* incx, SCIPY_C* beta, SCIPY_C* y, CBLAS_INT* incy) { scipy_wasix_real_cgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy, 1); }
++#define cgemv_ scipy_wasix_cgemv
++
++#undef cgetrs_
++extern void scipy_wasix_real_cgetrs(char* trans, CBLAS_INT* n, CBLAS_INT* nrhs, SCIPY_C* a, CBLAS_INT* lda, CBLAS_INT* ipiv, SCIPY_C* b, CBLAS_INT* ldb, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cgetrs)));
++static inline void scipy_wasix_cgetrs(char* trans, CBLAS_INT* n, CBLAS_INT* nrhs, SCIPY_C* a, CBLAS_INT* lda, CBLAS_INT* ipiv, SCIPY_C* b, CBLAS_INT* ldb, CBLAS_INT* info) { scipy_wasix_real_cgetrs(trans, n, nrhs, a, lda, ipiv, b, ldb, info, 1); }
++#define cgetrs_ scipy_wasix_cgetrs
++
++#undef ctrsyl_
++extern void scipy_wasix_real_ctrsyl(char* trana, char* tranb, CBLAS_INT* isgn, CBLAS_INT* m, CBLAS_INT* n, SCIPY_C* a, CBLAS_INT* lda, SCIPY_C* b, CBLAS_INT* ldb, SCIPY_C* c, CBLAS_INT* ldc, float* scale, CBLAS_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(ctrsyl)));
++static inline void scipy_wasix_ctrsyl(char* trana, char* tranb, CBLAS_INT* isgn, CBLAS_INT* m, CBLAS_INT* n, SCIPY_C* a, CBLAS_INT* lda, SCIPY_C* b, CBLAS_INT* ldb, SCIPY_C* c, CBLAS_INT* ldc, float* scale, CBLAS_INT* info) { scipy_wasix_real_ctrsyl(trana, tranb, isgn, m, n, a, lda, b, ldb, c, ldc, scale, info, 1, 1); }
++#define ctrsyl_ scipy_wasix_ctrsyl
++
++#undef zgees_
++extern void scipy_wasix_real_zgees(char* jobvs, char* sort, int (*select)(SCIPY_Z), CBLAS_INT* n, SCIPY_Z* a, CBLAS_INT* lda, CBLAS_INT* sdim, SCIPY_Z* w, SCIPY_Z* vs, CBLAS_INT* ldvs, SCIPY_Z* work, CBLAS_INT* lwork, double* rwork, CBLAS_INT* bwork, CBLAS_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgees)));
++static inline void scipy_wasix_zgees(char* jobvs, char* sort, int (*select)(SCIPY_Z), CBLAS_INT* n, SCIPY_Z* a, CBLAS_INT* lda, CBLAS_INT* sdim, SCIPY_Z* w, SCIPY_Z* vs, CBLAS_INT* ldvs, SCIPY_Z* work, CBLAS_INT* lwork, double* rwork, CBLAS_INT* bwork, CBLAS_INT* info) { scipy_wasix_real_zgees(jobvs, sort, select, n, a, lda, sdim, w, vs, ldvs, work, lwork, rwork, bwork, info, 1, 1); }
++#define zgees_ scipy_wasix_zgees
++
++#undef zgemm_
++extern void scipy_wasix_real_zgemm(char* transa, char* transb, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, SCIPY_Z* alpha, SCIPY_Z* a, CBLAS_INT* lda, SCIPY_Z* b, CBLAS_INT* ldb, SCIPY_Z* beta, SCIPY_Z* c, CBLAS_INT* ldc, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgemm)));
++static inline void scipy_wasix_zgemm(char* transa, char* transb, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, SCIPY_Z* alpha, SCIPY_Z* a, CBLAS_INT* lda, SCIPY_Z* b, CBLAS_INT* ldb, SCIPY_Z* beta, SCIPY_Z* c, CBLAS_INT* ldc) { scipy_wasix_real_zgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc, 1, 1); }
++#define zgemm_ scipy_wasix_zgemm
++
++#undef zgemv_
++extern void scipy_wasix_real_zgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, SCIPY_Z* alpha, SCIPY_Z* a, CBLAS_INT* lda, SCIPY_Z* x, CBLAS_INT* incx, SCIPY_Z* beta, SCIPY_Z* y, CBLAS_INT* incy, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgemv)));
++static inline void scipy_wasix_zgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, SCIPY_Z* alpha, SCIPY_Z* a, CBLAS_INT* lda, SCIPY_Z* x, CBLAS_INT* incx, SCIPY_Z* beta, SCIPY_Z* y, CBLAS_INT* incy) { scipy_wasix_real_zgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy, 1); }
++#define zgemv_ scipy_wasix_zgemv
++
++#undef zgetrs_
++extern void scipy_wasix_real_zgetrs(char* trans, CBLAS_INT* n, CBLAS_INT* nrhs, SCIPY_Z* a, CBLAS_INT* lda, CBLAS_INT* ipiv, SCIPY_Z* b, CBLAS_INT* ldb, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgetrs)));
++static inline void scipy_wasix_zgetrs(char* trans, CBLAS_INT* n, CBLAS_INT* nrhs, SCIPY_Z* a, CBLAS_INT* lda, CBLAS_INT* ipiv, SCIPY_Z* b, CBLAS_INT* ldb, CBLAS_INT* info) { scipy_wasix_real_zgetrs(trans, n, nrhs, a, lda, ipiv, b, ldb, info, 1); }
++#define zgetrs_ scipy_wasix_zgetrs
++
++#undef ztrsyl_
++extern void scipy_wasix_real_ztrsyl(char* trana, char* tranb, CBLAS_INT* isgn, CBLAS_INT* m, CBLAS_INT* n, SCIPY_Z* a, CBLAS_INT* lda, SCIPY_Z* b, CBLAS_INT* ldb, SCIPY_Z* c, CBLAS_INT* ldc, double* scale, CBLAS_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(ztrsyl)));
++static inline void scipy_wasix_ztrsyl(char* trana, char* tranb, CBLAS_INT* isgn, CBLAS_INT* m, CBLAS_INT* n, SCIPY_Z* a, CBLAS_INT* lda, SCIPY_Z* b, CBLAS_INT* ldb, SCIPY_Z* c, CBLAS_INT* ldc, double* scale, CBLAS_INT* info) { scipy_wasix_real_ztrsyl(trana, tranb, isgn, m, n, a, lda, b, ldb, c, ldc, scale, info, 1, 1); }
++#define ztrsyl_ scipy_wasix_ztrsyl
++#endif  /* wasm charlen redirects */
++
+ #endif
+--- a/scipy/linalg/src/_common_array_utils.hh
++++ b/scipy/linalg/src/_common_array_utils.hh
+@@ -264,6 +264,531 @@
+ 
+ } // extern "C"
+ 
++/*
++ * WASIX: flang compiles the Netlib reference BLAS/LAPACK with the standard F77
++ * hidden-CHARACTER-length ABI: one trailing size_t per CHARACTER*1 flag arg
++ * (TRANS/UPLO/DIAG/SIDE/JOBZ/...), appended after ALL explicit args. These
++ * declarations omit those lengths (and declare ?getrf/?getri as CBLAS_INT-
++ * returning though the flang subroutines return void), which is harmless where a
++ * lax C ABI ignores the difference but traps under wasm's strictly typed
++ * call_indirect / dylib import (signature_mismatch:<sym>). For each affected
++ * routine, bind the true flang symbol to a private C name via an asm label (with
++ * the hidden lengths / void return), then redirect the public name to a static
++ * inline wrapper that appends length 1 per char arg (every wrapped arg is
++ * CHARACTER*1; LSAME reads only the first character). The wrapper needs a
++ * DISTINCT name from the true symbol: reusing it makes the asm label bind the
++ * call back to the wrapper (self-recursion under wasm-ld). Counts/return types
++ * verified against the flang-built reference lib arities. See scipy.nix.
++ */
++#if defined(__wasi__) || defined(__wasm__)
++#include <stddef.h>
++#ifndef SCIPY_WASIX_STR
++#define SCIPY_WASIX_STR2(x) #x
++#define SCIPY_WASIX_STR(x) SCIPY_WASIX_STR2(x)
++#endif
++
++#undef sgetrf_
++extern void scipy_wasix_real_sgetrf(CBLAS_INT *m, CBLAS_INT *n, float a[], CBLAS_INT *lda, CBLAS_INT ipiv[], CBLAS_INT *info) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sgetrf)));
++static inline CBLAS_INT scipy_wasix_sgetrf(CBLAS_INT *m, CBLAS_INT *n, float a[], CBLAS_INT *lda, CBLAS_INT ipiv[], CBLAS_INT *info) { scipy_wasix_real_sgetrf(m, n, a, lda, ipiv, info); return 0; }
++#define sgetrf_ scipy_wasix_sgetrf
++
++#undef dgetrf_
++extern void scipy_wasix_real_dgetrf(CBLAS_INT *m, CBLAS_INT *n, double a[], CBLAS_INT *lda, CBLAS_INT ipiv[], CBLAS_INT *info) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgetrf)));
++static inline CBLAS_INT scipy_wasix_dgetrf(CBLAS_INT *m, CBLAS_INT *n, double a[], CBLAS_INT *lda, CBLAS_INT ipiv[], CBLAS_INT *info) { scipy_wasix_real_dgetrf(m, n, a, lda, ipiv, info); return 0; }
++#define dgetrf_ scipy_wasix_dgetrf
++
++#undef cgetrf_
++extern void scipy_wasix_real_cgetrf(CBLAS_INT *m, CBLAS_INT *n, npy_complex64 a[], CBLAS_INT *lda, CBLAS_INT ipiv[], CBLAS_INT *info) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cgetrf)));
++static inline CBLAS_INT scipy_wasix_cgetrf(CBLAS_INT *m, CBLAS_INT *n, npy_complex64 a[], CBLAS_INT *lda, CBLAS_INT ipiv[], CBLAS_INT *info) { scipy_wasix_real_cgetrf(m, n, a, lda, ipiv, info); return 0; }
++#define cgetrf_ scipy_wasix_cgetrf
++
++#undef zgetrf_
++extern void scipy_wasix_real_zgetrf(CBLAS_INT *m, CBLAS_INT *n, npy_complex128 a[], CBLAS_INT *lda, CBLAS_INT ipiv[], CBLAS_INT *info) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgetrf)));
++static inline CBLAS_INT scipy_wasix_zgetrf(CBLAS_INT *m, CBLAS_INT *n, npy_complex128 a[], CBLAS_INT *lda, CBLAS_INT ipiv[], CBLAS_INT *info) { scipy_wasix_real_zgetrf(m, n, a, lda, ipiv, info); return 0; }
++#define zgetrf_ scipy_wasix_zgetrf
++
++#undef sgetri_
++extern void scipy_wasix_real_sgetri(CBLAS_INT *n, float a[], CBLAS_INT *lda, CBLAS_INT ipiv[], float work[], CBLAS_INT *lwork, CBLAS_INT *info) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sgetri)));
++static inline CBLAS_INT scipy_wasix_sgetri(CBLAS_INT *n, float a[], CBLAS_INT *lda, CBLAS_INT ipiv[], float work[], CBLAS_INT *lwork, CBLAS_INT *info) { scipy_wasix_real_sgetri(n, a, lda, ipiv, work, lwork, info); return 0; }
++#define sgetri_ scipy_wasix_sgetri
++
++#undef dgetri_
++extern void scipy_wasix_real_dgetri(CBLAS_INT *n, double a[], CBLAS_INT *lda, CBLAS_INT ipiv[], double work[], CBLAS_INT *lwork, CBLAS_INT *info) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgetri)));
++static inline CBLAS_INT scipy_wasix_dgetri(CBLAS_INT *n, double a[], CBLAS_INT *lda, CBLAS_INT ipiv[], double work[], CBLAS_INT *lwork, CBLAS_INT *info) { scipy_wasix_real_dgetri(n, a, lda, ipiv, work, lwork, info); return 0; }
++#define dgetri_ scipy_wasix_dgetri
++
++#undef cgetri_
++extern void scipy_wasix_real_cgetri(CBLAS_INT *n, npy_complex64 a[], CBLAS_INT *lda, CBLAS_INT ipiv[], npy_complex64 work[], CBLAS_INT *lwork, CBLAS_INT *info) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cgetri)));
++static inline CBLAS_INT scipy_wasix_cgetri(CBLAS_INT *n, npy_complex64 a[], CBLAS_INT *lda, CBLAS_INT ipiv[], npy_complex64 work[], CBLAS_INT *lwork, CBLAS_INT *info) { scipy_wasix_real_cgetri(n, a, lda, ipiv, work, lwork, info); return 0; }
++#define cgetri_ scipy_wasix_cgetri
++
++#undef zgetri_
++extern void scipy_wasix_real_zgetri(CBLAS_INT *n, npy_complex128 a[], CBLAS_INT *lda, CBLAS_INT ipiv[], npy_complex128 work[], CBLAS_INT *lwork, CBLAS_INT *info) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgetri)));
++static inline CBLAS_INT scipy_wasix_zgetri(CBLAS_INT *n, npy_complex128 a[], CBLAS_INT *lda, CBLAS_INT ipiv[], npy_complex128 work[], CBLAS_INT *lwork, CBLAS_INT *info) { scipy_wasix_real_zgetri(n, a, lda, ipiv, work, lwork, info); return 0; }
++#define zgetri_ scipy_wasix_zgetri
++
++#undef sgetrs_
++extern void scipy_wasix_real_sgetrs(char *trans, CBLAS_INT *n, CBLAS_INT *nrhs, float *a, CBLAS_INT *lda, CBLAS_INT *ipiv, float *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sgetrs)));
++static inline void scipy_wasix_sgetrs(char *trans, CBLAS_INT *n, CBLAS_INT *nrhs, float *a, CBLAS_INT *lda, CBLAS_INT *ipiv, float *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_sgetrs(trans, n, nrhs, a, lda, ipiv, b, ldb, info, 1); }
++#define sgetrs_ scipy_wasix_sgetrs
++
++#undef dgetrs_
++extern void scipy_wasix_real_dgetrs(char *trans, CBLAS_INT *n, CBLAS_INT *nrhs, double *a, CBLAS_INT *lda, CBLAS_INT *ipiv, double *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgetrs)));
++static inline void scipy_wasix_dgetrs(char *trans, CBLAS_INT *n, CBLAS_INT *nrhs, double *a, CBLAS_INT *lda, CBLAS_INT *ipiv, double *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_dgetrs(trans, n, nrhs, a, lda, ipiv, b, ldb, info, 1); }
++#define dgetrs_ scipy_wasix_dgetrs
++
++#undef cgetrs_
++extern void scipy_wasix_real_cgetrs(char *trans, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex64 *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cgetrs)));
++static inline void scipy_wasix_cgetrs(char *trans, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex64 *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_cgetrs(trans, n, nrhs, a, lda, ipiv, b, ldb, info, 1); }
++#define cgetrs_ scipy_wasix_cgetrs
++
++#undef zgetrs_
++extern void scipy_wasix_real_zgetrs(char *trans, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex128 *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgetrs)));
++static inline void scipy_wasix_zgetrs(char *trans, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex128 *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_zgetrs(trans, n, nrhs, a, lda, ipiv, b, ldb, info, 1); }
++#define zgetrs_ scipy_wasix_zgetrs
++
++#undef sgecon_
++extern void scipy_wasix_real_sgecon(char* norm, CBLAS_INT* n, float* a, CBLAS_INT* lda, float* anorm, float* rcond, float* work, CBLAS_INT* iwork, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sgecon)));
++static inline void scipy_wasix_sgecon(char* norm, CBLAS_INT* n, float* a, CBLAS_INT* lda, float* anorm, float* rcond, float* work, CBLAS_INT* iwork, CBLAS_INT* info) { scipy_wasix_real_sgecon(norm, n, a, lda, anorm, rcond, work, iwork, info, 1); }
++#define sgecon_ scipy_wasix_sgecon
++
++#undef dgecon_
++extern void scipy_wasix_real_dgecon(char* norm, CBLAS_INT* n, double* a, CBLAS_INT* lda, double* anorm, double* rcond, double* work, CBLAS_INT* iwork, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgecon)));
++static inline void scipy_wasix_dgecon(char* norm, CBLAS_INT* n, double* a, CBLAS_INT* lda, double* anorm, double* rcond, double* work, CBLAS_INT* iwork, CBLAS_INT* info) { scipy_wasix_real_dgecon(norm, n, a, lda, anorm, rcond, work, iwork, info, 1); }
++#define dgecon_ scipy_wasix_dgecon
++
++#undef cgecon_
++extern void scipy_wasix_real_cgecon(char* norm, CBLAS_INT* n, npy_complex64* a, CBLAS_INT* lda, float* anorm, float* rcond, npy_complex64* work, float* rwork, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cgecon)));
++static inline void scipy_wasix_cgecon(char* norm, CBLAS_INT* n, npy_complex64* a, CBLAS_INT* lda, float* anorm, float* rcond, npy_complex64* work, float* rwork, CBLAS_INT* info) { scipy_wasix_real_cgecon(norm, n, a, lda, anorm, rcond, work, rwork, info, 1); }
++#define cgecon_ scipy_wasix_cgecon
++
++#undef zgecon_
++extern void scipy_wasix_real_zgecon(char* norm, CBLAS_INT* n, npy_complex128* a, CBLAS_INT* lda, double* anorm, double* rcond, npy_complex128* work, double* rwork, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgecon)));
++static inline void scipy_wasix_zgecon(char* norm, CBLAS_INT* n, npy_complex128* a, CBLAS_INT* lda, double* anorm, double* rcond, npy_complex128* work, double* rwork, CBLAS_INT* info) { scipy_wasix_real_zgecon(norm, n, a, lda, anorm, rcond, work, rwork, info, 1); }
++#define zgecon_ scipy_wasix_zgecon
++
++#undef strtri_
++extern void scipy_wasix_real_strtri(char *uplo, char *diag, CBLAS_INT *n, float* a, CBLAS_INT *lda, CBLAS_INT *info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(strtri)));
++static inline void scipy_wasix_strtri(char *uplo, char *diag, CBLAS_INT *n, float* a, CBLAS_INT *lda, CBLAS_INT *info) { scipy_wasix_real_strtri(uplo, diag, n, a, lda, info, 1, 1); }
++#define strtri_ scipy_wasix_strtri
++
++#undef dtrtri_
++extern void scipy_wasix_real_dtrtri(char *uplo, char *diag, CBLAS_INT *n, double* a, CBLAS_INT *lda, CBLAS_INT *info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dtrtri)));
++static inline void scipy_wasix_dtrtri(char *uplo, char *diag, CBLAS_INT *n, double* a, CBLAS_INT *lda, CBLAS_INT *info) { scipy_wasix_real_dtrtri(uplo, diag, n, a, lda, info, 1, 1); }
++#define dtrtri_ scipy_wasix_dtrtri
++
++#undef ctrtri_
++extern void scipy_wasix_real_ctrtri(char *uplo, char *diag, CBLAS_INT *n, npy_complex64* a, CBLAS_INT *lda, CBLAS_INT *info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(ctrtri)));
++static inline void scipy_wasix_ctrtri(char *uplo, char *diag, CBLAS_INT *n, npy_complex64* a, CBLAS_INT *lda, CBLAS_INT *info) { scipy_wasix_real_ctrtri(uplo, diag, n, a, lda, info, 1, 1); }
++#define ctrtri_ scipy_wasix_ctrtri
++
++#undef ztrtri_
++extern void scipy_wasix_real_ztrtri(char *uplo, char *diag, CBLAS_INT *n, npy_complex128* a, CBLAS_INT *lda, CBLAS_INT *info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(ztrtri)));
++static inline void scipy_wasix_ztrtri(char *uplo, char *diag, CBLAS_INT *n, npy_complex128* a, CBLAS_INT *lda, CBLAS_INT *info) { scipy_wasix_real_ztrtri(uplo, diag, n, a, lda, info, 1, 1); }
++#define ztrtri_ scipy_wasix_ztrtri
++
++#undef strcon_
++extern void scipy_wasix_real_strcon(char *norm, char *uplo, char *diag, CBLAS_INT *n, float *a, CBLAS_INT *lda, float *rcond, float *work, CBLAS_INT *iwork, CBLAS_INT *info, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(strcon)));
++static inline void scipy_wasix_strcon(char *norm, char *uplo, char *diag, CBLAS_INT *n, float *a, CBLAS_INT *lda, float *rcond, float *work, CBLAS_INT *iwork, CBLAS_INT *info) { scipy_wasix_real_strcon(norm, uplo, diag, n, a, lda, rcond, work, iwork, info, 1, 1, 1); }
++#define strcon_ scipy_wasix_strcon
++
++#undef dtrcon_
++extern void scipy_wasix_real_dtrcon(char *norm, char *uplo, char *diag, CBLAS_INT *n, double *a, CBLAS_INT *lda, double *rcond, double *work, CBLAS_INT *iwork, CBLAS_INT *info, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dtrcon)));
++static inline void scipy_wasix_dtrcon(char *norm, char *uplo, char *diag, CBLAS_INT *n, double *a, CBLAS_INT *lda, double *rcond, double *work, CBLAS_INT *iwork, CBLAS_INT *info) { scipy_wasix_real_dtrcon(norm, uplo, diag, n, a, lda, rcond, work, iwork, info, 1, 1, 1); }
++#define dtrcon_ scipy_wasix_dtrcon
++
++#undef ctrcon_
++extern void scipy_wasix_real_ctrcon(char *norm, char *uplo, char *diag, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, float *rcond, npy_complex64 *work, float *rwork, CBLAS_INT *info, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(ctrcon)));
++static inline void scipy_wasix_ctrcon(char *norm, char *uplo, char *diag, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, float *rcond, npy_complex64 *work, float *rwork, CBLAS_INT *info) { scipy_wasix_real_ctrcon(norm, uplo, diag, n, a, lda, rcond, work, rwork, info, 1, 1, 1); }
++#define ctrcon_ scipy_wasix_ctrcon
++
++#undef ztrcon_
++extern void scipy_wasix_real_ztrcon(char *norm, char *uplo, char *diag, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, double *rcond, npy_complex128 *work, double *rwork, CBLAS_INT *info, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(ztrcon)));
++static inline void scipy_wasix_ztrcon(char *norm, char *uplo, char *diag, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, double *rcond, npy_complex128 *work, double *rwork, CBLAS_INT *info) { scipy_wasix_real_ztrcon(norm, uplo, diag, n, a, lda, rcond, work, rwork, info, 1, 1, 1); }
++#define ztrcon_ scipy_wasix_ztrcon
++
++#undef strtrs_
++extern void scipy_wasix_real_strtrs(char *uplo, char *trans, char *diag, CBLAS_INT *n, CBLAS_INT *nrhs, float *a, CBLAS_INT *lda, float *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(strtrs)));
++static inline void scipy_wasix_strtrs(char *uplo, char *trans, char *diag, CBLAS_INT *n, CBLAS_INT *nrhs, float *a, CBLAS_INT *lda, float *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_strtrs(uplo, trans, diag, n, nrhs, a, lda, b, ldb, info, 1, 1, 1); }
++#define strtrs_ scipy_wasix_strtrs
++
++#undef dtrtrs_
++extern void scipy_wasix_real_dtrtrs(char *uplo, char *trans, char *diag, CBLAS_INT *n, CBLAS_INT *nrhs, double *a, CBLAS_INT *lda, double *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dtrtrs)));
++static inline void scipy_wasix_dtrtrs(char *uplo, char *trans, char *diag, CBLAS_INT *n, CBLAS_INT *nrhs, double *a, CBLAS_INT *lda, double *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_dtrtrs(uplo, trans, diag, n, nrhs, a, lda, b, ldb, info, 1, 1, 1); }
++#define dtrtrs_ scipy_wasix_dtrtrs
++
++#undef ctrtrs_
++extern void scipy_wasix_real_ctrtrs(char *uplo, char *trans, char *diag, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex64 *a, CBLAS_INT *lda, npy_complex64 *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(ctrtrs)));
++static inline void scipy_wasix_ctrtrs(char *uplo, char *trans, char *diag, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex64 *a, CBLAS_INT *lda, npy_complex64 *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_ctrtrs(uplo, trans, diag, n, nrhs, a, lda, b, ldb, info, 1, 1, 1); }
++#define ctrtrs_ scipy_wasix_ctrtrs
++
++#undef ztrtrs_
++extern void scipy_wasix_real_ztrtrs(char *uplo, char *trans, char *diag, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex128 *a, CBLAS_INT *lda, npy_complex128 *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(ztrtrs)));
++static inline void scipy_wasix_ztrtrs(char *uplo, char *trans, char *diag, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex128 *a, CBLAS_INT *lda, npy_complex128 *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_ztrtrs(uplo, trans, diag, n, nrhs, a, lda, b, ldb, info, 1, 1, 1); }
++#define ztrtrs_ scipy_wasix_ztrtrs
++
++#undef spotrf_
++extern void scipy_wasix_real_spotrf(char *uplo, CBLAS_INT *n, float *a, CBLAS_INT *lda, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(spotrf)));
++static inline void scipy_wasix_spotrf(char *uplo, CBLAS_INT *n, float *a, CBLAS_INT *lda, CBLAS_INT *info) { scipy_wasix_real_spotrf(uplo, n, a, lda, info, 1); }
++#define spotrf_ scipy_wasix_spotrf
++
++#undef dpotrf_
++extern void scipy_wasix_real_dpotrf(char *uplo, CBLAS_INT *n, double *a, CBLAS_INT *lda, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dpotrf)));
++static inline void scipy_wasix_dpotrf(char *uplo, CBLAS_INT *n, double *a, CBLAS_INT *lda, CBLAS_INT *info) { scipy_wasix_real_dpotrf(uplo, n, a, lda, info, 1); }
++#define dpotrf_ scipy_wasix_dpotrf
++
++#undef cpotrf_
++extern void scipy_wasix_real_cpotrf(char *uplo, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cpotrf)));
++static inline void scipy_wasix_cpotrf(char *uplo, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *info) { scipy_wasix_real_cpotrf(uplo, n, a, lda, info, 1); }
++#define cpotrf_ scipy_wasix_cpotrf
++
++#undef zpotrf_
++extern void scipy_wasix_real_zpotrf(char *uplo, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zpotrf)));
++static inline void scipy_wasix_zpotrf(char *uplo, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *info) { scipy_wasix_real_zpotrf(uplo, n, a, lda, info, 1); }
++#define zpotrf_ scipy_wasix_zpotrf
++
++#undef spotri_
++extern void scipy_wasix_real_spotri(char *uplo, CBLAS_INT *n, float *a, CBLAS_INT *lda, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(spotri)));
++static inline void scipy_wasix_spotri(char *uplo, CBLAS_INT *n, float *a, CBLAS_INT *lda, CBLAS_INT *info) { scipy_wasix_real_spotri(uplo, n, a, lda, info, 1); }
++#define spotri_ scipy_wasix_spotri
++
++#undef dpotri_
++extern void scipy_wasix_real_dpotri(char *uplo, CBLAS_INT *n, double *a, CBLAS_INT *lda, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dpotri)));
++static inline void scipy_wasix_dpotri(char *uplo, CBLAS_INT *n, double *a, CBLAS_INT *lda, CBLAS_INT *info) { scipy_wasix_real_dpotri(uplo, n, a, lda, info, 1); }
++#define dpotri_ scipy_wasix_dpotri
++
++#undef cpotri_
++extern void scipy_wasix_real_cpotri(char *uplo, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cpotri)));
++static inline void scipy_wasix_cpotri(char *uplo, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *info) { scipy_wasix_real_cpotri(uplo, n, a, lda, info, 1); }
++#define cpotri_ scipy_wasix_cpotri
++
++#undef zpotri_
++extern void scipy_wasix_real_zpotri(char *uplo, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zpotri)));
++static inline void scipy_wasix_zpotri(char *uplo, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *info) { scipy_wasix_real_zpotri(uplo, n, a, lda, info, 1); }
++#define zpotri_ scipy_wasix_zpotri
++
++#undef spocon_
++extern void scipy_wasix_real_spocon(char *uplo, CBLAS_INT *n, float* a, CBLAS_INT *lda, float *anorm, float *rcond, float* work, CBLAS_INT* iwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(spocon)));
++static inline void scipy_wasix_spocon(char *uplo, CBLAS_INT *n, float* a, CBLAS_INT *lda, float *anorm, float *rcond, float* work, CBLAS_INT* iwork, CBLAS_INT *info) { scipy_wasix_real_spocon(uplo, n, a, lda, anorm, rcond, work, iwork, info, 1); }
++#define spocon_ scipy_wasix_spocon
++
++#undef dpocon_
++extern void scipy_wasix_real_dpocon(char *uplo, CBLAS_INT *n, double* a, CBLAS_INT *lda, double *anorm, double *rcond, double* work, CBLAS_INT* iwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dpocon)));
++static inline void scipy_wasix_dpocon(char *uplo, CBLAS_INT *n, double* a, CBLAS_INT *lda, double *anorm, double *rcond, double* work, CBLAS_INT* iwork, CBLAS_INT *info) { scipy_wasix_real_dpocon(uplo, n, a, lda, anorm, rcond, work, iwork, info, 1); }
++#define dpocon_ scipy_wasix_dpocon
++
++#undef cpocon_
++extern void scipy_wasix_real_cpocon(char *uplo, CBLAS_INT *n, npy_complex64* a, CBLAS_INT *lda, float *anorm, float *rcond, npy_complex64* work, float *rwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cpocon)));
++static inline void scipy_wasix_cpocon(char *uplo, CBLAS_INT *n, npy_complex64* a, CBLAS_INT *lda, float *anorm, float *rcond, npy_complex64* work, float *rwork, CBLAS_INT *info) { scipy_wasix_real_cpocon(uplo, n, a, lda, anorm, rcond, work, rwork, info, 1); }
++#define cpocon_ scipy_wasix_cpocon
++
++#undef zpocon_
++extern void scipy_wasix_real_zpocon(char *uplo, CBLAS_INT *n, npy_complex128* a, CBLAS_INT *lda, double *anorm, double *rcond, npy_complex128* work, double *rwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zpocon)));
++static inline void scipy_wasix_zpocon(char *uplo, CBLAS_INT *n, npy_complex128* a, CBLAS_INT *lda, double *anorm, double *rcond, npy_complex128* work, double *rwork, CBLAS_INT *info) { scipy_wasix_real_zpocon(uplo, n, a, lda, anorm, rcond, work, rwork, info, 1); }
++#define zpocon_ scipy_wasix_zpocon
++
++#undef spotrs_
++extern void scipy_wasix_real_spotrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, float *a, CBLAS_INT *lda, float *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(spotrs)));
++static inline void scipy_wasix_spotrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, float *a, CBLAS_INT *lda, float *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_spotrs(uplo, n, nrhs, a, lda, b, ldb, info, 1); }
++#define spotrs_ scipy_wasix_spotrs
++
++#undef dpotrs_
++extern void scipy_wasix_real_dpotrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, double *a, CBLAS_INT *lda, double *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dpotrs)));
++static inline void scipy_wasix_dpotrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, double *a, CBLAS_INT *lda, double *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_dpotrs(uplo, n, nrhs, a, lda, b, ldb, info, 1); }
++#define dpotrs_ scipy_wasix_dpotrs
++
++#undef cpotrs_
++extern void scipy_wasix_real_cpotrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex64 *a, CBLAS_INT *lda, npy_complex64 *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cpotrs)));
++static inline void scipy_wasix_cpotrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex64 *a, CBLAS_INT *lda, npy_complex64 *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_cpotrs(uplo, n, nrhs, a, lda, b, ldb, info, 1); }
++#define cpotrs_ scipy_wasix_cpotrs
++
++#undef zpotrs_
++extern void scipy_wasix_real_zpotrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex128 *a, CBLAS_INT *lda, npy_complex128 *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zpotrs)));
++static inline void scipy_wasix_zpotrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex128 *a, CBLAS_INT *lda, npy_complex128 *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_zpotrs(uplo, n, nrhs, a, lda, b, ldb, info, 1); }
++#define zpotrs_ scipy_wasix_zpotrs
++
++#undef ssytrf_
++extern void scipy_wasix_real_ssytrf(char *uplo, CBLAS_INT *n, float *a, CBLAS_INT *lda, CBLAS_INT *ipiv, float *work, CBLAS_INT *lwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(ssytrf)));
++static inline void scipy_wasix_ssytrf(char *uplo, CBLAS_INT *n, float *a, CBLAS_INT *lda, CBLAS_INT *ipiv, float *work, CBLAS_INT *lwork, CBLAS_INT *info) { scipy_wasix_real_ssytrf(uplo, n, a, lda, ipiv, work, lwork, info, 1); }
++#define ssytrf_ scipy_wasix_ssytrf
++
++#undef dsytrf_
++extern void scipy_wasix_real_dsytrf(char *uplo, CBLAS_INT *n, double *a, CBLAS_INT *lda, CBLAS_INT *ipiv, double *work, CBLAS_INT *lwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dsytrf)));
++static inline void scipy_wasix_dsytrf(char *uplo, CBLAS_INT *n, double *a, CBLAS_INT *lda, CBLAS_INT *ipiv, double *work, CBLAS_INT *lwork, CBLAS_INT *info) { scipy_wasix_real_dsytrf(uplo, n, a, lda, ipiv, work, lwork, info, 1); }
++#define dsytrf_ scipy_wasix_dsytrf
++
++#undef csytrf_
++extern void scipy_wasix_real_csytrf(char *uplo, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex64 *work, CBLAS_INT *lwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(csytrf)));
++static inline void scipy_wasix_csytrf(char *uplo, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex64 *work, CBLAS_INT *lwork, CBLAS_INT *info) { scipy_wasix_real_csytrf(uplo, n, a, lda, ipiv, work, lwork, info, 1); }
++#define csytrf_ scipy_wasix_csytrf
++
++#undef zsytrf_
++extern void scipy_wasix_real_zsytrf(char *uplo, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex128 *work, CBLAS_INT *lwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zsytrf)));
++static inline void scipy_wasix_zsytrf(char *uplo, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex128 *work, CBLAS_INT *lwork, CBLAS_INT *info) { scipy_wasix_real_zsytrf(uplo, n, a, lda, ipiv, work, lwork, info, 1); }
++#define zsytrf_ scipy_wasix_zsytrf
++
++#undef ssytri_
++extern void scipy_wasix_real_ssytri(char *uplo, CBLAS_INT *n, float *a, CBLAS_INT *lda, CBLAS_INT *ipiv, float *work, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(ssytri)));
++static inline void scipy_wasix_ssytri(char *uplo, CBLAS_INT *n, float *a, CBLAS_INT *lda, CBLAS_INT *ipiv, float *work, CBLAS_INT *info) { scipy_wasix_real_ssytri(uplo, n, a, lda, ipiv, work, info, 1); }
++#define ssytri_ scipy_wasix_ssytri
++
++#undef dsytri_
++extern void scipy_wasix_real_dsytri(char *uplo, CBLAS_INT *n, double *a, CBLAS_INT *lda, CBLAS_INT *ipiv, double *work, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dsytri)));
++static inline void scipy_wasix_dsytri(char *uplo, CBLAS_INT *n, double *a, CBLAS_INT *lda, CBLAS_INT *ipiv, double *work, CBLAS_INT *info) { scipy_wasix_real_dsytri(uplo, n, a, lda, ipiv, work, info, 1); }
++#define dsytri_ scipy_wasix_dsytri
++
++#undef csytri_
++extern void scipy_wasix_real_csytri(char *uplo, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex64 *work, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(csytri)));
++static inline void scipy_wasix_csytri(char *uplo, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex64 *work, CBLAS_INT *info) { scipy_wasix_real_csytri(uplo, n, a, lda, ipiv, work, info, 1); }
++#define csytri_ scipy_wasix_csytri
++
++#undef zsytri_
++extern void scipy_wasix_real_zsytri(char *uplo, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex128 *work, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zsytri)));
++static inline void scipy_wasix_zsytri(char *uplo, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex128 *work, CBLAS_INT *info) { scipy_wasix_real_zsytri(uplo, n, a, lda, ipiv, work, info, 1); }
++#define zsytri_ scipy_wasix_zsytri
++
++#undef ssycon_
++extern void scipy_wasix_real_ssycon(char *uplo, CBLAS_INT *n, float *a, CBLAS_INT *lda, CBLAS_INT *ipiv, float *anorm, float *rcond, float *work, CBLAS_INT *iwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(ssycon)));
++static inline void scipy_wasix_ssycon(char *uplo, CBLAS_INT *n, float *a, CBLAS_INT *lda, CBLAS_INT *ipiv, float *anorm, float *rcond, float *work, CBLAS_INT *iwork, CBLAS_INT *info) { scipy_wasix_real_ssycon(uplo, n, a, lda, ipiv, anorm, rcond, work, iwork, info, 1); }
++#define ssycon_ scipy_wasix_ssycon
++
++#undef dsycon_
++extern void scipy_wasix_real_dsycon(char *uplo, CBLAS_INT *n, double *a, CBLAS_INT *lda, CBLAS_INT *ipiv, double *anorm, double *rcond, double *work, CBLAS_INT *iwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dsycon)));
++static inline void scipy_wasix_dsycon(char *uplo, CBLAS_INT *n, double *a, CBLAS_INT *lda, CBLAS_INT *ipiv, double *anorm, double *rcond, double *work, CBLAS_INT *iwork, CBLAS_INT *info) { scipy_wasix_real_dsycon(uplo, n, a, lda, ipiv, anorm, rcond, work, iwork, info, 1); }
++#define dsycon_ scipy_wasix_dsycon
++
++#undef csycon_
++extern void scipy_wasix_real_csycon(char *uplo, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, float *anorm, float *rcond, npy_complex64 *work, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(csycon)));
++static inline void scipy_wasix_csycon(char *uplo, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, float *anorm, float *rcond, npy_complex64 *work, CBLAS_INT *info) { scipy_wasix_real_csycon(uplo, n, a, lda, ipiv, anorm, rcond, work, info, 1); }
++#define csycon_ scipy_wasix_csycon
++
++#undef zsycon_
++extern void scipy_wasix_real_zsycon(char *uplo, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, double *anorm, double *rcond, npy_complex128 *work, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zsycon)));
++static inline void scipy_wasix_zsycon(char *uplo, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, double *anorm, double *rcond, npy_complex128 *work, CBLAS_INT *info) { scipy_wasix_real_zsycon(uplo, n, a, lda, ipiv, anorm, rcond, work, info, 1); }
++#define zsycon_ scipy_wasix_zsycon
++
++#undef chetrf_
++extern void scipy_wasix_real_chetrf(char *uplo, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex64 *work, CBLAS_INT *lwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(chetrf)));
++static inline void scipy_wasix_chetrf(char *uplo, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex64 *work, CBLAS_INT *lwork, CBLAS_INT *info) { scipy_wasix_real_chetrf(uplo, n, a, lda, ipiv, work, lwork, info, 1); }
++#define chetrf_ scipy_wasix_chetrf
++
++#undef zhetrf_
++extern void scipy_wasix_real_zhetrf(char *uplo, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex128 *work, CBLAS_INT *lwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zhetrf)));
++static inline void scipy_wasix_zhetrf(char *uplo, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex128 *work, CBLAS_INT *lwork, CBLAS_INT *info) { scipy_wasix_real_zhetrf(uplo, n, a, lda, ipiv, work, lwork, info, 1); }
++#define zhetrf_ scipy_wasix_zhetrf
++
++#undef chetri_
++extern void scipy_wasix_real_chetri(char *uplo, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex64 *work, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(chetri)));
++static inline void scipy_wasix_chetri(char *uplo, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex64 *work, CBLAS_INT *info) { scipy_wasix_real_chetri(uplo, n, a, lda, ipiv, work, info, 1); }
++#define chetri_ scipy_wasix_chetri
++
++#undef zhetri_
++extern void scipy_wasix_real_zhetri(char *uplo, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex128 *work, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zhetri)));
++static inline void scipy_wasix_zhetri(char *uplo, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex128 *work, CBLAS_INT *info) { scipy_wasix_real_zhetri(uplo, n, a, lda, ipiv, work, info, 1); }
++#define zhetri_ scipy_wasix_zhetri
++
++#undef ssytrs_
++extern void scipy_wasix_real_ssytrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, float *a, CBLAS_INT *lda, CBLAS_INT *ipiv, float *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(ssytrs)));
++static inline void scipy_wasix_ssytrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, float *a, CBLAS_INT *lda, CBLAS_INT *ipiv, float *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_ssytrs(uplo, n, nrhs, a, lda, ipiv, b, ldb, info, 1); }
++#define ssytrs_ scipy_wasix_ssytrs
++
++#undef dsytrs_
++extern void scipy_wasix_real_dsytrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, double *a, CBLAS_INT *lda, CBLAS_INT *ipiv, double *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dsytrs)));
++static inline void scipy_wasix_dsytrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, double *a, CBLAS_INT *lda, CBLAS_INT *ipiv, double *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_dsytrs(uplo, n, nrhs, a, lda, ipiv, b, ldb, info, 1); }
++#define dsytrs_ scipy_wasix_dsytrs
++
++#undef csytrs_
++extern void scipy_wasix_real_csytrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex64 *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(csytrs)));
++static inline void scipy_wasix_csytrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex64 *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_csytrs(uplo, n, nrhs, a, lda, ipiv, b, ldb, info, 1); }
++#define csytrs_ scipy_wasix_csytrs
++
++#undef zsytrs_
++extern void scipy_wasix_real_zsytrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex128 *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zsytrs)));
++static inline void scipy_wasix_zsytrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex128 *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_zsytrs(uplo, n, nrhs, a, lda, ipiv, b, ldb, info, 1); }
++#define zsytrs_ scipy_wasix_zsytrs
++
++#undef checon_
++extern void scipy_wasix_real_checon(char *uplo, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, float *anorm, float *rcond, npy_complex64 *work, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(checon)));
++static inline void scipy_wasix_checon(char *uplo, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, float *anorm, float *rcond, npy_complex64 *work, CBLAS_INT *info) { scipy_wasix_real_checon(uplo, n, a, lda, ipiv, anorm, rcond, work, info, 1); }
++#define checon_ scipy_wasix_checon
++
++#undef zhecon_
++extern void scipy_wasix_real_zhecon(char *uplo, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, double *anorm, double *rcond, npy_complex128 *work, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zhecon)));
++static inline void scipy_wasix_zhecon(char *uplo, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, double *anorm, double *rcond, npy_complex128 *work, CBLAS_INT *info) { scipy_wasix_real_zhecon(uplo, n, a, lda, ipiv, anorm, rcond, work, info, 1); }
++#define zhecon_ scipy_wasix_zhecon
++
++#undef chetrs_
++extern void scipy_wasix_real_chetrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex64 *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(chetrs)));
++static inline void scipy_wasix_chetrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex64 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex64 *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_chetrs(uplo, n, nrhs, a, lda, ipiv, b, ldb, info, 1); }
++#define chetrs_ scipy_wasix_chetrs
++
++#undef zhetrs_
++extern void scipy_wasix_real_zhetrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex128 *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zhetrs)));
++static inline void scipy_wasix_zhetrs(char *uplo, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex128 *a, CBLAS_INT *lda, CBLAS_INT *ipiv, npy_complex128 *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_zhetrs(uplo, n, nrhs, a, lda, ipiv, b, ldb, info, 1); }
++#define zhetrs_ scipy_wasix_zhetrs
++
++#undef sgttrs_
++extern void scipy_wasix_real_sgttrs(char *trans, CBLAS_INT *n, CBLAS_INT *nrhs, float *dl, float *d, float *du, float *du2, CBLAS_INT *ipiv, float *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sgttrs)));
++static inline void scipy_wasix_sgttrs(char *trans, CBLAS_INT *n, CBLAS_INT *nrhs, float *dl, float *d, float *du, float *du2, CBLAS_INT *ipiv, float *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_sgttrs(trans, n, nrhs, dl, d, du, du2, ipiv, b, ldb, info, 1); }
++#define sgttrs_ scipy_wasix_sgttrs
++
++#undef dgttrs_
++extern void scipy_wasix_real_dgttrs(char *trans, CBLAS_INT *n, CBLAS_INT *nrhs, double *dl, double *d, double *du, double *du2, CBLAS_INT *ipiv, double *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgttrs)));
++static inline void scipy_wasix_dgttrs(char *trans, CBLAS_INT *n, CBLAS_INT *nrhs, double *dl, double *d, double *du, double *du2, CBLAS_INT *ipiv, double *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_dgttrs(trans, n, nrhs, dl, d, du, du2, ipiv, b, ldb, info, 1); }
++#define dgttrs_ scipy_wasix_dgttrs
++
++#undef cgttrs_
++extern void scipy_wasix_real_cgttrs(char *trans, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex64 *dl, npy_complex64 *d, npy_complex64 *du, npy_complex64 *du2, CBLAS_INT *ipiv, npy_complex64 *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cgttrs)));
++static inline void scipy_wasix_cgttrs(char *trans, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex64 *dl, npy_complex64 *d, npy_complex64 *du, npy_complex64 *du2, CBLAS_INT *ipiv, npy_complex64 *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_cgttrs(trans, n, nrhs, dl, d, du, du2, ipiv, b, ldb, info, 1); }
++#define cgttrs_ scipy_wasix_cgttrs
++
++#undef zgttrs_
++extern void scipy_wasix_real_zgttrs(char *trans, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex128 *dl, npy_complex128 *d, npy_complex128 *du, npy_complex128 *du2, CBLAS_INT *ipiv, npy_complex128 *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgttrs)));
++static inline void scipy_wasix_zgttrs(char *trans, CBLAS_INT *n, CBLAS_INT *nrhs, npy_complex128 *dl, npy_complex128 *d, npy_complex128 *du, npy_complex128 *du2, CBLAS_INT *ipiv, npy_complex128 *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_zgttrs(trans, n, nrhs, dl, d, du, du2, ipiv, b, ldb, info, 1); }
++#define zgttrs_ scipy_wasix_zgttrs
++
++#undef sgtcon_
++extern void scipy_wasix_real_sgtcon(char *norm, CBLAS_INT *n, float *dl, float *d, float *du, float *du2, CBLAS_INT *ipiv, float *anorm, float *rcond, float *work, CBLAS_INT *iwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sgtcon)));
++static inline void scipy_wasix_sgtcon(char *norm, CBLAS_INT *n, float *dl, float *d, float *du, float *du2, CBLAS_INT *ipiv, float *anorm, float *rcond, float *work, CBLAS_INT *iwork, CBLAS_INT *info) { scipy_wasix_real_sgtcon(norm, n, dl, d, du, du2, ipiv, anorm, rcond, work, iwork, info, 1); }
++#define sgtcon_ scipy_wasix_sgtcon
++
++#undef dgtcon_
++extern void scipy_wasix_real_dgtcon(char *norm, CBLAS_INT *n, double *dl, double *d, double *du, double *du2, CBLAS_INT *ipiv, double *anorm, double *rcond, double *work, CBLAS_INT *iwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgtcon)));
++static inline void scipy_wasix_dgtcon(char *norm, CBLAS_INT *n, double *dl, double *d, double *du, double *du2, CBLAS_INT *ipiv, double *anorm, double *rcond, double *work, CBLAS_INT *iwork, CBLAS_INT *info) { scipy_wasix_real_dgtcon(norm, n, dl, d, du, du2, ipiv, anorm, rcond, work, iwork, info, 1); }
++#define dgtcon_ scipy_wasix_dgtcon
++
++#undef cgtcon_
++extern void scipy_wasix_real_cgtcon(char *norm, CBLAS_INT *n, npy_complex64 *dl, npy_complex64 *d, npy_complex64 *du, npy_complex64 *du2, CBLAS_INT *ipiv, float *anorm, float *rcond, npy_complex64 *work, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cgtcon)));
++static inline void scipy_wasix_cgtcon(char *norm, CBLAS_INT *n, npy_complex64 *dl, npy_complex64 *d, npy_complex64 *du, npy_complex64 *du2, CBLAS_INT *ipiv, float *anorm, float *rcond, npy_complex64 *work, CBLAS_INT *info) { scipy_wasix_real_cgtcon(norm, n, dl, d, du, du2, ipiv, anorm, rcond, work, info, 1); }
++#define cgtcon_ scipy_wasix_cgtcon
++
++#undef zgtcon_
++extern void scipy_wasix_real_zgtcon(char *norm, CBLAS_INT *n, npy_complex128 *dl, npy_complex128 *d, npy_complex128 *du, npy_complex128 *du2, CBLAS_INT *ipiv, double *anorm, double *rcond, npy_complex128 *work, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgtcon)));
++static inline void scipy_wasix_zgtcon(char *norm, CBLAS_INT *n, npy_complex128 *dl, npy_complex128 *d, npy_complex128 *du, npy_complex128 *du2, CBLAS_INT *ipiv, double *anorm, double *rcond, npy_complex128 *work, CBLAS_INT *info) { scipy_wasix_real_zgtcon(norm, n, dl, d, du, du2, ipiv, anorm, rcond, work, info, 1); }
++#define zgtcon_ scipy_wasix_zgtcon
++
++#undef sgbtrs_
++extern void scipy_wasix_real_sgbtrs(char *trans, CBLAS_INT *n, CBLAS_INT *kl, CBLAS_INT *ku, CBLAS_INT *nrhs, float *ab, CBLAS_INT *ldab, CBLAS_INT *ipiv, float *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sgbtrs)));
++static inline void scipy_wasix_sgbtrs(char *trans, CBLAS_INT *n, CBLAS_INT *kl, CBLAS_INT *ku, CBLAS_INT *nrhs, float *ab, CBLAS_INT *ldab, CBLAS_INT *ipiv, float *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_sgbtrs(trans, n, kl, ku, nrhs, ab, ldab, ipiv, b, ldb, info, 1); }
++#define sgbtrs_ scipy_wasix_sgbtrs
++
++#undef dgbtrs_
++extern void scipy_wasix_real_dgbtrs(char *trans, CBLAS_INT *n, CBLAS_INT *kl, CBLAS_INT *ku, CBLAS_INT *nrhs, double *ab, CBLAS_INT *ldab, CBLAS_INT *ipiv, double *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgbtrs)));
++static inline void scipy_wasix_dgbtrs(char *trans, CBLAS_INT *n, CBLAS_INT *kl, CBLAS_INT *ku, CBLAS_INT *nrhs, double *ab, CBLAS_INT *ldab, CBLAS_INT *ipiv, double *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_dgbtrs(trans, n, kl, ku, nrhs, ab, ldab, ipiv, b, ldb, info, 1); }
++#define dgbtrs_ scipy_wasix_dgbtrs
++
++#undef cgbtrs_
++extern void scipy_wasix_real_cgbtrs(char *trans, CBLAS_INT *n, CBLAS_INT *kl, CBLAS_INT *ku, CBLAS_INT *nrhs, npy_complex64 *ab, CBLAS_INT *ldab, CBLAS_INT *ipiv, npy_complex64 *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cgbtrs)));
++static inline void scipy_wasix_cgbtrs(char *trans, CBLAS_INT *n, CBLAS_INT *kl, CBLAS_INT *ku, CBLAS_INT *nrhs, npy_complex64 *ab, CBLAS_INT *ldab, CBLAS_INT *ipiv, npy_complex64 *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_cgbtrs(trans, n, kl, ku, nrhs, ab, ldab, ipiv, b, ldb, info, 1); }
++#define cgbtrs_ scipy_wasix_cgbtrs
++
++#undef zgbtrs_
++extern void scipy_wasix_real_zgbtrs(char *trans, CBLAS_INT *n, CBLAS_INT *kl, CBLAS_INT *ku, CBLAS_INT *nrhs, npy_complex128 *ab, CBLAS_INT *ldab, CBLAS_INT *ipiv, npy_complex128 *b, CBLAS_INT *ldb, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgbtrs)));
++static inline void scipy_wasix_zgbtrs(char *trans, CBLAS_INT *n, CBLAS_INT *kl, CBLAS_INT *ku, CBLAS_INT *nrhs, npy_complex128 *ab, CBLAS_INT *ldab, CBLAS_INT *ipiv, npy_complex128 *b, CBLAS_INT *ldb, CBLAS_INT *info) { scipy_wasix_real_zgbtrs(trans, n, kl, ku, nrhs, ab, ldab, ipiv, b, ldb, info, 1); }
++#define zgbtrs_ scipy_wasix_zgbtrs
++
++#undef sgbcon_
++extern void scipy_wasix_real_sgbcon(char *norm, CBLAS_INT *n, CBLAS_INT *kl, CBLAS_INT *ku, float *ab, CBLAS_INT *ldab, CBLAS_INT *ipiv, float *anorm, float *rcond, float *work, CBLAS_INT *iwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sgbcon)));
++static inline void scipy_wasix_sgbcon(char *norm, CBLAS_INT *n, CBLAS_INT *kl, CBLAS_INT *ku, float *ab, CBLAS_INT *ldab, CBLAS_INT *ipiv, float *anorm, float *rcond, float *work, CBLAS_INT *iwork, CBLAS_INT *info) { scipy_wasix_real_sgbcon(norm, n, kl, ku, ab, ldab, ipiv, anorm, rcond, work, iwork, info, 1); }
++#define sgbcon_ scipy_wasix_sgbcon
++
++#undef dgbcon_
++extern void scipy_wasix_real_dgbcon(char *norm, CBLAS_INT *n, CBLAS_INT *kl, CBLAS_INT *ku, double *ab, CBLAS_INT *ldab, CBLAS_INT *ipiv, double *anorm, double *rcond, double *work, CBLAS_INT *iwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgbcon)));
++static inline void scipy_wasix_dgbcon(char *norm, CBLAS_INT *n, CBLAS_INT *kl, CBLAS_INT *ku, double *ab, CBLAS_INT *ldab, CBLAS_INT *ipiv, double *anorm, double *rcond, double *work, CBLAS_INT *iwork, CBLAS_INT *info) { scipy_wasix_real_dgbcon(norm, n, kl, ku, ab, ldab, ipiv, anorm, rcond, work, iwork, info, 1); }
++#define dgbcon_ scipy_wasix_dgbcon
++
++#undef cgbcon_
++extern void scipy_wasix_real_cgbcon(char *norm, CBLAS_INT *n, CBLAS_INT *kl, CBLAS_INT *ku, npy_complex64 *ab, CBLAS_INT *ldab, CBLAS_INT *ipiv, float *anorm, float *rcond, npy_complex64 *work, float *rwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cgbcon)));
++static inline void scipy_wasix_cgbcon(char *norm, CBLAS_INT *n, CBLAS_INT *kl, CBLAS_INT *ku, npy_complex64 *ab, CBLAS_INT *ldab, CBLAS_INT *ipiv, float *anorm, float *rcond, npy_complex64 *work, float *rwork, CBLAS_INT *info) { scipy_wasix_real_cgbcon(norm, n, kl, ku, ab, ldab, ipiv, anorm, rcond, work, rwork, info, 1); }
++#define cgbcon_ scipy_wasix_cgbcon
++
++#undef zgbcon_
++extern void scipy_wasix_real_zgbcon(char *norm, CBLAS_INT *n, CBLAS_INT *kl, CBLAS_INT *ku, npy_complex128 *ab, CBLAS_INT *ldab, CBLAS_INT *ipiv, double *anorm, double *rcond, npy_complex128 *work, double *rwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgbcon)));
++static inline void scipy_wasix_zgbcon(char *norm, CBLAS_INT *n, CBLAS_INT *kl, CBLAS_INT *ku, npy_complex128 *ab, CBLAS_INT *ldab, CBLAS_INT *ipiv, double *anorm, double *rcond, npy_complex128 *work, double *rwork, CBLAS_INT *info) { scipy_wasix_real_zgbcon(norm, n, kl, ku, ab, ldab, ipiv, anorm, rcond, work, rwork, info, 1); }
++#define zgbcon_ scipy_wasix_zgbcon
++
++#undef sgesvd_
++extern void scipy_wasix_real_sgesvd(char *jobu, char *jobvt, CBLAS_INT *m, CBLAS_INT *n, float *a, CBLAS_INT *lda, float *s, float *u, CBLAS_INT *ldu, float *vt, CBLAS_INT *ldvt, float *work, CBLAS_INT *lwork, CBLAS_INT *info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sgesvd)));
++static inline void scipy_wasix_sgesvd(char *jobu, char *jobvt, CBLAS_INT *m, CBLAS_INT *n, float *a, CBLAS_INT *lda, float *s, float *u, CBLAS_INT *ldu, float *vt, CBLAS_INT *ldvt, float *work, CBLAS_INT *lwork, CBLAS_INT *info) { scipy_wasix_real_sgesvd(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info, 1, 1); }
++#define sgesvd_ scipy_wasix_sgesvd
++
++#undef dgesvd_
++extern void scipy_wasix_real_dgesvd(char *jobu, char *jobvt, CBLAS_INT *m, CBLAS_INT *n, double *a, CBLAS_INT *lda, double *s, double *u, CBLAS_INT *ldu, double *vt, CBLAS_INT *ldvt, double *work, CBLAS_INT *lwork, CBLAS_INT *info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgesvd)));
++static inline void scipy_wasix_dgesvd(char *jobu, char *jobvt, CBLAS_INT *m, CBLAS_INT *n, double *a, CBLAS_INT *lda, double *s, double *u, CBLAS_INT *ldu, double *vt, CBLAS_INT *ldvt, double *work, CBLAS_INT *lwork, CBLAS_INT *info) { scipy_wasix_real_dgesvd(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info, 1, 1); }
++#define dgesvd_ scipy_wasix_dgesvd
++
++#undef cgesvd_
++extern void scipy_wasix_real_cgesvd(char *jobu, char *jobvt, CBLAS_INT *m, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, float *s, npy_complex64 *u, CBLAS_INT *ldu, npy_complex64 *vt, CBLAS_INT *ldvt, npy_complex64 *work, CBLAS_INT *lwork, float *rwork, CBLAS_INT *info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cgesvd)));
++static inline void scipy_wasix_cgesvd(char *jobu, char *jobvt, CBLAS_INT *m, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, float *s, npy_complex64 *u, CBLAS_INT *ldu, npy_complex64 *vt, CBLAS_INT *ldvt, npy_complex64 *work, CBLAS_INT *lwork, float *rwork, CBLAS_INT *info) { scipy_wasix_real_cgesvd(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, rwork, info, 1, 1); }
++#define cgesvd_ scipy_wasix_cgesvd
++
++#undef zgesvd_
++extern void scipy_wasix_real_zgesvd(char *jobu, char *jobvt, CBLAS_INT *m, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, double *s, npy_complex128 *u, CBLAS_INT *ldu, npy_complex128 *vt, CBLAS_INT *ldvt, npy_complex128 *work, CBLAS_INT *lwork, double *rwork, CBLAS_INT *info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgesvd)));
++static inline void scipy_wasix_zgesvd(char *jobu, char *jobvt, CBLAS_INT *m, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, double *s, npy_complex128 *u, CBLAS_INT *ldu, npy_complex128 *vt, CBLAS_INT *ldvt, npy_complex128 *work, CBLAS_INT *lwork, double *rwork, CBLAS_INT *info) { scipy_wasix_real_zgesvd(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, rwork, info, 1, 1); }
++#define zgesvd_ scipy_wasix_zgesvd
++
++#undef sgesdd_
++extern void scipy_wasix_real_sgesdd(char *jobz, CBLAS_INT *m, CBLAS_INT *n, float *a, CBLAS_INT *lda, float *s, float *u, CBLAS_INT *ldu, float *vt, CBLAS_INT *ldvt, float *work, CBLAS_INT *lwork, CBLAS_INT *iwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sgesdd)));
++static inline void scipy_wasix_sgesdd(char *jobz, CBLAS_INT *m, CBLAS_INT *n, float *a, CBLAS_INT *lda, float *s, float *u, CBLAS_INT *ldu, float *vt, CBLAS_INT *ldvt, float *work, CBLAS_INT *lwork, CBLAS_INT *iwork, CBLAS_INT *info) { scipy_wasix_real_sgesdd(jobz, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, iwork, info, 1); }
++#define sgesdd_ scipy_wasix_sgesdd
++
++#undef dgesdd_
++extern void scipy_wasix_real_dgesdd(char *jobz, CBLAS_INT *m, CBLAS_INT *n, double *a, CBLAS_INT *lda, double *s, double *u, CBLAS_INT *ldu, double *vt, CBLAS_INT *ldvt, double *work, CBLAS_INT *lwork, CBLAS_INT *iwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgesdd)));
++static inline void scipy_wasix_dgesdd(char *jobz, CBLAS_INT *m, CBLAS_INT *n, double *a, CBLAS_INT *lda, double *s, double *u, CBLAS_INT *ldu, double *vt, CBLAS_INT *ldvt, double *work, CBLAS_INT *lwork, CBLAS_INT *iwork, CBLAS_INT *info) { scipy_wasix_real_dgesdd(jobz, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, iwork, info, 1); }
++#define dgesdd_ scipy_wasix_dgesdd
++
++#undef cgesdd_
++extern void scipy_wasix_real_cgesdd(char *jobz, CBLAS_INT *m, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, float *s, npy_complex64 *u, CBLAS_INT *ldu, npy_complex64 *vt, CBLAS_INT *ldvt, npy_complex64 *work, CBLAS_INT *lwork, float *rwork, CBLAS_INT *iwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cgesdd)));
++static inline void scipy_wasix_cgesdd(char *jobz, CBLAS_INT *m, CBLAS_INT *n, npy_complex64 *a, CBLAS_INT *lda, float *s, npy_complex64 *u, CBLAS_INT *ldu, npy_complex64 *vt, CBLAS_INT *ldvt, npy_complex64 *work, CBLAS_INT *lwork, float *rwork, CBLAS_INT *iwork, CBLAS_INT *info) { scipy_wasix_real_cgesdd(jobz, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, rwork, iwork, info, 1); }
++#define cgesdd_ scipy_wasix_cgesdd
++
++#undef zgesdd_
++extern void scipy_wasix_real_zgesdd(char *jobz, CBLAS_INT *m, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, double *s, npy_complex128 *u, CBLAS_INT *ldu, npy_complex128 *vt, CBLAS_INT *ldvt, npy_complex128 *work, CBLAS_INT *lwork, double *rwork, CBLAS_INT *iwork, CBLAS_INT *info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgesdd)));
++static inline void scipy_wasix_zgesdd(char *jobz, CBLAS_INT *m, CBLAS_INT *n, npy_complex128 *a, CBLAS_INT *lda, double *s, npy_complex128 *u, CBLAS_INT *ldu, npy_complex128 *vt, CBLAS_INT *ldvt, npy_complex128 *work, CBLAS_INT *lwork, double *rwork, CBLAS_INT *iwork, CBLAS_INT *info) { scipy_wasix_real_zgesdd(jobz, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, rwork, iwork, info, 1); }
++#define zgesdd_ scipy_wasix_zgesdd
++
++#undef sgeev_
++extern void scipy_wasix_real_sgeev(char *jobvl, char *jobvr, CBLAS_INT *n, float *a, CBLAS_INT *lda, float *wr, float *wi, float *vl, CBLAS_INT *ldvl, float *vr, CBLAS_INT *ldvr, float *work, CBLAS_INT *lwork, CBLAS_INT *info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sgeev)));
++static inline void scipy_wasix_sgeev(char *jobvl, char *jobvr, CBLAS_INT *n, float *a, CBLAS_INT *lda, float *wr, float *wi, float *vl, CBLAS_INT *ldvl, float *vr, CBLAS_INT *ldvr, float *work, CBLAS_INT *lwork, CBLAS_INT *info) { scipy_wasix_real_sgeev(jobvl, jobvr, n, a, lda, wr, wi, vl, ldvl, vr, ldvr, work, lwork, info, 1, 1); }
++#define sgeev_ scipy_wasix_sgeev
++
++#undef dgeev_
++extern void scipy_wasix_real_dgeev(char *jobvl, char *jobvr, CBLAS_INT *n, double *a, CBLAS_INT *lda, double *wr, double *wi, double *vl, CBLAS_INT *ldvl, double *vr, CBLAS_INT *ldvr, double *work, CBLAS_INT *lwork, CBLAS_INT *info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgeev)));
++static inline void scipy_wasix_dgeev(char *jobvl, char *jobvr, CBLAS_INT *n, double *a, CBLAS_INT *lda, double *wr, double *wi, double *vl, CBLAS_INT *ldvl, double *vr, CBLAS_INT *ldvr, double *work, CBLAS_INT *lwork, CBLAS_INT *info) { scipy_wasix_real_dgeev(jobvl, jobvr, n, a, lda, wr, wi, vl, ldvl, vr, ldvr, work, lwork, info, 1, 1); }
++#define dgeev_ scipy_wasix_dgeev
++
++#undef cgeev_
++extern void scipy_wasix_real_cgeev(char *jobvl, char *jobvr, CBLAS_INT *n, c64_t *a, CBLAS_INT *lda, c64_t *w, c64_t *vl, CBLAS_INT *ldvl, c64_t *vr, CBLAS_INT *ldvr, c64_t *work, CBLAS_INT *lwork, float *rwork, CBLAS_INT *info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cgeev)));
++static inline void scipy_wasix_cgeev(char *jobvl, char *jobvr, CBLAS_INT *n, c64_t *a, CBLAS_INT *lda, c64_t *w, c64_t *vl, CBLAS_INT *ldvl, c64_t *vr, CBLAS_INT *ldvr, c64_t *work, CBLAS_INT *lwork, float *rwork, CBLAS_INT *info) { scipy_wasix_real_cgeev(jobvl, jobvr, n, a, lda, w, vl, ldvl, vr, ldvr, work, lwork, rwork, info, 1, 1); }
++#define cgeev_ scipy_wasix_cgeev
++
++#undef zgeev_
++extern void scipy_wasix_real_zgeev(char *jobvl, char *jobvr, CBLAS_INT *n, c128_t *a, CBLAS_INT *lda, c128_t *w, c128_t *vl, CBLAS_INT *ldvl, c128_t *vr, CBLAS_INT *ldvr, c128_t *work, CBLAS_INT *lwork, double *rwork, CBLAS_INT *info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgeev)));
++static inline void scipy_wasix_zgeev(char *jobvl, char *jobvr, CBLAS_INT *n, c128_t *a, CBLAS_INT *lda, c128_t *w, c128_t *vl, CBLAS_INT *ldvl, c128_t *vr, CBLAS_INT *ldvr, c128_t *work, CBLAS_INT *lwork, double *rwork, CBLAS_INT *info) { scipy_wasix_real_zgeev(jobvl, jobvr, n, a, lda, w, vl, ldvl, vr, ldvr, work, lwork, rwork, info, 1, 1); }
++#define zgeev_ scipy_wasix_zgeev
++
++#undef sggev_
++extern void scipy_wasix_real_sggev(char *jobvl, char *jobvr, CBLAS_INT *n, float *a, CBLAS_INT *lda, float *b, CBLAS_INT *ldb, float *alphar, float *alphai, float *beta, float *vl, CBLAS_INT *ldvl, float *vr, CBLAS_INT *ldvr, float *work, CBLAS_INT *lwork, CBLAS_INT *info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sggev)));
++static inline void scipy_wasix_sggev(char *jobvl, char *jobvr, CBLAS_INT *n, float *a, CBLAS_INT *lda, float *b, CBLAS_INT *ldb, float *alphar, float *alphai, float *beta, float *vl, CBLAS_INT *ldvl, float *vr, CBLAS_INT *ldvr, float *work, CBLAS_INT *lwork, CBLAS_INT *info) { scipy_wasix_real_sggev(jobvl, jobvr, n, a, lda, b, ldb, alphar, alphai, beta, vl, ldvl, vr, ldvr, work, lwork, info, 1, 1); }
++#define sggev_ scipy_wasix_sggev
++
++#undef dggev_
++extern void scipy_wasix_real_dggev(char *jobvl, char *jobvr, CBLAS_INT *n, double *a, CBLAS_INT *lda, double *b, CBLAS_INT *ldb, double *alphar, double *alphai, double *beta, double *vl, CBLAS_INT *ldvl, double *vr, CBLAS_INT *ldvr, double *work, CBLAS_INT *lwork, CBLAS_INT *info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dggev)));
++static inline void scipy_wasix_dggev(char *jobvl, char *jobvr, CBLAS_INT *n, double *a, CBLAS_INT *lda, double *b, CBLAS_INT *ldb, double *alphar, double *alphai, double *beta, double *vl, CBLAS_INT *ldvl, double *vr, CBLAS_INT *ldvr, double *work, CBLAS_INT *lwork, CBLAS_INT *info) { scipy_wasix_real_dggev(jobvl, jobvr, n, a, lda, b, ldb, alphar, alphai, beta, vl, ldvl, vr, ldvr, work, lwork, info, 1, 1); }
++#define dggev_ scipy_wasix_dggev
++
++#undef cggev_
++extern void scipy_wasix_real_cggev(char *jobvl, char *jobvr, CBLAS_INT *n, c64_t *a, CBLAS_INT *lda, c64_t *b, CBLAS_INT *ldb, c64_t *alpha, c64_t *beta, c64_t *vl, CBLAS_INT *ldvl, c64_t *vr, CBLAS_INT *ldvr, c64_t *work, CBLAS_INT *lwork, float *rwork, CBLAS_INT *info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cggev)));
++static inline void scipy_wasix_cggev(char *jobvl, char *jobvr, CBLAS_INT *n, c64_t *a, CBLAS_INT *lda, c64_t *b, CBLAS_INT *ldb, c64_t *alpha, c64_t *beta, c64_t *vl, CBLAS_INT *ldvl, c64_t *vr, CBLAS_INT *ldvr, c64_t *work, CBLAS_INT *lwork, float *rwork, CBLAS_INT *info) { scipy_wasix_real_cggev(jobvl, jobvr, n, a, lda, b, ldb, alpha, beta, vl, ldvl, vr, ldvr, work, lwork, rwork, info, 1, 1); }
++#define cggev_ scipy_wasix_cggev
++
++#undef zggev_
++extern void scipy_wasix_real_zggev(char *jobvl, char *jobvr, CBLAS_INT *n, c128_t *a, CBLAS_INT *lda, c128_t *b, CBLAS_INT *ldb, c128_t *alpha, c128_t *beta, c128_t *vl, CBLAS_INT *ldvl, c128_t *vr, CBLAS_INT *ldvr, c128_t *work, CBLAS_INT *lwork, double *rwork, CBLAS_INT *info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zggev)));
++static inline void scipy_wasix_zggev(char *jobvl, char *jobvr, CBLAS_INT *n, c128_t *a, CBLAS_INT *lda, c128_t *b, CBLAS_INT *ldb, c128_t *alpha, c128_t *beta, c128_t *vl, CBLAS_INT *ldvl, c128_t *vr, CBLAS_INT *ldvr, c128_t *work, CBLAS_INT *lwork, double *rwork, CBLAS_INT *info) { scipy_wasix_real_zggev(jobvl, jobvr, n, a, lda, b, ldb, alpha, beta, vl, ldvl, vr, ldvr, work, lwork, rwork, info, 1, 1); }
++#define zggev_ scipy_wasix_zggev
++#endif  /* wasm charlen redirects */
++
++
+ 
+ namespace sp_linalg {
+ 
+--- a/scipy/integrate/src/blaslapack_declarations.h
++++ b/scipy/integrate/src/blaslapack_declarations.h
+@@ -33,4 +33,49 @@
+ void BLAS_FUNC(zgetrf)(CBLAS_INT* m, CBLAS_INT* n, ZVODE_CPLX_TYPE* a, CBLAS_INT* lda, CBLAS_INT* ipiv, CBLAS_INT* info);
+ void BLAS_FUNC(zgetrs)(char* trans, CBLAS_INT* n, CBLAS_INT* nrhs, ZVODE_CPLX_TYPE* a, CBLAS_INT* lda, CBLAS_INT* ipiv, ZVODE_CPLX_TYPE* b, CBLAS_INT* ldb, CBLAS_INT* info);
+ 
++
++/*
++ * WASIX: flang compiles the Netlib reference BLAS/LAPACK with the standard F77
++ * hidden-CHARACTER-length ABI: one trailing size_t per CHARACTER*1 flag arg
++ * (TRANS/UPLO/DIAG/SIDE/JOBZ/...), appended after ALL explicit args. These
++ * declarations omit those lengths (and declare ?getrf/?getri as CBLAS_INT-
++ * returning though the flang subroutines return void), which is harmless where a
++ * lax C ABI ignores the difference but traps under wasm's strictly typed
++ * call_indirect / dylib import (signature_mismatch:<sym>). For each affected
++ * routine, bind the true flang symbol to a private C name via an asm label (with
++ * the hidden lengths / void return), then redirect the public name to a static
++ * inline wrapper that appends length 1 per char arg (every wrapped arg is
++ * CHARACTER*1; LSAME reads only the first character). The wrapper needs a
++ * DISTINCT name from the true symbol: reusing it makes the asm label bind the
++ * call back to the wrapper (self-recursion under wasm-ld). Counts/return types
++ * verified against the flang-built reference lib arities. See scipy.nix.
++ */
++#if defined(__wasi__) || defined(__wasm__)
++#include <stddef.h>
++#ifndef SCIPY_WASIX_STR
++#define SCIPY_WASIX_STR2(x) #x
++#define SCIPY_WASIX_STR(x) SCIPY_WASIX_STR2(x)
++#endif
++
++#undef dgbtrs_
++extern void scipy_wasix_real_dgbtrs(char* trans, CBLAS_INT* n, CBLAS_INT* kl, CBLAS_INT* ku, CBLAS_INT* nrhs, double* ab, CBLAS_INT* ldab, CBLAS_INT* ipiv, double* b, CBLAS_INT* ldb, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgbtrs)));
++static inline void scipy_wasix_dgbtrs(char* trans, CBLAS_INT* n, CBLAS_INT* kl, CBLAS_INT* ku, CBLAS_INT* nrhs, double* ab, CBLAS_INT* ldab, CBLAS_INT* ipiv, double* b, CBLAS_INT* ldb, CBLAS_INT* info) { scipy_wasix_real_dgbtrs(trans, n, kl, ku, nrhs, ab, ldab, ipiv, b, ldb, info, 1); }
++#define dgbtrs_ scipy_wasix_dgbtrs
++
++#undef dgetrs_
++extern void scipy_wasix_real_dgetrs(char* trans, CBLAS_INT* n, CBLAS_INT* nrhs, double* a, CBLAS_INT* lda, CBLAS_INT* ipiv, double* b, CBLAS_INT* ldb, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgetrs)));
++static inline void scipy_wasix_dgetrs(char* trans, CBLAS_INT* n, CBLAS_INT* nrhs, double* a, CBLAS_INT* lda, CBLAS_INT* ipiv, double* b, CBLAS_INT* ldb, CBLAS_INT* info) { scipy_wasix_real_dgetrs(trans, n, nrhs, a, lda, ipiv, b, ldb, info, 1); }
++#define dgetrs_ scipy_wasix_dgetrs
++
++#undef zgbtrs_
++extern void scipy_wasix_real_zgbtrs(char* trans, CBLAS_INT* n, CBLAS_INT* kl, CBLAS_INT* ku, CBLAS_INT* nrhs, ZVODE_CPLX_TYPE* ab, CBLAS_INT* ldab, CBLAS_INT* ipiv, ZVODE_CPLX_TYPE* b, CBLAS_INT* ldb, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgbtrs)));
++static inline void scipy_wasix_zgbtrs(char* trans, CBLAS_INT* n, CBLAS_INT* kl, CBLAS_INT* ku, CBLAS_INT* nrhs, ZVODE_CPLX_TYPE* ab, CBLAS_INT* ldab, CBLAS_INT* ipiv, ZVODE_CPLX_TYPE* b, CBLAS_INT* ldb, CBLAS_INT* info) { scipy_wasix_real_zgbtrs(trans, n, kl, ku, nrhs, ab, ldab, ipiv, b, ldb, info, 1); }
++#define zgbtrs_ scipy_wasix_zgbtrs
++
++#undef zgetrs_
++extern void scipy_wasix_real_zgetrs(char* trans, CBLAS_INT* n, CBLAS_INT* nrhs, ZVODE_CPLX_TYPE* a, CBLAS_INT* lda, CBLAS_INT* ipiv, ZVODE_CPLX_TYPE* b, CBLAS_INT* ldb, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgetrs)));
++static inline void scipy_wasix_zgetrs(char* trans, CBLAS_INT* n, CBLAS_INT* nrhs, ZVODE_CPLX_TYPE* a, CBLAS_INT* lda, CBLAS_INT* ipiv, ZVODE_CPLX_TYPE* b, CBLAS_INT* ldb, CBLAS_INT* info) { scipy_wasix_real_zgetrs(trans, n, nrhs, a, lda, ipiv, b, ldb, info, 1); }
++#define zgetrs_ scipy_wasix_zgetrs
++#endif  /* wasm charlen redirects */
++
+ #endif
+--- a/scipy/sparse/linalg/_propack/PROPACK/src/include/blaslapack_declarations.h
++++ b/scipy/sparse/linalg/_propack/PROPACK/src/include/blaslapack_declarations.h
+@@ -132,4 +132,119 @@
+     return result;
+ }
+ 
++
++/*
++ * WASIX: flang compiles the Netlib reference BLAS/LAPACK with the standard F77
++ * hidden-CHARACTER-length ABI: one trailing size_t per CHARACTER*1 flag arg
++ * (TRANS/UPLO/DIAG/SIDE/JOBZ/...), appended after ALL explicit args. These
++ * declarations omit those lengths (and declare ?getrf/?getri as CBLAS_INT-
++ * returning though the flang subroutines return void), which is harmless where a
++ * lax C ABI ignores the difference but traps under wasm's strictly typed
++ * call_indirect / dylib import (signature_mismatch:<sym>). For each affected
++ * routine, bind the true flang symbol to a private C name via an asm label (with
++ * the hidden lengths / void return), then redirect the public name to a static
++ * inline wrapper that appends length 1 per char arg (every wrapped arg is
++ * CHARACTER*1; LSAME reads only the first character). The wrapper needs a
++ * DISTINCT name from the true symbol: reusing it makes the asm label bind the
++ * call back to the wrapper (self-recursion under wasm-ld). Counts/return types
++ * verified against the flang-built reference lib arities. See scipy.nix.
++ */
++#if defined(__wasi__) || defined(__wasm__)
++#include <stddef.h>
++#ifndef SCIPY_WASIX_STR
++#define SCIPY_WASIX_STR2(x) #x
++#define SCIPY_WASIX_STR(x) SCIPY_WASIX_STR2(x)
++#endif
++
++#undef sgemm_
++extern void scipy_wasix_real_sgemm(char* transa, char* transb, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, float* alpha, float* a, CBLAS_INT* lda, float* b, CBLAS_INT* ldb, float* beta, float* c, CBLAS_INT* ldc, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sgemm)));
++static inline void scipy_wasix_sgemm(char* transa, char* transb, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, float* alpha, float* a, CBLAS_INT* lda, float* b, CBLAS_INT* ldb, float* beta, float* c, CBLAS_INT* ldc) { scipy_wasix_real_sgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc, 1, 1); }
++#define sgemm_ scipy_wasix_sgemm
++
++#undef sgemv_
++extern void scipy_wasix_real_sgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, float* alpha, float* a, CBLAS_INT* lda, float* x, CBLAS_INT* incx, float* beta, float* y, CBLAS_INT* incy, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sgemv)));
++static inline void scipy_wasix_sgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, float* alpha, float* a, CBLAS_INT* lda, float* x, CBLAS_INT* incx, float* beta, float* y, CBLAS_INT* incy) { scipy_wasix_real_sgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy, 1); }
++#define sgemv_ scipy_wasix_sgemv
++
++#undef dgemm_
++extern void scipy_wasix_real_dgemm(char* transa, char* transb, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, double* alpha, double* a, CBLAS_INT* lda, double* b, CBLAS_INT* ldb, double* beta, double* c, CBLAS_INT* ldc, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgemm)));
++static inline void scipy_wasix_dgemm(char* transa, char* transb, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, double* alpha, double* a, CBLAS_INT* lda, double* b, CBLAS_INT* ldb, double* beta, double* c, CBLAS_INT* ldc) { scipy_wasix_real_dgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc, 1, 1); }
++#define dgemm_ scipy_wasix_dgemm
++
++#undef dgemv_
++extern void scipy_wasix_real_dgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, double* alpha, double* a, CBLAS_INT* lda, double* x, CBLAS_INT* incx, double* beta, double* y, CBLAS_INT* incy, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dgemv)));
++static inline void scipy_wasix_dgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, double* alpha, double* a, CBLAS_INT* lda, double* x, CBLAS_INT* incx, double* beta, double* y, CBLAS_INT* incy) { scipy_wasix_real_dgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy, 1); }
++#define dgemv_ scipy_wasix_dgemv
++
++#undef cgemm_
++extern void scipy_wasix_real_cgemm(char* transa, char* transb, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, PROPACK_CPLXF_TYPE* alpha, PROPACK_CPLXF_TYPE* a, CBLAS_INT* lda, PROPACK_CPLXF_TYPE* b, CBLAS_INT* ldb, PROPACK_CPLXF_TYPE* beta, PROPACK_CPLXF_TYPE* c, CBLAS_INT* ldc, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cgemm)));
++static inline void scipy_wasix_cgemm(char* transa, char* transb, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, PROPACK_CPLXF_TYPE* alpha, PROPACK_CPLXF_TYPE* a, CBLAS_INT* lda, PROPACK_CPLXF_TYPE* b, CBLAS_INT* ldb, PROPACK_CPLXF_TYPE* beta, PROPACK_CPLXF_TYPE* c, CBLAS_INT* ldc) { scipy_wasix_real_cgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc, 1, 1); }
++#define cgemm_ scipy_wasix_cgemm
++
++#undef cgemv_
++extern void scipy_wasix_real_cgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, PROPACK_CPLXF_TYPE* alpha, PROPACK_CPLXF_TYPE* a, CBLAS_INT* lda, PROPACK_CPLXF_TYPE* x, CBLAS_INT* incx, PROPACK_CPLXF_TYPE* beta, PROPACK_CPLXF_TYPE* y, CBLAS_INT* incy, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(cgemv)));
++static inline void scipy_wasix_cgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, PROPACK_CPLXF_TYPE* alpha, PROPACK_CPLXF_TYPE* a, CBLAS_INT* lda, PROPACK_CPLXF_TYPE* x, CBLAS_INT* incx, PROPACK_CPLXF_TYPE* beta, PROPACK_CPLXF_TYPE* y, CBLAS_INT* incy) { scipy_wasix_real_cgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy, 1); }
++#define cgemv_ scipy_wasix_cgemv
++
++#undef zgemm_
++extern void scipy_wasix_real_zgemm(char* transa, char* transb, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, PROPACK_CPLX_TYPE* alpha, PROPACK_CPLX_TYPE* a, CBLAS_INT* lda, PROPACK_CPLX_TYPE* b, CBLAS_INT* ldb, PROPACK_CPLX_TYPE* beta, PROPACK_CPLX_TYPE* c, CBLAS_INT* ldc, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgemm)));
++static inline void scipy_wasix_zgemm(char* transa, char* transb, CBLAS_INT* m, CBLAS_INT* n, CBLAS_INT* k, PROPACK_CPLX_TYPE* alpha, PROPACK_CPLX_TYPE* a, CBLAS_INT* lda, PROPACK_CPLX_TYPE* b, CBLAS_INT* ldb, PROPACK_CPLX_TYPE* beta, PROPACK_CPLX_TYPE* c, CBLAS_INT* ldc) { scipy_wasix_real_zgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc, 1, 1); }
++#define zgemm_ scipy_wasix_zgemm
++
++#undef zgemv_
++extern void scipy_wasix_real_zgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, PROPACK_CPLX_TYPE* alpha, PROPACK_CPLX_TYPE* a, CBLAS_INT* lda, PROPACK_CPLX_TYPE* x, CBLAS_INT* incx, PROPACK_CPLX_TYPE* beta, PROPACK_CPLX_TYPE* y, CBLAS_INT* incy, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zgemv)));
++static inline void scipy_wasix_zgemv(char* trans, CBLAS_INT* m, CBLAS_INT* n, PROPACK_CPLX_TYPE* alpha, PROPACK_CPLX_TYPE* a, CBLAS_INT* lda, PROPACK_CPLX_TYPE* x, CBLAS_INT* incx, PROPACK_CPLX_TYPE* beta, PROPACK_CPLX_TYPE* y, CBLAS_INT* incy) { scipy_wasix_real_zgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy, 1); }
++#define zgemv_ scipy_wasix_zgemv
++
++#undef sbdsdc_
++extern void scipy_wasix_real_sbdsdc(char* uplo, char* compq, CBLAS_INT* n, float* d, float* e, float* u, CBLAS_INT* ldu, float* vt, CBLAS_INT* ldvt, float* q, CBLAS_INT* iq, float* work, CBLAS_INT* iwork, CBLAS_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sbdsdc)));
++static inline void scipy_wasix_sbdsdc(char* uplo, char* compq, CBLAS_INT* n, float* d, float* e, float* u, CBLAS_INT* ldu, float* vt, CBLAS_INT* ldvt, float* q, CBLAS_INT* iq, float* work, CBLAS_INT* iwork, CBLAS_INT* info) { scipy_wasix_real_sbdsdc(uplo, compq, n, d, e, u, ldu, vt, ldvt, q, iq, work, iwork, info, 1, 1); }
++#define sbdsdc_ scipy_wasix_sbdsdc
++
++#undef sbdsqr_
++extern void scipy_wasix_real_sbdsqr(char* uplo, CBLAS_INT* n, CBLAS_INT* ncvt, CBLAS_INT* nru, CBLAS_INT* ncc, float* d, float* e, float* vt, CBLAS_INT* ldvt, float* u, CBLAS_INT* ldu, float* c, CBLAS_INT* ldc, float* work, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(sbdsqr)));
++static inline void scipy_wasix_sbdsqr(char* uplo, CBLAS_INT* n, CBLAS_INT* ncvt, CBLAS_INT* nru, CBLAS_INT* ncc, float* d, float* e, float* vt, CBLAS_INT* ldvt, float* u, CBLAS_INT* ldu, float* c, CBLAS_INT* ldc, float* work, CBLAS_INT* info) { scipy_wasix_real_sbdsqr(uplo, n, ncvt, nru, ncc, d, e, vt, ldvt, u, ldu, c, ldc, work, info, 1); }
++#define sbdsqr_ scipy_wasix_sbdsqr
++
++#undef slascl_
++extern void scipy_wasix_real_slascl(char* mtype, CBLAS_INT* kl, CBLAS_INT* ku, float* cfrom, float* cto, CBLAS_INT* m, CBLAS_INT* n, float* a, CBLAS_INT* lda, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(slascl)));
++static inline void scipy_wasix_slascl(char* mtype, CBLAS_INT* kl, CBLAS_INT* ku, float* cfrom, float* cto, CBLAS_INT* m, CBLAS_INT* n, float* a, CBLAS_INT* lda, CBLAS_INT* info) { scipy_wasix_real_slascl(mtype, kl, ku, cfrom, cto, m, n, a, lda, info, 1); }
++#define slascl_ scipy_wasix_slascl
++
++#undef slaset_
++extern void scipy_wasix_real_slaset(char* uplo, CBLAS_INT* m, CBLAS_INT* n, float* alpha, float* beta, float* a, CBLAS_INT* lda, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(slaset)));
++static inline void scipy_wasix_slaset(char* uplo, CBLAS_INT* m, CBLAS_INT* n, float* alpha, float* beta, float* a, CBLAS_INT* lda) { scipy_wasix_real_slaset(uplo, m, n, alpha, beta, a, lda, 1); }
++#define slaset_ scipy_wasix_slaset
++
++#undef dbdsdc_
++extern void scipy_wasix_real_dbdsdc(char* uplo, char* compq, CBLAS_INT* n, double* d, double* e, double* u, CBLAS_INT* ldu, double* vt, CBLAS_INT* ldvt, double* q, CBLAS_INT* iq, double* work, CBLAS_INT* iwork, CBLAS_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dbdsdc)));
++static inline void scipy_wasix_dbdsdc(char* uplo, char* compq, CBLAS_INT* n, double* d, double* e, double* u, CBLAS_INT* ldu, double* vt, CBLAS_INT* ldvt, double* q, CBLAS_INT* iq, double* work, CBLAS_INT* iwork, CBLAS_INT* info) { scipy_wasix_real_dbdsdc(uplo, compq, n, d, e, u, ldu, vt, ldvt, q, iq, work, iwork, info, 1, 1); }
++#define dbdsdc_ scipy_wasix_dbdsdc
++
++#undef dbdsqr_
++extern void scipy_wasix_real_dbdsqr(char* uplo, CBLAS_INT* n, CBLAS_INT* ncvt, CBLAS_INT* nru, CBLAS_INT* ncc, double* d, double* e, double* vt, CBLAS_INT* ldvt, double* u, CBLAS_INT* ldu, double* c, CBLAS_INT* ldc, double* work, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dbdsqr)));
++static inline void scipy_wasix_dbdsqr(char* uplo, CBLAS_INT* n, CBLAS_INT* ncvt, CBLAS_INT* nru, CBLAS_INT* ncc, double* d, double* e, double* vt, CBLAS_INT* ldvt, double* u, CBLAS_INT* ldu, double* c, CBLAS_INT* ldc, double* work, CBLAS_INT* info) { scipy_wasix_real_dbdsqr(uplo, n, ncvt, nru, ncc, d, e, vt, ldvt, u, ldu, c, ldc, work, info, 1); }
++#define dbdsqr_ scipy_wasix_dbdsqr
++
++#undef dlascl_
++extern void scipy_wasix_real_dlascl(char* mtype, CBLAS_INT* kl, CBLAS_INT* ku, double* cfrom, double* cto, CBLAS_INT* m, CBLAS_INT* n, double* a, CBLAS_INT* lda, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dlascl)));
++static inline void scipy_wasix_dlascl(char* mtype, CBLAS_INT* kl, CBLAS_INT* ku, double* cfrom, double* cto, CBLAS_INT* m, CBLAS_INT* n, double* a, CBLAS_INT* lda, CBLAS_INT* info) { scipy_wasix_real_dlascl(mtype, kl, ku, cfrom, cto, m, n, a, lda, info, 1); }
++#define dlascl_ scipy_wasix_dlascl
++
++#undef dlaset_
++extern void scipy_wasix_real_dlaset(char* uplo, CBLAS_INT* m, CBLAS_INT* n, double* alpha, double* beta, double* a, CBLAS_INT* lda, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(dlaset)));
++static inline void scipy_wasix_dlaset(char* uplo, CBLAS_INT* m, CBLAS_INT* n, double* alpha, double* beta, double* a, CBLAS_INT* lda) { scipy_wasix_real_dlaset(uplo, m, n, alpha, beta, a, lda, 1); }
++#define dlaset_ scipy_wasix_dlaset
++
++#undef clascl_
++extern void scipy_wasix_real_clascl(char* mtype, CBLAS_INT* kl, CBLAS_INT* ku, float* cfrom, float* cto, CBLAS_INT* m, CBLAS_INT* n, PROPACK_CPLXF_TYPE* a, CBLAS_INT* lda, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(clascl)));
++static inline void scipy_wasix_clascl(char* mtype, CBLAS_INT* kl, CBLAS_INT* ku, float* cfrom, float* cto, CBLAS_INT* m, CBLAS_INT* n, PROPACK_CPLXF_TYPE* a, CBLAS_INT* lda, CBLAS_INT* info) { scipy_wasix_real_clascl(mtype, kl, ku, cfrom, cto, m, n, a, lda, info, 1); }
++#define clascl_ scipy_wasix_clascl
++
++#undef zlascl_
++extern void scipy_wasix_real_zlascl(char* mtype, CBLAS_INT* kl, CBLAS_INT* ku, double* cfrom, double* cto, CBLAS_INT* m, CBLAS_INT* n, PROPACK_CPLX_TYPE* a, CBLAS_INT* lda, CBLAS_INT* info, size_t) __asm__(SCIPY_WASIX_STR(BLAS_FUNC(zlascl)));
++static inline void scipy_wasix_zlascl(char* mtype, CBLAS_INT* kl, CBLAS_INT* ku, double* cfrom, double* cto, CBLAS_INT* m, CBLAS_INT* n, PROPACK_CPLX_TYPE* a, CBLAS_INT* lda, CBLAS_INT* info) { scipy_wasix_real_zlascl(mtype, kl, ku, cfrom, cto, m, n, a, lda, info, 1); }
++#define zlascl_ scipy_wasix_zlascl
++#endif  /* wasm charlen redirects */
++
+ #endif
+--- a/scipy/sparse/linalg/_eigen/arpack/arnaud/src/blaslapack_declarations.h
++++ b/scipy/sparse/linalg/_eigen/arpack/arnaud/src/blaslapack_declarations.h
+@@ -144,4 +144,259 @@
+ void ARNAUD_BLAS(zunm2r)(char* side, char* trans, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_INT* k, ARNAUD_CPLX_TYPE* a, ARNAUD_INT* lda, ARNAUD_CPLX_TYPE* tau, ARNAUD_CPLX_TYPE* c, ARNAUD_INT* ldc, ARNAUD_CPLX_TYPE* work, ARNAUD_INT* info);
+ 
+ 
++
++/*
++ * WASIX: flang compiles the Netlib reference BLAS/LAPACK with the standard F77
++ * hidden-CHARACTER-length ABI: one trailing size_t per CHARACTER*1 flag arg
++ * (TRANS/UPLO/DIAG/SIDE/JOBZ/...), appended after ALL explicit args. These
++ * declarations omit those lengths (and declare ?getrf/?getri as CBLAS_INT-
++ * returning though the flang subroutines return void), which is harmless where a
++ * lax C ABI ignores the difference but traps under wasm's strictly typed
++ * call_indirect / dylib import (signature_mismatch:<sym>). For each affected
++ * routine, bind the true flang symbol to a private C name via an asm label (with
++ * the hidden lengths / void return), then redirect the public name to a static
++ * inline wrapper that appends length 1 per char arg (every wrapped arg is
++ * CHARACTER*1; LSAME reads only the first character). The wrapper needs a
++ * DISTINCT name from the true symbol: reusing it makes the asm label bind the
++ * call back to the wrapper (self-recursion under wasm-ld). Counts/return types
++ * verified against the flang-built reference lib arities. See scipy.nix.
++ */
++#if defined(__wasi__) || defined(__wasm__)
++#include <stddef.h>
++#ifndef SCIPY_WASIX_STR
++#define SCIPY_WASIX_STR2(x) #x
++#define SCIPY_WASIX_STR(x) SCIPY_WASIX_STR2(x)
++#endif
++
++#undef sgemv_
++extern void scipy_wasix_real_sgemv(char* trans, ARNAUD_INT* m, ARNAUD_INT* n, float* alpha, float* a, ARNAUD_INT* lda, float* x, ARNAUD_INT* incx, float* beta, float* y, ARNAUD_INT* incy, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(sgemv)));
++static inline void scipy_wasix_sgemv(char* trans, ARNAUD_INT* m, ARNAUD_INT* n, float* alpha, float* a, ARNAUD_INT* lda, float* x, ARNAUD_INT* incx, float* beta, float* y, ARNAUD_INT* incy) { scipy_wasix_real_sgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy, 1); }
++#define sgemv_ scipy_wasix_sgemv
++
++#undef strmm_
++extern void scipy_wasix_real_strmm(char* side, char* uplo, char* transa, char* diag, ARNAUD_INT* m, ARNAUD_INT* n, float* alpha, float* a, ARNAUD_INT* lda, float* b, ARNAUD_INT* ldb, size_t, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(strmm)));
++static inline void scipy_wasix_strmm(char* side, char* uplo, char* transa, char* diag, ARNAUD_INT* m, ARNAUD_INT* n, float* alpha, float* a, ARNAUD_INT* lda, float* b, ARNAUD_INT* ldb) { scipy_wasix_real_strmm(side, uplo, transa, diag, m, n, alpha, a, lda, b, ldb, 1, 1, 1, 1); }
++#define strmm_ scipy_wasix_strmm
++
++#undef dgemv_
++extern void scipy_wasix_real_dgemv(char* trans, ARNAUD_INT* m, ARNAUD_INT* n, double* alpha, double* a, ARNAUD_INT* lda, double* x, ARNAUD_INT* incx, double* beta, double* y, ARNAUD_INT* incy, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(dgemv)));
++static inline void scipy_wasix_dgemv(char* trans, ARNAUD_INT* m, ARNAUD_INT* n, double* alpha, double* a, ARNAUD_INT* lda, double* x, ARNAUD_INT* incx, double* beta, double* y, ARNAUD_INT* incy) { scipy_wasix_real_dgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy, 1); }
++#define dgemv_ scipy_wasix_dgemv
++
++#undef dtrmm_
++extern void scipy_wasix_real_dtrmm(char* side, char* uplo, char* transa, char* diag, ARNAUD_INT* m, ARNAUD_INT* n, double* alpha, double* a, ARNAUD_INT* lda, double* b, ARNAUD_INT* ldb, size_t, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(dtrmm)));
++static inline void scipy_wasix_dtrmm(char* side, char* uplo, char* transa, char* diag, ARNAUD_INT* m, ARNAUD_INT* n, double* alpha, double* a, ARNAUD_INT* lda, double* b, ARNAUD_INT* ldb) { scipy_wasix_real_dtrmm(side, uplo, transa, diag, m, n, alpha, a, lda, b, ldb, 1, 1, 1, 1); }
++#define dtrmm_ scipy_wasix_dtrmm
++
++#undef cgemv_
++extern void scipy_wasix_real_cgemv(char* trans, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* alpha, ARNAUD_CPLXF_TYPE* a, ARNAUD_INT* lda, ARNAUD_CPLXF_TYPE* x, ARNAUD_INT* incx, ARNAUD_CPLXF_TYPE* beta, ARNAUD_CPLXF_TYPE* y, ARNAUD_INT* incy, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(cgemv)));
++static inline void scipy_wasix_cgemv(char* trans, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* alpha, ARNAUD_CPLXF_TYPE* a, ARNAUD_INT* lda, ARNAUD_CPLXF_TYPE* x, ARNAUD_INT* incx, ARNAUD_CPLXF_TYPE* beta, ARNAUD_CPLXF_TYPE* y, ARNAUD_INT* incy) { scipy_wasix_real_cgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy, 1); }
++#define cgemv_ scipy_wasix_cgemv
++
++#undef ctrmm_
++extern void scipy_wasix_real_ctrmm(char* side, char* uplo, char* transa, char* diag, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* alpha, ARNAUD_CPLXF_TYPE* a, ARNAUD_INT* lda, ARNAUD_CPLXF_TYPE* b, ARNAUD_INT* ldb, size_t, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(ctrmm)));
++static inline void scipy_wasix_ctrmm(char* side, char* uplo, char* transa, char* diag, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* alpha, ARNAUD_CPLXF_TYPE* a, ARNAUD_INT* lda, ARNAUD_CPLXF_TYPE* b, ARNAUD_INT* ldb) { scipy_wasix_real_ctrmm(side, uplo, transa, diag, m, n, alpha, a, lda, b, ldb, 1, 1, 1, 1); }
++#define ctrmm_ scipy_wasix_ctrmm
++
++#undef zgemv_
++extern void scipy_wasix_real_zgemv(char* trans, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* alpha, ARNAUD_CPLX_TYPE* a, ARNAUD_INT* lda, ARNAUD_CPLX_TYPE* x, ARNAUD_INT* incx, ARNAUD_CPLX_TYPE* beta, ARNAUD_CPLX_TYPE* y, ARNAUD_INT* incy, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(zgemv)));
++static inline void scipy_wasix_zgemv(char* trans, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* alpha, ARNAUD_CPLX_TYPE* a, ARNAUD_INT* lda, ARNAUD_CPLX_TYPE* x, ARNAUD_INT* incx, ARNAUD_CPLX_TYPE* beta, ARNAUD_CPLX_TYPE* y, ARNAUD_INT* incy) { scipy_wasix_real_zgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy, 1); }
++#define zgemv_ scipy_wasix_zgemv
++
++#undef ztrmm_
++extern void scipy_wasix_real_ztrmm(char* side, char* uplo, char* transa, char* diag, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* alpha, ARNAUD_CPLX_TYPE* a, ARNAUD_INT* lda, ARNAUD_CPLX_TYPE* b, ARNAUD_INT* ldb, size_t, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(ztrmm)));
++static inline void scipy_wasix_ztrmm(char* side, char* uplo, char* transa, char* diag, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* alpha, ARNAUD_CPLX_TYPE* a, ARNAUD_INT* lda, ARNAUD_CPLX_TYPE* b, ARNAUD_INT* ldb) { scipy_wasix_real_ztrmm(side, uplo, transa, diag, m, n, alpha, a, lda, b, ldb, 1, 1, 1, 1); }
++#define ztrmm_ scipy_wasix_ztrmm
++
++#undef slacpy_
++extern void scipy_wasix_real_slacpy(char* uplo, ARNAUD_INT* m, ARNAUD_INT* n, float* a, ARNAUD_INT* lda, float* b, ARNAUD_INT* ldb, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(slacpy)));
++static inline void scipy_wasix_slacpy(char* uplo, ARNAUD_INT* m, ARNAUD_INT* n, float* a, ARNAUD_INT* lda, float* b, ARNAUD_INT* ldb) { scipy_wasix_real_slacpy(uplo, m, n, a, lda, b, ldb, 1); }
++#define slacpy_ scipy_wasix_slacpy
++
++#undef slanhs_
++extern float scipy_wasix_real_slanhs(char* norm, ARNAUD_INT* n, float* a, ARNAUD_INT* lda, float* work, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(slanhs)));
++static inline float scipy_wasix_slanhs(char* norm, ARNAUD_INT* n, float* a, ARNAUD_INT* lda, float* work) { return scipy_wasix_real_slanhs(norm, n, a, lda, work, 1); }
++#define slanhs_ scipy_wasix_slanhs
++
++#undef slanst_
++extern float scipy_wasix_real_slanst(char* norm, ARNAUD_INT* n, float* d, float* e, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(slanst)));
++static inline float scipy_wasix_slanst(char* norm, ARNAUD_INT* n, float* d, float* e) { return scipy_wasix_real_slanst(norm, n, d, e, 1); }
++#define slanst_ scipy_wasix_slanst
++
++#undef slarf_
++extern void scipy_wasix_real_slarf(char* side, ARNAUD_INT* m, ARNAUD_INT* n, float* v, ARNAUD_INT* incv, float* tau, float* c, ARNAUD_INT* ldc, float* work, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(slarf)));
++static inline void scipy_wasix_slarf(char* side, ARNAUD_INT* m, ARNAUD_INT* n, float* v, ARNAUD_INT* incv, float* tau, float* c, ARNAUD_INT* ldc, float* work) { scipy_wasix_real_slarf(side, m, n, v, incv, tau, c, ldc, work, 1); }
++#define slarf_ scipy_wasix_slarf
++
++#undef slascl_
++extern void scipy_wasix_real_slascl(char* mtype, ARNAUD_INT* kl, ARNAUD_INT* ku, float* cfrom, float* cto, ARNAUD_INT* m, ARNAUD_INT* n, float* a, ARNAUD_INT* lda, ARNAUD_INT* info, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(slascl)));
++static inline void scipy_wasix_slascl(char* mtype, ARNAUD_INT* kl, ARNAUD_INT* ku, float* cfrom, float* cto, ARNAUD_INT* m, ARNAUD_INT* n, float* a, ARNAUD_INT* lda, ARNAUD_INT* info) { scipy_wasix_real_slascl(mtype, kl, ku, cfrom, cto, m, n, a, lda, info, 1); }
++#define slascl_ scipy_wasix_slascl
++
++#undef slaset_
++extern void scipy_wasix_real_slaset(char* uplo, ARNAUD_INT* m, ARNAUD_INT* n, float* alpha, float* beta, float* a, ARNAUD_INT* lda, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(slaset)));
++static inline void scipy_wasix_slaset(char* uplo, ARNAUD_INT* m, ARNAUD_INT* n, float* alpha, float* beta, float* a, ARNAUD_INT* lda) { scipy_wasix_real_slaset(uplo, m, n, alpha, beta, a, lda, 1); }
++#define slaset_ scipy_wasix_slaset
++
++#undef slasr_
++extern void scipy_wasix_real_slasr(char* side, char* pivot, char* direct, ARNAUD_INT* m, ARNAUD_INT* n, float* c, float* s, float* a, ARNAUD_INT* lda, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(slasr)));
++static inline void scipy_wasix_slasr(char* side, char* pivot, char* direct, ARNAUD_INT* m, ARNAUD_INT* n, float* c, float* s, float* a, ARNAUD_INT* lda) { scipy_wasix_real_slasr(side, pivot, direct, m, n, c, s, a, lda, 1, 1, 1); }
++#define slasr_ scipy_wasix_slasr
++
++#undef sorm2r_
++extern void scipy_wasix_real_sorm2r(char* side, char* trans, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_INT* k, float* a, ARNAUD_INT* lda, float* tau, float* c, ARNAUD_INT* ldc, float* work, ARNAUD_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(sorm2r)));
++static inline void scipy_wasix_sorm2r(char* side, char* trans, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_INT* k, float* a, ARNAUD_INT* lda, float* tau, float* c, ARNAUD_INT* ldc, float* work, ARNAUD_INT* info) { scipy_wasix_real_sorm2r(side, trans, m, n, k, a, lda, tau, c, ldc, work, info, 1, 1); }
++#define sorm2r_ scipy_wasix_sorm2r
++
++#undef ssteqr_
++extern void scipy_wasix_real_ssteqr(char* compz, ARNAUD_INT* n, float* d, float* e, float* z, ARNAUD_INT* ldz, float* work, ARNAUD_INT* info, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(ssteqr)));
++static inline void scipy_wasix_ssteqr(char* compz, ARNAUD_INT* n, float* d, float* e, float* z, ARNAUD_INT* ldz, float* work, ARNAUD_INT* info) { scipy_wasix_real_ssteqr(compz, n, d, e, z, ldz, work, info, 1); }
++#define ssteqr_ scipy_wasix_ssteqr
++
++#undef strevc_
++extern void scipy_wasix_real_strevc(char* side, char* howmny, ARNAUD_INT* select, ARNAUD_INT* n, float* t, ARNAUD_INT* ldt, float* vl, ARNAUD_INT* ldvl, float* vr, ARNAUD_INT* ldvr, ARNAUD_INT* mm, ARNAUD_INT* m, float* work, ARNAUD_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(strevc)));
++static inline void scipy_wasix_strevc(char* side, char* howmny, ARNAUD_INT* select, ARNAUD_INT* n, float* t, ARNAUD_INT* ldt, float* vl, ARNAUD_INT* ldvl, float* vr, ARNAUD_INT* ldvr, ARNAUD_INT* mm, ARNAUD_INT* m, float* work, ARNAUD_INT* info) { scipy_wasix_real_strevc(side, howmny, select, n, t, ldt, vl, ldvl, vr, ldvr, mm, m, work, info, 1, 1); }
++#define strevc_ scipy_wasix_strevc
++
++#undef strsen_
++extern void scipy_wasix_real_strsen(char* job, char* compq, ARNAUD_INT* select, ARNAUD_INT* n, float* t, ARNAUD_INT* ldt, float* q, ARNAUD_INT* ldq, float* wr, float* wi, ARNAUD_INT* m, float* s, float* sep, float* work, ARNAUD_INT* lwork, ARNAUD_INT* iwork, ARNAUD_INT* liwork, ARNAUD_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(strsen)));
++static inline void scipy_wasix_strsen(char* job, char* compq, ARNAUD_INT* select, ARNAUD_INT* n, float* t, ARNAUD_INT* ldt, float* q, ARNAUD_INT* ldq, float* wr, float* wi, ARNAUD_INT* m, float* s, float* sep, float* work, ARNAUD_INT* lwork, ARNAUD_INT* iwork, ARNAUD_INT* liwork, ARNAUD_INT* info) { scipy_wasix_real_strsen(job, compq, select, n, t, ldt, q, ldq, wr, wi, m, s, sep, work, lwork, iwork, liwork, info, 1, 1); }
++#define strsen_ scipy_wasix_strsen
++
++#undef dlacpy_
++extern void scipy_wasix_real_dlacpy(char* uplo, ARNAUD_INT* m, ARNAUD_INT* n, double* a, ARNAUD_INT* lda, double* b, ARNAUD_INT* ldb, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(dlacpy)));
++static inline void scipy_wasix_dlacpy(char* uplo, ARNAUD_INT* m, ARNAUD_INT* n, double* a, ARNAUD_INT* lda, double* b, ARNAUD_INT* ldb) { scipy_wasix_real_dlacpy(uplo, m, n, a, lda, b, ldb, 1); }
++#define dlacpy_ scipy_wasix_dlacpy
++
++#undef dlanhs_
++extern double scipy_wasix_real_dlanhs(char* norm, ARNAUD_INT* n, double* a, ARNAUD_INT* lda, double* work, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(dlanhs)));
++static inline double scipy_wasix_dlanhs(char* norm, ARNAUD_INT* n, double* a, ARNAUD_INT* lda, double* work) { return scipy_wasix_real_dlanhs(norm, n, a, lda, work, 1); }
++#define dlanhs_ scipy_wasix_dlanhs
++
++#undef dlanst_
++extern double scipy_wasix_real_dlanst(char* norm, ARNAUD_INT* n, double* d, double* e, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(dlanst)));
++static inline double scipy_wasix_dlanst(char* norm, ARNAUD_INT* n, double* d, double* e) { return scipy_wasix_real_dlanst(norm, n, d, e, 1); }
++#define dlanst_ scipy_wasix_dlanst
++
++#undef dlarf_
++extern void scipy_wasix_real_dlarf(char* side, ARNAUD_INT* m, ARNAUD_INT* n, double* v, ARNAUD_INT* incv, double* tau, double* c, ARNAUD_INT* ldc, double* work, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(dlarf)));
++static inline void scipy_wasix_dlarf(char* side, ARNAUD_INT* m, ARNAUD_INT* n, double* v, ARNAUD_INT* incv, double* tau, double* c, ARNAUD_INT* ldc, double* work) { scipy_wasix_real_dlarf(side, m, n, v, incv, tau, c, ldc, work, 1); }
++#define dlarf_ scipy_wasix_dlarf
++
++#undef dlascl_
++extern void scipy_wasix_real_dlascl(char* mtype, ARNAUD_INT* kl, ARNAUD_INT* ku, double* cfrom, double* cto, ARNAUD_INT* m, ARNAUD_INT* n, double* a, ARNAUD_INT* lda, ARNAUD_INT* info, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(dlascl)));
++static inline void scipy_wasix_dlascl(char* mtype, ARNAUD_INT* kl, ARNAUD_INT* ku, double* cfrom, double* cto, ARNAUD_INT* m, ARNAUD_INT* n, double* a, ARNAUD_INT* lda, ARNAUD_INT* info) { scipy_wasix_real_dlascl(mtype, kl, ku, cfrom, cto, m, n, a, lda, info, 1); }
++#define dlascl_ scipy_wasix_dlascl
++
++#undef dlaset_
++extern void scipy_wasix_real_dlaset(char* uplo, ARNAUD_INT* m, ARNAUD_INT* n, double* alpha, double* beta, double* a, ARNAUD_INT* lda, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(dlaset)));
++static inline void scipy_wasix_dlaset(char* uplo, ARNAUD_INT* m, ARNAUD_INT* n, double* alpha, double* beta, double* a, ARNAUD_INT* lda) { scipy_wasix_real_dlaset(uplo, m, n, alpha, beta, a, lda, 1); }
++#define dlaset_ scipy_wasix_dlaset
++
++#undef dlasr_
++extern void scipy_wasix_real_dlasr(char* side, char* pivot, char* direct, ARNAUD_INT* m, ARNAUD_INT* n, double* c, double* s, double* a, ARNAUD_INT* lda, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(dlasr)));
++static inline void scipy_wasix_dlasr(char* side, char* pivot, char* direct, ARNAUD_INT* m, ARNAUD_INT* n, double* c, double* s, double* a, ARNAUD_INT* lda) { scipy_wasix_real_dlasr(side, pivot, direct, m, n, c, s, a, lda, 1, 1, 1); }
++#define dlasr_ scipy_wasix_dlasr
++
++#undef dorm2r_
++extern void scipy_wasix_real_dorm2r(char* side, char* trans, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_INT* k, double* a, ARNAUD_INT* lda, double* tau, double* c, ARNAUD_INT* ldc, double* work, ARNAUD_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(dorm2r)));
++static inline void scipy_wasix_dorm2r(char* side, char* trans, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_INT* k, double* a, ARNAUD_INT* lda, double* tau, double* c, ARNAUD_INT* ldc, double* work, ARNAUD_INT* info) { scipy_wasix_real_dorm2r(side, trans, m, n, k, a, lda, tau, c, ldc, work, info, 1, 1); }
++#define dorm2r_ scipy_wasix_dorm2r
++
++#undef dsteqr_
++extern void scipy_wasix_real_dsteqr(char* compz, ARNAUD_INT* n, double* d, double* e, double* z, ARNAUD_INT* ldz, double* work, ARNAUD_INT* info, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(dsteqr)));
++static inline void scipy_wasix_dsteqr(char* compz, ARNAUD_INT* n, double* d, double* e, double* z, ARNAUD_INT* ldz, double* work, ARNAUD_INT* info) { scipy_wasix_real_dsteqr(compz, n, d, e, z, ldz, work, info, 1); }
++#define dsteqr_ scipy_wasix_dsteqr
++
++#undef dtrevc_
++extern void scipy_wasix_real_dtrevc(char* side, char* howmny, ARNAUD_INT* select, ARNAUD_INT* n, double* t, ARNAUD_INT* ldt, double* vl, ARNAUD_INT* ldvl, double* vr, ARNAUD_INT* ldvr, ARNAUD_INT* mm, ARNAUD_INT* m, double* work, ARNAUD_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(dtrevc)));
++static inline void scipy_wasix_dtrevc(char* side, char* howmny, ARNAUD_INT* select, ARNAUD_INT* n, double* t, ARNAUD_INT* ldt, double* vl, ARNAUD_INT* ldvl, double* vr, ARNAUD_INT* ldvr, ARNAUD_INT* mm, ARNAUD_INT* m, double* work, ARNAUD_INT* info) { scipy_wasix_real_dtrevc(side, howmny, select, n, t, ldt, vl, ldvl, vr, ldvr, mm, m, work, info, 1, 1); }
++#define dtrevc_ scipy_wasix_dtrevc
++
++#undef dtrsen_
++extern void scipy_wasix_real_dtrsen(char* job, char* compq, ARNAUD_INT* select, ARNAUD_INT* n, double* t, ARNAUD_INT* ldt, double* q, ARNAUD_INT* ldq, double* wr, double* wi, ARNAUD_INT* m, double* s, double* sep, double* work, ARNAUD_INT* lwork, ARNAUD_INT* iwork, ARNAUD_INT* liwork, ARNAUD_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(dtrsen)));
++static inline void scipy_wasix_dtrsen(char* job, char* compq, ARNAUD_INT* select, ARNAUD_INT* n, double* t, ARNAUD_INT* ldt, double* q, ARNAUD_INT* ldq, double* wr, double* wi, ARNAUD_INT* m, double* s, double* sep, double* work, ARNAUD_INT* lwork, ARNAUD_INT* iwork, ARNAUD_INT* liwork, ARNAUD_INT* info) { scipy_wasix_real_dtrsen(job, compq, select, n, t, ldt, q, ldq, wr, wi, m, s, sep, work, lwork, iwork, liwork, info, 1, 1); }
++#define dtrsen_ scipy_wasix_dtrsen
++
++#undef clacpy_
++extern void scipy_wasix_real_clacpy(char* uplo, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* a, ARNAUD_INT* lda, ARNAUD_CPLXF_TYPE* b, ARNAUD_INT* ldb, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(clacpy)));
++static inline void scipy_wasix_clacpy(char* uplo, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* a, ARNAUD_INT* lda, ARNAUD_CPLXF_TYPE* b, ARNAUD_INT* ldb) { scipy_wasix_real_clacpy(uplo, m, n, a, lda, b, ldb, 1); }
++#define clacpy_ scipy_wasix_clacpy
++
++#undef clanhs_
++extern float scipy_wasix_real_clanhs(char* norm, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* a, ARNAUD_INT* lda, float* work, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(clanhs)));
++static inline float scipy_wasix_clanhs(char* norm, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* a, ARNAUD_INT* lda, float* work) { return scipy_wasix_real_clanhs(norm, n, a, lda, work, 1); }
++#define clanhs_ scipy_wasix_clanhs
++
++#undef clarf_
++extern void scipy_wasix_real_clarf(char* side, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* v, ARNAUD_INT* incv, ARNAUD_CPLXF_TYPE* tau, ARNAUD_CPLXF_TYPE* c, ARNAUD_INT* ldc, ARNAUD_CPLXF_TYPE* work, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(clarf)));
++static inline void scipy_wasix_clarf(char* side, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* v, ARNAUD_INT* incv, ARNAUD_CPLXF_TYPE* tau, ARNAUD_CPLXF_TYPE* c, ARNAUD_INT* ldc, ARNAUD_CPLXF_TYPE* work) { scipy_wasix_real_clarf(side, m, n, v, incv, tau, c, ldc, work, 1); }
++#define clarf_ scipy_wasix_clarf
++
++#undef clascl_
++extern void scipy_wasix_real_clascl(char* mtype, ARNAUD_INT* kl, ARNAUD_INT* ku, float* cfrom, float* cto, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* a, ARNAUD_INT* lda, ARNAUD_INT* info, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(clascl)));
++static inline void scipy_wasix_clascl(char* mtype, ARNAUD_INT* kl, ARNAUD_INT* ku, float* cfrom, float* cto, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* a, ARNAUD_INT* lda, ARNAUD_INT* info) { scipy_wasix_real_clascl(mtype, kl, ku, cfrom, cto, m, n, a, lda, info, 1); }
++#define clascl_ scipy_wasix_clascl
++
++#undef claset_
++extern void scipy_wasix_real_claset(char* uplo, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* alpha, ARNAUD_CPLXF_TYPE* beta, ARNAUD_CPLXF_TYPE* a, ARNAUD_INT* lda, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(claset)));
++static inline void scipy_wasix_claset(char* uplo, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* alpha, ARNAUD_CPLXF_TYPE* beta, ARNAUD_CPLXF_TYPE* a, ARNAUD_INT* lda) { scipy_wasix_real_claset(uplo, m, n, alpha, beta, a, lda, 1); }
++#define claset_ scipy_wasix_claset
++
++#undef ctrevc_
++extern void scipy_wasix_real_ctrevc(char* side, char* howmny, ARNAUD_INT* select, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* t, ARNAUD_INT* ldt, ARNAUD_CPLXF_TYPE* vl, ARNAUD_INT* ldvl, ARNAUD_CPLXF_TYPE* vr, ARNAUD_INT* ldvr, ARNAUD_INT* mm, ARNAUD_INT* m, ARNAUD_CPLXF_TYPE* work, float* rwork, ARNAUD_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(ctrevc)));
++static inline void scipy_wasix_ctrevc(char* side, char* howmny, ARNAUD_INT* select, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* t, ARNAUD_INT* ldt, ARNAUD_CPLXF_TYPE* vl, ARNAUD_INT* ldvl, ARNAUD_CPLXF_TYPE* vr, ARNAUD_INT* ldvr, ARNAUD_INT* mm, ARNAUD_INT* m, ARNAUD_CPLXF_TYPE* work, float* rwork, ARNAUD_INT* info) { scipy_wasix_real_ctrevc(side, howmny, select, n, t, ldt, vl, ldvl, vr, ldvr, mm, m, work, rwork, info, 1, 1); }
++#define ctrevc_ scipy_wasix_ctrevc
++
++#undef ctrsen_
++extern void scipy_wasix_real_ctrsen(char* job, char* compq, ARNAUD_INT* select, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* t, ARNAUD_INT* ldt, ARNAUD_CPLXF_TYPE* q, ARNAUD_INT* ldq, ARNAUD_CPLXF_TYPE* w, ARNAUD_INT* m, float* s, float* sep, ARNAUD_CPLXF_TYPE* work, ARNAUD_INT* lwork, ARNAUD_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(ctrsen)));
++static inline void scipy_wasix_ctrsen(char* job, char* compq, ARNAUD_INT* select, ARNAUD_INT* n, ARNAUD_CPLXF_TYPE* t, ARNAUD_INT* ldt, ARNAUD_CPLXF_TYPE* q, ARNAUD_INT* ldq, ARNAUD_CPLXF_TYPE* w, ARNAUD_INT* m, float* s, float* sep, ARNAUD_CPLXF_TYPE* work, ARNAUD_INT* lwork, ARNAUD_INT* info) { scipy_wasix_real_ctrsen(job, compq, select, n, t, ldt, q, ldq, w, m, s, sep, work, lwork, info, 1, 1); }
++#define ctrsen_ scipy_wasix_ctrsen
++
++#undef cunm2r_
++extern void scipy_wasix_real_cunm2r(char* side, char* trans, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_INT* k, ARNAUD_CPLXF_TYPE* a, ARNAUD_INT* lda, ARNAUD_CPLXF_TYPE* tau, ARNAUD_CPLXF_TYPE* c, ARNAUD_INT* ldc, ARNAUD_CPLXF_TYPE* work, ARNAUD_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(cunm2r)));
++static inline void scipy_wasix_cunm2r(char* side, char* trans, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_INT* k, ARNAUD_CPLXF_TYPE* a, ARNAUD_INT* lda, ARNAUD_CPLXF_TYPE* tau, ARNAUD_CPLXF_TYPE* c, ARNAUD_INT* ldc, ARNAUD_CPLXF_TYPE* work, ARNAUD_INT* info) { scipy_wasix_real_cunm2r(side, trans, m, n, k, a, lda, tau, c, ldc, work, info, 1, 1); }
++#define cunm2r_ scipy_wasix_cunm2r
++
++#undef zlacpy_
++extern void scipy_wasix_real_zlacpy(char* uplo, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* a, ARNAUD_INT* lda, ARNAUD_CPLX_TYPE* b, ARNAUD_INT* ldb, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(zlacpy)));
++static inline void scipy_wasix_zlacpy(char* uplo, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* a, ARNAUD_INT* lda, ARNAUD_CPLX_TYPE* b, ARNAUD_INT* ldb) { scipy_wasix_real_zlacpy(uplo, m, n, a, lda, b, ldb, 1); }
++#define zlacpy_ scipy_wasix_zlacpy
++
++#undef zlanhs_
++extern double scipy_wasix_real_zlanhs(char* norm, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* a, ARNAUD_INT* lda, double* work, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(zlanhs)));
++static inline double scipy_wasix_zlanhs(char* norm, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* a, ARNAUD_INT* lda, double* work) { return scipy_wasix_real_zlanhs(norm, n, a, lda, work, 1); }
++#define zlanhs_ scipy_wasix_zlanhs
++
++#undef zlarf_
++extern void scipy_wasix_real_zlarf(char* side, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* v, ARNAUD_INT* incv, ARNAUD_CPLX_TYPE* tau, ARNAUD_CPLX_TYPE* c, ARNAUD_INT* ldc, ARNAUD_CPLX_TYPE* work, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(zlarf)));
++static inline void scipy_wasix_zlarf(char* side, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* v, ARNAUD_INT* incv, ARNAUD_CPLX_TYPE* tau, ARNAUD_CPLX_TYPE* c, ARNAUD_INT* ldc, ARNAUD_CPLX_TYPE* work) { scipy_wasix_real_zlarf(side, m, n, v, incv, tau, c, ldc, work, 1); }
++#define zlarf_ scipy_wasix_zlarf
++
++#undef zlascl_
++extern void scipy_wasix_real_zlascl(char* mtype, ARNAUD_INT* kl, ARNAUD_INT* ku, double* cfrom, double* cto, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* a, ARNAUD_INT* lda, ARNAUD_INT* info, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(zlascl)));
++static inline void scipy_wasix_zlascl(char* mtype, ARNAUD_INT* kl, ARNAUD_INT* ku, double* cfrom, double* cto, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* a, ARNAUD_INT* lda, ARNAUD_INT* info) { scipy_wasix_real_zlascl(mtype, kl, ku, cfrom, cto, m, n, a, lda, info, 1); }
++#define zlascl_ scipy_wasix_zlascl
++
++#undef zlaset_
++extern void scipy_wasix_real_zlaset(char* uplo, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* alpha, ARNAUD_CPLX_TYPE* beta, ARNAUD_CPLX_TYPE* a, ARNAUD_INT* lda, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(zlaset)));
++static inline void scipy_wasix_zlaset(char* uplo, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* alpha, ARNAUD_CPLX_TYPE* beta, ARNAUD_CPLX_TYPE* a, ARNAUD_INT* lda) { scipy_wasix_real_zlaset(uplo, m, n, alpha, beta, a, lda, 1); }
++#define zlaset_ scipy_wasix_zlaset
++
++#undef ztrevc_
++extern void scipy_wasix_real_ztrevc(char* side, char* howmny, ARNAUD_INT* select, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* t, ARNAUD_INT* ldt, ARNAUD_CPLX_TYPE* vl, ARNAUD_INT* ldvl, ARNAUD_CPLX_TYPE* vr, ARNAUD_INT* ldvr, ARNAUD_INT* mm, ARNAUD_INT* m, ARNAUD_CPLX_TYPE* work, double* rwork, ARNAUD_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(ztrevc)));
++static inline void scipy_wasix_ztrevc(char* side, char* howmny, ARNAUD_INT* select, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* t, ARNAUD_INT* ldt, ARNAUD_CPLX_TYPE* vl, ARNAUD_INT* ldvl, ARNAUD_CPLX_TYPE* vr, ARNAUD_INT* ldvr, ARNAUD_INT* mm, ARNAUD_INT* m, ARNAUD_CPLX_TYPE* work, double* rwork, ARNAUD_INT* info) { scipy_wasix_real_ztrevc(side, howmny, select, n, t, ldt, vl, ldvl, vr, ldvr, mm, m, work, rwork, info, 1, 1); }
++#define ztrevc_ scipy_wasix_ztrevc
++
++#undef ztrsen_
++extern void scipy_wasix_real_ztrsen(char* job, char* compq, ARNAUD_INT* select, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* t, ARNAUD_INT* ldt, ARNAUD_CPLX_TYPE* q, ARNAUD_INT* ldq, ARNAUD_CPLX_TYPE* w, ARNAUD_INT* m, double* s, double* sep, ARNAUD_CPLX_TYPE* work, ARNAUD_INT* lwork, ARNAUD_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(ztrsen)));
++static inline void scipy_wasix_ztrsen(char* job, char* compq, ARNAUD_INT* select, ARNAUD_INT* n, ARNAUD_CPLX_TYPE* t, ARNAUD_INT* ldt, ARNAUD_CPLX_TYPE* q, ARNAUD_INT* ldq, ARNAUD_CPLX_TYPE* w, ARNAUD_INT* m, double* s, double* sep, ARNAUD_CPLX_TYPE* work, ARNAUD_INT* lwork, ARNAUD_INT* info) { scipy_wasix_real_ztrsen(job, compq, select, n, t, ldt, q, ldq, w, m, s, sep, work, lwork, info, 1, 1); }
++#define ztrsen_ scipy_wasix_ztrsen
++
++#undef zunm2r_
++extern void scipy_wasix_real_zunm2r(char* side, char* trans, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_INT* k, ARNAUD_CPLX_TYPE* a, ARNAUD_INT* lda, ARNAUD_CPLX_TYPE* tau, ARNAUD_CPLX_TYPE* c, ARNAUD_INT* ldc, ARNAUD_CPLX_TYPE* work, ARNAUD_INT* info, size_t, size_t) __asm__(SCIPY_WASIX_STR(ARNAUD_BLAS(zunm2r)));
++static inline void scipy_wasix_zunm2r(char* side, char* trans, ARNAUD_INT* m, ARNAUD_INT* n, ARNAUD_INT* k, ARNAUD_CPLX_TYPE* a, ARNAUD_INT* lda, ARNAUD_CPLX_TYPE* tau, ARNAUD_CPLX_TYPE* c, ARNAUD_INT* ldc, ARNAUD_CPLX_TYPE* work, ARNAUD_INT* info) { scipy_wasix_real_zunm2r(side, trans, m, n, k, a, lda, tau, c, ldc, work, info, 1, 1); }
++#define zunm2r_ scipy_wasix_zunm2r
++#endif  /* wasm charlen redirects */
++
+ #endif
+--- a/scipy/sparse/linalg/_dsolve/SuperLU/SRC/slu_sdefs.h
++++ b/scipy/sparse/linalg/_dsolve/SuperLU/SRC/slu_sdefs.h
+@@ -273,6 +273,51 @@
+ extern void sgemv_(char *, slu_blasint *, slu_blasint *, float *, float *a, slu_blasint *,
+                   float *, slu_blasint *, float *, float *, slu_blasint *);
+ 
++
++/*
++ * WASIX: flang compiles the Netlib reference BLAS/LAPACK with the standard F77
++ * hidden-CHARACTER-length ABI: one trailing size_t per CHARACTER*1 flag arg
++ * (TRANS/UPLO/DIAG/SIDE/JOBZ/...), appended after ALL explicit args. These
++ * declarations omit those lengths (and declare ?getrf/?getri as CBLAS_INT-
++ * returning though the flang subroutines return void), which is harmless where a
++ * lax C ABI ignores the difference but traps under wasm's strictly typed
++ * call_indirect / dylib import (signature_mismatch:<sym>). For each affected
++ * routine, bind the true flang symbol to a private C name via an asm label (with
++ * the hidden lengths / void return), then redirect the public name to a static
++ * inline wrapper that appends length 1 per char arg (every wrapped arg is
++ * CHARACTER*1; LSAME reads only the first character). The wrapper needs a
++ * DISTINCT name from the true symbol: reusing it makes the asm label bind the
++ * call back to the wrapper (self-recursion under wasm-ld). Counts/return types
++ * verified against the flang-built reference lib arities. See scipy.nix.
++ */
++#if defined(__wasi__) || defined(__wasm__)
++#include <stddef.h>
++#ifndef SCIPY_WASIX_STR
++#define SCIPY_WASIX_STR2(x) #x
++#define SCIPY_WASIX_STR(x) SCIPY_WASIX_STR2(x)
++#endif
++
++#undef sgemm_
++extern void scipy_wasix_real_sgemm(const char* a0, const char* a1, const slu_blasint* a2, const slu_blasint* a3, const slu_blasint* a4, const float* a5, const float* a6, const slu_blasint* a7, const float* a8, const slu_blasint* a9, const float* a10, float* a11, const slu_blasint* a12, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(sgemm)));
++static inline void scipy_wasix_slu_sgemm(const char* a0, const char* a1, const slu_blasint* a2, const slu_blasint* a3, const slu_blasint* a4, const float* a5, const float* a6, const slu_blasint* a7, const float* a8, const slu_blasint* a9, const float* a10, float* a11, const slu_blasint* a12) { scipy_wasix_real_sgemm(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, 1, 1); }
++#define sgemm_ scipy_wasix_slu_sgemm
++
++#undef strsv_
++extern void scipy_wasix_real_strsv(char* a0, char* a1, char* a2, slu_blasint* a3, float* a4, slu_blasint* a5, float* a6, slu_blasint* a7, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(strsv)));
++static inline void scipy_wasix_slu_strsv(char* a0, char* a1, char* a2, slu_blasint* a3, float* a4, slu_blasint* a5, float* a6, slu_blasint* a7) { scipy_wasix_real_strsv(a0, a1, a2, a3, a4, a5, a6, a7, 1, 1, 1); }
++#define strsv_ scipy_wasix_slu_strsv
++
++#undef strsm_
++extern void scipy_wasix_real_strsm(char* a0, char* a1, char* a2, char* a3, slu_blasint* a4, slu_blasint* a5, float* a6, float* a7, slu_blasint* a8, float* a9, slu_blasint* a10, size_t, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(strsm)));
++static inline void scipy_wasix_slu_strsm(char* a0, char* a1, char* a2, char* a3, slu_blasint* a4, slu_blasint* a5, float* a6, float* a7, slu_blasint* a8, float* a9, slu_blasint* a10) { scipy_wasix_real_strsm(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, 1, 1, 1, 1); }
++#define strsm_ scipy_wasix_slu_strsm
++
++#undef sgemv_
++extern void scipy_wasix_real_sgemv(char * a0, slu_blasint * a1, slu_blasint * a2, float * a3, float * a4, slu_blasint * a5, float * a6, slu_blasint * a7, float * a8, float * a9, slu_blasint * a10, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(sgemv)));
++static inline void scipy_wasix_slu_sgemv(char * a0, slu_blasint * a1, slu_blasint * a2, float * a3, float * a4, slu_blasint * a5, float * a6, slu_blasint * a7, float * a8, float * a9, slu_blasint * a10) { scipy_wasix_real_sgemv(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, 1); }
++#define sgemv_ scipy_wasix_slu_sgemv
++#endif  /* wasm charlen redirects */
++
+ extern void susolve(int, int, float*, float*);
+ extern void slsolve(int, int, float*, float*);
+ extern void smatvec(int, int, int, float*, float*, float*);
+--- a/scipy/sparse/linalg/_dsolve/SuperLU/SRC/slu_ddefs.h
++++ b/scipy/sparse/linalg/_dsolve/SuperLU/SRC/slu_ddefs.h
+@@ -273,6 +273,51 @@
+ extern void dgemv_(char *, slu_blasint *, slu_blasint *, double *, double *a, slu_blasint *,
+                   double *, slu_blasint *, double *, double *, slu_blasint *);
+ 
++
++/*
++ * WASIX: flang compiles the Netlib reference BLAS/LAPACK with the standard F77
++ * hidden-CHARACTER-length ABI: one trailing size_t per CHARACTER*1 flag arg
++ * (TRANS/UPLO/DIAG/SIDE/JOBZ/...), appended after ALL explicit args. These
++ * declarations omit those lengths (and declare ?getrf/?getri as CBLAS_INT-
++ * returning though the flang subroutines return void), which is harmless where a
++ * lax C ABI ignores the difference but traps under wasm's strictly typed
++ * call_indirect / dylib import (signature_mismatch:<sym>). For each affected
++ * routine, bind the true flang symbol to a private C name via an asm label (with
++ * the hidden lengths / void return), then redirect the public name to a static
++ * inline wrapper that appends length 1 per char arg (every wrapped arg is
++ * CHARACTER*1; LSAME reads only the first character). The wrapper needs a
++ * DISTINCT name from the true symbol: reusing it makes the asm label bind the
++ * call back to the wrapper (self-recursion under wasm-ld). Counts/return types
++ * verified against the flang-built reference lib arities. See scipy.nix.
++ */
++#if defined(__wasi__) || defined(__wasm__)
++#include <stddef.h>
++#ifndef SCIPY_WASIX_STR
++#define SCIPY_WASIX_STR2(x) #x
++#define SCIPY_WASIX_STR(x) SCIPY_WASIX_STR2(x)
++#endif
++
++#undef dgemm_
++extern void scipy_wasix_real_dgemm(const char* a0, const char* a1, const slu_blasint* a2, const slu_blasint* a3, const slu_blasint* a4, const double* a5, const double* a6, const slu_blasint* a7, const double* a8, const slu_blasint* a9, const double* a10, double* a11, const slu_blasint* a12, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(dgemm)));
++static inline void scipy_wasix_slu_dgemm(const char* a0, const char* a1, const slu_blasint* a2, const slu_blasint* a3, const slu_blasint* a4, const double* a5, const double* a6, const slu_blasint* a7, const double* a8, const slu_blasint* a9, const double* a10, double* a11, const slu_blasint* a12) { scipy_wasix_real_dgemm(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, 1, 1); }
++#define dgemm_ scipy_wasix_slu_dgemm
++
++#undef dtrsv_
++extern void scipy_wasix_real_dtrsv(char* a0, char* a1, char* a2, slu_blasint* a3, double* a4, slu_blasint* a5, double* a6, slu_blasint* a7, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(dtrsv)));
++static inline void scipy_wasix_slu_dtrsv(char* a0, char* a1, char* a2, slu_blasint* a3, double* a4, slu_blasint* a5, double* a6, slu_blasint* a7) { scipy_wasix_real_dtrsv(a0, a1, a2, a3, a4, a5, a6, a7, 1, 1, 1); }
++#define dtrsv_ scipy_wasix_slu_dtrsv
++
++#undef dtrsm_
++extern void scipy_wasix_real_dtrsm(char* a0, char* a1, char* a2, char* a3, slu_blasint* a4, slu_blasint* a5, double* a6, double* a7, slu_blasint* a8, double* a9, slu_blasint* a10, size_t, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(dtrsm)));
++static inline void scipy_wasix_slu_dtrsm(char* a0, char* a1, char* a2, char* a3, slu_blasint* a4, slu_blasint* a5, double* a6, double* a7, slu_blasint* a8, double* a9, slu_blasint* a10) { scipy_wasix_real_dtrsm(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, 1, 1, 1, 1); }
++#define dtrsm_ scipy_wasix_slu_dtrsm
++
++#undef dgemv_
++extern void scipy_wasix_real_dgemv(char * a0, slu_blasint * a1, slu_blasint * a2, double * a3, double * a4, slu_blasint * a5, double * a6, slu_blasint * a7, double * a8, double * a9, slu_blasint * a10, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(dgemv)));
++static inline void scipy_wasix_slu_dgemv(char * a0, slu_blasint * a1, slu_blasint * a2, double * a3, double * a4, slu_blasint * a5, double * a6, slu_blasint * a7, double * a8, double * a9, slu_blasint * a10) { scipy_wasix_real_dgemv(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, 1); }
++#define dgemv_ scipy_wasix_slu_dgemv
++#endif  /* wasm charlen redirects */
++
+ extern void dusolve(int, int, double*, double*);
+ extern void dlsolve(int, int, double*, double*);
+ extern void dmatvec(int, int, int, double*, double*, double*);
+--- a/scipy/sparse/linalg/_dsolve/SuperLU/SRC/slu_cdefs.h
++++ b/scipy/sparse/linalg/_dsolve/SuperLU/SRC/slu_cdefs.h
+@@ -276,6 +276,51 @@
+ extern void cgemv_(char *, slu_blasint *, slu_blasint *, singlecomplex *, singlecomplex *a, slu_blasint *,
+                   singlecomplex *, slu_blasint *, singlecomplex *, singlecomplex *, slu_blasint *);
+ 
++
++/*
++ * WASIX: flang compiles the Netlib reference BLAS/LAPACK with the standard F77
++ * hidden-CHARACTER-length ABI: one trailing size_t per CHARACTER*1 flag arg
++ * (TRANS/UPLO/DIAG/SIDE/JOBZ/...), appended after ALL explicit args. These
++ * declarations omit those lengths (and declare ?getrf/?getri as CBLAS_INT-
++ * returning though the flang subroutines return void), which is harmless where a
++ * lax C ABI ignores the difference but traps under wasm's strictly typed
++ * call_indirect / dylib import (signature_mismatch:<sym>). For each affected
++ * routine, bind the true flang symbol to a private C name via an asm label (with
++ * the hidden lengths / void return), then redirect the public name to a static
++ * inline wrapper that appends length 1 per char arg (every wrapped arg is
++ * CHARACTER*1; LSAME reads only the first character). The wrapper needs a
++ * DISTINCT name from the true symbol: reusing it makes the asm label bind the
++ * call back to the wrapper (self-recursion under wasm-ld). Counts/return types
++ * verified against the flang-built reference lib arities. See scipy.nix.
++ */
++#if defined(__wasi__) || defined(__wasm__)
++#include <stddef.h>
++#ifndef SCIPY_WASIX_STR
++#define SCIPY_WASIX_STR2(x) #x
++#define SCIPY_WASIX_STR(x) SCIPY_WASIX_STR2(x)
++#endif
++
++#undef cgemm_
++extern void scipy_wasix_real_cgemm(const char* a0, const char* a1, const slu_blasint* a2, const slu_blasint* a3, const slu_blasint* a4, const singlecomplex* a5, const singlecomplex* a6, const slu_blasint* a7, const singlecomplex* a8, const slu_blasint* a9, const singlecomplex* a10, singlecomplex* a11, const slu_blasint* a12, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(cgemm)));
++static inline void scipy_wasix_slu_cgemm(const char* a0, const char* a1, const slu_blasint* a2, const slu_blasint* a3, const slu_blasint* a4, const singlecomplex* a5, const singlecomplex* a6, const slu_blasint* a7, const singlecomplex* a8, const slu_blasint* a9, const singlecomplex* a10, singlecomplex* a11, const slu_blasint* a12) { scipy_wasix_real_cgemm(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, 1, 1); }
++#define cgemm_ scipy_wasix_slu_cgemm
++
++#undef ctrsv_
++extern void scipy_wasix_real_ctrsv(char* a0, char* a1, char* a2, slu_blasint* a3, singlecomplex* a4, slu_blasint* a5, singlecomplex* a6, slu_blasint* a7, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(ctrsv)));
++static inline void scipy_wasix_slu_ctrsv(char* a0, char* a1, char* a2, slu_blasint* a3, singlecomplex* a4, slu_blasint* a5, singlecomplex* a6, slu_blasint* a7) { scipy_wasix_real_ctrsv(a0, a1, a2, a3, a4, a5, a6, a7, 1, 1, 1); }
++#define ctrsv_ scipy_wasix_slu_ctrsv
++
++#undef ctrsm_
++extern void scipy_wasix_real_ctrsm(char* a0, char* a1, char* a2, char* a3, slu_blasint* a4, slu_blasint* a5, singlecomplex* a6, singlecomplex* a7, slu_blasint* a8, singlecomplex* a9, slu_blasint* a10, size_t, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(ctrsm)));
++static inline void scipy_wasix_slu_ctrsm(char* a0, char* a1, char* a2, char* a3, slu_blasint* a4, slu_blasint* a5, singlecomplex* a6, singlecomplex* a7, slu_blasint* a8, singlecomplex* a9, slu_blasint* a10) { scipy_wasix_real_ctrsm(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, 1, 1, 1, 1); }
++#define ctrsm_ scipy_wasix_slu_ctrsm
++
++#undef cgemv_
++extern void scipy_wasix_real_cgemv(char * a0, slu_blasint * a1, slu_blasint * a2, singlecomplex * a3, singlecomplex * a4, slu_blasint * a5, singlecomplex * a6, slu_blasint * a7, singlecomplex * a8, singlecomplex * a9, slu_blasint * a10, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(cgemv)));
++static inline void scipy_wasix_slu_cgemv(char * a0, slu_blasint * a1, slu_blasint * a2, singlecomplex * a3, singlecomplex * a4, slu_blasint * a5, singlecomplex * a6, slu_blasint * a7, singlecomplex * a8, singlecomplex * a9, slu_blasint * a10) { scipy_wasix_real_cgemv(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, 1); }
++#define cgemv_ scipy_wasix_slu_cgemv
++#endif  /* wasm charlen redirects */
++
+ extern void cusolve(int, int, singlecomplex*, singlecomplex*);
+ extern void clsolve(int, int, singlecomplex*, singlecomplex*);
+ extern void cmatvec(int, int, int, singlecomplex*, singlecomplex*, singlecomplex*);
+--- a/scipy/sparse/linalg/_dsolve/SuperLU/SRC/slu_zdefs.h
++++ b/scipy/sparse/linalg/_dsolve/SuperLU/SRC/slu_zdefs.h
+@@ -276,6 +276,51 @@
+ extern void zgemv_(char *, slu_blasint *, slu_blasint *, doublecomplex *, doublecomplex *a, slu_blasint *,
+                   doublecomplex *, slu_blasint *, doublecomplex *, doublecomplex *, slu_blasint *);
+ 
++
++/*
++ * WASIX: flang compiles the Netlib reference BLAS/LAPACK with the standard F77
++ * hidden-CHARACTER-length ABI: one trailing size_t per CHARACTER*1 flag arg
++ * (TRANS/UPLO/DIAG/SIDE/JOBZ/...), appended after ALL explicit args. These
++ * declarations omit those lengths (and declare ?getrf/?getri as CBLAS_INT-
++ * returning though the flang subroutines return void), which is harmless where a
++ * lax C ABI ignores the difference but traps under wasm's strictly typed
++ * call_indirect / dylib import (signature_mismatch:<sym>). For each affected
++ * routine, bind the true flang symbol to a private C name via an asm label (with
++ * the hidden lengths / void return), then redirect the public name to a static
++ * inline wrapper that appends length 1 per char arg (every wrapped arg is
++ * CHARACTER*1; LSAME reads only the first character). The wrapper needs a
++ * DISTINCT name from the true symbol: reusing it makes the asm label bind the
++ * call back to the wrapper (self-recursion under wasm-ld). Counts/return types
++ * verified against the flang-built reference lib arities. See scipy.nix.
++ */
++#if defined(__wasi__) || defined(__wasm__)
++#include <stddef.h>
++#ifndef SCIPY_WASIX_STR
++#define SCIPY_WASIX_STR2(x) #x
++#define SCIPY_WASIX_STR(x) SCIPY_WASIX_STR2(x)
++#endif
++
++#undef zgemm_
++extern void scipy_wasix_real_zgemm(const char* a0, const char* a1, const slu_blasint* a2, const slu_blasint* a3, const slu_blasint* a4, const doublecomplex* a5, const doublecomplex* a6, const slu_blasint* a7, const doublecomplex* a8, const slu_blasint* a9, const doublecomplex* a10, doublecomplex* a11, const slu_blasint* a12, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(zgemm)));
++static inline void scipy_wasix_slu_zgemm(const char* a0, const char* a1, const slu_blasint* a2, const slu_blasint* a3, const slu_blasint* a4, const doublecomplex* a5, const doublecomplex* a6, const slu_blasint* a7, const doublecomplex* a8, const slu_blasint* a9, const doublecomplex* a10, doublecomplex* a11, const slu_blasint* a12) { scipy_wasix_real_zgemm(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, 1, 1); }
++#define zgemm_ scipy_wasix_slu_zgemm
++
++#undef ztrsv_
++extern void scipy_wasix_real_ztrsv(char* a0, char* a1, char* a2, slu_blasint* a3, doublecomplex* a4, slu_blasint* a5, doublecomplex* a6, slu_blasint* a7, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(ztrsv)));
++static inline void scipy_wasix_slu_ztrsv(char* a0, char* a1, char* a2, slu_blasint* a3, doublecomplex* a4, slu_blasint* a5, doublecomplex* a6, slu_blasint* a7) { scipy_wasix_real_ztrsv(a0, a1, a2, a3, a4, a5, a6, a7, 1, 1, 1); }
++#define ztrsv_ scipy_wasix_slu_ztrsv
++
++#undef ztrsm_
++extern void scipy_wasix_real_ztrsm(char* a0, char* a1, char* a2, char* a3, slu_blasint* a4, slu_blasint* a5, doublecomplex* a6, doublecomplex* a7, slu_blasint* a8, doublecomplex* a9, slu_blasint* a10, size_t, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(ztrsm)));
++static inline void scipy_wasix_slu_ztrsm(char* a0, char* a1, char* a2, char* a3, slu_blasint* a4, slu_blasint* a5, doublecomplex* a6, doublecomplex* a7, slu_blasint* a8, doublecomplex* a9, slu_blasint* a10) { scipy_wasix_real_ztrsm(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, 1, 1, 1, 1); }
++#define ztrsm_ scipy_wasix_slu_ztrsm
++
++#undef zgemv_
++extern void scipy_wasix_real_zgemv(char * a0, slu_blasint * a1, slu_blasint * a2, doublecomplex * a3, doublecomplex * a4, slu_blasint * a5, doublecomplex * a6, slu_blasint * a7, doublecomplex * a8, doublecomplex * a9, slu_blasint * a10, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(zgemv)));
++static inline void scipy_wasix_slu_zgemv(char * a0, slu_blasint * a1, slu_blasint * a2, doublecomplex * a3, doublecomplex * a4, slu_blasint * a5, doublecomplex * a6, slu_blasint * a7, doublecomplex * a8, doublecomplex * a9, slu_blasint * a10) { scipy_wasix_real_zgemv(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, 1); }
++#define zgemv_ scipy_wasix_slu_zgemv
++#endif  /* wasm charlen redirects */
++
+ extern void zusolve(int, int, doublecomplex*, doublecomplex*);
+ extern void zlsolve(int, int, doublecomplex*, doublecomplex*);
+ extern void zmatvec(int, int, int, doublecomplex*, doublecomplex*, doublecomplex*);
