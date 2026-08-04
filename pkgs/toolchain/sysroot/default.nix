@@ -1,27 +1,22 @@
-# The from-source wasix sysroot, mirroring wasix-libc's build32-general.sh. Per
-# ABI variant: build libc (the wasix-libc Makefile), compiler-rt, and
-# libc++/libc++abi/libunwind (cmake driven by wasix-libc's committed
-# clang-wasix*.cmake_toolchain files, which stay the single source of the ABI
-# flags). Components are staged (libc, then +compiler-rt, then +libcxx) and
-# merged into a per-variant sysroot. The combined `sysroot` has one subdir per
-# variant (release-tarball layout); wasixcc points WASIXCC_SYSROOT_PREFIX here
-# and selects the subdir by EH/PIC.
+# The from-source wasix sysroot, mirroring wasix-libc's build32-general.sh: per ABI
+# variant, libc then compiler-rt then libc++, each staged against the previous. The
+# combined `sysroot` holds one subdir per variant, as WASIXCC_SYSROOT_PREFIX expects.
 {
   pkgs,
   llvm,
   llvmVersion,
+  flang,
 }: let
   inherit (pkgs) lib;
-  # Profile table: one sysroot variant per profile, encoded as {eh, pic, exnref}
-  # (PIC is only valid with EH).
+  # One sysroot variant per profile, encoded {eh, pic, exnref}; PIC needs EH.
   profilesCfg = import ../../profiles.nix;
 
-  # The wasix-libc source pin lives in libc.nix, next to the witx pins; the
-  # per-variant libc drvs share it as their (content-addressed) src.
+  # The pin lives in libc.nix next to the witx pins; the per-variant libc drvs
+  # share it as their src.
   wasixLibcSrc = (pkgs.callPackage ./libc.nix {}).src;
 
-  # The cmake toolchain file with this variant's ABI flags. PIC is a cmake arg,
-  # not a separate file.
+  # wasix-libc's committed toolchain files are the single source of the ABI flags.
+  # PIC is a cmake arg, not a separate file.
   toolchainFileFor = {
     eh,
     exnref,
@@ -32,11 +27,9 @@
     then "${wasixLibcSrc}/tools/clang-wasix-exnref-eh.cmake_toolchain"
     else "${wasixLibcSrc}/tools/clang-wasix-eh.cmake_toolchain";
 
-  # Merge component output trees into one sysroot (mirrors build32's sysroot(),
-  # which rsyncs them together). A real copy, not symlinkJoin: the components
-  # install into the SAME dirs (lib/wasm32-wasi, include/) and cmake/clang resolve
-  # --sysroot paths through the tree. --no-preserve=mode so later components can
-  # merge into the read-only store copies.
+  # A real copy, not symlinkJoin: components install into the SAME dirs and
+  # cmake/clang resolve --sysroot paths through the tree. --no-preserve=mode lets
+  # later components merge into the read-only store copies.
   mkSysroot = sname: comps:
     pkgs.runCommand "wasix-sysroot-${sname}" {} (
       ''
@@ -48,11 +41,9 @@
       comps
     );
 
-  # Shared by the compiler-rt/libcxx cmake builds: stdenvNoCC has no compiler env,
-  # so export the tools the cmake hook and toolchain file read. The prefix-map
-  # gives reproducible debug info (mirrors build32); computed in preConfigure
-  # because it needs the source path ($PWD before the hook cd's into ./build) and
-  # clang's resource dir.
+  # stdenvNoCC has no compiler env, so export the tools the cmake hook and toolchain
+  # file read. The prefix-map is computed here because it needs the source path
+  # ($PWD before the hook cd's into ./build) and clang's resource dir.
   runtimesPreConfigure = ''
     export CC=clang CXX=clang++ NM=llvm-nm AR=llvm-ar RANLIB=llvm-ranlib STRIP=llvm-strip
     resource_dir="$(clang -print-resource-dir)"
@@ -74,42 +65,46 @@
 
     libc = pkgs.callPackage ./libc.nix {inherit eh pic exnref;};
 
-    # compiler-rt builds against a libc-only sysroot (build32 staging), from the
-    # same LLVM tree the toolchain was built from.
     compiler-rt = pkgs.callPackage ./compiler-rt.nix {
       inherit name pic llvm toolchainFile runtimesPreConfigure;
       version = llvmVersion;
       sysroot = mkSysroot "${name}-rtdeps" [libc];
     };
 
-    # libcxx builds against a sysroot of libc + compiler-rt (build32 staging).
     libcxx = pkgs.callPackage ./libcxx.nix {
       inherit name eh pic llvm toolchainFile runtimesPreConfigure;
       version = llvmVersion;
       sysroot = mkSysroot "${name}-cxxdeps" [libc compiler-rt];
     };
 
-    # Subdir name under the combined sysroot, matching the release tarballs
-    # (off: sysroot, eh: sysroot-eh, ehpic: sysroot-ehpic, ...).
+    # Matches the release tarballs: off -> sysroot, eh -> sysroot-eh, and so on.
     sysrootSubdir = profilesCfg.sysrootSubdirs.${name};
 
     sysroot = mkSysroot name [libc compiler-rt libcxx];
 
-    # Compile smoke test against this sysroot.
+    # The Fortran and OpenMP runtimes stage against the full sysroot, unlike
+    # compiler-rt and libcxx, which build the stages it is made of.
+    flangRt = pkgs.callPackage ../flang-rt.nix {
+      inherit name pic flang llvm toolchainFile sysroot runtimesPreConfigure;
+      version = llvmVersion;
+    };
+
+    openmp = pkgs.callPackage ../openmp.nix {
+      inherit name pic llvm toolchainFile sysroot runtimesPreConfigure;
+      version = llvmVersion;
+    };
+
     test = pkgs.callPackage ../tests/sysroot-test.nix {
       inherit name eh pic toolchainFile sysroot llvm;
     };
   in {
-    inherit name eh pic exnref libc compiler-rt libcxx sysrootSubdir sysroot test;
+    inherit name eh pic exnref libc compiler-rt libcxx sysrootSubdir sysroot flangRt openmp test;
   };
 
-  # One variant per profile: `off` = threads without EH, `eh` adds C++ exceptions,
-  # `pic` builds position-independent, `exnref` uses the exnref/SjLj exception model.
   variants =
     lib.mapAttrs (name: enc: mkVariant (enc // {inherit name;}))
     profilesCfg.sysrootEncodings;
 
-  # Combined sysroot: one subdir per variant; WASIXCC_SYSROOT_PREFIX points here.
   sysroot = pkgs.runCommand "wasix-sysroot" {} (
     ''
       mkdir -p "$out"
@@ -124,5 +119,5 @@ in
   {
     inherit variants sysroot tests;
   }
-  # Default single-variant component attrs = the `off` variant.
+  # The undecorated component attrs are the `off` variant.
   // {inherit (variants.off) libc compiler-rt libcxx;}
