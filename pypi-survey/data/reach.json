@@ -1,0 +1,10558 @@
+{
+ "charset-normalizer": {
+  "pkgs": 2164,
+  "downloads": 21043651475,
+  "self": 1,
+  "rank": 8,
+  "own_downloads": 1481137495
+ },
+ "numpy": {
+  "pkgs": 1358,
+  "downloads": 6951862618,
+  "self": 1,
+  "rank": 18,
+  "own_downloads": 1090380601
+ },
+ "pyyaml": {
+  "pkgs": 1290,
+  "downloads": 8143437224,
+  "self": 1,
+  "rank": 17,
+  "own_downloads": 1107888785
+ },
+ "pydantic-core": {
+  "pkgs": 1162,
+  "downloads": 10279378697,
+  "self": 1,
+  "rank": 26,
+  "own_downloads": 938100909
+ },
+ "cffi": {
+  "pkgs": 1070,
+  "downloads": 15284396246,
+  "self": 1,
+  "rank": 19,
+  "own_downloads": 1084322973
+ },
+ "markupsafe": {
+  "pkgs": 1053,
+  "downloads": 6544073186,
+  "self": 1,
+  "rank": 36,
+  "own_downloads": 745452878
+ },
+ "cryptography": {
+  "pkgs": 886,
+  "downloads": 12736048227,
+  "self": 1,
+  "rank": 11,
+  "own_downloads": 1347495101
+ },
+ "protobuf": {
+  "pkgs": 808,
+  "downloads": 13108346044,
+  "self": 1,
+  "rank": 30,
+  "own_downloads": 857032949
+ },
+ "wrapt": {
+  "pkgs": 545,
+  "downloads": 5770469291,
+  "self": 1,
+  "rank": 83,
+  "own_downloads": 464391052
+ },
+ "multidict": {
+  "pkgs": 520,
+  "downloads": 7017931257,
+  "self": 1,
+  "rank": 56,
+  "own_downloads": 575094724
+ },
+ "rpds-py": {
+  "pkgs": 510,
+  "downloads": 5829872606,
+  "self": 1,
+  "rank": 55,
+  "own_downloads": 576965025
+ },
+ "propcache": {
+  "pkgs": 506,
+  "downloads": 6931896062,
+  "self": 1,
+  "rank": 54,
+  "own_downloads": 581887167
+ },
+ "yarl": {
+  "pkgs": 504,
+  "downloads": 6323988920,
+  "self": 1,
+  "rank": 52,
+  "own_downloads": 607601638
+ },
+ "pillow": {
+  "pkgs": 477,
+  "downloads": 2412706491,
+  "self": 1,
+  "rank": 79,
+  "own_downloads": 494223461
+ },
+ "psutil": {
+  "pkgs": 472,
+  "downloads": 2210326750,
+  "self": 1,
+  "rank": 107,
+  "own_downloads": 382635724
+ },
+ "grpcio": {
+  "pkgs": 467,
+  "downloads": 7873617999,
+  "self": 1,
+  "rank": 86,
+  "own_downloads": 442817867
+ },
+ "pandas": {
+  "pkgs": 463,
+  "downloads": 1912906544,
+  "self": 1,
+  "rank": 34,
+  "own_downloads": 770402548
+ },
+ "frozenlist": {
+  "pkgs": 459,
+  "downloads": 6661902777,
+  "self": 1,
+  "rank": 65,
+  "own_downloads": 540293621
+ },
+ "aiohttp": {
+  "pkgs": 457,
+  "downloads": 5506577447,
+  "self": 1,
+  "rank": 48,
+  "own_downloads": 632089652
+ },
+ "scipy": {
+  "pkgs": 417,
+  "downloads": 1497061686,
+  "self": 1,
+  "rank": 93,
+  "own_downloads": 427254898
+ },
+ "greenlet": {
+  "pkgs": 373,
+  "downloads": 2375002672,
+  "self": 1,
+  "rank": 85,
+  "own_downloads": 446748997
+ },
+ "sqlalchemy": {
+  "pkgs": 333,
+  "downloads": 1734137732,
+  "self": 1,
+  "rank": 99,
+  "own_downloads": 408262516
+ },
+ "regex": {
+  "pkgs": 311,
+  "downloads": 2715008731,
+  "self": 1,
+  "rank": 102,
+  "own_downloads": 400308318
+ },
+ "websockets": {
+  "pkgs": 256,
+  "downloads": 2258314597,
+  "self": 1,
+  "rank": 91,
+  "own_downloads": 429770080
+ },
+ "orjson": {
+  "pkgs": 233,
+  "downloads": 2143275636,
+  "self": 1,
+  "rank": 195,
+  "own_downloads": 203579855
+ },
+ "cuda-bindings": {
+  "pkgs": 208,
+  "downloads": 989847236,
+  "self": 1,
+  "rank": 565,
+  "own_downloads": 49734328
+ },
+ "nvidia-cuda-nvrtc": {
+  "pkgs": 198,
+  "downloads": 1083038861,
+  "self": 1,
+  "rank": 668,
+  "own_downloads": 39092860
+ },
+ "lxml": {
+  "pkgs": 197,
+  "downloads": 1375774829,
+  "self": 1,
+  "rank": 108,
+  "own_downloads": 375267944
+ },
+ "nvidia-cublas": {
+  "pkgs": 197,
+  "downloads": 1043253269,
+  "self": 1,
+  "rank": 657,
+  "own_downloads": 39785592
+ },
+ "nvidia-cuda-cccl": {
+  "pkgs": 197,
+  "downloads": 1004766395,
+  "self": 1,
+  "rank": 3722,
+  "own_downloads": 1512968
+ },
+ "nvidia-nvshmem-cu13": {
+  "pkgs": 196,
+  "downloads": 966582953,
+  "self": 1,
+  "rank": 679,
+  "own_downloads": 38183442
+ },
+ "nvidia-cudnn-cu13": {
+  "pkgs": 195,
+  "downloads": 966216497,
+  "self": 1,
+  "rank": 659,
+  "own_downloads": 39580349
+ },
+ "nvidia-cusparselt-cu13": {
+  "pkgs": 195,
+  "downloads": 966216497,
+  "self": 1,
+  "rank": 663,
+  "own_downloads": 39521520
+ },
+ "nvidia-nccl-cu13": {
+  "pkgs": 195,
+  "downloads": 966216497,
+  "self": 1,
+  "rank": 661,
+  "own_downloads": 39543926
+ },
+ "triton": {
+  "pkgs": 195,
+  "downloads": 966216497,
+  "self": 1,
+  "rank": 454,
+  "own_downloads": 70278546
+ },
+ "torch": {
+  "pkgs": 194,
+  "downloads": 873799713,
+  "self": 1,
+  "rank": 359,
+  "own_downloads": 92416784
+ },
+ "hf-xet": {
+  "pkgs": 177,
+  "downloads": 2544406512,
+  "self": 1,
+  "rank": 161,
+  "own_downloads": 248166257
+ },
+ "pyarrow": {
+  "pkgs": 177,
+  "downloads": 1297224917,
+  "self": 1,
+  "rank": 95,
+  "own_downloads": 417811642
+ },
+ "fonttools": {
+  "pkgs": 171,
+  "downloads": 574180180,
+  "self": 1,
+  "rank": 156,
+  "own_downloads": 251270273
+ },
+ "contourpy": {
+  "pkgs": 164,
+  "downloads": 534801035,
+  "self": 1,
+  "rank": 179,
+  "own_downloads": 218491048
+ },
+ "pyobjc-core": {
+  "pkgs": 161,
+  "downloads": 98223543,
+  "self": 1,
+  "rank": 2578,
+  "own_downloads": 3351834
+ },
+ "pyobjc-framework-cocoa": {
+  "pkgs": 160,
+  "downloads": 95051041,
+  "self": 1,
+  "rank": 2627,
+  "own_downloads": 3172502
+ },
+ "kiwisolver": {
+  "pkgs": 158,
+  "downloads": 519058551,
+  "self": 1,
+  "rank": 172,
+  "own_downloads": 225069833
+ },
+ "matplotlib": {
+  "pkgs": 156,
+  "downloads": 268388864,
+  "self": 1,
+  "rank": 159,
+  "own_downloads": 249450538
+ },
+ "scikit-learn": {
+  "pkgs": 152,
+  "downloads": 289007566,
+  "self": 1,
+  "rank": 177,
+  "own_downloads": 219573429
+ },
+ "msgpack": {
+  "pkgs": 147,
+  "downloads": 668784715,
+  "self": 1,
+  "rank": 147,
+  "own_downloads": 279988475
+ },
+ "jiter": {
+  "pkgs": 146,
+  "downloads": 2308698480,
+  "self": 1,
+  "rank": 115,
+  "own_downloads": 350412146
+ },
+ "zstandard": {
+  "pkgs": 140,
+  "downloads": 1920939050,
+  "self": 1,
+  "rank": 235,
+  "own_downloads": 172180379
+ },
+ "pendulum": {
+  "pkgs": 139,
+  "downloads": 505957640,
+  "self": 1,
+  "rank": 437,
+  "own_downloads": 75049545
+ },
+ "msgspec": {
+  "pkgs": 134,
+  "downloads": 989927749,
+  "self": 1,
+  "rank": 625,
+  "own_downloads": 43674915
+ },
+ "xxhash": {
+  "pkgs": 130,
+  "downloads": 1959925569,
+  "self": 1,
+  "rank": 224,
+  "own_downloads": 180667588
+ },
+ "libcst": {
+  "pkgs": 124,
+  "downloads": 450749017,
+  "self": 1,
+  "rank": 448,
+  "own_downloads": 72840971
+ },
+ "tokenizers": {
+  "pkgs": 122,
+  "downloads": 1623727052,
+  "self": 1,
+  "rank": 185,
+  "own_downloads": 214056212
+ },
+ "setproctitle": {
+  "pkgs": 119,
+  "downloads": 953059143,
+  "self": 1,
+  "rank": 464,
+  "own_downloads": 68705679
+ },
+ "tiktoken": {
+  "pkgs": 116,
+  "downloads": 1726836613,
+  "self": 1,
+  "rank": 180,
+  "own_downloads": 216122227
+ },
+ "watchdog": {
+  "pkgs": 116,
+  "downloads": 283624407,
+  "self": 1,
+  "rank": 312,
+  "own_downloads": 109867851
+ },
+ "lazy-object-proxy": {
+  "pkgs": 115,
+  "downloads": 490881596,
+  "self": 1,
+  "rank": 623,
+  "own_downloads": 43824386
+ },
+ "bcrypt": {
+  "pkgs": 96,
+  "downloads": 360747642,
+  "self": 1,
+  "rank": 197,
+  "own_downloads": 201659122
+ },
+ "chardet": {
+  "pkgs": 94,
+  "downloads": 332828978,
+  "self": 1,
+  "rank": 196,
+  "own_downloads": 202919321
+ },
+ "uuid-utils": {
+  "pkgs": 91,
+  "downloads": 1215929044,
+  "self": 1,
+  "rank": 444,
+  "own_downloads": 73451936
+ },
+ "ml-dtypes": {
+  "pkgs": 89,
+  "downloads": 750825998,
+  "self": 1,
+  "rank": 708,
+  "own_downloads": 36421676
+ },
+ "safetensors": {
+  "pkgs": 85,
+  "downloads": 845369438,
+  "self": 1,
+  "rank": 370,
+  "own_downloads": 88984942
+ },
+ "tornado": {
+  "pkgs": 83,
+  "downloads": 826626962,
+  "self": 1,
+  "rank": 294,
+  "own_downloads": 127259427
+ },
+ "pynacl": {
+  "pkgs": 77,
+  "downloads": 409363118,
+  "self": 1,
+  "rank": 166,
+  "own_downloads": 237441403
+ },
+ "llvmlite": {
+  "pkgs": 67,
+  "downloads": 167045564,
+  "self": 1,
+  "rank": 486,
+  "own_downloads": 64548107
+ },
+ "pycryptodome": {
+  "pkgs": 66,
+  "downloads": 99297328,
+  "self": 1,
+  "rank": 353,
+  "own_downloads": 94151624
+ },
+ "numba": {
+  "pkgs": 66,
+  "downloads": 98101733,
+  "self": 1,
+  "rank": 463,
+  "own_downloads": 68943831
+ },
+ "pyzmq": {
+  "pkgs": 65,
+  "downloads": 1212133819,
+  "self": 1,
+  "rank": 327,
+  "own_downloads": 103170786
+ },
+ "tomli": {
+  "pkgs": 65,
+  "downloads": 200919429,
+  "self": 1,
+  "rank": 103,
+  "own_downloads": 399407098
+ },
+ "rapidfuzz": {
+  "pkgs": 65,
+  "downloads": 535507377,
+  "self": 1,
+  "rank": 223,
+  "own_downloads": 180767714
+ },
+ "debugpy": {
+  "pkgs": 60,
+  "downloads": 285265912,
+  "self": 1,
+  "rank": 319,
+  "own_downloads": 105356351
+ },
+ "zope-interface": {
+  "pkgs": 55,
+  "downloads": 167949638,
+  "self": 1,
+  "rank": 459,
+  "own_downloads": 69561736
+ },
+ "google-crc32c": {
+  "pkgs": 53,
+  "downloads": 1268775657,
+  "self": 1,
+  "rank": 218,
+  "own_downloads": 184645608
+ },
+ "simplejson": {
+  "pkgs": 53,
+  "downloads": 79127394,
+  "self": 1,
+  "rank": 492,
+  "own_downloads": 62030480
+ },
+ "ijson": {
+  "pkgs": 50,
+  "downloads": 88325731,
+  "self": 1,
+  "rank": 554,
+  "own_downloads": 51148039
+ },
+ "onnxruntime": {
+  "pkgs": 48,
+  "downloads": 180457619,
+  "self": 1,
+  "rank": 386,
+  "own_downloads": 85513853
+ },
+ "torchvision": {
+  "pkgs": 44,
+  "downloads": 565443134,
+  "self": 1,
+  "rank": 676,
+  "own_downloads": 38543090
+ },
+ "h5py": {
+  "pkgs": 43,
+  "downloads": 89841469,
+  "self": 1,
+  "rank": 631,
+  "own_downloads": 43063703
+ },
+ "coverage": {
+  "pkgs": 41,
+  "downloads": 243592241,
+  "self": 1,
+  "rank": 135,
+  "own_downloads": 294209166
+ },
+ "cachebox": {
+  "pkgs": 41,
+  "downloads": 464645850,
+  "self": 1,
+  "rank": 1320,
+  "own_downloads": 12095863
+ },
+ "mmh3": {
+  "pkgs": 41,
+  "downloads": 243944417,
+  "self": 1,
+  "rank": 491,
+  "own_downloads": 63261046
+ },
+ "ormsgpack": {
+  "pkgs": 40,
+  "downloads": 568618224,
+  "self": 1,
+  "rank": 573,
+  "own_downloads": 48543263
+ },
+ "watchfiles": {
+  "pkgs": 38,
+  "downloads": 689087384,
+  "self": 1,
+  "rank": 120,
+  "own_downloads": 335489159
+ },
+ "argon2-cffi-bindings": {
+  "pkgs": 37,
+  "downloads": 417423308,
+  "self": 1,
+  "rank": 446,
+  "own_downloads": 73368896
+ },
+ "multiprocess": {
+  "pkgs": 34,
+  "downloads": 753007992,
+  "self": 1,
+  "rank": 140,
+  "own_downloads": 285018284
+ },
+ "brotli": {
+  "pkgs": 34,
+  "downloads": 84257060,
+  "self": 1,
+  "rank": 372,
+  "own_downloads": 88581064
+ },
+ "shapely": {
+  "pkgs": 33,
+  "downloads": 51308772,
+  "self": 1,
+  "rank": 440,
+  "own_downloads": 74983548
+ },
+ "lz4": {
+  "pkgs": 32,
+  "downloads": 277277868,
+  "self": 1,
+  "rank": 339,
+  "own_downloads": 97545357
+ },
+ "opencv-python": {
+  "pkgs": 32,
+  "downloads": 32654559,
+  "self": 1,
+  "rank": 544,
+  "own_downloads": 52434784
+ },
+ "fastuuid": {
+  "pkgs": 31,
+  "downloads": 721699680,
+  "self": 1,
+  "rank": 350,
+  "own_downloads": 95531867
+ },
+ "httptools": {
+  "pkgs": 31,
+  "downloads": 49649960,
+  "self": 1,
+  "rank": 186,
+  "own_downloads": 213092793
+ },
+ "pycares": {
+  "pkgs": 31,
+  "downloads": 64280710,
+  "self": 1,
+  "rank": 902,
+  "own_downloads": 24628484
+ },
+ "ruamel-yaml-clib": {
+  "pkgs": 30,
+  "downloads": 75400249,
+  "self": 1,
+  "rank": 369,
+  "own_downloads": 89173405
+ },
+ "litellm": {
+  "pkgs": 28,
+  "downloads": 85699065,
+  "self": 1,
+  "rank": 47,
+  "own_downloads": 633238370
+ },
+ "dbt-core-experimental-parser": {
+  "pkgs": 28,
+  "downloads": 166285158,
+  "self": 1,
+  "rank": 7325,
+  "own_downloads": 368567
+ },
+ "dbt-extractor": {
+  "pkgs": 28,
+  "downloads": 166285158,
+  "self": 1,
+  "rank": 864,
+  "own_downloads": 26243478
+ },
+ "statsmodels": {
+  "pkgs": 28,
+  "downloads": 28175156,
+  "self": 1,
+  "rank": 675,
+  "own_downloads": 38572864
+ },
+ "uvloop": {
+  "pkgs": 27,
+  "downloads": 554907063,
+  "self": 1,
+  "rank": 193,
+  "own_downloads": 205246996
+ },
+ "av": {
+  "pkgs": 27,
+  "downloads": 43545595,
+  "self": 1,
+  "rank": 801,
+  "own_downloads": 29216431
+ },
+ "jaxlib": {
+  "pkgs": 27,
+  "downloads": 52823802,
+  "self": 1,
+  "rank": 1177,
+  "own_downloads": 15586994
+ },
+ "optree": {
+  "pkgs": 26,
+  "downloads": 74723652,
+  "self": 1,
+  "rank": 1361,
+  "own_downloads": 11477265
+ },
+ "pyobjc-framework-quartz": {
+  "pkgs": 26,
+  "downloads": 15468473,
+  "self": 1,
+  "rank": 2894,
+  "own_downloads": 2591959
+ },
+ "pycryptodomex": {
+  "pkgs": 25,
+  "downloads": 552546171,
+  "self": 1,
+  "rank": 496,
+  "own_downloads": 61263150
+ },
+ "pytokens": {
+  "pkgs": 25,
+  "downloads": 181317594,
+  "self": 1,
+  "rank": 348,
+  "own_downloads": 95783235
+ },
+ "bitarray": {
+  "pkgs": 25,
+  "downloads": 45067552,
+  "self": 1,
+  "rank": 949,
+  "own_downloads": 22412183
+ },
+ "black": {
+  "pkgs": 24,
+  "downloads": 32066293,
+  "self": 1,
+  "rank": 259,
+  "own_downloads": 149251301
+ },
+ "pymongo": {
+  "pkgs": 24,
+  "downloads": 33164429,
+  "self": 1,
+  "rank": 305,
+  "own_downloads": 115769656
+ },
+ "onnx": {
+  "pkgs": 24,
+  "downloads": 50581195,
+  "self": 1,
+  "rank": 1026,
+  "own_downloads": 20272329
+ },
+ "sentencepiece": {
+  "pkgs": 23,
+  "downloads": 529000387,
+  "self": 1,
+  "rank": 751,
+  "own_downloads": 32304139
+ },
+ "mysqlclient": {
+  "pkgs": 23,
+  "downloads": 19150630,
+  "self": 1,
+  "rank": 955,
+  "own_downloads": 22227885
+ },
+ "cytoolz": {
+  "pkgs": 23,
+  "downloads": 63406291,
+  "self": 1,
+  "rank": 1617,
+  "own_downloads": 7902998
+ },
+ "asyncpg": {
+  "pkgs": 22,
+  "downloads": 43852121,
+  "self": 1,
+  "rank": 314,
+  "own_downloads": 107573168
+ },
+ "libclang": {
+  "pkgs": 22,
+  "downloads": 53138204,
+  "self": 1,
+  "rank": 1241,
+  "own_downloads": 14046079
+ },
+ "soundfile": {
+  "pkgs": 21,
+  "downloads": 527138334,
+  "self": 1,
+  "rank": 1005,
+  "own_downloads": 20843811
+ },
+ "psycopg2-binary": {
+  "pkgs": 21,
+  "downloads": 51712894,
+  "self": 1,
+  "rank": 153,
+  "own_downloads": 257275391
+ },
+ "cbor2": {
+  "pkgs": 21,
+  "downloads": 151272006,
+  "self": 1,
+  "rank": 380,
+  "own_downloads": 86923977
+ },
+ "ujson": {
+  "pkgs": 21,
+  "downloads": 31526028,
+  "self": 1,
+  "rank": 696,
+  "own_downloads": 37016822
+ },
+ "cuda-core": {
+  "pkgs": 20,
+  "downloads": 549137284,
+  "self": 1,
+  "rank": 2321,
+  "own_downloads": 4119919
+ },
+ "tree-sitter": {
+  "pkgs": 20,
+  "downloads": 129849981,
+  "self": 1,
+  "rank": 297,
+  "own_downloads": 123513719
+ },
+ "sounddevice": {
+  "pkgs": 20,
+  "downloads": 31210034,
+  "self": 1,
+  "rank": 927,
+  "own_downloads": 23325233
+ },
+ "slixmpp": {
+  "pkgs": 20,
+  "downloads": 5305520,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 160094
+ },
+ "pybase64": {
+  "pkgs": 19,
+  "downloads": 563359322,
+  "self": 1,
+  "rank": 900,
+  "own_downloads": 24677698
+ },
+ "uv": {
+  "pkgs": 19,
+  "downloads": 75063364,
+  "self": 1,
+  "rank": 245,
+  "own_downloads": 168544220
+ },
+ "opencv-python-headless": {
+  "pkgs": 19,
+  "downloads": 29200047,
+  "self": 1,
+  "rank": 646,
+  "own_downloads": 41324847
+ },
+ "tensorboard-data-server": {
+  "pkgs": 19,
+  "downloads": 32423084,
+  "self": 1,
+  "rank": 1041,
+  "own_downloads": 19699007
+ },
+ "torchaudio": {
+  "pkgs": 18,
+  "downloads": 527363315,
+  "self": 1,
+  "rank": 1358,
+  "own_downloads": 11500688
+ },
+ "snowflake-connector-python": {
+  "pkgs": 18,
+  "downloads": 244721948,
+  "self": 1,
+  "rank": 220,
+  "own_downloads": 181832639
+ },
+ "pypdfium2": {
+  "pkgs": 18,
+  "downloads": 90681220,
+  "self": 1,
+  "rank": 504,
+  "own_downloads": 59152412
+ },
+ "duckdb": {
+  "pkgs": 18,
+  "downloads": 32564729,
+  "self": 1,
+  "rank": 562,
+  "own_downloads": 49953646
+ },
+ "pyproj": {
+  "pkgs": 17,
+  "downloads": 30570899,
+  "self": 1,
+  "rank": 873,
+  "own_downloads": 25821220
+ },
+ "thrift": {
+  "pkgs": 16,
+  "downloads": 214736692,
+  "self": 1,
+  "rank": 653,
+  "own_downloads": 39989340
+ },
+ "dulwich": {
+  "pkgs": 16,
+  "downloads": 197212789,
+  "self": 1,
+  "rank": 325,
+  "own_downloads": 103255558
+ },
+ "backports-zstd": {
+  "pkgs": 16,
+  "downloads": 50086171,
+  "self": 1,
+  "rank": 394,
+  "own_downloads": 83678302
+ },
+ "playwright": {
+  "pkgs": 16,
+  "downloads": 37457879,
+  "self": 1,
+  "rank": 400,
+  "own_downloads": 82380098
+ },
+ "crcmod": {
+  "pkgs": 16,
+  "downloads": 17946366,
+  "self": 1,
+  "rank": 1748,
+  "own_downloads": 6852706
+ },
+ "livekit": {
+  "pkgs": 16,
+  "downloads": 23565371,
+  "self": 1,
+  "rank": 2300,
+  "own_downloads": 4185702
+ },
+ "unicon": {
+  "pkgs": 16,
+  "downloads": 5457197,
+  "self": 1,
+  "rank": 7293,
+  "own_downloads": 372264
+ },
+ "ninja": {
+  "pkgs": 15,
+  "downloads": 528123064,
+  "self": 1,
+  "rank": 756,
+  "own_downloads": 31868156
+ },
+ "cython": {
+  "pkgs": 15,
+  "downloads": 9138360,
+  "self": 1,
+  "rank": 292,
+  "own_downloads": 128037996
+ },
+ "fastavro": {
+  "pkgs": 15,
+  "downloads": 55307206,
+  "self": 1,
+  "rank": 611,
+  "own_downloads": 44637731
+ },
+ "tensorflow": {
+  "pkgs": 15,
+  "downloads": 27507392,
+  "self": 1,
+  "rank": 971,
+  "own_downloads": 21630256
+ },
+ "burner-redis": {
+  "pkgs": 15,
+  "downloads": 50861921,
+  "self": 1,
+  "rank": 1200,
+  "own_downloads": 14993708
+ },
+ "frozendict": {
+  "pkgs": 15,
+  "downloads": 10403896,
+  "self": 1,
+  "rank": 989,
+  "own_downloads": 21293399
+ },
+ "soxr": {
+  "pkgs": 15,
+  "downloads": 14893352,
+  "self": 1,
+  "rank": 1410,
+  "own_downloads": 10737320
+ },
+ "livekit-blingfire": {
+  "pkgs": 15,
+  "downloads": 22426098,
+  "self": 1,
+  "rank": 2709,
+  "own_downloads": 3004739
+ },
+ "livekit-local-inference": {
+  "pkgs": 15,
+  "downloads": 22426098,
+  "self": 1,
+  "rank": 7046,
+  "own_downloads": 404368
+ },
+ "blake3": {
+  "pkgs": 14,
+  "downloads": 140726092,
+  "self": 1,
+  "rank": 1134,
+  "own_downloads": 16823126
+ },
+ "cramjam": {
+  "pkgs": 14,
+  "downloads": 43424374,
+  "self": 1,
+  "rank": 736,
+  "own_downloads": 33549788
+ },
+ "srsly": {
+  "pkgs": 14,
+  "downloads": 84177921,
+  "self": 1,
+  "rank": 996,
+  "own_downloads": 21129356
+ },
+ "scikit-image": {
+  "pkgs": 13,
+  "downloads": 11590654,
+  "self": 1,
+  "rank": 761,
+  "own_downloads": 31710670
+ },
+ "cymem": {
+  "pkgs": 13,
+  "downloads": 83281823,
+  "self": 1,
+  "rank": 1027,
+  "own_downloads": 20232373
+ },
+ "murmurhash": {
+  "pkgs": 13,
+  "downloads": 83281823,
+  "self": 1,
+  "rank": 1003,
+  "own_downloads": 20929828
+ },
+ "tensorstore": {
+  "pkgs": 13,
+  "downloads": 20132130,
+  "self": 1,
+  "rank": 2336,
+  "own_downloads": 4090955
+ },
+ "pyats-datastructures": {
+  "pkgs": 13,
+  "downloads": 5081273,
+  "self": 1,
+  "rank": 7051,
+  "own_downloads": 403560
+ },
+ "polars-runtime-32": {
+  "pkgs": 12,
+  "downloads": 80304754,
+  "self": 1,
+  "rank": 581,
+  "own_downloads": 47585789
+ },
+ "crc32c": {
+  "pkgs": 12,
+  "downloads": 28370627,
+  "self": 1,
+  "rank": 738,
+  "own_downloads": 33315442
+ },
+ "blis": {
+  "pkgs": 12,
+  "downloads": 61807644,
+  "self": 1,
+  "rank": 1024,
+  "own_downloads": 20342027
+ },
+ "preshed": {
+  "pkgs": 12,
+  "downloads": 61807644,
+  "self": 1,
+  "rank": 978,
+  "own_downloads": 21474179
+ },
+ "pyats-log": {
+  "pkgs": 12,
+  "downloads": 4688535,
+  "self": 1,
+  "rank": 7151,
+  "own_downloads": 392738
+ },
+ "rapids-logger": {
+  "pkgs": 12,
+  "downloads": 3869827,
+  "self": 1,
+  "rank": 7059,
+  "own_downloads": 402753
+ },
+ "gevent": {
+  "pkgs": 11,
+  "downloads": 38871526,
+  "self": 1,
+  "rank": 524,
+  "own_downloads": 55500655
+ },
+ "ciso8601": {
+  "pkgs": 11,
+  "downloads": 68192319,
+  "self": 1,
+  "rank": 1337,
+  "own_downloads": 11823826
+ },
+ "nh3": {
+  "pkgs": 11,
+  "downloads": 91672312,
+  "self": 1,
+  "rank": 569,
+  "own_downloads": 49330181
+ },
+ "thinc": {
+  "pkgs": 11,
+  "downloads": 38458740,
+  "self": 1,
+  "rank": 925,
+  "own_downloads": 23348904
+ },
+ "rustworkx": {
+  "pkgs": 11,
+  "downloads": 27086025,
+  "self": 1,
+  "rank": 1704,
+  "own_downloads": 7147932
+ },
+ "tibs": {
+  "pkgs": 11,
+  "downloads": 14528373,
+  "self": 1,
+  "rank": 2237,
+  "own_downloads": 4468827
+ },
+ "apsw": {
+  "pkgs": 11,
+  "downloads": 10095763,
+  "self": 1,
+  "rank": 2914,
+  "own_downloads": 2561895
+ },
+ "apache-tvm-ffi": {
+  "pkgs": 10,
+  "downloads": 534633326,
+  "self": 1,
+  "rank": 1794,
+  "own_downloads": 6606000
+ },
+ "nvidia-cuda-nvdisasm": {
+  "pkgs": 10,
+  "downloads": 536570315,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 119888
+ },
+ "dbus-fast": {
+  "pkgs": 10,
+  "downloads": 20306945,
+  "self": 1,
+  "rank": 3149,
+  "own_downloads": 2159804
+ },
+ "pythonnet": {
+  "pkgs": 10,
+  "downloads": 8081828,
+  "self": 1,
+  "rank": 1725,
+  "own_downloads": 6993866
+ },
+ "spglib": {
+  "pkgs": 10,
+  "downloads": 7523536,
+  "self": 1,
+  "rank": 3458,
+  "own_downloads": 1785756
+ },
+ "librmm-cu12": {
+  "pkgs": 10,
+  "downloads": 3196029,
+  "self": 1,
+  "rank": 7665,
+  "own_downloads": 329796
+ },
+ "nvidia-cutlass-dsl-libs-base": {
+  "pkgs": 9,
+  "downloads": 532107140,
+  "self": 1,
+  "rank": 2239,
+  "own_downloads": 4463175
+ },
+ "grpcio-tools": {
+  "pkgs": 9,
+  "downloads": 32876692,
+  "self": 1,
+  "rank": 136,
+  "own_downloads": 293989780
+ },
+ "ast-serialize": {
+  "pkgs": 9,
+  "downloads": 177004787,
+  "self": 1,
+  "rank": 490,
+  "own_downloads": 63614644
+ },
+ "librt": {
+  "pkgs": 9,
+  "downloads": 177004787,
+  "self": 1,
+  "rank": 304,
+  "own_downloads": 119010790
+ },
+ "numexpr": {
+  "pkgs": 9,
+  "downloads": 46441357,
+  "self": 1,
+  "rank": 1168,
+  "own_downloads": 15823864
+ },
+ "spacy": {
+  "pkgs": 9,
+  "downloads": 14461246,
+  "self": 1,
+  "rank": 938,
+  "own_downloads": 22777951
+ },
+ "tree-sitter-bash": {
+  "pkgs": 9,
+  "downloads": 42871664,
+  "self": 1,
+  "rank": 998,
+  "own_downloads": 21086997
+ },
+ "pyogrio": {
+  "pkgs": 9,
+  "downloads": 24869127,
+  "self": 1,
+  "rank": 1165,
+  "own_downloads": 15858799
+ },
+ "chromadb": {
+  "pkgs": 9,
+  "downloads": 27866292,
+  "self": 1,
+  "rank": 1272,
+  "own_downloads": 13349187
+ },
+ "ckzg": {
+  "pkgs": 9,
+  "downloads": 23151381,
+  "self": 1,
+  "rank": 2025,
+  "own_downloads": 5429343
+ },
+ "dm-tree": {
+  "pkgs": 9,
+  "downloads": 6180295,
+  "self": 1,
+  "rank": 2131,
+  "own_downloads": 4919193
+ },
+ "cmeel-boost": {
+  "pkgs": 9,
+  "downloads": 6931309,
+  "self": 1,
+  "rank": 3733,
+  "own_downloads": 1503802
+ },
+ "cmeel-zlib": {
+  "pkgs": 9,
+  "downloads": 5942184,
+  "self": 1,
+  "rank": 4019,
+  "own_downloads": 1281843
+ },
+ "azureml-dataprep-native": {
+  "pkgs": 9,
+  "downloads": 3828674,
+  "self": 1,
+  "rank": 6811,
+  "own_downloads": 443725
+ },
+ "azureml-dataprep-rslex": {
+  "pkgs": 9,
+  "downloads": 3828674,
+  "self": 1,
+  "rank": 6708,
+  "own_downloads": 457174
+ },
+ "pyobjc-framework-coremedia": {
+  "pkgs": 9,
+  "downloads": 4991566,
+  "self": 1,
+  "rank": 5731,
+  "own_downloads": 642025
+ },
+ "pyats-async": {
+  "pkgs": 9,
+  "downloads": 3485290,
+  "self": 1,
+  "rank": 7074,
+  "own_downloads": 401751
+ },
+ "zope-proxy": {
+  "pkgs": 9,
+  "downloads": 2366866,
+  "self": 1,
+  "rank": 6902,
+  "own_downloads": 426100
+ },
+ "nvidia-cutlass-dsl-libs-cu12": {
+  "pkgs": 8,
+  "downloads": 530380193,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "ruff": {
+  "pkgs": 8,
+  "downloads": 7229002,
+  "self": 1,
+  "rank": 149,
+  "own_downloads": 270360248
+ },
+ "mypy": {
+  "pkgs": 8,
+  "downloads": 4542673,
+  "self": 1,
+  "rank": 234,
+  "own_downloads": 172462114
+ },
+ "pyroaring": {
+  "pkgs": 8,
+  "downloads": 87339362,
+  "self": 1,
+  "rank": 744,
+  "own_downloads": 32780446
+ },
+ "arro3-core": {
+  "pkgs": 8,
+  "downloads": 54590457,
+  "self": 1,
+  "rank": 1360,
+  "own_downloads": 11489011
+ },
+ "pyclipper": {
+  "pkgs": 8,
+  "downloads": 11774796,
+  "self": 1,
+  "rank": 1477,
+  "own_downloads": 9652840
+ },
+ "zeroconf": {
+  "pkgs": 8,
+  "downloads": 13032905,
+  "self": 1,
+  "rank": 2746,
+  "own_downloads": 2930806
+ },
+ "aiooui": {
+  "pkgs": 8,
+  "downloads": 18060485,
+  "self": 1,
+  "rank": 6712,
+  "own_downloads": 456721
+ },
+ "pygit2": {
+  "pkgs": 8,
+  "downloads": 9670749,
+  "self": 1,
+  "rank": 1965,
+  "own_downloads": 5768462
+ },
+ "capstone": {
+  "pkgs": 8,
+  "downloads": 6445698,
+  "self": 1,
+  "rank": 2330,
+  "own_downloads": 4098127
+ },
+ "tcmlib": {
+  "pkgs": 8,
+  "downloads": 6135253,
+  "self": 1,
+  "rank": 2953,
+  "own_downloads": 2470638
+ },
+ "cmeel-assimp": {
+  "pkgs": 8,
+  "downloads": 4644892,
+  "self": 1,
+  "rank": 4000,
+  "own_downloads": 1297292
+ },
+ "cmeel-octomap": {
+  "pkgs": 8,
+  "downloads": 4644892,
+  "self": 1,
+  "rank": 4035,
+  "own_downloads": 1271238
+ },
+ "cmeel-qhull": {
+  "pkgs": 8,
+  "downloads": 4644892,
+  "self": 1,
+  "rank": 4041,
+  "own_downloads": 1268512
+ },
+ "pyobjc-framework-coreaudio": {
+  "pkgs": 8,
+  "downloads": 4448230,
+  "self": 1,
+  "rank": 5735,
+  "own_downloads": 640371
+ },
+ "pyats-connections": {
+  "pkgs": 8,
+  "downloads": 3081945,
+  "self": 1,
+  "rank": 7053,
+  "own_downloads": 403345
+ },
+ "winrt-runtime": {
+  "pkgs": 8,
+  "downloads": 1884844,
+  "self": 1,
+  "rank": 7729,
+  "own_downloads": 322476
+ },
+ "z3-solver": {
+  "pkgs": 7,
+  "downloads": 518954691,
+  "self": 1,
+  "rank": 1900,
+  "own_downloads": 6053696
+ },
+ "pymupdf": {
+  "pkgs": 7,
+  "downloads": 58985567,
+  "self": 1,
+  "rank": 346,
+  "own_downloads": 96090872
+ },
+ "lmnr-claude-code-proxy": {
+  "pkgs": 7,
+  "downloads": 131849145,
+  "self": 1,
+  "rank": 1391,
+  "own_downloads": 10991456
+ },
+ "nvidia-nccl-cu12": {
+  "pkgs": 7,
+  "downloads": 50995128,
+  "self": 1,
+  "rank": 555,
+  "own_downloads": 51022865
+ },
+ "pyodbc": {
+  "pkgs": 7,
+  "downloads": 7049270,
+  "self": 1,
+  "rank": 629,
+  "own_downloads": 43156974
+ },
+ "pyiceberg": {
+  "pkgs": 7,
+  "downloads": 49940436,
+  "self": 1,
+  "rank": 690,
+  "own_downloads": 37398926
+ },
+ "curl-cffi": {
+  "pkgs": 7,
+  "downloads": 29338188,
+  "self": 1,
+  "rank": 734,
+  "own_downloads": 34332089
+ },
+ "nvidia-nvjitlink-cu12": {
+  "pkgs": 7,
+  "downloads": 83633723,
+  "self": 1,
+  "rank": 834,
+  "own_downloads": 27532270
+ },
+ "pywavelets": {
+  "pkgs": 7,
+  "downloads": 9481241,
+  "self": 1,
+  "rank": 1142,
+  "own_downloads": 16595752
+ },
+ "python-box": {
+  "pkgs": 7,
+  "downloads": 4436619,
+  "self": 1,
+  "rank": 1634,
+  "own_downloads": 7703845
+ },
+ "pyerfa": {
+  "pkgs": 7,
+  "downloads": 6479837,
+  "self": 1,
+  "rank": 2232,
+  "own_downloads": 4485952
+ },
+ "pycrdt": {
+  "pkgs": 7,
+  "downloads": 6393531,
+  "self": 1,
+  "rank": 2831,
+  "own_downloads": 2768276
+ },
+ "qh3": {
+  "pkgs": 7,
+  "downloads": 7722575,
+  "self": 1,
+  "rank": 2853,
+  "own_downloads": 2681379
+ },
+ "pyqwest": {
+  "pkgs": 7,
+  "downloads": 4345997,
+  "self": 1,
+  "rank": 3457,
+  "own_downloads": 1788002
+ },
+ "zope-hookable": {
+  "pkgs": 7,
+  "downloads": 2001244,
+  "self": 1,
+  "rank": 4925,
+  "own_downloads": 811082
+ },
+ "systemrdl-compiler": {
+  "pkgs": 7,
+  "downloads": 1743629,
+  "self": 1,
+  "rank": 5521,
+  "own_downloads": 705026
+ },
+ "zope-i18nmessageid": {
+  "pkgs": 7,
+  "downloads": 1844218,
+  "self": 1,
+  "rank": 5618,
+  "own_downloads": 674855
+ },
+ "pyats-results": {
+  "pkgs": 7,
+  "downloads": 2678377,
+  "self": 1,
+  "rank": 7067,
+  "own_downloads": 402061
+ },
+ "pyats-topology": {
+  "pkgs": 7,
+  "downloads": 2679880,
+  "self": 1,
+  "rank": 7066,
+  "own_downloads": 402065
+ },
+ "pyats-utils": {
+  "pkgs": 7,
+  "downloads": 2679484,
+  "self": 1,
+  "rank": 7063,
+  "own_downloads": 402461
+ },
+ "torch-c-dlpack-ext": {
+  "pkgs": 6,
+  "downloads": 521754826,
+  "self": 1,
+  "rank": 2382,
+  "own_downloads": 3932744
+ },
+ "ray": {
+  "pkgs": 6,
+  "downloads": 19449728,
+  "self": 1,
+  "rank": 497,
+  "own_downloads": 61010946
+ },
+ "python-rapidjson": {
+  "pkgs": 6,
+  "downloads": 42964646,
+  "self": 1,
+  "rank": 2035,
+  "own_downloads": 5369819
+ },
+ "magika": {
+  "pkgs": 6,
+  "downloads": 12665381,
+  "self": 1,
+  "rank": 1294,
+  "own_downloads": 12657387
+ },
+ "imageio-ffmpeg": {
+  "pkgs": 6,
+  "downloads": 9294416,
+  "self": 1,
+  "rank": 1315,
+  "own_downloads": 12225749
+ },
+ "google-re2": {
+  "pkgs": 6,
+  "downloads": 29940891,
+  "self": 1,
+  "rank": 1318,
+  "own_downloads": 12134230
+ },
+ "tree-sitter-language-pack": {
+  "pkgs": 6,
+  "downloads": 19510804,
+  "self": 1,
+  "rank": 1348,
+  "own_downloads": 11613997
+ },
+ "primp": {
+  "pkgs": 6,
+  "downloads": 15116970,
+  "self": 1,
+  "rank": 1364,
+  "own_downloads": 11410923
+ },
+ "py-rust-stemmers": {
+  "pkgs": 6,
+  "downloads": 14983265,
+  "self": 1,
+  "rank": 2037,
+  "own_downloads": 5364281
+ },
+ "numcodecs": {
+  "pkgs": 6,
+  "downloads": 14452343,
+  "self": 1,
+  "rank": 1757,
+  "own_downloads": 6808730
+ },
+ "rdkit": {
+  "pkgs": 6,
+  "downloads": 1978866,
+  "self": 1,
+  "rank": 1595,
+  "own_downloads": 8084903
+ },
+ "rasterio": {
+  "pkgs": 6,
+  "downloads": 3223875,
+  "self": 1,
+  "rank": 1869,
+  "own_downloads": 6234434
+ },
+ "obstore": {
+  "pkgs": 6,
+  "downloads": 5832689,
+  "self": 1,
+  "rank": 2067,
+  "own_downloads": 5284264
+ },
+ "astropy": {
+  "pkgs": 6,
+  "downloads": 1839188,
+  "self": 1,
+  "rank": 2194,
+  "own_downloads": 4640649
+ },
+ "glfw": {
+  "pkgs": 6,
+  "downloads": 4261702,
+  "self": 1,
+  "rank": 2487,
+  "own_downloads": 3600034
+ },
+ "jh2": {
+  "pkgs": 6,
+  "downloads": 7281226,
+  "self": 1,
+  "rank": 3041,
+  "own_downloads": 2329152
+ },
+ "eigenpy": {
+  "pkgs": 6,
+  "downloads": 3538677,
+  "self": 1,
+  "rank": 3070,
+  "own_downloads": 2286417
+ },
+ "pymatgen-core": {
+  "pkgs": 6,
+  "downloads": 4490131,
+  "self": 1,
+  "rank": 6495,
+  "own_downloads": 496703
+ },
+ "pyobjc-framework-security": {
+  "pkgs": 6,
+  "downloads": 3350447,
+  "self": 1,
+  "rank": 4506,
+  "own_downloads": 986009
+ },
+ "pyobjc-framework-metal": {
+  "pkgs": 6,
+  "downloads": 3170656,
+  "self": 1,
+  "rank": 5920,
+  "own_downloads": 597351
+ },
+ "serialx": {
+  "pkgs": 6,
+  "downloads": 1990955,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 128141
+ },
+ "pyats-aereport": {
+  "pkgs": 6,
+  "downloads": 2277419,
+  "self": 1,
+  "rank": 7078,
+  "own_downloads": 400958
+ },
+ "hypothesis": {
+  "pkgs": 5,
+  "downloads": 12670313,
+  "self": 1,
+  "rank": 639,
+  "own_downloads": 41968730
+ },
+ "tree-sitter-javascript": {
+  "pkgs": 5,
+  "downloads": 5745557,
+  "self": 1,
+  "rank": 739,
+  "own_downloads": 33245579
+ },
+ "nvidia-cuda-nvrtc-cu12": {
+  "pkgs": 5,
+  "downloads": 87817626,
+  "self": 1,
+  "rank": 791,
+  "own_downloads": 29956813
+ },
+ "openlineage-sql": {
+  "pkgs": 5,
+  "downloads": 30761556,
+  "self": 1,
+  "rank": 1524,
+  "own_downloads": 8867348
+ },
+ "bluetooth-data-tools": {
+  "pkgs": 5,
+  "downloads": 16258694,
+  "self": 1,
+  "rank": 2899,
+  "own_downloads": 2582535
+ },
+ "whenever": {
+  "pkgs": 5,
+  "downloads": 14739593,
+  "self": 1,
+  "rank": 1934,
+  "own_downloads": 5909726
+ },
+ "zstd": {
+  "pkgs": 5,
+  "downloads": 6245569,
+  "self": 1,
+  "rank": 1633,
+  "own_downloads": 7711359
+ },
+ "hf-transfer": {
+  "pkgs": 5,
+  "downloads": 4858890,
+  "self": 1,
+  "rank": 1964,
+  "own_downloads": 5775080
+ },
+ "freetype-py": {
+  "pkgs": 5,
+  "downloads": 5029836,
+  "self": 1,
+  "rank": 2109,
+  "own_downloads": 5017817
+ },
+ "osqp": {
+  "pkgs": 5,
+  "downloads": 5561719,
+  "self": 1,
+  "rank": 2154,
+  "own_downloads": 4776880
+ },
+ "qdldl": {
+  "pkgs": 5,
+  "downloads": 5479193,
+  "self": 1,
+  "rank": 3500,
+  "own_downloads": 1729074
+ },
+ "sparsediffpy": {
+  "pkgs": 5,
+  "downloads": 5479193,
+  "self": 1,
+  "rank": 4059,
+  "own_downloads": 1256102
+ },
+ "lmdb": {
+  "pkgs": 5,
+  "downloads": 3297016,
+  "self": 1,
+  "rank": 2256,
+  "own_downloads": 4372580
+ },
+ "editdistance": {
+  "pkgs": 5,
+  "downloads": 1982797,
+  "self": 1,
+  "rank": 2464,
+  "own_downloads": 3672264
+ },
+ "array-record": {
+  "pkgs": 5,
+  "downloads": 3773599,
+  "self": 1,
+  "rank": 2803,
+  "own_downloads": 2833709
+ },
+ "mujoco": {
+  "pkgs": 5,
+  "downloads": 1670146,
+  "self": 1,
+  "rank": 2895,
+  "own_downloads": 2591556
+ },
+ "coreforecast": {
+  "pkgs": 5,
+  "downloads": 3112326,
+  "self": 1,
+  "rank": 3364,
+  "own_downloads": 1894951
+ },
+ "cmeel-console-bridge": {
+  "pkgs": 5,
+  "downloads": 4028395,
+  "self": 1,
+  "rank": 4044,
+  "own_downloads": 1266716
+ },
+ "cmeel-tinyxml2": {
+  "pkgs": 5,
+  "downloads": 4028395,
+  "self": 1,
+  "rank": 4231,
+  "own_downloads": 1143791
+ },
+ "libcoal": {
+  "pkgs": 5,
+  "downloads": 3263658,
+  "self": 1,
+  "rank": 6309,
+  "own_downloads": 534051
+ },
+ "awkward-cpp": {
+  "pkgs": 5,
+  "downloads": 3446953,
+  "self": 1,
+  "rank": 5578,
+  "own_downloads": 685799
+ },
+ "umf": {
+  "pkgs": 5,
+  "downloads": 2613027,
+  "self": 1,
+  "rank": 6083,
+  "own_downloads": 575119
+ },
+ "pyobjc-framework-fsevents": {
+  "pkgs": 5,
+  "downloads": 2907762,
+  "self": 1,
+  "rank": 5835,
+  "own_downloads": 617696
+ },
+ "rmm-cu12": {
+  "pkgs": 5,
+  "downloads": 1594351,
+  "self": 1,
+  "rank": 7153,
+  "own_downloads": 392630
+ },
+ "openai-harmony": {
+  "pkgs": 4,
+  "downloads": 514774787,
+  "self": 1,
+  "rank": 1962,
+  "own_downloads": 5793547
+ },
+ "torchao": {
+  "pkgs": 4,
+  "downloads": 511320328,
+  "self": 1,
+  "rank": 2584,
+  "own_downloads": 3336948
+ },
+ "torchcodec": {
+  "pkgs": 4,
+  "downloads": 516336688,
+  "self": 1,
+  "rank": 2246,
+  "own_downloads": 4441147
+ },
+ "rfc3161-client": {
+  "pkgs": 4,
+  "downloads": 509768464,
+  "self": 1,
+  "rank": 5715,
+  "own_downloads": 646416
+ },
+ "pywin32": {
+  "pkgs": 4,
+  "downloads": 3524440,
+  "self": 1,
+  "rank": 520,
+  "own_downloads": 56411277
+ },
+ "nvidia-nvjitlink": {
+  "pkgs": 4,
+  "downloads": 114339036,
+  "self": 1,
+  "rank": 687,
+  "own_downloads": 37638570
+ },
+ "nvidia-cublas-cu12": {
+  "pkgs": 4,
+  "downloads": 57508984,
+  "self": 1,
+  "rank": 781,
+  "own_downloads": 30308642
+ },
+ "tree-sitter-java": {
+  "pkgs": 4,
+  "downloads": 1877723,
+  "self": 1,
+  "rank": 798,
+  "own_downloads": 29417354
+ },
+ "deltalake": {
+  "pkgs": 4,
+  "downloads": 24690273,
+  "self": 1,
+  "rank": 802,
+  "own_downloads": 29087288
+ },
+ "jpype1": {
+  "pkgs": 4,
+  "downloads": 20293045,
+  "self": 1,
+  "rank": 847,
+  "own_downloads": 26983306
+ },
+ "wandb": {
+  "pkgs": 4,
+  "downloads": 1616419,
+  "self": 1,
+  "rank": 899,
+  "own_downloads": 24697376
+ },
+ "jellyfish": {
+  "pkgs": 4,
+  "downloads": 6759496,
+  "self": 1,
+  "rank": 1310,
+  "own_downloads": 12389976
+ },
+ "pyinstrument": {
+  "pkgs": 4,
+  "downloads": 2066510,
+  "self": 1,
+  "rank": 1389,
+  "own_downloads": 11007869
+ },
+ "ctranslate2": {
+  "pkgs": 4,
+  "downloads": 12009083,
+  "self": 1,
+  "rank": 1401,
+  "own_downloads": 10830789
+ },
+ "python-bidi": {
+  "pkgs": 4,
+  "downloads": 8548943,
+  "self": 1,
+  "rank": 1411,
+  "own_downloads": 10732249
+ },
+ "fnv-hash-fast": {
+  "pkgs": 4,
+  "downloads": 10826058,
+  "self": 1,
+  "rank": 4831,
+  "own_downloads": 842437
+ },
+ "lru-dict": {
+  "pkgs": 4,
+  "downloads": 18081608,
+  "self": 1,
+  "rank": 2048,
+  "own_downloads": 5338550
+ },
+ "habluetooth": {
+  "pkgs": 4,
+  "downloads": 10954337,
+  "self": 1,
+  "rank": 2058,
+  "own_downloads": 5304357
+ },
+ "pyppmd": {
+  "pkgs": 4,
+  "downloads": 8861046,
+  "self": 1,
+  "rank": 1615,
+  "own_downloads": 7918957
+ },
+ "inflate64": {
+  "pkgs": 4,
+  "downloads": 8861046,
+  "self": 1,
+  "rank": 1676,
+  "own_downloads": 7341977
+ },
+ "pybcj": {
+  "pkgs": 4,
+  "downloads": 8861046,
+  "self": 1,
+  "rank": 1666,
+  "own_downloads": 7428092
+ },
+ "python-crfsuite": {
+  "pkgs": 4,
+  "downloads": 8661223,
+  "self": 1,
+  "rank": 1826,
+  "own_downloads": 6401931
+ },
+ "tree-sitter-typescript": {
+  "pkgs": 4,
+  "downloads": 5481544,
+  "self": 1,
+  "rank": 1830,
+  "own_downloads": 6396006
+ },
+ "pyahocorasick": {
+  "pkgs": 4,
+  "downloads": 1706086,
+  "self": 1,
+  "rank": 1864,
+  "own_downloads": 6252811
+ },
+ "nvtx": {
+  "pkgs": 4,
+  "downloads": 6963920,
+  "self": 1,
+  "rank": 4289,
+  "own_downloads": 1109228
+ },
+ "numkong": {
+  "pkgs": 4,
+  "downloads": 9705549,
+  "self": 1,
+  "rank": 6600,
+  "own_downloads": 476258
+ },
+ "tensorflow-text": {
+  "pkgs": 4,
+  "downloads": 1354343,
+  "self": 1,
+  "rank": 2160,
+  "own_downloads": 4765217
+ },
+ "pyqt6-qt6": {
+  "pkgs": 4,
+  "downloads": 6977527,
+  "self": 1,
+  "rank": 2329,
+  "own_downloads": 4098265
+ },
+ "pyqt6-sip": {
+  "pkgs": 4,
+  "downloads": 6977527,
+  "self": 1,
+  "rank": 2357,
+  "own_downloads": 4021379
+ },
+ "clarabel": {
+  "pkgs": 4,
+  "downloads": 5263312,
+  "self": 1,
+  "rank": 2552,
+  "own_downloads": 3411010
+ },
+ "highspy": {
+  "pkgs": 4,
+  "downloads": 5263312,
+  "self": 1,
+  "rank": 2756,
+  "own_downloads": 2922224
+ },
+ "scs": {
+  "pkgs": 4,
+  "downloads": 5263312,
+  "self": 1,
+  "rank": 2562,
+  "own_downloads": 3397700
+ },
+ "coincurve": {
+  "pkgs": 4,
+  "downloads": 5101043,
+  "self": 1,
+  "rank": 2775,
+  "own_downloads": 2868605
+ },
+ "pycocotools": {
+  "pkgs": 4,
+  "downloads": 1972581,
+  "self": 1,
+  "rank": 2354,
+  "own_downloads": 4029603
+ },
+ "pycairo": {
+  "pkgs": 4,
+  "downloads": 3822296,
+  "self": 1,
+  "rank": 2441,
+  "own_downloads": 3736538
+ },
+ "psygnal": {
+  "pkgs": 4,
+  "downloads": 6302464,
+  "self": 1,
+  "rank": 2455,
+  "own_downloads": 3695829
+ },
+ "shiboken6": {
+  "pkgs": 4,
+  "downloads": 9603276,
+  "self": 1,
+  "rank": 2559,
+  "own_downloads": 3402742
+ },
+ "pyqt5-qt5": {
+  "pkgs": 4,
+  "downloads": 4682919,
+  "self": 1,
+  "rank": 2739,
+  "own_downloads": 2942750
+ },
+ "pyqt5-sip": {
+  "pkgs": 4,
+  "downloads": 4682919,
+  "self": 1,
+  "rank": 2699,
+  "own_downloads": 3020608
+ },
+ "adbc-driver-manager": {
+  "pkgs": 4,
+  "downloads": 3897785,
+  "self": 1,
+  "rank": 2869,
+  "own_downloads": 2637999
+ },
+ "pytensor": {
+  "pkgs": 4,
+  "downloads": 3161410,
+  "self": 1,
+  "rank": 3572,
+  "own_downloads": 1665895
+ },
+ "cmeel-urdfdom": {
+  "pkgs": 4,
+  "downloads": 2691164,
+  "self": 1,
+  "rank": 3946,
+  "own_downloads": 1337231
+ },
+ "plum-dispatch": {
+  "pkgs": 4,
+  "downloads": 2470280,
+  "self": 1,
+  "rank": 3677,
+  "own_downloads": 1552704
+ },
+ "wasmtime": {
+  "pkgs": 4,
+  "downloads": 1106800,
+  "self": 1,
+  "rank": 3940,
+  "own_downloads": 1340997
+ },
+ "libusb-package": {
+  "pkgs": 4,
+  "downloads": 2093487,
+  "self": 1,
+  "rank": 4017,
+  "own_downloads": 1282439
+ },
+ "cmsis-pack-manager": {
+  "pkgs": 4,
+  "downloads": 2093487,
+  "self": 1,
+  "rank": 4355,
+  "own_downloads": 1068854
+ },
+ "qiskit": {
+  "pkgs": 4,
+  "downloads": 1778152,
+  "self": 1,
+  "rank": 4135,
+  "own_downloads": 1206572
+ },
+ "traits": {
+  "pkgs": 4,
+  "downloads": 1640603,
+  "self": 1,
+  "rank": 4208,
+  "own_downloads": 1160183
+ },
+ "intel-cmplr-lib-ur": {
+  "pkgs": 4,
+  "downloads": 1891909,
+  "self": 1,
+  "rank": 5406,
+  "own_downloads": 721118
+ },
+ "pyobjc-framework-avfoundation": {
+  "pkgs": 4,
+  "downloads": 2099835,
+  "self": 1,
+  "rank": 5799,
+  "own_downloads": 625612
+ },
+ "pyobjc-framework-coreservices": {
+  "pkgs": 4,
+  "downloads": 2302337,
+  "self": 1,
+  "rank": 5886,
+  "own_downloads": 605425
+ },
+ "safe-pysha3": {
+  "pkgs": 4,
+  "downloads": 1384282,
+  "self": 1,
+  "rank": 7337,
+  "own_downloads": 366892
+ },
+ "pyats-aetest": {
+  "pkgs": 4,
+  "downloads": 1478653,
+  "self": 1,
+  "rank": 7054,
+  "own_downloads": 403332
+ },
+ "libkvikio-cu12": {
+  "pkgs": 4,
+  "downloads": 1486000,
+  "self": 1,
+  "rank": 7528,
+  "own_downloads": 344002
+ },
+ "nvidia-libnvcomp-cu12": {
+  "pkgs": 4,
+  "downloads": 1486000,
+  "self": 1,
+  "rank": 8800,
+  "own_downloads": 236960
+ },
+ "persistent": {
+  "pkgs": 4,
+  "downloads": 961552,
+  "self": 1,
+  "rank": 7212,
+  "own_downloads": 383451
+ },
+ "genie": {
+  "pkgs": 4,
+  "downloads": 1035282,
+  "self": 1,
+  "rank": 7962,
+  "own_downloads": 300133
+ },
+ "llguidance": {
+  "pkgs": 3,
+  "downloads": 514121627,
+  "self": 1,
+  "rank": 2017,
+  "own_downloads": 5461199
+ },
+ "cuda-tile": {
+  "pkgs": 3,
+  "downloads": 517860988,
+  "self": 1,
+  "rank": 2724,
+  "own_downloads": 2974350
+ },
+ "nvidia-cudnn-frontend": {
+  "pkgs": 3,
+  "downloads": 517860988,
+  "self": 1,
+  "rank": 2556,
+  "own_downloads": 3405300
+ },
+ "outlines-core": {
+  "pkgs": 3,
+  "downloads": 515229741,
+  "self": 1,
+  "rank": 2123,
+  "own_downloads": 4950359
+ },
+ "tokenspeed-triton": {
+  "pkgs": 3,
+  "downloads": 514751531,
+  "self": 1,
+  "rank": 3737,
+  "own_downloads": 1497600
+ },
+ "caio": {
+  "pkgs": 3,
+  "downloads": 68874957,
+  "self": 1,
+  "rank": 478,
+  "own_downloads": 66188343
+ },
+ "confluent-kafka": {
+  "pkgs": 3,
+  "downloads": 2872666,
+  "self": 1,
+  "rank": 511,
+  "own_downloads": 57610189
+ },
+ "pymssql": {
+  "pkgs": 3,
+  "downloads": 26628281,
+  "self": 1,
+  "rank": 548,
+  "own_downloads": 51709362
+ },
+ "tree-sitter-c-sharp": {
+  "pkgs": 3,
+  "downloads": 2343893,
+  "self": 1,
+  "rank": 705,
+  "own_downloads": 36662098
+ },
+ "tree-sitter-go": {
+  "pkgs": 3,
+  "downloads": 1613710,
+  "self": 1,
+  "rank": 804,
+  "own_downloads": 29003588
+ },
+ "hiredis": {
+  "pkgs": 3,
+  "downloads": 764869,
+  "self": 1,
+  "rank": 818,
+  "own_downloads": 28247239
+ },
+ "oracledb": {
+  "pkgs": 3,
+  "downloads": 24533073,
+  "self": 1,
+  "rank": 852,
+  "own_downloads": 26698403
+ },
+ "lightgbm": {
+  "pkgs": 3,
+  "downloads": 1345797,
+  "self": 1,
+  "rank": 965,
+  "own_downloads": 21837330
+ },
+ "awscrt": {
+  "pkgs": 3,
+  "downloads": 2000537,
+  "self": 1,
+  "rank": 1087,
+  "own_downloads": 18084058
+ },
+ "shap": {
+  "pkgs": 3,
+  "downloads": 2371042,
+  "self": 1,
+  "rank": 1118,
+  "own_downloads": 17317142
+ },
+ "faiss-cpu": {
+  "pkgs": 3,
+  "downloads": 2191499,
+  "self": 1,
+  "rank": 1125,
+  "own_downloads": 17193021
+ },
+ "geventhttpclient": {
+  "pkgs": 3,
+  "downloads": 15693782,
+  "self": 1,
+  "rank": 1336,
+  "own_downloads": 11832976
+ },
+ "clickhouse-driver": {
+  "pkgs": 3,
+  "downloads": 4421595,
+  "self": 1,
+  "rank": 1300,
+  "own_downloads": 12587821
+ },
+ "nodejs-wheel-binaries": {
+  "pkgs": 3,
+  "downloads": 9669873,
+  "self": 1,
+  "rank": 1313,
+  "own_downloads": 12284977
+ },
+ "jsonschema-rs": {
+  "pkgs": 3,
+  "downloads": 18166377,
+  "self": 1,
+  "rank": 2054,
+  "own_downloads": 5322967
+ },
+ "forbiddenfruit": {
+  "pkgs": 3,
+  "downloads": 17821578,
+  "self": 1,
+  "rank": 2993,
+  "own_downloads": 2399285
+ },
+ "audioop-lts": {
+  "pkgs": 3,
+  "downloads": 10426266,
+  "self": 1,
+  "rank": 1502,
+  "own_downloads": 9153382
+ },
+ "cassandra-driver": {
+  "pkgs": 3,
+  "downloads": 809849,
+  "self": 1,
+  "rank": 1514,
+  "own_downloads": 8957896
+ },
+ "pi-heif": {
+  "pkgs": 3,
+  "downloads": 6905599,
+  "self": 1,
+  "rank": 1580,
+  "own_downloads": 8234466
+ },
+ "annotatedyaml": {
+  "pkgs": 3,
+  "downloads": 10426266,
+  "self": 1,
+  "rank": 7906,
+  "own_downloads": 305504
+ },
+ "ulid-transform": {
+  "pkgs": 3,
+  "downloads": 10426266,
+  "self": 1,
+  "rank": 6267,
+  "own_downloads": 542531
+ },
+ "rtree": {
+  "pkgs": 3,
+  "downloads": 6381739,
+  "self": 1,
+  "rank": 1590,
+  "own_downloads": 8114036
+ },
+ "pinecone": {
+  "pkgs": 3,
+  "downloads": 1396305,
+  "self": 1,
+  "rank": 1606,
+  "own_downloads": 7971185
+ },
+ "autobahn": {
+  "pkgs": 3,
+  "downloads": 6179474,
+  "self": 1,
+  "rank": 1765,
+  "own_downloads": 6763906
+ },
+ "tensorflow-io-gcs-filesystem": {
+  "pkgs": 3,
+  "downloads": 897177,
+  "self": 1,
+  "rank": 1844,
+  "own_downloads": 6345061
+ },
+ "apache-beam": {
+  "pkgs": 3,
+  "downloads": 802597,
+  "self": 1,
+  "rank": 1926,
+  "own_downloads": 5975487
+ },
+ "serpyco-rs": {
+  "pkgs": 3,
+  "downloads": 6454661,
+  "self": 1,
+  "rank": 7060,
+  "own_downloads": 402668
+ },
+ "stringzilla": {
+  "pkgs": 3,
+  "downloads": 9182128,
+  "self": 1,
+  "rank": 2806,
+  "own_downloads": 2823830
+ },
+ "crcmod-plus": {
+  "pkgs": 3,
+  "downloads": 5655858,
+  "self": 1,
+  "rank": 2301,
+  "own_downloads": 4185339
+ },
+ "bitstruct": {
+  "pkgs": 3,
+  "downloads": 3364077,
+  "self": 1,
+  "rank": 2141,
+  "own_downloads": 4842452
+ },
+ "pyqt6": {
+  "pkgs": 3,
+  "downloads": 2280762,
+  "self": 1,
+  "rank": 2178,
+  "own_downloads": 4696765
+ },
+ "sqlite-vec": {
+  "pkgs": 3,
+  "downloads": 3857816,
+  "self": 1,
+  "rank": 2214,
+  "own_downloads": 4554022
+ },
+ "cvxpy": {
+  "pkgs": 3,
+  "downloads": 825331,
+  "self": 1,
+  "rank": 2248,
+  "own_downloads": 4437981
+ },
+ "cftime": {
+  "pkgs": 3,
+  "downloads": 4740918,
+  "self": 1,
+  "rank": 2251,
+  "own_downloads": 4392437
+ },
+ "onnxruntime-gpu": {
+  "pkgs": 3,
+  "downloads": 1246803,
+  "self": 1,
+  "rank": 2337,
+  "own_downloads": 4088792
+ },
+ "fasttext-predict": {
+  "pkgs": 3,
+  "downloads": 4362145,
+  "self": 1,
+  "rank": 3982,
+  "own_downloads": 1307940
+ },
+ "cupy-cuda12x": {
+  "pkgs": 3,
+  "downloads": 992410,
+  "self": 1,
+  "rank": 2472,
+  "own_downloads": 3652296
+ },
+ "pyside6-essentials": {
+  "pkgs": 3,
+  "downloads": 6186153,
+  "self": 1,
+  "rank": 2549,
+  "own_downloads": 3417123
+ },
+ "rjsmin": {
+  "pkgs": 3,
+  "downloads": 4384261,
+  "self": 1,
+  "rank": 2601,
+  "own_downloads": 3256697
+ },
+ "yappi": {
+  "pkgs": 3,
+  "downloads": 1029300,
+  "self": 1,
+  "rank": 2612,
+  "own_downloads": 3205558
+ },
+ "pyqt5": {
+  "pkgs": 3,
+  "downloads": 1605037,
+  "self": 1,
+  "rank": 2675,
+  "own_downloads": 3077882
+ },
+ "rcssmin": {
+  "pkgs": 3,
+  "downloads": 4384261,
+  "self": 1,
+  "rank": 2680,
+  "own_downloads": 3068221
+ },
+ "igraph": {
+  "pkgs": 3,
+  "downloads": 2319219,
+  "self": 1,
+  "rank": 2758,
+  "own_downloads": 2915511
+ },
+ "pyjson5": {
+  "pkgs": 3,
+  "downloads": 2895918,
+  "self": 1,
+  "rank": 2816,
+  "own_downloads": 2804358
+ },
+ "tbb": {
+  "pkgs": 3,
+  "downloads": 1014118,
+  "self": 1,
+  "rank": 2830,
+  "own_downloads": 2769482
+ },
+ "pylibsrtp": {
+  "pkgs": 3,
+  "downloads": 5070307,
+  "self": 1,
+  "rank": 3300,
+  "own_downloads": 1961305
+ },
+ "impit": {
+  "pkgs": 3,
+  "downloads": 3343513,
+  "self": 1,
+  "rank": 3292,
+  "own_downloads": 1969573
+ },
+ "vtk": {
+  "pkgs": 3,
+  "downloads": 2368932,
+  "self": 1,
+  "rank": 3045,
+  "own_downloads": 2324115
+ },
+ "tensordict": {
+  "pkgs": 3,
+  "downloads": 1799943,
+  "self": 1,
+  "rank": 3135,
+  "own_downloads": 2180497
+ },
+ "boost-histogram": {
+  "pkgs": 3,
+  "downloads": 3577981,
+  "self": 1,
+  "rank": 3199,
+  "own_downloads": 2094019
+ },
+ "coal": {
+  "pkgs": 3,
+  "downloads": 2119000,
+  "self": 1,
+  "rank": 6108,
+  "own_downloads": 572494
+ },
+ "libpinocchio": {
+  "pkgs": 3,
+  "downloads": 2119000,
+  "self": 1,
+  "rank": 6109,
+  "own_downloads": 572164
+ },
+ "warp-lang": {
+  "pkgs": 3,
+  "downloads": 1289414,
+  "self": 1,
+  "rank": 3693,
+  "own_downloads": 1534909
+ },
+ "lzfse": {
+  "pkgs": 3,
+  "downloads": 945443,
+  "self": 1,
+  "rank": 3843,
+  "own_downloads": 1400476
+ },
+ "iregexp-check": {
+  "pkgs": 3,
+  "downloads": 2977870,
+  "self": 1,
+  "rank": 6753,
+  "own_downloads": 451490
+ },
+ "hidapi": {
+  "pkgs": 3,
+  "downloads": 822897,
+  "self": 1,
+  "rank": 4233,
+  "own_downloads": 1142705
+ },
+ "mlx": {
+  "pkgs": 3,
+  "downloads": 1390282,
+  "self": 1,
+  "rank": 4278,
+  "own_downloads": 1117159
+ },
+ "pyqt6-webengine-qt6": {
+  "pkgs": 3,
+  "downloads": 2280762,
+  "self": 1,
+  "rank": 5504,
+  "own_downloads": 709096
+ },
+ "pyicu": {
+  "pkgs": 3,
+  "downloads": 642603,
+  "self": 1,
+  "rank": 5611,
+  "own_downloads": 676556
+ },
+ "pyobjc-framework-coredata": {
+  "pkgs": 3,
+  "downloads": 1762932,
+  "self": 1,
+  "rank": 5984,
+  "own_downloads": 583794
+ },
+ "glcontext": {
+  "pkgs": 3,
+  "downloads": 1070653,
+  "self": 1,
+  "rank": 5924,
+  "own_downloads": 595784
+ },
+ "cchecksum": {
+  "pkgs": 3,
+  "downloads": 1070215,
+  "self": 1,
+  "rank": 7818,
+  "own_downloads": 314067
+ },
+ "cyscale": {
+  "pkgs": 3,
+  "downloads": 1140094,
+  "self": 1,
+  "rank": 6922,
+  "own_downloads": 422874
+ },
+ "cysignals": {
+  "pkgs": 3,
+  "downloads": 954190,
+  "self": 1,
+  "rank": 6503,
+  "own_downloads": 495300
+ },
+ "libuuu": {
+  "pkgs": 3,
+  "downloads": 822897,
+  "self": 1,
+  "rank": 7734,
+  "own_downloads": 322187
+ },
+ "pylzss": {
+  "pkgs": 3,
+  "downloads": 945443,
+  "self": 1,
+  "rank": 8518,
+  "own_downloads": 254117
+ },
+ "cocotb": {
+  "pkgs": 3,
+  "downloads": 654563,
+  "self": 1,
+  "rank": 6911,
+  "own_downloads": 424561
+ },
+ "libcudf-cu12": {
+  "pkgs": 3,
+  "downloads": 1076201,
+  "self": 1,
+  "rank": 7006,
+  "own_downloads": 409799
+ },
+ "libraft-cu12": {
+  "pkgs": 3,
+  "downloads": 1013935,
+  "self": 1,
+  "rank": 8101,
+  "own_downloads": 287315
+ },
+ "btrees": {
+  "pkgs": 3,
+  "downloads": 596696,
+  "self": 1,
+  "rank": 7356,
+  "own_downloads": 364856
+ },
+ "yara-x": {
+  "pkgs": 3,
+  "downloads": 915654,
+  "self": 1,
+  "rank": 7853,
+  "own_downloads": 310878
+ },
+ "zope-security": {
+  "pkgs": 3,
+  "downloads": 563458,
+  "self": 1,
+  "rank": 9146,
+  "own_downloads": 216192
+ },
+ "intel-cmplr-lic-rt": {
+  "pkgs": 3,
+  "downloads": 542986,
+  "self": 1,
+  "rank": 9636,
+  "own_downloads": 191566
+ },
+ "tilelang": {
+  "pkgs": 2,
+  "downloads": 513239968,
+  "self": 1,
+  "rank": 3105,
+  "own_downloads": 2229108
+ },
+ "tokenspeed-mla": {
+  "pkgs": 2,
+  "downloads": 513239968,
+  "self": 1,
+  "rank": 3725,
+  "own_downloads": 1511563
+ },
+ "xgrammar": {
+  "pkgs": 2,
+  "downloads": 513239968,
+  "self": 1,
+  "rank": 1837,
+  "own_downloads": 6375535
+ },
+ "kernels-data": {
+  "pkgs": 2,
+  "downloads": 508511433,
+  "self": 1,
+  "rank": 5927,
+  "own_downloads": 595098
+ },
+ "xgboost": {
+  "pkgs": 2,
+  "downloads": 1927375,
+  "self": 1,
+  "rank": 578,
+  "own_downloads": 47766503
+ },
+ "nvidia-cuda-runtime": {
+  "pkgs": 2,
+  "downloads": 3347610,
+  "self": 1,
+  "rank": 685,
+  "own_downloads": 37767783
+ },
+ "bottleneck": {
+  "pkgs": 2,
+  "downloads": 37659401,
+  "self": 1,
+  "rank": 1427,
+  "own_downloads": 10398150
+ },
+ "tree-sitter-rust": {
+  "pkgs": 2,
+  "downloads": 1427608,
+  "self": 1,
+  "rank": 803,
+  "own_downloads": 29018218
+ },
+ "tree-sitter-php": {
+  "pkgs": 2,
+  "downloads": 1427608,
+  "self": 1,
+  "rank": 861,
+  "own_downloads": 26370391
+ },
+ "nvidia-cuda-runtime-cu12": {
+  "pkgs": 2,
+  "downloads": 563981,
+  "self": 1,
+  "rank": 863,
+  "own_downloads": 26247060
+ },
+ "levenshtein": {
+  "pkgs": 2,
+  "downloads": 14067814,
+  "self": 1,
+  "rank": 956,
+  "own_downloads": 22203318
+ },
+ "maxminddb": {
+  "pkgs": 2,
+  "downloads": 19395375,
+  "self": 1,
+  "rank": 983,
+  "own_downloads": 21370686
+ },
+ "cmake": {
+  "pkgs": 2,
+  "downloads": 448148,
+  "self": 1,
+  "rank": 1054,
+  "own_downloads": 19141817
+ },
+ "memray": {
+  "pkgs": 2,
+  "downloads": 3694538,
+  "self": 1,
+  "rank": 1136,
+  "own_downloads": 16808475
+ },
+ "fastparquet": {
+  "pkgs": 2,
+  "downloads": 534788,
+  "self": 1,
+  "rank": 1155,
+  "own_downloads": 16144620
+ },
+ "lancedb": {
+  "pkgs": 2,
+  "downloads": 23013368,
+  "self": 1,
+  "rank": 1669,
+  "own_downloads": 7381925
+ },
+ "aiokafka": {
+  "pkgs": 2,
+  "downloads": 572664,
+  "self": 1,
+  "rank": 1380,
+  "own_downloads": 11108686
+ },
+ "pikepdf": {
+  "pkgs": 2,
+  "downloads": 2902116,
+  "self": 1,
+  "rank": 1525,
+  "own_downloads": 8855219
+ },
+ "tree-sitter-python": {
+  "pkgs": 2,
+  "downloads": 1427608,
+  "self": 1,
+  "rank": 1547,
+  "own_downloads": 8588394
+ },
+ "opencv-contrib-python": {
+  "pkgs": 2,
+  "downloads": 3441172,
+  "self": 1,
+  "rank": 1625,
+  "own_downloads": 7835929
+ },
+ "brotlicffi": {
+  "pkgs": 2,
+  "downloads": 2282179,
+  "self": 1,
+  "rank": 1719,
+  "own_downloads": 7027065
+ },
+ "bitsandbytes": {
+  "pkgs": 2,
+  "downloads": 2947719,
+  "self": 1,
+  "rank": 1767,
+  "own_downloads": 6746725
+ },
+ "selectolax": {
+  "pkgs": 2,
+  "downloads": 1698740,
+  "self": 1,
+  "rank": 1774,
+  "own_downloads": 6701204
+ },
+ "pylsqpack": {
+  "pkgs": 2,
+  "downloads": 9958644,
+  "self": 1,
+  "rank": 2358,
+  "own_downloads": 4021092
+ },
+ "mitmproxy-linux": {
+  "pkgs": 2,
+  "downloads": 9425369,
+  "self": 1,
+  "rank": 2815,
+  "own_downloads": 2809770
+ },
+ "ortools": {
+  "pkgs": 2,
+  "downloads": 875893,
+  "self": 1,
+  "rank": 1945,
+  "own_downloads": 5872310
+ },
+ "pillow-avif-plugin": {
+  "pkgs": 2,
+  "downloads": 6005906,
+  "self": 1,
+  "rank": 2279,
+  "own_downloads": 4277757
+ },
+ "gssapi": {
+  "pkgs": 2,
+  "downloads": 502636,
+  "self": 1,
+  "rank": 2055,
+  "own_downloads": 5316000
+ },
+ "ydf": {
+  "pkgs": 2,
+  "downloads": 5076528,
+  "self": 1,
+  "rank": 6591,
+  "own_downloads": 477264
+ },
+ "ndindex": {
+  "pkgs": 2,
+  "downloads": 7822652,
+  "self": 1,
+  "rank": 2741,
+  "own_downloads": 2940382
+ },
+ "zlib-ng": {
+  "pkgs": 2,
+  "downloads": 4833112,
+  "self": 1,
+  "rank": 6562,
+  "own_downloads": 483828
+ },
+ "tree-sitter-cpp": {
+  "pkgs": 2,
+  "downloads": 1427608,
+  "self": 1,
+  "rank": 2359,
+  "own_downloads": 4011509
+ },
+ "patchright": {
+  "pkgs": 2,
+  "downloads": 2229534,
+  "self": 1,
+  "rank": 2505,
+  "own_downloads": 3536145
+ },
+ "wordcloud": {
+  "pkgs": 2,
+  "downloads": 2527914,
+  "self": 1,
+  "rank": 2548,
+  "own_downloads": 3417643
+ },
+ "pmdarima": {
+  "pkgs": 2,
+  "downloads": 1112313,
+  "self": 1,
+  "rank": 2660,
+  "own_downloads": 3109709
+ },
+ "kornia-rs": {
+  "pkgs": 2,
+  "downloads": 3468204,
+  "self": 1,
+  "rank": 2753,
+  "own_downloads": 2924956
+ },
+ "libsass": {
+  "pkgs": 2,
+  "downloads": 1854466,
+  "self": 1,
+  "rank": 2749,
+  "own_downloads": 2927115
+ },
+ "pyside6-addons": {
+  "pkgs": 2,
+  "downloads": 3365982,
+  "self": 1,
+  "rank": 2810,
+  "own_downloads": 2820171
+ },
+ "sudachipy": {
+  "pkgs": 2,
+  "downloads": 3251352,
+  "self": 1,
+  "rank": 2834,
+  "own_downloads": 2742459
+ },
+ "netifaces": {
+  "pkgs": 2,
+  "downloads": 534794,
+  "self": 1,
+  "rank": 2861,
+  "own_downloads": 2661414
+ },
+ "ezdxf": {
+  "pkgs": 2,
+  "downloads": 667354,
+  "self": 1,
+  "rank": 2992,
+  "own_downloads": 2405887
+ },
+ "nvidia-cublas-cu11": {
+  "pkgs": 2,
+  "downloads": 3660674,
+  "self": 1,
+  "rank": 2995,
+  "own_downloads": 2392662
+ },
+ "loro": {
+  "pkgs": 2,
+  "downloads": 2655790,
+  "self": 1,
+  "rank": 3053,
+  "own_downloads": 2308973
+ },
+ "evdev": {
+  "pkgs": 2,
+  "downloads": 3099834,
+  "self": 1,
+  "rank": 4056,
+  "own_downloads": 1261763
+ },
+ "thriftpy2": {
+  "pkgs": 2,
+  "downloads": 951779,
+  "self": 1,
+  "rank": 3005,
+  "own_downloads": 2368518
+ },
+ "nvidia-cuda-crt": {
+  "pkgs": 2,
+  "downloads": 3347610,
+  "self": 1,
+  "rank": 3471,
+  "own_downloads": 1768398
+ },
+ "nvidia-nvvm": {
+  "pkgs": 2,
+  "downloads": 3347610,
+  "self": 1,
+  "rank": 3311,
+  "own_downloads": 1949997
+ },
+ "isal": {
+  "pkgs": 2,
+  "downloads": 1919272,
+  "self": 1,
+  "rank": 3138,
+  "own_downloads": 2173030
+ },
+ "mapbox-earcut": {
+  "pkgs": 2,
+  "downloads": 420092,
+  "self": 1,
+  "rank": 3153,
+  "own_downloads": 2156847
+ },
+ "minify-html": {
+  "pkgs": 2,
+  "downloads": 2527914,
+  "self": 1,
+  "rank": 3687,
+  "own_downloads": 1541727
+ },
+ "phik": {
+  "pkgs": 2,
+  "downloads": 2527914,
+  "self": 1,
+  "rank": 3965,
+  "own_downloads": 1318714
+ },
+ "statsforecast": {
+  "pkgs": 2,
+  "downloads": 494682,
+  "self": 1,
+  "rank": 3469,
+  "own_downloads": 1769922
+ },
+ "pyvex": {
+  "pkgs": 2,
+  "downloads": 2981756,
+  "self": 1,
+  "rank": 4410,
+  "own_downloads": 1031852
+ },
+ "pyxdia": {
+  "pkgs": 2,
+  "downloads": 2981756,
+  "self": 1,
+  "rank": 7799,
+  "own_downloads": 316170
+ },
+ "uefi-firmware": {
+  "pkgs": 2,
+  "downloads": 2981756,
+  "self": 1,
+  "rank": 8435,
+  "own_downloads": 259915
+ },
+ "ada-url": {
+  "pkgs": 2,
+  "downloads": 426389,
+  "self": 1,
+  "rank": 3641,
+  "own_downloads": 1582189
+ },
+ "pin": {
+  "pkgs": 2,
+  "downloads": 559942,
+  "self": 1,
+  "rank": 3671,
+  "own_downloads": 1559058
+ },
+ "tree-sitter-kotlin": {
+  "pkgs": 2,
+  "downloads": 1295049,
+  "self": 1,
+  "rank": 3678,
+  "own_downloads": 1552255
+ },
+ "json-stream-rs-tokenizer": {
+  "pkgs": 2,
+  "downloads": 2010121,
+  "self": 1,
+  "rank": 3753,
+  "own_downloads": 1483977
+ },
+ "iminuit": {
+  "pkgs": 2,
+  "downloads": 2867562,
+  "self": 1,
+  "rank": 9170,
+  "own_downloads": 215011
+ },
+ "curated-tokenizers": {
+  "pkgs": 2,
+  "downloads": 2005272,
+  "self": 1,
+  "rank": 4964,
+  "own_downloads": 796275
+ },
+ "scipy-openblas32": {
+  "pkgs": 2,
+  "downloads": 1467791,
+  "self": 1,
+  "rank": 7010,
+  "own_downloads": 409540
+ },
+ "tree-sitter-lua": {
+  "pkgs": 2,
+  "downloads": 1427608,
+  "self": 1,
+  "rank": 4277,
+  "own_downloads": 1117222
+ },
+ "tree-sitter-groovy": {
+  "pkgs": 2,
+  "downloads": 1295049,
+  "self": 1,
+  "rank": 4458,
+  "own_downloads": 1008266
+ },
+ "wasmer": {
+  "pkgs": 2,
+  "downloads": 1915712,
+  "self": 1,
+  "rank": 4389,
+  "own_downloads": 1048579
+ },
+ "wasmer-compiler-cranelift": {
+  "pkgs": 2,
+  "downloads": 1915712,
+  "self": 1,
+  "rank": 4514,
+  "own_downloads": 982215
+ },
+ "stream-inflate": {
+  "pkgs": 2,
+  "downloads": 1238088,
+  "self": 1,
+  "rank": 4621,
+  "own_downloads": 933213
+ },
+ "miniaudio": {
+  "pkgs": 2,
+  "downloads": 1191316,
+  "self": 1,
+  "rank": 6234,
+  "own_downloads": 547587
+ },
+ "pyobjc-framework-coretext": {
+  "pkgs": 2,
+  "downloads": 1473749,
+  "self": 1,
+  "rank": 4773,
+  "own_downloads": 867651
+ },
+ "moocore": {
+  "pkgs": 2,
+  "downloads": 1234832,
+  "self": 1,
+  "rank": 4779,
+  "own_downloads": 865543
+ },
+ "intel-openmp": {
+  "pkgs": 2,
+  "downloads": 836493,
+  "self": 1,
+  "rank": 4781,
+  "own_downloads": 864647
+ },
+ "nlopt": {
+  "pkgs": 2,
+  "downloads": 818862,
+  "self": 1,
+  "rank": 4788,
+  "own_downloads": 860615
+ },
+ "anki": {
+  "pkgs": 2,
+  "downloads": 1590609,
+  "self": 1,
+  "rank": 4839,
+  "own_downloads": 839389
+ },
+ "pyqt6-webengine": {
+  "pkgs": 2,
+  "downloads": 1590609,
+  "self": 1,
+  "rank": 5566,
+  "own_downloads": 690153
+ },
+ "numba-cuda": {
+  "pkgs": 2,
+  "downloads": 714601,
+  "self": 1,
+  "rank": 5530,
+  "own_downloads": 701091
+ },
+ "onemkl-license": {
+  "pkgs": 2,
+  "downloads": 841619,
+  "self": 1,
+  "rank": 7159,
+  "own_downloads": 391597
+ },
+ "cwcwidth": {
+  "pkgs": 2,
+  "downloads": 1180688,
+  "self": 1,
+  "rank": 5843,
+  "own_downloads": 615543
+ },
+ "pyobjc-framework-discrecording": {
+  "pkgs": 2,
+  "downloads": 1182760,
+  "self": 1,
+  "rank": 5996,
+  "own_downloads": 582366
+ },
+ "pyobjc-framework-iobluetooth": {
+  "pkgs": 2,
+  "downloads": 1161839,
+  "self": 1,
+  "rank": 6185,
+  "own_downloads": 560961
+ },
+ "moderngl": {
+  "pkgs": 2,
+  "downloads": 462861,
+  "self": 1,
+  "rank": 5876,
+  "own_downloads": 607792
+ },
+ "pyobjc-framework-corelocation": {
+  "pkgs": 2,
+  "downloads": 1149820,
+  "self": 1,
+  "rank": 5881,
+  "own_downloads": 606705
+ },
+ "tsdownsample": {
+  "pkgs": 2,
+  "downloads": 978682,
+  "self": 1,
+  "rank": 5917,
+  "own_downloads": 597603
+ },
+ "geoarrow-c": {
+  "pkgs": 2,
+  "downloads": 837537,
+  "self": 1,
+  "rank": 8409,
+  "own_downloads": 261611
+ },
+ "core-universal4": {
+  "pkgs": 2,
+  "downloads": 1134111,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "siphash24": {
+  "pkgs": 2,
+  "downloads": 714435,
+  "self": 1,
+  "rank": 6453,
+  "own_downloads": 503875
+ },
+ "onnx-weekly": {
+  "pkgs": 2,
+  "downloads": 773548,
+  "self": 1,
+  "rank": 7339,
+  "own_downloads": 366699
+ },
+ "dynet38": {
+  "pkgs": 2,
+  "downloads": 849349,
+  "self": 1,
+  "rank": 6747,
+  "own_downloads": 452274
+ },
+ "py-sr25519-bindings": {
+  "pkgs": 2,
+  "downloads": 515825,
+  "self": 1,
+  "rank": 6840,
+  "own_downloads": 438684
+ },
+ "onigurumacffi": {
+  "pkgs": 2,
+  "downloads": 822705,
+  "self": 1,
+  "rank": 6845,
+  "own_downloads": 438282
+ },
+ "pyats-kleenex": {
+  "pkgs": 2,
+  "downloads": 837608,
+  "self": 1,
+  "rank": 7055,
+  "own_downloads": 403211
+ },
+ "jsonpath-rust-bindings": {
+  "pkgs": 2,
+  "downloads": 465807,
+  "self": 1,
+  "rank": 6882,
+  "own_downloads": 430732
+ },
+ "foundry-local-core": {
+  "pkgs": 2,
+  "downloads": 752798,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "onnxruntime-genai-cuda": {
+  "pkgs": 2,
+  "downloads": 752798,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "ahocorasick-rs": {
+  "pkgs": 2,
+  "downloads": 519418,
+  "self": 1,
+  "rank": 6975,
+  "own_downloads": 415480
+ },
+ "bittensor-wallet": {
+  "pkgs": 2,
+  "downloads": 629773,
+  "self": 1,
+  "rank": 7072,
+  "own_downloads": 401871
+ },
+ "bittensor-drand": {
+  "pkgs": 2,
+  "downloads": 629773,
+  "self": 1,
+  "rank": 7208,
+  "own_downloads": 384720
+ },
+ "intel-cmplr-lib-rt": {
+  "pkgs": 2,
+  "downloads": 365361,
+  "self": 1,
+  "rank": 7260,
+  "own_downloads": 377513
+ },
+ "pylibcudf-cu12": {
+  "pkgs": 2,
+  "downloads": 714601,
+  "self": 1,
+  "rank": 7386,
+  "own_downloads": 361600
+ },
+ "libnvforest-cu12": {
+  "pkgs": 2,
+  "downloads": 689687,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "unicode-segmentation-rs": {
+  "pkgs": 2,
+  "downloads": 648772,
+  "self": 1,
+  "rank": 8684,
+  "own_downloads": 243557
+ },
+ "protobuf-py-ext": {
+  "pkgs": 2,
+  "downloads": 514748,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "pyglm": {
+  "pkgs": 2,
+  "downloads": 462861,
+  "self": 1,
+  "rank": 7896,
+  "own_downloads": 307568
+ },
+ "basicsr": {
+  "pkgs": 2,
+  "downloads": 472746,
+  "self": 1,
+  "rank": 8193,
+  "own_downloads": 279276
+ },
+ "klayout": {
+  "pkgs": 2,
+  "downloads": 425338,
+  "self": 1,
+  "rank": 8441,
+  "own_downloads": 259757
+ },
+ "libucx-cu12": {
+  "pkgs": 2,
+  "downloads": 387344,
+  "self": 1,
+  "rank": 9092,
+  "own_downloads": 219208
+ },
+ "kfnetlist": {
+  "pkgs": 2,
+  "downloads": 425338,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "rectangle-packer": {
+  "pkgs": 2,
+  "downloads": 425338,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 168557
+ },
+ "extensionclass": {
+  "pkgs": 2,
+  "downloads": 387606,
+  "self": 1,
+  "rank": 9926,
+  "own_downloads": 178075
+ },
+ "typedunits": {
+  "pkgs": 2,
+  "downloads": 372412,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 123455
+ },
+ "py-spy": {
+  "pkgs": 1,
+  "downloads": 507352249,
+  "self": 1,
+  "rank": 954,
+  "own_downloads": 22230636
+ },
+ "sgl-deep-gemm": {
+  "pkgs": 1,
+  "downloads": 507352249,
+  "self": 1,
+  "rank": 7307,
+  "own_downloads": 370382
+ },
+ "sglang-kernel": {
+  "pkgs": 1,
+  "downloads": 507352249,
+  "self": 1,
+  "rank": 6690,
+  "own_downloads": 460249
+ },
+ "torch-memory-saver": {
+  "pkgs": 1,
+  "downloads": 507352249,
+  "self": 1,
+  "rank": 5034,
+  "own_downloads": 775485
+ },
+ "psycopg2": {
+  "pkgs": 1,
+  "downloads": 236668,
+  "self": 1,
+  "rank": 563,
+  "own_downloads": 49932315
+ },
+ "mysql-connector-python": {
+  "pkgs": 1,
+  "downloads": 13359804,
+  "self": 1,
+  "rank": 585,
+  "own_downloads": 47214081
+ },
+ "pyrsistent": {
+  "pkgs": 1,
+  "downloads": 707841,
+  "self": 1,
+  "rank": 644,
+  "own_downloads": 41446864
+ },
+ "fastar": {
+  "pkgs": 1,
+  "downloads": 39533941,
+  "self": 1,
+  "rank": 790,
+  "own_downloads": 29960364
+ },
+ "rignore": {
+  "pkgs": 1,
+  "downloads": 39533941,
+  "self": 1,
+  "rank": 773,
+  "own_downloads": 30837318
+ },
+ "ddtrace": {
+  "pkgs": 1,
+  "downloads": 2343663,
+  "self": 1,
+  "rank": 671,
+  "own_downloads": 38892050
+ },
+ "nvidia-cusparse": {
+  "pkgs": 1,
+  "downloads": 37456423,
+  "self": 1,
+  "rank": 684,
+  "own_downloads": 37965343
+ },
+ "semgrep": {
+  "pkgs": 1,
+  "downloads": 190347,
+  "self": 1,
+  "rank": 689,
+  "own_downloads": 37420771
+ },
+ "nvidia-cuda-cupti": {
+  "pkgs": 1,
+  "downloads": 422239,
+  "self": 1,
+  "rank": 698,
+  "own_downloads": 36782263
+ },
+ "temporalio": {
+  "pkgs": 1,
+  "downloads": 179934,
+  "self": 1,
+  "rank": 746,
+  "own_downloads": 32715078
+ },
+ "time-machine": {
+  "pkgs": 1,
+  "downloads": 559734,
+  "self": 1,
+  "rank": 789,
+  "own_downloads": 29989855
+ },
+ "tree-sitter-c": {
+  "pkgs": 1,
+  "downloads": 1108947,
+  "self": 1,
+  "rank": 800,
+  "own_downloads": 29276102
+ },
+ "clickhouse-connect": {
+  "pkgs": 1,
+  "downloads": 2019985,
+  "self": 1,
+  "rank": 819,
+  "own_downloads": 28189759
+ },
+ "nvidia-cusparse-cu12": {
+  "pkgs": 1,
+  "downloads": 27052866,
+  "self": 1,
+  "rank": 830,
+  "own_downloads": 27784815
+ },
+ "nvidia-curand-cu12": {
+  "pkgs": 1,
+  "downloads": 373128,
+  "self": 1,
+  "rank": 848,
+  "own_downloads": 26932820
+ },
+ "tree-sitter-ruby": {
+  "pkgs": 1,
+  "downloads": 1108947,
+  "self": 1,
+  "rank": 870,
+  "own_downloads": 26121343
+ },
+ "pymupdf-layout": {
+  "pkgs": 1,
+  "downloads": 23654041,
+  "self": 1,
+  "rank": 951,
+  "own_downloads": 22340374
+ },
+ "claude-agent-sdk": {
+  "pkgs": 1,
+  "downloads": 441218,
+  "self": 1,
+  "rank": 1034,
+  "own_downloads": 20058743
+ },
+ "biopython": {
+  "pkgs": 1,
+  "downloads": 1551963,
+  "self": 1,
+  "rank": 1196,
+  "own_downloads": 15074298
+ },
+ "amazon-ion": {
+  "pkgs": 1,
+  "downloads": 1351023,
+  "self": 1,
+  "rank": 1197,
+  "own_downloads": 15060587
+ },
+ "patchelf": {
+  "pkgs": 1,
+  "downloads": 232884,
+  "self": 1,
+  "rank": 1209,
+  "own_downloads": 14785468
+ },
+ "textual-speedups": {
+  "pkgs": 1,
+  "downloads": 3729168,
+  "self": 1,
+  "rank": 1230,
+  "own_downloads": 14210491
+ },
+ "tree-sitter-yaml": {
+  "pkgs": 1,
+  "downloads": 916285,
+  "self": 1,
+  "rank": 1278,
+  "own_downloads": 13034614
+ },
+ "h3": {
+  "pkgs": 1,
+  "downloads": 5694986,
+  "self": 1,
+  "rank": 1366,
+  "own_downloads": 11372470
+ },
+ "tree-sitter-embedded-template": {
+  "pkgs": 1,
+  "downloads": 916285,
+  "self": 1,
+  "rank": 1425,
+  "own_downloads": 10430526
+ },
+ "httpr": {
+  "pkgs": 1,
+  "downloads": 10071105,
+  "self": 1,
+  "rank": 2285,
+  "own_downloads": 4236319
+ },
+ "grimp": {
+  "pkgs": 1,
+  "downloads": 9519293,
+  "self": 1,
+  "rank": 1462,
+  "own_downloads": 9894079
+ },
+ "nvidia-cuda-cccl-cu12": {
+  "pkgs": 1,
+  "downloads": 9213359,
+  "self": 1,
+  "rank": 4329,
+  "own_downloads": 1084755
+ },
+ "dependency-injector": {
+  "pkgs": 1,
+  "downloads": 833362,
+  "self": 1,
+  "rank": 1711,
+  "own_downloads": 7076809
+ },
+ "biotraj": {
+  "pkgs": 1,
+  "downloads": 7072766,
+  "self": 1,
+  "rank": 2294,
+  "own_downloads": 4193822
+ },
+ "jq": {
+  "pkgs": 1,
+  "downloads": 334668,
+  "self": 1,
+  "rank": 1842,
+  "own_downloads": 6366633
+ },
+ "pyodps": {
+  "pkgs": 1,
+  "downloads": 343325,
+  "self": 1,
+  "rank": 1909,
+  "own_downloads": 6040188
+ },
+ "aioquic": {
+  "pkgs": 1,
+  "downloads": 6000448,
+  "self": 1,
+  "rank": 2370,
+  "own_downloads": 3958196
+ },
+ "mitmproxy-rs": {
+  "pkgs": 1,
+  "downloads": 6000448,
+  "self": 1,
+  "rank": 2546,
+  "own_downloads": 3424921
+ },
+ "fastsafetensors": {
+  "pkgs": 1,
+  "downloads": 5887719,
+  "self": 1,
+  "rank": 3481,
+  "own_downloads": 1750768
+ },
+ "pynvvideocodec": {
+  "pkgs": 1,
+  "downloads": 5887719,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 108493
+ },
+ "pyroscope-io": {
+  "pkgs": 1,
+  "downloads": 1232186,
+  "self": 1,
+  "rank": 1955,
+  "own_downloads": 5831894
+ },
+ "polyleven": {
+  "pkgs": 1,
+  "downloads": 5338342,
+  "self": 1,
+  "rank": 2026,
+  "own_downloads": 5424973
+ },
+ "uamqp": {
+  "pkgs": 1,
+  "downloads": 439891,
+  "self": 1,
+  "rank": 2042,
+  "own_downloads": 5350220
+ },
+ "granian": {
+  "pkgs": 1,
+  "downloads": 301526,
+  "self": 1,
+  "rank": 2059,
+  "own_downloads": 5303661
+ },
+ "python-ldap": {
+  "pkgs": 1,
+  "downloads": 969639,
+  "self": 1,
+  "rank": 2209,
+  "own_downloads": 4574033
+ },
+ "tensorflow-decision-forests": {
+  "pkgs": 1,
+  "downloads": 4468924,
+  "self": 1,
+  "rank": 5878,
+  "own_downloads": 607604
+ },
+ "netcdf4": {
+  "pkgs": 1,
+  "downloads": 212578,
+  "self": 1,
+  "rank": 2261,
+  "own_downloads": 4344154
+ },
+ "blosc2": {
+  "pkgs": 1,
+  "downloads": 3608322,
+  "self": 1,
+  "rank": 2288,
+  "own_downloads": 4214330
+ },
+ "pyenchant": {
+  "pkgs": 1,
+  "downloads": 3774743,
+  "self": 1,
+  "rank": 2305,
+  "own_downloads": 4178368
+ },
+ "immutables": {
+  "pkgs": 1,
+  "downloads": 264663,
+  "self": 1,
+  "rank": 2310,
+  "own_downloads": 4164606
+ },
+ "marisa-trie": {
+  "pkgs": 1,
+  "downloads": 3509245,
+  "self": 1,
+  "rank": 2315,
+  "own_downloads": 4136940
+ },
+ "simsimd": {
+  "pkgs": 1,
+  "downloads": 999525,
+  "self": 1,
+  "rank": 2393,
+  "own_downloads": 3877983
+ },
+ "datefinder": {
+  "pkgs": 1,
+  "downloads": 613045,
+  "self": 1,
+  "rank": 2395,
+  "own_downloads": 3873550
+ },
+ "regress": {
+  "pkgs": 1,
+  "downloads": 3509170,
+  "self": 1,
+  "rank": 2432,
+  "own_downloads": 3774679
+ },
+ "ibm-db": {
+  "pkgs": 1,
+  "downloads": 474926,
+  "self": 1,
+  "rank": 2477,
+  "own_downloads": 3633508
+ },
+ "pytest-codspeed": {
+  "pkgs": 1,
+  "downloads": 2573236,
+  "self": 1,
+  "rank": 2491,
+  "own_downloads": 3590393
+ },
+ "hdbcli": {
+  "pkgs": 1,
+  "downloads": 631676,
+  "self": 1,
+  "rank": 2592,
+  "own_downloads": 3306409
+ },
+ "pytrec-eval-terrier": {
+  "pkgs": 1,
+  "downloads": 3118173,
+  "self": 1,
+  "rank": 4175,
+  "own_downloads": 1178886
+ },
+ "hdbscan": {
+  "pkgs": 1,
+  "downloads": 476982,
+  "self": 1,
+  "rank": 2657,
+  "own_downloads": 3111728
+ },
+ "tree-sitter-json": {
+  "pkgs": 1,
+  "downloads": 1108947,
+  "self": 1,
+  "rank": 2683,
+  "own_downloads": 3055628
+ },
+ "line-profiler": {
+  "pkgs": 1,
+  "downloads": 186102,
+  "self": 1,
+  "rank": 2687,
+  "own_downloads": 3050052
+ },
+ "pygeohash": {
+  "pkgs": 1,
+  "downloads": 2594693,
+  "self": 1,
+  "rank": 2698,
+  "own_downloads": 3027612
+ },
+ "xformers": {
+  "pkgs": 1,
+  "downloads": 2453714,
+  "self": 1,
+  "rank": 2744,
+  "own_downloads": 2934499
+ },
+ "py-mini-racer": {
+  "pkgs": 1,
+  "downloads": 2923534,
+  "self": 1,
+  "rank": 4409,
+  "own_downloads": 1035956
+ },
+ "pyside6": {
+  "pkgs": 1,
+  "downloads": 565201,
+  "self": 1,
+  "rank": 2817,
+  "own_downloads": 2800781
+ },
+ "chdb-core": {
+  "pkgs": 1,
+  "downloads": 2535050,
+  "self": 1,
+  "rank": 8048,
+  "own_downloads": 292658
+ },
+ "azure-cognitiveservices-speech": {
+  "pkgs": 1,
+  "downloads": 294863,
+  "self": 1,
+  "rank": 2962,
+  "own_downloads": 2459200
+ },
+ "bashkit": {
+  "pkgs": 1,
+  "downloads": 2332206,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 111047
+ },
+ "sqlean-py": {
+  "pkgs": 1,
+  "downloads": 2332206,
+  "self": 1,
+  "rank": 4309,
+  "own_downloads": 1094984
+ },
+ "cartopy": {
+  "pkgs": 1,
+  "downloads": 212578,
+  "self": 1,
+  "rank": 3062,
+  "own_downloads": 2302865
+ },
+ "nvidia-cuda-nvcc": {
+  "pkgs": 1,
+  "downloads": 1162337,
+  "self": 1,
+  "rank": 3131,
+  "own_downloads": 2185273
+ },
+ "backports-datetime-fromisoformat": {
+  "pkgs": 1,
+  "downloads": 276196,
+  "self": 1,
+  "rank": 3143,
+  "own_downloads": 2162688
+ },
+ "yggdrasil-engine": {
+  "pkgs": 1,
+  "downloads": 2157963,
+  "self": 1,
+  "rank": 3519,
+  "own_downloads": 1715969
+ },
+ "coglet": {
+  "pkgs": 1,
+  "downloads": 2140225,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "pystemmer": {
+  "pkgs": 1,
+  "downloads": 230780,
+  "self": 1,
+  "rank": 3222,
+  "own_downloads": 2052290
+ },
+ "ast-grep-cli": {
+  "pkgs": 1,
+  "downloads": 1195669,
+  "self": 1,
+  "rank": 3225,
+  "own_downloads": 2046701
+ },
+ "coremltools": {
+  "pkgs": 1,
+  "downloads": 261034,
+  "self": 1,
+  "rank": 3253,
+  "own_downloads": 2014689
+ },
+ "ephem": {
+  "pkgs": 1,
+  "downloads": 1276592,
+  "self": 1,
+  "rank": 3285,
+  "own_downloads": 1975645
+ },
+ "mutf8": {
+  "pkgs": 1,
+  "downloads": 1965706,
+  "self": 1,
+  "rank": 3441,
+  "own_downloads": 1806415
+ },
+ "pact-python-ffi": {
+  "pkgs": 1,
+  "downloads": 1895509,
+  "self": 1,
+  "rank": 3593,
+  "own_downloads": 1650925
+ },
+ "xattr": {
+  "pkgs": 1,
+  "downloads": 491109,
+  "self": 1,
+  "rank": 3424,
+  "own_downloads": 1823432
+ },
+ "pydemumble": {
+  "pkgs": 1,
+  "downloads": 1697611,
+  "self": 1,
+  "rank": 7472,
+  "own_downloads": 351570
+ },
+ "pypcode": {
+  "pkgs": 1,
+  "downloads": 1697611,
+  "self": 1,
+  "rank": 7655,
+  "own_downloads": 331284
+ },
+ "sqlglotc": {
+  "pkgs": 1,
+  "downloads": 665995,
+  "self": 1,
+  "rank": 3546,
+  "own_downloads": 1690066
+ },
+ "mwparserfromhell": {
+  "pkgs": 1,
+  "downloads": 318186,
+  "self": 1,
+  "rank": 3601,
+  "own_downloads": 1646065
+ },
+ "scikit-network": {
+  "pkgs": 1,
+  "downloads": 1632008,
+  "self": 1,
+  "rank": 4406,
+  "own_downloads": 1037049
+ },
+ "openvino": {
+  "pkgs": 1,
+  "downloads": 202302,
+  "self": 1,
+  "rank": 3730,
+  "own_downloads": 1509411
+ },
+ "databento-dbn": {
+  "pkgs": 1,
+  "downloads": 1429650,
+  "self": 1,
+  "rank": 3742,
+  "own_downloads": 1490286
+ },
+ "ai-edge-litert": {
+  "pkgs": 1,
+  "downloads": 1464183,
+  "self": 1,
+  "rank": 5937,
+  "own_downloads": 593832
+ },
+ "onnxoptimizer": {
+  "pkgs": 1,
+  "downloads": 1464183,
+  "self": 1,
+  "rank": 7358,
+  "own_downloads": 364685
+ },
+ "onnxsim": {
+  "pkgs": 1,
+  "downloads": 1464183,
+  "self": 1,
+  "rank": 6597,
+  "own_downloads": 476786
+ },
+ "unicorn": {
+  "pkgs": 1,
+  "downloads": 1068371,
+  "self": 1,
+  "rank": 3788,
+  "own_downloads": 1443095
+ },
+ "fastwarc": {
+  "pkgs": 1,
+  "downloads": 1225738,
+  "self": 1,
+  "rank": 3799,
+  "own_downloads": 1438184
+ },
+ "solders": {
+  "pkgs": 1,
+  "downloads": 827538,
+  "self": 1,
+  "rank": 3820,
+  "own_downloads": 1417833
+ },
+ "jax-cuda12-pjrt": {
+  "pkgs": 1,
+  "downloads": 1401694,
+  "self": 1,
+  "rank": 3837,
+  "own_downloads": 1405322
+ },
+ "falcon": {
+  "pkgs": 1,
+  "downloads": 219497,
+  "self": 1,
+  "rank": 3916,
+  "own_downloads": 1353624
+ },
+ "delta-kernel-rust-sharing-wrapper": {
+  "pkgs": 1,
+  "downloads": 1353489,
+  "self": 1,
+  "rank": 4465,
+  "own_downloads": 1004142
+ },
+ "pysimdjson": {
+  "pkgs": 1,
+  "downloads": 1293808,
+  "self": 1,
+  "rank": 3956,
+  "own_downloads": 1327393
+ },
+ "httpstan": {
+  "pkgs": 1,
+  "downloads": 1293808,
+  "self": 1,
+  "rank": 4177,
+  "own_downloads": 1176955
+ },
+ "grain": {
+  "pkgs": 1,
+  "downloads": 186476,
+  "self": 1,
+  "rank": 4008,
+  "own_downloads": 1289944
+ },
+ "tree-sitter-swift": {
+  "pkgs": 1,
+  "downloads": 1108947,
+  "self": 1,
+  "rank": 4048,
+  "own_downloads": 1265718
+ },
+ "truss-transfer": {
+  "pkgs": 1,
+  "downloads": 1241446,
+  "self": 1,
+  "rank": 7859,
+  "own_downloads": 310661
+ },
+ "pysam": {
+  "pkgs": 1,
+  "downloads": 260146,
+  "self": 1,
+  "rank": 4132,
+  "own_downloads": 1208194
+ },
+ "y-py": {
+  "pkgs": 1,
+  "downloads": 1109458,
+  "self": 1,
+  "rank": 4152,
+  "own_downloads": 1191064
+ },
+ "chonkie-core": {
+  "pkgs": 1,
+  "downloads": 1164457,
+  "self": 1,
+  "rank": 6408,
+  "own_downloads": 514292
+ },
+ "tokie": {
+  "pkgs": 1,
+  "downloads": 1164457,
+  "self": 1,
+  "rank": 7300,
+  "own_downloads": 370729
+ },
+ "casadi": {
+  "pkgs": 1,
+  "downloads": 467375,
+  "self": 1,
+  "rank": 4232,
+  "own_downloads": 1143108
+ },
+ "pennylane-lightning": {
+  "pkgs": 1,
+  "downloads": 341520,
+  "self": 1,
+  "rank": 4255,
+  "own_downloads": 1126271
+ },
+ "deflate": {
+  "pkgs": 1,
+  "downloads": 1125790,
+  "self": 1,
+  "rank": 8417,
+  "own_downloads": 260851
+ },
+ "eccodes": {
+  "pkgs": 1,
+  "downloads": 848601,
+  "self": 1,
+  "rank": 4265,
+  "own_downloads": 1120193
+ },
+ "tree-sitter-elixir": {
+  "pkgs": 1,
+  "downloads": 1108947,
+  "self": 1,
+  "rank": 4469,
+  "own_downloads": 1001580
+ },
+ "tree-sitter-fortran": {
+  "pkgs": 1,
+  "downloads": 1108947,
+  "self": 1,
+  "rank": 4739,
+  "own_downloads": 884834
+ },
+ "tree-sitter-julia": {
+  "pkgs": 1,
+  "downloads": 1108947,
+  "self": 1,
+  "rank": 4648,
+  "own_downloads": 918936
+ },
+ "tree-sitter-objc": {
+  "pkgs": 1,
+  "downloads": 1108947,
+  "self": 1,
+  "rank": 4401,
+  "own_downloads": 1041247
+ },
+ "tree-sitter-powershell": {
+  "pkgs": 1,
+  "downloads": 1108947,
+  "self": 1,
+  "rank": 4508,
+  "own_downloads": 984054
+ },
+ "tree-sitter-scala": {
+  "pkgs": 1,
+  "downloads": 1108947,
+  "self": 1,
+  "rank": 4387,
+  "own_downloads": 1049894
+ },
+ "tree-sitter-verilog": {
+  "pkgs": 1,
+  "downloads": 1108947,
+  "self": 1,
+  "rank": 4644,
+  "own_downloads": 921228
+ },
+ "tree-sitter-zig": {
+  "pkgs": 1,
+  "downloads": 1108947,
+  "self": 1,
+  "rank": 4627,
+  "own_downloads": 929771
+ },
+ "dukpy": {
+  "pkgs": 1,
+  "downloads": 993004,
+  "self": 1,
+  "rank": 4304,
+  "own_downloads": 1098478
+ },
+ "pyaudio": {
+  "pkgs": 1,
+  "downloads": 181800,
+  "self": 1,
+  "rank": 4323,
+  "own_downloads": 1088371
+ },
+ "tf-nightly": {
+  "pkgs": 1,
+  "downloads": 1036829,
+  "self": 1,
+  "rank": 7090,
+  "own_downloads": 399261
+ },
+ "daft": {
+  "pkgs": 1,
+  "downloads": 284720,
+  "self": 1,
+  "rank": 4463,
+  "own_downloads": 1004582
+ },
+ "ecos": {
+  "pkgs": 1,
+  "downloads": 298407,
+  "self": 1,
+  "rank": 4466,
+  "own_downloads": 1003773
+ },
+ "gilknocker": {
+  "pkgs": 1,
+  "downloads": 1000538,
+  "self": 1,
+  "rank": 4745,
+  "own_downloads": 883479
+ },
+ "xprof": {
+  "pkgs": 1,
+  "downloads": 991649,
+  "self": 1,
+  "rank": 5945,
+  "own_downloads": 590910
+ },
+ "pyobjc-framework-webkit": {
+  "pkgs": 1,
+  "downloads": 608757,
+  "self": 1,
+  "rank": 4517,
+  "own_downloads": 981343
+ },
+ "simpleitk": {
+  "pkgs": 1,
+  "downloads": 931396,
+  "self": 1,
+  "rank": 5659,
+  "own_downloads": 663390
+ },
+ "stream-unzip": {
+  "pkgs": 1,
+  "downloads": 308862,
+  "self": 1,
+  "rank": 4631,
+  "own_downloads": 929226
+ },
+ "frida": {
+  "pkgs": 1,
+  "downloads": 373246,
+  "self": 1,
+  "rank": 4632,
+  "own_downloads": 929057
+ },
+ "uharfbuzz": {
+  "pkgs": 1,
+  "downloads": 899693,
+  "self": 1,
+  "rank": 4837,
+  "own_downloads": 841310
+ },
+ "lameenc": {
+  "pkgs": 1,
+  "downloads": 301971,
+  "self": 1,
+  "rank": 4715,
+  "own_downloads": 893830
+ },
+ "playa-pdf": {
+  "pkgs": 1,
+  "downloads": 888786,
+  "self": 1,
+  "rank": 8162,
+  "own_downloads": 282051
+ },
+ "pyobjc-framework-applicationservices": {
+  "pkgs": 1,
+  "downloads": 608757,
+  "self": 1,
+  "rank": 4780,
+  "own_downloads": 864992
+ },
+ "test-results-parser": {
+  "pkgs": 1,
+  "downloads": 863043,
+  "self": 1,
+  "rank": 5010,
+  "own_downloads": 781725
+ },
+ "aioesphomeapi": {
+  "pkgs": 1,
+  "downloads": 370351,
+  "self": 1,
+  "rank": 4804,
+  "own_downloads": 854829
+ },
+ "ta-lib": {
+  "pkgs": 1,
+  "downloads": 297978,
+  "self": 1,
+  "rank": 4868,
+  "own_downloads": 828701
+ },
+ "sgp4": {
+  "pkgs": 1,
+  "downloads": 580630,
+  "self": 1,
+  "rank": 4877,
+  "own_downloads": 825900
+ },
+ "fastcrc": {
+  "pkgs": 1,
+  "downloads": 627661,
+  "self": 1,
+  "rank": 4891,
+  "own_downloads": 820266
+ },
+ "pyslang": {
+  "pkgs": 1,
+  "downloads": 818416,
+  "self": 1,
+  "rank": 7706,
+  "own_downloads": 324954
+ },
+ "espeakng-loader": {
+  "pkgs": 1,
+  "downloads": 445354,
+  "self": 1,
+  "rank": 4929,
+  "own_downloads": 810166
+ },
+ "resvg-py": {
+  "pkgs": 1,
+  "downloads": 370351,
+  "self": 1,
+  "rank": 4949,
+  "own_downloads": 801651
+ },
+ "memfabric-hybrid": {
+  "pkgs": 1,
+  "downloads": 581094,
+  "self": 1,
+  "rank": 4962,
+  "own_downloads": 796979
+ },
+ "eckitlib": {
+  "pkgs": 1,
+  "downloads": 790169,
+  "self": 1,
+  "rank": 4981,
+  "own_downloads": 791024
+ },
+ "libipld": {
+  "pkgs": 1,
+  "downloads": 779729,
+  "self": 1,
+  "rank": 6237,
+  "own_downloads": 546915
+ },
+ "pyobjc-framework-coreml": {
+  "pkgs": 1,
+  "downloads": 766299,
+  "self": 1,
+  "rank": 5052,
+  "own_downloads": 771394
+ },
+ "fuzzysearch": {
+  "pkgs": 1,
+  "downloads": 242974,
+  "self": 1,
+  "rank": 5307,
+  "own_downloads": 729392
+ },
+ "phonors": {
+  "pkgs": 1,
+  "downloads": 695779,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 70858
+ },
+ "cadquery-ocp": {
+  "pkgs": 1,
+  "downloads": 467375,
+  "self": 1,
+  "rank": 5575,
+  "own_downloads": 686511
+ },
+ "sherpa-onnx-core": {
+  "pkgs": 1,
+  "downloads": 677852,
+  "self": 1,
+  "rank": 6002,
+  "own_downloads": 581573
+ },
+ "matscipy": {
+  "pkgs": 1,
+  "downloads": 508512,
+  "self": 1,
+  "rank": 5621,
+  "own_downloads": 673495
+ },
+ "cedarpy": {
+  "pkgs": 1,
+  "downloads": 665995,
+  "self": 1,
+  "rank": 7187,
+  "own_downloads": 386864
+ },
+ "libvirt-python": {
+  "pkgs": 1,
+  "downloads": 665995,
+  "self": 1,
+  "rank": 7867,
+  "own_downloads": 310235
+ },
+ "chalkpy-rs": {
+  "pkgs": 1,
+  "downloads": 664635,
+  "self": 1,
+  "rank": 8648,
+  "own_downloads": 245464
+ },
+ "gemmi": {
+  "pkgs": 1,
+  "downloads": 382065,
+  "self": 1,
+  "rank": 5699,
+  "own_downloads": 651810
+ },
+ "pygobject": {
+  "pkgs": 1,
+  "downloads": 278048,
+  "self": 1,
+  "rank": 5773,
+  "own_downloads": 631309
+ },
+ "fuzzyset2": {
+  "pkgs": 1,
+  "downloads": 622094,
+  "self": 1,
+  "rank": 7206,
+  "own_downloads": 384789
+ },
+ "asyncmy2": {
+  "pkgs": 1,
+  "downloads": 622068,
+  "self": 1,
+  "rank": 7570,
+  "own_downloads": 339803
+ },
+ "pyobjc-framework-systemconfiguration": {
+  "pkgs": 1,
+  "downloads": 608757,
+  "self": 1,
+  "rank": 5848,
+  "own_downloads": 614295
+ },
+ "nixl-cu12": {
+  "pkgs": 1,
+  "downloads": 613882,
+  "self": 1,
+  "rank": 6676,
+  "own_downloads": 462025
+ },
+ "nixl-cu13": {
+  "pkgs": 1,
+  "downloads": 613882,
+  "self": 1,
+  "rank": 6545,
+  "own_downloads": 487841
+ },
+ "pyobjc-framework-contacts": {
+  "pkgs": 1,
+  "downloads": 579381,
+  "self": 1,
+  "rank": 5863,
+  "own_downloads": 610944
+ },
+ "pyobjc-framework-addressbook": {
+  "pkgs": 1,
+  "downloads": 608757,
+  "self": 1,
+  "rank": 5980,
+  "own_downloads": 584235
+ },
+ "pyobjc-framework-automator": {
+  "pkgs": 1,
+  "downloads": 608757,
+  "self": 1,
+  "rank": 5995,
+  "own_downloads": 582557
+ },
+ "pyobjc-framework-cfnetwork": {
+  "pkgs": 1,
+  "downloads": 608757,
+  "self": 1,
+  "rank": 5971,
+  "own_downloads": 585479
+ },
+ "pyobjc-framework-coreaudiokit": {
+  "pkgs": 1,
+  "downloads": 608757,
+  "self": 1,
+  "rank": 6001,
+  "own_downloads": 581954
+ },
+ "pyobjc-framework-coremidi": {
+  "pkgs": 1,
+  "downloads": 608757,
+  "self": 1,
+  "rank": 6014,
+  "own_downloads": 579852
+ },
+ "pyobjc-framework-screensaver": {
+  "pkgs": 1,
+  "downloads": 608757,
+  "self": 1,
+  "rank": 5992,
+  "own_downloads": 582931
+ },
+ "pyobjc-framework-securityinterface": {
+  "pkgs": 1,
+  "downloads": 608757,
+  "self": 1,
+  "rank": 5999,
+  "own_downloads": 581967
+ },
+ "pyobjc-framework-syncservices": {
+  "pkgs": 1,
+  "downloads": 608757,
+  "self": 1,
+  "rank": 5990,
+  "own_downloads": 583043
+ },
+ "perf-analyzer": {
+  "pkgs": 1,
+  "downloads": 358326,
+  "self": 1,
+  "rank": 5893,
+  "own_downloads": 602301
+ },
+ "distance": {
+  "pkgs": 1,
+  "downloads": 600806,
+  "self": 1,
+  "rank": 6984,
+  "own_downloads": 413539
+ },
+ "gmpy2": {
+  "pkgs": 1,
+  "downloads": 207180,
+  "self": 1,
+  "rank": 5909,
+  "own_downloads": 599369
+ },
+ "pyobjc-framework-localauthentication": {
+  "pkgs": 1,
+  "downloads": 568544,
+  "self": 1,
+  "rank": 5968,
+  "own_downloads": 586197
+ },
+ "mosek": {
+  "pkgs": 1,
+  "downloads": 376548,
+  "self": 1,
+  "rank": 5977,
+  "own_downloads": 584772
+ },
+ "pyobjc-framework-usernotifications": {
+  "pkgs": 1,
+  "downloads": 567390,
+  "self": 1,
+  "rank": 6009,
+  "own_downloads": 580490
+ },
+ "pyobjc-framework-spritekit": {
+  "pkgs": 1,
+  "downloads": 578082,
+  "self": 1,
+  "rank": 6015,
+  "own_downloads": 579835
+ },
+ "pyobjc-framework-intents": {
+  "pkgs": 1,
+  "downloads": 574410,
+  "self": 1,
+  "rank": 6031,
+  "own_downloads": 578687
+ },
+ "pyobjc-framework-fileprovider": {
+  "pkgs": 1,
+  "downloads": 569023,
+  "self": 1,
+  "rank": 6039,
+  "own_downloads": 578079
+ },
+ "pyobjc-framework-metalperformanceshaders": {
+  "pkgs": 1,
+  "downloads": 567811,
+  "self": 1,
+  "rank": 6065,
+  "own_downloads": 576565
+ },
+ "treelite": {
+  "pkgs": 1,
+  "downloads": 371195,
+  "self": 1,
+  "rank": 6122,
+  "own_downloads": 570421
+ },
+ "zxing-cpp": {
+  "pkgs": 1,
+  "downloads": 494005,
+  "self": 1,
+  "rank": 6160,
+  "own_downloads": 567085
+ },
+ "pyobjc-framework-sharedwithyoucore": {
+  "pkgs": 1,
+  "downloads": 545124,
+  "self": 1,
+  "rank": 6252,
+  "own_downloads": 545601
+ },
+ "rpy2-rinterface": {
+  "pkgs": 1,
+  "downloads": 536085,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 131095
+ },
+ "adbc-driver-flightsql": {
+  "pkgs": 1,
+  "downloads": 190682,
+  "self": 1,
+  "rank": 6350,
+  "own_downloads": 526291
+ },
+ "adbutils": {
+  "pkgs": 1,
+  "downloads": 470976,
+  "self": 1,
+  "rank": 6363,
+  "own_downloads": 523056
+ },
+ "dissect-util": {
+  "pkgs": 1,
+  "downloads": 510013,
+  "self": 1,
+  "rank": 9977,
+  "own_downloads": 175323
+ },
+ "janitor-rs": {
+  "pkgs": 1,
+  "downloads": 503875,
+  "self": 1,
+  "rank": 7263,
+  "own_downloads": 376792
+ },
+ "tensorrt-cu12-bindings": {
+  "pkgs": 1,
+  "downloads": 355796,
+  "self": 1,
+  "rank": 6463,
+  "own_downloads": 501901
+ },
+ "sdbus": {
+  "pkgs": 1,
+  "downloads": 397358,
+  "self": 1,
+  "rank": 6467,
+  "own_downloads": 501605
+ },
+ "pyvips": {
+  "pkgs": 1,
+  "downloads": 494005,
+  "self": 1,
+  "rank": 6582,
+  "own_downloads": 480186
+ },
+ "accumulation-tree": {
+  "pkgs": 1,
+  "downloads": 487945,
+  "self": 1,
+  "rank": 7241,
+  "own_downloads": 379687
+ },
+ "diffq": {
+  "pkgs": 1,
+  "downloads": 481888,
+  "self": 1,
+  "rank": 8835,
+  "own_downloads": 234578
+ },
+ "samplerate": {
+  "pkgs": 1,
+  "downloads": 481888,
+  "self": 1,
+  "rank": 7328,
+  "own_downloads": 367814
+ },
+ "multimark": {
+  "pkgs": 1,
+  "downloads": 478679,
+  "self": 1,
+  "rank": 9565,
+  "own_downloads": 195320
+ },
+ "tesserocr": {
+  "pkgs": 1,
+  "downloads": 278048,
+  "self": 1,
+  "rank": 6637,
+  "own_downloads": 468962
+ },
+ "nagisa": {
+  "pkgs": 1,
+  "downloads": 387770,
+  "self": 1,
+  "rank": 6678,
+  "own_downloads": 461579
+ },
+ "tabmat": {
+  "pkgs": 1,
+  "downloads": 460158,
+  "self": 1,
+  "rank": 6740,
+  "own_downloads": 453581
+ },
+ "labmaze": {
+  "pkgs": 1,
+  "downloads": 460070,
+  "self": 1,
+  "rank": 7895,
+  "own_downloads": 307620
+ },
+ "pyston": {
+  "pkgs": 1,
+  "downloads": 453758,
+  "self": 1,
+  "rank": 6717,
+  "own_downloads": 456094
+ },
+ "xrootd": {
+  "pkgs": 1,
+  "downloads": 438509,
+  "self": 1,
+  "rank": 6724,
+  "own_downloads": 455454
+ },
+ "sslpsk-pmd3": {
+  "pkgs": 1,
+  "downloads": 441349,
+  "self": 1,
+  "rank": 9367,
+  "own_downloads": 206046
+ },
+ "webrtcvad": {
+  "pkgs": 1,
+  "downloads": 273238,
+  "self": 1,
+  "rank": 6835,
+  "own_downloads": 439300
+ },
+ "s3torchconnectorclient": {
+  "pkgs": 1,
+  "downloads": 375442,
+  "self": 1,
+  "rank": 6836,
+  "own_downloads": 439129
+ },
+ "lzallright": {
+  "pkgs": 1,
+  "downloads": 434250,
+  "self": 1,
+  "rank": 8781,
+  "own_downloads": 238075
+ },
+ "pyats-easypy": {
+  "pkgs": 1,
+  "downloads": 431478,
+  "self": 1,
+  "rank": 7034,
+  "own_downloads": 406130
+ },
+ "pyats-reporter": {
+  "pkgs": 1,
+  "downloads": 431478,
+  "self": 1,
+  "rank": 7126,
+  "own_downloads": 395434
+ },
+ "pyats-tcl": {
+  "pkgs": 1,
+  "downloads": 431478,
+  "self": 1,
+  "rank": 7083,
+  "own_downloads": 400536
+ },
+ "ssh2-python": {
+  "pkgs": 1,
+  "downloads": 271105,
+  "self": 1,
+  "rank": 7024,
+  "own_downloads": 407518
+ },
+ "correctionlib": {
+  "pkgs": 1,
+  "downloads": 333777,
+  "self": 1,
+  "rank": 7146,
+  "own_downloads": 393156
+ },
+ "color-operations": {
+  "pkgs": 1,
+  "downloads": 388527,
+  "self": 1,
+  "rank": 7509,
+  "own_downloads": 347285
+ },
+ "cudf-cu12": {
+  "pkgs": 1,
+  "downloads": 371195,
+  "self": 1,
+  "rank": 7538,
+  "own_downloads": 343406
+ },
+ "libcuml-cu12": {
+  "pkgs": 1,
+  "downloads": 371195,
+  "self": 1,
+  "rank": 7777,
+  "own_downloads": 318492
+ },
+ "nvforest-cu12": {
+  "pkgs": 1,
+  "downloads": 371195,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "pylibraft-cu12": {
+  "pkgs": 1,
+  "downloads": 371195,
+  "self": 1,
+  "rank": 7714,
+  "own_downloads": 324248
+ },
+ "pyromark": {
+  "pkgs": 1,
+  "downloads": 272187,
+  "self": 1,
+  "rank": 7304,
+  "own_downloads": 370604
+ },
+ "pytorch-tokenizers": {
+  "pkgs": 1,
+  "downloads": 261034,
+  "self": 1,
+  "rank": 7368,
+  "own_downloads": 363874
+ },
+ "cbcbox": {
+  "pkgs": 1,
+  "downloads": 356483,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 149450
+ },
+ "theano-pymc": {
+  "pkgs": 1,
+  "downloads": 340600,
+  "self": 1,
+  "rank": 9559,
+  "own_downloads": 195491
+ },
+ "pyqtwebengine-qt5": {
+  "pkgs": 1,
+  "downloads": 339730,
+  "self": 1,
+  "rank": 8065,
+  "own_downloads": 291510
+ },
+ "crosshair-tool": {
+  "pkgs": 1,
+  "downloads": 186102,
+  "self": 1,
+  "rank": 7691,
+  "own_downloads": 327157
+ },
+ "python-gdcm": {
+  "pkgs": 1,
+  "downloads": 187402,
+  "self": 1,
+  "rank": 7792,
+  "own_downloads": 317333
+ },
+ "ed25519-blake2b-fork": {
+  "pkgs": 1,
+  "downloads": 310179,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 166129
+ },
+ "spacy-alignments": {
+  "pkgs": 1,
+  "downloads": 303956,
+  "self": 1,
+  "rank": 8896,
+  "own_downloads": 231345
+ },
+ "sphn": {
+  "pkgs": 1,
+  "downloads": 301971,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 119950
+ },
+ "igwn-ligolw": {
+  "pkgs": 1,
+  "downloads": 291644,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 85981
+ },
+ "igwn-segments": {
+  "pkgs": 1,
+  "downloads": 291644,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 94911
+ },
+ "kaldifst": {
+  "pkgs": 1,
+  "downloads": 268089,
+  "self": 1,
+  "rank": 8103,
+  "own_downloads": 287146
+ },
+ "ssh-python": {
+  "pkgs": 1,
+  "downloads": 271105,
+  "self": 1,
+  "rank": 8178,
+  "own_downloads": 280598
+ },
+ "crick": {
+  "pkgs": 1,
+  "downloads": 279174,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 92730
+ },
+ "pyaskalono": {
+  "pkgs": 1,
+  "downloads": 278048,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 90540
+ },
+ "siphashc": {
+  "pkgs": 1,
+  "downloads": 278048,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 126877
+ },
+ "skia-pathops": {
+  "pkgs": 1,
+  "downloads": 210609,
+  "self": 1,
+  "rank": 8274,
+  "own_downloads": 272910
+ },
+ "faster-eth-utils": {
+  "pkgs": 1,
+  "downloads": 251506,
+  "self": 1,
+  "rank": 8288,
+  "own_downloads": 271860
+ },
+ "amulet-mutf8": {
+  "pkgs": 1,
+  "downloads": 265025,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "kingfisher-bin": {
+  "pkgs": 1,
+  "downloads": 260342,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "aliyun-log-fastpb": {
+  "pkgs": 1,
+  "downloads": 260342,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 90994
+ },
+ "numpy-rms": {
+  "pkgs": 1,
+  "downloads": 203830,
+  "self": 1,
+  "rank": 8461,
+  "own_downloads": 258544
+ },
+ "numpy-minmax": {
+  "pkgs": 1,
+  "downloads": 203830,
+  "self": 1,
+  "rank": 8513,
+  "own_downloads": 254634
+ },
+ "ty-types": {
+  "pkgs": 1,
+  "downloads": 250575,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 110027
+ },
+ "deepframe": {
+  "pkgs": 1,
+  "downloads": 243387,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "zodbpickle": {
+  "pkgs": 1,
+  "downloads": 224138,
+  "self": 1,
+  "rank": 8845,
+  "own_downloads": 233936
+ },
+ "freeze-core": {
+  "pkgs": 1,
+  "downloads": 232884,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 97257
+ },
+ "fabricatio-core": {
+  "pkgs": 1,
+  "downloads": 232409,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "tflite-runtime": {
+  "pkgs": 1,
+  "downloads": 228252,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 147362
+ },
+ "dlib": {
+  "pkgs": 1,
+  "downloads": 227631,
+  "self": 1,
+  "rank": 9472,
+  "own_downloads": 199994
+ },
+ "tensorrt-cu13-bindings": {
+  "pkgs": 1,
+  "downloads": 223702,
+  "self": 1,
+  "rank": 9254,
+  "own_downloads": 210711
+ },
+ "runstats": {
+  "pkgs": 1,
+  "downloads": 221097,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 150620
+ },
+ "xpresslibs": {
+  "pkgs": 1,
+  "downloads": 217067,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 157411
+ },
+ "minijinja": {
+  "pkgs": 1,
+  "downloads": 215453,
+  "self": 1,
+  "rank": 9344,
+  "own_downloads": 206709
+ },
+ "py-bip39-bindings": {
+  "pkgs": 1,
+  "downloads": 205646,
+  "self": 1,
+  "rank": 9201,
+  "own_downloads": 213480
+ },
+ "py-ed25519-zebra-bindings": {
+  "pkgs": 1,
+  "downloads": 205646,
+  "self": 1,
+  "rank": 9245,
+  "own_downloads": 211050
+ },
+ "manimpango": {
+  "pkgs": 1,
+  "downloads": 210609,
+  "self": 1,
+  "rank": 9975,
+  "own_downloads": 175438
+ },
+ "epam-indigo": {
+  "pkgs": 1,
+  "downloads": 183556,
+  "self": 1,
+  "rank": 9276,
+  "own_downloads": 209560
+ },
+ "memory-allocator": {
+  "pkgs": 1,
+  "downloads": 207180,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "passagemath-categories": {
+  "pkgs": 1,
+  "downloads": 207180,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "passagemath-objects": {
+  "pkgs": 1,
+  "downloads": 207180,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "sysv-ipc": {
+  "pkgs": 1,
+  "downloads": 189568,
+  "self": 1,
+  "rank": 9370,
+  "own_downloads": 205877
+ },
+ "smoldot-light": {
+  "pkgs": 1,
+  "downloads": 205646,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 106078
+ },
+ "ai-edge-model-explorer-adapter": {
+  "pkgs": 1,
+  "downloads": 204886,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "hyperlight-sandbox-backend-wasm": {
+  "pkgs": 1,
+  "downloads": 188597,
+  "self": 1,
+  "rank": 9392,
+  "own_downloads": 204670
+ },
+ "jax-cuda13-pjrt": {
+  "pkgs": 1,
+  "downloads": 203875,
+  "self": 1,
+  "rank": 9566,
+  "own_downloads": 195313
+ },
+ "python-stretch": {
+  "pkgs": 1,
+  "downloads": 203830,
+  "self": 1,
+  "rank": 9619,
+  "own_downloads": 192920
+ },
+ "cadquery-ocp-novtk": {
+  "pkgs": 1,
+  "downloads": 199979,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 0
+ },
+ "lib3mf": {
+  "pkgs": 1,
+  "downloads": 199979,
+  "self": 1,
+  "rank": 9725,
+  "own_downloads": 187554
+ },
+ "acquisition": {
+  "pkgs": 1,
+  "downloads": 197846,
+  "self": 1,
+  "rank": 9681,
+  "own_downloads": 189760
+ },
+ "persistence": {
+  "pkgs": 1,
+  "downloads": 197846,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 170771
+ },
+ "pemja": {
+  "pkgs": 1,
+  "downloads": 195283,
+  "self": 1,
+  "rank": 9577,
+  "own_downloads": 194924
+ },
+ "libucxx-cu12": {
+  "pkgs": 1,
+  "downloads": 193902,
+  "self": 1,
+  "rank": 9609,
+  "own_downloads": 193442
+ },
+ "intel-sycl-rt": {
+  "pkgs": 1,
+  "downloads": 174592,
+  "self": 1,
+  "rank": 9656,
+  "own_downloads": 190769
+ },
+ "pylerc": {
+  "pkgs": 1,
+  "downloads": 189300,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 130884
+ },
+ "nominal-streaming": {
+  "pkgs": 1,
+  "downloads": 183382,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 101594
+ },
+ "aimrocks": {
+  "pkgs": 1,
+  "downloads": 182349,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 108289
+ },
+ "silk-python": {
+  "pkgs": 1,
+  "downloads": 181800,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 121325
+ },
+ "intel-opencl-rt": {
+  "pkgs": 1,
+  "downloads": 174592,
+  "self": 1,
+  "rank": 9933,
+  "own_downloads": 177625
+ },
+ "shiboken2": {
+  "pkgs": 1,
+  "downloads": 174682,
+  "self": 0,
+  "rank": null,
+  "own_downloads": 135731
+ },
+ "sglang": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 72,
+  "own_downloads": 507352249
+ },
+ "psycopg-binary": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 374,
+  "own_downloads": 88273780
+ },
+ "tree-sitter-languages": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 512,
+  "own_downloads": 57454473
+ },
+ "nvidia-cufft": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 686,
+  "own_downloads": 37754933
+ },
+ "nvidia-cusolver": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 688,
+  "own_downloads": 37456423
+ },
+ "nvidia-curand": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 691,
+  "own_downloads": 37304554
+ },
+ "uv-build": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 704,
+  "own_downloads": 36666503
+ },
+ "nvidia-nvtx": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 707,
+  "own_downloads": 36422721
+ },
+ "nvidia-cufile": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 709,
+  "own_downloads": 36324961
+ },
+ "zopfli": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 758,
+  "own_downloads": 31856413
+ },
+ "lupa": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 760,
+  "own_downloads": 31727219
+ },
+ "ty": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 762,
+  "own_downloads": 31341604
+ },
+ "nvidia-cudnn-cu12": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 792,
+  "own_downloads": 29892137
+ },
+ "nvidia-cufft-cu12": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 835,
+  "own_downloads": 27494792
+ },
+ "nvidia-cuda-cupti-cu12": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 842,
+  "own_downloads": 27096447
+ },
+ "nvidia-cusolver-cu12": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 843,
+  "own_downloads": 27052866
+ },
+ "prek": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 849,
+  "own_downloads": 26840148
+ },
+ "nvidia-nvtx-cu12": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 888,
+  "own_downloads": 24943444
+ },
+ "nvidia-cusparselt-cu12": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1033,
+  "own_downloads": 20079496
+ },
+ "pyyaml-ft": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1061,
+  "own_downloads": 18933726
+ },
+ "maturin": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1123,
+  "own_downloads": 17207192
+ },
+ "nvidia-cufile-cu12": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1202,
+  "own_downloads": 14955700
+ },
+ "xmlsec": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1334,
+  "own_downloads": 11853667
+ },
+ "pillow-heif": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1404,
+  "own_downloads": 10782630
+ },
+ "pyinstaller": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1412,
+  "own_downloads": 10729835
+ },
+ "nvidia-nvshmem-cu12": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1497,
+  "own_downloads": 9213359
+ },
+ "backports-zoneinfo": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1550,
+  "own_downloads": 8562542
+ },
+ "pycrypto": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1589,
+  "own_downloads": 8114397
+ },
+ "prophet": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1592,
+  "own_downloads": 8090325
+ },
+ "toons": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1645,
+  "own_downloads": 7648699
+ },
+ "deptry": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1695,
+  "own_downloads": 7199498
+ },
+ "biotite": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1713,
+  "own_downloads": 7072766
+ },
+ "fiona": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1714,
+  "own_downloads": 7057075
+ },
+ "catboost": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1807,
+  "own_downloads": 6520710
+ },
+ "cchardet": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1865,
+  "own_downloads": 6252676
+ },
+ "pyiceberg-core": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1894,
+  "own_downloads": 6103015
+ },
+ "vllm": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1940,
+  "own_downloads": 5887719
+ },
+ "gensim": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1960,
+  "own_downloads": 5802223
+ },
+ "timezonefinder": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1976,
+  "own_downloads": 5694986
+ },
+ "logbook": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1983,
+  "own_downloads": 5634199
+ },
+ "pywinpty": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 1984,
+  "own_downloads": 5633090
+ },
+ "pyrefly": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2006,
+  "own_downloads": 5526000
+ },
+ "pypandoc-binary": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2032,
+  "own_downloads": 5383892
+ },
+ "pycurl": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2050,
+  "own_downloads": 5338031
+ },
+ "python-calamine": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2095,
+  "own_downloads": 5139962
+ },
+ "pymupdfb": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2100,
+  "own_downloads": 5071736
+ },
+ "coolprop": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2121,
+  "own_downloads": 4962969
+ },
+ "krb5": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2149,
+  "own_downloads": 4806134
+ },
+ "pylance": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2243,
+  "own_downloads": 4448754
+ },
+ "newrelic": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2249,
+  "own_downloads": 4402306
+ },
+ "datafusion": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2255,
+  "own_downloads": 4376620
+ },
+ "pyinotify": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2263,
+  "own_downloads": 4337852
+ },
+ "tzfpy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2271,
+  "own_downloads": 4318819
+ },
+ "winkerberos": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2272,
+  "own_downloads": 4313016
+ },
+ "zizmor": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2322,
+  "own_downloads": 4118896
+ },
+ "typed-ast": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2333,
+  "own_downloads": 4091736
+ },
+ "sspilib": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2365,
+  "own_downloads": 3984934
+ },
+ "cx-oracle": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2389,
+  "own_downloads": 3889890
+ },
+ "clang-format": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2405,
+  "own_downloads": 3844515
+ },
+ "pglast": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2406,
+  "own_downloads": 3842560
+ },
+ "chroma-hnswlib": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2409,
+  "own_downloads": 3840334
+ },
+ "pyhmmer": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2413,
+  "own_downloads": 3825072
+ },
+ "mmcif": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2424,
+  "own_downloads": 3783983
+ },
+ "shellcheck-py": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2433,
+  "own_downloads": 3774665
+ },
+ "statsig-python-core": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2462,
+  "own_downloads": 3681706
+ },
+ "tach": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2475,
+  "own_downloads": 3644727
+ },
+ "tables": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2484,
+  "own_downloads": 3608322
+ },
+ "djlint": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2489,
+  "own_downloads": 3595773
+ },
+ "docling-parse": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2532,
+  "own_downloads": 3467358
+ },
+ "valkey-glide": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2534,
+  "own_downloads": 3459760
+ },
+ "ua-parser-rs": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2570,
+  "own_downloads": 3375800
+ },
+ "opencv-contrib-python-headless": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2602,
+  "own_downloads": 3248682
+ },
+ "tantivy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2637,
+  "own_downloads": 3152908
+ },
+ "davey": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2639,
+  "own_downloads": 3149454
+ },
+ "fastexcel": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2646,
+  "own_downloads": 3132884
+ },
+ "decord": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2689,
+  "own_downloads": 3046974
+ },
+ "pyreadstat": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2690,
+  "own_downloads": 3043830
+ },
+ "awslambdaric": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2705,
+  "own_downloads": 3012538
+ },
+ "rerun-sdk": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2717,
+  "own_downloads": 2986945
+ },
+ "tink": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2723,
+  "own_downloads": 2979700
+ },
+ "mediapipe": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2738,
+  "own_downloads": 2947167
+ },
+ "pygame": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2779,
+  "own_downloads": 2864506
+ },
+ "fasttext-wheel": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2790,
+  "own_downloads": 2845410
+ },
+ "pagefind-bin": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2795,
+  "own_downloads": 2839960
+ },
+ "comfy-aimdo": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2840,
+  "own_downloads": 2727778
+ },
+ "css-inline": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2850,
+  "own_downloads": 2690354
+ },
+ "kerberos": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2880,
+  "own_downloads": 2607671
+ },
+ "comfy-kitchen": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2971,
+  "own_downloads": 2447298
+ },
+ "plyvel": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 2997,
+  "own_downloads": 2386266
+ },
+ "tree-sitter-xml": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3011,
+  "own_downloads": 2361922
+ },
+ "tree-sitter-html": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3024,
+  "own_downloads": 2346722
+ },
+ "pyzbar": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3037,
+  "own_downloads": 2334911
+ },
+ "nvidia-cudnn-cu11": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3077,
+  "own_downloads": 2277012
+ },
+ "tree-sitter-sql": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3093,
+  "own_downloads": 2253247
+ },
+ "apache-sedona": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3098,
+  "own_downloads": 2241985
+ },
+ "tree-sitter-css": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3115,
+  "own_downloads": 2210010
+ },
+ "jsonnet": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3121,
+  "own_downloads": 2205102
+ },
+ "tree-sitter-markdown": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3122,
+  "own_downloads": 2202669
+ },
+ "tree-sitter-toml": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3124,
+  "own_downloads": 2198681
+ },
+ "paddlepaddle": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3125,
+  "own_downloads": 2197307
+ },
+ "mitmproxy-wireguard": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3134,
+  "own_downloads": 2184775
+ },
+ "pymediainfo": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3145,
+  "own_downloads": 2160794
+ },
+ "nvidia-cuda-runtime-cu11": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3171,
+  "own_downloads": 2132811
+ },
+ "manifold3d": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3185,
+  "own_downloads": 2115705
+ },
+ "tree-sitter-regex": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3186,
+  "own_downloads": 2115335
+ },
+ "py-ubjson": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3198,
+  "own_downloads": 2095784
+ },
+ "nvidia-cuda-nvrtc-cu11": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3205,
+  "own_downloads": 2081183
+ },
+ "scandir": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3232,
+  "own_downloads": 2040314
+ },
+ "pykerberos": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3254,
+  "own_downloads": 2012221
+ },
+ "ct3": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3256,
+  "own_downloads": 2010459
+ },
+ "lingua-language-detector": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3299,
+  "own_downloads": 1962872
+ },
+ "embreex": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3321,
+  "own_downloads": 1944815
+ },
+ "uwsgi": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3323,
+  "own_downloads": 1943105
+ },
+ "tensorflow-cpu": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3330,
+  "own_downloads": 1932422
+ },
+ "open3d": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3357,
+  "own_downloads": 1900835
+ },
+ "lief": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3436,
+  "own_downloads": 1811808
+ },
+ "flpc": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3439,
+  "own_downloads": 1809203
+ },
+ "oai-statsig-python-core": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3455,
+  "own_downloads": 1788824
+ },
+ "hogql-parser": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3463,
+  "own_downloads": 1774061
+ },
+ "fasttext": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3465,
+  "own_downloads": 1773384
+ },
+ "vhacdx": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3466,
+  "own_downloads": 1772374
+ },
+ "nvidia-cuda-nvcc-cu12": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3473,
+  "own_downloads": 1766545
+ },
+ "stpyv8": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3482,
+  "own_downloads": 1746384
+ },
+ "adbc-driver-postgresql": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3483,
+  "own_downloads": 1744945
+ },
+ "hogql-parser-rs": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3498,
+  "own_downloads": 1730025
+ },
+ "nvidia-cutlass-dsl-libs-cu13": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3502,
+  "own_downloads": 1726947
+ },
+ "jsoncompat": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3503,
+  "own_downloads": 1726816
+ },
+ "angr": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3537,
+  "own_downloads": 1697611
+ },
+ "pixelhog": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3539,
+  "own_downloads": 1695461
+ },
+ "brotlipy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3549,
+  "own_downloads": 1686455
+ },
+ "numpy-quaternion": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3587,
+  "own_downloads": 1653945
+ },
+ "sasl": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3591,
+  "own_downloads": 1651739
+ },
+ "pydevd": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3609,
+  "own_downloads": 1631680
+ },
+ "pydantic-monty": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3619,
+  "own_downloads": 1615964
+ },
+ "connectorx": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3636,
+  "own_downloads": 1589095
+ },
+ "yara-python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3672,
+  "own_downloads": 1557448
+ },
+ "rust-just": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3717,
+  "own_downloads": 1516937
+ },
+ "fastrlock": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3718,
+  "own_downloads": 1516469
+ },
+ "lintrunner": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3729,
+  "own_downloads": 1510202
+ },
+ "pedalboard": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3740,
+  "own_downloads": 1493005
+ },
+ "coredis": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3756,
+  "own_downloads": 1481121
+ },
+ "aiocsv": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3765,
+  "own_downloads": 1466501
+ },
+ "deepspeed": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3772,
+  "own_downloads": 1455790
+ },
+ "jsonschema2md": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3782,
+  "own_downloads": 1451723
+ },
+ "adbc-driver-sqlite": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3802,
+  "own_downloads": 1435867
+ },
+ "tableauhyperapi": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3838,
+  "own_downloads": 1401954
+ },
+ "jax-cuda12-plugin": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3839,
+  "own_downloads": 1401694
+ },
+ "pyxirr": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3840,
+  "own_downloads": 1401626
+ },
+ "mysql-connector": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3858,
+  "own_downloads": 1388669
+ },
+ "nvidia-cusparse-cu11": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3864,
+  "own_downloads": 1385493
+ },
+ "nvidia-cufft-cu11": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3865,
+  "own_downloads": 1385492
+ },
+ "nvidia-cusolver-cu11": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3868,
+  "own_downloads": 1383662
+ },
+ "nvidia-curand-cu11": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3870,
+  "own_downloads": 1381418
+ },
+ "nvidia-cuda-cupti-cu11": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3872,
+  "own_downloads": 1381015
+ },
+ "nvidia-nvtx-cu11": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3893,
+  "own_downloads": 1370298
+ },
+ "rnet": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3894,
+  "own_downloads": 1369523
+ },
+ "ruptures": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3911,
+  "own_downloads": 1356987
+ },
+ "cvxopt": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3939,
+  "own_downloads": 1341236
+ },
+ "swig": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3945,
+  "own_downloads": 1337949
+ },
+ "pyomo": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3948,
+  "own_downloads": 1336826
+ },
+ "mssql-python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3953,
+  "own_downloads": 1331982
+ },
+ "saxonche": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3955,
+  "own_downloads": 1330371
+ },
+ "zensical": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3962,
+  "own_downloads": 1322879
+ },
+ "pygraphviz": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3968,
+  "own_downloads": 1316393
+ },
+ "viztracer": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3973,
+  "own_downloads": 1314029
+ },
+ "littlefs-python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3976,
+  "own_downloads": 1309879
+ },
+ "nvidia-nccl-cu11": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3990,
+  "own_downloads": 1303681
+ },
+ "imagecodecs": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 3995,
+  "own_downloads": 1299560
+ },
+ "annoy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4025,
+  "own_downloads": 1276551
+ },
+ "mini-racer": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4045,
+  "own_downloads": 1266529
+ },
+ "pulsar-client": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4067,
+  "own_downloads": 1248939
+ },
+ "pymongocrypt": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4072,
+  "own_downloads": 1246712
+ },
+ "artifacts-keyring": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4075,
+  "own_downloads": 1242973
+ },
+ "guppy3": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4086,
+  "own_downloads": 1237247
+ },
+ "resiliparse": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4100,
+  "own_downloads": 1225738
+ },
+ "httpmorph": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4107,
+  "own_downloads": 1221012
+ },
+ "vispy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4110,
+  "own_downloads": 1219149
+ },
+ "clandestined": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4121,
+  "own_downloads": 1212561
+ },
+ "headroom-ai": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4145,
+  "own_downloads": 1195669
+ },
+ "vl-convert-python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4153,
+  "own_downloads": 1190554
+ },
+ "gurobipy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4161,
+  "own_downloads": 1186926
+ },
+ "typos": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4162,
+  "own_downloads": 1186026
+ },
+ "fatfs-ng": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4167,
+  "own_downloads": 1184730
+ },
+ "python-geohash": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4183,
+  "own_downloads": 1174715
+ },
+ "nvidia-cuda-tileiras": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4201,
+  "own_downloads": 1162337
+ },
+ "lap": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4214,
+  "own_downloads": 1156533
+ },
+ "livekit-plugins-noise-cancellation": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4238,
+  "own_downloads": 1139273
+ },
+ "asammdf": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4259,
+  "own_downloads": 1125790
+ },
+ "hmmlearn": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4260,
+  "own_downloads": 1124393
+ },
+ "stagehand": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4299,
+  "own_downloads": 1101180
+ },
+ "zipfile-deflate64": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4307,
+  "own_downloads": 1096697
+ },
+ "xlwings": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4311,
+  "own_downloads": 1094809
+ },
+ "arch": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4312,
+  "own_downloads": 1094484
+ },
+ "torchrl": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4326,
+  "own_downloads": 1085378
+ },
+ "mpi4py": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4328,
+  "own_downloads": 1084912
+ },
+ "pytype": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4331,
+  "own_downloads": 1083252
+ },
+ "libtpu": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4332,
+  "own_downloads": 1082617
+ },
+ "usd-core": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4365,
+  "own_downloads": 1064106
+ },
+ "google-cloud-profiler": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4392,
+  "own_downloads": 1047358
+ },
+ "tensorflow-addons": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4421,
+  "own_downloads": 1026945
+ },
+ "fasttext-numpy2": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4435,
+  "own_downloads": 1018388
+ },
+ "ibmmq": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4448,
+  "own_downloads": 1012092
+ },
+ "onepassword-sdk": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4454,
+  "own_downloads": 1009720
+ },
+ "cbor": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4455,
+  "own_downloads": 1009662
+ },
+ "pycld2": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4475,
+  "own_downloads": 999163
+ },
+ "tensorboard-plugin-profile": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4490,
+  "own_downloads": 991649
+ },
+ "hunter": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4520,
+  "own_downloads": 979269
+ },
+ "ast-grep-py": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4610,
+  "own_downloads": 939560
+ },
+ "dlib-bin": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4628,
+  "own_downloads": 929645
+ },
+ "scylla-driver": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4651,
+  "own_downloads": 917880
+ },
+ "couchbase": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4665,
+  "own_downloads": 912483
+ },
+ "rtoml": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4692,
+  "own_downloads": 901953
+ },
+ "fugue-sql-antlr": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4696,
+  "own_downloads": 900607
+ },
+ "mrml": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4730,
+  "own_downloads": 888735
+ },
+ "sccache": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4775,
+  "own_downloads": 867451
+ },
+ "mxnet": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4794,
+  "own_downloads": 859006
+ },
+ "libvalkey": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4809,
+  "own_downloads": 851368
+ },
+ "psycopg-c": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4811,
+  "own_downloads": 850417
+ },
+ "quantlib": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4840,
+  "own_downloads": 837348
+ },
+ "leidenalg": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4865,
+  "own_downloads": 830477
+ },
+ "s5cmd": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4876,
+  "own_downloads": 826445
+ },
+ "mlx-metal": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4890,
+  "own_downloads": 820410
+ },
+ "pyfarmhash": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4893,
+  "own_downloads": 819535
+ },
+ "mecab-python3": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4911,
+  "own_downloads": 814884
+ },
+ "pysqlite3-binary": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4927,
+  "own_downloads": 810489
+ },
+ "msgpack-python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4953,
+  "own_downloads": 800717
+ },
+ "fugashi": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4966,
+  "own_downloads": 795405
+ },
+ "rocksdict": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4980,
+  "own_downloads": 791667
+ },
+ "eccodeslib": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4984,
+  "own_downloads": 790169
+ },
+ "asyncmy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 4989,
+  "own_downloads": 786452
+ },
+ "pyobjc-framework-corebluetooth": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5011,
+  "own_downloads": 781716
+ },
+ "pyobjc-framework-vision": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5070,
+  "own_downloads": 766299
+ },
+ "pyobjc-framework-libdispatch": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5071,
+  "own_downloads": 766266
+ },
+ "austin-dist": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5093,
+  "own_downloads": 759181
+ },
+ "unicodedata2": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5102,
+  "own_downloads": 757703
+ },
+ "pyproject-fmt": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5130,
+  "own_downloads": 750265
+ },
+ "pymoo": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5304,
+  "own_downloads": 730038
+ },
+ "murmurhash2": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5330,
+  "own_downloads": 725950
+ },
+ "torch-npu": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5417,
+  "own_downloads": 720552
+ },
+ "llama-cpp-python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5487,
+  "own_downloads": 711561
+ },
+ "decord2": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5514,
+  "own_downloads": 707407
+ },
+ "ziglang": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5518,
+  "own_downloads": 706683
+ },
+ "rumdl": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5540,
+  "own_downloads": 696770
+ },
+ "iterfzf": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5542,
+  "own_downloads": 696560
+ },
+ "phonopy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5543,
+  "own_downloads": 695779
+ },
+ "piper-tts": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5546,
+  "own_downloads": 695070
+ },
+ "pycapnp": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5585,
+  "own_downloads": 683648
+ },
+ "pyarmor-cli-core": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5593,
+  "own_downloads": 681820
+ },
+ "pybullet": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5596,
+  "own_downloads": 681695
+ },
+ "jenkspy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5601,
+  "own_downloads": 678591
+ },
+ "sherpa-onnx": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5606,
+  "own_downloads": 677852
+ },
+ "vosk": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5619,
+  "own_downloads": 674216
+ },
+ "runai-model-streamer": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5629,
+  "own_downloads": 671853
+ },
+ "coal-library": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5630,
+  "own_downloads": 671813
+ },
+ "lapx": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5637,
+  "own_downloads": 668633
+ },
+ "xgboost-cpu": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5653,
+  "own_downloads": 664985
+ },
+ "zlib-state": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5660,
+  "own_downloads": 663187
+ },
+ "mkl": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5662,
+  "own_downloads": 661901
+ },
+ "subprocess32": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5668,
+  "own_downloads": 661072
+ },
+ "datasketches": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5671,
+  "own_downloads": 660029
+ },
+ "liblinear-multicore": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5678,
+  "own_downloads": 658692
+ },
+ "pymsalruntime": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5679,
+  "own_downloads": 658252
+ },
+ "qiskit-aer": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5733,
+  "own_downloads": 641735
+ },
+ "sqloxide": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5753,
+  "own_downloads": 637795
+ },
+ "pymavlink": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5787,
+  "own_downloads": 627661
+ },
+ "hnswlib": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5797,
+  "own_downloads": 625899
+ },
+ "moyopy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5837,
+  "own_downloads": 616967
+ },
+ "html-to-markdown": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5854,
+  "own_downloads": 612858
+ },
+ "xatlas": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5859,
+  "own_downloads": 611372
+ },
+ "openexr": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5877,
+  "own_downloads": 607782
+ },
+ "cupy-cuda13x": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5883,
+  "own_downloads": 606428
+ },
+ "econml": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5895,
+  "own_downloads": 601875
+ },
+ "pyuwsgi": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5901,
+  "own_downloads": 600930
+ },
+ "pydevd-pycharm": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5926,
+  "own_downloads": 595645
+ },
+ "pyobjc-framework-photos": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5931,
+  "own_downloads": 594366
+ },
+ "pycups": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5942,
+  "own_downloads": 591887
+ },
+ "gpiod": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5965,
+  "own_downloads": 586790
+ },
+ "pyobjc-framework-corewlan": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 5979,
+  "own_downloads": 584384
+ },
+ "pyobjc-framework-multipeerconnectivity": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6000,
+  "own_downloads": 581964
+ },
+ "pyobjc-framework-modelio": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6003,
+  "own_downloads": 581282
+ },
+ "memcache-hybrid": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6004,
+  "own_downloads": 581094
+ },
+ "pyobjc-framework-screencapturekit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6005,
+  "own_downloads": 581083
+ },
+ "pyobjc-framework-speech": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6007,
+  "own_downloads": 580858
+ },
+ "pyobjc-framework-cryptotokenkit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6011,
+  "own_downloads": 580147
+ },
+ "pyobjc-framework-imagecapturecore": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6013,
+  "own_downloads": 579948
+ },
+ "pyobjc-framework-avkit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6017,
+  "own_downloads": 579575
+ },
+ "pyobjc-framework-contactsui": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6019,
+  "own_downloads": 579381
+ },
+ "pyobjc-framework-coremediaio": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6022,
+  "own_downloads": 579148
+ },
+ "mariadb": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6024,
+  "own_downloads": 579025
+ },
+ "pygame-ce": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6025,
+  "own_downloads": 579021
+ },
+ "pyobjc-framework-corespotlight": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6026,
+  "own_downloads": 579011
+ },
+ "pyobjc-framework-scenekit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6027,
+  "own_downloads": 579008
+ },
+ "pyobjc-framework-gamecenter": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6029,
+  "own_downloads": 578862
+ },
+ "pyobjc-framework-mapkit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6030,
+  "own_downloads": 578688
+ },
+ "pyobjc-framework-storekit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6032,
+  "own_downloads": 578393
+ },
+ "pyobjc-framework-photosui": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6033,
+  "own_downloads": 578304
+ },
+ "pyobjc-framework-networkextension": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6035,
+  "own_downloads": 578216
+ },
+ "pyobjc-framework-gamecontroller": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6036,
+  "own_downloads": 578192
+ },
+ "pyobjc-framework-gameplaykit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6038,
+  "own_downloads": 578082
+ },
+ "pyobjc-framework-coremotion": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6042,
+  "own_downloads": 577888
+ },
+ "pyobjc-framework-externalaccessory": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6043,
+  "own_downloads": 577846
+ },
+ "pyobjc-framework-notificationcenter": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6045,
+  "own_downloads": 577664
+ },
+ "pyobjc-framework-safariservices": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6046,
+  "own_downloads": 577652
+ },
+ "pyobjc-framework-mediatoolbox": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6047,
+  "own_downloads": 577584
+ },
+ "pyobjc-framework-gamekit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6049,
+  "own_downloads": 577454
+ },
+ "pyobjc-framework-authenticationservices": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6052,
+  "own_downloads": 577290
+ },
+ "aerospike": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6053,
+  "own_downloads": 577284
+ },
+ "pyobjc-framework-videotoolbox": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6054,
+  "own_downloads": 577210
+ },
+ "typst": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6055,
+  "own_downloads": 577114
+ },
+ "pyobjc-framework-network": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6059,
+  "own_downloads": 576839
+ },
+ "pyobjc-framework-accessibility": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6060,
+  "own_downloads": 576835
+ },
+ "pyobjc-framework-audiovideobridging": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6062,
+  "own_downloads": 576762
+ },
+ "pyobjc-framework-automaticassessmentconfiguration": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6063,
+  "own_downloads": 576702
+ },
+ "pyobjc-framework-metalkit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6066,
+  "own_downloads": 576293
+ },
+ "fastokens": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6069,
+  "own_downloads": 576077
+ },
+ "pyobjc-framework-scriptingbridge": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6071,
+  "own_downloads": 575860
+ },
+ "pyobjc-framework-oslog": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6073,
+  "own_downloads": 575754
+ },
+ "pyobjc-framework-systemextensions": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6075,
+  "own_downloads": 575557
+ },
+ "pyobjc-framework-pushkit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6076,
+  "own_downloads": 575542
+ },
+ "pyobjc-framework-classkit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6077,
+  "own_downloads": 575501
+ },
+ "pyobjc-framework-passkit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6080,
+  "own_downloads": 575248
+ },
+ "pyobjc-framework-replaykit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6081,
+  "own_downloads": 575201
+ },
+ "pyobjc-framework-callkit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6082,
+  "own_downloads": 575151
+ },
+ "pyobjc-framework-virtualization": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6087,
+  "own_downloads": 574733
+ },
+ "pyobjc-framework-metrickit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6088,
+  "own_downloads": 574636
+ },
+ "pyobjc-framework-intentsui": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6091,
+  "own_downloads": 574410
+ },
+ "pyobjc-framework-shazamkit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6092,
+  "own_downloads": 574381
+ },
+ "polars-lts-cpu": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6110,
+  "own_downloads": 571772
+ },
+ "zipcodes": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6162,
+  "own_downloads": 566944
+ },
+ "pyopengl-accelerate": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6164,
+  "own_downloads": 566606
+ },
+ "faster-coco-eval": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6166,
+  "own_downloads": 566391
+ },
+ "ovito": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6171,
+  "own_downloads": 565201
+ },
+ "fairscale": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6179,
+  "own_downloads": 563358
+ },
+ "libusb1": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6181,
+  "own_downloads": 562887
+ },
+ "certbot-dns-multi": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6182,
+  "own_downloads": 562684
+ },
+ "flash-attn": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6187,
+  "own_downloads": 560621
+ },
+ "pyobjc-framework-libxpc": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6194,
+  "own_downloads": 558742
+ },
+ "google-python-cloud-debugger": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6198,
+  "own_downloads": 557654
+ },
+ "faust-cchardet": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6212,
+  "own_downloads": 552942
+ },
+ "hdf5plugin": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6222,
+  "own_downloads": 550062
+ },
+ "pyobjc-framework-inputmethodkit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6231,
+  "own_downloads": 548583
+ },
+ "pyobjc-framework-backgroundassets": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6243,
+  "own_downloads": 546557
+ },
+ "pyobjc-framework-healthkit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6244,
+  "own_downloads": 546231
+ },
+ "pyobjc-framework-avrouting": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6248,
+  "own_downloads": 545987
+ },
+ "pyobjc-framework-metalfx": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6249,
+  "own_downloads": 545689
+ },
+ "pyobjc-framework-extensionkit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6250,
+  "own_downloads": 545666
+ },
+ "pyobjc-framework-sharedwithyou": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6255,
+  "own_downloads": 545124
+ },
+ "pyobjc-framework-safetykit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6256,
+  "own_downloads": 545069
+ },
+ "asn1tools": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6264,
+  "own_downloads": 542973
+ },
+ "spacy-pkuseg": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6283,
+  "own_downloads": 539785
+ },
+ "promql-parser": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6287,
+  "own_downloads": 538965
+ },
+ "pyobjc-framework-browserenginekit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6315,
+  "own_downloads": 532072
+ },
+ "core-universal": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6319,
+  "own_downloads": 531388
+ },
+ "text2num": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6326,
+  "own_downloads": 530151
+ },
+ "pot": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6359,
+  "own_downloads": 524324
+ },
+ "usearch": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6362,
+  "own_downloads": 523421
+ },
+ "phidget22": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6365,
+  "own_downloads": 522894
+ },
+ "taplo": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6384,
+  "own_downloads": 519582
+ },
+ "psd-tools": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6385,
+  "own_downloads": 519404
+ },
+ "openequivariance": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6401,
+  "own_downloads": 515836
+ },
+ "systemd-python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6427,
+  "own_downloads": 509842
+ },
+ "quadprog": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6435,
+  "own_downloads": 507607
+ },
+ "twofish": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6436,
+  "own_downloads": 507584
+ },
+ "anki-audio": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6452,
+  "own_downloads": 504051
+ },
+ "triton-windows": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6482,
+  "own_downloads": 499009
+ },
+ "multi-storage-client": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6528,
+  "own_downloads": 491109
+ },
+ "squawk-cli": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6529,
+  "own_downloads": 491068
+ },
+ "libigl": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6535,
+  "own_downloads": 490109
+ },
+ "polars-hash": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6538,
+  "own_downloads": 489105
+ },
+ "fastdtw": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6540,
+  "own_downloads": 488574
+ },
+ "streaming-form-data": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6546,
+  "own_downloads": 487504
+ },
+ "clevercsv": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6550,
+  "own_downloads": 486628
+ },
+ "kuzu": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6552,
+  "own_downloads": 485840
+ },
+ "runai-model-streamer-gcs": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6561,
+  "own_downloads": 484014
+ },
+ "typeid-python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6583,
+  "own_downloads": 479762
+ },
+ "hdrhistogram": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6609,
+  "own_downloads": 474110
+ },
+ "complexipy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6644,
+  "own_downloads": 467720
+ },
+ "pywatchman": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6658,
+  "own_downloads": 465994
+ },
+ "reuse": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6661,
+  "own_downloads": 465678
+ },
+ "nuitka": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6667,
+  "own_downloads": 464250
+ },
+ "foxglove-sdk": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6674,
+  "own_downloads": 462296
+ },
+ "glum": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6692,
+  "own_downloads": 460158
+ },
+ "grpcio-observability": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6696,
+  "own_downloads": 459655
+ },
+ "asv": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6702,
+  "own_downloads": 458061
+ },
+ "planarity": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6706,
+  "own_downloads": 457533
+ },
+ "sglang-router": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6722,
+  "own_downloads": 455615
+ },
+ "pyswisseph": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6727,
+  "own_downloads": 455017
+ },
+ "pygrib": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6733,
+  "own_downloads": 454249
+ },
+ "symengine": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6734,
+  "own_downloads": 454131
+ },
+ "dumb-init": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6736,
+  "own_downloads": 454059
+ },
+ "pysqlite3": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6738,
+  "own_downloads": 453822
+ },
+ "pyston-autoload": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6739,
+  "own_downloads": 453758
+ },
+ "longbridge": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6748,
+  "own_downloads": 452232
+ },
+ "daqp": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6754,
+  "own_downloads": 451082
+ },
+ "quickjs": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6758,
+  "own_downloads": 450803
+ },
+ "runai-model-streamer-s3": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6763,
+  "own_downloads": 450247
+ },
+ "lazrs": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6779,
+  "own_downloads": 448327
+ },
+ "rawpy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6805,
+  "own_downloads": 444557
+ },
+ "pyobjc-framework-mediaextension": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6807,
+  "own_downloads": 444377
+ },
+ "editdistpy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6837,
+  "own_downloads": 439058
+ },
+ "pylibmc": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6838,
+  "own_downloads": 438882
+ },
+ "mcp-grafana": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6846,
+  "own_downloads": 438225
+ },
+ "pyobjc-framework-fskit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6849,
+  "own_downloads": 438018
+ },
+ "simplification": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6863,
+  "own_downloads": 435418
+ },
+ "posix-ipc": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6875,
+  "own_downloads": 432992
+ },
+ "chia-rs": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6877,
+  "own_downloads": 431886
+ },
+ "arctic-inference": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6879,
+  "own_downloads": 431786
+ },
+ "pyats": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6880,
+  "own_downloads": 431478
+ },
+ "vegafusion": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6893,
+  "own_downloads": 428474
+ },
+ "baml-py": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6901,
+  "own_downloads": 426544
+ },
+ "cupti-python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6926,
+  "own_downloads": 422239
+ },
+ "texterrors": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6944,
+  "own_downloads": 419015
+ },
+ "linearmodels": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6955,
+  "own_downloads": 418118
+ },
+ "cmarkgfm": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6964,
+  "own_downloads": 416818
+ },
+ "pyminizip": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 6968,
+  "own_downloads": 416159
+ },
+ "tgcrypto": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7001,
+  "own_downloads": 410699
+ },
+ "aubio": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7013,
+  "own_downloads": 409384
+ },
+ "ipex-llm": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7017,
+  "own_downloads": 408770
+ },
+ "scikit-misc": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7019,
+  "own_downloads": 408668
+ },
+ "webrtcvad-wheels": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7021,
+  "own_downloads": 407950
+ },
+ "syntaqlite": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7030,
+  "own_downloads": 406712
+ },
+ "tensorflow-io": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7044,
+  "own_downloads": 404626
+ },
+ "scikit-learn-extra": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7050,
+  "own_downloads": 403721
+ },
+ "lilcom": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7065,
+  "own_downloads": 402274
+ },
+ "mercurial": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7075,
+  "own_downloads": 401366
+ },
+ "gdal": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7082,
+  "own_downloads": 400595
+ },
+ "neo4j-rust-ext": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7097,
+  "own_downloads": 398185
+ },
+ "chiapos": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7113,
+  "own_downloads": 396858
+ },
+ "chiavdf": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7122,
+  "own_downloads": 395907
+ },
+ "mt2": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7130,
+  "own_downloads": 395005
+ },
+ "fast-simplification": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7136,
+  "own_downloads": 394087
+ },
+ "blosc": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7138,
+  "own_downloads": 393728
+ },
+ "ptvsd": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7150,
+  "own_downloads": 392835
+ },
+ "python-olm": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7190,
+  "own_downloads": 386624
+ },
+ "hip-python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7203,
+  "own_downloads": 384935
+ },
+ "cheetah3": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7214,
+  "own_downloads": 383220
+ },
+ "singlestoredb": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7215,
+  "own_downloads": 383044
+ },
+ "chiabip158": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7227,
+  "own_downloads": 381714
+ },
+ "gmsh": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7247,
+  "own_downloads": 379544
+ },
+ "ifcopenshell": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7253,
+  "own_downloads": 378885
+ },
+ "drake": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7264,
+  "own_downloads": 376548
+ },
+ "databricks-zerobus-ingest-sdk": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7266,
+  "own_downloads": 376243
+ },
+ "hyperscan": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7278,
+  "own_downloads": 374445
+ },
+ "faiss-gpu": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7288,
+  "own_downloads": 373128
+ },
+ "transformations": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7294,
+  "own_downloads": 372250
+ },
+ "cuml-cu12": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7298,
+  "own_downloads": 371195
+ },
+ "mergify-cli": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7314,
+  "own_downloads": 369872
+ },
+ "rbloom": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7315,
+  "own_downloads": 369835
+ },
+ "pymupdfpro": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7321,
+  "own_downloads": 368823
+ },
+ "implicit": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7330,
+  "own_downloads": 367441
+ },
+ "nvshmem4py-cu13": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7345,
+  "own_downloads": 366456
+ },
+ "tombi": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7359,
+  "own_downloads": 364675
+ },
+ "pymunk": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7367,
+  "own_downloads": 364120
+ },
+ "p4python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7373,
+  "own_downloads": 363060
+ },
+ "clvm-tools-rs": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7377,
+  "own_downloads": 362373
+ },
+ "gnureadline": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7396,
+  "own_downloads": 360341
+ },
+ "ripgrep": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7403,
+  "own_downloads": 359548
+ },
+ "opencc": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7412,
+  "own_downloads": 358661
+ },
+ "eppo-server-sdk": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7420,
+  "own_downloads": 357522
+ },
+ "clvm-rs": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7422,
+  "own_downloads": 357187
+ },
+ "py-rattler": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7424,
+  "own_downloads": 356817
+ },
+ "semantic-text-splitter": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7436,
+  "own_downloads": 355066
+ },
+ "dockerfile": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7447,
+  "own_downloads": 353747
+ },
+ "clang-tidy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7456,
+  "own_downloads": 352796
+ },
+ "jsonobject": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7461,
+  "own_downloads": 352112
+ },
+ "praat-parselmouth": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7463,
+  "own_downloads": 351988
+ },
+ "mmhash3": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7485,
+  "own_downloads": 350079
+ },
+ "uptime": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7497,
+  "own_downloads": 348469
+ },
+ "imagededup": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7502,
+  "own_downloads": 348218
+ },
+ "stim": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7505,
+  "own_downloads": 347859
+ },
+ "kaldialign": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7507,
+  "own_downloads": 347438
+ },
+ "aplr": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7527,
+  "own_downloads": 344080
+ },
+ "pyorc": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7542,
+  "own_downloads": 342558
+ },
+ "pyheck": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7543,
+  "own_downloads": 342526
+ },
+ "pyscipopt": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7554,
+  "own_downloads": 341325
+ },
+ "pyqtwebengine": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7571,
+  "own_downloads": 339730
+ },
+ "mjml-python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7572,
+  "own_downloads": 339726
+ },
+ "mojimoji": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7605,
+  "own_downloads": 335458
+ },
+ "pyagrum-nightly": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7623,
+  "own_downloads": 334130
+ },
+ "pymeshlab": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7628,
+  "own_downloads": 333420
+ },
+ "jdk4py": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7637,
+  "own_downloads": 332436
+ },
+ "torchtext": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7638,
+  "own_downloads": 332162
+ },
+ "lefthook": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7645,
+  "own_downloads": 331790
+ },
+ "clickhouse-cityhash": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7650,
+  "own_downloads": 331733
+ },
+ "lagom": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7656,
+  "own_downloads": 331201
+ },
+ "sgl-kernel": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7667,
+  "own_downloads": 329722
+ },
+ "pyscf": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7674,
+  "own_downloads": 329104
+ },
+ "cityhash": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7692,
+  "own_downloads": 326957
+ },
+ "dtw-python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7728,
+  "own_downloads": 322516
+ },
+ "aiochclient": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7737,
+  "own_downloads": 322050
+ },
+ "triton-ascend": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7755,
+  "own_downloads": 320267
+ },
+ "baseten-performance-client": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7760,
+  "own_downloads": 319678
+ },
+ "eclipse-zenoh": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7765,
+  "own_downloads": 319454
+ },
+ "openviking": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7774,
+  "own_downloads": 318661
+ },
+ "libscrc": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7780,
+  "own_downloads": 318406
+ },
+ "pygresql": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7797,
+  "own_downloads": 316688
+ },
+ "ale-py": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7815,
+  "own_downloads": 314609
+ },
+ "faust-streaming": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7819,
+  "own_downloads": 313898
+ },
+ "scrypt": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7837,
+  "own_downloads": 312372
+ },
+ "zen-engine": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7839,
+  "own_downloads": 312192
+ },
+ "jsonslicer": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7845,
+  "own_downloads": 311715
+ },
+ "ansible-pylibssh": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7854,
+  "own_downloads": 310849
+ },
+ "scalene": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7861,
+  "own_downloads": 310587
+ },
+ "onnxruntime-genai": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7865,
+  "own_downloads": 310248
+ },
+ "ngrok": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7893,
+  "own_downloads": 307948
+ },
+ "pyjnius": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7898,
+  "own_downloads": 307350
+ },
+ "lcm": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7903,
+  "own_downloads": 305855
+ },
+ "simplejpeg": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7904,
+  "own_downloads": 305709
+ },
+ "spacy-transformers": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7918,
+  "own_downloads": 303956
+ },
+ "hierarchicalforecast": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7919,
+  "own_downloads": 303895
+ },
+ "winrt-windows-foundation": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7924,
+  "own_downloads": 303545
+ },
+ "kiwipiepy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7945,
+  "own_downloads": 301567
+ },
+ "pykcs11": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7951,
+  "own_downloads": 301005
+ },
+ "icechunk": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7955,
+  "own_downloads": 300758
+ },
+ "mecab": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7961,
+  "own_downloads": 300157
+ },
+ "cypari": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7974,
+  "own_downloads": 298816
+ },
+ "open-spiel": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7978,
+  "own_downloads": 298724
+ },
+ "scikit-survival": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7982,
+  "own_downloads": 298407
+ },
+ "dmpython": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 7997,
+  "own_downloads": 297520
+ },
+ "kaldi-native-fbank": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8004,
+  "own_downloads": 296853
+ },
+ "sagemaker-training": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8006,
+  "own_downloads": 296475
+ },
+ "pyjoulescope-driver": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8024,
+  "own_downloads": 294670
+ },
+ "mink": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8031,
+  "own_downloads": 294247
+ },
+ "healpy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8033,
+  "own_downloads": 294094
+ },
+ "lalsuite": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8061,
+  "own_downloads": 291644
+ },
+ "qutip": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8094,
+  "own_downloads": 288232
+ },
+ "iteration-utilities": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8105,
+  "own_downloads": 287070
+ },
+ "rhino3dm": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8123,
+  "own_downloads": 285939
+ },
+ "h2o-wave": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8143,
+  "own_downloads": 284065
+ },
+ "primer3-py": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8144,
+  "own_downloads": 283969
+ },
+ "winrt-windows-foundation-collections": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8167,
+  "own_downloads": 281751
+ },
+ "osmium": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8188,
+  "own_downloads": 279495
+ },
+ "python-nmap": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8200,
+  "own_downloads": 278728
+ },
+ "tfx-bsl": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8206,
+  "own_downloads": 278280
+ },
+ "attoworld": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8217,
+  "own_downloads": 277448
+ },
+ "winrt-windows-storage-streams": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8221,
+  "own_downloads": 276763
+ },
+ "doublemetaphone": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8270,
+  "own_downloads": 273268
+ },
+ "ur-rtde": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8309,
+  "own_downloads": 270882
+ },
+ "stem": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8311,
+  "own_downloads": 270689
+ },
+ "dask-cuda": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8314,
+  "own_downloads": 270483
+ },
+ "simple-equ": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8320,
+  "own_downloads": 269426
+ },
+ "mnn": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8326,
+  "own_downloads": 269050
+ },
+ "python-sat": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8340,
+  "own_downloads": 267586
+ },
+ "cursor-sdk": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8343,
+  "own_downloads": 267341
+ },
+ "polyscope": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8357,
+  "own_downloads": 266541
+ },
+ "kivy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8358,
+  "own_downloads": 266516
+ },
+ "python-magic-bin": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8366,
+  "own_downloads": 265283
+ },
+ "amulet-nbt": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8368,
+  "own_downloads": 265025
+ },
+ "daily-python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8374,
+  "own_downloads": 264729
+ },
+ "pybigtools": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8382,
+  "own_downloads": 264367
+ },
+ "ladybug": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8384,
+  "own_downloads": 264140
+ },
+ "openslide-python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8388,
+  "own_downloads": 263727
+ },
+ "liteparse": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8390,
+  "own_downloads": 263433
+ },
+ "xxtea": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8414,
+  "own_downloads": 261095
+ },
+ "executorch": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8415,
+  "own_downloads": 261034
+ },
+ "pyclamd": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8418,
+  "own_downloads": 260797
+ },
+ "rjieba": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8431,
+  "own_downloads": 260013
+ },
+ "anycrc": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8437,
+  "own_downloads": 259873
+ },
+ "dimod": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8446,
+  "own_downloads": 259534
+ },
+ "threaded": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8448,
+  "own_downloads": 259484
+ },
+ "netifaces2": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8463,
+  "own_downloads": 258351
+ },
+ "portforward": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8478,
+  "own_downloads": 257210
+ },
+ "aspose-words": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8479,
+  "own_downloads": 257133
+ },
+ "pylibmagic": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8488,
+  "own_downloads": 256163
+ },
+ "arrow-odbc": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8494,
+  "own_downloads": 255929
+ },
+ "aic-sdk": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8501,
+  "own_downloads": 255534
+ },
+ "unicodedataplus": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8517,
+  "own_downloads": 254126
+ },
+ "nautilus-trader": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8533,
+  "own_downloads": 253217
+ },
+ "tensordict-nightly": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8541,
+  "own_downloads": 252507
+ },
+ "rapidyaml": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8556,
+  "own_downloads": 252059
+ },
+ "vesin": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8561,
+  "own_downloads": 251638
+ },
+ "faster-eth-abi": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8564,
+  "own_downloads": 251506
+ },
+ "edlib": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8565,
+  "own_downloads": 251379
+ },
+ "triangle": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8620,
+  "own_downloads": 246789
+ },
+ "m2crypto": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8636,
+  "own_downloads": 246286
+ },
+ "imgui-bundle": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8652,
+  "own_downloads": 245350
+ },
+ "astropy-healpix": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8678,
+  "own_downloads": 243974
+ },
+ "deeplake": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8687,
+  "own_downloads": 243387
+ },
+ "tensorflow-intel": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8697,
+  "own_downloads": 242938
+ },
+ "ncnn": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8706,
+  "own_downloads": 242604
+ },
+ "river": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8744,
+  "own_downloads": 240611
+ },
+ "pnnx": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8757,
+  "own_downloads": 239653
+ },
+ "cartoboost": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8759,
+  "own_downloads": 239552
+ },
+ "readline": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8762,
+  "own_downloads": 239395
+ },
+ "pyopenms": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8778,
+  "own_downloads": 238398
+ },
+ "fast-diff-match-patch": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8783,
+  "own_downloads": 237911
+ },
+ "flexivrdk": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8804,
+  "own_downloads": 236856
+ },
+ "pygeos": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8808,
+  "own_downloads": 236624
+ },
+ "cyvcf2": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8817,
+  "own_downloads": 235884
+ },
+ "python-pkcs11": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8819,
+  "own_downloads": 235756
+ },
+ "mdanalysis": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8826,
+  "own_downloads": 235293
+ },
+ "kumoai": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8828,
+  "own_downloads": 235190
+ },
+ "dbus-python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8841,
+  "own_downloads": 234111
+ },
+ "pylibjpeg-libjpeg": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8850,
+  "own_downloads": 233684
+ },
+ "fabricatio": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8870,
+  "own_downloads": 232409
+ },
+ "arcticdb": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8886,
+  "own_downloads": 231532
+ },
+ "mgrs": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8887,
+  "own_downloads": 231529
+ },
+ "cvc5": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8895,
+  "own_downloads": 231346
+ },
+ "pyoxigraph": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8900,
+  "own_downloads": 231112
+ },
+ "pantab": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8912,
+  "own_downloads": 230546
+ },
+ "fastnumbers": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8940,
+  "own_downloads": 228680
+ },
+ "python3-dtls": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8941,
+  "own_downloads": 228634
+ },
+ "shfmt-py": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8947,
+  "own_downloads": 228362
+ },
+ "cbitstruct": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8948,
+  "own_downloads": 228297
+ },
+ "depthai": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8952,
+  "own_downloads": 228016
+ },
+ "taichi": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8956,
+  "own_downloads": 227698
+ },
+ "pynng": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8974,
+  "own_downloads": 226629
+ },
+ "spdlog": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8975,
+  "own_downloads": 226509
+ },
+ "vtracer": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 8997,
+  "own_downloads": 225134
+ },
+ "pyfftw": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9004,
+  "own_downloads": 224616
+ },
+ "connected-components-3d": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9040,
+  "own_downloads": 222054
+ },
+ "pyreadr": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9048,
+  "own_downloads": 221672
+ },
+ "openmm": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9071,
+  "own_downloads": 220263
+ },
+ "mdtraj": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9082,
+  "own_downloads": 219522
+ },
+ "python-qpid-proton": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9098,
+  "own_downloads": 218926
+ },
+ "simplepyble": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9110,
+  "own_downloads": 218141
+ },
+ "openskill": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9126,
+  "own_downloads": 217251
+ },
+ "xpress": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9129,
+  "own_downloads": 217067
+ },
+ "dracopy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9141,
+  "own_downloads": 216452
+ },
+ "pyrealsense2": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9149,
+  "own_downloads": 216020
+ },
+ "cvxpy-base": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9154,
+  "own_downloads": 215881
+ },
+ "restate-sdk": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9180,
+  "own_downloads": 214474
+ },
+ "sentry-cli": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9192,
+  "own_downloads": 213859
+ },
+ "onyx-devtools": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9198,
+  "own_downloads": 213656
+ },
+ "pylibjpeg-openjpeg": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9200,
+  "own_downloads": 213491
+ },
+ "can-ada": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9203,
+  "own_downloads": 213066
+ },
+ "pystack": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9208,
+  "own_downloads": 212891
+ },
+ "arm-pyart": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9214,
+  "own_downloads": 212578
+ },
+ "fastecdsa": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9222,
+  "own_downloads": 212419
+ },
+ "obspy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9224,
+  "own_downloads": 212352
+ },
+ "comfy-angle": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9251,
+  "own_downloads": 210825
+ },
+ "winrt-windows-devices-enumeration": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9264,
+  "own_downloads": 210099
+ },
+ "ytsaurus-yson": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9267,
+  "own_downloads": 209925
+ },
+ "opendal": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9268,
+  "own_downloads": 209893
+ },
+ "runai-model-streamer-azure": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9270,
+  "own_downloads": 209853
+ },
+ "winrt-windows-devices-bluetooth": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9275,
+  "own_downloads": 209567
+ },
+ "coacd": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9287,
+  "own_downloads": 209117
+ },
+ "winrt-windows-devices-bluetooth-genericattributeprofile": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9303,
+  "own_downloads": 208418
+ },
+ "gseapy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9313,
+  "own_downloads": 207902
+ },
+ "winrt-windows-devices-bluetooth-advertisement": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9316,
+  "own_downloads": 207852
+ },
+ "solace-pubsubplus": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9319,
+  "own_downloads": 207696
+ },
+ "polars-runtime-compat": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9321,
+  "own_downloads": 207684
+ },
+ "passagemath-gap": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9333,
+  "own_downloads": 207180
+ },
+ "starlark-pyo3": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9395,
+  "own_downloads": 204505
+ },
+ "jax-cuda13-plugin": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9402,
+  "own_downloads": 203875
+ },
+ "sparse-dot-topn": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9405,
+  "own_downloads": 203697
+ },
+ "pyre-check": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9420,
+  "own_downloads": 202610
+ },
+ "openvino-tokenizers": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9423,
+  "own_downloads": 202302
+ },
+ "questdb": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9446,
+  "own_downloads": 201167
+ },
+ "cdifflib": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9452,
+  "own_downloads": 200803
+ },
+ "tensorflow-cpu-aws": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9464,
+  "own_downloads": 200329
+ },
+ "graspologic-native": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9482,
+  "own_downloads": 199522
+ },
+ "protoc-gen-connect-python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9484,
+  "own_downloads": 199370
+ },
+ "streamlink": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9489,
+  "own_downloads": 199225
+ },
+ "autosar-data": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9492,
+  "own_downloads": 199120
+ },
+ "arro3-io": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9502,
+  "own_downloads": 198490
+ },
+ "sqlcipher3": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9508,
+  "own_downloads": 198173
+ },
+ "accesscontrol": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9515,
+  "own_downloads": 197846
+ },
+ "chialisp": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9542,
+  "own_downloads": 196560
+ },
+ "fiftyone-db": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9555,
+  "own_downloads": 195935
+ },
+ "apache-flink": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9567,
+  "own_downloads": 195283
+ },
+ "megatron-core": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9586,
+  "own_downloads": 194457
+ },
+ "cu2qu": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9599,
+  "own_downloads": 193936
+ },
+ "ucxx-cu12": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9601,
+  "own_downloads": 193902
+ },
+ "bsdiff4": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9617,
+  "own_downloads": 193095
+ },
+ "pylibdmtx": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9625,
+  "own_downloads": 192455
+ },
+ "onnxruntime-extensions": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9627,
+  "own_downloads": 192138
+ },
+ "pycolmap": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9632,
+  "own_downloads": 191922
+ },
+ "faiss-gpu-cu12": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9652,
+  "own_downloads": 190853
+ },
+ "sagemaker-containers": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9653,
+  "own_downloads": 190851
+ },
+ "pylibfdt": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9659,
+  "own_downloads": 190649
+ },
+ "pymongoarrow": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9667,
+  "own_downloads": 190301
+ },
+ "kreuzberg": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9685,
+  "own_downloads": 189689
+ },
+ "dearpygui": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9688,
+  "own_downloads": 189497
+ },
+ "tensorflow-aarch64": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9701,
+  "own_downloads": 188777
+ },
+ "windows-curses": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9709,
+  "own_downloads": 188303
+ },
+ "scann": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9715,
+  "own_downloads": 188137
+ },
+ "atheris": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9729,
+  "own_downloads": 187403
+ },
+ "winrt-windows-devices-radios": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9734,
+  "own_downloads": 186849
+ },
+ "pygdal": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9735,
+  "own_downloads": 186818
+ },
+ "power-grid-model": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9752,
+  "own_downloads": 186141
+ },
+ "floret": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9755,
+  "own_downloads": 186028
+ },
+ "nutpie": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9757,
+  "own_downloads": 185932
+ },
+ "pynini": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9769,
+  "own_downloads": 184898
+ },
+ "laszip": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9772,
+  "own_downloads": 184810
+ },
+ "pymatching": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9773,
+  "own_downloads": 184791
+ },
+ "vortex-data": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9775,
+  "own_downloads": 184760
+ },
+ "betterproto-rust-codec": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9788,
+  "own_downloads": 184042
+ },
+ "go-task-bin": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9794,
+  "own_downloads": 183735
+ },
+ "gdstk": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9796,
+  "own_downloads": 183682
+ },
+ "pybigwig": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9803,
+  "own_downloads": 183320
+ },
+ "openimageio": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9806,
+  "own_downloads": 183180
+ },
+ "aim": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9823,
+  "own_downloads": 182349
+ },
+ "mooncake-transfer-engine": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9845,
+  "own_downloads": 181179
+ },
+ "pyopencl": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9851,
+  "own_downloads": 181040
+ },
+ "polars-ds": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9852,
+  "own_downloads": 181030
+ },
+ "git-cliff": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9853,
+  "own_downloads": 181004
+ },
+ "wxpython": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9856,
+  "own_downloads": 180835
+ },
+ "clarifai-protocol": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9858,
+  "own_downloads": 180769
+ },
+ "keystone-engine": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9865,
+  "own_downloads": 180437
+ },
+ "mkl-include": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9881,
+  "own_downloads": 179718
+ },
+ "pywhispercpp": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9885,
+  "own_downloads": 179643
+ },
+ "panda3d": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9886,
+  "own_downloads": 179598
+ },
+ "valkey-glide-sync": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9888,
+  "own_downloads": 179503
+ },
+ "twisted-iocpsupport": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9899,
+  "own_downloads": 179204
+ },
+ "spiceypy": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9902,
+  "own_downloads": 179167
+ },
+ "cydifflib": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9921,
+  "own_downloads": 178323
+ },
+ "pykdtree": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9938,
+  "own_downloads": 177433
+ },
+ "mysql-connector-python-rf": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9955,
+  "own_downloads": 176619
+ },
+ "ncompress": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9971,
+  "own_downloads": 175662
+ },
+ "hpp-fcl": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9976,
+  "own_downloads": 175370
+ },
+ "zope-container": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9988,
+  "own_downloads": 174712
+ },
+ "libpff-python": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9990,
+  "own_downloads": 174704
+ },
+ "pyside2": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9991,
+  "own_downloads": 174682
+ },
+ "dpcpp-cpp-rt": {
+  "pkgs": 0,
+  "downloads": 0,
+  "self": 1,
+  "rank": 9993,
+  "own_downloads": 174592
+ }
+}

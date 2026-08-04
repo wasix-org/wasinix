@@ -1,0 +1,4586 @@
+{
+ "git-python": {
+  "no_sdist": true
+ },
+ "pyspark": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 450129423,
+  "skipped": "too_large"
+ },
+ "stringcase": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2958
+ },
+ "ratelimit": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5251
+ },
+ "sgmllib3k": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5750
+ },
+ "unicodecsv": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 10267
+ },
+ "protobuf3-to-dict": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 3508
+ },
+ "docopt": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 25901
+ },
+ "pysftp": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 25949
+ },
+ "avro-python3": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 38701
+ },
+ "func-timeout": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 44264
+ },
+ "pyhive": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 46479
+ },
+ "pylatexenc": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 162597
+ },
+ "pycrypto": {
+  "exts": {
+   ".h": 19,
+   ".c": 25
+  },
+  "special": {
+   "configure": 1
+  },
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "build_ext"
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 446240
+ },
+ "oss2": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 298845
+ },
+ "pytest-timeouts": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5002
+ },
+ "multi-key-dict": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 8429
+ },
+ "aliyun-python-sdk-core": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 449555
+ },
+ "hdfs": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 43540
+ },
+ "atomicwrites": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 14227
+ },
+ "minimal-snowplow-tracker": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 12542
+ },
+ "timeout-decorator": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 4754
+ },
+ "crcmod": {
+  "exts": {
+   ".c": 2
+  },
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 89670
+ },
+ "pgpy": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools",
+   "wheel"
+  ],
+  "sdist_size": 603002
+ },
+ "pyinotify": {
+  "exts": {
+   ".c": 1
+  },
+  "special": {
+   "makefile": 2
+  },
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 60998
+ },
+ "salesforce-bulk": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 12305
+ },
+ "pyhocon": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 307265
+ },
+ "swifter": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1190837
+ },
+ "gitignore-parser": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools"
+  ],
+  "sdist_size": 5603
+ },
+ "promise": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 19534
+ },
+ "jsonpath-rw": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 13814
+ },
+ "python-ldap": {
+  "exts": {
+   ".c": 9,
+   ".h": 9
+  },
+  "special": {
+   "makefile": 3
+  },
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools"
+  ],
+  "sdist_size": 387477
+ },
+ "rouge-score": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 17400
+ },
+ "fpdf": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 39504
+ },
+ "pyaes": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 28536
+ },
+ "alibabacloud-tea": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 8785
+ },
+ "pydruid": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 135508
+ },
+ "uuid": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5811
+ },
+ "betterproto": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": [],
+  "sdist_size": 26098
+ },
+ "red-black-tree-mod": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 34173
+ },
+ "kfp-server-api": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 69867
+ },
+ "pyscreeze": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta:__legacy__",
+  "build_requires": [
+   "setuptools",
+   "wheel"
+  ],
+  "sdist_size": 27826
+ },
+ "pygetwindow": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 9699
+ },
+ "wget": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 10857
+ },
+ "pyautogui": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": [],
+  "sdist_size": 61236
+ },
+ "pyrect": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 17219
+ },
+ "googlemaps": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 33056
+ },
+ "mouseinfo": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 10850
+ },
+ "pytweening": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 171241
+ },
+ "alibabacloud-endpoint-util": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2813
+ },
+ "odfpy": {
+  "exts": {},
+  "special": {
+   "makefile": 34
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 717045
+ },
+ "standardwebhooks": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta:__legacy__",
+  "build_requires": [
+   "setuptools >= 40.8.0",
+   "wheel"
+  ],
+  "sdist_size": 5103
+ },
+ "flashtext": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 14536
+ },
+ "http-ece": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 8830
+ },
+ "commentjson": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 8653
+ },
+ "python-nvd3": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 34060
+ },
+ "forbiddenfruit": {
+  "exts": {
+   ".c": 1
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 43756
+ },
+ "alibabacloud-tea-xml": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 3466
+ },
+ "openai-whisper": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools>=61.2"
+  ],
+  "sdist_size": 803191
+ },
+ "pytest-dependency": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 20837
+ },
+ "chess": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 6131385
+ },
+ "emr-notebooks-magics": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 13976
+ },
+ "iopath": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 42226
+ },
+ "kylinpy": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 30079
+ },
+ "contextvars": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 9570
+ },
+ "py-ubjson": {
+  "exts": {
+   ".c": 4,
+   ".h": 5
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "build_ext"
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 50316
+ },
+ "sqlitedict": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 21846
+ },
+ "pykerberos": {
+  "exts": {
+   ".c": 5,
+   ".h": 4
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 25046
+ },
+ "requests-oauth": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 9955
+ },
+ "pymeeus": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5752712
+ },
+ "python3-xlib": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 132828
+ },
+ "filterpy": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 177985
+ },
+ "clickhouse-sqlalchemy": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 45206
+ },
+ "atlasclient": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 46021
+ },
+ "sklearn": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2578
+ },
+ "pandasql": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 26702
+ },
+ "word2number": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 9723
+ },
+ "uptime-kuma-api": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 43631
+ },
+ "bibtexparser": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 55594
+ },
+ "gnupg": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 100437
+ },
+ "autograd-gamma": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 3952
+ },
+ "polling": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5189
+ },
+ "match": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 8946
+ },
+ "pip-hello-world": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1393
+ },
+ "logging-azure-rest": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": [],
+  "sdist_size": 10168
+ },
+ "google-search-results": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 18818
+ },
+ "azure": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 4568
+ },
+ "crontab": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools"
+  ],
+  "sdist_size": 21963
+ },
+ "sasl": {
+  "exts": {
+   ".pyx": 1,
+   ".h": 1,
+   ".cpp": 1
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 44677
+ },
+ "fvcore": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 50217
+ },
+ "httpretty": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 442389
+ },
+ "validate-email": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 4694
+ },
+ "esptool": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools>=64"
+  ],
+  "sdist_size": 488230
+ },
+ "azure-mgmt": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 4813
+ },
+ "json2html": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 6977
+ },
+ "ibm-cos-sdk": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 58984
+ },
+ "miscreant": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 8063
+ },
+ "uwsgi": {
+  "exts": {
+   ".c": 234,
+   ".cc": 8,
+   ".h": 12,
+   ".go": 4
+  },
+  "special": {
+   "makefile": 2
+  },
+  "setup_signals": [
+   "build_ext"
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 822796
+ },
+ "pysher": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 9071
+ },
+ "jsmin": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 13925
+ },
+ "cuid": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 4986
+ },
+ "clandestined": {
+  "exts": {
+   ".c": 1
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5926
+ },
+ "grapheme": {
+  "exts": {
+   ".c": 3
+  },
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 207306
+ },
+ "evdev": {
+  "exts": {
+   ".c": 2
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "build_ext"
+  ],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools>=77.0"
+  ],
+  "sdist_size": 32723
+ },
+ "jsonpath": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 10353
+ },
+ "pytest-watch": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 16340
+ },
+ "wordninja": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 541572
+ },
+ "memoization": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 41209
+ },
+ "glob2": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 10697
+ },
+ "undetected-chromedriver": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 65409
+ },
+ "google-cloud-profiler": {
+  "exts": {
+   ".cc": 6,
+   ".h": 5
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 32305
+ },
+ "htmlmin": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 19940
+ },
+ "cbor": {
+  "exts": {
+   ".h": 1,
+   ".c": 1
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "build_ext"
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 20096
+ },
+ "ibm-cos-sdk-s3transfer": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 141144
+ },
+ "localstack-client": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 11225
+ },
+ "psycogreen": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": [],
+  "sdist_size": 5411
+ },
+ "gpustat": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": [
+   "setuptools>=45",
+   "setuptools_scm[toml]>=6.2",
+   "wheel"
+  ],
+  "sdist_size": 98052
+ },
+ "bson": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 10363
+ },
+ "graphql-server-core": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 13343
+ },
+ "wikipedia": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 27748
+ },
+ "plaid-python": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1229190
+ },
+ "pyandoc": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 4312
+ },
+ "geohash2": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 15364
+ },
+ "ta": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 25308
+ },
+ "flask-graphql": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 6086
+ },
+ "strict-rfc3339": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 17552
+ },
+ "sphinxcontrib-redoc": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 350482
+ },
+ "flake8-quotes": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 14107
+ },
+ "asciitree": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 3951
+ },
+ "pyspark-client": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1675557
+ },
+ "googleads": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 31328
+ },
+ "redlock-py": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 6035
+ },
+ "python-hostlist": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 37326
+ },
+ "django-htmlmin": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 8017
+ },
+ "idna-ssl": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 3377
+ },
+ "csscompressor": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 237808
+ },
+ "tonyg-rfc3339": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 4756
+ },
+ "pluginbase": {
+  "exts": {},
+  "special": {
+   "makefile": 2
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 43588
+ },
+ "fugue-sql-antlr": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 158964
+ },
+ "git-remote-codecommit": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 10647
+ },
+ "gcs-oauth2-boto-plugin": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 22923
+ },
+ "ibm-cos-sdk-core": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1119564
+ },
+ "ipy": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 33641
+ },
+ "yattag": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 29069
+ },
+ "azure-storage": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 4275
+ },
+ "gputil": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5545
+ },
+ "deepspeed": {
+  "exts": {
+   ".cpp": 116,
+   ".h": 206,
+   ".hpp": 2
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "build_ext"
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1756950
+ },
+ "assertpy": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 25421
+ },
+ "pyactiveresource": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 19659
+ },
+ "utils": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 13203
+ },
+ "flameprof": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 7865
+ },
+ "patch": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 12809
+ },
+ "django-querycount": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 6739
+ },
+ "msgpack-python": {
+  "exts": {
+   ".h": 6,
+   ".cpp": 2,
+   ".pyx": 2
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "cythonize",
+   "build_ext"
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 138996
+ },
+ "bigquery-schema-generator": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 55721
+ },
+ "psycopg-c": {
+  "exts": {
+   ".pxd": 6,
+   ".c": 3
+  },
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "cython_backend",
+  "build_requires": [
+   "setuptools == 80.3.1",
+   "wheel >= 0.37",
+   "tomli >= 2.0.1; python_version < '3.11'"
+  ],
+  "sdist_size": 647111
+ },
+ "sox": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 63905
+ },
+ "py3dbp": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 4301
+ },
+ "gzip-stream": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 6146
+ },
+ "gsutil": {
+  "exts": {},
+  "special": {
+   "makefile": 2
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2975606
+ },
+ "llama-cpp-python": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 71617302,
+  "skipped": "too_large"
+ },
+ "opentracing": {
+  "exts": {},
+  "special": {
+   "makefile": 2
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 46228
+ },
+ "dj-rest-auth": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 490126
+ },
+ "flask-testing": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 45214
+ },
+ "shopifyapi": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": [],
+  "sdist_size": 33676
+ },
+ "avalara": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 99692
+ },
+ "randomname": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 64242
+ },
+ "proxy-tools": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2978
+ },
+ "sharepy": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 23186
+ },
+ "grpc-google-logging-v2": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 15110
+ },
+ "sudachidict-full": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 9073
+ },
+ "dockerpty": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 13924
+ },
+ "pymeta3": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 29566
+ },
+ "avro-gen": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 26758
+ },
+ "gym": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": [],
+  "sdist_size": 721689
+ },
+ "www-authenticate": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2414
+ },
+ "flasgger": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 3979409
+ },
+ "pandoc": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 34635
+ },
+ "pyicu": {
+  "exts": {
+   ".cpp": 32,
+   ".h": 33
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools",
+   "wheel"
+  ],
+  "sdist_size": 268223
+ },
+ "visitor": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 3260
+ },
+ "titlecase": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools>=46.1.0",
+   "setuptools_scm[toml]>=5",
+   "wheel"
+  ],
+  "sdist_size": 14434
+ },
+ "names": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 789099
+ },
+ "python-logstash": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 7074
+ },
+ "python-baseconv": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 4929
+ },
+ "imutils": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 17240
+ },
+ "flask-bootstrap": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 456359
+ },
+ "lob": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 9244
+ },
+ "pytest-nunit": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 15162
+ },
+ "hnswlib": {
+  "exts": {
+   ".h": 7,
+   ".cpp": 1
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "build_ext"
+  ],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools>=42",
+   "wheel",
+   "numpy>=1.10.0",
+   "pybind11>=2.0"
+  ],
+  "sdist_size": 36206
+ },
+ "pytest-cache": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 16242
+ },
+ "srt": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 28296
+ },
+ "singleton-decorator": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2791
+ },
+ "ffmpeg": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5055
+ },
+ "pyinvoke": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2642
+ },
+ "sagemaker-feature-store-pyspark-3-1": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 49892668,
+  "skipped": "too_large"
+ },
+ "webexteamssdk": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 73390
+ },
+ "delta": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 4111
+ },
+ "djangorestframework-camel-case": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": [],
+  "sdist_size": 8839
+ },
+ "empy": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 174979
+ },
+ "pylatex": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": [],
+  "sdist_size": 59710
+ },
+ "pyftpdlib": {
+  "exts": {},
+  "special": {
+   "makefile": 2
+  },
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools"
+  ],
+  "sdist_size": 189150
+ },
+ "langid": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1925978
+ },
+ "pytest-clarity": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 4891
+ },
+ "singer-python": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 34094
+ },
+ "simplegeneric": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 12663
+ },
+ "pycups": {
+  "exts": {
+   ".c": 4,
+   ".h": 4
+  },
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 65105
+ },
+ "logging": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 96029
+ },
+ "pyqrcode": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 36989
+ },
+ "dkimpy": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 66979
+ },
+ "authy": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 11021
+ },
+ "progressbar": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 10046
+ },
+ "ipaddr": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 26266
+ },
+ "robotframework-jsonlibrary": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5538
+ },
+ "fairscale": {
+  "exts": {
+   ".h": 1
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "build_ext"
+  ],
+  "build_backend": "setuptools.build_meta:__legacy__",
+  "build_requires": [
+   "setuptools >= 40.6.2",
+   "wheel >= 0.30.0"
+  ],
+  "sdist_size": 266261
+ },
+ "backports-ssl-match-hostname": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5722
+ },
+ "dictor": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 9963
+ },
+ "gcloud": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 454375
+ },
+ "pygobject": {
+  "exts": {
+   ".c": 59,
+   ".h": 52,
+   ".cpp": 1
+  },
+  "special": {
+   "makefile": 2,
+   "meson.build": 7
+  },
+  "setup_signals": [],
+  "build_backend": "mesonpy",
+  "build_requires": [
+   "meson-python>=0.12.1",
+   "pycairo>=1.16"
+  ],
+  "sdist_size": 1411853
+ },
+ "python-interface": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 19370
+ },
+ "simplekml": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 52999
+ },
+ "retry-decorator": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 3902
+ },
+ "sendsafely": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 94811
+ },
+ "tinysegmenter": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 16898
+ },
+ "pandarallel": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 14201
+ },
+ "clipboard": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1713
+ },
+ "openequivariance": {
+  "exts": {
+   ".hpp": 7,
+   ".cpp": 5
+  },
+  "special": {
+   "cmakelists.txt": 2
+  },
+  "setup_signals": [],
+  "build_backend": "scikit_build_core.build",
+  "build_requires": [
+   "setuptools",
+   "setuptools-scm",
+   "scikit-build-core",
+   "nanobind"
+  ],
+  "sdist_size": 103919
+ },
+ "bingads": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 414235
+ },
+ "twofish": {
+  "exts": {
+   ".c": 2,
+   ".h": 1
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 26039
+ },
+ "systemd-python": {
+  "exts": {
+   ".c": 8,
+   ".h": 6
+  },
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 61677
+ },
+ "queries": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 21223
+ },
+ "sphinxcontrib-plantuml": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools"
+  ],
+  "sdist_size": 15736
+ },
+ "pyu2f": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 27133
+ },
+ "sagemaker-scikit-learn-extension": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 70749
+ },
+ "feedfinder2": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 3297
+ },
+ "jstyleson": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2004
+ },
+ "syncer": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 11512
+ },
+ "pyvips": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [
+   "cffi_modules"
+  ],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools>=61.0.0",
+   "cffi>=1.0.0",
+   "pkgconfig>=1.5"
+  ],
+  "sdist_size": 56951
+ },
+ "cursor": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 15666
+ },
+ "awsebcli": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 326147
+ },
+ "hexdump": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 12658
+ },
+ "asn1tools": {
+  "exts": {
+   ".c": 11,
+   ".h": 5,
+   ".rs": 3
+  },
+  "special": {
+   "makefile": 1,
+   "cargo.toml": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 864481
+ },
+ "untokenize": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 3099
+ },
+ "flask-basicauth": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 16052
+ },
+ "drain3": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 27960
+ },
+ "mysql-connector": {
+  "exts": {
+   ".c": 4,
+   ".cc": 1,
+   ".h": 5
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules"
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 11852649
+ },
+ "demjson3": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 131477
+ },
+ "lime": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 275719
+ },
+ "webrtcvad": {
+  "exts": {
+   ".c": 20,
+   ".h": 12
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 66156
+ },
+ "jsonformatter": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools"
+  ],
+  "sdist_size": 21289
+ },
+ "planarity": {
+  "exts": {
+   ".c": 32,
+   ".h": 30,
+   ".pxd": 4,
+   ".pyx": 4
+  },
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "cythonize"
+  ],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools",
+   "cython"
+  ],
+  "sdist_size": 682477
+ },
+ "pylint-celery": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1899
+ },
+ "slacker": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 10116
+ },
+ "nvidia-ml-py3": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 19494
+ },
+ "arctic-inference": {
+  "exts": {
+   ".h": 4,
+   ".cpp": 1,
+   ".cc": 2
+  },
+  "special": {
+   "cmakelists.txt": 2
+  },
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "build_ext"
+  ],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools>=61.0",
+   "wheel",
+   "ninja",
+   "cmake>=3.12",
+   "nanobind==2.9.2",
+   "protobuf==5.29.5",
+   "grpcio-tools",
+   "torch==2.10.0"
+  ],
+  "sdist_size": 216844
+ },
+ "empirical-calibration": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 15761
+ },
+ "shodan": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 57939
+ },
+ "zmq": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 966
+ },
+ "docx": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 54925
+ },
+ "source-distribution": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "hatchling.build",
+  "build_requires": [
+   "hatchling"
+  ],
+  "sdist_size": 2166
+ },
+ "jieba3k": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 7423646
+ },
+ "literalai": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 68859
+ },
+ "ummalqura": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 10974
+ },
+ "unidic-lite": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 47356746,
+  "skipped": "too_large"
+ },
+ "nkeys": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools>=68.0"
+  ],
+  "sdist_size": 10667
+ },
+ "distance": {
+  "exts": {
+   ".c": 5,
+   ".h": 3
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 180271
+ },
+ "flask-script": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 43146
+ },
+ "pyminizip": {
+  "exts": {
+   ".c": 38,
+   ".h": 28
+  },
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 261210
+ },
+ "nested-lookup": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 14189
+ },
+ "esprima": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 47021
+ },
+ "importlib": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 7074
+ },
+ "ptable": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 31042
+ },
+ "urwid-readline": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": [],
+  "sdist_size": 9007
+ },
+ "cognitive-complexity": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5650
+ },
+ "spotinst-agent": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 18530
+ },
+ "aubio": {
+  "exts": {
+   ".c": 127,
+   ".h": 63
+  },
+  "special": {
+   "makefile": 2
+  },
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "build_ext"
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 479008
+ },
+ "wtforms-json": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 12797
+ },
+ "win-unicode-console": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 31420
+ },
+ "accumulation-tree": {
+  "exts": {
+   ".pyx": 1
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools>=42",
+   "cffi>=1.0.0",
+   "cython"
+  ],
+  "sdist_size": 12635
+ },
+ "dora-search": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": [],
+  "sdist_size": 87111
+ },
+ "warc3-wet-clueweb09": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 17853
+ },
+ "pyudorandom": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1599
+ },
+ "keyrings-cryptfile": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 19080
+ },
+ "python-louvain": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 204641
+ },
+ "pika-stubs": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 15155
+ },
+ "s3torchconnector": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools",
+   "build"
+  ],
+  "sdist_size": 103050
+ },
+ "gdal": {
+  "exts": {
+   ".cpp": 5,
+   ".c": 1
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "build_ext"
+  ],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools>=77.0.3",
+   "wheel",
+   "oldest-supported-numpy; python_version=='3.8'",
+   "numpy >=2.0.0rc1; python_version>='3.9'"
+  ],
+  "sdist_size": 940649
+ },
+ "transformers-stream-generator": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 13033
+ },
+ "functools32": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 31171
+ },
+ "kaldi-python-io": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 8814
+ },
+ "nylas": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools>=69.0.3",
+   "wheel"
+  ],
+  "sdist_size": 72038
+ },
+ "ignore": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2363
+ },
+ "qualname": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 3088
+ },
+ "sqlite3-api": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5870
+ },
+ "seqeval": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 43605
+ },
+ "pybars4": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 29907
+ },
+ "tensorrt-cu12": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools>=61.0",
+   "wheel"
+  ],
+  "sdist_size": 17962
+ },
+ "spotinst-agent-2": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 21292
+ },
+ "flake8-cognitive-complexity": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 3061
+ },
+ "pyspark-pandas": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 12760
+ },
+ "pysodium": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 26876
+ },
+ "pybars3": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 29203
+ },
+ "argbind": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 17567
+ },
+ "uptime": {
+  "exts": {
+   ".c": 1
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "build_ext"
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 6630
+ },
+ "bravado": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 37647
+ },
+ "localstack-ext": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools>=64",
+   "wheel",
+   "setuptools_scm>=8.1",
+   "ls_buildtools>=0.1.3"
+  ],
+  "sdist_size": 9551155
+ },
+ "alibabacloud-gateway-dingtalk": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2938
+ },
+ "pydotplus": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 278677
+ },
+ "reverse-geocoder": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [
+   "build_ext"
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2246559
+ },
+ "pysolr": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": [],
+  "sdist_size": 63983
+ },
+ "jupyter-contrib-core": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 17490
+ },
+ "pysrt": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 104371
+ },
+ "tensorrt-cu12-libs": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "wheel_stub.buildapi",
+  "build_requires": [
+   "wheel-stub"
+  ],
+  "sdist_size": 15770
+ },
+ "pytest-pep8": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 7271
+ },
+ "fusepy": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 11519
+ },
+ "flake8-use-fstring": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5751
+ },
+ "flask-principal": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5452
+ },
+ "brazilnum": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 7396
+ },
+ "pydevd-pycharm": {
+  "exts": {
+   ".c": 4,
+   ".pyx": 2,
+   ".h": 4,
+   ".cpp": 5
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools >= 40.8.0"
+  ],
+  "sdist_size": 7636010
+ },
+ "json-diff": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 576465
+ },
+ "celery-once": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 12692
+ },
+ "nuitka": {
+  "exts": {
+   ".h": 140,
+   ".c": 118,
+   ".cpp": 1
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules"
+  ],
+  "build_backend": null,
+  "build_requires": [
+   "setuptools>=42",
+   "wheel"
+  ],
+  "sdist_size": 4565475
+ },
+ "jsonslicer": {
+  "exts": {
+   ".cc": 11
+  },
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 23902
+ },
+ "python-gflags": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 52093
+ },
+ "aliyun-log-python-sdk": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": [],
+  "sdist_size": 169272
+ },
+ "aiochclient": {
+  "exts": {
+   ".c": 1,
+   ".pyx": 1
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "cythonize",
+   "build_ext"
+  ],
+  "build_backend": null,
+  "build_requires": [
+   "setuptools",
+   "wheel",
+   "Cython"
+  ],
+  "sdist_size": 250452
+ },
+ "libvirt-python": {
+  "exts": {
+   ".c": 5,
+   ".h": 2
+  },
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "build_ext"
+  ],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools"
+  ],
+  "sdist_size": 245493
+ },
+ "feedgen": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 258496
+ },
+ "authres": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 23226
+ },
+ "python-etcd": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 37270
+ },
+ "pathtools": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 11006
+ },
+ "sagemaker-inference": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 23394
+ },
+ "async-asgi-testclient": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 11716
+ },
+ "dash-cytoscape": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 3992593
+ },
+ "flask-apscheduler": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 12601
+ },
+ "sift": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools"
+  ],
+  "sdist_size": 12301
+ },
+ "sagemaker-training": {
+  "exts": {
+   ".c": 2,
+   ".h": 1
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 59177
+ },
+ "pyexecjs": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 13344
+ },
+ "args": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 3048
+ },
+ "frida-tools": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": [],
+  "sdist_size": 4690392
+ },
+ "logger": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1187
+ },
+ "jieba": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 19214172
+ },
+ "patchelf-wrapper": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 197025
+ },
+ "openapi-codec": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 6302
+ },
+ "tzwhere": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 23744295
+ },
+ "clint": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 29355
+ },
+ "xmlrunner": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5557
+ },
+ "bz2file": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 11333
+ },
+ "encodec": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 3736037
+ },
+ "mdxpy": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools",
+   "wheel"
+  ],
+  "sdist_size": 83562
+ },
+ "pismosendlogs": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2447
+ },
+ "python-speech-features": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5588
+ },
+ "pytest-json": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5669
+ },
+ "overpunch": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2608
+ },
+ "phpserialize": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 7466
+ },
+ "python-nmap": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 44366
+ },
+ "robotframework-sshlibrary": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 51417
+ },
+ "initools": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 21009
+ },
+ "phonetics": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 8848
+ },
+ "pyreadline": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 109189
+ },
+ "basicsr": {
+  "exts": {
+   ".cpp": 4
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "build_ext"
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 172524
+ },
+ "sqlalchemy-dremio": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": [],
+  "sdist_size": 17717
+ },
+ "marketorestpython": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 22060
+ },
+ "pyattest": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": [],
+  "sdist_size": 23107
+ },
+ "aliyun-python-sdk-core-v3": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 440774
+ },
+ "pyclamd": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 11177
+ },
+ "lzstring": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 4256
+ },
+ "compoundfiles": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 18465
+ },
+ "rlbot": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2586472
+ },
+ "google-oauth": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5674
+ },
+ "authheaders": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 115428
+ },
+ "matplotlib-venn": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools"
+  ],
+  "sdist_size": 40821
+ },
+ "neotime": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 17915
+ },
+ "pgdb": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2720
+ },
+ "pylightxl": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 36057
+ },
+ "openai-clip": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1371625
+ },
+ "jose": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 9153
+ },
+ "mattermostwrapper": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2461
+ },
+ "aws-logging-handlers": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 8515
+ },
+ "pbkdf2": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 6360
+ },
+ "japanize-matplotlib": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 4118887
+ },
+ "fernet": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1909
+ },
+ "python-terraform": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 8746
+ },
+ "zss": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 9790
+ },
+ "unidic": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 7688
+ },
+ "statistics": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 8303
+ },
+ "bigquery": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 8319
+ },
+ "mkdocs-exclude": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 6751
+ },
+ "webapp2": {
+  "exts": {},
+  "special": {
+   "makefile": 2
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 191549
+ },
+ "pyzipcode": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1934784
+ },
+ "flash-attn": {
+  "exts": {
+   ".cpp": 2519,
+   ".hpp": 1827,
+   ".h": 751
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "build_ext"
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 8451657
+ },
+ "str2bool": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1567
+ },
+ "spark-sklearn": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 28245
+ },
+ "py2neo-history": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 162028
+ },
+ "htbuilder": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 10591
+ },
+ "placebo": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 15123
+ },
+ "linear-tsv": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 9589
+ },
+ "pydes": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 9878
+ },
+ "tos": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 164263
+ },
+ "dbus-python": {
+  "exts": {
+   ".c": 32,
+   ".h": 9
+  },
+  "special": {
+   "meson.build": 7
+  },
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "build_ext"
+  ],
+  "build_backend": "mesonpy",
+  "build_requires": [
+   "meson-python>=0.8.1",
+   "meson>=0.60.0",
+   "ninja",
+   "patchelf",
+   "setuptools",
+   "wheel"
+  ],
+  "sdist_size": 232490
+ },
+ "pylint-flask": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 9964
+ },
+ "slugify": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1156
+ },
+ "autowrapt": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2687
+ },
+ "readline": {
+  "exts": {
+   ".c": 2
+  },
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2315142
+ },
+ "mulpyplexer": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2846
+ },
+ "stem": {
+  "exts": {
+   ".go": 2
+  },
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2859640
+ },
+ "mock-open": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 12127
+ },
+ "django-impersonate": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": [],
+  "sdist_size": 26694
+ },
+ "click-completion": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 10019
+ },
+ "pptree": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 3043
+ },
+ "tensorrt": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools>=61.0",
+   "wheel"
+  ],
+  "sdist_size": 16664
+ },
+ "varint": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1886
+ },
+ "aws": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5645
+ },
+ "tailer": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 7504
+ },
+ "efficientnet-pytorch": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 21012
+ },
+ "pyformance": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 20683
+ },
+ "sib-api-v3-sdk": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 265002
+ },
+ "envparse": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 7576
+ },
+ "django-bitfield": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 17365
+ },
+ "uwsgitop": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 6574
+ },
+ "stopit": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 18281
+ },
+ "pubnub": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 100495
+ },
+ "ordereddict": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2114
+ },
+ "nameof": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1794
+ },
+ "interruptingcow": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5009
+ },
+ "sdnotify": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2459
+ },
+ "python-path": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2253
+ },
+ "opuslib": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 8550
+ },
+ "python-openid": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 301619
+ },
+ "dbt": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 3322
+ },
+ "cpe": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 942225
+ },
+ "pyhwp": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 218143
+ },
+ "django-haystack": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools>=61.2",
+   "setuptools_scm[toml]>=3.4",
+   "wheel"
+  ],
+  "sdist_size": 454662
+ },
+ "python-constraint": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 18416
+ },
+ "hurry-filesize": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2810
+ },
+ "pykmip": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 542498
+ },
+ "dlipower": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 13362
+ },
+ "stepfunctions": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 67112
+ },
+ "mobly": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools>=61.2"
+  ],
+  "sdist_size": 201877
+ },
+ "metaphone": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 14075
+ },
+ "websocket": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 195339
+ },
+ "pypydispatcher": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 23224
+ },
+ "progressbar33": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 10184
+ },
+ "expects": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 27901
+ },
+ "xero-python": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 627658
+ },
+ "pdfminer": {
+  "exts": {},
+  "special": {
+   "makefile": 5
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 4173248
+ },
+ "htmlparser": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 5970
+ },
+ "apkutils2": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 60986
+ },
+ "sseclient": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 7465
+ },
+ "arpy": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 9572
+ },
+ "drf-flex-fields": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 30476
+ },
+ "splitio-client": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 156054
+ },
+ "ofxparse": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 53837
+ },
+ "pyric": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 870401
+ },
+ "django-crontab": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 7089
+ },
+ "luhn": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1734
+ },
+ "sphinx-jsonschema": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 30550
+ },
+ "pytest-incremental": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 27089
+ },
+ "pyeapi": {
+  "exts": {},
+  "special": {
+   "makefile": 2
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 151406
+ },
+ "molotov": {
+  "exts": {},
+  "special": {
+   "makefile": 2
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 45813
+ },
+ "zhconv": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 211571
+ },
+ "pbtools": {
+  "exts": {
+   ".c": 48,
+   ".h": 46
+  },
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 126816
+ },
+ "browserstack-sdk": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 469629
+ },
+ "sagemaker-containers": {
+  "exts": {
+   ".h": 1,
+   ".c": 2
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension("
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 51391
+ },
+ "pylibfdt": {
+  "exts": {
+   ".c": 10,
+   ".h": 4
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "build_ext"
+  ],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools",
+   "setuptools_scm",
+   "swig"
+  ],
+  "sdist_size": 62578
+ },
+ "googleauthentication": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2872
+ },
+ "spyne": {
+  "exts": {},
+  "special": {
+   "makefile": 3
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 528323
+ },
+ "pip-review": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 6644
+ },
+ "jupyter-contrib-nbextensions": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 23462252
+ },
+ "ansible-tower-cli": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 203898
+ },
+ "f5-icontrol-rest": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 12950
+ },
+ "spsdk-pyocd": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools >= 61.0",
+   "wheel"
+  ],
+  "sdist_size": 8220
+ },
+ "kiwipiepy-model": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 87976912,
+  "skipped": "too_large"
+ },
+ "jaeger-client": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 87365
+ },
+ "databricksapi": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 16832
+ },
+ "etcd3": {
+  "exts": {},
+  "special": {
+   "makefile": 1
+  },
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 63926
+ },
+ "spsdk-mcu-link": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools >= 61.0",
+   "wheel"
+  ],
+  "sdist_size": 165398
+ },
+ "pytorch": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 689
+ },
+ "virustotal3": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 9779
+ },
+ "pygdal": {
+  "exts": {
+   ".cpp": 4,
+   ".c": 1
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "build_ext"
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 487496
+ },
+ "docker-squash": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 38619
+ },
+ "keplergl": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "geopandas~=0.14.3",
+   "ipywidgets~=8.1.5",
+   "notebook~=6.0.1",
+   "jupyter_packaging~=0.12.3",
+   "jupyter-contrib-nbextensions~=0.7.0",
+   "jupyterlab~=4.1.6",
+   "pyarrow~=16.0.0",
+   "setuptools>=69.5.1",
+   "wheel"
+  ],
+  "sdist_size": 18440135
+ },
+ "public": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2067
+ },
+ "dbstream": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 4642
+ },
+ "ezodf": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 125940
+ },
+ "environ": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 2628
+ },
+ "slackweb": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1337
+ },
+ "salesforce-api": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 30570
+ },
+ "theano-pymc": {
+  "exts": {
+   ".c": 52,
+   ".h": 5
+  },
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 1810180
+ },
+ "dlib": {
+  "exts": {
+   ".h": 1046,
+   ".cpp": 112,
+   ".c": 240,
+   ".f": 20,
+   ".s": 1
+  },
+  "special": {
+   "cmakelists.txt": 13
+  },
+  "setup_signals": [
+   "ext_modules",
+   "Extension(",
+   "build_ext"
+  ],
+  "build_backend": "setuptools.build_meta",
+  "build_requires": [
+   "setuptools",
+   "wheel",
+   "packaging",
+   "cmake"
+  ],
+  "sdist_size": 3327542
+ },
+ "geoip2fast": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 9655302
+ },
+ "ipadic": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 13413189
+ },
+ "maxminddb-geolite2": {
+  "exts": {},
+  "special": {},
+  "setup_signals": [],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 26099794
+ },
+ "mysql-connector-python-rf": {
+  "exts": {
+   ".c": 4,
+   ".cc": 1,
+   ".h": 5
+  },
+  "special": {},
+  "setup_signals": [
+   "ext_modules"
+  ],
+  "build_backend": null,
+  "build_requires": null,
+  "sdist_size": 11926482
+ }
+}

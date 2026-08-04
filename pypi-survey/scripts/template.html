@@ -1,0 +1,554 @@
+<title>PyPI native dependency survey</title>
+<style>
+:root {
+  color-scheme: light;
+  --plane: #f9f9f7; --surface: #fcfcfb;
+  --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --baseline: #c3c2b7; --ring: rgba(11,11,11,0.10);
+  --accent: #2a78d6;
+  --lang-c: #2a78d6; --lang-cpp: #008300; --lang-rust: #e87ba4;
+  --lang-cython: #eda100; --lang-fortran: #1baf7a;
+  --frame: #eceae4; --frame-hi: #e2e0d8; --other: #d8d6cd;
+  --seq-strong: #1c5cab; --seq-mid: #6da7ec;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --plane: #0d0d0d; --surface: #1a1a19;
+    --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --baseline: #383835; --ring: rgba(255,255,255,0.10);
+    --accent: #3987e5;
+    --lang-c: #3987e5; --lang-cpp: #008300; --lang-rust: #d55181;
+    --lang-cython: #c98500; --lang-fortran: #199e70;
+    --frame: #262624; --frame-hi: #32322f; --other: #202020;
+    --seq-strong: #3987e5; --seq-mid: #86b6ef;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --plane: #0d0d0d; --surface: #1a1a19;
+  --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --baseline: #383835; --ring: rgba(255,255,255,0.10);
+  --accent: #3987e5;
+  --lang-c: #3987e5; --lang-cpp: #008300; --lang-rust: #d55181;
+  --lang-cython: #c98500; --lang-fortran: #199e70;
+  --frame: #262624; --frame-hi: #32322f; --other: #202020;
+  --seq-strong: #3987e5; --seq-mid: #86b6ef;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--plane); color: var(--ink);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+.eyebrow {
+  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 10px;
+}
+h1 { font-size: 27px; line-height: 1.25; margin: 0 0 8px; text-wrap: balance; font-weight: 650; }
+.dek { color: var(--ink-2); max-width: 62ch; margin: 0 0 36px; }
+h2 { font-size: 18px; margin: 44px 0 6px; font-weight: 650; }
+h2 + .sub { margin-top: 0; }
+.sub { color: var(--ink-2); font-size: 13.5px; margin: 2px 0 16px; max-width: 72ch; }
+.card {
+  background: var(--surface); border: 1px solid var(--ring);
+  border-radius: 8px; padding: 18px 18px 14px;
+}
+code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+/* KPI stacked bars */
+.kpi-row { display: grid; gap: 14px; }
+.kpi { display: grid; grid-template-columns: 92px 1fr; gap: 12px; align-items: center; }
+.kpi .lbl { font-size: 13px; color: var(--ink-2); text-align: right; }
+.kpi .lbl b { display: block; color: var(--ink); font-size: 14px; font-weight: 600; }
+.stack { display: flex; height: 26px; gap: 2px; }
+.seg { border-radius: 4px; position: relative; min-width: 3px; }
+.seg span {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden;
+}
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 0; font-size: 12.5px; color: var(--ink-2); }
+.legend .key { display: inline-flex; align-items: center; gap: 7px; }
+.swatch { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+
+/* flame controls */
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin: 0 0 12px; }
+.seg-ctl { display: inline-flex; border: 1px solid var(--baseline); border-radius: 6px; overflow: hidden; }
+.seg-ctl button {
+  border: 0; background: transparent; color: var(--ink-2); font: inherit; font-size: 13px;
+  padding: 5px 13px; cursor: pointer;
+}
+.seg-ctl button[aria-pressed="true"] { background: var(--accent); color: #fff; font-weight: 600; }
+.seg-ctl button:focus-visible, .ctl-btn:focus-visible, #search:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#search {
+  font: inherit; font-size: 13px; padding: 5px 10px; border: 1px solid var(--baseline);
+  border-radius: 6px; background: var(--surface); color: var(--ink); width: 210px;
+}
+.ctl-btn {
+  font: inherit; font-size: 13px; padding: 5px 12px; border: 1px solid var(--baseline);
+  border-radius: 6px; background: transparent; color: var(--ink-2); cursor: pointer;
+}
+.ctl-btn:hover { background: var(--frame); }
+.hint { font-size: 12px; color: var(--muted); }
+#matchcount { font-size: 12.5px; color: var(--ink-2); }
+
+/* flame chart */
+#flame { position: relative; width: 100%; }
+.frame {
+  position: absolute; height: 20px; border-radius: 3px; cursor: pointer;
+  font-size: 11.5px; line-height: 20px; padding: 0 5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+.frame.dim { opacity: 0.22; }
+.frame.kbd { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 2; }
+.frame:hover { filter: brightness(1.06); }
+@media (prefers-reduced-motion: no-preference) {
+  .frame { transition: opacity 0.15s; }
+}
+#status { font-size: 12.5px; color: var(--ink-2); min-height: 1.4em; margin-top: 10px; }
+#crumb { font-size: 12.5px; color: var(--ink-2); margin: 2px 0 8px; min-height: 1.4em; }
+#crumb a { color: var(--accent); cursor: pointer; text-decoration: none; }
+#crumb a:hover { text-decoration: underline; }
+
+/* tooltip */
+#tip {
+  position: fixed; z-index: 10; pointer-events: none; display: none;
+  background: var(--surface); border: 1px solid var(--ring); border-radius: 7px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.18); padding: 9px 12px; font-size: 12.5px;
+  max-width: 320px;
+}
+#tip .t-name { font-weight: 650; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+#tip .t-val { font-size: 15px; font-weight: 650; margin: 2px 0; }
+#tip .t-sub { color: var(--ink-2); }
+
+/* bar lists */
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 22px; }
+.barlist { display: grid; gap: 5px; }
+.bl-row { display: grid; grid-template-columns: 130px 1fr 44px; gap: 9px; align-items: center; font-size: 12.5px; }
+.bl-row .n { text-align: right; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Menlo, monospace; }
+.bl-row .v { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.bl-bar { height: 13px; border-radius: 0 3px 3px 0; background: var(--accent); min-width: 2px; }
+.bl-track { border-left: 2px solid var(--baseline); padding: 1.5px 0; }
+h3 { font-size: 13.5px; margin: 0 0 10px; font-weight: 650; color: var(--ink); }
+
+/* table */
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th {
+  text-align: left; font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--muted); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--baseline);
+}
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+td { padding: 5px 10px; border-bottom: 1px solid var(--grid); }
+td.pkg { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; }
+.scroll { overflow-x: auto; }
+
+.foot { margin-top: 48px; border-top: 1px solid var(--grid); padding-top: 18px; font-size: 13px; color: var(--ink-2); }
+.foot ul { margin: 8px 0 0; padding-left: 20px; }
+.foot li { margin: 4px 0; }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">wasinix · PyPI survey · 2026-07-16</p>
+  <h1>Native dependencies in the PyPI top 10,000</h1>
+  <p class="dek">
+    Every package in the top 10k by 30-day downloads, classified as pure Python or
+    native, with the full runtime dependency graph resolved for CPython 3.12 on
+    linux/x86_64. The flame chart shows how native packages get pulled in — and by whom.
+  </p>
+
+  <h2>How much of PyPI needs native code?</h2>
+  <p class="sub">Share of packages per cutoff. A pure package still <em>needs</em> native
+     code when something in its dependency closure ships it.</p>
+  <div class="card">
+    <div class="kpi-row" id="kpis"></div>
+    <div class="legend" id="kpi-legend"></div>
+  </div>
+
+  <h2>Who pulls what — native reach flame chart</h2>
+  <p class="sub">
+    Roots are the native packages, sized by how much they're pulled. Each level below a
+    root answers “via which dependent?” — the chain ends at the package that started the pull.
+    Every top-10k package contributes once per native package in its closure, attributed
+    along its shortest dependency path. Click a frame to zoom, <span class="mono">Esc</span> to reset.
+  </p>
+  <div class="card">
+    <div class="controls">
+      <div class="seg-ctl" role="group" aria-label="Weighting">
+        <button id="w-c" aria-pressed="true">Packages</button>
+        <button id="w-d" aria-pressed="false">Downloads</button>
+      </div>
+      <input id="search" type="search" placeholder="Find a package…" aria-label="Find a package">
+      <span id="matchcount"></span>
+      <button class="ctl-btn" id="reset">Reset zoom</button>
+      <span class="hint">arrow keys navigate · Enter zooms</span>
+    </div>
+    <div class="legend" id="flame-legend"></div>
+    <div id="crumb"></div>
+    <div id="flame" tabindex="0" role="application"
+         aria-label="Flame chart of native package pulls. Use arrow keys to navigate frames, Enter to zoom, Escape to reset."></div>
+    <div id="status" aria-live="polite"></div>
+  </div>
+
+  <h2>Native reach, as a table</h2>
+  <p class="sub">The 40 most-pulled native packages. “Pulled by” counts top-10k packages whose
+     runtime closure contains it; download-weighting sums those dependents’ 30-day downloads.</p>
+  <div class="card scroll">
+    <table id="reach-table">
+      <thead><tr>
+        <th>native package</th><th class="num">own rank</th><th class="num">pulled by</th>
+        <th class="num">dl-weighted /30d</th><th class="num">own dl /30d</th><th>language</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <h2>What the 1,460 native packages are made of</h2>
+  <p class="sub">Top-10k native set. Languages are attributed from sources, build requirements and
+     bundled runtimes; a third publish no sdist (binary-only) and stay unattributed.</p>
+  <div class="card">
+    <div class="grid3">
+      <div><h3>Primary language</h3><div class="barlist" id="bl-lang"></div></div>
+      <div><h3>Build backend</h3><div class="barlist" id="bl-gen"></div></div>
+      <div><h3>Bundled shared libraries</h3><div class="barlist" id="bl-lib"></div></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <strong>Method &amp; caveats.</strong>
+    <ul>
+      <li>Ranking: hugovk/top-pypi-packages 30-day downloads, snapshot 2026-07-01.</li>
+      <li>“Native” = latest release ships a platform-specific wheel, or its sdist builds compiled code. Optional-accelerator packages that also publish a pure <span class="mono">py3-none-any</span> wheel count as native (9 of the top-100’s 25).</li>
+      <li>Dependency closure: <span class="mono">requires_dist</span> of each latest release, markers evaluated for CPython 3.12 / linux / x86_64, no extras — extras slightly undercount, version-range back-solving isn’t modeled.</li>
+      <li>Flame attribution: each (package, native dep) pair follows one shortest path; packages reaching a dep by several routes are counted on the shortest one only.</li>
+      <li>Small frames fold into “(other)”; the full unpruned tree is in <span class="mono">data/flame_full.json</span>.</li>
+    </ul>
+  </div>
+</div>
+
+<div id="tip" role="presentation"></div>
+
+<script>
+const DATA = __PAGE_DATA__;
+const TREE = __FLAME_DATA__;
+
+const LANGCOLORS = {
+  "c": "--lang-c", "c++": "--lang-cpp", "rust": "--lang-rust",
+  "cython": "--lang-cython", "fortran": "--lang-fortran",
+  "binary/unknown": "--frame-hi",
+};
+const LANGLABEL = {
+  "c": "C", "c++": "C++", "rust": "Rust", "cython": "Cython",
+  "fortran": "Fortran", "binary/unknown": "binary / unattributed",
+};
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fmt = n => n >= 1e9 ? (n / 1e9).toFixed(n >= 1e10 ? 0 : 1) + " B"
+  : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + " M"
+  : n >= 1e3 ? (n / 1e3).toFixed(0) + " k" : String(n);
+const fmtC = n => n.toLocaleString("en-US");
+
+/* ---------- KPI stacked bars ---------- */
+(function () {
+  const wrap = document.getElementById("kpis");
+  for (const cutoff of [100, 1000, 10000]) {
+    const k = DATA.kpis[cutoff];
+    const row = document.createElement("div"); row.className = "kpi";
+    const lbl = document.createElement("div"); lbl.className = "lbl";
+    const b = document.createElement("b"); b.textContent = "top " + fmtC(cutoff);
+    lbl.appendChild(b); lbl.appendChild(document.createTextNode("packages"));
+    const stack = document.createElement("div"); stack.className = "stack";
+    const segs = [
+      ["native itself", k.native_self, "var(--seq-strong)", "#fff"],
+      ["pure, but pulls native deps", k.native_deps, "var(--seq-mid)", "#0b0b0b"],
+      ["pure all the way down", k.pure_closure, "var(--frame)", "var(--ink-2)"],
+    ];
+    for (const [name, v, bg, ink] of segs) {
+      const s = document.createElement("div"); s.className = "seg";
+      s.style.background = bg; s.style.flexGrow = v; s.style.flexBasis = "0";
+      const t = document.createElement("span");
+      t.style.color = ink;
+      const pct = (v / k.total * 100);
+      t.textContent = pct >= 7 ? fmtC(v) + " · " + pct.toFixed(0) + "%" : (pct >= 4 ? fmtC(v) : "");
+      s.appendChild(t);
+      s.addEventListener("pointermove", e => showTip(e, name, fmtC(v) + " packages",
+        pct.toFixed(1) + "% of top " + fmtC(cutoff)));
+      s.addEventListener("pointerleave", hideTip);
+      stack.appendChild(s);
+    }
+    row.appendChild(lbl); row.appendChild(stack); wrap.appendChild(row);
+  }
+  const leg = document.getElementById("kpi-legend");
+  for (const [name, color] of [["native itself", "var(--seq-strong)"],
+    ["pure, but pulls native deps", "var(--seq-mid)"],
+    ["pure all the way down", "var(--frame)"]]) {
+    const k = document.createElement("span"); k.className = "key";
+    const sw = document.createElement("span"); sw.className = "swatch"; sw.style.background = color;
+    k.appendChild(sw); k.appendChild(document.createTextNode(name)); leg.appendChild(k);
+  }
+})();
+
+/* ---------- tooltip ---------- */
+const tip = document.getElementById("tip");
+function showTip(e, name, val, sub, sub2) {
+  tip.textContent = "";
+  const n = document.createElement("div"); n.className = "t-name"; n.textContent = name;
+  const v = document.createElement("div"); v.className = "t-val"; v.textContent = val;
+  tip.appendChild(n); tip.appendChild(v);
+  for (const s of [sub, sub2]) {
+    if (!s) continue;
+    const d = document.createElement("div"); d.className = "t-sub"; d.textContent = s;
+    tip.appendChild(d);
+  }
+  tip.style.display = "block";
+  positionTip(e.clientX, e.clientY);
+}
+function positionTip(x, y) {
+  const r = tip.getBoundingClientRect();
+  tip.style.left = Math.min(x + 14, innerWidth - r.width - 8) + "px";
+  tip.style.top = (y + 18 + r.height > innerHeight ? y - r.height - 10 : y + 18) + "px";
+}
+function hideTip() { tip.style.display = "none"; }
+
+/* ---------- flame chart ---------- */
+const flame = document.getElementById("flame");
+const crumb = document.getElementById("crumb");
+const statusEl = document.getElementById("status");
+let mode = "c";          // "c" packages | "d" downloads
+let focusNode = TREE;
+let kbdNode = null;
+const parentOf = new Map();
+(function link(n) { for (const ch of n.ch) { parentOf.set(ch, n); link(ch); } })(TREE);
+const ROWH = 24, BARH = 20, MINW = 1, LABELW = 40;
+
+function frameColor(node, depth) {
+  if (node.name === "(other)") return css("--other");
+  if (depth === 1) {
+    const lang = DATA.langcats[node.name] || "binary/unknown";
+    return css(LANGCOLORS[lang] || "--frame-hi");
+  }
+  return css("--frame");
+}
+function inkFor(bg) {
+  const m = bg.match(/#([0-9a-f]{6})/i);
+  if (!m) return css("--ink");
+  const x = parseInt(m[1], 16);
+  const yiq = ((x >> 16) * 299 + ((x >> 8) & 255) * 587 + (x & 255) * 114) / 1000;
+  return yiq > 150 ? "#0b0b0b" : "#ffffff";
+}
+
+function chainOf(node) {
+  const chain = [];
+  for (let n = node; n; n = parentOf.get(n)) chain.unshift(n);
+  return chain;
+}
+
+function render() {
+  flame.textContent = "";
+  const W = flame.clientWidth;
+  const chain = chainOf(focusNode);
+  let maxDepth = 0;
+  (function depth(n, d) { maxDepth = Math.max(maxDepth, d); for (const c of n.ch) depth(c, d + 1); })(focusNode, chain.length - 1);
+  flame.style.height = (maxDepth + 1) * ROWH + "px";
+
+  const q = document.getElementById("search").value.trim().toLowerCase();
+  let matches = 0;
+
+  function draw(node, x, w, row, depthAbs) {
+    if (w < MINW) return;
+    const div = document.createElement("div");
+    div.className = "frame";
+    const isAncestor = row < chain.length - 1;
+    const bg = frameColor(node, depthAbs);
+    div.style.background = bg;
+    div.style.color = inkFor(bg);
+    if (isAncestor) div.style.opacity = "0.55";
+    div.style.left = x + "px";
+    div.style.top = row * ROWH + "px";
+    div.style.width = Math.max(w - 2, MINW) + "px";
+    if (w >= LABELW) {
+      div.textContent = node.name === "(other)"
+        ? "(other · " + (mode === "c" ? fmtC(node.c) + " pkgs" : fmt(node.d)) + ")"
+        : node.name;
+    }
+    if (node.name === "(other)") div.style.fontStyle = "italic";
+    if (q) {
+      const hit = node.name.toLowerCase().includes(q);
+      if (hit) matches++; else div.classList.add("dim");
+    }
+    if (node === kbdNode) div.classList.add("kbd");
+    div.addEventListener("pointermove", e => tipFor(e, node, depthAbs));
+    div.addEventListener("pointerleave", hideTip);
+    div.addEventListener("click", () => { zoom(node); });
+    div.__node = node;
+    flame.appendChild(div);
+    return div;
+  }
+
+  // ancestor rows: full width
+  chain.forEach((n, i) => draw(n, 0, W, i, i));
+  // subtree of focus
+  (function place(node, x, w, row, depthAbs) {
+    let cx = x;
+    for (const ch of node.ch) {
+      const cw = w * ch[mode] / node[mode];
+      draw(ch, cx, cw, row, depthAbs);
+      if (cw >= 3) place(ch, cx, cw, row + 1, depthAbs + 1);
+      cx += cw;
+    }
+  })(focusNode, 0, W, chain.length, chain.length);
+
+  document.getElementById("matchcount").textContent =
+    q ? fmtC(matches) + " visible match" + (matches === 1 ? "" : "es") : "";
+
+  crumb.textContent = "";
+  if (chain.length > 1) {
+    chain.forEach((n, i) => {
+      if (i) crumb.appendChild(document.createTextNode("  ›  "));
+      if (i < chain.length - 1) {
+        const a = document.createElement("a"); a.textContent = n.name;
+        a.addEventListener("click", () => zoom(n)); crumb.appendChild(a);
+      } else {
+        const b = document.createElement("strong"); b.textContent = n.name;
+        crumb.appendChild(b);
+      }
+    });
+  }
+}
+
+function tipFor(e, node, depthAbs) {
+  const total = TREE[mode];
+  const pct = (node[mode] / total * 100).toFixed(node[mode] / total < 0.001 ? 3 : 1) + "% of all pulls";
+  const par = parentOf.get(node);
+  const via = depthAbs > 1 && par && par !== TREE ? "under " + par.name : null;
+  const val = mode === "c" ? fmtC(node.c) + " packages" : fmt(node.d) + " downloads/30d";
+  const alt = mode === "c" ? fmt(node.d) + " downloads/30d" : fmtC(node.c) + " packages";
+  showTip(e, node.name, val, alt + " · " + pct, via);
+  statusEl.textContent = node.name + " — " + val + " (" + pct + ")" + (via ? " · " + via : "");
+}
+
+function zoom(node) {
+  focusNode = node.ch.length ? node : (parentOf.get(node) || TREE);
+  kbdNode = null;
+  render();
+}
+document.getElementById("reset").addEventListener("click", () => { focusNode = TREE; kbdNode = null; render(); });
+
+/* weight toggle */
+for (const [id, m] of [["w-c", "c"], ["w-d", "d"]]) {
+  document.getElementById(id).addEventListener("click", () => {
+    mode = m;
+    document.getElementById("w-c").setAttribute("aria-pressed", String(m === "c"));
+    document.getElementById("w-d").setAttribute("aria-pressed", String(m === "d"));
+    render(); renderReach(); renderBars();
+  });
+}
+document.getElementById("search").addEventListener("input", render);
+
+/* keyboard navigation */
+flame.addEventListener("keydown", e => {
+  const k = e.key;
+  if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Enter", "Escape"].includes(k)) return;
+  e.preventDefault();
+  if (k === "Escape") { focusNode = TREE; kbdNode = null; render(); return; }
+  if (!kbdNode) { kbdNode = focusNode.ch[0] || focusNode; }
+  else if (k === "Enter") { zoom(kbdNode); return; }
+  else {
+    const par = parentOf.get(kbdNode);
+    if (k === "ArrowUp" && par && kbdNode !== focusNode) kbdNode = par;
+    if (k === "ArrowDown" && kbdNode.ch.length) kbdNode = kbdNode.ch[0];
+    if ((k === "ArrowLeft" || k === "ArrowRight") && par) {
+      const i = par.ch.indexOf(kbdNode);
+      const j = k === "ArrowLeft" ? i - 1 : i + 1;
+      if (j >= 0 && j < par.ch.length) kbdNode = par.ch[j];
+    }
+  }
+  render();
+  const total = TREE[mode];
+  const val = mode === "c" ? fmtC(kbdNode.c) + " packages" : fmt(kbdNode.d) + " downloads/30d";
+  statusEl.textContent = kbdNode.name + " — " + val + " (" +
+    (kbdNode[mode] / total * 100).toFixed(1) + "% of all pulls)";
+});
+
+/* flame legend */
+(function () {
+  const leg = document.getElementById("flame-legend");
+  const counts = {};
+  for (const n of TREE.ch) {
+    const lang = n.name === "(other)" ? null : (DATA.langcats[n.name] || "binary/unknown");
+    if (lang) counts[lang] = (counts[lang] || 0) + 1;
+  }
+  for (const lang of ["c", "c++", "rust", "cython", "binary/unknown"]) {
+    const k = document.createElement("span"); k.className = "key";
+    const sw = document.createElement("span"); sw.className = "swatch";
+    sw.style.background = "var(" + LANGCOLORS[lang] + ")";
+    if (lang === "binary/unknown") sw.style.border = "1px solid var(--baseline)";
+    k.appendChild(sw);
+    k.appendChild(document.createTextNode(LANGLABEL[lang] + " roots"));
+    leg.appendChild(k);
+  }
+  const k = document.createElement("span"); k.className = "key";
+  const sw = document.createElement("span"); sw.className = "swatch"; sw.style.background = "var(--frame)";
+  k.appendChild(sw); k.appendChild(document.createTextNode("route (dependents)"));
+  leg.appendChild(k);
+})();
+
+/* ---------- reach table ---------- */
+function renderReach() {
+  const tb = document.querySelector("#reach-table tbody");
+  tb.textContent = "";
+  const rows = [...DATA.reach].sort((a, b) => mode === "c" ? b.pkgs - a.pkgs : b.dl - a.dl).slice(0, 40);
+  for (const r of rows) {
+    const tr = document.createElement("tr");
+    const cells = [
+      ["pkg", r.pkg], ["num", r.rank ? "#" + fmtC(r.rank) : "—"],
+      ["num", fmtC(r.pkgs)], ["num", fmt(r.dl)], ["num", fmt(r.own)],
+    ];
+    for (const [cls, txt] of cells) {
+      const td = document.createElement("td"); td.className = cls; td.textContent = txt;
+      tr.appendChild(td);
+    }
+    const td = document.createElement("td");
+    const chip = document.createElement("span"); chip.className = "chip";
+    const sw = document.createElement("span"); sw.className = "swatch";
+    sw.style.background = "var(" + (LANGCOLORS[r.lang] || "--frame-hi") + ")";
+    chip.appendChild(sw); chip.appendChild(document.createTextNode(LANGLABEL[r.lang] || r.lang));
+    td.appendChild(chip); tr.appendChild(td);
+    tb.appendChild(tr);
+  }
+}
+renderReach();
+
+/* ---------- breakdown bar lists ---------- */
+function barlist(el, items, labelFn) {
+  el.textContent = "";
+  const max = Math.max(...items.map(i => i[1]));
+  for (const [name, v] of items) {
+    const row = document.createElement("div"); row.className = "bl-row";
+    const n = document.createElement("div"); n.className = "n"; n.textContent = labelFn ? labelFn(name) : name;
+    n.title = n.textContent;
+    const track = document.createElement("div"); track.className = "bl-track";
+    const bar = document.createElement("div"); bar.className = "bl-bar";
+    bar.style.width = (v / max * 100) + "%";
+    track.appendChild(bar);
+    const val = document.createElement("div"); val.className = "v"; val.textContent = fmtC(v);
+    row.appendChild(n); row.appendChild(track); row.appendChild(val);
+    row.addEventListener("pointermove", e => showTip(e, n.textContent, fmtC(v) + " packages", null));
+    row.addEventListener("pointerleave", hideTip);
+    el.appendChild(row);
+  }
+}
+function renderBars() {
+  const b = DATA.breakdowns[10000];
+  barlist(document.getElementById("bl-lang"), b.languages, n => LANGLABEL[n] || n);
+  barlist(document.getElementById("bl-gen"), b.generators.slice(0, 10));
+  barlist(document.getElementById("bl-lib"), b.bundled.slice(0, 14));
+}
+renderBars();
+
+render();
+let rT;
+addEventListener("resize", () => { clearTimeout(rT); rT = setTimeout(render, 120); });
+new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+</script>
