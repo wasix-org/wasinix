@@ -1,0 +1,127 @@
+diff --git a/src/args.rs b/src/args.rs
+index e3035d9..76828bf 100644
+--- a/src/args.rs
++++ b/src/args.rs
+@@ -111,6 +111,7 @@ pub struct UserSettings {
+     pub link_symbolic: bool,                    // key name: LINK_SYMBOLIC
+     pub generate_shell_script: bool,            // key name: GENERATE_SHELL_SCRIPT
+     pub shell_script_wasmer_args: Vec<String>,  // key name: SHELL_SCRIPT_WASMER_ARGS
++    pub openmp: bool,                           // key name: OPENMP
+     pub discard_unsupported_flags: bool,        // key name: DISCARD_UNSUPPORTED_FLAGS
+     pub autoconf_workarounds: bool,             // key name: AUTOCONF_WORKAROUNDS
+ }
+@@ -349,6 +350,12 @@ pub fn gather_user_settings(
+             None => vec![],
+         };
+ 
++    let openmp = match try_get_user_setting_value("OPENMP", args, envs)? {
++        Some(value) => read_bool_user_setting(&value)
++            .with_context(|| format!("Invalid value {value} for OPENMP"))?,
++        None => false,
++    };
++
+     let discard_unsupported_flags =
+         match try_get_user_setting_value("DISCARD_UNSUPPORTED_FLAGS", args, envs)? {
+             Some(value) => read_bool_user_setting(&value)
+@@ -386,6 +393,7 @@ pub fn gather_user_settings(
+         link_symbolic,
+         generate_shell_script,
+         shell_script_wasmer_args,
++        openmp,
+         discard_unsupported_flags,
+         autoconf_workarounds,
+     })
+diff --git a/src/compiler.rs b/src/compiler.rs
+index ccf2916..faef5bb 100644
+--- a/src/compiler.rs
++++ b/src/compiler.rs
+@@ -567,6 +567,18 @@ fn build_link_args(
+         push("--no-whole-archive");
+     }
+ 
++    // libomp is C++, and the C++ runtime above is executable-only, so an OpenMP
++    // shared module needs it here too. The search path for libomp itself comes
++    // from the -L the build passes, as it does for any other library.
++    if state.user_settings.openmp {
++        push("-lomp");
++        push("-lc++");
++        push("-lc++abi");
++        if state.user_settings.wasm_exceptions.is_enabled() {
++            push("-lunwind");
++        }
++    }
++
+     // Link as much as needed out of libclang_rt.builtins regardless of module kind.
+     push("-lclang_rt.builtins-wasm32");
+ 
+@@ -1302,6 +1314,42 @@ mod tests {
+         );
+     }
+ 
++    #[test]
++    fn test_openmp_links_the_runtime_for_a_shared_module() {
++        // -fopenmp is a compiler flag, so it never reaches wasm-ld; without the
++        // driver naming libomp the OpenMP symbols of a shared module (a python
++        // extension, say) go unresolved.
++        let mut state = link_args_state(
++            ModuleKind::SharedLibrary,
++            vec![LinkToken::Input(PathBuf::from("ext.o"))],
++        );
++        state.user_settings.openmp = true;
++        let args = rendered_link_args(&state);
++
++        assert!(
++            args.iter().any(|a| a == "-lomp"),
++            "-fopenmp should link libomp, got {args:?}"
++        );
++        assert!(
++            args.iter().any(|a| a == "-lc++"),
++            "libomp is C++ and a shared module gets no C++ runtime otherwise, got {args:?}"
++        );
++    }
++
++    #[test]
++    fn test_no_openmp_leaves_the_link_line_alone() {
++        let state = link_args_state(
++            ModuleKind::SharedLibrary,
++            vec![LinkToken::Input(PathBuf::from("ext.o"))],
++        );
++        let args = rendered_link_args(&state);
++
++        assert!(
++            !args.iter().any(|a| a == "-lomp"),
++            "libomp must not be linked without -fopenmp, got {args:?}"
++        );
++    }
++
+     #[test]
+     fn test_user_lstdcxx_is_translated_to_libcxx() {
+         // The sysroot has no libstdc++. A build system that links a vendored C++
+diff --git a/src/compiler/flags.rs b/src/compiler/flags.rs
+index 9ab0cb4..650f095 100644
+--- a/src/compiler/flags.rs
++++ b/src/compiler/flags.rs
+@@ -185,6 +185,11 @@ fn update_build_settings_from_compiler_flag(
+             user_settings.wasm_exceptions = WasmExceptionStyle::Exnref
+         }
+         Flag::Simple("-fno-exceptions") => user_settings.wasm_exceptions = WasmExceptionStyle::Off,
++        // clang's driver turns -fopenmp into -lomp at the link stage; the link
++        // here runs wasm-ld directly, which takes no driver flags, so the
++        // request has to be remembered until build_link_args.
++        Flag::Simple("-fopenmp" | "-fopenmp=libomp") => user_settings.openmp = true,
++        Flag::Simple("-fno-openmp") => user_settings.openmp = false,
+         Flag::Simple("-fPIC") => user_settings.pic = true,
+         Flag::Simple("-fno-PIC") => user_settings.pic = false,
+         Flag::Simple("--wasm-opt") => build_settings.use_wasm_opt = true,
+@@ -572,6 +577,11 @@ mod tests {
+         assert_eq!(us.wasm_exceptions, WasmExceptionStyle::Exnref);
+         update_build_settings_from_compiler_flag(Flag::Simple("-fno-exceptions"), &mut bs, &mut us);
+         assert_eq!(us.wasm_exceptions, WasmExceptionStyle::Off);
++        assert!(!us.openmp);
++        update_build_settings_from_compiler_flag(Flag::Simple("-fopenmp"), &mut bs, &mut us);
++        assert!(us.openmp);
++        update_build_settings_from_compiler_flag(Flag::Simple("-fno-openmp"), &mut bs, &mut us);
++        assert!(!us.openmp);
+         us = UserSettings::default();
+         update_build_settings_from_compiler_flag(
+             Flag::Simple("-fwasm-exceptions"),

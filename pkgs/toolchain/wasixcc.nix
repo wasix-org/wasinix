@@ -35,6 +35,15 @@
       rm .cargo/config.toml
     '';
 
+    # A shared module gets no C++ runtime injected (that block is executable-only),
+    # so a build system passing the GNU name -lstdc++ fails to link. -fopenmp is a
+    # driver flag that never reaches wasm-ld, so the omp symbols go unresolved
+    # unless the driver names libomp itself, as clang's own does.
+    patches = [
+      ./wasixcc-map-libstdcxx-to-libcxx.patch
+      ./wasixcc-openmp-link.patch
+    ];
+
     doCheck = true;
 
     installPhase = ''
