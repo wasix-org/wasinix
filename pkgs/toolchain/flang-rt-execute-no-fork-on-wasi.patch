@@ -1,0 +1,21 @@
+--- a/flang-rt/lib/runtime/execute.cpp
++++ b/flang-rt/lib/runtime/execute.cpp
+@@ -249,6 +249,18 @@
+       }
+     }
+     FreeMemory(wcmd);
++#elif defined(__wasi__)
++    // WASI has no fork() in the Wasm exception-handling configuration (and no
++    // shell to exec), so asynchronous command execution is unsupported. Report
++    // it the same way the Windows CreateProcess-failed path does.
++    if (!cmdstat) {
++      terminator.Crash(
++          "Asynchronous command execution is not supported on this platform.");
++    } else {
++      StoreIntToDescriptor(cmdstat, ASYNC_NO_SUPPORT_ERR, terminator);
++      CheckAndCopyCharsToDescriptor(
++          cmdmsg, "Asynchronous command execution is not supported.");
++    }
+ #else
+     pid_t pid{fork()};
+     if (pid < 0) {
