@@ -1,0 +1,18 @@
+diff --git a/src/legacy/runtime.rs b/src/legacy/runtime.rs
+--- a/src/legacy/runtime.rs
++++ b/src/legacy/runtime.rs
+@@ -17,6 +17,14 @@
+     static ref MULTITHREADED_RUNTIME: RwLock<Option<(u32, XetContext)>> = RwLock::new(None);
+ }
+ 
++#[cfg(not(any(unix, windows)))]
++fn install_sigint_handler() -> Result<(), RuntimeError> {
++    // wasix: signal_hook is cfg(unix)-only, and wasmer signal delivery can't yet
++    // cancel in-flight syscalls, so a native handler would be inert here. CPython
++    // still owns the Ctrl-C path at the Python boundary.
++    Ok(())
++}
++
+ #[cfg(unix)]
+ fn install_sigint_handler() -> Result<(), RuntimeError> {
+     use signal_hook::consts::SIGINT;
