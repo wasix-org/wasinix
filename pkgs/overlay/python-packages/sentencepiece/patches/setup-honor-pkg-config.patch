@@ -1,0 +1,29 @@
+setup.py invokes a literal `pkg-config`, which misses the wasix cross wrapper
+(prefixed, and exported as $PKG_CONFIG). Honor $PKG_CONFIG so the cross probe
+resolves our sentencepiece.pc and links the static archives directly. Upstream
+cross bug; should go upstream to google/sentencepiece.
+
+--- a/setup.py
++++ b/setup.py
+@@ -41,7 +41,8 @@
+
+ def run_pkg_config(section, pkg_config_path=None):
+   try:
+-    cmd = 'pkg-config sentencepiece --{}'.format(section)
++    cmd = '{} sentencepiece --{}'.format(
++        os.environ.get('PKG_CONFIG', 'pkg-config'), section)
+     if pkg_config_path:
+       cmd = 'env PKG_CONFIG_PATH={} {}'.format(pkg_config_path, cmd)
+     output = subprocess.check_output(cmd, shell=True)
+@@ -55,7 +56,10 @@
+
+ def is_sentencepiece_installed():
+   try:
+-    subprocess.check_call('pkg-config sentencepiece --libs', shell=True)
++    subprocess.check_call(
++        '{} sentencepiece --libs'.format(
++            os.environ.get('PKG_CONFIG', 'pkg-config')),
++        shell=True)
+     return True
+   except subprocess.CalledProcessError:
+     return False
