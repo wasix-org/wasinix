@@ -7,6 +7,7 @@
   "expat"
   "gmp"
   "jansson"
+  "lcms2" # pillow's ImageCms
   "libb2"
   "libdeflate"
   "libpng"

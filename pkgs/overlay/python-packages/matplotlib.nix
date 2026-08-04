@@ -1,11 +1,7 @@
-# matplotlib for wasix.
-# - enableTk pulls tk → X11 (no cross-build); force the headless Agg build.
-# - drop ffmpeg-headless (movie-writer optional; its closure doesn't cross-build).
-# - alias -lqhull_r → the static libqhullstatic_r.a the cross build actually installs.
-# - the overlay carried matplotlib-agg-cast-wasm.patch (from the 3.10.x data
-#   stack) to cast wasm32-narrowing dimensions; it's stale for 3.11.0 (the
-#   RendererAgg cast it added is now upstream). Drop it and cast the buffer
-#   3.11.0 still leaves un-cast (BufferRegion) via postPatch instead.
+# matplotlib for wasix: enableTk pulls tk -> X11, so force the headless Agg build;
+# drop ffmpeg-headless (optional movie writers, closure doesn't cross-build); alias
+# -lqhull_r to the static libqhullstatic_r.a the cross build installs; postPatch
+# casts the BufferRegion dimensions wasm32 narrows, replacing the inherited patches.
 {
   pyprev,
   final,
@@ -13,7 +9,6 @@
   helpers,
   ...
 }: let
-  wheels = import ./lib/wheels.nix {inherit lib;};
   qhullR =
     helpers.libTweaks {
       postInstall = ''
@@ -23,7 +18,7 @@
     final.qhull;
 in
   helpers.libTweaks
-  (wheels.dropInputsByName ["ffmpeg"]
+  (helpers.linkInputs (helpers.dropInputsByNameInfix ["ffmpeg"])
     // {
       patches = _: [];
       postPatch = ''

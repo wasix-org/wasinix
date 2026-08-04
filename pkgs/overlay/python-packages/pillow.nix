@@ -1,25 +1,22 @@
-# nixpkgs' pillow links codec/X11 libraries (lcms2, libavif -> glib -> rust,
-# libimagequant (rust), libraqm, libxcb) that don't cross-build to wasix. Drop
-# them, leaving a minimal codec set (freetype + jpeg/tiff/webp/openjpeg/zlib);
-# pillow's setup.py auto-disables features whose libs are absent.
+# Three of nixpkgs' pillow libraries do not cross-build to wasix: libavif (through
+# gdk-pixbuf -> glib -> bash, which only builds in the off-EH profile), libimagequant
+# (cargo-c: "The target wasi-p1 is not supported yet") and libxcb (its xorgproto meson
+# rejects wasix-libc's fd_set). setup.py then turns AVIF/quantize/xcb off.
 {
   pyprev,
   final,
   lib,
   helpers,
   ...
-}: let
-  wheels = import ./lib/wheels.nix {inherit lib;};
-in
-  helpers.libTweaks (
-    wheels.dropInputsByName ["lcms2" "libavif" "libimagequant" "libraqm" "libxcb"]
-    // {
-      # lib.const replaces upstream's preConfigure (drops its AVIF/IMAGEQUANT/libxcb roots),
-      # keeping only the openjpeg (JPEG2K) root.
-      preConfigure = lib.const ''
-        substituteInPlace setup.py \
-          --replace-fail 'JPEG2K_ROOT = None' 'JPEG2K_ROOT = "${final.openjpeg.out}/lib", "${lib.getDev final.openjpeg}/include"'
-      '';
-    }
-  )
-  pyprev.pillow
+}:
+helpers.libTweaks (
+  helpers.linkInputs (helpers.dropInputsByNameInfix ["libavif" "libimagequant" "libxcb"])
+  // {
+    # Replaces upstream's preConfigure, keeping only the openjpeg root
+    preConfigure = _: ''
+      substituteInPlace setup.py \
+        --replace-fail 'JPEG2K_ROOT = None' 'JPEG2K_ROOT = "${final.openjpeg.out}/lib", "${lib.getDev final.openjpeg}/include"'
+    '';
+  }
+)
+pyprev.pillow
