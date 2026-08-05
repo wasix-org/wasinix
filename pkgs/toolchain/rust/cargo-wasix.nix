@@ -17,14 +17,12 @@
 }: let
   env = import ../env.nix {inherit lib;};
 
-  # Untagged rev: the overlay-registry switch, the wasixcc CC/EH auto-config and
-  # the binaryen 130 bump all landed after v0.1.29, and upstream has cut no tag
-  # for 0.1.30/0.1.31.
-  version = "0.1.31";
+  version = "0.1.32";
+
   src = fetchFromGitHub {
     owner = "wasix-org";
     repo = "cargo-wasix";
-    rev = "89980447bc9b6c001f5631c1598780d3dcb6f17d";
+    tag = "v${version}";
     hash = "sha256-0spEK/HmE7qdglHBMxhzUc/O/otKu5imPsEta1y39v4=";
   };
 
@@ -33,15 +31,11 @@
     inherit version src;
     cargoHash = "sha256-mOPo9sNAOflMY2hHpKpzUlKMFXYr0O8r/7QGtOoDtUU=";
 
-    doCheck = false;
-
-    # TODO: Is this necessary?
-    installPhase = ''
-      runHook preInstall
-      mkdir -p "$out/bin"
-      cp "$(find target -type f -path '*/release/cargo-wasix' | head -n 1)" "$out/bin/cargo-wasix"
-      runHook postInstall
-    '';
+    # The integration suite creates empty CARGO_HOMEs then invokes cargo-wasix,
+    # which downloads the WASIX target. Its download_toolchain unit test also
+    # contacts GitHub. Keep the remaining offline library unit tests.
+    cargoTestFlags = ["--lib"];
+    checkFlags = ["--skip" "toolchain::tests::test_download_toolchain"];
   };
 
   # cargo-wasix resolves its toolchain through rustup; before exec, (re-)link
@@ -93,10 +87,6 @@ in
         command = nix-update-script {extraArgs = ["--flake"];};
         attrPath = "toolchain.cargo-wasix.unwrapped";
       };
-
-      wasix.updateNotes = [
-        {message = "cargo-wasix is pinned to an untagged rev; go back to `tag = \"v\${version}\"` once upstream tags 0.1.31 or later";}
-      ];
     };
 
     meta = {
