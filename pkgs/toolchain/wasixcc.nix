@@ -14,26 +14,19 @@
 }: let
   env = import ./env.nix {inherit lib;};
 
-  version = "0.4.4";
+  version = "0.4.5";
   src = fetchFromGitHub {
     owner = "wasix-org";
     repo = "wasixcc";
     tag = "v${version}";
-    hash = "sha256-8ifkYmPoKLlTeZHww+wMyFRYWkK3hOKx3vOlEP+4bYo=";
+    hash = "sha256-dCBNXceJO9Wx91o7+g/iVzHiCeanC71NPk0PUsf4xN0=";
   };
 
   wasixccUnwrapped = rustPlatform.buildRustPackage {
     pname = "wasixcc-unwrapped";
     inherit version src;
 
-    # Upstream's lock + .cargo/config.toml resolve through the WASIX overlay
-    # registry (+wasix.N versions 403 on crates.io, and the in-source config
-    # outranks the vendored source replacement); this host build needs neither.
-    cargoLock.lockFile = ./wasixcc.Cargo.lock;
-    postPatch = ''
-      cp ${./wasixcc.Cargo.lock} Cargo.lock
-      rm .cargo/config.toml
-    '';
+    cargoHash = "sha256-6f0LnlsAKK/VywTFfjPIMBmG+Ht1q2ItRSvmKkd8qpU=";
 
     # A shared module gets no C++ runtime injected (that block is executable-only),
     # so a build system passing the GNU name -lstdc++ fails to link. -fopenmp is a
@@ -83,9 +76,6 @@ in
         command = nix-update-script {extraArgs = ["--flake"];};
         attrPath = "toolchain.wasixcc.unwrapped";
       };
-      wasix.updateNotes = [
-        {message = "regenerate wasixcc.Cargo.lock: delete upstream's Cargo.lock and .cargo/config.toml, then `cargo generate-lockfile`; drop the override once upstream keeps the WASIX registry out of the default build";}
-      ];
     };
 
     meta = {
