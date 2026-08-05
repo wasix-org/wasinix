@@ -20,7 +20,7 @@
   # Untagged rev: the overlay-registry switch, the wasixcc CC/EH auto-config and
   # the binaryen 130 bump all landed after v0.1.29, and upstream has cut no tag
   # for 0.1.30/0.1.31.
-  version = "0.1.31";
+  version = "0.1.29";
   src = fetchFromGitHub {
     owner = "wasix-org";
     repo = "cargo-wasix";
