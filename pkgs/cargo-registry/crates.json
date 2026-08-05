@@ -75,6 +75,11 @@
     "0.13.3": "sha256-A6Y3fMbG80Il5FgUsGkGVLOuWLwGmvt7wBYqJq0UUB4=",
     "0.13.4": "sha256-rEmkWmZVlVEOEX+ID7xdlvrcgi37el15PvvtoUkh7Cc="
   },
+  "reqwest-middleware": {
+    "0.5.0": "sha256-ozADVtCwrJYfEDCRh+wAdYMJk/uyzu9x6CoYtykIq0s=",
+    "0.5.1": "sha256-+b11J8pFqBiiGnAW1cDeZCfZnuAwyyTQiiJCZPAFp04=",
+    "0.5.2": "sha256-TXj/qV6W6JFYAzMYsC/QmVkPqakOGHKl8kY558LFKL8="
+  },
   "rustls-native-certs": {
     "0.8.2": "sha256-tHDRFlG6Jpp3BLrtIQmftZWZdiScn3UG7nrB0X13cIg=",
     "0.8.3": "sha256-GQCYlb1J/3SsZPwqIrtxQiDItHEBiSCunxVRXMIgbhs=",
