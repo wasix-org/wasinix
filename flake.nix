@@ -128,6 +128,7 @@
           # These carry their test suites as passthru.tests.
           inherit (wasix.toolchainTestPkgs) sysroot wasixcc;
 
+          anybuild = toolchain.anybuild;
           cargo-wasix = toolchain.cargoWasix;
           rust-toolchain = toolchain.wasixRustToolchain;
           libc = toolchain.libc;
@@ -398,6 +399,7 @@
 
     packages.${system} = {
       # the webc packages and the merged registry live under legacyPackages
+      anybuild = toolchain.anybuild;
       wasixcc = toolchain.wasixcc;
       cargo-wasix = toolchain.cargoWasix;
       wasix-rust-toolchain = toolchain.wasixRustToolchain;

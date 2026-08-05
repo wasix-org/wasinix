@@ -182,7 +182,7 @@ patch tree, so the two can't drift:
 
 ## Flake outputs
 
-- `packages.<system>`: `wasixcc` (default), `cargo-wasix`,
+- `packages.<system>`: `wasixcc` (default), `cargo-wasix`, `anybuild`,
   `wasix-rust-toolchain`, `wasmer-bin`, `wasix-{libc,llvm,compiler-rt,libcxx,sysroot}`.
 - `checks.<system>`: every `passthru.tests`: behavioural suites, toolchain
   suites (`sysroot`, `wasixcc`, `rust`), wheel imports (`wheel-<attr>`),

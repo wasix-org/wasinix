@@ -41,6 +41,7 @@
     wasixSysrootEhpic = variants.ehpic.sysroot;
   };
   binaryen = pkgs.binaryen;
+  anybuild = pkgs.callPackage ./anybuild.nix {};
   wasixcc = pkgs.callPackage ./wasixcc.nix {
     inherit wasixLlvm binaryen wasixSysroot;
   };
@@ -50,7 +51,7 @@
 in {
   # The wasix rustPlatform is assembled in pkgs/default.nix, where the pkgsCross
   # it needs is in scope.
-  inherit wasixLlvm wasixSysroot wasixRustToolchain binaryen wasixcc cargoWasix;
+  inherit anybuild wasixLlvm wasixSysroot wasixRustToolchain binaryen wasixcc cargoWasix;
   inherit llvm variants sysroot tests libc compiler-rt libcxx flang flangCross;
   # Internal inputs for pkgs/default.nix and the overlay. Profile-sensitive
   # outputs are public through toolchainByProfile, never as implicit defaults.
