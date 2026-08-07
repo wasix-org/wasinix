@@ -19,6 +19,29 @@ helpers.libTweaks {
       {message = "recheck or drop wasix.patch; it supplies missing WASI cfg branches for paths and signal-free shutdown";}
     ];
   };
+  # Preserve the command identity published by wasix-org/static-web-server.
+  # Edge deployments and SDK consumers address its atom explicitly as
+  # `wasmer/static-web-server:webserver`, so changing it would break existing
+  # package references even though the upstream binary has a different name.
+  passthru.wasmer = {
+    entrypoint = "webserver";
+    commands = [
+      {
+        name = "webserver";
+        module = "webserver";
+        wasm = "static-web-server.wasm";
+        output = "webserver.wasm";
+      }
+      # Also expose the upstream binary name for new consumers. Both commands
+      # use the legacy module and atom, and therefore share one module in webc.
+      {
+        name = "static-web-server";
+        module = "webserver";
+        wasm = "static-web-server.wasm";
+        output = "webserver.wasm";
+      }
+    ];
+  };
 } (prev.static-web-server.overrideAttrs (_: {
   # This wraps an existing buildRustPackage result, so set the hook variables
   # produced by buildRustPackage rather than its already-consumed arguments.
