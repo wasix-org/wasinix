@@ -8,6 +8,7 @@
 helpers.libTweaks {
   passthru.wasix.shipped = true;
   passthru.wasmer = {
+    entrypoint = "anybuild";
     dependencies = [preferredProfilePackages.bash];
     dependencyVersions."wasmer/bash" = "*";
     commandEnv = {
