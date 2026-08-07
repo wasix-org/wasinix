@@ -13,12 +13,7 @@ helpers.libTweaks {
     substituteInPlace Cargo.toml \
       --replace-fail 'shadow-rs = "1.4.0"' 'shadow-rs = { version = "1.4.0", default-features = false, features = ["build"] }'
   '';
-  passthru.wasix = {
-    shipped = true;
-    updateNotes = [
-      {message = "recheck or drop wasix.patch; it supplies missing WASI cfg branches for paths and signal-free shutdown";}
-    ];
-  };
+  passthru.wasix.shipped = true;
   # Preserve the command identity published by wasix-org/static-web-server.
   # Edge deployments and SDK consumers address its atom explicitly as
   # `wasmer/static-web-server:webserver`, so changing it would break existing
