@@ -6,8 +6,10 @@
 # the pins being edited are in the working tree.
 
 import json
+import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from urllib import request
 
@@ -69,6 +71,36 @@ def prefetch_github(owner, repo, rev):
     url = f"https://github.com/{owner}/{repo}/archive/{rev}.tar.gz"
     out = run(["nix", "store", "prefetch-file", "--json", "--unpack", url])
     return json.loads(out.stdout)["hash"]
+
+
+def nix_build_hash(attr, *, log_prefix="wasinix-hash-"):
+    """Build a flake FOD using its fake hash and return Nix's reported hash."""
+    with tempfile.NamedTemporaryFile(
+        mode="w", prefix=log_prefix, suffix=".log", delete=False
+    ) as log:
+        log_path = Path(log.name)
+        cmd = ["nix", "build", "--no-link", f".#{attr}"]
+        print(f"  $ {' '.join(cmd)} 2>&1 | tee {log_path}", file=sys.stderr)
+        proc = subprocess.Popen(
+            cmd,
+            cwd=REPO,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        output = []
+        for line in proc.stdout:
+            sys.stderr.write(line)
+            log.write(line)
+            output.append(line)
+        returncode = proc.wait()
+
+    got = re.search(r"\bgot:\s+(sha256-[A-Za-z0-9+/=]+)", "".join(output))
+    if returncode == 0 or not got:
+        raise RuntimeError(
+            f"fixed-output build did not report a hash mismatch; log: {log_path}"
+        )
+    return got.group(1)
 
 
 def run_nix_update(argv):

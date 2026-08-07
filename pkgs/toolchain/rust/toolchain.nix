@@ -96,7 +96,6 @@
       cp ${src}/library/Cargo.toml work/library/Cargo.toml
       cp ${src}/library/std/Cargo.toml work/library/std/Cargo.toml
       chmod -R +w work/library
-      ( cd work && patch -p1 < ${./libc-patch-crates-io.patch} )
       python3 ${./merge-cargo-locks.py} "$out/Cargo.lock" \
         ${src}/Cargo.lock \
         work/library/Cargo.lock \
@@ -107,7 +106,7 @@
   cargoVendorDir = rustPlatform.fetchCargoVendor {
     name = "wasix-rust-toolchain-${version}-vendor";
     src = mergedCargoLock;
-    hash = "sha256-Cl/JQWb/fUGW+PjOSeY8GZmr6KYLyetzeXqvzQJDVe8=";
+    hash = "sha256-OQVUl9p5sT7nLgmxHqOspqUtKId50L3sJ1t0Je7gq58=";
   };
 
   # rust bootstrap's cc_detect.rs looks for a `-wasi` target's C compiler at
@@ -131,12 +130,6 @@ in
   stdenv.mkDerivation {
     pname = "wasix-rust-toolchain";
     inherit version src;
-
-    # std -> the WASIX libc fork: single-sources library/Cargo.lock's libc so
-    # name+version-keyed vendoring can split it (WASIX-TODO.md, Rust section).
-    # Pending upstream as #19; mergedCargoLock applies the same patch so its
-    # vendored lock matches. Recheck on the next tag bump.
-    patches = [./libc-patch-crates-io.patch];
 
     nativeBuildInputs = [
       python3
@@ -281,14 +274,13 @@ in
       # marks them unsupported in the profiles rust can't target (off/exnref*).
       supportedProfiles = ["eh"] ++ optionals withDynamicLinking ["ehpic"];
 
-      # bumps, then re-derives the stage0 bootstrap pin from the new tag's
-      # src/stage0 (the nix-update command is passed through as its argv)
-      updateScript = ["pkgs/toolchain/rust/update.py"] ++ nix-update-script {extraArgs = ["--flake"];};
+      # The updater builds this FOD alone with a fake hash to obtain the hash
+      # for the new tag without scheduling the full toolchain.
+      inherit cargoVendorDir;
 
-      wasix.updateNotes = [
-        {message = "libc-patch-crates-io.patch is vendored pending upstream; drop it once the tag includes the fix";}
-        {message = "re-hash cargoVendorDir (fetchCargoVendor): nix-update bumps the tag but not the vendor hash; set it to lib.fakeHash and rebuild to get the new value";}
-      ];
+      # Bumps, then re-derives the stage0 bootstrap pin and cargo vendor hash
+      # from the new tag (the nix-update command is passed through as its argv).
+      updateScript = ["pkgs/toolchain/rust/update.py"] ++ nix-update-script {extraArgs = ["--flake"];};
     };
 
     meta = with lib; {

@@ -9,10 +9,11 @@ nix run .#scripts.update -- --only llvm wasix-libc
 How a pin bumps is declared next to it (`passthru.updateScript`, the standard
 nixpkgs convention); its constraints and quirks are comments in the same file.
 That includes a pin _derived_ from another pin: the rust fork's stage0
-bootstrap and wasix-libc's witx submodules are re-derived by
-`pkgs/toolchain/rust/update.py` and `pkgs/toolchain/sysroot/update.py`, which
-the package's `updateScript` runs after its own bump (the `nix-update-script`
-command is passed through as their argv, so the bump is declared once).
+bootstrap and cargo vendor hash, and wasix-libc's witx submodules are
+re-derived by `pkgs/toolchain/rust/update.py` and
+`pkgs/toolchain/sysroot/update.py`, which the package's `updateScript` runs
+after its own bump (the `nix-update-script` command is passed through as their
+argv, so the bump is declared once).
 
 `scripts/update.py` is only the driver: flake-input targets, per-target
 isolation, the repo-wide steps a bump implies, and the summary. Those are
