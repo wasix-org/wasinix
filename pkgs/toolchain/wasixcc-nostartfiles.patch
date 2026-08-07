@@ -1,0 +1,83 @@
+diff --git a/src/compiler.rs b/src/compiler.rs
+index 00b8894..245934a 100644
+--- a/src/compiler.rs
++++ b/src/compiler.rs
+@@ -482,6 +482,11 @@ fn build_link_args(
+         .link_args
+         .iter()
+         .any(|token| matches!(token, LinkToken::Flag(flag) if flag == "-nodefaultlibs"));
++    let no_start_files = state
++        .args
++        .link_args
++        .iter()
++        .any(|token| matches!(token, LinkToken::Flag(flag) if flag == "-nostartfiles"));
+     let mut args: Vec<OsString> = Vec::new();
+ 
+     let mut push = |arg: &str| args.push(OsString::from(arg));
+@@ -633,6 +638,7 @@ fn build_link_args(
+     for token in &state.args.link_args {
+         match token {
+             LinkToken::Flag(flag) if flag == "-nodefaultlibs" => {}
++            LinkToken::Flag(flag) if flag == "-nostartfiles" => {}
+             // -lstdc++/-lsupc++ name the GNU C++ runtime; the sysroot ships
+             // libc++, so translate instead of letting wasm-ld fail on a library
+             // that cannot exist here. Build systems hardcode the GNU name when
+@@ -649,10 +655,12 @@ fn build_link_args(
+         }
+     }
+ 
+-    if module_kind.is_executable() {
+-        args.push(sysroot_lib_wasm32_path.join("crt1.o").into_os_string());
+-    } else {
+-        args.push(sysroot_lib_wasm32_path.join("scrt1.o").into_os_string());
++    if !no_start_files {
++        if module_kind.is_executable() {
++            args.push(sysroot_lib_wasm32_path.join("crt1.o").into_os_string());
++        } else {
++            args.push(sysroot_lib_wasm32_path.join("scrt1.o").into_os_string());
++        }
+     }
+ 
+     args.push(OsString::from("-o"));
+@@ -1322,6 +1330,27 @@ mod tests {
+         assert!(!args.iter().any(|arg| arg == "-lwasi-emulated-getpid"));
+     }
+ 
++    #[test]
++    fn test_nostartfiles_suppresses_injected_crt() {
++        let state = link_args_state(
++            ModuleKind::DynamicMain,
++            vec![
++                LinkToken::Flag("-nostartfiles".to_string()),
++                LinkToken::Input(PathBuf::from("crt1-command.o")),
++            ],
++        );
++        let args = rendered_link_args(&state);
++
++        assert!(!args.iter().any(|arg| arg == "-nostartfiles"));
++        assert!(args.iter().any(|arg| arg == "crt1-command.o"));
++        assert!(
++            !args
++                .iter()
++                .any(|arg| arg == "/sysroot/lib/wasm32-wasi/crt1.o"),
++            "wasixcc must not add its crt when the caller supplied one: {args:?}"
++        );
++    }
++
+     #[test]
+     fn test_user_whole_archive_bracket_contiguous_in_link_args() {
+         // A user --whole-archive <archive> --no-whole-archive must reach wasm-ld
+diff --git a/src/compiler/flags.rs b/src/compiler/flags.rs
+index 8dbcc6e..7cece26 100644
+--- a/src/compiler/flags.rs
++++ b/src/compiler/flags.rs
+@@ -289,6 +289,9 @@ fn process_compiler_flags<'a>(
+             Flag::Simple("-nodefaultlibs") => {
+                 raw_link_tokens.push("-nodefaultlibs".to_owned());
+             }
++            Flag::Simple("-nostartfiles") => {
++                raw_link_tokens.push("-nostartfiles".to_owned());
++            }
+             Flag::Simple(flag) | Flag::WithValue(flag, _, _)
+                 if CLANG_FLAGS_TO_FORWARD_TO_WASM_LD.contains(flag) =>
+             {

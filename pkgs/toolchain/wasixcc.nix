@@ -38,6 +38,9 @@
       # Relocatable links must bypass executable setup. Meson prelinking exposed
       # the driver's attempt to add crt and resolve main for `-r`.
       ./wasixcc-relocatable-link-passthrough.patch
+      ./wasixcc-rlib-linker-input.patch
+      ./wasixcc-nodefaultlibs.patch
+      ./wasixcc-nostartfiles.patch
     ];
 
     doCheck = true;
@@ -81,6 +84,10 @@ in
       };
       wasix.updateNotes = [
         {message = "check whether wasixcc-relocatable-link-passthrough.patch landed upstream";}
+        {message = "regenerate wasixcc.Cargo.lock: delete upstream's Cargo.lock and .cargo/config.toml, then `cargo generate-lockfile`; drop the override once upstream keeps the WASIX registry out of the default build";}
+        {message = "drop wasixcc-rlib-linker-input.patch once wasixcc recognizes Rust .rlib archives as linker inputs";}
+        {message = "drop wasixcc-nodefaultlibs.patch once wasixcc honors -nodefaultlibs without forwarding it to wasm-ld";}
+        {message = "drop wasixcc-nostartfiles.patch once wasixcc honors -nostartfiles without forwarding it to wasm-ld";}
       ];
     };
 
