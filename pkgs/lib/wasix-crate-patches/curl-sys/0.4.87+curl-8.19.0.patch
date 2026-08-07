@@ -1,0 +1,29 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index b2d2244..96baaac 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -82 +82 @@ version = "0.3.3"
+-[target."cfg(all(unix))".dependencies.openssl-sys]
++[target.'cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))'.dependencies.openssl-sys]
+diff --git a/lib.rs b/lib.rs
+index 605e93d..394e25b 100644
+--- a/lib.rs
++++ b/lib.rs
+@@ -17,6 +17,8 @@
+ #[cfg(unix)]
+ pub use libc::fd_set;
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++pub enum fd_set {}
+ #[cfg(windows)]
+ pub use windows_sys::Win32::Networking::WinSock::FD_SET as fd_set;
+ #[cfg(windows)]
+ use windows_sys::Win32::Networking::WinSock::SOCKADDR;
+@@ -39,4 +41,4 @@ pub enum CURL {}
+-#[cfg(unix)]
++#[cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))]
+ pub type curl_socket_t = libc::c_int;
+-#[cfg(unix)]
++#[cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))]
+ pub const CURL_SOCKET_BAD: curl_socket_t = -1;
+ #[cfg(all(windows, target_pointer_width = "32"))]
+ pub type curl_socket_t = libc::c_uint;

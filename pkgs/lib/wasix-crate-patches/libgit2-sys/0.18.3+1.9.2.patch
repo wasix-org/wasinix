@@ -1,0 +1,34 @@
+diff --git a/build.rs b/build.rs
+index f4f045d..ce646c2 100644
+--- a/build.rs
++++ b/build.rs
+@@ -153,1 +153,9 @@ fn build_libgit2(target: &str, windows: bool) {
++    if target.contains("wasmer") && target.contains("wasi") {
++        cfg.define("_POSIX_THREADS", Some("200809L"));
++        cfg.define("_WASI_EMULATED_MMAN", None);
++        cfg.define("_WASI_EMULATED_PROCESS_CLOCKS", None);
++        println!("cargo:rustc-link-lib=wasi-emulated-mman");
++        println!("cargo:rustc-link-lib=wasi-emulated-process-clocks");
++    }
++
+     let mut features = String::new();
+diff --git a/libgit2/deps/llhttp/api.c b/libgit2/deps/llhttp/api.c
+index 90f5d22..fa7f11c 100644
+--- a/libgit2/deps/llhttp/api.c
++++ b/libgit2/deps/llhttp/api.c
+@@ -42,1 +42,1 @@
+-#if defined(__wasm__)
++#if defined(__wasm__) && !defined(__wasi__)
+diff --git a/libgit2/src/util/unix/process.c b/libgit2/src/util/unix/process.c
+index 7b1cd45..083afc2 100644
+--- a/libgit2/src/util/unix/process.c
++++ b/libgit2/src/util/unix/process.c
+@@ -374,1 +374,7 @@
+-	switch (pid = fork()) {
++#ifdef __wasi__
++	pid = -1;
++	errno = ENOSYS;
++#else
++	pid = fork();
++#endif
++	switch (pid) {

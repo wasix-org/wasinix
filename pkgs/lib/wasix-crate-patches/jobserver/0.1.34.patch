@@ -1,0 +1,29 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index a66374f..31fc937 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -382,7 +382,10 @@ impl Client {
+     /// On platforms other than Unix and Windows this panics.
+     pub fn configure(&self, cmd: &mut Command) {
++        #[cfg(not(all(target_family = "wasm", not(target_os = "emscripten"))))]
++        {
+         cmd.env("CARGO_MAKEFLAGS", &self.mflags_env());
+         self.inner.configure(cmd);
++        }
+     }
+ 
+     /// Configures a child process to have access to this client's jobserver as
+@@ -405,10 +408,13 @@ impl Client {
+     /// On platforms other than Unix and Windows this panics.
+     pub fn configure_make(&self, cmd: &mut Command) {
++        #[cfg(not(all(target_family = "wasm", not(target_os = "emscripten"))))]
++        {
+         let value = self.mflags_env();
+         cmd.env("CARGO_MAKEFLAGS", &value);
+         cmd.env("MAKEFLAGS", &value);
+         cmd.env("MFLAGS", &value);
+         self.inner.configure(cmd);
++        }
+     }
+ 
+     fn mflags_env(&self) -> String {

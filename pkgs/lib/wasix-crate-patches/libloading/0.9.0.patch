@@ -1,0 +1,174 @@
+diff --git a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -78 +78 @@ version = "1.1"
+-[target."cfg(unix)".dependencies.cfg-if]
++[target."cfg(any(unix, target_family = \"wasm\"))".dependencies.cfg-if]
+ version = "1"
+diff --git a/src/as_filename.rs b/src/as_filename.rs
+--- a/src/as_filename.rs
++++ b/src/as_filename.rs
+@@ -12 +12 @@ pub(crate) trait Sealed {
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_family = "wasm"))]
+@@ -42 +42 @@ impl Sealed for &str {
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_family = "wasm"))]
+@@ -66 +66 @@ impl Sealed for &String {
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_family = "wasm"))]
+@@ -85 +85 @@ impl Sealed for String {
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_family = "wasm"))]
+@@ -104,2 +104,6 @@ mod std {
+     use std::ffi::{OsStr, OsString};
++    #[cfg(unix)]
++    use std::os::unix::ffi::OsStrExt;
++    #[cfg(target_family = "wasm")]
++    use std::os::wasi::ffi::OsStrExt;
+ 
+@@ -123 +127 @@ mod std {
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_family = "wasm"))]
+@@ -128 +132 @@ mod std {
+-            let bytes = std::os::unix::ffi::OsStrExt::as_bytes(self);
++            let bytes = self.as_bytes();
+@@ -148 +152 @@ mod std {
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_family = "wasm"))]
+@@ -171 +175 @@ mod std {
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_family = "wasm"))]
+@@ -176,7 +180 @@ mod std {
+-            let mut bytes = std::os::unix::ffi::OsStringExt::into_vec(self);
+-            if crate::util::check_null_bytes(&bytes)? {
+-                function(bytes.as_ptr().cast())
+-            } else {
+-                bytes.push(0);
+-                function(bytes.as_ptr().cast())
+-            }
++            self.as_os_str().posix_filename(function)
+@@ -196 +193 @@ mod std {
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_family = "wasm"))]
+@@ -215 +212 @@ mod std {
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_family = "wasm"))]
+@@ -234 +231 @@ mod std {
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_family = "wasm"))]
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -39 +39 @@
+-    any(unix, windows),
++    any(unix, windows, target_family = "wasm"),
+@@ -59 +59 @@ pub mod os;
+-#[cfg(any(unix, windows, libloading_docs))]
++#[cfg(any(unix, windows, target_family = "wasm", libloading_docs))]
+@@ -65 +65 @@ pub use self::error::Error;
+-#[cfg(any(unix, windows, libloading_docs))]
++#[cfg(any(unix, windows, target_family = "wasm", libloading_docs))]
+diff --git a/src/os/mod.rs b/src/os/mod.rs
+--- a/src/os/mod.rs
++++ b/src/os/mod.rs
+@@ -20 +20 @@
+-#[cfg(any(unix, libloading_docs))]
++#[cfg(any(unix, target_family = "wasm", libloading_docs))]
+diff --git a/src/os/unix/mod.rs b/src/os/unix/mod.rs
+--- a/src/os/unix/mod.rs
++++ b/src/os/unix/mod.rs
+@@ -481,24 +481,60 @@ impl<T> fmt::Debug for Symbol<T> {
+ // Platform specific things
+ #[cfg_attr(any(target_os = "linux", target_os = "android"), link(name = "dl"))]
+ #[cfg_attr(any(target_os = "freebsd", target_os = "dragonfly"), link(name = "c"))]
++#[cfg(not(all(target_os = "wasi", target_vendor = "wasmer", not(target_env = "dl"))))]
+ extern "C" {
+     fn dlopen(
+         filename: *const core::ffi::c_char,
+         flags: core::ffi::c_int,
+     ) -> *mut core::ffi::c_void;
+     fn dlclose(handle: *mut core::ffi::c_void) -> core::ffi::c_int;
+     fn dlsym(
+         handle: *mut core::ffi::c_void,
+         symbol: *const core::ffi::c_char,
+     ) -> *mut core::ffi::c_void;
+     fn dlerror() -> *mut core::ffi::c_char;
+     fn dladdr(addr: *mut core::ffi::c_void, info: *mut DlInfo) -> core::ffi::c_int;
+ }
+ 
+ #[repr(C)]
+ struct DlInfo {
+     dli_fname: *const core::ffi::c_char,
+     dli_fbase: *mut core::ffi::c_void,
+     dli_sname: *const core::ffi::c_char,
+     dli_saddr: *mut core::ffi::c_void,
+ }
++
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer", not(target_env = "dl")))]
++fn dl_unavailable() -> *mut core::ffi::c_char {
++    b"dynamic loading is unavailable for static WASIX modules\0"
++        .as_ptr()
++        .cast::<core::ffi::c_char>()
++        .cast_mut()
++}
++
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer", not(target_env = "dl")))]
++unsafe fn dlopen(
++    _filename: *const core::ffi::c_char,
++    _flags: core::ffi::c_int,
++) -> *mut core::ffi::c_void {
++    ptr::null_mut()
++}
++
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer", not(target_env = "dl")))]
++unsafe fn dlclose(_handle: *mut core::ffi::c_void) -> core::ffi::c_int {
++    -1
++}
++
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer", not(target_env = "dl")))]
++unsafe fn dlsym(
++    _handle: *mut core::ffi::c_void,
++    _symbol: *const core::ffi::c_char,
++) -> *mut core::ffi::c_void {
++    ptr::null_mut()
++}
++
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer", not(target_env = "dl")))]
++unsafe fn dlerror() -> *mut core::ffi::c_char { dl_unavailable() }
++
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer", not(target_env = "dl")))]
++unsafe fn dladdr(_addr: *mut core::ffi::c_void, _info: *mut DlInfo) -> core::ffi::c_int { 0 }
+diff --git a/src/os/unix/consts.rs b/src/os/unix/consts.rs
+--- a/src/os/unix/consts.rs
++++ b/src/os/unix/consts.rs
+@@ -60,2 +60,4 @@ mod posix {
+-        if #[cfg(target_os = "haiku")] {
++        if #[cfg(target_os = "wasi")] {
++            pub(super) const RTLD_LAZY: c_int = 1;
++        } else if #[cfg(target_os = "haiku")] {
+             pub(super) const RTLD_LAZY: c_int = 0;
+@@ -101,2 +103,4 @@ mod posix {
+-        if #[cfg(target_os = "haiku")] {
++        if #[cfg(target_os = "wasi")] {
++            pub(super) const RTLD_NOW: c_int = 2;
++        } else if #[cfg(target_os = "haiku")] {
+             pub(super) const RTLD_NOW: c_int = 1;
+@@ -143,2 +147,4 @@ mod posix {
+-        if #[cfg(any(
++        if #[cfg(target_os = "wasi")] {
++            pub(super) const RTLD_GLOBAL: c_int = 4;
++        } else if #[cfg(any(
+             target_os = "haiku",
+@@ -194,2 +200,4 @@ mod posix {
+-        if #[cfg(any(
++        if #[cfg(target_os = "wasi")] {
++            pub(super) const RTLD_LOCAL: c_int = 0;
++        } else if #[cfg(any(
+            target_os = "netbsd",
+diff --git a/src/safe.rs b/src/safe.rs
+--- a/src/safe.rs
++++ b/src/safe.rs
+@@ -3 +3 @@ use super::os::unix as imp; // the implementation used here doesn't matter particularly much...
+-#[cfg(all(not(libloading_docs), unix))]
++#[cfg(all(not(libloading_docs), any(unix, target_family = "wasm")))]

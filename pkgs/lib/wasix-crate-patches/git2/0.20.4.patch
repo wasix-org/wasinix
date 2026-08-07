@@ -1,0 +1,24 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index a7aef55..5e6a40b 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -66,0 +67 @@
++#![cfg_attr(all(target_os = "wasi", target_vendor = "wasmer"), feature(wasi_ext))]
+diff --git a/src/util.rs b/src/util.rs
+index c47f86e..940586a 100644
+--- a/src/util.rs
++++ b/src/util.rs
+@@ -89,0 +90,5 @@ pub fn bytes2path(b: &[u8]) -> &Path {
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++pub fn bytes2path(b: &[u8]) -> &Path {
++    use std::os::wasi::prelude::*;
++    Path::new(OsStr::from_bytes(b))
++}
+@@ -155,0 +161,7 @@ impl IntoCString for OsString {
++    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++    fn into_c_string(self) -> Result<CString, Error> {
++        use std::os::wasi::prelude::*;
++        let s: &OsStr = self.as_ref();
++        Ok(CString::new(s.as_bytes())?)
++    }
++

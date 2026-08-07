@@ -1,0 +1,25 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index bdcc6f5..02764d1 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -410,6 +410,8 @@ impl Build {
+             "wasm32-unknown-emscripten" => "gcc",
+             "wasm32-unknown-unknown" => "gcc",
+             "wasm32-wasi" => "gcc",
++            "wasm32-wasmer-wasi" => "gcc",
++            "wasm32-wasmer-wasi-dl" => "gcc",
+             "aarch64-apple-ios" => "ios64-cross",
+             "x86_64-apple-ios" => "iossimulator-xcrun",
+             "aarch64-apple-ios-sim" => "iossimulator-xcrun",
+@@ -429,0 +431,3 @@ impl Build {
++        if target.contains("wasi") {
++            configure.arg("no-secure-memory");
++        }
+@@ -776,6 +777,6 @@ impl Artifacts {
+             println!("cargo:rustc-link-lib=crypt32");
+             println!("cargo:rustc-link-lib=advapi32");
+-        } else if self.target == "wasm32-wasi" {
++        } else if self.target.contains("wasi") {
+             println!("cargo:rustc-link-lib=wasi-emulated-signal");
+             println!("cargo:rustc-link-lib=wasi-emulated-process-clocks");
+             println!("cargo:rustc-link-lib=wasi-emulated-mman");

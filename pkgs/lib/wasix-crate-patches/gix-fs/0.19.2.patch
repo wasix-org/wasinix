@@ -1,0 +1,39 @@
+diff --git a/src/capabilities.rs b/src/capabilities.rs
+index 1db240b..53f5436 100644
+--- a/src/capabilities.rs
++++ b/src/capabilities.rs
+@@ -41,0 +42,12 @@
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++impl Default for Capabilities {
++    fn default() -> Self {
++        Capabilities {
++            precompose_unicode: false,
++            ignore_case: false,
++            executable_bit: false,
++            symlink: true,
++        }
++    }
++}
++
+diff --git a/src/lib.rs b/src/lib.rs
+index 2917b1f..7a97f5c 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,0 +2 @@
++#![cfg_attr(all(target_os = "wasi", target_vendor = "wasmer"), feature(wasi_ext))]
+diff --git a/src/symlink.rs b/src/symlink.rs
+index 0b53d24..057a46e 100644
+--- a/src/symlink.rs
++++ b/src/symlink.rs
+@@ -6 +6,4 @@
+-#[cfg(not(windows))]
++#[cfg(all(
++    not(windows),
++    not(all(target_os = "wasi", target_vendor = "wasmer"))
++))]
+@@ -10,0 +14,5 @@
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++pub fn create(original: &Path, link: &Path) -> io::Result<()> {
++    std::os::wasi::fs::symlink_path(original, link)
++}
++

@@ -1,0 +1,7 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 08b6d6c..735a0e3 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -148 +148 @@ features = ["sha256"]
+-[target.'cfg(not(target_arch = "wasm32"))'.dependencies.gix-tempfile]
++[target.'cfg(any(not(target_arch = "wasm32"), target_vendor = "wasmer"))'.dependencies.gix-tempfile]

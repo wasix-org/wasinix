@@ -1,0 +1,27 @@
+diff --git a/src/wasm.rs b/src/wasm.rs
+index 6e38dc6..ec68eef 100644
+--- a/src/wasm.rs
++++ b/src/wasm.rs
+@@ -19,16 +19,16 @@ pub fn set_file_atime(_p: &Path, _atime: FileTime) -> io::Result<()> {
+     Err(io::Error::new(io::ErrorKind::Other, "Wasm not implemented"))
+ }
+ 
+-pub fn from_last_modification_time(_meta: &fs::Metadata) -> FileTime {
+-    unimplemented!()
++pub fn from_last_modification_time(meta: &fs::Metadata) -> FileTime {
++    meta.modified().map(FileTime::from_system_time).unwrap_or_else(|_| FileTime::zero())
+ }
+ 
+-pub fn from_last_access_time(_meta: &fs::Metadata) -> FileTime {
+-    unimplemented!()
++pub fn from_last_access_time(meta: &fs::Metadata) -> FileTime {
++    meta.accessed().map(FileTime::from_system_time).unwrap_or_else(|_| FileTime::zero())
+ }
+ 
+-pub fn from_creation_time(_meta: &fs::Metadata) -> Option<FileTime> {
+-    unimplemented!()
++pub fn from_creation_time(meta: &fs::Metadata) -> Option<FileTime> {
++    meta.created().ok().map(FileTime::from_system_time)
+ }
+ 
+ pub fn set_file_handle_times(

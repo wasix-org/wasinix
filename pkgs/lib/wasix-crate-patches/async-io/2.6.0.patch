@@ -1,0 +1,87 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index f080d46..6ffeb1a 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1519,25 +1519,27 @@ impl Async<TcpStream> {
+     /// # std::io::Result::Ok(()) });
+     /// ```
+     pub async fn connect<A: Into<SocketAddr>>(addr: A) -> io::Result<Async<TcpStream>> {
+-        // Figure out how to handle this address.
+         let addr = addr.into();
+-        let (domain, sock_addr) = match addr {
+-            SocketAddr::V4(v4) => (rn::AddressFamily::INET, v4.as_any()),
+-            SocketAddr::V6(v6) => (rn::AddressFamily::INET6, v6.as_any()),
+-        };
+-
+-        // Begin async connect.
+-        let socket = connect(sock_addr, domain, Some(rn::ipproto::TCP))?;
+-        // Use new_nonblocking because connect already sets socket to non-blocking mode.
+-        let stream = Async::new_nonblocking(TcpStream::from(socket))?;
+-
+-        // The stream becomes writable when connected.
+-        stream.writable().await?;
+-
+-        // Check if there was an error while connecting.
+-        match stream.get_ref().take_error()? {
+-            None => Ok(stream),
+-            Some(err) => Err(err),
++        cfg_if::cfg_if! {
++            if #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))] {
++                // rustix intentionally has no WASI socket module. WASIX std
++                // networking uses the same nonblocking-capable libc sockets.
++                Async::new(TcpStream::connect(addr)?)
++            } else {
++                let (domain, sock_addr) = match addr {
++                    SocketAddr::V4(v4) => (rn::AddressFamily::INET, v4.as_any()),
++                    SocketAddr::V6(v6) => (rn::AddressFamily::INET6, v6.as_any()),
++                };
++
++                let socket = connect(sock_addr, domain, Some(rn::ipproto::TCP))?;
++                let stream = Async::new_nonblocking(TcpStream::from(socket))?;
++                stream.writable().await?;
++
++                match stream.get_ref().take_error()? {
++                    None => Ok(stream),
++                    Some(err) => Err(err),
++                }
++            }
+         }
+     }
+
+@@ -2188,17 +2190,22 @@ fn setup_networking() {
+
+ #[inline]
+ fn set_nonblocking(
+-    #[cfg(unix)] fd: BorrowedFd<'_>,
++    #[cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))] fd: BorrowedFd<'_>,
+     #[cfg(windows)] fd: BorrowedSocket<'_>,
+ ) -> io::Result<()> {
+     cfg_if::cfg_if! {
++        if #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))] {
++            let raw = fd.as_raw_fd() as wasix::Fd;
++            let stat = unsafe { wasix::fd_fdstat_get(raw) }.map_err(wasix_io_err)?;
++            unsafe { wasix::fd_fdstat_set_flags(raw, stat.fs_flags | wasix::FDFLAGS_NONBLOCK) }
++                .map_err(wasix_io_err)?;
+         // ioctl(FIONBIO) sets the flag atomically, but we use this only on Linux
+         // for now, as with the standard library, because it seems to behave
+         // differently depending on the platform.
+         // https://github.com/rust-lang/rust/commit/efeb42be2837842d1beb47b51bb693c7474aba3d
+         // https://github.com/libuv/libuv/blob/e9d91fccfc3e5ff772d5da90e1c4a24061198ca0/src/unix/poll.c#L78-L80
+         // https://github.com/tokio-rs/mio/commit/0db49f6d5caf54b12176821363d154384357e70a
+-        if #[cfg(any(windows, target_os = "linux"))] {
++        } else if #[cfg(any(windows, target_os = "linux"))] {
+             rustix::io::ioctl_fionbio(fd, true)?;
+         } else {
+             let previous = rustix::fs::fcntl_getfl(fd)?;
+@@ -2212,6 +2219,11 @@ fn set_nonblocking(
+     Ok(())
+ }
+
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++fn wasix_io_err(errno: wasix::wasi::Errno) -> io::Error {
++    io::Error::from_raw_os_error(errno.raw().into())
++}
++
+ /// Converts a `Path` to its socket address representation.
+ ///
+ /// This function is abstract socket-aware.

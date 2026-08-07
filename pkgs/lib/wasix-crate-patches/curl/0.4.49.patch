@@ -1,0 +1,52 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 3b5f780..898e872 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -141 +141 @@ version = "2.0.3"
+-[target."cfg(all(unix))".dependencies.openssl-probe]
++[target.'cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))'.dependencies.openssl-probe]
+@@ -145 +145 @@ optional = true
+-[target."cfg(all(unix))".dependencies.openssl-sys]
++[target.'cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))'.dependencies.openssl-sys]
+diff --git a/src/easy/form.rs b/src/easy/form.rs
+index 7a78854..540dc16 100644
+--- a/src/easy/form.rs
++++ b/src/easy/form.rs
+@@ -339,0 +340,6 @@
++    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++    fn path2cstr(&mut self, p: &Path) -> Option<CString> {
++        use std::os::wasi::ffi::OsStrExt;
++        self.bytes2cstr(p.as_os_str().as_bytes())
++    }
++
+diff --git a/src/easy/handler.rs b/src/easy/handler.rs
+index efc3902..1f5089c 100644
+--- a/src/easy/handler.rs
++++ b/src/easy/handler.rs
+@@ -292,0 +293,6 @@
++        #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++        fn cvt(socket: Socket) -> curl_sys::curl_socket_t {
++            use std::os::wasi::io::IntoRawFd;
++            socket.into_raw_fd()
++        }
++
+@@ -3379,0 +3386,7 @@
++    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++    fn setopt_path(&mut self, opt: curl_sys::CURLoption, val: &Path) -> Result<(), Error> {
++        use std::os::wasi::ffi::OsStrExt;
++        let s = CString::new(val.as_os_str().as_bytes())?;
++        self.setopt_str(opt, &s)
++    }
++
+diff --git a/src/multi.rs b/src/multi.rs
+index efcfce8..d2e82ee 100644
+--- a/src/multi.rs
++++ b/src/multi.rs
+@@ -12,0 +13,4 @@
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++use libc::{pollfd, POLLIN, POLLOUT};
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++const POLLPRI: c_short = 0x0002;
+@@ -1300 +1300 @@
+-#[cfg(unix)]
++#[cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))]

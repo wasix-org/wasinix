@@ -1,0 +1,28 @@
+diff --git a/src/fs.rs b/src/fs.rs
+index f2c19c7..1e03808 100644
+--- a/src/fs.rs
++++ b/src/fs.rs
+@@ -57 +57 @@ impl Metadata {
+-            #[cfg(not(any(target_os = "aix", target_os = "hurd")))]
++            #[cfg(not(any(target_os = "aix", target_os = "hurd", all(target_os = "wasi", target_vendor = "wasmer"))))]
+@@ -59 +59 @@ impl Metadata {
+-            #[cfg(any(target_os = "aix", target_os = "hurd"))]
++            #[cfg(any(target_os = "aix", target_os = "hurd", all(target_os = "wasi", target_vendor = "wasmer")))]
+@@ -62 +62 @@ impl Metadata {
+-            #[cfg(not(any(target_os = "aix", target_os = "hurd")))]
++            #[cfg(not(any(target_os = "aix", target_os = "hurd", all(target_os = "wasi", target_vendor = "wasmer"))))]
+@@ -64 +64 @@ impl Metadata {
+-            #[cfg(any(target_os = "aix", target_os = "hurd"))]
++            #[cfg(any(target_os = "aix", target_os = "hurd", all(target_os = "wasi", target_vendor = "wasmer")))]
+@@ -84 +84 @@ impl Metadata {
+-            #[cfg(not(any(target_os = "aix", target_os = "hurd")))]
++            #[cfg(not(any(target_os = "aix", target_os = "hurd", all(target_os = "wasi", target_vendor = "wasmer"))))]
+@@ -86 +86 @@ impl Metadata {
+-            #[cfg(any(target_os = "aix", target_os = "hurd"))]
++            #[cfg(any(target_os = "aix", target_os = "hurd", all(target_os = "wasi", target_vendor = "wasmer")))]
+@@ -89 +89 @@ impl Metadata {
+-            #[cfg(not(any(target_os = "aix", target_os = "hurd")))]
++            #[cfg(not(any(target_os = "aix", target_os = "hurd", all(target_os = "wasi", target_vendor = "wasmer"))))]
+@@ -91 +91 @@ impl Metadata {
+-            #[cfg(any(target_os = "aix", target_os = "hurd"))]
++            #[cfg(any(target_os = "aix", target_os = "hurd", all(target_os = "wasi", target_vendor = "wasmer")))]
