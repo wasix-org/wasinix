@@ -86,6 +86,7 @@
     "0.8.4": "sha256-eOz2NFwK/xb8jXU7lNB26Ma4P+fkZv/iJy67anNremQ="
   },
   "socket2": {
+    "0.5.10": "sha256-mpYWaQmDUoaE9J2PeJ5Lgglr6uH7ncMBK1cNFlCWIsA=",
     "0.6.0": "sha256-MrP13tbtHr6nKn42yuhZNf/Nw2hZjTJBa1PR4Qp12jo=",
     "0.6.1": "sha256-3ra0LAGdpASsDSPmvt8k8UACJRkYjuHW5jjxbHA8D9g=",
     "0.6.2": "sha256-ufCwFcx3Lhn5T+2IM4RtLf5t1V2b7LQzgucLXupfKeA="
