@@ -450,4 +450,5 @@
   {attr = "langchain-text-splitters";}
   {attr = "langchain";} # LangChain (langgraph + langchain-core)
   {attr = "litellm";} # LiteLLM (tokenizers + tiktoken + fastuuid + openai)
+  {attr = "langflow";} # Langflow core server and built web frontend
 ]
