@@ -1,0 +1,14 @@
+FFmpeg's configure rejects WASI before its normal compiler feature probes can
+discover the POSIX interfaces supplied by WASIX.
+
+--- a/configure
++++ b/configure
+@@ -6294,6 +6294,9 @@ case $target_os in
+     minix)
+         ;;
++    wasi|wasip1)
++        target_os=wasi
++        ;;
+     none)
+         ;;
+     *)
