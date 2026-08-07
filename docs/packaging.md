@@ -1,5 +1,39 @@
 # Adding a package
 
+## A package provided natively and for WASIX
+
+Put its standard nixpkgs-style recipe in
+`pkgs/crossable/<name>/package.nix`. The directory is enumerated
+automatically and the recipe is called in both the native package set and every
+WASIX profile set. Use ordinary function arguments such as `stdenv`,
+`rustPlatform`, and named dependencies; do not take a native build from a cross
+set's `buildPackages`.
+
+Keep the matching overlay entry. Put only WASIX-specific adaptation in
+`pkgs/overlay/packages/<name>/package.nix`, deriving from the preceding shared
+recipe:
+
+```nix
+{prev, helpers, ...}:
+helpers.libTweaks {
+  passthru.wasix.shipped = true;
+} prev.foo
+```
+
+Small source-build differences may derive from
+`stdenv.hostPlatform.isWasix` in the shared recipe. Bootstrap-sensitive
+compiler families instead share their source/version bundle between explicit
+native build-tool and WASIX-hosted builders; a hosted compiler must depend on
+the build toolchain, never the reverse.
+
+The results are `nativePackages.<name>`,
+`packagesByHost.wasixByProfile.<profile>.<name>`, and
+`packagesByHost.preferredWasix.<name>`. A tool that runs under WASIX declares
+`passthru.wasix.toolchainRole = "hosted"` and is then also exposed through
+`toolchains.hostedByProfile`.
+
+## A WASIX-only package
+
 Lightest form that works (the loader finds all of these):
 
 - No changes: name in `pkgs/overlay/trivial.nix`.

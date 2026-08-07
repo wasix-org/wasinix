@@ -11,6 +11,7 @@ C/C++, Rust, and Python packages, and CLIs are packaged as webc.
 ```text
 pkgs/default.nix     wiring            pkgs/profiles.nix  the ABI profile table
 pkgs/lib/            helpers + passthru.wasix machinery
+pkgs/crossable/      recipes instantiated natively and for WASIX
 pkgs/set/            per-profile cross sets (stdenv, rustPlatform)
 pkgs/toolchain/      llvm.nix, sysroot/, rust/, wasixcc.nix, env.nix, tests/
 pkgs/overlay/        packages/, trivial.nix, python-packages/
@@ -31,7 +32,9 @@ scripts/update.py    pin updater (nix run .#scripts.update)
   `packages/<name>/package.nix` dir; a dir's `package.nix` may be
   `{names, packages}` for version families (icu). Same in
   `python-packages/`. Only `pkgs/lib/load-packages.nix` enumerates these
-  dirs.
+  dirs. A package we provide both natively and for WASIX has its standard
+  recipe in `pkgs/crossable/<name>/package.nix`; its WASIX-only
+  tweaks and webc policy stay in the matching overlay entry.
 - Tweaks go through `helpers.libTweaks` (phases concatenate, lists append,
   attrsets merge, scalars replace, functions get the old value). No
   `(old.X or []) ++ ...` in package files.
