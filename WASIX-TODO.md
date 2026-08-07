@@ -498,6 +498,29 @@ current toolchain before relying on it.
 
 ## Toolchain
 
+### wasix-libc exports `sigaltstack` but hides its API 🟡
+
+- LLVM's CMake symbol check finds `sigaltstack`, but wasix-libc guards the
+  declaration and `SS_ONSTACK` behind `__wasilibc_unmodified_upstream` with the
+  comment "WASI has no signals". LLVM consequently enables alternate signal
+  stacks and then fails to compile against `signal.h`.
+- Workaround: the LLVM package configures `HAVE_SIGALTSTACK=OFF`. LLVM's signal
+  handling otherwise works without an alternate stack.
+- Fix: wasix-libc should expose the `sigaltstack` declaration and constants when
+  the exported implementation is supported, or stop exporting the symbol so
+  feature checks consistently reject it.
+
+### wasix-libc declares memory-advice/protection APIs without definitions 🟡
+
+- `sys/mman.h` declares `posix_madvise` and `mprotect`, but no sysroot archive
+  defines either symbol. LLVM consequently compiles its optional mapped-file
+  eviction and protection operations and fails when linking every tool.
+- Workaround: `support-wasix.patch` makes LLVM's `mapped_file_region::dontNeed`
+  and `Memory::protectMappedMemory` no-ops on WASIX. Linear WebAssembly memory
+  has no per-page protection, so both operations are only hints there.
+- Fix: implement successful no-op definitions in wasix-libc, or remove the
+  declarations and advice constants until implementations exist.
+
 ### wasixcc rejects `-fno-exceptions` under forced EH; stripped in the shim 🟡
 
 - wasixcc hard-errors on `-fno-exceptions`/`-fno-cxx-exceptions` in the PIC
@@ -736,6 +759,54 @@ current toolchain before relying on it.
   `-lqhull_r`/`-lqhull` names.
 
 ## Rust
+
+### rustc incremental compilation requires file locking 🟡
+
+- The WASIX stdlib reports `File::lock` as unsupported because the WASIX ABI
+  has no cross-process advisory locking operation. rustc therefore rejects its
+  incremental session directory before compiling a crate.
+- Workaround: the hosted Cargo command sets `CARGO_INCREMENTAL=0`. Non-incremental
+  builds remain correct and avoid pretending that lock acquisition succeeded.
+- Fix: add shared advisory locking to the Wasmer WASIX filesystem ABI, implement
+  it in wasix-libc and Rust std, then remove the command environment override.
+
+### WASIX-hosted Cargo dependencies assume `cfg(unix)` 🟡
+
+- Cargo's default `git2` features enable SSH, which builds bundled libssh2
+  against OpenSSL. The toolchain sysroot does not contain target OpenSSL, so a
+  WASIX-hosted Cargo fails while compiling `libssh2-sys`.
+- Workaround: `toolchain/rust/wasix-host-tools.patch` disables `git2` default
+  features. Cargo's HTTP Git transport remains provided by `git2-curl`; SSH Git
+  URLs are unavailable in the hosted package. The patch also supplies the
+  missing WASIX process, pipe, path, and symlink branches in `cargo-util`.
+  Central vendor patches provide WASIX path and descriptor handling for `curl`
+  and `curl-sys`, provide byte-preserving WASIX paths in `git2`, select the
+  WASIX directory-symlink and stat-layout branches in the `gix` crates, and
+  select pthreads for bundled libgit2.
+- Fix: make the wasix-org/rust Cargo build explicitly select supported Git
+  transports, upstream the `cargo-util` WASIX branches and WASIX target handling
+  to those crates, and stabilize the WASIX std APIs Cargo needs.
+
+### `static-web-server` assumes Unix or Windows 🟡
+
+- Path decoding and server completion are selected only by `cfg(unix)` or
+  `cfg(windows)`, so WASIX has no byte-to-path implementation and leaves its
+  server futures unused under `deny(warnings)`.
+- Workaround: `wasix-target.patch` uses WASI byte paths and awaits the HTTP
+  server futures without installing the Unix signal-hook handlers.
+- Fix: upstream a WASI/WASIX platform arm; graceful shutdown can be added when
+  the program has a portable signal source for WASIX.
+
+### `polling` has no WASIX backend 🟡
+
+- `polling` 3.11 rejects `wasm32-wasmer-wasi`; its portable fallback is limited
+  to Unix-like targets and depends on `rustix` pipe support, which is compiled
+  out for WASI.
+- Workaround: the vendored crate patch selects a WASIX epoll backend with an
+  eventfd notifier, allowing consumers such as `async-io` to build.
+- Fix: upstream the WASIX backend to `polling`. It uses the existing WASIX
+  epoll API directly rather than routing through `rustix`'s WASI preview
+  backends.
 
 ### library/Cargo.lock pins libc 0.2.183 from two sources 🟡
 
