@@ -44,9 +44,6 @@
           wasix = {
             # upstream's version stands still across our rev bumps
             noteVersion = "${old.version}-${wasmer.shortRev or "dirty"}";
-            updateNotes = [
-              {message = "check whether patches/wasmer-signal-inherit-on-fork.patch landed upstream (WASIX-TODO.md)";}
-            ];
           };
         };
     });
