@@ -9,6 +9,7 @@
 #   owner       ? "wasmer"
 #   commands    ? null  => one command per bin/*.wasm (auto-globbed at build)
 #   commandEnv  ? {}     => { <command> = { ENV = "val"; }; } merged onto a command
+#   dependencyVersions ? {} => { "owner/name" = "requirement"; }
 #   fs          ? {}     => mounts, e.g. { "/etc/ssl" = "${cacert}/etc/ssl"; }
 #   selfMounts  ? []     => explicit store-path-at-itself mounts
 #   autoSelfMount ? false => also scan bin/*.wasm for embedded /nix/store paths
@@ -107,11 +108,13 @@
   # at /bin/<cmd> and /usr/bin/<cmd> in this package's fs, so e.g. /bin/bash
   # resolves from the dependency instead of a bundled copy.
   dependencies = w.dependencies or [];
+  dependencyVersions = w.dependencyVersions or {};
   dependencyLines =
     lib.concatMapStringsSep "\n" (
       dep: let
         r = webcIdent dep;
-      in "${builtins.toJSON r.fullName} = ${builtins.toJSON r.version}"
+        version = dependencyVersions.${r.fullName} or r.version;
+      in "${builtins.toJSON r.fullName} = ${builtins.toJSON version}"
     )
     dependencies;
 

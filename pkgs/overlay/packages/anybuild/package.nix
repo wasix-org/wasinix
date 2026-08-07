@@ -9,6 +9,7 @@ helpers.libTweaks {
   passthru.wasix.shipped = true;
   passthru.wasmer = {
     dependencies = [preferredProfilePackages.bash];
+    dependencyVersions."wasmer/bash" = "*";
     commandEnv = {
       anybuild.PATH = "/bin:/usr/bin";
       shipit.PATH = "/bin:/usr/bin";
