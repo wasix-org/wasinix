@@ -13,7 +13,17 @@ helpers.libTweaks {
     substituteInPlace Cargo.toml \
       --replace-fail 'shadow-rs = "1.4.0"' 'shadow-rs = { version = "1.4.0", default-features = false, features = ["build"] }'
   '';
-  passthru.wasix.shipped = true;
+  passthru.wasix = {
+    shipped = true;
+    updateNotes = [
+      {message = "recheck the mio WASIX backend patch if Cargo.lock moves off mio 1.2.1";}
+      {message = "recheck the socket2 WASIX backend patch if Cargo.lock moves off socket2 0.5.10";}
+      {message = "recheck the polling WASIX backend patch if Cargo.lock moves off polling 3.11.0";}
+      {message = "recheck the async-io WASIX backend patch if Cargo.lock moves off async-io 2.6.0";}
+      {message = "recheck the async-tar feature patch if Cargo.lock moves off async-tar 0.5.1";}
+      {message = "recheck wasix.patch and the shadow-rs feature override on the next version bump";}
+    ];
+  };
   # Preserve the command identity published by wasix-org/static-web-server.
   # Edge deployments and SDK consumers address its atom explicitly as
   # `wasmer/static-web-server:webserver`, so changing it would break existing
