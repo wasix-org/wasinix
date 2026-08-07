@@ -5,7 +5,15 @@
   ghcWasm,
 }: let
   haskell = import ./haskell {inherit pkgs ghcWasm;};
-  inherit (import ./llvm.nix {inherit pkgs;}) llvm llvmTree version;
+  inherit
+    (import ./llvm.nix {inherit pkgs;})
+    llvm
+    llvmTree
+    llvmVersion
+    monorepoSrc
+    version
+    ;
+  llvmMonorepoSrc = monorepoSrc;
   flang = import ./flang.nix {
     inherit pkgs;
     llvmPackages = llvm;
@@ -15,7 +23,15 @@
     inherit pkgs llvm flang;
     llvmVersion = version;
   };
-  inherit (sysroots) variants sysroot tests libc compiler-rt libcxx;
+  inherit
+    (sysroots)
+    variants
+    sysroot
+    tests
+    libc
+    compiler-rt
+    libcxx
+    ;
 
   flangRtByProfile = pkgs.lib.mapAttrs (_: v: v.flangRt) variants;
 
@@ -54,7 +70,7 @@ in {
   # The wasix rustPlatform is assembled in pkgs/default.nix, where the pkgsCross
   # it needs is in scope.
   inherit wasixLlvm wasixSysroot wasixRustToolchain binaryen wasixcc cargoWasix;
-  inherit llvm variants sysroot tests libc compiler-rt libcxx flang flangCross;
+  inherit llvm llvmMonorepoSrc llvmVersion variants sysroot tests libc compiler-rt libcxx flang flangCross;
   # Internal inputs for pkgs/default.nix and the overlay. Profile-sensitive
   # outputs are public through toolchainByProfile, never as implicit defaults.
   inherit flangRtByProfile wasixflangByProfile openmpByProfile;

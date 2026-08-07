@@ -1,0 +1,103 @@
+diff --git a/lib/Support/Unix/Path.inc b/lib/Support/Unix/Path.inc
+index 6f1b48cff395..8811ec529081 100644
+--- a/lib/Support/Unix/Path.inc
++++ b/lib/Support/Unix/Path.inc
+@@ -126,7 +126,7 @@ const file_t kInvalidFile = -1;
+     defined(__CYGWIN__) || defined(__DragonFly__) || defined(_AIX) ||          \
+     defined(__GNU__) ||                                                        \
+     (defined(__sun__) && defined(__svr4__) || defined(__HAIKU__)) ||           \
+-    defined(__managarm__)
++    defined(__managarm__) || defined(__wasi__)
+ static int test_dir(char ret[PATH_MAX], const char *dir, const char *bin) {
+   struct stat sb;
+   char fullpath[PATH_MAX];
+@@ -323,6 +323,12 @@ std::string getMainExecutable(const char *argv0, void *MainAddr) {
+       return std::string(real_path);
+     break; // Found entry, but realpath failed.
+   }
++#elif defined(__wasi__)
++  char exe_path[PATH_MAX];
++  // WASIX has no process filesystem or dynamic loader. Resolve argv[0]
++  // against the current directory and PATH instead.
++  if (getprogpath(exe_path, argv0) != nullptr)
++    return exe_path;
+ #elif defined(HAVE_DLOPEN)
+   // Use dladdr to get executable path if available.
+   Dl_info DLInfo;
+@@ -505,6 +510,6 @@ static bool is_local_impl(struct STATVFS &Vfs) {
+ #elif defined(__Fuchsia__)
+   // Fuchsia doesn't yet support remote filesystem mounts.
+   return true;
+-#elif defined(__EMSCRIPTEN__)
+-  // Emscripten doesn't currently support remote filesystem mounts.
++#elif defined(__EMSCRIPTEN__) || defined(__wasi__)
++  // Emscripten and WASIX don't currently support remote filesystem mounts.
+   return true;
+@@ -880,7 +885,7 @@ void mapped_file_region::dontNeedImpl() {
+   assert(Mode == mapped_file_region::readonly);
+   if (!Mapping)
+     return;
+-#if defined(__MVS__) || defined(_AIX)
++#if defined(__MVS__) || defined(_AIX) || defined(__wasi__)
+     // If we don't have madvise, or it isn't beneficial, treat this as a no-op.
+ #elif defined(POSIX_MADV_DONTNEED)
+   ::posix_madvise(Mapping, Size, POSIX_MADV_DONTNEED);
+diff --git a/lib/Support/Unix/Memory.inc b/lib/Support/Unix/Memory.inc
+index f9b3102dd272..5d254bda08bf 100644
+--- a/lib/Support/Unix/Memory.inc
++++ b/lib/Support/Unix/Memory.inc
+@@ -164,5 +164,9 @@ std::error_code Memory::releaseMappedMemory(MemoryBlock &M) {
+ std::error_code Memory::protectMappedMemory(const MemoryBlock &M,
+                                             unsigned Flags) {
++#if defined(__wasi__)
++  (void)M;
++  (void)Flags;
++#else
+   static const Align PageSize = Align(Process::getPageSizeEstimate());
+   if (M.Address == nullptr || M.AllocatedSize == 0)
+     return std::error_code();
+@@ -204,2 +208,3 @@ std::error_code Memory::protectMappedMemory(const MemoryBlock &M,
++#endif
+   return std::error_code();
+ }
+diff --git a/lib/Support/Unix/Program.inc b/lib/Support/Unix/Program.inc
+index 54409c120948..6149049d389f 100644
+--- a/lib/Support/Unix/Program.inc
++++ b/lib/Support/Unix/Program.inc
+@@ -260,0 +261,5 @@ static bool Execute(ProcessInfo &PI, StringRef Program,
++#if defined(__wasi__) && defined(__wasm_exception_handling__)
++  MakeErrMsg(ErrMsg, "fork is unavailable with WASIX exception handling",
++             ENOTSUP);
++  return false;
++#else
+@@ -330,2 +335,3 @@ static bool Execute(ProcessInfo &PI, StringRef Program,
+   return true;
++#endif
+ }
+diff --git a/lib/Support/Unix/Signals.inc b/lib/Support/Unix/Signals.inc
+index efdc7ce37296..0ee4a1dedc65 100644
+--- a/lib/Support/Unix/Signals.inc
++++ b/lib/Support/Unix/Signals.inc
+@@ -52,7 +52,9 @@
+ #endif
+ #include <signal.h>
+ #include <sys/stat.h>
++#ifdef HAVE_DLOPEN
+ #include <dlfcn.h>
++#endif
+ #if HAVE_MACH_MACH_H
+ #include <mach/mach.h>
+ #endif
+diff --git a/lib/ExecutionEngine/Orc/TargetProcess/ExecutorSharedMemoryMapperService.cpp b/lib/ExecutionEngine/Orc/TargetProcess/ExecutorSharedMemoryMapperService.cpp
+index e653bdbd0dbf..a6da8d110ebb 100644
+--- a/lib/ExecutionEngine/Orc/TargetProcess/ExecutorSharedMemoryMapperService.cpp
++++ b/lib/ExecutionEngine/Orc/TargetProcess/ExecutorSharedMemoryMapperService.cpp
+@@ -152,7 +152,7 @@ Expected<ExecutorAddr> ExecutorSharedMemoryMapperService::initialize(
+
+ #if defined(LLVM_ON_UNIX)
+
+-#if defined(__MVS__)
++#if defined(__MVS__) || defined(__wasi__)
+       // TODO Is it possible to change the protection level?
+ #else
+     int NativeProt = 0;

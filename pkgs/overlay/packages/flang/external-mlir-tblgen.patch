@@ -1,0 +1,23 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index a2f589da13fb..cbed32c2ee1b 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -217,10 +217,17 @@ include_directories(BEFORE
+ add_subdirectory(tools/mlir-irdl-to-cpp)
+ add_subdirectory(tools/mlir-linalg-ods-gen)
+ add_subdirectory(tools/mlir-pdll)
+-add_subdirectory(tools/mlir-tblgen)
++if(MLIR_TABLEGEN_EXE)
++  add_executable(mlir-tblgen IMPORTED GLOBAL)
++  set_target_properties(mlir-tblgen PROPERTIES
++    IMPORTED_LOCATION "${MLIR_TABLEGEN_EXE}")
++  set(MLIR_TABLEGEN_TARGET mlir-tblgen CACHE INTERNAL "")
++else()
++  add_subdirectory(tools/mlir-tblgen)
++endif()
+ add_subdirectory(tools/mlir-src-sharder)
+ set(MLIR_TABLEGEN_EXE "${MLIR_TABLEGEN_EXE}" CACHE INTERNAL "")
+ set(MLIR_TABLEGEN_TARGET "${MLIR_TABLEGEN_TARGET}" CACHE INTERNAL "")
+ set(MLIR_PDLL_TABLEGEN_EXE "${MLIR_PDLL_TABLEGEN_EXE}" CACHE INTERNAL "")
+ set(MLIR_PDLL_TABLEGEN_TARGET "${MLIR_PDLL_TABLEGEN_TARGET}" CACHE INTERNAL "")
+ set(MLIR_SRC_SHARDER_TABLEGEN_EXE "${MLIR_SRC_SHARDER_TABLEGEN_EXE}" CACHE INTERNAL "")

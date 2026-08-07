@@ -43,66 +43,84 @@
       src = monorepoSrc;
       inherit monorepoSrc;
       doCheck = false;
-    }))
-    .overrideScope (final: prev: {
-      compiler-rt = perVariant "compiler-rt";
-      libcxx = perVariant "libcxx";
-      # The drvs are the fork, so version them by its release (the baked-in
-      # release_version above is untouched by this). `pos` restamps
-      # meta.position to this file, where the pin lives (mkDerivation derives
-      # meta.position from pos, clobbering a meta.position attr).
-      llvm = prev.llvm.overrideAttrs (_old: {
-        inherit version;
-        __intentionallyOverridingVersion = true;
-      });
-      lld = prev.lld.overrideAttrs (_old: {
-        inherit version;
-        __intentionallyOverridingVersion = true;
-      });
-      clang-unwrapped = prev.clang-unwrapped.overrideAttrs (_old: {
-        inherit version;
-        __intentionallyOverridingVersion = true;
-        pos = __curPos;
-      });
-      # Update metadata rides on clang because that is the fork drv in the ci
-      # job set (toolchain.llvm.clang). nix-update finds the file to edit at
-      # the version attr's definition site, which through overrideAttrs still
-      # points into nixpkgs; `pin` is the pin as a record of its own, with
-      # version and src defined here.
-      clang = prev.clang.overrideAttrs (old: {
-        pos = __curPos;
-        passthru =
-          (old.passthru or {})
-          // {
-            unwrapped = final.clang-unwrapped;
-            pin = pkgs.runCommand "wasix-llvm-pin" {
-              inherit version;
-              src = monorepoSrc;
-              pos = __curPos;
-            } "touch $out";
-            updateScript = {
-              name = "llvm"; # attr tail is `clang`
-              # the fork also carries non-release tags (wasixrel-*, llvmorg-*)
-              command = pkgs.nix-update-script {extraArgs = ["--flake" "--version-regex" "^([0-9.]+)$"];};
-              attrPath = "toolchain.llvm.clang.pin";
+    })).overrideScope
+    (
+      final: prev: {
+        compiler-rt = perVariant "compiler-rt";
+        libcxx = perVariant "libcxx";
+        # The drvs are the fork, so version them by its release (the baked-in
+        # release_version above is untouched by this). `pos` restamps
+        # meta.position to this file, where the pin lives (mkDerivation derives
+        # meta.position from pos, clobbering a meta.position attr).
+        llvm = prev.llvm.overrideAttrs (_old: {
+          inherit version;
+          __intentionallyOverridingVersion = true;
+        });
+        lld = prev.lld.overrideAttrs (_old: {
+          inherit version;
+          __intentionallyOverridingVersion = true;
+        });
+        clang-unwrapped = prev.clang-unwrapped.overrideAttrs (_old: {
+          inherit version;
+          __intentionallyOverridingVersion = true;
+          pos = __curPos;
+        });
+        # Update metadata rides on clang because that is the fork drv in the ci
+        # job set (toolchain.llvm.clang). nix-update finds the file to edit at
+        # the version attr's definition site, which through overrideAttrs still
+        # points into nixpkgs; `pin` is the pin as a record of its own, with
+        # version and src defined here.
+        clang = prev.clang.overrideAttrs (old: {
+          pos = __curPos;
+          passthru =
+            (old.passthru or {})
+            // {
+              unwrapped = final.clang-unwrapped;
+              pin = pkgs.runCommand "wasix-llvm-pin" {
+                inherit version;
+                src = monorepoSrc;
+                pos = __curPos;
+              } "touch $out";
+              updateScript = {
+                name = "llvm"; # attr tail is `clang`
+                # the fork also carries non-release tags (wasixrel-*, llvmorg-*)
+                command = pkgs.nix-update-script {
+                  extraArgs = [
+                    "--flake"
+                    "--version-regex"
+                    "^([0-9.]+)$"
+                  ];
+                };
+                attrPath = "toolchain.llvm.clang.pin";
+              };
+              wasix.updateNotes = [
+                {
+                  name = "llvm";
+                  message = "the base LLVM version moved with this bump and nixpkgs' patch selection switched with it; check the toolchain build and the applied patches";
+                  when = prior: current: prior != null && current != null && baseOf prior != baseOf current;
+                }
+              ];
             };
-            wasix.updateNotes = [
-              {
-                name = "llvm";
-                message = "the base LLVM version moved with this bump and nixpkgs' patch selection switched with it; check the toolchain build and the applied patches";
-                when = prior: current: prior != null && current != null && baseOf prior != baseOf current;
-              }
-            ];
-          };
-      });
-    });
+        });
+      }
+    );
 
   # Single LLVM install tree (clang, wasm-ld, llvm-*, clang's resource dir) for
   # consumers that need one location, notably wasixcc's WASIXCC_LLVM_LOCATION.
   llvmTree = pkgs.symlinkJoin {
     name = "wasix-llvm-${version}";
-    paths = [llvm.clang-unwrapped llvm.lld llvm.llvm];
+    paths = [
+      llvm.clang-unwrapped
+      llvm.lld
+      llvm.llvm
+    ];
   };
 in {
-  inherit version monorepoSrc llvm llvmTree;
+  inherit
+    version
+    llvmVersion
+    monorepoSrc
+    llvm
+    llvmTree
+    ;
 }

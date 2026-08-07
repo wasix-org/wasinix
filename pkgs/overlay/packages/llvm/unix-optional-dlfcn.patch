@@ -1,0 +1,8 @@
+diff --git a/lib/Support/Unix/Unix.h b/lib/Support/Unix/Unix.h
+index 9b9646184c9f..c0cbcd12cb65 100644
+--- a/lib/Support/Unix/Unix.h
++++ b/lib/Support/Unix/Unix.h
+@@ -42 +42,3 @@
++#ifdef HAVE_DLOPEN
+ #include <dlfcn.h>
++#endif
