@@ -5,6 +5,7 @@
   rustPlatform,
   fetchFromGitHub,
   nix-update-script,
+  shellPath ? "${bash}/bin/bash",
 }:
 rustPlatform.buildRustPackage (finalAttrs: {
   pname = "anybuild";
@@ -21,7 +22,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
 
   postPatch = ''
     substituteInPlace crates/anybuild/src/run/local.rs \
-      --replace-fail '#!/bin/bash' '#!${bash}/bin/bash'
+      --replace-fail '#!/bin/bash' '#!${shellPath}'
   '';
 
   # The e2e harness otherwise assumes a separate target/debug build exists.
