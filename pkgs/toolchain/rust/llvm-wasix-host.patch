@@ -1,0 +1,146 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 16f6349e6f1f..e3628309b3a0 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -49,1 +49,7 @@ project(LLVM
++# Rust bootstrap uses Generic for WASIX cross builds. LLVM's support layer is
++# nevertheless the Unix implementation supplied by wasix-libc.
++if(LLVM_DEFAULT_TARGET_TRIPLE MATCHES "wasm32.*wasi")
++  set(UNIX ON)
++endif()
++
+ if (NOT DEFINED CMAKE_INSTALL_LIBDIR AND DEFINED LLVM_LIBDIR_SUFFIX)
+diff --git a/lib/Support/Unix/Path.inc b/lib/Support/Unix/Path.inc
+index 00e140092230..49872bd791c7 100644
+--- a/lib/Support/Unix/Path.inc
++++ b/lib/Support/Unix/Path.inc
+@@ -126,7 +126,7 @@ const file_t kInvalidFile = -1;
+     defined(__CYGWIN__) || defined(__DragonFly__) || defined(_AIX) ||          \
+     defined(__GNU__) ||                                                        \
+     (defined(__sun__) && defined(__svr4__) || defined(__HAIKU__)) ||           \
+-    defined(__managarm__)
++    defined(__managarm__) || defined(__wasi__)
+ static int test_dir(char ret[PATH_MAX], const char *dir, const char *bin) {
+   struct stat sb;
+   char fullpath[PATH_MAX];
+@@ -323,6 +323,12 @@ std::string getMainExecutable(const char *argv0, void *MainAddr) {
+       return std::string(real_path);
+     break; // Found entry, but realpath failed.
+   }
++#elif defined(__wasi__)
++  char exe_path[PATH_MAX];
++  // WASIX has no process filesystem or dynamic loader. Resolve argv[0]
++  // against the current directory and PATH instead.
++  if (getprogpath(exe_path, argv0) != nullptr)
++    return exe_path;
+ #elif defined(HAVE_DLOPEN)
+   // Use dladdr to get executable path if available.
+   Dl_info DLInfo;
+@@ -510,8 +516,8 @@ static bool is_local_impl(struct STATVFS &Vfs) {
+ #elif defined(__Fuchsia__)
+   // Fuchsia doesn't yet support remote filesystem mounts.
+   return true;
+-#elif defined(__EMSCRIPTEN__)
+-  // Emscripten doesn't currently support remote filesystem mounts.
++#elif defined(__EMSCRIPTEN__) || defined(__wasi__)
++  // Emscripten and WASIX don't currently support remote filesystem mounts.
+   return true;
+ #elif defined(__HAIKU__)
+   // Haiku doesn't expose this information.
+@@ -922,7 +928,7 @@ void mapped_file_region::dontNeedImpl() {
+   assert(Mode == mapped_file_region::readonly);
+   if (!Mapping)
+     return;
+-#if defined(__MVS__) || defined(_AIX)
++#if defined(__MVS__) || defined(_AIX) || defined(__wasi__)
+     // If we don't have madvise, or it isn't beneficial, treat this as a no-op.
+ #elif defined(POSIX_MADV_DONTNEED)
+   ::posix_madvise(Mapping, Size, POSIX_MADV_DONTNEED);
+@@ -937,7 +943,7 @@ void mapped_file_region::willNeedImpl() {
+   assert(Mode == mapped_file_region::readonly);
+   if (!Mapping)
+     return;
+-#if defined(__MVS__) || defined(_AIX)
++#if defined(__MVS__) || defined(_AIX) || defined(__wasi__)
+   // If we don't have madvise, or it isn't beneficial, treat this as a no-op.
+ #elif defined(POSIX_MADV_WILLNEED)
+   ::posix_madvise(Mapping, Size, POSIX_MADV_WILLNEED);
+diff --git a/lib/Support/Unix/Memory.inc b/lib/Support/Unix/Memory.inc
+index f9b3102dd272..5d254bda08bf 100644
+--- a/lib/Support/Unix/Memory.inc
++++ b/lib/Support/Unix/Memory.inc
+@@ -164,5 +164,9 @@ std::error_code Memory::releaseMappedMemory(MemoryBlock &M) {
+ std::error_code Memory::protectMappedMemory(const MemoryBlock &M,
+                                             unsigned Flags) {
++#if defined(__wasi__)
++  (void)M;
++  (void)Flags;
++#else
+   static const Align PageSize = Align(Process::getPageSizeEstimate());
+   if (M.Address == nullptr || M.AllocatedSize == 0)
+     return std::error_code();
+@@ -204,2 +208,3 @@ std::error_code Memory::protectMappedMemory(const MemoryBlock &M,
++#endif
+   return std::error_code();
+ }
+diff --git a/lib/Support/Unix/Program.inc b/lib/Support/Unix/Program.inc
+index 54409c120948..6149049d389f 100644
+--- a/lib/Support/Unix/Program.inc
++++ b/lib/Support/Unix/Program.inc
+@@ -169,2 +169,7 @@ static bool Execute(ProcessInfo &PI, StringRef Program,
+                     BitVector *AffinityMask, bool DetachProcess) {
++#if defined(__wasi__) && defined(__wasm_exception_handling__)
++  MakeErrMsg(ErrMsg, "fork is unavailable with WASIX exception handling",
++             ENOTSUP);
++  return false;
++#else
+   assert(!AffinityMask && "Starting a process with an affinity mask is "
+@@ -331,2 +336,3 @@ static bool Execute(ProcessInfo &PI, StringRef Program,
+   return true;
++#endif
+ }
+diff --git a/lib/Support/Unix/Signals.inc b/lib/Support/Unix/Signals.inc
+index efdc7ce37296..0ee4a1dedc65 100644
+--- a/lib/Support/Unix/Signals.inc
++++ b/lib/Support/Unix/Signals.inc
+@@ -52,7 +52,9 @@
+ #endif
+ #include <signal.h>
+ #include <sys/stat.h>
++#ifdef HAVE_DLOPEN
+ #include <dlfcn.h>
++#endif
+ #if HAVE_MACH_MACH_H
+ #include <mach/mach.h>
+ #endif
+@@ -263,1 +265,1 @@ static struct {
+-#if defined(HAVE_SIGALTSTACK)
++#if defined(HAVE_SIGALTSTACK) && !defined(__wasi__)
+diff --git a/lib/ExecutionEngine/Orc/TargetProcess/ExecutorSharedMemoryMapperService.cpp b/lib/ExecutionEngine/Orc/TargetProcess/ExecutorSharedMemoryMapperService.cpp
+index e653bdbd0dbf..a6da8d110ebb 100644
+--- a/lib/ExecutionEngine/Orc/TargetProcess/ExecutorSharedMemoryMapperService.cpp
++++ b/lib/ExecutionEngine/Orc/TargetProcess/ExecutorSharedMemoryMapperService.cpp
+@@ -150,1 +150,1 @@ Expected<ExecutorAddr> ExecutorSharedMemoryMapperService::initialize(
+-#if defined(__MVS__)
++#if defined(__MVS__) || defined(__wasi__)
+diff --git a/lib/Support/Unix/Unix.h b/lib/Support/Unix/Unix.h
+index 9b9646184c9f..c0cbcd12cb65 100644
+--- a/lib/Support/Unix/Unix.h
++++ b/lib/Support/Unix/Unix.h
+@@ -41,1 +41,3 @@
++#ifdef HAVE_DLOPEN
+ #include <dlfcn.h>
++#endif
+diff --git a/include/llvm/ADT/bit.h b/include/llvm/ADT/bit.h
+index 6a2f8d78fb7a..bd32994f9437 100644
+--- a/include/llvm/ADT/bit.h
++++ b/include/llvm/ADT/bit.h
+@@ -31,6 +31,7 @@
+ #if defined(__linux__) || defined(__GNU__) || defined(__HAIKU__) ||            \
+     defined(__Fuchsia__) || defined(__EMSCRIPTEN__) || defined(__NetBSD__) ||  \
+-    defined(__OpenBSD__) || defined(__DragonFly__) || defined(__managarm__)
++    defined(__OpenBSD__) || defined(__DragonFly__) || defined(__managarm__) || \
++    defined(__wasi__)
+ #include <endian.h>
+ #elif defined(_AIX)
+ #include <sys/machine.h>

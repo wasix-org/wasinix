@@ -1,0 +1,6 @@
+diff --git a/MachO/Driver.cpp b/MachO/Driver.cpp
+--- a/MachO/Driver.cpp
++++ b/MachO/Driver.cpp
+@@ -375,1 +375,1 @@ static void advise(llvm::MemoryBufferRef mb) {
+-#if defined(POSIX_MADV_WILLNEED)
++#if defined(POSIX_MADV_WILLNEED) && !defined(__wasi__)

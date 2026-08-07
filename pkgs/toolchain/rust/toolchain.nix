@@ -6,7 +6,7 @@
 #     nixpkgs LLVM can't substitute.
 #   - the two std targets use the EH and EH+PIC libc sysroots (wasi-root), like
 #     SYSROOT_EH / SYSROOT_EHPIC in build-wasix.sh.
-#   - stage0 is the upstream rustc/cargo pinned in src/stage0 (1.89.0); the fork
+#   - stage0 is the upstream rustc/cargo pinned in src/stage0 (1.96.0); the fork
 #     only bootstraps from its immediate predecessor, so nixpkgs' rustc can't stand in.
 # Output is the linked stage2 tree (bin/ + lib/rustlib/), the release-tarball
 # layout cargo-wasix.nix expects.
@@ -22,6 +22,7 @@
   # x.py/cargo need a writable HOME.
   writableTmpDirAsHomeHook,
   python3,
+  perl,
   cmake,
   ninja,
   pkg-config,
@@ -34,16 +35,31 @@
   file,
   # From-source wasix LLVM (clang/lld) + the EH and EH+PIC libc sysroots.
   wasixLlvm,
+  wasixcc,
   wasixSysrootEh,
   wasixSysrootEhpic,
+  # The central WASIX crate-edit pipeline, shared with set/rust-platform.nix.
+  patchVendor,
   # Also build std for wasm32-wasmer-wasi-dl (the dynamic-linking / PIC target),
   # needed for PIC `.so` Rust artifacts (e.g. pyo3 python extensions).
   withDynamicLinking ? true,
+  # Build rustc/cargo to run on WASIX. Bootstrap executes only native compilers;
+  # the resulting stage-2 compiler and its LLVM backend are WASIX modules.
+  hostedOnWasix ? false,
 }: let
   inherit (lib) optionals optionalString;
   version = "2026-08-06.1+rust-1.97";
 
-  hostTriple = "x86_64-unknown-linux-gnu";
+  buildTriple = "x86_64-unknown-linux-gnu";
+  hostTriple =
+    if hostedOnWasix
+    then "wasm32-wasmer-wasi"
+    else buildTriple;
+  targetTriples =
+    if hostedOnWasix
+    then hostTriple
+    else "${hostTriple},wasm32-wasmer-wasi${optionalString withDynamicLinking ",wasm32-wasmer-wasi-dl"}";
+  executableSuffix = optionalString hostedOnWasix ".wasm";
 
   # Full git checkout, including the src/llvm-project submodule we build in-tree.
   src = fetchFromGitHub {
@@ -60,7 +76,7 @@
     pname = "rust-bootstrap";
     version = "1.96.0";
     src = fetchurl {
-      url = "https://static.rust-lang.org/dist/2026-05-28/rust-1.96.0-${hostTriple}.tar.xz";
+      url = "https://static.rust-lang.org/dist/2026-05-28/rust-1.96.0-${buildTriple}.tar.xz";
       hash = "sha256-wpUEdYOlYjjqBrQ/hJ9Lh3+hK/1McQP42adMlMnE4Qg=";
     };
     nativeBuildInputs = [autoPatchelfHook];
@@ -71,7 +87,7 @@
       ./install.sh \
         --prefix="$out" \
         --disable-ldconfig \
-        --components=rustc,cargo,rust-std-${hostTriple}
+        --components=rustc,cargo,rust-std-${buildTriple}
       runHook postInstall
     '';
   };
@@ -83,10 +99,6 @@
   # source, so it splits the two `libc 0.2.183` entries (the WASIX git fork that
   # std links, the registry copy the host tools use) into separate dirs on its
   # own; that split is why a single `cargo vendor` / `x vendor` refuses this tree.
-  #
-  # The library lock is the one libc-patch-crates-io.patch rewrites, so patch it
-  # here too, matching what postPatch applies to the build; both read the same
-  # patch, so they can't drift.
   mergedCargoLock =
     runCommand "wasix-rust-merged-cargo-lock" {
       nativeBuildInputs = [python3];
@@ -103,46 +115,78 @@
         ${src}/src/bootstrap/Cargo.lock
     '';
 
-  cargoVendorDir = rustPlatform.fetchCargoVendor {
+  rawCargoVendorDir = rustPlatform.fetchCargoVendor {
     name = "wasix-rust-toolchain-${version}-vendor";
     src = mergedCargoLock;
     hash = "sha256-OQVUl9p5sT7nLgmxHqOspqUtKId50L3sJ1t0Je7gq58=";
   };
+  cargoVendorDir =
+    if hostedOnWasix
+    then patchVendor rawCargoVendorDir
+    else rawCargoVendorDir;
 
   # rust bootstrap's cc_detect.rs looks for a `-wasi` target's C compiler at
-  # $WASI_SDK_PATH/bin/<target>-clang[++]; synthesize that layout from the wasix
-  # clang + matching sysroot (eh for the base target, ehpic + -fPIC for -dl).
+  # $WASI_SDK_PATH/bin/<target>-clang[++]. Delegate those names to wasixcc so
+  # profile-specific TLS, exception, sysroot, and linker flags stay canonical.
   wasiSdk = let
-    mkClang = triple: sysroot: extra: ''
+    env = import ../env.nix {inherit lib;};
+    mkClang = triple: pic: let
+      profileEnv = env.exportsOf (
+        env.profileEnv {
+          wasmExceptions = "legacy";
+          inherit pic;
+        }
+        // {
+          WASIXCC_DISCARD_UNSUPPORTED_FLAGS = "yes";
+          WASIXCC_RUN_WASM_OPT = "no";
+        }
+      );
+    in ''
       for lang in clang clang++; do
-        printf '#!%s\nexec "%s/bin/%s" --target=wasm32-wasi --sysroot="%s" ${extra} "$@"\n' \
-          "${stdenv.shell}" "${wasixLlvm}" "$lang" "${sysroot}" > "$out/bin/${triple}-$lang"
-        chmod +x "$out/bin/${triple}-$lang"
+        tool=wasixcc
+        if [ "$lang" = clang++ ]; then
+          tool=wasix++
+        fi
+        target="$out/bin/${triple}-$lang"
+        printf '#!%s\n%s\nargs=()\nfor arg in "$@"; do\n  case "$arg" in -fno-exceptions|-fno-cxx-exceptions) ;; *) args+=("$arg");; esac\ndone\nexec "%s/bin/%s" "''${args[@]}"\n' \
+          "${stdenv.shell}" ${lib.escapeShellArg profileEnv} "${wasixcc}" "$tool" > "$target"
+        chmod +x "$target"
       done
     '';
   in
     runCommand "wasix-wasi-sdk" {} ''
       mkdir -p "$out/bin"
-      ${mkClang "wasm32-wasmer-wasi" wasixSysrootEh ""}
-      ${mkClang "wasm32-wasmer-wasi-dl" wasixSysrootEhpic "-fPIC"}
+      ${mkClang "wasm32-wasmer-wasi" false}
+      ${mkClang "wasm32-wasmer-wasi-dl" true}
     '';
 in
   stdenv.mkDerivation {
     pname = "wasix-rust-toolchain";
     inherit version src;
 
-    nativeBuildInputs = [
-      python3
-      cmake
-      ninja
-      pkg-config
-      which
-      file
-      # The built rustc/cargo need rpaths to zlib/libstdc++ (x.py doesn't embed
-      # store rpaths).
-      autoPatchelfHook
-      writableTmpDirAsHomeHook
+    patches = optionals hostedOnWasix [
+      ./wasix-host-tools.patch
+      ./wasix-process-fds.patch
     ];
+
+    nativeBuildInputs =
+      [
+        python3
+        perl
+        cmake
+        ninja
+        pkg-config
+        which
+        file
+      ]
+      # clang resolves to its unwrapped output, so its sibling lookup cannot see
+      # wasm-ld from the combined tree. Keep that tree on PATH while cross-linking
+      # the target LLVM backend and rustc.
+      ++ optionals hostedOnWasix [wasixLlvm]
+      # Native rustc/cargo need store rpaths. WASIX modules do not use ELF
+      # rpaths and must not be passed to autoPatchelf.
+      ++ optionals (!hostedOnWasix) [autoPatchelfHook]
+      ++ [writableTmpDirAsHomeHook];
 
     buildInputs = [
       curl
@@ -156,23 +200,30 @@ in
     # x.py shells out to cmake itself; the nixpkgs cmake hook would inject flags it
     # doesn't expect.
     dontUseCmakeConfigure = true;
+    dontStrip = hostedOnWasix;
     enableParallelBuilding = true;
     requiredSystemFeatures = ["big-parallel"];
 
-    env = {
-      # Rust bootstrap special-cases CI environments; force it off.
-      GITHUB_ACTIONS = "false";
-      # Offline mode, not build.vendor: vendor forces cargo --frozen, which trips
-      # over the fork's slightly stale lockfiles; offline still bars the network
-      # but lets cargo refresh a lock in place.
-      CARGO_NET_OFFLINE = "true";
-      # The wasix C toolchain for the std targets' C compiler detection (cc_detect.rs).
-      WASI_SDK_PATH = "${wasiSdk}";
-      # Binaries made during the build run without store rpaths (autoPatchelf
-      # only fixes the output): stage2 rustc needs zlib/libstdc++, and since
-      # 1.96 the bootstrap tool links liblzma.
-      LD_LIBRARY_PATH = lib.makeLibraryPath [zlib xz stdenv.cc.cc.lib];
-    };
+    env =
+      {
+        # Rust bootstrap special-cases CI environments; force it off.
+        GITHUB_ACTIONS = "false";
+        # Offline mode, not build.vendor: vendor forces cargo --frozen, which trips
+        # over the fork's slightly stale lockfiles; offline still bars the network
+        # but lets cargo refresh a lock in place.
+        CARGO_NET_OFFLINE = "true";
+        # The wasix C toolchain for the std targets' C compiler detection (cc_detect.rs).
+        WASI_SDK_PATH = "${wasiSdk}";
+        # Binaries made during the build run without store rpaths (autoPatchelf
+        # only fixes the output): stage2 rustc needs zlib/libstdc++, and since
+        # 1.96 the bootstrap tool links liblzma.
+        LD_LIBRARY_PATH = lib.makeLibraryPath [zlib xz stdenv.cc.cc.lib];
+      }
+      // lib.optionalAttrs hostedOnWasix {
+        # The target Cargo must not accept nixpkgs' build-machine libcurl through
+        # the pkg-config wrapper. curl-sys' bundled source is compiled by wasixcc.
+        LIBCURL_NO_PKG_CONFIG = "1";
+      };
 
     # Apply the fork's LLVM patch (build-wasix.sh step 1), install the vendor
     # config, and create the ./vendor symlink bootstrap's vendor check insists on
@@ -180,6 +231,12 @@ in
     postPatch = ''
       patchShebangs src/etc x.py configure
       ( cd src/llvm-project && patch -p1 < ../../wasix-llvm.patch )
+      ${optionalString hostedOnWasix ''
+        # Same WASIX support constraints as overlay/packages/llvm, adjusted for
+        # this newer in-tree LLVM revision and bootstrap's Generic CMake target.
+        ( cd src/llvm-project/llvm && patch -p1 < ${./llvm-wasix-host.patch} )
+        ( cd src/llvm-project/lld && patch -p1 < ${./lld-wasix-host.patch} )
+      ''}
       # Install fetchCargoVendor's source-replacement config with @vendor@ bound
       # to the vendor dir (what cargoSetupHook does for buildRustPackage).
       mkdir -p .cargo
@@ -200,21 +257,24 @@ in
         # the first std-startup allocation traps, and the program _Exit(70)s before
         # main. Upstream's template also leaves the channel non-stable.
         "--release-channel=nightly"
-        "--build=${hostTriple}"
+        "--build=${buildTriple}"
         "--host=${hostTriple}"
-        "--target=${hostTriple},wasm32-wasmer-wasi${optionalString withDynamicLinking ",wasm32-wasmer-wasi-dl"}"
+        "--target=${targetTriples}"
         "--set=build.rustc=${bootstrap}/bin/rustc"
         "--set=build.cargo=${bootstrap}/bin/cargo"
         "--enable-extended"
         "--tools=cargo"
+        # The WASIX target selects the self-contained linker flavor, including
+        # while bootstrap links the hosted Cargo binary.
         "--set=rust.lld=true"
-        "--set=rust.llvm-tools=true"
+        "--set=rust.llvm-tools=${
+          if hostedOnWasix
+          then "false"
+          else "true"
+        }"
         # Link the host rustc/cargo via the nix cc-wrapper (embeds an rpath to zlib
         # etc.) and keep rpaths, so the built binaries run outside the sandbox.
         "--enable-rpath"
-        "--set=target.${hostTriple}.cc=${stdenv.cc}/bin/cc"
-        "--set=target.${hostTriple}.cxx=${stdenv.cc}/bin/c++"
-        "--set=target.${hostTriple}.linker=${stdenv.cc}/bin/cc"
         "--set=llvm.download-ci-llvm=false"
         "--set=llvm.ninja=true"
         # On since 1.96 in configure's default (dist) profile; without
@@ -228,7 +288,23 @@ in
         "--set=target.wasm32-wasmer-wasi.optimized-compiler-builtins=false"
         "--disable-docs"
       ]
-      ++ optionals withDynamicLinking [
+      ++ optionals (!hostedOnWasix) [
+        "--set=target.${hostTriple}.cc=${stdenv.cc}/bin/cc"
+        "--set=target.${hostTriple}.cxx=${stdenv.cc}/bin/c++"
+        "--set=target.${hostTriple}.linker=${stdenv.cc}/bin/cc"
+      ]
+      ++ optionals hostedOnWasix [
+        # This setting is global: native bootstrap needs X86 while the hosted
+        # compiler needs WebAssembly. No other backend is used.
+        "--set=llvm.targets=X86;WebAssembly"
+        "--set=llvm.experimental-targets="
+        "--set=target.${hostTriple}.cc=${wasiSdk}/bin/${hostTriple}-clang"
+        "--set=target.${hostTriple}.cxx=${wasiSdk}/bin/${hostTriple}-clang++"
+        "--set=target.${hostTriple}.linker=${wasiSdk}/bin/${hostTriple}-clang++"
+        "--set=target.${hostTriple}.wasi-root=${wasixSysrootEh}"
+        "--set=target.${hostTriple}.optimized-compiler-builtins=false"
+      ]
+      ++ optionals (withDynamicLinking && !hostedOnWasix) [
         "--set=target.wasm32-wasmer-wasi-dl.wasi-root=${wasixSysrootEhpic}"
         "--set=target.wasm32-wasmer-wasi-dl.optimized-compiler-builtins=false"
       ];
@@ -240,8 +316,16 @@ in
     # src/tools/cargo, which fails offline.
     buildPhase = ''
       runHook preBuild
-      python3 x.py build --stage 2 cargo
-      python3 x.py build --stage 2
+      python3 x.py build --stage ${
+        if hostedOnWasix
+        then "1"
+        else "2"
+      } cargo
+      ${
+        if hostedOnWasix
+        then "python3 x.py build --stage 2 compiler/rustc"
+        else "python3 x.py build --stage 2"
+      }
       runHook postBuild
     '';
 
@@ -255,7 +339,9 @@ in
       runHook preInstall
       mkdir -p "$out"
       cp -a "build/${hostTriple}/stage2/." "$out/"
-      install -Dm755 "build/${hostTriple}/stage2-tools-bin/cargo" "$out/bin/cargo"
+      cargo=$(find build -type f -path '*/stage2-tools-bin/cargo${executableSuffix}' | head -n 1)
+      test -n "$cargo"
+      install -Dm755 "$cargo" "$out/bin/cargo${executableSuffix}"
       rm -rf "$out/lib/rustlib/src" "$out/lib/rustlib/rustc-src"
       runHook postInstall
     '';
@@ -281,10 +367,20 @@ in
       # Bumps, then re-derives the stage0 bootstrap pin from the new tag (the
       # nix-update command is passed through as its argv).
       updateScript = ["pkgs/toolchain/rust/update.py"] ++ nix-update-script {extraArgs = ["--flake"];};
+      wasix.updateNotes = optionals hostedOnWasix [
+        {message = "wasix-host-tools.patch enables the WASIX host target, supplies Cargo's WASIX process/path branches, and disables SSH until target OpenSSL exists; recheck on the next tag bump";}
+        {message = "wasix-process-fds.patch implements WASIX child pipe descriptor conversions in std; recheck on the next tag bump";}
+        {message = "llvm-wasix-host.patch carries WASIX host portability fixes for Rust's in-tree LLVM; recheck it on the next tag bump";}
+        {message = "lld-wasix-host.patch works around wasix-libc declaring POSIX_MADV_WILLNEED without exporting posix_madvise; recheck it on the next tag bump";}
+        {message = "the central filetime, getrandom, home, jobserver, curl, curl-sys, git2, gix-fs, gix-index, gix-pack, libgit2-sys, libloading, and openssl-src floor patches are needed by WASIX-hosted tools; recheck them on the next tag bump";}
+      ];
     };
 
     meta = with lib; {
-      description = "WASIX Rust toolchain (rustc + cargo + wasix std), built from source";
+      description =
+        if hostedOnWasix
+        then "WASIX-hosted Rust toolchain (rustc + cargo + WASIX std), built from source"
+        else "WASIX Rust toolchain (rustc + cargo + wasix std), built from source";
       homepage = "https://github.com/wasix-org/rust";
       license = with licenses; [mit asl20];
       platforms = ["x86_64-linux"];

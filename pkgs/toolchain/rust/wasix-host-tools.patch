@@ -1,0 +1,316 @@
+diff --git a/compiler/rustc/Cargo.toml b/compiler/rustc/Cargo.toml
+--- a/compiler/rustc/Cargo.toml
++++ b/compiler/rustc/Cargo.toml
+@@ -13 +12,0 @@
+-rustc_driver = { path = "../rustc_driver" }
+@@ -24,0 +24,3 @@
++[target.'cfg(not(target_family = "wasm"))'.dependencies]
++rustc_driver = { path = "../rustc_driver" }
++
+diff --git a/compiler/rustc/src/main.rs b/compiler/rustc/src/main.rs
+--- a/compiler/rustc/src/main.rs
++++ b/compiler/rustc/src/main.rs
+@@ -44 +44,8 @@
+-    rustc_driver::main()
++    #[cfg(target_family = "wasm")]
++    {
++        rustc_driver_impl::main()
++    }
++    #[cfg(not(target_family = "wasm"))]
++    {
++        rustc_driver::main()
++    }
+diff --git a/compiler/rustc_driver_impl/src/lib.rs b/compiler/rustc_driver_impl/src/lib.rs
+--- a/compiler/rustc_driver_impl/src/lib.rs
++++ b/compiler/rustc_driver_impl/src/lib.rs
+@@ -38,2 +38,4 @@ use rustc_errors::{ColorConfig, DiagCtxt, ErrCode, PResult, markdown};
+ use rustc_feature::find_gated_cfg;
++#[cfg(target_family = "wasm")]
++use rustc_const_eval as _;
+ // This avoids a false positive with `-Wunused_crate_dependencies`.
+diff --git a/compiler/rustc_fs_util/src/lib.rs b/compiler/rustc_fs_util/src/lib.rs
+--- a/compiler/rustc_fs_util/src/lib.rs
++++ b/compiler/rustc_fs_util/src/lib.rs
+@@ -1 +1,3 @@
+-use std::ffi::{CString, OsStr};
++#[cfg(any(unix, windows, target_family = "wasm"))]
++use std::ffi::CString;
++use std::ffi::OsStr;
+@@ -87 +89 @@ pub enum LinkOrCopy {
+-#[cfg(any(unix, all(target_os = "wasi", target_env = "p1")))]
++#[cfg(any(unix, target_family = "wasm"))]
+@@ -92 +94 @@ pub fn path_to_c_string(p: &Path) -> CString {
+-    #[cfg(all(target_os = "wasi", target_env = "p1"))]
++    #[cfg(target_family = "wasm")]
+diff --git a/compiler/rustc_session/src/filesearch.rs b/compiler/rustc_session/src/filesearch.rs
+--- a/compiler/rustc_session/src/filesearch.rs
++++ b/compiler/rustc_session/src/filesearch.rs
+@@ -6 +6,2 @@ use std::{env, fs};
+-use rustc_fs_util::try_canonicalize;
++#[cfg(any(unix, windows))]
++use rustc_fs_util::try_canonicalize;
+diff --git a/compiler/rustc_session/src/config.rs b/compiler/rustc_session/src/config.rs
+--- a/compiler/rustc_session/src/config.rs
++++ b/compiler/rustc_session/src/config.rs
+@@ -1359,7 +1359,12 @@ pub struct Sysroot {
+ 
+ impl Sysroot {
+     pub fn new(explicit: Option<PathBuf>) -> Sysroot {
+-        Sysroot { explicit, default: filesearch::default_sysroot() }
++        #[cfg(target_os = "wasi")]
++        let default = explicit.clone().unwrap_or_else(filesearch::default_sysroot);
++        #[cfg(not(target_os = "wasi"))]
++        let default = filesearch::default_sysroot();
++
++        Sysroot { explicit, default }
+     }
+ 
+     /// Return explicit sysroot if it was passed with `--sysroot`, or default sysroot otherwise.
+diff --git a/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs b/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs
+index d25684241a5..fbef79545e7 100644
+--- a/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs
++++ b/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs
+@@ -74 +74,3 @@
+-use crate::spec::{Arch, Cc, LinkSelfContainedDefault, LinkerFlavor, Os, Target, base, crt_objects};
++use crate::spec::{
++    Arch, Cc, LinkSelfContainedDefault, LinkerFlavor, Os, Target, add_link_args, base, crt_objects,
++};
+@@ -112,6 +114,29 @@ pub(crate) fn target() -> Target {
+     options.add_pre_link_args(LinkerFlavor::WasmLld(Cc::Yes), args!("-Wl,"));
+     options.add_pre_link_args(LinkerFlavor::WasmLld(Cc::No), args!(""));
+ 
++    // A C compiler driver is used for C/C++ interoperation, but rustc passes
++    // -nodefaultlibs to that driver, so mirror WasmLd's executable libraries.
++    add_link_args(
++        &mut options.late_link_args,
++        LinkerFlavor::WasmLld(Cc::Yes),
++        &[
++            "-Wl,--whole-archive",
++            "-lc",
++            "-lresolv",
++            "-lrt",
++            "-lm",
++            "-lpthread",
++            "-lutil",
++            "-lcommon-tag-stubs",
++            "-Wl,--no-whole-archive",
++            "-lwasi-emulated-getpid",
++            "-lwasi-emulated-mman",
++            "-lwasi-emulated-process-clocks",
++            "-lunwind",
++            "-lclang_rt.builtins-wasm32",
++        ],
++    );
++
+     options.pre_link_objects_self_contained = crt_objects::pre_wasi_self_contained();
+     options.post_link_objects_self_contained = crt_objects::post_wasi_self_contained();
+ 
+@@ -149,7 +174,7 @@ pub(crate) fn target() -> Target {
+         metadata: crate::spec::TargetMetadata {
+             description: None,
+             tier: None,
+-            host_tools: None,
++            host_tools: Some(true),
+             std: None,
+         },
+         pointer_width: 32,
+diff --git a/src/bootstrap/src/core/build_steps/llvm.rs b/src/bootstrap/src/core/build_steps/llvm.rs
+index 25f06d448d0..49dd3901b12 100644
+--- a/src/bootstrap/src/core/build_steps/llvm.rs
++++ b/src/bootstrap/src/core/build_steps/llvm.rs
+@@ -366,0 +367,5 @@
++        if target.triple.contains("wasmer-wasi") {
++            cfg.define("LLVM_BUILD_TOOLS", "OFF");
++            cfg.define("LLVM_BUILD_UTILS", "OFF");
++        }
++
+diff --git a/src/tools/cargo/Cargo.toml b/src/tools/cargo/Cargo.toml
+index 20b7f4e6c81..6fbb823507f 100644
+--- a/src/tools/cargo/Cargo.toml
++++ b/src/tools/cargo/Cargo.toml
+@@ -46,12 +46,12 @@ core-foundation = { version = "0.10.1", features = ["mac_os_10_7_support"] }
+ crates-io = { version = "0.40.18", path = "crates/crates-io" }
+ criterion = { version = "0.8.2", features = ["html_reports"] }
+-curl = "0.4.49"
++curl = { version = "0.4.49", features = ["static-ssl"] }
+ curl-sys = "0.4.87"
+ filetime = "0.2.27"
+ flate2 = { version = "1.1.9", default-features = false, features = ["zlib-rs"] }
+ futures = { version = "0.3.32", default-features = false, features = ["std", "executor"]}
+ futures-timer = "3.0.3"
+-git2 = "0.20.4"
++git2 = { version = "0.20.4", default-features = false }
+ git2-curl = "0.21.0"
+ # When updating this, also see if `gix-transport` further down needs updating or some auth-related tests will fail.
+ gix = { version = "0.81.0", default-features = false, features = ["sha1", "progress-tree", "parallel", "dirwalk", "status"] }
+diff --git a/src/tools/cargo/crates/cargo-util/Cargo.toml b/src/tools/cargo/crates/cargo-util/Cargo.toml
+index 8c781569239..15f69493ea2 100644
+--- a/src/tools/cargo/crates/cargo-util/Cargo.toml
++++ b/src/tools/cargo/crates/cargo-util/Cargo.toml
+@@ -27 +27 @@ core-foundation.workspace = true
+-[target.'cfg(unix)'.dependencies]
++[target.'cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))'.dependencies]
+diff --git a/src/bootstrap/src/core/build_steps/tool.rs b/src/bootstrap/src/core/build_steps/tool.rs
+index 20d2053c755..8e60a4ed5be 100644
+--- a/src/bootstrap/src/core/build_steps/tool.rs
++++ b/src/bootstrap/src/core/build_steps/tool.rs
+@@ -852 +852 @@ impl Step for Cargo {
+-            allow_features: "min_specialization,specialization",
++            allow_features: "min_specialization,specialization,wasi_ext",
+@@ -941 +941,5 @@ pub(crate) fn copy_lld_artifacts(
+-    let src_exe = exe("lld", target);
++    let src_exe = if target.triple.contains("wasmer-wasi") {
++        "lld".into()
++    } else {
++        exe("lld", target)
++    };
+diff --git a/src/tools/cargo/crates/cargo-util/src/lib.rs b/src/tools/cargo/crates/cargo-util/src/lib.rs
+index 884bcb390a7..5e501e9a5c1 100644
+--- a/src/tools/cargo/crates/cargo-util/src/lib.rs
++++ b/src/tools/cargo/crates/cargo-util/src/lib.rs
+@@ -6,0 +7 @@
++#![cfg_attr(all(target_os = "wasi", target_vendor = "wasmer"), feature(wasi_ext))]
+diff --git a/src/tools/cargo/crates/cargo-util/src/paths.rs b/src/tools/cargo/crates/cargo-util/src/paths.rs
+index c359d3411ce..385472b05ba 100644
+--- a/src/tools/cargo/crates/cargo-util/src/paths.rs
++++ b/src/tools/cargo/crates/cargo-util/src/paths.rs
+@@ -398,0 +399,5 @@ pub fn path2bytes(path: &Path) -> Result<&[u8]> {
++    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++    {
++        use std::os::wasi::prelude::*;
++        Ok(path.as_os_str().as_bytes())
++    }
+@@ -417,0 +423,5 @@ pub fn bytes2path(bytes: &[u8]) -> Result<PathBuf> {
++    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++    {
++        use std::os::wasi::prelude::*;
++        Ok(PathBuf::from(OsStr::from_bytes(bytes)))
++    }
+@@ -626,0 +637,2 @@ pub fn link_or_copy(src: &Path, dst: &Path) -> Result<()> {
++        #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++        use std::os::wasi::fs::symlink_path as symlink;
+diff --git a/src/tools/cargo/crates/cargo-util/src/process_builder.rs b/src/tools/cargo/crates/cargo-util/src/process_builder.rs
+index f3859080cc8..2618523a5f3 100644
+--- a/src/tools/cargo/crates/cargo-util/src/process_builder.rs
++++ b/src/tools/cargo/crates/cargo-util/src/process_builder.rs
+@@ -621,0 +622,35 @@ mod imp {
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++mod imp {
++    use super::{ProcessBuilder, close_tempfile_and_log_error, debug_force_argfile};
++    use anyhow::Result;
++    use std::io;
++
++    pub fn exec_replace(process_builder: &ProcessBuilder) -> Result<()> {
++        let mut file = None;
++        let status = if debug_force_argfile(process_builder.retry_with_argfile) {
++            let (mut command, argfile) = process_builder.build_command_with_argfile()?;
++            file = Some(argfile);
++            command.status()?
++        } else {
++            let mut command = process_builder.build_command();
++            match command.status() {
++                Ok(status) => status,
++                Err(error) if process_builder.should_retry_with_argfile(&error) => {
++                    let (mut command, argfile) = process_builder.build_command_with_argfile()?;
++                    file = Some(argfile);
++                    command.status()?
++                }
++                Err(error) => return Err(error.into()),
++            }
++        };
++        if let Some(file) = file {
++            close_tempfile_and_log_error(file);
++        }
++        std::process::exit(status.code().unwrap_or(1))
++    }
++
++    pub fn command_line_too_big(err: &io::Error) -> bool {
++        err.raw_os_error() == Some(libc::E2BIG)
++    }
++}
++
+diff --git a/src/tools/cargo/crates/cargo-util/src/process_error.rs b/src/tools/cargo/crates/cargo-util/src/process_error.rs
+index 8ab8ef9c7f9..9c5ea918e6b 100644
+--- a/src/tools/cargo/crates/cargo-util/src/process_error.rs
++++ b/src/tools/cargo/crates/cargo-util/src/process_error.rs
+@@ -139,0 +140,5 @@ pub fn exit_status_to_string(status: ExitStatus) -> String {
++    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++    fn status_to_string(status: ExitStatus) -> String {
++        status.to_string()
++    }
++
+diff --git a/src/tools/cargo/crates/cargo-util/src/read2.rs b/src/tools/cargo/crates/cargo-util/src/read2.rs
+index 9b76461c360..6bc17a5454e 100644
+--- a/src/tools/cargo/crates/cargo-util/src/read2.rs
++++ b/src/tools/cargo/crates/cargo-util/src/read2.rs
+@@ -3 +3 @@ pub use self::imp::read2;
+-#[cfg(unix)]
++#[cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))]
+diff --git a/src/tools/cargo/crates/cargo-util-terminal/src/shell.rs b/src/tools/cargo/crates/cargo-util-terminal/src/shell.rs
+index 241c97b2dbc..60e8583c5b1 100644
+--- a/src/tools/cargo/crates/cargo-util-terminal/src/shell.rs
++++ b/src/tools/cargo/crates/cargo-util-terminal/src/shell.rs
+@@ -646,0 +647,14 @@ mod imp {
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++mod imp {
++    use super::{Shell, TtyWidth};
++
++    pub fn stderr_width() -> TtyWidth {
++        TtyWidth::NoTty
++    }
++
++    pub fn err_erase_line(shell: &mut Shell) {
++        // WASIX supports ANSI terminals, but does not expose TIOCGWINSZ.
++        let _ = shell.output.stderr().write_all(b"\x1B[K");
++    }
++}
++
+diff --git a/src/tools/cargo/credential/cargo-credential/src/stdio.rs b/src/tools/cargo/credential/cargo-credential/src/stdio.rs
+index b7b03edff2a..42a6bdb6bfa 100644
+--- a/src/tools/cargo/credential/cargo-credential/src/stdio.rs
++++ b/src/tools/cargo/credential/cargo-credential/src/stdio.rs
+@@ -82 +82 @@ mod imp {
+-#[cfg(unix)]
++#[cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))]
+diff --git a/src/tools/cargo/credential/cargo-credential/Cargo.toml b/src/tools/cargo/credential/cargo-credential/Cargo.toml
+index c217d9d79e3..b49f8e3a38f 100644
+--- a/src/tools/cargo/credential/cargo-credential/Cargo.toml
++++ b/src/tools/cargo/credential/cargo-credential/Cargo.toml
+@@ -17 +17 @@ time.workspace = true
+-[target.'cfg(unix)'.dependencies]
++[target.'cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))'.dependencies]
+diff --git a/src/tools/cargo/src/cargo/util/flock.rs b/src/tools/cargo/src/cargo/util/flock.rs
+index 42799f7e11e..30e9369743a 100644
+--- a/src/tools/cargo/src/cargo/util/flock.rs
++++ b/src/tools/cargo/src/cargo/util/flock.rs
+@@ -469,0 +470,5 @@ fn error_unsupported(err: &std::io::Error) -> bool {
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++fn error_unsupported(err: &std::io::Error) -> bool {
++    err.kind() == std::io::ErrorKind::Unsupported
++}
++
+diff --git a/src/tools/cargo/src/bin/cargo/main.rs b/src/tools/cargo/src/bin/cargo/main.rs
+index c009cd0904d..8c49a0ad383 100644
+--- a/src/tools/cargo/src/bin/cargo/main.rs
++++ b/src/tools/cargo/src/bin/cargo/main.rs
+@@ -336,0 +337,5 @@ fn is_executable<P: AsRef<Path>>(path: P) -> bool {
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++fn is_executable<P: AsRef<Path>>(path: P) -> bool {
++    path.as_ref().is_file()
++}
++
+diff --git a/src/tools/cargo/src/cargo/util/job.rs b/src/tools/cargo/src/cargo/util/job.rs
+index b152097fa61..4cbf4d265c5 100644
+--- a/src/tools/cargo/src/cargo/util/job.rs
++++ b/src/tools/cargo/src/cargo/util/job.rs
+@@ -48,0 +49,10 @@ mod imp {
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++mod imp {
++    pub type Setup = ();
++
++    pub unsafe fn setup() -> Option<()> {
++        // WASIX does not expose setsid or Windows job objects.
++        Some(())
++    }
++}
++
