@@ -22,6 +22,5 @@ helpers.libTweaks {
     AWS_LC_SYS_NO_JITTER_ENTROPY = "1";
     AWS_LC_SYS_CFLAGS = "-DOPENSSL_NO_TTY -D_GNU_SOURCE";
   };
-  passthru.wasix.updateNotes = [{message = "hf-xet: re-check the wasm->browser cfg rewrite on bump.";}];
 }
 pyprev.hf-xet
