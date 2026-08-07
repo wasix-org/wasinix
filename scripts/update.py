@@ -40,6 +40,7 @@ class Target:
     command: tuple = ()
     command_drv_paths: tuple = ()
     file: str = ""  # repo-relative pin file, from meta.position
+    version: str = ""
 
 
 def prune_rels():
@@ -265,6 +266,7 @@ def discovered_targets():
             command=tuple(s["command"]),
             command_drv_paths=tuple(s["commandDrvPaths"]),
             file=repo_relative(pos.rsplit(":", 1)[0]) if pos else "",
+            version=s.get("version") or "",
         )
     return list(targets.values())
 
@@ -332,8 +334,7 @@ def run_update_script(t):
         # a --version-regex that excludes every available tag (prereleases
         # only, e.g. s3-server) means nothing to bump, not a broken updater
         if "No version matched the regex" in p.stderr:
-            found = " ".join(p.stderr.rsplit("versions were found:", 1)[-1].split())
-            return f"up to date (no release matches the version regex; found: {found})"
+            return "up to date"
         raise RuntimeError(
             f"{t.command[0]} exited {p.returncode}:\n{(p.stderr or p.stdout).strip()}"
         )
@@ -360,7 +361,11 @@ def update_flake_input(t):
     before = flake_input_rev(t.input)
     run(["nix", "flake", "update", t.input], cwd=REPO)
     after = flake_input_rev(t.input)
-    outcome = f"{before[:10]} -> {after[:10]}" if before != after else "up to date"
+    outcome = (
+        f"{before[:10]} -> {after[:10]}"
+        if before != after
+        else f"up to date ({after[:10]})"
+    )
     print(f"  {outcome}")
     return outcome
 
@@ -425,6 +430,14 @@ def main():
         "crate-pins": update_crate_pins,
     }
 
+    def normalize_outcome(t, outcome, changed):
+        crate_state = re.fullmatch(r"(\d+ pins) \(0 fetched\)", outcome)
+        if t.backend == "crate-pins" and not changed and crate_state:
+            return f"up to date ({crate_state.group(1)})"
+        if outcome == "up to date" and t.version:
+            return f"up to date ({t.version})"
+        return outcome
+
     # captured before anything bumps: the `prior` side of the update notes
     priors = note_versions()
     # and of regen_history, below. Any target can move a served version.
@@ -450,7 +463,7 @@ def main():
         any_changed = any_changed or changed
         if outcome is None:
             outcome = "updated" if changed else "up to date"
-        results.append((t.name, outcome))
+        results.append((t.name, normalize_outcome(t, outcome, changed)))
 
     # Retain before pruning: prune_rels drops the rel key of any version no
     # longer served, which is exactly the version retention just brought back.
@@ -521,27 +534,25 @@ def fired_notes(priors):
     # changed. Advisory only; deduped across the per-profile attrs.
     env = os.environ.copy()
     env["NOTE_PRIORS"] = json.dumps(priors)
-    try:
-        p = subprocess.run(
-            [
-                "nix",
-                "eval",
-                "--json",
-                "--impure",
-                f".#legacyPackages.{SYSTEM}.updateNotes.fired",
-                "--apply",
-                'f: f (builtins.fromJSON (builtins.getEnv "NOTE_PRIORS"))',
-            ],
-            cwd=REPO,
-            env=env,
-            text=True,
-            capture_output=True,
-            check=True,
-        )
-        fired = json.loads(p.stdout)
-    except Exception as e:
-        print(f"WARN: note check failed: {e}", file=sys.stderr)
-        return []
+    cmd = [
+        "nix",
+        "eval",
+        "--json",
+        "--impure",
+        f".#legacyPackages.{SYSTEM}.updateNotes.fired",
+        "--apply",
+        'f: f (builtins.fromJSON (builtins.getEnv "NOTE_PRIORS"))',
+    ]
+    for attempt in range(2):
+        try:
+            fired = json.loads(run(cmd, cwd=REPO, env=env).stdout)
+            break
+        except Exception as e:
+            if attempt == 0:
+                print("WARN: note check failed; retrying once", file=sys.stderr)
+            else:
+                print(f"WARN: note check failed after retry: {e}", file=sys.stderr)
+                return []
     seen = {}
     for attr, notes in sorted(fired.items()):
         # wasmerPackages.<n>.webc names as <n> (which may contain dots)

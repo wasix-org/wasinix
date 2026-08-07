@@ -334,7 +334,10 @@
               let
                 v = lib.optionalAttrs ours {
                   ${attr} =
-                    {inherit command commandDrvPaths;}
+                    {
+                      inherit command commandDrvPaths;
+                      version = drv.version or null;
+                    }
                     // lib.optionalAttrs (lib.isAttrs s && s ? name) {inherit (s) name;}
                     // lib.optionalAttrs (lib.isAttrs s && s ? attrPath) {inherit (s) attrPath;}
                     // {position = drv.meta.position or null;};
