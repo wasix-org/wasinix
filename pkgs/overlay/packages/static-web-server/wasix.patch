@@ -2,10 +2,13 @@ diff --git a/src/fs/path.rs b/src/fs/path.rs
 index 4dc405d..8afc0e1 100644
 --- a/src/fs/path.rs
 +++ b/src/fs/path.rs
-@@ -66,6 +66,14 @@ fn path_from_bytes(bytes: &[u8]) -> PathBuf {
+@@ -66,6 +66,17 @@ fn path_from_bytes(bytes: &[u8]) -> PathBuf {
      OsStr::from_bytes(bytes).into()
  }
  
++// Rust's WASI targets do not set cfg(unix), even though WASI paths are byte-oriented.
++// Use WASI's OsStrExt so percent-decoded, non-UTF-8 URL paths remain lossless rather
++// than applying the Windows branch's lossy Unicode conversion.
 +#[cfg(target_os = "wasi")]
 +fn path_from_bytes(bytes: &[u8]) -> PathBuf {
 +    use std::ffi::OsStr;
@@ -21,20 +24,26 @@ diff --git a/src/server.rs b/src/server.rs
 index b5d98c5..f9dc9ec 100644
 --- a/src/server.rs
 +++ b/src/server.rs
-@@ -10,6 +10,8 @@ use listenfd::ListenFd;
+@@ -10,6 +10,10 @@ use listenfd::ListenFd;
  use std::net::{IpAddr, SocketAddr, TcpListener};
  use std::sync::Arc;
 -use tokio::sync::{Mutex, watch::Receiver};
 +use tokio::sync::watch::Receiver;
++// Mutex is only used by the Unix and Windows graceful-shutdown signal paths.
++// WASI has no process-signal integration here, and deny(warnings) rejects the unused import.
 +#[cfg(any(unix, windows))]
 +use tokio::sync::Mutex;
  
  use crate::handler::{RequestHandler, RequestHandlerOpts};
  
-@@ -667,6 +669,9 @@ impl Server {
+@@ -667,6 +671,13 @@ impl Server {
          #[cfg(unix)]
          http1_server.await?;
  
++        // WASI has no supported termination-signal source, so it cannot use either
++        // graceful-shutdown wrapper above. Await Hyper directly so the server keeps
++        // accepting requests until the host terminates it; otherwise the future is
++        // unused and the function would drop the listener and return immediately.
 +        #[cfg(target_os = "wasi")]
 +        http1_server.await?;
 +
