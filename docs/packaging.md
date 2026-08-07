@@ -13,7 +13,7 @@ Lightest form that works (the loader finds all of these):
 A package file is a function over one argument set:
 
 ```nix
-{ final, prev, helpers, toolchain, preferredProfilePackages, nixpkgs, ... }: ...
+{ final, prev, helpers, toolchain, preferredProfilePackages, wasmerDependencies, nixpkgs, ... }: ...
 ```
 
 `prev.<name>` is the nixpkgs package, already compiling with the WASIX stdenv
@@ -73,6 +73,23 @@ not in nixpkgs, call `final.rustPlatform.buildRustPackage` (see
    store paths found in the wasm), `selfMounts` (paths referenced from
    scripts, which autoSelfMount can't see). See git's package.nix for a full
    example.
+
+   Runtime webc dependencies accept a derivation or an attrset containing
+   `package` and `version`. The helpers derive requirements from the package's
+   published webc version:
+
+   ```nix
+   passthru.wasmer.dependencies = [
+     preferredProfilePackages.foo
+     (wasmerDependencies.any preferredProfilePackages.bar)
+     (wasmerDependencies.exact preferredProfilePackages.baz)
+     (wasmerDependencies.compatibleMajor preferredProfilePackages.qux)
+     (wasmerDependencies.compatibleMinor preferredProfilePackages.quux)
+   ];
+   ```
+
+   A bare derivation retains the default semver-compatible requirement. Use an
+   explicit `{ package = drv; version = "..."; }` for another semver range.
 
 3. Ship an older release too (a version consumers pin): see
    [Registry history](#registry-history).

@@ -9,7 +9,7 @@
 #   owner       ? "wasmer"
 #   commands    ? null  => one command per bin/*.wasm (auto-globbed at build)
 #   commandEnv  ? {}     => { <command> = { ENV = "val"; }; } merged onto a command
-#   dependencyVersions ? {} => { "owner/name" = "requirement"; }
+#   dependencies ? [] => derivations, or { package = drv; version = requirement; }
 #   fs          ? {}     => mounts, e.g. { "/etc/ssl" = "${cacert}/etc/ssl"; }
 #   selfMounts  ? []     => explicit store-path-at-itself mounts
 #   autoSelfMount ? false => also scan bin/*.wasm for embedded /nix/store paths
@@ -21,6 +21,7 @@
   wasmer,
   # this function itself, to build dependency webcs.
   self,
+  wasmerDependencies,
   posOf,
 }: {
   package,
@@ -108,19 +109,18 @@
   # at /bin/<cmd> and /usr/bin/<cmd> in this package's fs, so e.g. /bin/bash
   # resolves from the dependency instead of a bundled copy.
   dependencies = w.dependencies or [];
-  dependencyVersions = w.dependencyVersions or {};
+  dependencySpecs = map wasmerDependencies.normalize dependencies;
   dependencyLines =
     lib.concatMapStringsSep "\n" (
       dep: let
-        r = webcIdent dep;
-        version = dependencyVersions.${r.fullName} or r.version;
-      in "${builtins.toJSON r.fullName} = ${builtins.toJSON version}"
+        r = webcIdent dep.package;
+      in "${builtins.toJSON r.fullName} = ${builtins.toJSON dep.version}"
     )
-    dependencies;
+    dependencySpecs;
 
   # Dependency webcs and their transitive closure, symlinkJoined (via each
   # .webc) into one --include-webc tree for the shim.
-  depWebcs = map (dep: self {package = dep;}) dependencies;
+  depWebcs = map (dep: self {package = dep.package;}) dependencySpecs;
   closure = webcs: lib.unique (webcs ++ lib.concatMap (w: closure w.depWebcs) webcs);
   depTree =
     if depWebcs == []

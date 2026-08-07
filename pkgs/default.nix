@@ -23,6 +23,7 @@
   inherit (pkgs) lib;
   nixUpdate = pkgs.nix-update;
   wasixLib = import ./lib {inherit lib;};
+  wasmerDependencies = import ./wasmer/dependencies.nix {inherit lib;};
   toolchain = import ./toolchain {inherit pkgs ghcWasm;};
 
   # Defined here, not derived from a profile, so pkgsCross can be built before the
@@ -78,7 +79,7 @@
   preferredProfilePackages = lib.genAttrs wasixPkgNames (name: nixpkgsByProfile.${preferredProfileOf name}.${name});
 
   wasixOverlay = import ./overlay {
-    inherit toolchain nixpkgs preferredProfilePackages wasixRustPlatform;
+    inherit toolchain nixpkgs preferredProfilePackages wasixRustPlatform wasmerDependencies;
     inherit (pkgs) nix-update-script;
   };
   mkWasixPkgs = import ./set/mk-pkgs.nix {inherit system nixpkgs mkWasixStdenv wasixOverlay;};
@@ -275,6 +276,7 @@
   makeWasmerPackage = pkgs.callPackage ./wasmer/make-wasmer-package.nix {
     self = makeWasmerPackage;
     wasmer = wasmerRuntime;
+    inherit wasmerDependencies;
     inherit (wasixLib) posOf;
   };
 
