@@ -1,0 +1,43 @@
+diff --git a/src/fs/path.rs b/src/fs/path.rs
+index 4dc405d..8afc0e1 100644
+--- a/src/fs/path.rs
++++ b/src/fs/path.rs
+@@ -66,6 +66,14 @@ fn path_from_bytes(bytes: &[u8]) -> PathBuf {
+     OsStr::from_bytes(bytes).into()
+ }
+ 
++#[cfg(target_os = "wasi")]
++fn path_from_bytes(bytes: &[u8]) -> PathBuf {
++    use std::ffi::OsStr;
++    use std::os::wasi::ffi::OsStrExt;
++
++    OsStr::from_bytes(bytes).into()
++}
++
+ #[cfg(windows)]
+ fn path_from_bytes(bytes: &[u8]) -> PathBuf {
+     // This should really be OsStr::from_encoded_bytes_unchecked() but it’s
+diff --git a/src/server.rs b/src/server.rs
+index b5d98c5..f9dc9ec 100644
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -10,6 +10,8 @@ use listenfd::ListenFd;
+ use std::net::{IpAddr, SocketAddr, TcpListener};
+ use std::sync::Arc;
+-use tokio::sync::{Mutex, watch::Receiver};
++use tokio::sync::watch::Receiver;
++#[cfg(any(unix, windows))]
++use tokio::sync::Mutex;
+ 
+ use crate::handler::{RequestHandler, RequestHandlerOpts};
+ 
+@@ -667,6 +669,9 @@ impl Server {
+         #[cfg(unix)]
+         http1_server.await?;
+ 
++        #[cfg(target_os = "wasi")]
++        http1_server.await?;
++
+         #[cfg(windows)]
+         let http1_server_task = tokio::spawn(async move {
+             if let Err(err) = http1_server.await {
