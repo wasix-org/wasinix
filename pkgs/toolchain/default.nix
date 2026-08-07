@@ -41,7 +41,9 @@
     wasixSysrootEhpic = variants.ehpic.sysroot;
   };
   binaryen = pkgs.binaryen;
-  anybuild = pkgs.callPackage ./anybuild.nix {};
+  # Crossable product recipe; the same definition is instantiated in every
+  # WASIX profile before its target-specific overlay adapter is applied.
+  anybuild = pkgs.anybuild;
   wasixcc = pkgs.callPackage ./wasixcc.nix {
     inherit wasixLlvm binaryen wasixSysroot;
   };

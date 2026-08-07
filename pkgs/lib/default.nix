@@ -1,7 +1,7 @@
 # Helpers for wasix package files, and the optional passthru.wasix declaration:
-# supportedProfiles, preferredProfile, shipped, broken, retention, retentionHook,
-# updateNotes (docs/packaging.md, docs/updating.md). applyWasixMeta below is the
-# only writer of meta.badPlatforms/meta.broken.
+# supportedProfiles, preferredProfile, shipped, broken, toolchainRole,
+# retention, retentionHook, updateNotes (docs/packaging.md, docs/updating.md).
+# applyWasixMeta below is the only writer of meta.badPlatforms/meta.broken.
 {lib}: let
   profilesCfg = import ../profiles.nix;
   # extendDrv hands the filters below `null` for an attr the package never set.

@@ -32,6 +32,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
 
   passthru.updateScript = {
     command = nix-update-script {extraArgs = ["--flake"];};
+    # Compatibility alias; packagesByHost.native.anybuild is the same drv.
     attrPath = "toolchain.anybuild";
   };
 

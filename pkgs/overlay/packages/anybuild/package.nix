@@ -1,13 +1,15 @@
 {
-  final,
+  prev,
   helpers,
   preferredProfilePackages,
   wasmerDependencies,
-  toolchain,
   ...
 }:
 helpers.libTweaks {
-  passthru.wasix.shipped = true;
+  passthru.wasix = {
+    shipped = true;
+    toolchainRole = "hosted";
+  };
   passthru.wasmer = {
     entrypoint = "anybuild";
     dependencies = [(wasmerDependencies.any preferredProfilePackages.bash)];
@@ -16,7 +18,5 @@ helpers.libTweaks {
       shipit.PATH = "/bin:/usr/bin";
     };
   };
-} (toolchain.anybuild.override {
-  inherit (final) rustPlatform stdenv;
-  shellPath = "/bin/bash";
-})
+}
+(prev.anybuild.override {shellPath = "/bin/bash";})

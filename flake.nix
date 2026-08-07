@@ -153,6 +153,10 @@
           runtime = wasmerRuntime; # the wasmer runtime (input, patched)
         };
         librariesByProfile = wasix.librariesByProfile; # <profile>.<lib>
+        # Shared Wasmer/WASIX product recipes built for the native host. The
+        # WASIX profile matrix is available through the packagesByHost escape
+        # hatch below and is already covered by the product-oriented outputs.
+        nativePackages = wasix.nativePackages;
         # <name> = wasm cross build; .pkg = its wasmer package; .webc = the built webc; .tests = its tests
         wasmerPackages = wasix.wasmerPackages;
         # <attr> = wasm cross build of python3.pkgs.<attr>; .tests = import smoke-test
@@ -198,12 +202,16 @@
             else {}
         );
       # One derivation per dotted key for nix-eval-jobs / nix-fast-build.
-      ci = flattenDrvs "" buildable // flattenDrvs "checks" flakeChecks;
+      # toolchain.anybuild remains a compatibility alias for the native
+      # product; nativePackages.anybuild is its single CI job.
+      ciBuildable = buildable // {toolchain = removeAttrs buildable.toolchain ["anybuild"];};
+      ci = flattenDrvs "" ciBuildable // flattenDrvs "checks" flakeChecks;
     in
       buildable
       // {
         # Escape hatches / aggregates: reachable via `.#`, but not ci jobs.
         inherit (wasix) nixpkgsByProfile toolchainByProfile defaultProfileName;
+        inherit (wasix) packagesByHost toolchains;
 
         # Rebuild one target against the working tree with everything below it
         # pinned to a pristine base (./spot.nix). A function, so never a ci job.

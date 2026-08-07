@@ -10,6 +10,7 @@
   # are built. Empty in every normal eval; nothing that ships may set it.
   spotOverlays ? {},
 }: let
+  crossable = import ./crossable;
   pkgs = import nixpkgs {
     inherit system;
     overlays = [
@@ -23,6 +24,7 @@
             ];
         });
       })
+      (crossable.overlay {})
     ];
   };
   inherit (pkgs) lib;
@@ -92,7 +94,10 @@
     inherit toolchain nixpkgs preferredProfilePackages wasixRustPlatform wasmerDependencies;
     inherit (pkgs) nix-update-script;
   };
-  mkWasixPkgs = import ./set/mk-pkgs.nix {inherit system nixpkgs mkWasixStdenv wasixOverlay;};
+  crossableOverlay = crossable.overlay {nativeNixUpdateScript = pkgs.nix-update-script;};
+  mkWasixPkgs = import ./set/mk-pkgs.nix {
+    inherit system nixpkgs mkWasixStdenv crossableOverlay wasixOverlay;
+  };
   nixpkgsByProfile = lib.mapAttrs (name: spec: mkWasixPkgs (spotOverlays.${name} or []) spec) profilesCfg.profiles;
 
   # ── toolchainByProfile: per-profile build environments ────────────────────────────────
@@ -118,6 +123,63 @@
     )
     profilesCfg.profiles;
   defaultToolchain = toolchainByProfile.${defaultProfileName};
+
+  # Shared product recipes by host platform. `native` is an independent native
+  # package-set product, never a buildPackages splice from a cross set.
+  nativePackages = lib.genAttrs crossable.names (name: pkgs.${name});
+  crossablePackagesByProfile =
+    lib.mapAttrs (
+      profile: profilePkgs:
+        lib.filterAttrs
+        (_: wasixLib.supportedIn profile)
+        (lib.genAttrs crossable.names (name: profilePkgs.${name}))
+    )
+    nixpkgsByProfile;
+  packagesByHost = {
+    native = nativePackages;
+    wasixByProfile = crossablePackagesByProfile;
+    preferredWasix = lib.genAttrs crossable.names (name: preferredProfilePackages.${name});
+  };
+
+  # Toolchain roles make the bootstrap direction explicit. Hosted products tag
+  # their WASIX adapter, so crossable tools and specialized LLVM/Rust builders
+  # can join without adding another profile matrix.
+  hostedToolNames =
+    lib.filter
+    (name: ((wasixLib.wasixMetaOf nixpkgsByProfile.${defaultProfileName}.${name}).toolchainRole or null) == "hosted")
+    wasixPkgNames;
+  hostedToolchainsByProfile =
+    lib.mapAttrs (
+      profile: profilePkgs:
+        lib.filterAttrs
+        (_: wasixLib.supportedIn profile)
+        (lib.genAttrs hostedToolNames (name: profilePkgs.${name}))
+    )
+    nixpkgsByProfile;
+  runtimeToolchainsByProfile =
+    lib.mapAttrs (_: tc: {
+      inherit (tc) sysroot libc compiler-rt libcxx flangRt openmp;
+    })
+    toolchainByProfile;
+  toolchains = {
+    build = {
+      inherit
+        (toolchain)
+        anybuild
+        binaryen
+        cargoWasix
+        flang
+        flangCross
+        haskell
+        llvm
+        wasixcc
+        wasixLlvm
+        wasixRustToolchain
+        ;
+    };
+    hostedByProfile = hostedToolchainsByProfile;
+    runtimesByProfile = runtimeToolchainsByProfile;
+  };
 
   # Profiles whose executables wasmer can execute, for the compile+link+run tests:
   # everything except legacy EH, whose `try` opcode wasmer has no feature flag for.
@@ -331,6 +393,7 @@
   };
 in {
   inherit pkgs pkgsCross nixUpdate defaultProfileName wasixPkgNames;
+  inherit nativePackages packagesByHost toolchains;
   inherit toolchain toolchainByProfile nixpkgsByProfile preferredProfilePackages allWasmerPackages;
   inherit shippedCommands wasmerPackages librariesByProfile toolchainTestPkgs abiChecks;
   inherit libraryTestPkgs;
