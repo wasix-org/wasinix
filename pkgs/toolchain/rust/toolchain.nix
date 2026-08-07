@@ -41,7 +41,7 @@
   withDynamicLinking ? true,
 }: let
   inherit (lib) optionals optionalString;
-  version = "2026-07-07.3+rust-1.96";
+  version = "2026-08-06.1+rust-1.97";
 
   hostTriple = "x86_64-unknown-linux-gnu";
 
@@ -51,17 +51,17 @@
     repo = "rust";
     tag = "v${version}";
     fetchSubmodules = true;
-    hash = "sha256-P8esuvLJE2bhOrc7HXNuSPxv6mpyUoxcNjjS8/qZ5lg=";
+    hash = "sha256-xJo/H+Im8pkr84FLil3K5ZJCvF3kb4M7zKhqfhyBPho=";
   };
 
   # stage0 bootstrap compiler: the upstream release pinned in src/stage0, which
   # x.py would otherwise download itself.
   bootstrap = stdenv.mkDerivation {
     pname = "rust-bootstrap";
-    version = "1.95.0";
+    version = "1.96.0";
     src = fetchurl {
-      url = "https://static.rust-lang.org/dist/2026-04-16/rust-1.95.0-${hostTriple}.tar.xz";
-      hash = "sha256-LgM48Y7LqkoPYxuegOi44mu2/nfdVFT7qKcM+WwehKE=";
+      url = "https://static.rust-lang.org/dist/2026-05-28/rust-1.96.0-${hostTriple}.tar.xz";
+      hash = "sha256-wpUEdYOlYjjqBrQ/hJ9Lh3+hK/1McQP42adMlMnE4Qg=";
     };
     nativeBuildInputs = [autoPatchelfHook];
     buildInputs = [stdenv.cc.cc.lib zlib];

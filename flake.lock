@@ -60,11 +60,11 @@
       },
       "locked": {
         "host": "gitlab.haskell.org",
-        "lastModified": 1785534229,
-        "narHash": "sha256-/UiXG7+WpkMOTWA3BY74bS7Sj0LAxxVAdX64loFPC5Y=",
+        "lastModified": 1785934104,
+        "narHash": "sha256-NpyIfOoX1IknWPmQy7kGT+qBMyFJX3kMLwYrpASPmeU=",
         "owner": "haskell-wasm",
         "repo": "ghc-wasm-meta",
-        "rev": "5b96779e3d356b3962b6e9c85a9db3a1fcc31ed1",
+        "rev": "c75985a1b58fb0376eea9149ba5c7b933b3c7455",
         "type": "gitlab"
       },
       "original": {
@@ -76,11 +76,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1785828668,
-        "narHash": "sha256-8fsyqeO+mJqvIzeO4xIpgJe/f7MTbbVTEC6RT6WSXNs=",
+        "lastModified": 1785967620,
+        "narHash": "sha256-IItrdb7Puk05RqOBWZYFC5X6Wl1sJmCfh5MWVHw5iMM=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "e72e4f299401a3689d4b3d5fc6496b11db7064eb",
+        "rev": "b7c2ada94fe99c15b0dbcf4d11fd7850b957a436",
         "type": "github"
       },
       "original": {
@@ -156,11 +156,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1785360170,
-        "narHash": "sha256-XE1lKgQ3eIO3E7zWryqcRsax+mYXod/5RHBn4YaR9YE=",
+        "lastModified": 1785945821,
+        "narHash": "sha256-NLSyTCW4K4ofhNBllt3omPasm6QpralXH1DBZOc91Dw=",
         "owner": "numtide",
         "repo": "treefmt-nix",
-        "rev": "d1187f8bc71fb8aab02395869ec3f5c1920f75c0",
+        "rev": "ae7910970dddc408fe6ab1c8e4b277bb21d72dc0",
         "type": "github"
       },
       "original": {
@@ -201,11 +201,11 @@
         "wasinix": "wasinix"
       },
       "locked": {
-        "lastModified": 1785851463,
-        "narHash": "sha256-9/ff0UK90rUC3wRCwlOwmEEXhSr8r4Gg3qP49an7gYc=",
+        "lastModified": 1786093046,
+        "narHash": "sha256-5BqPbTXa0ISFN2Qew167vZLPU9DQ611hzV1PXNEoDQk=",
         "ref": "refs/heads/main",
-        "rev": "77c5357b56283ee56dc5b72c3d324b0aa6a4078c",
-        "revCount": 20772,
+        "rev": "dfb19c1b7155043ff4d8cab343e615fd689cc4ae",
+        "revCount": 20784,
         "submodules": true,
         "type": "git",
         "url": "https://github.com/wasmerio/wasmer"

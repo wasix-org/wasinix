@@ -2,7 +2,7 @@
 # the fork source swapped in. Built once on the host x86_64; it is both the
 # shipped toolchain and the compiler that builds the sysroot runtimes.
 {pkgs}: let
-  version = "21.1.204"; # fork release: base 21.1.2 plus a 2-digit counter
+  version = "21.1.206"; # fork release: base 21.1.2 plus a 2-digit counter
   # The base is the release minus the counter. Lenient (echoes strings it
   # cannot parse) so the update-note predicate below never throws on old
   # recorded versions; llvmVersion asserts the scheme instead.
@@ -26,7 +26,7 @@
     owner = "wasix-org";
     repo = "llvm-project";
     tag = version;
-    hash = "sha256-IFQNaJfBTVXWYsahkCGLMbmcs6vWDEwr6xKszq7yHSM=";
+    hash = "sha256-TKvDtvvCi1mOhYvbb7kHK7cWezZp/XyaydZY1ZJQR4g=";
   };
 
   # The stock compiler-rt/libcxx are invalid for wasix and the replacements are

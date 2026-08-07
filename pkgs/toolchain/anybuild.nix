@@ -9,16 +9,16 @@
 }:
 rustPlatform.buildRustPackage (finalAttrs: {
   pname = "anybuild";
-  version = "0.26.4";
+  version = "0.26.5";
 
   src = fetchFromGitHub {
     owner = "wasmerio";
     repo = "anybuild";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-M6AP8QgIuoly9Gznw2JOAGEdKTY0+mJciYhA3JKicfk=";
+    hash = "sha256-Xai//mueLGjLLvt2drrgmxtfo3qTqo+B+3/TA5guHdI=";
   };
 
-  cargoHash = "sha256-K9EkxIsTXOmqVnfv/ZQb97uXpO2100RKLQEyf5PjsAw=";
+  cargoHash = "sha256-CqOF9SZoMhBE2lJAWBCLLczyOQiHU5tdGvAo2ajjQ0Y=";
 
   postPatch = ''
     substituteInPlace crates/anybuild/src/run/local.rs \

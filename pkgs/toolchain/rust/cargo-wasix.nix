@@ -17,19 +17,19 @@
 }: let
   env = import ../env.nix {inherit lib;};
 
-  version = "0.1.32";
+  version = "0.1.33";
 
   src = fetchFromGitHub {
     owner = "wasix-org";
     repo = "cargo-wasix";
     tag = "v${version}";
-    hash = "sha256-0spEK/HmE7qdglHBMxhzUc/O/otKu5imPsEta1y39v4=";
+    hash = "sha256-Jd9Dr2P9lqPhlHo1VAU6QBLY4RIAuAuNC7RKUdJL/ZI=";
   };
 
   cargoWasixUnwrapped = rustPlatform.buildRustPackage {
     pname = "cargo-wasix-unwrapped";
     inherit version src;
-    cargoHash = "sha256-mOPo9sNAOflMY2hHpKpzUlKMFXYr0O8r/7QGtOoDtUU=";
+    cargoHash = "sha256-0bQGbrYpqusf1yviMHihhtxyu2ACqiCHgmWtZbhsBn4=";
 
     # The integration suite creates empty CARGO_HOMEs then invokes cargo-wasix,
     # which downloads the WASIX target. Its download_toolchain unit test also
