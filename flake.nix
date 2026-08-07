@@ -124,6 +124,10 @@
     collectTests = collectTestsPrefixed "";
     flakeChecks =
       collectTests wasix.wasmerPackages
+      # checks.rust is the native-hosted cross-toolchain suite. Keep the
+      # WASIX-hosted WebC test independently addressable instead of losing it
+      # to the right-biased merge below.
+      // lib.optionalAttrs (wasix.wasmerPackages ? rust) {rust-webc = wasix.wasmerPackages.rust.tests;}
       // collectTests wasix.toolchainTestPkgs
       # pythonWheels is nested by version (py313/py314); collect as wheel-py314-<attr>.
       // lib.concatMapAttrs (pv: wheelSet: collectTestsPrefixed "wheel-${pv}-" wheelSet) wasix.pythonWheels
