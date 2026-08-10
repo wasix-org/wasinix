@@ -2,8 +2,12 @@
 # <version>.patch files), enumerated once so vendor patching and the registry
 # mint resolve the same spec. `floorFor` is the single version selector; both
 # consumers call `resolve` to get the {patches, patchPhase, adds} for a version.
+# `pins` is cargo-registry/crates.json, the enumeration of the versions we cover.
 # See wasix-crate-patches/README.md.
-{pkgs}: dir: let
+{
+  pkgs,
+  pins,
+}: dir: let
   lib = pkgs.lib;
   rewriters = import (dir + "/rewriters") {inherit pkgs;};
   adds = import (dir + "/adds.nix");
@@ -88,16 +92,25 @@
     patchPhase = fv.patchPhase or "";
     adds = fv.adds or [];
   };
-  # Deps crates pull in that upstream lacks (mio -> wasix), tagged with the adder,
-  # for the vendor's post-FOD lock amend. Constant per crate, so resolved at the
-  # crate's highest patch version.
+  # Deps crates pull in that upstream lacks (mio -> wasix), tagged with the adder
+  # and the exact versions that pull it. `adds` is declared per version inside
+  # forVersion, so the versions come from `pins` -- the enumeration of what we
+  # cover. Patch files are never iterated for this: their names floor a version
+  # that is already known, they are not a version list.
   addsFor = crate: let
-    e = edits.${crate};
-    reps = lib.sort (a: b: builtins.compareVersions a.version b.version < 0) e.patchFiles;
+    versions = lib.attrNames (pins.${crate} or {});
+    tagged = lib.concatMap (v: map (a: {inherit v a;}) (resolve crate v).adds) versions;
+    byAdd = lib.groupBy (t: "${t.a.name}-${t.a.version}") tagged;
   in
-    if reps == []
-    then []
-    else map (a: a // {inherit crate;}) (resolve crate (lib.last reps).version).adds;
+    lib.mapAttrsToList (
+      _: ts:
+        (lib.head ts).a
+        // {
+          inherit crate;
+          versions = lib.sort (a: b: builtins.compareVersions a b < 0) (map (t: t.v) ts);
+        }
+    )
+    byAdd;
   # Tri-state for a resolved version of an edited crate: `edited` (apply our
   # patch stack + phase), `stock` (deliberately left as upstream ships it), or
   # `unsupported` (neither — a version we have not vetted). The vendor hard-fails

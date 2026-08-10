@@ -46,7 +46,12 @@
   # rustPlatform.buildRustPackage, like C/C++ do via the wasixcc stdenv.
   # crate-edits.nix view of wasix-crate-patches/, shared by the vendor-time
   # patching (rust-platform.nix) and the cargo-registry mint.
-  crateEdits = import ./lib/crate-edits.nix {inherit pkgs;} ./lib/wasix-crate-patches;
+  crateEdits =
+    import ./lib/crate-edits.nix {
+      inherit pkgs;
+      pins = builtins.fromJSON (builtins.readFile ./cargo-registry/crates.json);
+    }
+    ./lib/wasix-crate-patches;
 
   wasixRustPlatform = import ./set/rust-platform.nix {
     inherit lib pkgsCross crateEdits;

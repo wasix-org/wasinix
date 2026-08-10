@@ -2,7 +2,8 @@
 # them normally. The forks declare what they add co-located
 # (wasix-crate-patches/<crate>/wasix.nix `adds`); each entry is {crate (the adder), name
 # (the added dep), version, checksum, deps}. For each whose adder crate is
-# present and whose added dep isn't already in the lock: add the dep to the
+# present at one of the versions that pull it, and whose added dep
+# isn't already in the lock: add the dep to the
 # adder's `dependencies`, and insert the dep's own `[[package]]` block, both in
 # cargo's alphabetical order, so the result is what `cargo` itself would have
 # written. Applied by the patch machinery, not called per package.
@@ -23,6 +24,11 @@ preamble, blocks = chunks[0], chunks[1:]
 
 def name_of(block):
     m = re.search(r'^name = "(.*)"$', block, re.M)
+    return m.group(1) if m else ""
+
+
+def version_of(block):
+    m = re.search(r'^version = "(.*)"$', block, re.M)
     return m.group(1) if m else ""
 
 
@@ -63,10 +69,11 @@ def make_block(inj):
 
 
 present = {name_of(b) for b in blocks}
+pairs = {(name_of(b), version_of(b)) for b in blocks}
 for a in adds:
     if a["name"] in present:
         continue
-    if a["crate"] not in present:
+    if not any((a["crate"], v) in pairs for v in a["versions"]):
         continue
     blocks = [add_dep(b, a["name"]) if name_of(b) == a["crate"] else b for b in blocks]
     pos = next((i for i, b in enumerate(blocks) if name_of(b) > a["name"]), len(blocks))

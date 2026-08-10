@@ -134,22 +134,40 @@
   # under source-registry-0 (git deps under source-git-*), importCargoLock
   # symlinks each crate flat at the root. Collect every root entry plus the
   # children of real root subdirs, never following the crate symlinks.
+  # Each entry carries the source it came from, since a crate vendored from git is
+  # already whatever that fork ships and must not take a crates.io-authored floor.
   vendorCrateDirs = raw: let
     root = builtins.readDir raw;
     subdirs = lib.attrNames (lib.filterAttrs (_: t: t == "directory") root);
   in
-    lib.attrNames root
-    ++ lib.concatMap (d: lib.attrNames (builtins.readDir (raw + "/${d}"))) subdirs;
+    map (dir: {
+      inherit dir;
+      git = false;
+    }) (lib.attrNames root)
+    ++ lib.concatMap (
+      parent:
+        map (dir: {
+          inherit dir;
+          git = lib.hasPrefix "source-git" parent;
+        }) (lib.attrNames (builtins.readDir (raw + "/${parent}")))
+    )
+    subdirs;
 
   # Covered edited crates present in a vendor, as {crate, version, resolved}. A
   # <crate>-<version> dir matches the edited crate that prefixes it, guarded by a
   # digit-starting suffix so tokio-util isn't taken for tokio. Its stateOf then
   # decides: edited -> patch, stock -> leave as-is, unsupported -> hard fail (a
   # version we have not vetted must not silently build unpatched).
+  #
+  # A git-sourced crate is skipped unless the crate is `notMinted`, which is what
+  # marks edits authored against a git tree (libdd). Everything else is floored
+  # against a crates.io release, and a consumer pinning the wasix-org fork of the
+  # same version already carries the port -- patching it again reverses.
   presentEdits = raw:
     lib.filter (e: e != null) (
       map (
-        d: let
+        entry: let
+          d = entry.dir;
           crate =
             lib.findFirst (
               c: let
@@ -160,7 +178,7 @@
             null
             crateEdits.crates;
         in
-          if crate == null
+          if crate == null || (entry.git && !(crateEdits.notMinted ? ${crate}))
           then null
           else let
             version = lib.removePrefix "${crate}-" d;
@@ -235,7 +253,9 @@
   '';
 
   injectAdds = presents: let
-    need = lib.filter (a: lib.any (e: e.crate == a.crate) presents) crateEdits.adds;
+    need =
+      lib.filter (a: lib.any (e: e.crate == a.crate && lib.elem e.version a.versions) presents)
+      crateEdits.adds;
   in
     lib.optionalString (need != []) (
       lib.concatMapStrings (a: ''
