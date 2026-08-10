@@ -1,0 +1,300 @@
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/client.rs b/src/client.rs
+--- a/src/client.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/client.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -1023,7 +1023,7 @@
+     /// stream have been written to the connection, the send buffer capacity
+     /// will be freed up again.
+     ///
+-    /// The default is currently ~400MB, but may change.
++    /// The default is currently ~400KB, but may change.
+     ///
+     /// # Panics
+     ///
+@@ -1072,6 +1072,39 @@
+         self
+     }
+ 
++    /// Sets the header table size.
++    ///
++    /// This setting informs the peer of the maximum size of the header compression
++    /// table used to encode header blocks, in octets. The encoder may select any value
++    /// equal to or less than the header table size specified by the sender.
++    ///
++    /// The default value is 4,096.
++    ///
++    /// # Examples
++    ///
++    /// ```
++    /// # use tokio::io::{AsyncRead, AsyncWrite};
++    /// # use h2::client::*;
++    /// # use bytes::Bytes;
++    /// #
++    /// # async fn doc<T: AsyncRead + AsyncWrite + Unpin>(my_io: T)
++    /// # -> Result<((SendRequest<Bytes>, Connection<T, Bytes>)), h2::Error>
++    /// # {
++    /// // `client_fut` is a future representing the completion of the HTTP/2
++    /// // handshake.
++    /// let client_fut = Builder::new()
++    ///     .header_table_size(1_000_000)
++    ///     .handshake(my_io);
++    /// # client_fut.await
++    /// # }
++    /// #
++    /// # pub fn main() {}
++    /// ```
++    pub fn header_table_size(&mut self, size: u32) -> &mut Self {
++        self.settings.set_header_table_size(Some(size));
++        self
++    }
++
+     /// Sets the first stream ID to something other than 1.
+     #[cfg(feature = "unstable")]
+     pub fn initial_stream_id(&mut self, stream_id: u32) -> &mut Self {
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/codec/framed_read.rs b/src/codec/framed_read.rs
+--- a/src/codec/framed_read.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/codec/framed_read.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -88,6 +88,12 @@
+     pub fn set_max_header_list_size(&mut self, val: usize) {
+         self.max_header_list_size = val;
+     }
++
++    /// Update the header table size setting.
++    #[inline]
++    pub fn set_header_table_size(&mut self, val: usize) {
++        self.hpack.queue_size_update(val);
++    }
+ }
+ 
+ /// Decodes a frame.
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/codec/framed_write.rs b/src/codec/framed_write.rs
+--- a/src/codec/framed_write.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/codec/framed_write.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -7,8 +7,9 @@
+ use std::pin::Pin;
+ use std::task::{Context, Poll};
+ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
++use tokio_util::io::poll_write_buf;
+ 
+-use std::io::{self, Cursor, IoSlice};
++use std::io::{self, Cursor};
+ 
+ // A macro to get around a method needing to borrow &mut self
+ macro_rules! limited_write_buf {
+@@ -45,8 +46,11 @@
+     /// Max frame size, this is specified by the peer
+     max_frame_size: FrameSize,
+ 
+-    /// Whether or not the wrapped `AsyncWrite` supports vectored IO.
+-    is_write_vectored: bool,
++    /// Chain payloads bigger than this.
++    chain_threshold: usize,
++
++    /// Min buffer required to attempt to write a frame
++    min_buffer_capacity: usize,
+ }
+ 
+ #[derive(Debug)]
+@@ -61,14 +65,16 @@
+ /// frame that big.
+ const DEFAULT_BUFFER_CAPACITY: usize = 16 * 1_024;
+ 
+-/// Min buffer required to attempt to write a frame
+-const MIN_BUFFER_CAPACITY: usize = frame::HEADER_LEN + CHAIN_THRESHOLD;
+-
+-/// Chain payloads bigger than this. The remote will never advertise a max frame
+-/// size less than this (well, the spec says the max frame size can't be less
+-/// than 16kb, so not even close).
++/// Chain payloads bigger than this when vectored I/O is enabled. The remote
++/// will never advertise a max frame size less than this (well, the spec says
++/// the max frame size can't be less than 16kb, so not even close).
+ const CHAIN_THRESHOLD: usize = 256;
+ 
++/// Chain payloads bigger than this when vectored I/O is **not** enabled.
++/// A larger value in this scenario will reduce the number of small and
++/// fragmented data being sent, and hereby improve the throughput.
++const CHAIN_THRESHOLD_WITHOUT_VECTORED_IO: usize = 1024;
++
+ // TODO: Make generic
+ impl<T, B> FramedWrite<T, B>
+ where
+@@ -76,7 +82,11 @@
+     B: Buf,
+ {
+     pub fn new(inner: T) -> FramedWrite<T, B> {
+-        let is_write_vectored = inner.is_write_vectored();
++        let chain_threshold = if inner.is_write_vectored() {
++            CHAIN_THRESHOLD
++        } else {
++            CHAIN_THRESHOLD_WITHOUT_VECTORED_IO
++        };
+         FramedWrite {
+             inner,
+             encoder: Encoder {
+@@ -85,7 +95,8 @@
+                 next: None,
+                 last_data_frame: None,
+                 max_frame_size: frame::DEFAULT_MAX_FRAME_SIZE,
+-                is_write_vectored,
++                chain_threshold,
++                min_buffer_capacity: chain_threshold + frame::HEADER_LEN,
+             },
+         }
+     }
+@@ -126,23 +137,17 @@
+                     Some(Next::Data(ref mut frame)) => {
+                         tracing::trace!(queued_data_frame = true);
+                         let mut buf = (&mut self.encoder.buf).chain(frame.payload_mut());
+-                        ready!(write(
+-                            &mut self.inner,
+-                            self.encoder.is_write_vectored,
+-                            &mut buf,
+-                            cx,
+-                        ))?
++                        ready!(poll_write_buf(Pin::new(&mut self.inner), cx, &mut buf))?
+                     }
+                     _ => {
+                         tracing::trace!(queued_data_frame = false);
+-                        ready!(write(
+-                            &mut self.inner,
+-                            self.encoder.is_write_vectored,
+-                            &mut self.encoder.buf,
++                        ready!(poll_write_buf(
++                            Pin::new(&mut self.inner),
+                             cx,
++                            &mut self.encoder.buf
+                         ))?
+                     }
+-                }
++                };
+             }
+ 
+             match self.encoder.unset_frame() {
+@@ -165,30 +170,6 @@
+     }
+ }
+ 
+-fn write<T, B>(
+-    writer: &mut T,
+-    is_write_vectored: bool,
+-    buf: &mut B,
+-    cx: &mut Context<'_>,
+-) -> Poll<io::Result<()>>
+-where
+-    T: AsyncWrite + Unpin,
+-    B: Buf,
+-{
+-    // TODO(eliza): when tokio-util 0.5.1 is released, this
+-    // could just use `poll_write_buf`...
+-    const MAX_IOVS: usize = 64;
+-    let n = if is_write_vectored {
+-        let mut bufs = [IoSlice::new(&[]); MAX_IOVS];
+-        let cnt = buf.chunks_vectored(&mut bufs);
+-        ready!(Pin::new(writer).poll_write_vectored(cx, &bufs[..cnt]))?
+-    } else {
+-        ready!(Pin::new(writer).poll_write(cx, buf.chunk()))?
+-    };
+-    buf.advance(n);
+-    Ok(()).into()
+-}
+-
+ #[must_use]
+ enum ControlFlow {
+     Continue,
+@@ -240,12 +221,17 @@
+                     return Err(PayloadTooBig);
+                 }
+ 
+-                if len >= CHAIN_THRESHOLD {
++                if len >= self.chain_threshold {
+                     let head = v.head();
+ 
+                     // Encode the frame head to the buffer
+                     head.encode(len, self.buf.get_mut());
+ 
++                    if self.buf.get_ref().remaining() < self.chain_threshold {
++                        let extra_bytes = self.chain_threshold - self.buf.remaining();
++                        self.buf.get_mut().put(v.payload_mut().take(extra_bytes));
++                    }
++
+                     // Save the data frame
+                     self.next = Some(Next::Data(v));
+                 } else {
+@@ -305,7 +291,9 @@
+     }
+ 
+     fn has_capacity(&self) -> bool {
+-        self.next.is_none() && self.buf.get_ref().remaining_mut() >= MIN_BUFFER_CAPACITY
++        self.next.is_none()
++            && (self.buf.get_ref().capacity() - self.buf.get_ref().len()
++                >= self.min_buffer_capacity)
+     }
+ 
+     fn is_empty(&self) -> bool {
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/codec/mod.rs b/src/codec/mod.rs
+--- a/src/codec/mod.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/codec/mod.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -95,6 +95,11 @@
+         self.framed_write().set_header_table_size(val)
+     }
+ 
++    /// Set the decoder header table size size.
++    pub fn set_recv_header_table_size(&mut self, val: usize) {
++        self.inner.set_header_table_size(val)
++    }
++
+     /// Set the max header list size that can be received.
+     pub fn set_max_recv_header_list_size(&mut self, val: usize) {
+         self.inner.set_max_header_list_size(val);
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/frame/mod.rs b/src/frame/mod.rs
+--- a/src/frame/mod.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/frame/mod.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -69,7 +69,7 @@
+ 
+ pub use self::settings::{
+     DEFAULT_INITIAL_WINDOW_SIZE, DEFAULT_MAX_FRAME_SIZE, DEFAULT_SETTINGS_HEADER_TABLE_SIZE,
+-    MAX_INITIAL_WINDOW_SIZE, MAX_MAX_FRAME_SIZE,
++    MAX_MAX_FRAME_SIZE,
+ };
+ 
+ pub type FrameSize = u32;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/frame/settings.rs b/src/frame/settings.rs
+--- a/src/frame/settings.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/frame/settings.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -121,11 +121,9 @@
+         self.header_table_size
+     }
+ 
+-    /*
+     pub fn set_header_table_size(&mut self, size: Option<u32>) {
+         self.header_table_size = size;
+     }
+-    */
+ 
+     pub fn load(head: Head, payload: &[u8]) -> Result<Settings, Error> {
+         use self::Setting::*;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/proto/settings.rs b/src/proto/settings.rs
+--- a/src/proto/settings.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/proto/settings.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -60,6 +60,10 @@
+                         codec.set_max_recv_header_list_size(max as usize);
+                     }
+ 
++                    if let Some(val) = local.header_table_size() {
++                        codec.set_recv_header_table_size(val as usize);
++                    }
++
+                     streams.apply_local_settings(local)?;
+                     self.local = Local::Synced;
+                     Ok(())
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/server.rs b/src/server.rs
+--- a/src/server.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/server.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -937,7 +937,7 @@
+     /// stream have been written to the connection, the send buffer capacity
+     /// will be freed up again.
+     ///
+-    /// The default is currently ~400MB, but may change.
++    /// The default is currently ~400KB, but may change.
+     ///
+     /// # Panics
+     ///

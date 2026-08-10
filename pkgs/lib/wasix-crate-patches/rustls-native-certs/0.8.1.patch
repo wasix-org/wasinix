@@ -1,0 +1,22 @@
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/lib.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -120,7 +120,17 @@
+     let paths = CertPaths::from_env();
+     match (&paths.dir, &paths.file) {
+         (Some(_), _) | (_, Some(_)) => paths.load(),
+-        (None, None) => platform::load_native_certs(),
++        (None, None) => {
++            #[cfg(target_os = "wasi")]
++            {
++                panic!("wasi does not support SSL_CERT_FILE");
++            }
++
++            #[cfg(not(target_os = "wasi"))]
++            {
++                platform::load_native_certs()
++            }
++        }
+     }
+ }
+ 

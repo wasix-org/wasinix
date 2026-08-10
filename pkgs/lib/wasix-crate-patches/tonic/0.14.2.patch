@@ -1,0 +1,34 @@
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/transport/channel/uds_connector.rs b/src/transport/channel/uds_connector.rs
+--- a/src/transport/channel/uds_connector.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/transport/channel/uds_connector.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -9,10 +9,10 @@
+ 
+ use crate::status::ConnectError;
+ 
+-#[cfg(not(target_os = "windows"))]
++#[cfg(not(any(target_os = "windows", all(target_os = "wasi", target_vendor = "wasmer"))))]
+ use tokio::net::UnixStream;
+ 
+-#[cfg(not(target_os = "windows"))]
++#[cfg(not(any(target_os = "windows", all(target_os = "wasi", target_vendor = "wasmer"))))]
+ async fn connect_uds(uds_path: String) -> Result<UnixStream, ConnectError> {
+     UnixStream::connect(uds_path)
+         .await
+@@ -21,14 +21,14 @@
+ 
+ // Dummy type that will allow us to compile and match trait bounds
+ // but is never used.
+-#[cfg(target_os = "windows")]
++#[cfg(any(target_os = "windows", all(target_os = "wasi", target_vendor = "wasmer")))]
+ #[allow(dead_code)]
+ type UnixStream = tokio::io::DuplexStream;
+ 
+-#[cfg(target_os = "windows")]
++#[cfg(any(target_os = "windows", all(target_os = "wasi", target_vendor = "wasmer")))]
+ async fn connect_uds(_uds_path: String) -> Result<UnixStream, ConnectError> {
+     Err(ConnectError(
+-        "uds connections are not allowed on windows".into(),
++        "uds connections are not allowed on windows or WASIX".into(),
+     ))
+ }
+ 

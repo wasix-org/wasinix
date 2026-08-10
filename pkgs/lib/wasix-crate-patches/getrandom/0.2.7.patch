@@ -1,0 +1,350 @@
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml	1970-01-01 01:00:01.000000000 +0100
++++ b/Cargo.toml	2026-08-10 23:26:59.543213572 +0200
+@@ -75,6 +75,9 @@
+ [target."cfg(all(target_arch = \"wasm32\", target_os = \"unknown\"))".dev-dependencies.wasm-bindgen-test]
+ version = "0.3.18"
+ 
++[target.'cfg(all(target_os = "wasi", target_vendor = "wasmer"))'.dependencies.wasix]
++version = ">=0.12, <0.14"
++
+ [target."cfg(target_os = \"wasi\")".dependencies.wasi]
+ version = "0.11"
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/custom.rs b/src/custom.rs
+--- a/src/custom.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/custom.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -79,7 +79,7 @@
+         // We use an extern "C" function to get the guarantees of a stable ABI.
+         #[no_mangle]
+         extern "C" fn __getrandom_custom(dest: *mut u8, len: usize) -> u32 {
+-            let f: fn(&mut [u8]) -> Result<(), ::getrandom::Error> = $path;
++            let f: fn(&mut [u8]) -> Result<(), $crate::Error> = $path;
+             let slice = unsafe { ::core::slice::from_raw_parts_mut(dest, len) };
+             match f(slice) {
+                 Ok(()) => 0,
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/error.rs b/src/error.rs
+--- a/src/error.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/error.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -43,16 +43,19 @@
+     pub const FAILED_RDRAND: Error = internal_error(5);
+     /// RDRAND instruction unsupported on this target.
+     pub const NO_RDRAND: Error = internal_error(6);
+-    /// The browser does not have support for `self.crypto`.
++    /// The environment does not support the Web Crypto API.
+     pub const WEB_CRYPTO: Error = internal_error(7);
+-    /// The browser does not have support for `crypto.getRandomValues`.
++    /// Calling Web Crypto API `crypto.getRandomValues` failed.
+     pub const WEB_GET_RANDOM_VALUES: Error = internal_error(8);
+     /// On VxWorks, call to `randSecure` failed (random number generator is not yet initialized).
+     pub const VXWORKS_RAND_SECURE: Error = internal_error(11);
+-    /// NodeJS does not have support for the `crypto` module.
++    /// Node.js does not have the `crypto` CommonJS module.
+     pub const NODE_CRYPTO: Error = internal_error(12);
+-    /// NodeJS does not have support for `crypto.randomFillSync`.
++    /// Calling Node.js function `crypto.randomFillSync` failed.
+     pub const NODE_RANDOM_FILL_SYNC: Error = internal_error(13);
++    /// Called from an ES module on Node.js. This is unsupported, see:
++    /// <https://docs.rs/getrandom#nodejs-es-module-support>.
++    pub const NODE_ES_MODULE: Error = internal_error(14);
+ 
+     /// Codes below this point represent OS Errors (i.e. positive i32 values).
+     /// Codes at or above this point, but below [`Error::CUSTOM_START`] are
+@@ -166,10 +169,11 @@
+         Error::FAILED_RDRAND => Some("RDRAND: failed multiple times: CPU issue likely"),
+         Error::NO_RDRAND => Some("RDRAND: instruction not supported"),
+         Error::WEB_CRYPTO => Some("Web Crypto API is unavailable"),
+-        Error::WEB_GET_RANDOM_VALUES => Some("Web API crypto.getRandomValues is unavailable"),
++        Error::WEB_GET_RANDOM_VALUES => Some("Calling Web API crypto.getRandomValues failed"),
+         Error::VXWORKS_RAND_SECURE => Some("randSecure: VxWorks RNG module is not initialized"),
+-        Error::NODE_CRYPTO => Some("Node.js crypto module is unavailable"),
+-        Error::NODE_RANDOM_FILL_SYNC => Some("Node.js API crypto.randomFillSync is unavailable"),
++        Error::NODE_CRYPTO => Some("Node.js crypto CommonJS module is unavailable"),
++        Error::NODE_RANDOM_FILL_SYNC => Some("Calling Node.js API crypto.randomFillSync failed"),
++        Error::NODE_ES_MODULE => Some("Node.js ES modules are not directly supported, see https://docs.rs/getrandom#nodejs-es-module-support"),
+         _ => None,
+     }
+ }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/js.rs b/src/js.rs
+--- a/src/js.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/js.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -10,15 +10,16 @@
+ extern crate std;
+ use std::thread_local;
+ 
+-use js_sys::{global, Uint8Array};
++use js_sys::{global, Function, Uint8Array};
+ use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
+ 
++// Size of our temporary Uint8Array buffer used with WebCrypto methods
+ // Maximum is 65536 bytes see https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues
+-const BROWSER_CRYPTO_BUFFER_SIZE: usize = 256;
++const WEB_CRYPTO_BUFFER_SIZE: usize = 256;
+ 
+ enum RngSource {
+     Node(NodeCrypto),
+-    Browser(BrowserCrypto, Uint8Array),
++    Web(WebCrypto, Uint8Array),
+ }
+ 
+ // JsValues are always per-thread, so we initialize RngSource for each thread.
+@@ -37,10 +38,10 @@
+                     return Err(Error::NODE_RANDOM_FILL_SYNC);
+                 }
+             }
+-            RngSource::Browser(crypto, buf) => {
++            RngSource::Web(crypto, buf) => {
+                 // getRandomValues does not work with all types of WASM memory,
+                 // so we initially write to browser memory to avoid exceptions.
+-                for chunk in dest.chunks_mut(BROWSER_CRYPTO_BUFFER_SIZE) {
++                for chunk in dest.chunks_mut(WEB_CRYPTO_BUFFER_SIZE) {
+                     // The chunk can be smaller than buf's length, so we call to
+                     // JS to create a smaller view of buf without allocation.
+                     let sub_buf = buf.subarray(0, chunk.len() as u32);
+@@ -58,25 +59,33 @@
+ 
+ fn getrandom_init() -> Result<RngSource, Error> {
+     let global: Global = global().unchecked_into();
+-    if is_node(&global) {
+-        let crypto = NODE_MODULE
+-            .require("crypto")
+-            .map_err(|_| Error::NODE_CRYPTO)?;
+-        return Ok(RngSource::Node(crypto));
+-    }
+ 
+-    // Assume we are in some Web environment (browser or web worker). We get
+-    // `self.crypto` (called `msCrypto` on IE), so we can call
+-    // `crypto.getRandomValues`. If `crypto` isn't defined, we assume that
+-    // we are in an older web browser and the OS RNG isn't available.
+-    let crypto = match (global.crypto(), global.ms_crypto()) {
+-        (c, _) if c.is_object() => c,
+-        (_, c) if c.is_object() => c,
+-        _ => return Err(Error::WEB_CRYPTO),
++    // Get the Web Crypto interface if we are in a browser, Web Worker, Deno,
++    // or another environment that supports the Web Cryptography API. This
++    // also allows for user-provided polyfills in unsupported environments.
++    let crypto = match global.crypto() {
++        // Standard Web Crypto interface
++        c if c.is_object() => c,
++        // Node.js CommonJS Crypto module
++        _ if is_node(&global) => {
++            // If module.require isn't a valid function, we are in an ES module.
++            match Module::require_fn().and_then(JsCast::dyn_into::<Function>) {
++                Ok(require_fn) => match require_fn.call1(&global, &JsValue::from_str("crypto")) {
++                    Ok(n) => return Ok(RngSource::Node(n.unchecked_into())),
++                    Err(_) => return Err(Error::NODE_CRYPTO),
++                },
++                Err(_) => return Err(Error::NODE_ES_MODULE),
++            }
++        }
++        // IE 11 Workaround
++        _ => match global.ms_crypto() {
++            c if c.is_object() => c,
++            _ => return Err(Error::WEB_CRYPTO),
++        },
+     };
+ 
+-    let buf = Uint8Array::new_with_length(BROWSER_CRYPTO_BUFFER_SIZE as u32);
+-    Ok(RngSource::Browser(crypto, buf))
++    let buf = Uint8Array::new_with_length(WEB_CRYPTO_BUFFER_SIZE as u32);
++    Ok(RngSource::Web(crypto, buf))
+ }
+ 
+ // Taken from https://www.npmjs.com/package/browser-or-node
+@@ -93,30 +102,36 @@
+ 
+ #[wasm_bindgen]
+ extern "C" {
+-    type Global; // Return type of js_sys::global()
++    // Return type of js_sys::global()
++    type Global;
+ 
+-    // Web Crypto API (https://www.w3.org/TR/WebCryptoAPI/)
+-    #[wasm_bindgen(method, getter, js_name = "msCrypto")]
+-    fn ms_crypto(this: &Global) -> BrowserCrypto;
++    // Web Crypto API: Crypto interface (https://www.w3.org/TR/WebCryptoAPI/)
++    type WebCrypto;
++    // Getters for the WebCrypto API
+     #[wasm_bindgen(method, getter)]
+-    fn crypto(this: &Global) -> BrowserCrypto;
+-    type BrowserCrypto;
++    fn crypto(this: &Global) -> WebCrypto;
++    #[wasm_bindgen(method, getter, js_name = msCrypto)]
++    fn ms_crypto(this: &Global) -> WebCrypto;
++    // Crypto.getRandomValues()
+     #[wasm_bindgen(method, js_name = getRandomValues, catch)]
+-    fn get_random_values(this: &BrowserCrypto, buf: &Uint8Array) -> Result<(), JsValue>;
++    fn get_random_values(this: &WebCrypto, buf: &Uint8Array) -> Result<(), JsValue>;
+ 
+-    // We use a "module" object here instead of just annotating require() with
+-    // js_name = "module.require", so that Webpack doesn't give a warning. See:
+-    //   https://github.com/rust-random/getrandom/issues/224
+-    type NodeModule;
+-    #[wasm_bindgen(js_name = module)]
+-    static NODE_MODULE: NodeModule;
+     // Node JS crypto module (https://nodejs.org/api/crypto.html)
+-    #[wasm_bindgen(method, catch)]
+-    fn require(this: &NodeModule, s: &str) -> Result<NodeCrypto, JsValue>;
+     type NodeCrypto;
++    // crypto.randomFillSync()
+     #[wasm_bindgen(method, js_name = randomFillSync, catch)]
+     fn random_fill_sync(this: &NodeCrypto, buf: &mut [u8]) -> Result<(), JsValue>;
+ 
++    // Ideally, we would just use `fn require(s: &str)` here. However, doing
++    // this causes a Webpack warning. So we instead return the function itself
++    // and manually invoke it using call1. This also lets us to check that the
++    // function actually exists, allowing for better error messages. See:
++    //   https://github.com/rust-random/getrandom/issues/224
++    //   https://github.com/rust-random/getrandom/issues/256
++    type Module;
++    #[wasm_bindgen(getter, static_method_of = Module, js_class = module, js_name = require, catch)]
++    fn require_fn() -> Result<JsValue, JsValue>;
++
+     // Node JS process Object (https://nodejs.org/api/process.html)
+     #[wasm_bindgen(method, getter)]
+     fn process(this: &Global) -> Process;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/lib.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -31,7 +31,7 @@
+ //! | Emscripten        | `*‑emscripten`     | `/dev/random` (identical to `/dev/urandom`)
+ //! | WASI              | `wasm32‑wasi`      | [`random_get`]
+ //! | Web Browser       | `wasm32‑*‑unknown` | [`Crypto.getRandomValues`], see [WebAssembly support]
+-//! | Node.js           | `wasm32‑*‑unknown` | [`crypto.randomBytes`], see [WebAssembly support]
++//! | Node.js           | `wasm32‑*‑unknown` | [`crypto.randomFillSync`], see [WebAssembly support]
+ //! | SOLID             | `*-kmc-solid_*`    | `SOLID_RNG_SampleRandomBytes`
+ //! | Nintendo 3DS      | `armv6k-nintendo-3ds` | [`getrandom`][1]
+ //!
+@@ -72,11 +72,37 @@
+ //! that you are building for an environment containing JavaScript, and will
+ //! call the appropriate methods. Both web browser (main window and Web Workers)
+ //! and Node.js environments are supported, invoking the methods
+-//! [described above](#supported-targets) using the
+-//! [wasm-bindgen](https://github.com/rust-lang/rust-bindgen) toolchain.
++//! [described above](#supported-targets) using the [`wasm-bindgen`] toolchain.
++//!
++//! To enable the `js` Cargo feature, add the following to the `dependencies`
++//! section in your `Cargo.toml` file:
++//! ```toml
++//! [dependencies]
++//! getrandom = { version = "0.2", features = ["js"] }
++//! ```
++//!
++//! This can be done even if `getrandom` is not a direct dependency. Cargo
++//! allows crates to enable features for indirect dependencies.
++//!
++//! This feature should only be enabled for binary, test, or benchmark crates.
++//! Library crates should generally not enable this feature, leaving such a
++//! decision to *users* of their library. Also, libraries should not introduce
++//! their own `js` features *just* to enable `getrandom`'s `js` feature.
+ //!
+ //! This feature has no effect on targets other than `wasm32-unknown-unknown`.
+ //!
++//! #### Node.js ES module support
++//!
++//! Node.js supports both [CommonJS modules] and [ES modules]. Due to
++//! limitations in wasm-bindgen's [`module`] support, we cannot directly
++//! support ES Modules running on Node.js. However, on Node v15 and later, the
++//! module author can add a simple shim to support the Web Cryptography API:
++//! ```js
++//! import { webcrypto } from 'node:crypto'
++//! globalThis.crypto = webcrypto
++//! ```
++//! This crate will then use the provided `webcrypto` implementation.
++//!
+ //! ### Custom implementations
+ //!
+ //! The [`register_custom_getrandom!`] macro allows a user to mark their own
+@@ -89,16 +115,6 @@
+ //! using `rdrand` and `js` Cargo features) continue using their normal
+ //! implementations even if a function is registered.
+ //!
+-//! ### Indirect Dependencies
+-//!
+-//! If `getrandom` is not a direct dependency of your crate, you can still
+-//! enable any of the above fallback behaviors by enabling the relevant
+-//! feature in your root crate's `Cargo.toml`:
+-//! ```toml
+-//! [dependencies]
+-//! getrandom = { version = "0.2", features = ["js"] }
+-//! ```
+-//!
+ //! ## Early boot
+ //!
+ //! Sometimes, early in the boot process, the OS has not collected enough
+@@ -115,13 +131,22 @@
+ //! entropy yet. To avoid returning low-entropy bytes, we first poll
+ //! `/dev/random` and only switch to `/dev/urandom` once this has succeeded.
+ //!
++//! On OpenBSD, this kind of entropy accounting isn't available, and on
++//! NetBSD, blocking on it is discouraged. On these platforms, nonblocking
++//! interfaces are used, even when reliable entropy may not be available.
++//! On the platforms where it is used, the reliability of entropy accounting
++//! itself isn't free from controversy. This library provides randomness
++//! sourced according to the platform's best practices, but each platform has
++//! its own limits on the grade of randomness it can promise in environments
++//! with few sources of entropy.
++//!
+ //! ## Error handling
+ //!
+-//! We always choose failure over returning insecure "random" bytes. In general,
+-//! on supported platforms, failure is highly unlikely, though not impossible.
+-//! If an error does occur, then it is likely that it will occur on every call to
+-//! `getrandom`, hence after the first successful call one can be reasonably
+-//! confident that no errors will occur.
++//! We always choose failure over returning known insecure "random" bytes. In
++//! general, on supported platforms, failure is highly unlikely, though not
++//! impossible. If an error does occur, then it is likely that it will occur
++//! on every call to `getrandom`, hence after the first successful call one
++//! can be reasonably confident that no errors will occur.
+ //!
+ //! [1]: http://man7.org/linux/man-pages/man2/getrandom.2.html
+ //! [2]: http://man7.org/linux/man-pages/man4/urandom.4.html
+@@ -141,10 +166,14 @@
+ //! [`RDRAND`]: https://software.intel.com/en-us/articles/intel-digital-random-number-generator-drng-software-implementation-guide
+ //! [`SecRandomCopyBytes`]: https://developer.apple.com/documentation/security/1399291-secrandomcopybytes?language=objc
+ //! [`cprng_draw`]: https://fuchsia.dev/fuchsia-src/zircon/syscalls/cprng_draw
+-//! [`crypto.randomBytes`]: https://nodejs.org/api/crypto.html#crypto_crypto_randombytes_size_callback
++//! [`crypto.randomFillSync`]: https://nodejs.org/api/crypto.html#cryptorandomfillsyncbuffer-offset-size
+ //! [`esp_fill_random`]: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/random.html#_CPPv415esp_fill_randomPv6size_t
+ //! [`random_get`]: https://github.com/WebAssembly/WASI/blob/main/phases/snapshot/docs.md#-random_getbuf-pointeru8-buf_len-size---errno
+ //! [WebAssembly support]: #webassembly-support
++//! [`wasm-bindgen`]: https://github.com/rustwasm/wasm-bindgen
++//! [`module`]: https://rustwasm.github.io/wasm-bindgen/reference/attributes/on-js-imports/module.html
++//! [CommonJS modules]: https://nodejs.org/api/modules.html
++//! [ES modules]: https://nodejs.org/api/esm.html
+ 
+ #![doc(
+     html_logo_url = "https://www.rust-lang.org/logos/rust-logo-128x128-blk.png",
+@@ -203,6 +232,8 @@
+     } else if #[cfg(target_os = "openbsd")] {
+         mod util_libc;
+         #[path = "openbsd.rs"] mod imp;
++    } else if #[cfg(target_vendor = "wasmer")] {
++        #[path = "wasix.rs"] mod imp;
+     } else if #[cfg(target_os = "wasi")] {
+         #[path = "wasi.rs"] mod imp;
+     } else if #[cfg(all(target_arch = "x86_64", target_os = "hermit"))] {
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/wasix.rs b/src/wasix.rs
+--- a/src/wasix.rs	1970-01-01 01:00:00.000000000 +0100
++++ b/src/wasix.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -0,0 +1,19 @@
++// Copyright 2018 Developers of the Rand project.
++//
++// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
++// https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
++// <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
++// option. This file may not be copied, modified, or distributed
++// except according to those terms.
++
++//! Implementation for WASI
++use crate::Error;
++use core::num::NonZeroU32;
++use wasix::random_get;
++
++pub fn getrandom_inner(dest: &mut [u8]) -> Result<(), Error> {
++    match unsafe { random_get(dest.as_mut_ptr(), dest.len()) } {
++        Ok(()) => Ok(()),
++        Err(num) => Err(unsafe { NonZeroU32::new_unchecked(num.raw() as u32) }.into()),
++    }
++}

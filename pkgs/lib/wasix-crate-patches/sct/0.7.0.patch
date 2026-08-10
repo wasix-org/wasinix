@@ -1,0 +1,57 @@
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	1970-01-01 01:00:00.000000000 +0100
++++ b/src/lib.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -186,16 +186,12 @@
+         let inp = untrusted::Input::from(enc);
+ 
+         inp.read_all(Error::MalformedSct, |rd| {
+-            let version = rd
+-                .read_byte()
+-                .map_err(|_| Error::MalformedSct)?;
++            let version = rd.read_byte().map_err(|_| Error::MalformedSct)?;
+             if version != 0 {
+                 return Err(Error::UnsupportedSctVersion);
+             }
+ 
+-            let id = rd
+-                .read_bytes(32)
+-                .map_err(|_| Error::MalformedSct)?;
++            let id = rd.read_bytes(32).map_err(|_| Error::MalformedSct)?;
+             let timestamp = rd
+                 .read_bytes(8)
+                 .map_err(|_| Error::MalformedSct)
+@@ -243,7 +239,7 @@
+ /// Otherwise, it returns an `Error`.
+ pub fn verify_sct(cert: &[u8], sct: &[u8], at_time: u64, logs: &[&Log]) -> Result<usize, Error> {
+     let sct = Sct::parse(sct)?;
+-    let i = lookup(logs, &sct.log_id)?;
++    let i = lookup(logs, sct.log_id)?;
+     let log = logs[i];
+     sct.verify(log.key, cert)?;
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/tests.rs b/src/tests.rs
+--- a/src/tests.rs	1970-01-01 01:00:00.000000000 +0100
++++ b/src/tests.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -2,17 +2,17 @@
+ 
+ #[test]
+ fn test_unknown_log_is_not_fatal() {
+-    assert_eq!(false, Error::UnknownLog.should_be_fatal());
++    assert!(!Error::UnknownLog.should_be_fatal());
+ }
+ 
+ #[test]
+ fn test_unknown_sct_version_is_not_fatal() {
+-    assert_eq!(false, Error::UnsupportedSctVersion.should_be_fatal());
++    assert!(!Error::UnsupportedSctVersion.should_be_fatal());
+ }
+ 
+ #[test]
+ fn test_other_errors_are_fatal() {
+-    assert_eq!(true, Error::MalformedSct.should_be_fatal());
+-    assert_eq!(true, Error::InvalidSignature.should_be_fatal());
+-    assert_eq!(true, Error::TimestampInFuture.should_be_fatal());
++    assert!(Error::MalformedSct.should_be_fatal());
++    assert!(Error::InvalidSignature.should_be_fatal());
++    assert!(Error::TimestampInFuture.should_be_fatal());
+ }

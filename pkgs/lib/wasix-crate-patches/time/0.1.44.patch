@@ -1,0 +1,21 @@
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys.rs b/src/sys.rs
+--- a/src/sys.rs	2020-08-26 22:42:35.000000000 +0200
++++ b/src/sys.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -3,7 +3,7 @@
+ pub use self::inner::*;
+ 
+ #[cfg(any(
+-    all(target_arch = "wasm32", not(target_os = "emscripten")),
++    all(any(target_arch = "wasm32", target_arch = "wasm64"), not(target_os = "emscripten")),
+     target_env = "sgx"
+ ))]
+ mod common {
+@@ -69,7 +69,7 @@
+     }
+ }
+ 
+-#[cfg(all(target_arch = "wasm32", not(any(target_os = "emscripten", target_os = "wasi"))))]
++#[cfg(all(any(target_arch = "wasm32", target_arch = "wasm64"), not(any(target_os = "emscripten", target_os = "wasi"))))]
+ mod inner {
+     use std::ops::{Add, Sub};
+     use Tm;

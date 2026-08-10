@@ -1,0 +1,85 @@
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/conn/mod.rs b/src/conn/mod.rs
+--- a/src/conn/mod.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/conn/mod.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -41,6 +41,8 @@
+ 
+ #[cfg(unix)]
+ use std::os::unix::io::{AsRawFd, RawFd};
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++use std::os::wasi::io::{AsRawFd, RawFd};
+ 
+ use crate::{
+     buffer_pool::{get_buffer, Buffer},
+@@ -1346,7 +1348,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))]
+ impl AsRawFd for Conn {
+     fn as_raw_fd(&self) -> RawFd {
+         self.stream_ref().get_ref().as_raw_fd()
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/io/mod.rs b/src/io/mod.rs
+--- a/src/io/mod.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/io/mod.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -11,6 +11,8 @@
+ #[cfg(windows)]
+ use named_pipe as np;
+ 
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++use std::os::wasi::io::{AsRawFd, RawFd};
+ #[cfg(unix)]
+ use std::os::{
+     unix,
+@@ -86,7 +88,11 @@
+     }
+ 
+     #[cfg(all(not(unix), not(windows)))]
+-    fn connect_socket(&mut self) -> MyResult<()> {
++    pub fn connect_socket(
++        _socket: &str,
++        _read_timeout: Option<Duration>,
++        _write_timeout: Option<Duration>,
++    ) -> MyResult<Stream> {
+         unimplemented!("Sockets is not implemented on current platform");
+     }
+ 
+@@ -139,10 +145,16 @@
+         matches!(self, Stream::TcpStream(TcpStream::Insecure(_)))
+     }
+ 
++    #[cfg(any(unix, windows))]
+     pub fn is_socket(&self) -> bool {
+         matches!(self, Stream::SocketStream(_))
+     }
+ 
++    #[cfg(not(any(unix, windows)))]
++    pub fn is_socket(&self) -> bool {
++        false
++    }
++
+     #[cfg(all(not(feature = "native-tls"), not(feature = "rustls")))]
+     pub fn make_secure(self, _host: url::Host, _ssl_opts: crate::SslOpts) -> MyResult<Stream> {
+         panic!(
+@@ -152,10 +164,11 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))]
+ impl AsRawFd for Stream {
+     fn as_raw_fd(&self) -> RawFd {
+         match self {
++            #[cfg(unix)]
+             Stream::SocketStream(stream) => stream.get_ref().as_raw_fd(),
+             Stream::TcpStream(stream) => stream.as_raw_fd(),
+         }
+@@ -171,7 +184,7 @@
+     Insecure(BufStream<net::TcpStream>),
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))]
+ impl AsRawFd for TcpStream {
+     fn as_raw_fd(&self) -> RawFd {
+         match self {

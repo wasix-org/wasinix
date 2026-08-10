@@ -1,0 +1,1618 @@
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/build.rs b/build.rs
+--- a/build.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/build.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -602,7 +602,9 @@
+     // Allow cross-compiling without a target sysroot for these targets.
+     //
+     // poly1305_vec.c requires <emmintrin.h> which requires <stdlib.h>.
+-    if (target.arch == "wasm32")
++    //
++    // When targeting WASI the sysroot should always contain a standard library
++    if (target.arch == "wasm32" && target.os != "wasi")
+         || (target.os == "linux" && target.is_musl && target.arch != "x86_64")
+     {
+         if let Ok(compiler) = c.try_get_compiler() {
+@@ -799,6 +801,8 @@
+     let computed = {
+         let name = std::env::var("CARGO_PKG_NAME").unwrap();
+         let version = std::env::var("CARGO_PKG_VERSION").unwrap();
++        // Build metadata (e.g. `+wasix.1`) is not part of the symbol prefix.
++        let version = version.split('+').next().unwrap();
+         name + "_core_" + &version.replace(&['-', '.'][..], "_")
+     };
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml	1970-01-01 01:00:01.000000000 +0100
++++ b/Cargo.toml	2026-08-10 23:29:06.657728189 +0200
+@@ -190,6 +190,9 @@
+ [lib]
+ name = "ring"
+ 
++[dependencies.cfg-if]
++version = "1.0.0"
++
+ [dependencies.getrandom]
+ version = "0.2.10"
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/crypto/internal.h b/crypto/internal.h
+--- a/crypto/internal.h	1973-11-29 22:33:09.000000000 +0100
++++ b/crypto/internal.h	2006-07-24 03:21:28.000000000 +0200
+@@ -132,6 +132,14 @@
+ #include <stdalign.h>
+ #endif
+ 
++#if defined(__clang__) || defined(__GNUC__)
++#define RING_NOINLINE __attribute__((noinline))
++#elif defined(_MSC_VER)
++#define RING_NOINLINE __declspec(noinline)
++#else
++#define RING_NOINLINE
++#endif
++
+ // Some C compilers require a useless cast when dealing with arrays for the
+ // reason explained in
+ // https://gustedt.wordpress.com/2011/02/12/const-and-arrays/
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/include/ring-core/target.h b/include/ring-core/target.h
+--- a/include/ring-core/target.h	1973-11-29 22:33:09.000000000 +0100
++++ b/include/ring-core/target.h	2006-07-24 03:21:28.000000000 +0200
+@@ -36,30 +36,31 @@
+ #define OPENSSL_ARM
+ #elif defined(__loongarch_lp64)
+ #define OPENSSL_64_BIT
+-#define OPENSSL_LOONGARCH64
++#elif defined(__riscv) && __SIZEOF_POINTER__ == 8
++#define OPENSSL_64_BIT
++#elif defined(__wasm__)
++#define OPENSSL_32_BIT
++// All of following architectures are only supported when `__BYTE_ORDER__` can be used to detect
++// endianness (in crypto/internal.h).
++#elif !defined(__BYTE_ORDER__)
++#error "Cannot determine endianness because __BYTE_ORDER__ is not defined"
++// Targets are assumed to be little-endian unless __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__.
++#elif !(defined(__ORDER_LITTLE_ENDIAN__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)) && \
++      !(defined(__ORDER_BIG_ENDIAN__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__))
++#error "Unsupported endianness"
+ #elif defined(__MIPSEL__) && !defined(__LP64__)
+ #define OPENSSL_32_BIT
+-#define OPENSSL_MIPS
+ #elif defined(__MIPSEL__) && defined(__LP64__)
+ #define OPENSSL_64_BIT
+-#define OPENSSL_MIPS64
++#elif defined(__MIPSEB__) && !defined(__LP64__)
++#define OPENSSL_32_BIT
+ #elif defined(__PPC64__) || defined(__powerpc64__)
+ #define OPENSSL_64_BIT
+ #elif (defined(__PPC__) || defined(__powerpc__)) && defined(_BIG_ENDIAN)
+ #define OPENSSL_32_BIT
+-#elif defined(__riscv) && __SIZEOF_POINTER__ == 8
+-#define OPENSSL_64_BIT
+-#define OPENSSL_RISCV64
+ #elif defined(__s390x__)
+ #define OPENSSL_64_BIT
+-#define OPENSSL_S390X
+-#elif defined(__wasm__)
+-#define OPENSSL_32_BIT
+ #else
+-// Note BoringSSL only supports standard 32-bit and 64-bit two's-complement,
+-// little-endian architectures. Functions will not produce the correct answer
+-// on other systems. Run the crypto_test binary, notably
+-// crypto/compiler_test.cc, before adding a new architecture.
+ #error "Unknown target CPU"
+ #endif
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/aead/aes_gcm.rs b/src/aead/aes_gcm.rs
+--- a/src/aead/aes_gcm.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/aead/aes_gcm.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -63,13 +63,22 @@
+     cpu_features: cpu::Features,
+ ) -> Result<aead::KeyInner, error::Unspecified> {
+     let aes_key = aes::Key::new(key, variant, cpu_features)?;
+-    let gcm_key = gcm::Key::new(aes_key.encrypt_block(Block::zero()), cpu_features);
++    let gcm_key = gcm::Key::new(
++        aes_key.encrypt_block(Block::zero(), cpu_features),
++        cpu_features,
++    );
+     Ok(aead::KeyInner::AesGcm(Key { gcm_key, aes_key }))
+ }
+ 
+ const CHUNK_BLOCKS: usize = 3 * 1024 / 16;
+ 
+-fn aes_gcm_seal(key: &aead::KeyInner, nonce: Nonce, aad: Aad<&[u8]>, in_out: &mut [u8]) -> Tag {
++fn aes_gcm_seal(
++    key: &aead::KeyInner,
++    nonce: Nonce,
++    aad: Aad<&[u8]>,
++    in_out: &mut [u8],
++    cpu_features: cpu::Features,
++) -> Tag {
+     let Key { gcm_key, aes_key } = match key {
+         aead::KeyInner::AesGcm(key) => key,
+         _ => unreachable!(),
+@@ -80,11 +89,11 @@
+ 
+     let total_in_out_len = in_out.len();
+     let aad_len = aad.0.len();
+-    let mut auth = gcm::Context::new(gcm_key, aad);
++    let mut auth = gcm::Context::new(gcm_key, aad, cpu_features);
+ 
+     #[cfg(target_arch = "x86_64")]
+     let in_out = {
+-        if !aes_key.is_aes_hw() || !auth.is_avx() {
++        if !aes_key.is_aes_hw(cpu_features) || !auth.is_avx() {
+             in_out
+         } else {
+             use crate::c;
+@@ -124,20 +133,27 @@
+     };
+ 
+     for chunk in whole.chunks_mut(CHUNK_BLOCKS * BLOCK_LEN) {
+-        aes_key.ctr32_encrypt_within(chunk, 0.., &mut ctr);
++        aes_key.ctr32_encrypt_within(chunk, 0.., &mut ctr, cpu_features);
+         auth.update_blocks(chunk);
+     }
+ 
+     if !remainder.is_empty() {
+         let mut input = Block::zero();
+         input.overwrite_part_at(0, remainder);
+-        let mut output = aes_key.encrypt_iv_xor_block(ctr.into(), input);
++        let mut output = aes_key.encrypt_iv_xor_block(ctr.into(), input, cpu_features);
+         output.zero_from(remainder.len());
+         auth.update_block(output);
+         remainder.copy_from_slice(&output.as_ref()[..remainder.len()]);
+     }
+ 
+-    finish(aes_key, auth, tag_iv, aad_len, total_in_out_len)
++    finish(
++        aes_key,
++        auth,
++        tag_iv,
++        aad_len,
++        total_in_out_len,
++        cpu_features,
++    )
+ }
+ 
+ fn aes_gcm_open(
+@@ -146,6 +162,7 @@
+     aad: Aad<&[u8]>,
+     in_out: &mut [u8],
+     src: RangeFrom<usize>,
++    cpu_features: cpu::Features,
+ ) -> Tag {
+     let Key { gcm_key, aes_key } = match key {
+         aead::KeyInner::AesGcm(key) => key,
+@@ -156,7 +173,7 @@
+     let tag_iv = ctr.increment();
+ 
+     let aad_len = aad.0.len();
+-    let mut auth = gcm::Context::new(gcm_key, aad);
++    let mut auth = gcm::Context::new(gcm_key, aad, cpu_features);
+ 
+     let in_prefix_len = src.start;
+ 
+@@ -164,7 +181,7 @@
+ 
+     #[cfg(target_arch = "x86_64")]
+     let in_out = {
+-        if !aes_key.is_aes_hw() || !auth.is_avx() {
++        if !aes_key.is_aes_hw(cpu_features) || !auth.is_avx() {
+             in_out
+         } else {
+             use crate::c;
+@@ -218,6 +235,7 @@
+                 &mut in_out[output..][..(chunk_len + in_prefix_len)],
+                 in_prefix_len..,
+                 &mut ctr,
++                cpu_features,
+             );
+             output += chunk_len;
+             input += chunk_len;
+@@ -229,10 +247,17 @@
+         let mut input = Block::zero();
+         input.overwrite_part_at(0, remainder);
+         auth.update_block(input);
+-        aes_key.encrypt_iv_xor_block(ctr.into(), input)
++        aes_key.encrypt_iv_xor_block(ctr.into(), input, cpu_features)
+     });
+ 
+-    finish(aes_key, auth, tag_iv, aad_len, total_in_out_len)
++    finish(
++        aes_key,
++        auth,
++        tag_iv,
++        aad_len,
++        total_in_out_len,
++        cpu_features,
++    )
+ }
+ 
+ fn finish(
+@@ -241,6 +266,7 @@
+     tag_iv: aes::Iv,
+     aad_len: usize,
+     in_out_len: usize,
++    cpu_features: cpu::Features,
+ ) -> Tag {
+     // Authenticate the final block containing the input lengths.
+     let aad_bits = polyfill::u64_from_usize(aad_len) << 3;
+@@ -251,7 +277,7 @@
+ 
+     // Finalize the tag and return it.
+     gcm_ctx.pre_finish(|pre_tag| {
+-        let encrypted_iv = aes_key.encrypt_block(tag_iv.into_block_less_safe());
++        let encrypted_iv = aes_key.encrypt_block(tag_iv.into_block_less_safe(), cpu_features);
+         let tag = pre_tag ^ encrypted_iv;
+         Tag(*tag.as_ref())
+     })
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/aead/aes.rs b/src/aead/aes.rs
+--- a/src/aead/aes.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/aead/aes.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -29,7 +29,6 @@
+ #[derive(Clone)]
+ pub(super) struct Key {
+     inner: AES_KEY,
+-    cpu_features: cpu::Features,
+ }
+ 
+ macro_rules! set_encrypt_key {
+@@ -172,15 +171,12 @@
+             }
+         };
+ 
+-        Ok(Self {
+-            inner: key,
+-            cpu_features,
+-        })
++        Ok(Self { inner: key })
+     }
+ 
+     #[inline]
+-    pub fn encrypt_block(&self, a: Block) -> Block {
+-        match detect_implementation(self.cpu_features) {
++    pub fn encrypt_block(&self, a: Block, cpu_features: cpu::Features) -> Block {
++        match detect_implementation(cpu_features) {
+             #[cfg(any(
+                 target_arch = "aarch64",
+                 target_arch = "arm",
+@@ -203,8 +199,8 @@
+     }
+ 
+     #[inline]
+-    pub fn encrypt_iv_xor_block(&self, iv: Iv, input: Block) -> Block {
+-        let encrypted_iv = self.encrypt_block(iv.into_block_less_safe());
++    pub fn encrypt_iv_xor_block(&self, iv: Iv, input: Block, cpu_features: cpu::Features) -> Block {
++        let encrypted_iv = self.encrypt_block(iv.into_block_less_safe(), cpu_features);
+         encrypted_iv ^ input
+     }
+ 
+@@ -214,12 +210,13 @@
+         in_out: &mut [u8],
+         src: RangeFrom<usize>,
+         ctr: &mut Counter,
++        cpu_features: cpu::Features,
+     ) {
+         let in_out_len = in_out[src.clone()].len();
+ 
+         assert_eq!(in_out_len % BLOCK_LEN, 0);
+ 
+-        match detect_implementation(self.cpu_features) {
++        match detect_implementation(cpu_features) {
+             #[cfg(any(
+                 target_arch = "aarch64",
+                 target_arch = "arm",
+@@ -271,7 +268,7 @@
+             #[cfg(target_arch = "x86")]
+             Implementation::VPAES_BSAES => {
+                 super::shift::shift_full_blocks(in_out, src, |input| {
+-                    self.encrypt_iv_xor_block(ctr.increment(), Block::from(input))
++                    self.encrypt_iv_xor_block(ctr.increment(), Block::from(input), cpu_features)
+                 });
+             }
+ 
+@@ -283,7 +280,7 @@
+     }
+ 
+     pub fn new_mask(&self, sample: Sample) -> [u8; 5] {
+-        let block = self.encrypt_block(Block::from(&sample));
++        let block = self.encrypt_block(Block::from(&sample), cpu::features());
+ 
+         let mut out: [u8; 5] = [0; 5];
+         out.copy_from_slice(&block.as_ref()[..5]);
+@@ -293,11 +290,8 @@
+ 
+     #[cfg(target_arch = "x86_64")]
+     #[must_use]
+-    pub fn is_aes_hw(&self) -> bool {
+-        matches!(
+-            detect_implementation(self.cpu_features),
+-            Implementation::HWAES
+-        )
++    pub fn is_aes_hw(&self, cpu_features: cpu::Features) -> bool {
++        matches!(detect_implementation(cpu_features), Implementation::HWAES)
+     }
+ 
+     #[cfg(target_arch = "x86_64")]
+@@ -401,14 +395,16 @@
+     )))]
+     let _cpu_features = cpu_features;
+ 
+-    #[cfg(any(
+-        target_arch = "aarch64",
+-        target_arch = "arm",
+-        target_arch = "x86_64",
+-        target_arch = "x86"
+-    ))]
++    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
++    {
++        if cpu::arm::AES.available(cpu_features) {
++            return Implementation::HWAES;
++        }
++    }
++
++    #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
+     {
+-        if cpu::intel::AES.available(cpu_features) || cpu::arm::AES.available(cpu_features) {
++        if cpu::intel::AES.available(cpu_features) {
+             return Implementation::HWAES;
+         }
+     }
+@@ -445,6 +441,7 @@
+ 
+     #[test]
+     pub fn test_aes() {
++        let cpu_features = cpu::features();
+         test::run(test_file!("aes_tests.txt"), |section, test_case| {
+             assert_eq!(section, "");
+             let key = consume_key(test_case, "Key");
+@@ -453,7 +450,7 @@
+             let expected_output = test_case.consume_bytes("Output");
+ 
+             let block = Block::from(input);
+-            let output = key.encrypt_block(block);
++            let output = key.encrypt_block(block, cpu_features);
+             assert_eq!(output.as_ref(), &expected_output[..]);
+ 
+             Ok(())
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/aead/chacha20_poly1305_openssh.rs b/src/aead/chacha20_poly1305_openssh.rs
+--- a/src/aead/chacha20_poly1305_openssh.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/aead/chacha20_poly1305_openssh.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -45,7 +45,7 @@
+     /// Constructs a new `SealingKey`.
+     pub fn new(key_material: &[u8; KEY_LEN]) -> Self {
+         Self {
+-            key: Key::new(key_material, cpu::features()),
++            key: Key::new(key_material),
+         }
+     }
+ 
+@@ -62,6 +62,7 @@
+         plaintext_in_ciphertext_out: &mut [u8],
+         tag_out: &mut [u8; TAG_LEN],
+     ) {
++        let cpu_features = cpu::features();
+         let mut counter = make_counter(sequence_number);
+         let poly_key = derive_poly1305_key(&self.key.k_2, counter.increment());
+ 
+@@ -77,7 +78,7 @@
+                 .encrypt_in_place(counter, data_and_padding_in_out);
+         }
+ 
+-        let Tag(tag) = poly1305::sign(poly_key, plaintext_in_ciphertext_out);
++        let Tag(tag) = poly1305::sign(poly_key, plaintext_in_ciphertext_out, cpu_features);
+         tag_out.copy_from_slice(tag.as_ref());
+     }
+ }
+@@ -91,7 +92,7 @@
+     /// Constructs a new `OpeningKey`.
+     pub fn new(key_material: &[u8; KEY_LEN]) -> Self {
+         Self {
+-            key: Key::new(key_material, cpu::features()),
++            key: Key::new(key_material),
+         }
+     }
+ 
+@@ -148,12 +149,12 @@
+ }
+ 
+ impl Key {
+-    fn new(key_material: &[u8; KEY_LEN], cpu_features: cpu::Features) -> Self {
++    fn new(key_material: &[u8; KEY_LEN]) -> Self {
+         // The first half becomes K_2 and the second half becomes K_1.
+         let (k_2, k_1) = key_material.split_at(chacha::KEY_LEN);
+         Self {
+-            k_1: chacha::Key::new(k_1.try_into().unwrap(), cpu_features),
+-            k_2: chacha::Key::new(k_2.try_into().unwrap(), cpu_features),
++            k_1: chacha::Key::new(k_1.try_into().unwrap()),
++            k_2: chacha::Key::new(k_2.try_into().unwrap()),
+         }
+     }
+ }
+@@ -174,6 +175,6 @@
+ pub const TAG_LEN: usize = super::TAG_LEN;
+ 
+ fn verify(key: poly1305::Key, msg: &[u8], tag: &[u8; TAG_LEN]) -> Result<(), error::Unspecified> {
+-    let Tag(calculated_tag) = poly1305::sign(key, msg);
++    let Tag(calculated_tag) = poly1305::sign(key, msg, cpu::features());
+     constant_time::verify_slices_are_equal(calculated_tag.as_ref(), tag)
+ }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/aead/chacha20_poly1305.rs b/src/aead/chacha20_poly1305.rs
+--- a/src/aead/chacha20_poly1305.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/aead/chacha20_poly1305.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -39,13 +39,10 @@
+ /// Copies |key| into |ctx_buf|.
+ fn chacha20_poly1305_init(
+     key: &[u8],
+-    cpu_features: cpu::Features,
++    _cpu_features: cpu::Features,
+ ) -> Result<aead::KeyInner, error::Unspecified> {
+     let key: [u8; chacha::KEY_LEN] = key.try_into()?;
+-    Ok(aead::KeyInner::ChaCha20Poly1305(chacha::Key::new(
+-        key,
+-        cpu_features,
+-    )))
++    Ok(aead::KeyInner::ChaCha20Poly1305(chacha::Key::new(key)))
+ }
+ 
+ fn chacha20_poly1305_seal(
+@@ -53,6 +50,7 @@
+     nonce: Nonce,
+     aad: Aad<&[u8]>,
+     in_out: &mut [u8],
++    cpu_features: cpu::Features,
+ ) -> Tag {
+     let chacha20_key = match key {
+         aead::KeyInner::ChaCha20Poly1305(key) => key,
+@@ -60,68 +58,64 @@
+     };
+ 
+     #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
+-    {
+-        if cpu::intel::SSE41.available(chacha20_key.cpu_features())
+-            || cpu::arm::NEON.available(chacha20_key.cpu_features())
+-        {
+-            // XXX: BoringSSL uses `alignas(16)` on `key` instead of on the
+-            // structure, but Rust can't do that yet; see
+-            // https://github.com/rust-lang/rust/issues/73557.
+-            //
+-            // Keep in sync with the anonymous struct of BoringSSL's
+-            // `chacha20_poly1305_seal_data`.
+-            #[repr(align(16), C)]
+-            #[derive(Clone, Copy)]
+-            struct seal_data_in {
+-                key: [u32; chacha::KEY_LEN / 4],
+-                counter: u32,
+-                nonce: [u8; super::NONCE_LEN],
+-                extra_ciphertext: *const u8,
+-                extra_ciphertext_len: usize,
+-            }
+-
+-            let mut data = InOut {
+-                input: seal_data_in {
+-                    key: *chacha20_key.words_less_safe(),
+-                    counter: 0,
+-                    nonce: *nonce.as_ref(),
+-                    extra_ciphertext: core::ptr::null(),
+-                    extra_ciphertext_len: 0,
+-                },
+-            };
+-
+-            // Encrypts `plaintext_len` bytes from `plaintext` and writes them to `out_ciphertext`.
+-            prefixed_extern! {
+-                fn chacha20_poly1305_seal(
+-                    out_ciphertext: *mut u8,
+-                    plaintext: *const u8,
+-                    plaintext_len: usize,
+-                    ad: *const u8,
+-                    ad_len: usize,
+-                    data: &mut InOut<seal_data_in>,
+-                );
+-            }
+-
+-            let out = unsafe {
+-                chacha20_poly1305_seal(
+-                    in_out.as_mut_ptr(),
+-                    in_out.as_ptr(),
+-                    in_out.len(),
+-                    aad.as_ref().as_ptr(),
+-                    aad.as_ref().len(),
+-                    &mut data,
+-                );
+-                &data.out
+-            };
++    if has_integrated(cpu_features) {
++        // XXX: BoringSSL uses `alignas(16)` on `key` instead of on the
++        // structure, but Rust can't do that yet; see
++        // https://github.com/rust-lang/rust/issues/73557.
++        //
++        // Keep in sync with the anonymous struct of BoringSSL's
++        // `chacha20_poly1305_seal_data`.
++        #[repr(align(16), C)]
++        #[derive(Clone, Copy)]
++        struct seal_data_in {
++            key: [u32; chacha::KEY_LEN / 4],
++            counter: u32,
++            nonce: [u8; super::NONCE_LEN],
++            extra_ciphertext: *const u8,
++            extra_ciphertext_len: usize,
++        }
+ 
+-            return Tag(out.tag);
++        let mut data = InOut {
++            input: seal_data_in {
++                key: *chacha20_key.words_less_safe(),
++                counter: 0,
++                nonce: *nonce.as_ref(),
++                extra_ciphertext: core::ptr::null(),
++                extra_ciphertext_len: 0,
++            },
++        };
++
++        // Encrypts `plaintext_len` bytes from `plaintext` and writes them to `out_ciphertext`.
++        prefixed_extern! {
++            fn chacha20_poly1305_seal(
++                out_ciphertext: *mut u8,
++                plaintext: *const u8,
++                plaintext_len: usize,
++                ad: *const u8,
++                ad_len: usize,
++                data: &mut InOut<seal_data_in>,
++            );
+         }
++
++        let out = unsafe {
++            chacha20_poly1305_seal(
++                in_out.as_mut_ptr(),
++                in_out.as_ptr(),
++                in_out.len(),
++                aad.as_ref().as_ptr(),
++                aad.as_ref().len(),
++                &mut data,
++            );
++            &data.out
++        };
++
++        return Tag(out.tag);
+     }
+ 
+     let mut counter = Counter::zero(nonce);
+     let mut auth = {
+         let key = derive_poly1305_key(chacha20_key, counter.increment());
+-        poly1305::Context::from_key(key)
++        poly1305::Context::from_key(key, cpu_features)
+     };
+ 
+     poly1305_update_padded_16(&mut auth, aad.as_ref());
+@@ -136,6 +130,7 @@
+     aad: Aad<&[u8]>,
+     in_out: &mut [u8],
+     src: RangeFrom<usize>,
++    cpu_features: cpu::Features,
+ ) -> Tag {
+     let chacha20_key = match key {
+         aead::KeyInner::ChaCha20Poly1305(key) => key,
+@@ -143,64 +138,60 @@
+     };
+ 
+     #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
+-    {
+-        if cpu::intel::SSE41.available(chacha20_key.cpu_features())
+-            || cpu::arm::NEON.available(chacha20_key.cpu_features())
+-        {
+-            // XXX: BoringSSL uses `alignas(16)` on `key` instead of on the
+-            // structure, but Rust can't do that yet; see
+-            // https://github.com/rust-lang/rust/issues/73557.
+-            //
+-            // Keep in sync with the anonymous struct of BoringSSL's
+-            // `chacha20_poly1305_open_data`.
+-            #[derive(Copy, Clone)]
+-            #[repr(align(16), C)]
+-            struct open_data_in {
+-                key: [u32; chacha::KEY_LEN / 4],
+-                counter: u32,
+-                nonce: [u8; super::NONCE_LEN],
+-            }
+-
+-            let mut data = InOut {
+-                input: open_data_in {
+-                    key: *chacha20_key.words_less_safe(),
+-                    counter: 0,
+-                    nonce: *nonce.as_ref(),
+-                },
+-            };
+-
+-            // Decrypts `plaintext_len` bytes from `ciphertext` and writes them to `out_plaintext`.
+-            prefixed_extern! {
+-                fn chacha20_poly1305_open(
+-                    out_plaintext: *mut u8,
+-                    ciphertext: *const u8,
+-                    plaintext_len: usize,
+-                    ad: *const u8,
+-                    ad_len: usize,
+-                    data: &mut InOut<open_data_in>,
+-                );
+-            }
+-
+-            let out = unsafe {
+-                chacha20_poly1305_open(
+-                    in_out.as_mut_ptr(),
+-                    in_out.as_ptr().add(src.start),
+-                    in_out.len() - src.start,
+-                    aad.as_ref().as_ptr(),
+-                    aad.as_ref().len(),
+-                    &mut data,
+-                );
+-                &data.out
+-            };
++    if has_integrated(cpu_features) {
++        // XXX: BoringSSL uses `alignas(16)` on `key` instead of on the
++        // structure, but Rust can't do that yet; see
++        // https://github.com/rust-lang/rust/issues/73557.
++        //
++        // Keep in sync with the anonymous struct of BoringSSL's
++        // `chacha20_poly1305_open_data`.
++        #[derive(Copy, Clone)]
++        #[repr(align(16), C)]
++        struct open_data_in {
++            key: [u32; chacha::KEY_LEN / 4],
++            counter: u32,
++            nonce: [u8; super::NONCE_LEN],
++        }
+ 
+-            return Tag(out.tag);
++        let mut data = InOut {
++            input: open_data_in {
++                key: *chacha20_key.words_less_safe(),
++                counter: 0,
++                nonce: *nonce.as_ref(),
++            },
++        };
++
++        // Decrypts `plaintext_len` bytes from `ciphertext` and writes them to `out_plaintext`.
++        prefixed_extern! {
++            fn chacha20_poly1305_open(
++                out_plaintext: *mut u8,
++                ciphertext: *const u8,
++                plaintext_len: usize,
++                ad: *const u8,
++                ad_len: usize,
++                data: &mut InOut<open_data_in>,
++            );
+         }
++
++        let out = unsafe {
++            chacha20_poly1305_open(
++                in_out.as_mut_ptr(),
++                in_out.as_ptr().add(src.start),
++                in_out.len() - src.start,
++                aad.as_ref().as_ptr(),
++                aad.as_ref().len(),
++                &mut data,
++            );
++            &data.out
++        };
++
++        return Tag(out.tag);
+     }
+ 
+     let mut counter = Counter::zero(nonce);
+     let mut auth = {
+         let key = derive_poly1305_key(chacha20_key, counter.increment());
+-        poly1305::Context::from_key(key)
++        poly1305::Context::from_key(key, cpu_features)
+     };
+ 
+     poly1305_update_padded_16(&mut auth, aad.as_ref());
+@@ -209,6 +200,21 @@
+     finish(auth, aad.as_ref().len(), in_out[src].len())
+ }
+ 
++#[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
++#[allow(clippy::needless_return)]
++#[inline(always)]
++fn has_integrated(cpu_features: cpu::Features) -> bool {
++    #[cfg(target_arch = "aarch64")]
++    {
++        return cpu::arm::NEON.available(cpu_features);
++    }
++
++    #[cfg(target_arch = "x86_64")]
++    {
++        return cpu::intel::SSE41.available(cpu_features);
++    }
++}
++
+ fn finish(mut auth: poly1305::Context, aad_len: usize, in_out_len: usize) -> Tag {
+     let block: [[u8; 8]; 2] = [aad_len, in_out_len]
+         .map(polyfill::u64_from_usize)
+@@ -258,7 +264,7 @@
+ pub(super) fn derive_poly1305_key(chacha_key: &chacha::Key, iv: Iv) -> poly1305::Key {
+     let mut key_bytes = [0u8; poly1305::KEY_LEN];
+     chacha_key.encrypt_iv_xor_in_place(iv, &mut key_bytes);
+-    poly1305::Key::new(key_bytes, chacha_key.cpu_features())
++    poly1305::Key::new(key_bytes)
+ }
+ 
+ #[cfg(test)]
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/aead/chacha.rs b/src/aead/chacha.rs
+--- a/src/aead/chacha.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/aead/chacha.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -14,7 +14,6 @@
+ // CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ 
+ use super::{quic::Sample, Nonce};
+-use crate::cpu;
+ 
+ #[cfg(any(
+     test,
+@@ -33,20 +32,14 @@
+ #[derive(Clone)]
+ pub struct Key {
+     words: [u32; KEY_LEN / 4],
+-    cpu_features: cpu::Features,
+ }
+ 
+ impl Key {
+-    pub(super) fn new(value: [u8; KEY_LEN], cpu_features: cpu::Features) -> Self {
++    pub(super) fn new(value: [u8; KEY_LEN]) -> Self {
+         Self {
+             words: value.array_split_map(u32::from_le_bytes),
+-            cpu_features,
+         }
+     }
+-
+-    pub(super) fn cpu_features(&self) -> cpu::Features {
+-        self.cpu_features
+-    }
+ }
+ 
+ impl Key {
+@@ -261,7 +254,7 @@
+ 
+             let key = test_case.consume_bytes("Key");
+             let key: &[u8; KEY_LEN] = key.as_slice().try_into()?;
+-            let key = Key::new(*key, cpu::features());
++            let key = Key::new(*key);
+ 
+             let ctr = test_case.consume_usize("Ctr");
+             let nonce = test_case.consume_bytes("Nonce");
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/aead/gcm.rs b/src/aead/gcm.rs
+--- a/src/aead/gcm.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/aead/gcm.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -25,7 +25,6 @@
+ #[derive(Clone)]
+ pub struct Key {
+     h_table: HTable,
+-    cpu_features: cpu::Features,
+ }
+ 
+ impl Key {
+@@ -36,7 +35,6 @@
+             h_table: HTable {
+                 Htable: [u128 { hi: 0, lo: 0 }; HTABLE_LEN],
+             },
+-            cpu_features,
+         };
+         let h_table = &mut key.h_table;
+ 
+@@ -92,13 +90,13 @@
+ }
+ 
+ impl Context {
+-    pub(crate) fn new(key: &Key, aad: Aad<&[u8]>) -> Self {
++    pub(crate) fn new(key: &Key, aad: Aad<&[u8]>, cpu_features: cpu::Features) -> Self {
+         let mut ctx = Self {
+             inner: ContextInner {
+                 Xi: Xi(Block::zero()),
+                 Htable: key.h_table.clone(),
+             },
+-            cpu_features: key.cpu_features,
++            cpu_features,
+         };
+ 
+         for ad in aad.0.chunks(BLOCK_LEN) {
+@@ -322,16 +320,16 @@
+     )))]
+     let _cpu_features = cpu_features;
+ 
+-    #[cfg(any(
+-        target_arch = "aarch64",
+-        target_arch = "arm",
+-        target_arch = "x86_64",
+-        target_arch = "x86"
+-    ))]
++    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
++    {
++        if cpu::arm::PMULL.available(cpu_features) {
++            return Implementation::CLMUL;
++        }
++    }
++
++    #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
+     {
+-        if (cpu::intel::FXSR.available(cpu_features)
+-            && cpu::intel::PCLMULQDQ.available(cpu_features))
+-            || cpu::arm::PMULL.available(cpu_features)
++        if cpu::intel::FXSR.available(cpu_features) && cpu::intel::PCLMULQDQ.available(cpu_features)
+         {
+             return Implementation::CLMUL;
+         }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/aead/less_safe_key.rs b/src/aead/less_safe_key.rs
+--- a/src/aead/less_safe_key.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/aead/less_safe_key.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -171,7 +171,8 @@
+     let ciphertext_len = in_out.get(src.clone()).ok_or(error::Unspecified)?.len();
+     check_per_nonce_max_bytes(key.algorithm, ciphertext_len)?;
+ 
+-    let Tag(calculated_tag) = (key.algorithm.open)(&key.inner, nonce, aad, in_out, src);
++    let Tag(calculated_tag) =
++        (key.algorithm.open)(&key.inner, nonce, aad, in_out, src, cpu::features());
+ 
+     if constant_time::verify_slices_are_equal(calculated_tag.as_ref(), received_tag.as_ref())
+         .is_err()
+@@ -198,7 +199,13 @@
+     in_out: &mut [u8],
+ ) -> Result<Tag, error::Unspecified> {
+     check_per_nonce_max_bytes(key.algorithm(), in_out.len())?;
+-    Ok((key.algorithm.seal)(&key.inner, nonce, aad, in_out))
++    Ok((key.algorithm.seal)(
++        &key.inner,
++        nonce,
++        aad,
++        in_out,
++        cpu::features(),
++    ))
+ }
+ 
+ fn check_per_nonce_max_bytes(alg: &Algorithm, in_out_len: usize) -> Result<(), error::Unspecified> {
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/aead/poly1305.rs b/src/aead/poly1305.rs
+--- a/src/aead/poly1305.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/aead/poly1305.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -21,7 +21,6 @@
+ /// A Poly1305 key.
+ pub(super) struct Key {
+     key_and_nonce: [u8; KEY_LEN],
+-    cpu_features: cpu::Features,
+ }
+ 
+ pub(super) const BLOCK_LEN: usize = 16;
+@@ -29,11 +28,8 @@
+ 
+ impl Key {
+     #[inline]
+-    pub(super) fn new(key_and_nonce: [u8; KEY_LEN], cpu_features: cpu::Features) -> Self {
+-        Self {
+-            key_and_nonce,
+-            cpu_features,
+-        }
++    pub(super) fn new(key_and_nonce: [u8; KEY_LEN]) -> Self {
++        Self { key_and_nonce }
+     }
+ }
+ 
+@@ -79,12 +75,7 @@
+ 
+ impl Context {
+     #[inline]
+-    pub(super) fn from_key(
+-        Key {
+-            key_and_nonce,
+-            cpu_features,
+-        }: Key,
+-    ) -> Self {
++    pub(super) fn from_key(Key { key_and_nonce }: Key, cpu_features: cpu::Features) -> Self {
+         let mut ctx = Self {
+             state: poly1305_state([0u8; OPAQUE_LEN]),
+             cpu_features,
+@@ -123,8 +114,8 @@
+ ///
+ /// This is used by chacha20_poly1305_openssh and the standalone
+ /// poly1305 test vectors.
+-pub(super) fn sign(key: Key, input: &[u8]) -> Tag {
+-    let mut ctx = Context::from_key(key);
++pub(super) fn sign(key: Key, input: &[u8], cpu_features: cpu::Features) -> Tag {
++    let mut ctx = Context::from_key(key, cpu_features);
+     ctx.update(input);
+     ctx.finish()
+ }
+@@ -144,8 +135,8 @@
+             let key: &[u8; KEY_LEN] = key.as_slice().try_into().unwrap();
+             let input = test_case.consume_bytes("Input");
+             let expected_mac = test_case.consume_bytes("MAC");
+-            let key = Key::new(*key, cpu_features);
+-            let Tag(actual_mac) = sign(key, &input);
++            let key = Key::new(*key);
++            let Tag(actual_mac) = sign(key, &input, cpu_features);
+             assert_eq!(expected_mac, actual_mac.as_ref());
+ 
+             Ok(())
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/aead/quic.rs b/src/aead/quic.rs
+--- a/src/aead/quic.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/aead/quic.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -170,12 +170,9 @@
+     id: AlgorithmID::CHACHA20,
+ };
+ 
+-fn chacha20_init(key: &[u8], cpu_features: cpu::Features) -> Result<KeyInner, error::Unspecified> {
++fn chacha20_init(key: &[u8], _cpu_features: cpu::Features) -> Result<KeyInner, error::Unspecified> {
+     let chacha20_key: [u8; chacha::KEY_LEN] = key.try_into()?;
+-    Ok(KeyInner::ChaCha20(chacha::Key::new(
+-        chacha20_key,
+-        cpu_features,
+-    )))
++    Ok(KeyInner::ChaCha20(chacha::Key::new(chacha20_key)))
+ }
+ 
+ fn chacha20_new_mask(key: &KeyInner, sample: Sample) -> [u8; 5] {
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/aead.rs b/src/aead.rs
+--- a/src/aead.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/aead.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -134,13 +134,20 @@
+ pub struct Algorithm {
+     init: fn(key: &[u8], cpu_features: cpu::Features) -> Result<KeyInner, error::Unspecified>,
+ 
+-    seal: fn(key: &KeyInner, nonce: Nonce, aad: Aad<&[u8]>, in_out: &mut [u8]) -> Tag,
++    seal: fn(
++        key: &KeyInner,
++        nonce: Nonce,
++        aad: Aad<&[u8]>,
++        in_out: &mut [u8],
++        cpu_features: cpu::Features,
++    ) -> Tag,
+     open: fn(
+         key: &KeyInner,
+         nonce: Nonce,
+         aad: Aad<&[u8]>,
+         in_out: &mut [u8],
+         src: RangeFrom<usize>,
++        cpu_features: cpu::Features,
+     ) -> Tag,
+ 
+     key_len: usize,
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/arithmetic/bigint/modulus.rs b/src/arithmetic/bigint/modulus.rs
+--- a/src/arithmetic/bigint/modulus.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/arithmetic/bigint/modulus.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -75,8 +75,6 @@
+     n0: N0,
+ 
+     len_bits: BitLength,
+-
+-    cpu_features: cpu::Features,
+ }
+ 
+ impl<M: PublicModulus> Clone for OwnedModulus<M> {
+@@ -85,16 +83,12 @@
+             limbs: self.limbs.clone(),
+             n0: self.n0,
+             len_bits: self.len_bits,
+-            cpu_features: self.cpu_features,
+         }
+     }
+ }
+ 
+ impl<M> OwnedModulus<M> {
+-    pub(crate) fn from_be_bytes(
+-        input: untrusted::Input,
+-        cpu_features: cpu::Features,
+-    ) -> Result<Self, error::KeyRejected> {
++    pub(crate) fn from_be_bytes(input: untrusted::Input) -> Result<Self, error::KeyRejected> {
+         let n = BoxedLimbs::positive_minimal_width_from_be_bytes(input)?;
+         if n.len() > MODULUS_MAX_LIMBS {
+             return Err(error::KeyRejected::too_large());
+@@ -135,7 +129,6 @@
+             limbs: n,
+             n0,
+             len_bits,
+-            cpu_features,
+         })
+     }
+ 
+@@ -158,13 +151,13 @@
+             encoding: PhantomData,
+         })
+     }
+-    pub fn modulus(&self) -> Modulus<M> {
++    pub(crate) fn modulus(&self, cpu_features: cpu::Features) -> Modulus<M> {
+         Modulus {
+             limbs: &self.limbs,
+             n0: self.n0,
+             len_bits: self.len_bits,
+             m: PhantomData,
+-            cpu_features: self.cpu_features,
++            cpu_features,
+         }
+     }
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/arithmetic/bigint.rs b/src/arithmetic/bigint.rs
+--- a/src/arithmetic/bigint.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/arithmetic/bigint.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -719,8 +719,8 @@
+             |section, test_case| {
+                 assert_eq!(section, "");
+ 
+-                let m = consume_modulus::<M>(test_case, "M", cpu_features);
+-                let m = m.modulus();
++                let m = consume_modulus::<M>(test_case, "M");
++                let m = m.modulus(cpu_features);
+                 let expected_result = consume_elem(test_case, "ModExp", &m);
+                 let base = consume_elem(test_case, "A", &m);
+                 let e = {
+@@ -749,8 +749,8 @@
+             |section, test_case| {
+                 assert_eq!(section, "");
+ 
+-                let m = consume_modulus::<M>(test_case, "M", cpu_features);
+-                let m = m.modulus();
++                let m = consume_modulus::<M>(test_case, "M");
++                let m = m.modulus(cpu_features);
+                 let expected_result = consume_elem(test_case, "ModMul", &m);
+                 let a = consume_elem(test_case, "A", &m);
+                 let b = consume_elem(test_case, "B", &m);
+@@ -774,8 +774,8 @@
+             |section, test_case| {
+                 assert_eq!(section, "");
+ 
+-                let m = consume_modulus::<M>(test_case, "M", cpu_features);
+-                let m = m.modulus();
++                let m = consume_modulus::<M>(test_case, "M");
++                let m = m.modulus(cpu_features);
+                 let expected_result = consume_elem(test_case, "ModSquare", &m);
+                 let a = consume_elem(test_case, "A", &m);
+ 
+@@ -799,8 +799,8 @@
+ 
+                 struct M {}
+ 
+-                let m_ = consume_modulus::<M>(test_case, "M", cpu_features);
+-                let m = m_.modulus();
++                let m_ = consume_modulus::<M>(test_case, "M");
++                let m = m_.modulus(cpu_features);
+                 let expected_result = consume_elem(test_case, "R", &m);
+                 let a =
+                     consume_elem_unchecked::<M>(test_case, "A", expected_result.limbs.len() * 2);
+@@ -826,12 +826,13 @@
+ 
+                 struct M {}
+                 struct O {}
+-                let m = consume_modulus::<M>(test_case, "m", cpu_features);
+-                let a = consume_elem_unchecked::<O>(test_case, "a", m.modulus().limbs().len());
+-                let expected_result = consume_elem::<M>(test_case, "r", &m.modulus());
+-                let other_modulus_len_bits = m.modulus().len_bits();
++                let m = consume_modulus::<M>(test_case, "m");
++                let m = m.modulus(cpu_features);
++                let a = consume_elem_unchecked::<O>(test_case, "a", m.limbs().len());
++                let expected_result = consume_elem::<M>(test_case, "r", &m);
++                let other_modulus_len_bits = m.len_bits();
+ 
+-                let actual_result = elem_reduced_once(&a, &m.modulus(), other_modulus_len_bits);
++                let actual_result = elem_reduced_once(&a, &m, other_modulus_len_bits);
+                 assert_elem_eq(&actual_result, &expected_result);
+ 
+                 Ok(())
+@@ -863,13 +864,9 @@
+         }
+     }
+ 
+-    fn consume_modulus<M>(
+-        test_case: &mut test::TestCase,
+-        name: &str,
+-        cpu_features: cpu::Features,
+-    ) -> OwnedModulus<M> {
++    fn consume_modulus<M>(test_case: &mut test::TestCase, name: &str) -> OwnedModulus<M> {
+         let value = test_case.consume_bytes(name);
+-        OwnedModulus::from_be_bytes(untrusted::Input::from(&value), cpu_features).unwrap()
++        OwnedModulus::from_be_bytes(untrusted::Input::from(&value)).unwrap()
+     }
+ 
+     fn assert_elem_eq<M, E>(a: &Elem<M, E>, b: &Elem<M, E>) {
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/cpu/intel.rs b/src/cpu/intel.rs
+--- a/src/cpu/intel.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/cpu/intel.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -51,16 +51,19 @@
+     }
+ }
+ 
++#[allow(dead_code)]
+ pub(crate) const ADX: Feature = Feature {
+     word: 2,
+     mask: 1 << 19,
+ };
+ 
++#[allow(dead_code)]
+ pub(crate) const BMI1: Feature = Feature {
+     word: 2,
+     mask: 1 << 3,
+ };
+ 
++#[allow(dead_code)]
+ pub(crate) const BMI2: Feature = Feature {
+     word: 2,
+     mask: 1 << 8,
+@@ -81,6 +84,7 @@
+     mask: 1 << 9,
+ };
+ 
++#[allow(dead_code)]
+ pub(crate) const SSE41: Feature = Feature {
+     word: 1,
+     mask: 1 << 19,
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/cpu.rs b/src/cpu.rs
+--- a/src/cpu.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/cpu.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -44,5 +44,8 @@
+     Features(())
+ }
+ 
++#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+ pub mod arm;
++
++#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+ pub mod intel;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/digest.rs b/src/digest.rs
+--- a/src/digest.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/digest.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -41,8 +41,6 @@
+ 
+     /// The context's algorithm.
+     pub algorithm: &'static Algorithm,
+-
+-    cpu_features: cpu::Features,
+ }
+ 
+ impl BlockContext {
+@@ -51,7 +49,6 @@
+             state: algorithm.initial_state,
+             completed_data_blocks: 0,
+             algorithm,
+-            cpu_features: cpu::features(),
+         }
+     }
+ 
+@@ -61,9 +58,8 @@
+         assert_eq!(num_blocks * self.algorithm.block_len, input.len());
+ 
+         if num_blocks > 0 {
+-            let _cpu_features = self.cpu_features;
+             unsafe {
+-                (self.algorithm.block_data_order)(&mut self.state, input.as_ptr(), num_blocks);
++                self.block_data_order(input.as_ptr(), num_blocks, cpu::features());
+             }
+             self.completed_data_blocks = self
+                 .completed_data_blocks
+@@ -83,9 +79,7 @@
+ 
+         if padding_pos > block_len - self.algorithm.len_len {
+             pending[padding_pos..block_len].fill(0);
+-            unsafe {
+-                (self.algorithm.block_data_order)(&mut self.state, pending.as_ptr(), 1);
+-            }
++            unsafe { self.block_data_order(pending.as_ptr(), 1, cpu::features()) };
+             // We don't increase |self.completed_data_blocks| because the
+             // padding isn't data, and so it isn't included in the data length.
+             padding_pos = 0;
+@@ -104,15 +98,25 @@
+             .unwrap();
+         pending[(block_len - 8)..block_len].copy_from_slice(&u64::to_be_bytes(completed_data_bits));
+ 
+-        unsafe {
+-            (self.algorithm.block_data_order)(&mut self.state, pending.as_ptr(), 1);
+-        }
++        unsafe { self.block_data_order(pending.as_ptr(), 1, cpu::features()) };
+ 
+         Digest {
+             algorithm: self.algorithm,
+             value: (self.algorithm.format_output)(self.state),
+         }
+     }
++
++    unsafe fn block_data_order(
++        &mut self,
++        pending: *const u8,
++        num_blocks: usize,
++        _cpu_features: cpu::Features,
++    ) {
++        // CPU features are inspected by assembly implementations.
++        unsafe {
++            (self.algorithm.block_data_order)(&mut self.state, pending, num_blocks);
++        }
++    }
+ }
+ 
+ /// A context for multi-step (Init-Update-Finish) digest calculations.
+@@ -579,7 +583,6 @@
+                     state: alg.initial_state,
+                     completed_data_blocks: max_blocks - 1,
+                     algorithm: alg,
+-                    cpu_features: crate::cpu::features(),
+                 },
+                 pending: [0u8; digest::MAX_BLOCK_LEN],
+                 num_pending: 0,
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/ec/curve25519/ops.rs b/src/ec/curve25519/ops.rs
+--- a/src/ec/curve25519/ops.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/ec/curve25519/ops.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -157,12 +157,20 @@
+     bytes
+ }
+ 
+-#[inline]
+-pub(super) fn has_fe25519_adx(cpu: cpu::Features) -> bool {
+-    cfg!(all(target_arch = "x86_64", not(target_os = "windows")))
+-        && cpu::intel::ADX.available(cpu)
+-        && cpu::intel::BMI1.available(cpu)
+-        && cpu::intel::BMI2.available(cpu)
++cfg_if::cfg_if! {
++    if #[cfg(all(target_arch = "x86_64", not(target_os = "windows")))] {
++        #[inline(always)]
++        pub(super) fn has_fe25519_adx(cpu: cpu::Features) -> bool {
++            cpu::intel::ADX.available(cpu)
++            && cpu::intel::BMI1.available(cpu)
++            && cpu::intel::BMI2.available(cpu)
++        }
++    } else {
++        #[inline(always)]
++        pub (super) fn has_fe25519_adx(_cpu: cpu::Features) -> bool {
++            false
++        }
++    }
+ }
+ 
+ prefixed_extern! {
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/rsa/keypair.rs b/src/rsa/keypair.rs
+--- a/src/rsa/keypair.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/rsa/keypair.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -285,7 +285,7 @@
+         )?;
+ 
+         let n_one = public_key.inner().n().oneRR();
+-        let n = &public_key.inner().n().value();
++        let n = &public_key.inner().n().value(cpu_features);
+ 
+         // 6.4.1.4.3 says to skip 6.4.1.2.1 Step 2.
+ 
+@@ -338,7 +338,7 @@
+         // First, validate `2**half_n_bits < d`. Since 2**half_n_bits has a bit
+         // length of half_n_bits + 1, this check gives us 2**half_n_bits <= d,
+         // and knowing d is odd makes the inequality strict.
+-        let d = bigint::OwnedModulus::<D>::from_be_bytes(d, cpu_features)
++        let d = bigint::OwnedModulus::<D>::from_be_bytes(d)
+             .map_err(|_| error::KeyRejected::invalid_component())?;
+         if !(n_bits.half_rounded_up() < d.len_bits()) {
+             return Err(KeyRejected::inconsistent_components());
+@@ -350,7 +350,7 @@
+ 
+         // Step 6.b is omitted as explained above.
+ 
+-        let pm = &p.modulus.modulus();
++        let pm = &p.modulus.modulus(cpu_features);
+ 
+         // 6.4.1.4.3 - Step 7.
+ 
+@@ -371,8 +371,8 @@
+ 
+         // This should never fail since `n` and `e` were validated above.
+ 
+-        let p = PrivateCrtPrime::new(p, dP)?;
+-        let q = PrivateCrtPrime::new(q, dQ)?;
++        let p = PrivateCrtPrime::new(p, dP, cpu_features)?;
++        let q = PrivateCrtPrime::new(q, dQ, cpu_features)?;
+ 
+         Ok(Self {
+             p,
+@@ -416,7 +416,7 @@
+         n_bits: BitLength,
+         cpu_features: cpu::Features,
+     ) -> Result<Self, KeyRejected> {
+-        let p = bigint::OwnedModulus::from_be_bytes(p, cpu_features)?;
++        let p = bigint::OwnedModulus::from_be_bytes(p)?;
+ 
+         // 5.c / 5.g:
+         //
+@@ -438,7 +438,7 @@
+ 
+         // Steps 5.e and 5.f are omitted as explained above.
+ 
+-        let oneRR = bigint::One::newRR(&p.modulus());
++        let oneRR = bigint::One::newRR(&p.modulus(cpu_features));
+ 
+         Ok(Self { modulus: p, oneRR })
+     }
+@@ -453,8 +453,12 @@
+ impl<M> PrivateCrtPrime<M> {
+     /// Constructs a `PrivateCrtPrime` from the private prime `p` and `dP` where
+     /// dP == d % (p - 1).
+-    fn new(p: PrivatePrime<M>, dP: untrusted::Input) -> Result<Self, KeyRejected> {
+-        let m = &p.modulus.modulus();
++    fn new(
++        p: PrivatePrime<M>,
++        dP: untrusted::Input,
++        cpu_features: cpu::Features,
++    ) -> Result<Self, KeyRejected> {
++        let m = &p.modulus.modulus(cpu_features);
+         // [NIST SP-800-56B rev. 1] 6.4.1.4.3 - Steps 7.a & 7.b.
+         let dP = bigint::PrivateExponent::from_be_bytes_padded(dP, m)
+             .map_err(|error::Unspecified| KeyRejected::inconsistent_components())?;
+@@ -482,8 +486,9 @@
+     c: &bigint::Elem<N>,
+     p: &PrivateCrtPrime<M>,
+     other_prime_len_bits: BitLength,
++    cpu_features: cpu::Features,
+ ) -> Result<bigint::Elem<M>, error::Unspecified> {
+-    let m = &p.modulus.modulus();
++    let m = &p.modulus.modulus(cpu_features);
+     let c_mod_m = bigint::elem_reduced(c, m, other_prime_len_bits);
+     let c_mod_m = bigint::elem_mul(p.oneRRR.as_ref(), c_mod_m, m);
+     bigint::elem_exp_consttime(c_mod_m, &p.exponent, m)
+@@ -523,6 +528,8 @@
+         msg: &[u8],
+         signature: &mut [u8],
+     ) -> Result<(), error::Unspecified> {
++        let cpu_features = cpu::features();
++
+         if signature.len() != self.public().modulus_len() {
+             return Err(error::Unspecified);
+         }
+@@ -537,7 +544,7 @@
+         // with Garner's algorithm.
+ 
+         // Steps 1 and 2.
+-        let m = self.private_exponentiate(signature)?;
++        let m = self.private_exponentiate(signature, cpu_features)?;
+ 
+         // Step 3.
+         m.fill_be_bytes(signature);
+@@ -552,13 +559,17 @@
+     /// leaked that would endanger the private key.
+     ///
+     /// Panics if `in_out` is not `self.public().modulus_len()`.
+-    fn private_exponentiate(&self, base: &[u8]) -> Result<bigint::Elem<N>, error::Unspecified> {
++    fn private_exponentiate(
++        &self,
++        base: &[u8],
++        cpu_features: cpu::Features,
++    ) -> Result<bigint::Elem<N>, error::Unspecified> {
+         assert_eq!(base.len(), self.public().modulus_len());
+ 
+         // RFC 8017 Section 5.1.2: RSADP, using the Chinese Remainder Theorem
+         // with Garner's algorithm.
+ 
+-        let n = &self.public.inner().n().value();
++        let n = &self.public.inner().n().value(cpu_features);
+         let n_one = self.public.inner().n().oneRR();
+ 
+         // Step 1. The value zero is also rejected.
+@@ -569,14 +580,14 @@
+ 
+         // Step 2.b.i.
+         let q_bits = self.q.modulus.len_bits();
+-        let m_1 = elem_exp_consttime(&c, &self.p, q_bits)?;
+-        let m_2 = elem_exp_consttime(&c, &self.q, self.p.modulus.len_bits())?;
++        let m_1 = elem_exp_consttime(&c, &self.p, q_bits, cpu_features)?;
++        let m_2 = elem_exp_consttime(&c, &self.q, self.p.modulus.len_bits(), cpu_features)?;
+ 
+         // Step 2.b.ii isn't needed since there are only two primes.
+ 
+         // Step 2.b.iii.
+         let h = {
+-            let p = &self.p.modulus.modulus();
++            let p = &self.p.modulus.modulus(cpu_features);
+             let m_2 = bigint::elem_reduced_once(&m_2, p, q_bits);
+             let m_1_minus_m_2 = bigint::elem_sub(m_1, &m_2, p);
+             bigint::elem_mul(&self.qInv, m_1_minus_m_2, p)
+@@ -605,7 +616,7 @@
+         // minimum value, since the relationship of `e` to `d`, `p`, and `q` is
+         // not verified during `KeyPair` construction.
+         {
+-            let verify = self.public.inner().exponentiate_elem(&m);
++            let verify = self.public.inner().exponentiate_elem(&m, cpu_features);
+             bigint::elem_verify_equal_consttime(&verify, &c)?;
+         }
+ 
+@@ -623,6 +634,7 @@
+ 
+     #[test]
+     fn test_rsakeypair_private_exponentiate() {
++        let cpu = cpu::features();
+         test::run(
+             test_file!("keypair_private_exponentiate_tests.txt"),
+             |section, test_case| {
+@@ -645,7 +657,7 @@
+                     let mut padded = vec![0; key.public.modulus_len()];
+                     let zeroes = padded.len() - test_case.len();
+                     padded[zeroes..].copy_from_slice(test_case);
+-                    let _: bigint::Elem<_> = key.private_exponentiate(&padded).unwrap();
++                    let _: bigint::Elem<_> = key.private_exponentiate(&padded, cpu).unwrap();
+                 }
+                 Ok(())
+             },
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/rsa/padding.rs b/src/rsa/padding.rs
+--- a/src/rsa/padding.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/rsa/padding.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -18,8 +18,8 @@
+ mod pss;
+ 
+ pub use self::{
+-    pkcs1::{PKCS1, RSA_PKCS1_SHA256, RSA_PKCS1_SHA384, RSA_PKCS1_SHA512},
+-    pss::{PSS, RSA_PSS_SHA256, RSA_PSS_SHA384, RSA_PSS_SHA512},
++    pkcs1::{RSA_PKCS1_SHA256, RSA_PKCS1_SHA384, RSA_PKCS1_SHA512},
++    pss::{RSA_PSS_SHA256, RSA_PSS_SHA384, RSA_PSS_SHA512},
+ };
+ pub(super) use pkcs1::RSA_PKCS1_SHA1_FOR_LEGACY_USE_ONLY;
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/rsa/public_key.rs b/src/rsa/public_key.rs
+--- a/src/rsa/public_key.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/rsa/public_key.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -144,8 +144,9 @@
+         &self,
+         base: untrusted::Input,
+         out_buffer: &'out mut [u8; PUBLIC_KEY_PUBLIC_MODULUS_MAX_LEN],
++        cpu_features: cpu::Features,
+     ) -> Result<&'out [u8], error::Unspecified> {
+-        let n = &self.n.value();
++        let n = &self.n.value(cpu_features);
+ 
+         // The encoded value of the base must be the same length as the modulus,
+         // in bytes.
+@@ -162,7 +163,7 @@
+         }
+ 
+         // Step 2.
+-        let m = self.exponentiate_elem(&s);
++        let m = self.exponentiate_elem(&s, cpu_features);
+ 
+         // Step 3.
+         Ok(fill_be_bytes_n(m, self.n.len_bits(), out_buffer))
+@@ -171,13 +172,17 @@
+     /// Calculates base**e (mod n).
+     ///
+     /// This is constant-time with respect to `base` only.
+-    pub(super) fn exponentiate_elem(&self, base: &bigint::Elem<N>) -> bigint::Elem<N> {
++    pub(super) fn exponentiate_elem(
++        &self,
++        base: &bigint::Elem<N>,
++        cpu_features: cpu::Features,
++    ) -> bigint::Elem<N> {
+         // The exponent was already checked to be at least 3.
+         let exponent_without_low_bit = NonZeroU64::try_from(self.e.value().get() & !1).unwrap();
+         // The exponent was already checked to be odd.
+         debug_assert_ne!(exponent_without_low_bit, self.e.value());
+ 
+-        let n = &self.n.value();
++        let n = &self.n.value(cpu_features);
+ 
+         let base_r = bigint::elem_mul(self.n.oneRR(), base.clone(), n);
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/rsa/public_modulus.rs b/src/rsa/public_modulus.rs
+--- a/src/rsa/public_modulus.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/rsa/public_modulus.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -37,7 +37,7 @@
+         const MIN_BITS: bits::BitLength = bits::BitLength::from_usize_bits(1024);
+ 
+         // Step 3 / Step c for `n` (out of order).
+-        let value = bigint::OwnedModulus::from_be_bytes(n, cpu_features)?;
++        let value = bigint::OwnedModulus::from_be_bytes(n)?;
+         let bits = value.len_bits();
+ 
+         // Step 1 / Step a. XXX: SP800-56Br1 and SP800-89 require the length of
+@@ -52,7 +52,7 @@
+         if bits > max_bits {
+             return Err(error::KeyRejected::too_large());
+         }
+-        let oneRR = bigint::One::newRR(&value.modulus());
++        let oneRR = bigint::One::newRR(&value.modulus(cpu_features));
+ 
+         Ok(Self { value, oneRR })
+     }
+@@ -69,8 +69,8 @@
+         self.value.len_bits()
+     }
+ 
+-    pub(super) fn value(&self) -> bigint::Modulus<N> {
+-        self.value.modulus()
++    pub(super) fn value(&self, cpu_features: cpu::Features) -> bigint::Modulus<N> {
++        self.value.modulus(cpu_features)
+     }
+ 
+     pub(super) fn oneRR(&self) -> &bigint::Elem<N, RR> {
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/rsa/verification.rs b/src/rsa/verification.rs
+--- a/src/rsa/verification.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/rsa/verification.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -35,6 +35,7 @@
+             ),
+             msg,
+             signature,
++            cpu::features(),
+         )
+     }
+ }
+@@ -184,6 +185,7 @@
+             ),
+             untrusted::Input::from(message),
+             untrusted::Input::from(signature),
++            cpu::features(),
+         )
+     }
+ }
+@@ -193,6 +195,7 @@
+     (n, e): (untrusted::Input, untrusted::Input),
+     msg: untrusted::Input,
+     signature: untrusted::Input,
++    cpu_features: cpu::Features,
+ ) -> Result<(), error::Unspecified> {
+     let max_bits: bits::BitLength =
+         bits::BitLength::from_usize_bytes(PUBLIC_KEY_PUBLIC_MODULUS_MAX_LEN)?;
+@@ -207,12 +210,12 @@
+         params.min_bits,
+         max_bits,
+         PublicExponent::_3,
+-        cpu::features(),
++        cpu_features,
+     )?;
+ 
+     // RFC 8017 Section 5.2.2: RSAVP1.
+     let mut decoded = [0u8; PUBLIC_KEY_PUBLIC_MODULUS_MAX_LEN];
+-    let decoded = key.exponentiate(signature, &mut decoded)?;
++    let decoded = key.exponentiate(signature, &mut decoded, cpu_features)?;
+ 
+     // Verify the padded message is correct.
+     let m_hash = digest::digest(params.padding_alg.digest_alg(), msg.as_slice_less_safe());
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/test.rs b/src/test.rs
+--- a/src/test.rs	1973-11-29 22:33:09.000000000 +0100
++++ b/src/test.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -346,16 +346,14 @@
+         }
+ 
+         #[cfg(feature = "test_logging")]
+-        {
+-            if let Err(msg) = result {
+-                std::println!("{}: {}", test_file.file_name, msg);
+-
+-                for (name, value, consumed) in test_case.attributes {
+-                    let consumed_str = if consumed { "" } else { " (unconsumed)" };
+-                    std::println!("{}{} = {}", name, consumed_str, value);
+-                }
+-            };
+-        }
++        if let Err(msg) = result {
++            std::println!("{}: {}", test_file.file_name, msg);
++
++            for (name, value, consumed) in test_case.attributes {
++                let consumed_str = if consumed { "" } else { " (unconsumed)" };
++                std::println!("{}{} = {}", name, consumed_str, value);
++            }
++        };
+     }
+ 
+     if failed {
+@@ -405,10 +403,8 @@
+         let line = lines.next();
+ 
+         #[cfg(feature = "test_logging")]
+-        {
+-            if let Some(text) = &line {
+-                std::println!("Line: {}", text);
+-            }
++        if let Some(text) = &line {
++            std::println!("Line: {}", text);
+         }
+ 
+         match line {
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/third_party/fiat/curve25519_64_adx.h b/third_party/fiat/curve25519_64_adx.h
+--- a/third_party/fiat/curve25519_64_adx.h	1973-11-29 22:33:09.000000000 +0100
++++ b/third_party/fiat/curve25519_64_adx.h	2006-07-24 03:21:28.000000000 +0200
+@@ -463,7 +463,7 @@
+   fe4_mul(out, t1, t0);
+ }
+ 
+-__attribute__((noinline)) // https://github.com/rust-lang/rust/issues/116573
++RING_NOINLINE // https://github.com/rust-lang/rust/issues/116573
+ __attribute__((target("adx,bmi2")))
+ void x25519_scalar_mult_adx(uint8_t out[32], const uint8_t scalar[32],
+                             const uint8_t point[32]) {
+@@ -640,7 +640,7 @@
+ //
+ // Preconditions:
+ //   a[31] <= 127
+-__attribute__((noinline)) // https://github.com/rust-lang/rust/issues/116573
++RING_NOINLINE // https://github.com/rust-lang/rust/issues/116573
+ __attribute__((target("adx,bmi2")))
+ void x25519_ge_scalarmult_base_adx(uint8_t h[4][32], const uint8_t a[32]) {
+   signed char e[64];
