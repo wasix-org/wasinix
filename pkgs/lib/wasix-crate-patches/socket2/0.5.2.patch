@@ -1,36 +1,19 @@
 diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/Cargo.toml b/Cargo.toml
 --- a/Cargo.toml	1970-01-01 01:00:01.000000000 +0100
-+++ b/Cargo.toml	2026-08-10 16:05:23.604569673 +0200
-@@ -50,6 +50,16 @@
- license = "MIT OR Apache-2.0"
- repository = "https://github.com/rust-lang/socket2"
- 
-+[package.metadata.cargo_check_external_types]
-+allowed_external_types = [
-+    "libc::socklen_t",
-+    "libc::*::socklen_t",
-+    "libc::sa_family_t",
-+    "libc::*::sa_family_t",
-+    "windows_sys::Win32::Networking::WinSock::socklen_t",
-+    "windows_sys::Win32::Networking::WinSock::ADDRESS_FAMILY",
-+]
-+
- [package.metadata.docs.rs]
- all-features = true
- rustdoc-args = [
-@@ -83,7 +93,7 @@
- name = "socket2"
- path = "src/lib.rs"
++++ b/Cargo.toml	2026-08-10 23:28:13.832412539 +0200
+@@ -71,7 +71,7 @@
+ [features]
+ all = []
  
 -[target."cfg(unix)".dependencies.libc]
 +[target.'cfg(any(unix, target_os = "wasi"))'.dependencies.libc]
- version = "0.2.171"
+ version = "0.2.141"
  
  [target."cfg(windows)".dependencies.windows-sys]
 diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/lib.rs b/src/lib.rs
 --- a/src/lib.rs	2006-07-24 03:21:28.000000000 +0200
-+++ b/src/lib.rs	2026-08-10 16:05:23.642946843 +0200
-@@ -107,7 +107,7 @@
++++ b/src/lib.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -101,7 +101,7 @@
      ($from: ty, $for: ty) => {
          impl From<$from> for $for {
              fn from(socket: $from) -> $for {
@@ -39,7 +22,7 @@ diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=tar
                  unsafe {
                      <$for>::from_raw_fd(socket.into_raw_fd())
                  }
-@@ -176,9 +176,10 @@
+@@ -170,9 +170,10 @@
  
  #[cfg_attr(unix, path = "sys/unix.rs")]
  #[cfg_attr(windows, path = "sys/windows.rs")]
@@ -51,7 +34,7 @@ diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=tar
  compile_error!("Socket2 doesn't support the compile target");
  
  use sys::c_int;
-@@ -255,12 +256,12 @@
+@@ -249,12 +250,12 @@
      /// Type corresponding to `SOCK_STREAM`.
      ///
      /// Used for protocols such as TCP.
@@ -66,41 +49,41 @@ diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=tar
  
      /// Type corresponding to `SOCK_DCCP`.
      ///
-@@ -523,6 +524,7 @@
+@@ -491,6 +492,7 @@
+         target_os = "tvos",
          target_os = "watchos",
          target_os = "windows",
-         target_os = "cygwin",
 +        target_os = "wasi",
      ))]
      #[cfg_attr(
          docsrs,
-@@ -536,6 +538,7 @@
-             target_os = "visionos",
+@@ -507,6 +509,7 @@
+             target_os = "tvos",
+             target_os = "watchos",
+             target_os = "windows",
++            target_os = "wasi",
+         )))
+     )]
+     pub const fn with_interval(self, interval: Duration) -> Self {
+@@ -531,6 +534,7 @@
+             target_os = "ios",
              target_os = "linux",
              target_os = "macos",
 +            target_os = "wasi",
              target_os = "netbsd",
              target_os = "tvos",
              target_os = "watchos",
-@@ -569,6 +572,7 @@
-             target_os = "tvos",
-             target_os = "watchos",
-             target_os = "cygwin",
-+            target_os = "wasi",
-         )
-     ))]
-     #[cfg_attr(
-@@ -588,6 +592,7 @@
+@@ -549,6 +553,7 @@
+                 target_os = "ios",
+                 target_os = "linux",
+                 target_os = "macos",
++                target_os = "wasi",
                  target_os = "netbsd",
                  target_os = "tvos",
                  target_os = "watchos",
-+                target_os = "wasi",
-             )
-         )))
-     )]
 diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sockaddr.rs b/src/sockaddr.rs
 --- a/src/sockaddr.rs	2006-07-24 03:21:28.000000000 +0200
-+++ b/src/sockaddr.rs	2026-08-10 16:05:23.605632026 +0200
++++ b/src/sockaddr.rs	2006-07-24 03:21:28.000000000 +0200
 @@ -1,6 +1,7 @@
  use std::hash::Hash;
  use std::mem::{self, size_of, MaybeUninit};
@@ -117,7 +100,16 @@ diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=tar
      pub fn unix<P>(path: P) -> io::Result<SockAddr>
      where
          P: AsRef<Path>,
-@@ -225,7 +227,7 @@
+@@ -206,7 +208,7 @@
+     }
+ 
+     /// Returns a raw pointer to the address storage.
+-    #[cfg(all(unix, not(target_os = "redox")))]
++    #[cfg(all(any(unix, target_os = "wasi"), not(target_os = "redox")))]
+     pub(crate) const fn as_storage_ptr(&self) -> *const sockaddr_storage {
+         &self.storage
+     }
+@@ -231,7 +233,7 @@
                  ip,
                  port,
                  addr.sin6_flowinfo,
@@ -126,7 +118,7 @@ diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=tar
                  addr.sin6_scope_id,
                  #[cfg(windows)]
                  unsafe {
-@@ -317,7 +319,7 @@
+@@ -305,7 +307,7 @@
              storage.sin6_port = addr.port().to_be();
              storage.sin6_addr = crate::sys::to_in6_addr(addr.ip());
              storage.sin6_flowinfo = addr.flowinfo();
@@ -137,17 +129,26 @@ diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=tar
              }
 diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/socket.rs b/src/socket.rs
 --- a/src/socket.rs	2006-07-24 03:21:28.000000000 +0200
-+++ b/src/socket.rs	2026-08-10 16:05:23.606399540 +0200
-@@ -16,6 +16,8 @@
- use std::net::{self, Ipv4Addr, Shutdown};
- #[cfg(unix)]
++++ b/src/socket.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -18,6 +18,8 @@
  use std::os::unix::io::{FromRawFd, IntoRawFd};
-+#[cfg(all(target_os = "wasi", not(unix)))]
-+use std::os::wasi::io::{FromRawFd, IntoRawFd};
  #[cfg(windows)]
  use std::os::windows::io::{FromRawSocket, IntoRawSocket};
++#[cfg(target_os = "wasi")]
++use std::os::wasi::io::{FromRawFd, IntoRawFd};
  use std::time::Duration;
-@@ -238,7 +240,7 @@
+ 
+ use crate::sys::{self, c_int, getsockopt, setsockopt, Bool};
+@@ -100,7 +102,7 @@
+                 // Violating this assumption (fd never negative) causes UB,
+                 // something we don't want. So check for that we have this
+                 // `assert!`.
+-                #[cfg(unix)]
++                #[cfg(any(unix, target_os = "wasi"))]
+                 assert!(raw >= 0, "tried to create a `Socket` with an invalid fd");
+                 sys::socket_from_raw(raw)
+             },
+@@ -231,7 +233,7 @@
          match res {
              Ok(()) => return Ok(()),
              Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {}
@@ -156,40 +157,40 @@ diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=tar
              Err(ref e) if e.raw_os_error() == Some(libc::EINPROGRESS) => {}
              Err(e) => return Err(e),
          }
-@@ -283,6 +285,7 @@
+@@ -269,6 +271,7 @@
              target_os = "fuchsia",
              target_os = "illumos",
              target_os = "linux",
 +            target_os = "wasi",
              target_os = "netbsd",
              target_os = "openbsd",
-             target_os = "cygwin",
-@@ -297,6 +300,7 @@
+         ))]
+@@ -282,6 +285,7 @@
              target_os = "fuchsia",
              target_os = "illumos",
              target_os = "linux",
 +            target_os = "wasi",
              target_os = "netbsd",
              target_os = "openbsd",
-             target_os = "cygwin",
-@@ -639,6 +643,7 @@
+         )))]
+@@ -623,6 +627,7 @@
      /// but suppresses the `WSAEMSGSIZE` error on Windows.
      ///
      /// [`peek_from`]: Socket::peek_from
-+    #[cfg(not(all(target_os = "wasi", target_vendor = "unknown")))]
++    #[cfg(not(target_os = "wasi"))]
      pub fn peek_sender(&self) -> io::Result<SockAddr> {
          sys::peek_sender(self.as_raw())
      }
-@@ -1177,7 +1182,7 @@
-     )]
-     pub fn header_included_v4(&self) -> io::Result<bool> {
+@@ -1089,7 +1094,7 @@
+     #[cfg_attr(docsrs, doc(cfg(all(feature = "all", not(target_os = "redox")))))]
+     pub fn header_included(&self) -> io::Result<bool> {
          unsafe {
 -            getsockopt::<c_int>(self.as_raw(), sys::IPPROTO_IP, sys::IP_HDRINCL)
 +            getsockopt::<c_int>(self.as_raw(), sys::IPPROTO_IP, libc::IP_HDRINCL)
                  .map(|included| included != 0)
          }
      }
-@@ -1222,7 +1227,7 @@
+@@ -1116,7 +1121,7 @@
              setsockopt(
                  self.as_raw(),
                  sys::IPPROTO_IP,
@@ -198,64 +199,101 @@ diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=tar
                  included as c_int,
              )
          }
-@@ -1999,7 +2004,7 @@
+@@ -1732,6 +1737,7 @@
          target_os = "redox",
          target_os = "solaris",
          target_os = "haiku",
--        target_os = "hurd",
 +        target_os = "wasi",
-         target_os = "espidf",
-         target_os = "vita",
      )))]
-@@ -2024,6 +2029,7 @@
+     pub fn recv_tclass_v6(&self) -> io::Result<bool> {
+         unsafe {
+@@ -1754,6 +1760,7 @@
          target_os = "redox",
          target_os = "solaris",
          target_os = "haiku",
 +        target_os = "wasi",
-         target_os = "hurd",
-         target_os = "espidf",
-         target_os = "vita",
-@@ -2155,6 +2161,7 @@
-             target_os = "visionos",
+     )))]
+     pub fn set_recv_tclass_v6(&self, recv_tclass: bool) -> io::Result<()> {
+         unsafe {
+@@ -1808,6 +1815,7 @@
+             target_os = "ios",
              target_os = "linux",
              target_os = "macos",
 +            target_os = "wasi",
              target_os = "netbsd",
              target_os = "tvos",
              target_os = "watchos",
-@@ -2205,6 +2212,7 @@
-             target_os = "visionos",
+@@ -1826,6 +1834,7 @@
+                 target_os = "ios",
+                 target_os = "linux",
+                 target_os = "macos",
++                target_os = "wasi",
+                 target_os = "netbsd",
+                 target_os = "tvos",
+                 target_os = "watchos",
+@@ -1855,6 +1864,7 @@
+             target_os = "ios",
              target_os = "linux",
              target_os = "macos",
 +            target_os = "wasi",
              target_os = "netbsd",
              target_os = "tvos",
              target_os = "watchos",
+@@ -1873,6 +1883,7 @@
+                 target_os = "ios",
+                 target_os = "linux",
+                 target_os = "macos",
++                target_os = "wasi",
+                 target_os = "netbsd",
+                 target_os = "tvos",
+                 target_os = "watchos",
 diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sockref.rs b/src/sockref.rs
 --- a/src/sockref.rs	2006-07-24 03:21:28.000000000 +0200
-+++ b/src/sockref.rs	2026-08-10 16:05:23.607202631 +0200
-@@ -4,6 +4,8 @@
- use std::ops::Deref;
- #[cfg(unix)]
++++ b/src/sockref.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -6,6 +6,8 @@
  use std::os::unix::io::{AsFd, AsRawFd, FromRawFd};
-+#[cfg(all(target_os = "wasi", not(unix)))]
-+use std::os::wasi::io::{AsFd, AsRawFd, FromRawFd};
  #[cfg(windows)]
  use std::os::windows::io::{AsRawSocket, AsSocket, FromRawSocket};
++#[cfg(target_os = "wasi")]
++use std::os::wasi::io::{AsFd, AsRawFd, FromRawFd};
  
-@@ -77,7 +79,7 @@
+ use crate::Socket;
+ 
+@@ -77,8 +79,8 @@
  }
  
  /// On Windows, a corresponding `From<&impl AsSocket>` implementation exists.
 -#[cfg(unix)]
+-#[cfg_attr(docsrs, doc(cfg(unix)))]
 +#[cfg(any(unix, target_os = "wasi"))]
- #[cfg_attr(docsrs, doc(cfg(unix)))]
++#[cfg_attr(docsrs, doc(cfg(any(unix, target_os = "wasi"))))]
  impl<'s, S> From<&'s S> for SockRef<'s>
  where
+     S: AsFd,
 diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/unix.rs b/src/sys/unix.rs
 --- a/src/sys/unix.rs	2006-07-24 03:21:28.000000000 +0200
-+++ b/src/sys/unix.rs	2026-08-10 16:05:23.607991482 +0200
-@@ -3302,4 +3302,4 @@
++++ b/src/sys/unix.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -293,6 +293,10 @@
+ #[cfg(all(feature = "all", any(target_os = "freebsd", target_os = "linux")))]
+ const TCP_CA_NAME_MAX: usize = 16;
+ 
++// TCP_CA_NAME_MAX isn't defined in user space include files(not in libc)
++#[cfg(all(feature = "all", any(target_os = "freebsd", target_os = "linux")))]
++const TCP_CA_NAME_MAX: usize = 16;
++
+ #[cfg(any(
+     all(
+         target_os = "linux",
+@@ -1162,7 +1166,7 @@
+     syscall!(fcntl(fd, cmd))
+ }
+ 
+-/// Add `flag` to the current set flags of `F_GETFD`.
++//// Add `flag` to the current set flags of `F_GETFD`.
+ fn fcntl_add(fd: Socket, get_cmd: c_int, set_cmd: c_int, flag: c_int) -> io::Result<()> {
+     let previous = fcntl_get(fd, get_cmd)?;
+     let new = previous | flag;
+@@ -2886,4 +2890,4 @@
      let want = [32, 0, 0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7];
      assert_eq!(raw.s6_addr, want);
      assert_eq!(from_in6_addr(raw), ip);

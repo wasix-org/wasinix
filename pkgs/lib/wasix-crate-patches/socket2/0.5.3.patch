@@ -1,0 +1,1209 @@
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml	1970-01-01 01:00:01.000000000 +0100
++++ b/Cargo.toml	2026-08-10 23:28:16.582824032 +0200
+@@ -73,7 +73,7 @@
+ [features]
+ all = []
+ 
+-[target."cfg(unix)".dependencies.libc]
++[target.'cfg(any(unix, target_os = "wasi"))'.dependencies.libc]
+ version = "0.2.141"
+ 
+ [target."cfg(windows)".dependencies.windows-sys]
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/lib.rs	2026-08-10 23:28:16.584540954 +0200
+@@ -59,6 +59,12 @@
+ #![doc(test(attr(deny(warnings))))]
+ 
+ use std::fmt;
++#[cfg(not(any(target_os = "redox", target_os = "wasi")))]
++use std::io::IoSlice;
++#[cfg(not(any(target_os = "redox", target_os = "wasi")))]
++use std::marker::PhantomData;
++#[cfg(not(any(target_os = "redox", target_os = "wasi")))]
++use std::mem;
+ use std::mem::MaybeUninit;
+ use std::net::SocketAddr;
+ use std::ops::{Deref, DerefMut};
+@@ -101,7 +107,7 @@
+     ($from: ty, $for: ty) => {
+         impl From<$from> for $for {
+             fn from(socket: $from) -> $for {
+-                #[cfg(unix)]
++                #[cfg(any(unix, target_os = "wasi"))]
+                 unsafe {
+                     <$for>::from_raw_fd(socket.into_raw_fd())
+                 }
+@@ -170,9 +176,10 @@
+ 
+ #[cfg_attr(unix, path = "sys/unix.rs")]
+ #[cfg_attr(windows, path = "sys/windows.rs")]
++#[cfg_attr(target_os = "wasi", path = "sys/wasi.rs")]
+ mod sys;
+ 
+-#[cfg(not(any(windows, unix)))]
++#[cfg(not(any(windows, unix, target_os = "wasi")))]
+ compile_error!("Socket2 doesn't support the compile target");
+ 
+ use sys::c_int;
+@@ -264,13 +271,16 @@
+     pub const DCCP: Type = Type(sys::SOCK_DCCP);
+ 
+     /// Type corresponding to `SOCK_SEQPACKET`.
+-    #[cfg(feature = "all")]
+-    #[cfg_attr(docsrs, doc(cfg(feature = "all")))]
++    #[cfg(all(feature = "all", not(target_os = "espidf")))]
++    #[cfg_attr(docsrs, doc(cfg(all(feature = "all", not(target_os = "espidf")))))]
+     pub const SEQPACKET: Type = Type(sys::SOCK_SEQPACKET);
+ 
+     /// Type corresponding to `SOCK_RAW`.
+-    #[cfg(all(feature = "all", not(target_os = "redox")))]
+-    #[cfg_attr(docsrs, doc(cfg(all(feature = "all", not(target_os = "redox")))))]
++    #[cfg(all(feature = "all", not(any(target_os = "redox", target_os = "espidf"))))]
++    #[cfg_attr(
++        docsrs,
++        doc(cfg(all(feature = "all", not(any(target_os = "redox", target_os = "espidf")))))
++    )]
+     pub const RAW: Type = Type(sys::SOCK_RAW);
+ }
+ 
+@@ -333,6 +343,10 @@
+         )
+     ))]
+     pub const UDPLITE: Protocol = Protocol(sys::IPPROTO_UDPLITE);
++
++    /// Protocol corresponding to `DIVERT`.
++    #[cfg(all(feature = "all", any(target_os = "freebsd", target_os = "openbsd")))]
++    pub const DIVERT: Protocol = Protocol(sys::IPPROTO_DIVERT);
+ }
+ 
+ impl From<c_int> for Protocol {
+@@ -364,6 +378,7 @@
+     ///
+     /// On Unix this corresponds to the `MSG_TRUNC` flag.
+     /// On Windows this corresponds to the `WSAEMSGSIZE` error code.
++    #[cfg(not(target_os = "espidf"))]
+     pub const fn is_truncated(self) -> bool {
+         self.0 & sys::MSG_TRUNC != 0
+     }
+@@ -418,6 +433,7 @@
+         target_os = "redox",
+         target_os = "solaris",
+         target_os = "nto",
++        target_os = "espidf",
+     )))]
+     interval: Option<Duration>,
+     #[cfg(not(any(
+@@ -426,6 +442,7 @@
+         target_os = "solaris",
+         target_os = "windows",
+         target_os = "nto",
++        target_os = "espidf",
+     )))]
+     retries: Option<u32>,
+ }
+@@ -440,6 +457,7 @@
+                 target_os = "redox",
+                 target_os = "solaris",
+                 target_os = "nto",
++                target_os = "espidf",
+             )))]
+             interval: None,
+             #[cfg(not(any(
+@@ -448,6 +466,7 @@
+                 target_os = "solaris",
+                 target_os = "windows",
+                 target_os = "nto",
++                target_os = "espidf",
+             )))]
+             retries: None,
+         }
+@@ -490,6 +509,7 @@
+         target_os = "netbsd",
+         target_os = "tvos",
+         target_os = "watchos",
++        target_os = "wasi",
+         target_os = "windows",
+     ))]
+     #[cfg_attr(
+@@ -507,6 +527,7 @@
+             target_os = "tvos",
+             target_os = "watchos",
+             target_os = "windows",
++            target_os = "wasi",
+         )))
+     )]
+     pub const fn with_interval(self, interval: Duration) -> Self {
+@@ -531,6 +552,7 @@
+             target_os = "ios",
+             target_os = "linux",
+             target_os = "macos",
++            target_os = "wasi",
+             target_os = "netbsd",
+             target_os = "tvos",
+             target_os = "watchos",
+@@ -549,6 +571,7 @@
+                 target_os = "ios",
+                 target_os = "linux",
+                 target_os = "macos",
++                target_os = "wasi",
+                 target_os = "netbsd",
+                 target_os = "tvos",
+                 target_os = "watchos",
+@@ -562,3 +585,138 @@
+         }
+     }
+ }
++
++/// Configuration of a `sendmsg(2)` system call.
++///
++/// This wraps `msghdr` on Unix and `WSAMSG` on Windows. Also see [`MsgHdrMut`]
++/// for the variant used by `recvmsg(2)`.
++#[cfg(not(any(target_os = "redox", target_os = "wasi")))]
++pub struct MsgHdr<'addr, 'bufs, 'control> {
++    inner: sys::msghdr,
++    #[allow(clippy::type_complexity)]
++    _lifetimes: PhantomData<(&'addr SockAddr, &'bufs IoSlice<'bufs>, &'control [u8])>,
++}
++
++#[cfg(not(any(target_os = "redox", target_os = "wasi")))]
++impl<'addr, 'bufs, 'control> MsgHdr<'addr, 'bufs, 'control> {
++    /// Create a new `MsgHdr` with all empty/zero fields.
++    #[allow(clippy::new_without_default)]
++    pub fn new() -> MsgHdr<'addr, 'bufs, 'control> {
++        // SAFETY: all zero is valid for `msghdr` and `WSAMSG`.
++        MsgHdr {
++            inner: unsafe { mem::zeroed() },
++            _lifetimes: PhantomData,
++        }
++    }
++
++    /// Set the address (name) of the message.
++    ///
++    /// Corresponds to setting `msg_name` and `msg_namelen` on Unix and `name`
++    /// and `namelen` on Windows.
++    pub fn with_addr(mut self, addr: &'addr SockAddr) -> Self {
++        sys::set_msghdr_name(&mut self.inner, addr);
++        self
++    }
++
++    /// Set the buffer(s) of the message.
++    ///
++    /// Corresponds to setting `msg_iov` and `msg_iovlen` on Unix and `lpBuffers`
++    /// and `dwBufferCount` on Windows.
++    pub fn with_buffers(mut self, bufs: &'bufs [IoSlice<'_>]) -> Self {
++        let ptr = bufs.as_ptr() as *mut _;
++        sys::set_msghdr_iov(&mut self.inner, ptr, bufs.len());
++        self
++    }
++
++    /// Set the control buffer of the message.
++    ///
++    /// Corresponds to setting `msg_control` and `msg_controllen` on Unix and
++    /// `Control` on Windows.
++    pub fn with_control(mut self, buf: &'control [u8]) -> Self {
++        let ptr = buf.as_ptr() as *mut _;
++        sys::set_msghdr_control(&mut self.inner, ptr, buf.len());
++        self
++    }
++
++    /// Set the flags of the message.
++    ///
++    /// Corresponds to setting `msg_flags` on Unix and `dwFlags` on Windows.
++    pub fn with_flags(mut self, flags: sys::c_int) -> Self {
++        sys::set_msghdr_flags(&mut self.inner, flags);
++        self
++    }
++}
++
++#[cfg(not(any(target_os = "redox", target_os = "wasi")))]
++impl<'name, 'bufs, 'control> fmt::Debug for MsgHdr<'name, 'bufs, 'control> {
++    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
++        "MsgHdr".fmt(fmt)
++    }
++}
++
++/// Configuration of a `recvmsg(2)` system call.
++///
++/// This wraps `msghdr` on Unix and `WSAMSG` on Windows. Also see [`MsgHdr`] for
++/// the variant used by `sendmsg(2)`.
++#[cfg(not(any(target_os = "redox", target_os = "wasi")))]
++pub struct MsgHdrMut<'addr, 'bufs, 'control> {
++    inner: sys::msghdr,
++    #[allow(clippy::type_complexity)]
++    _lifetimes: PhantomData<(
++        &'addr mut SockAddr,
++        &'bufs mut MaybeUninitSlice<'bufs>,
++        &'control mut [u8],
++    )>,
++}
++
++#[cfg(not(any(target_os = "redox", target_os = "wasi")))]
++impl<'addr, 'bufs, 'control> MsgHdrMut<'addr, 'bufs, 'control> {
++    /// Create a new `MsgHdrMut` with all empty/zero fields.
++    #[allow(clippy::new_without_default)]
++    pub fn new() -> MsgHdrMut<'addr, 'bufs, 'control> {
++        // SAFETY: all zero is valid for `msghdr` and `WSAMSG`.
++        MsgHdrMut {
++            inner: unsafe { mem::zeroed() },
++            _lifetimes: PhantomData,
++        }
++    }
++
++    /// Set the mutable address (name) of the message.
++    ///
++    /// Corresponds to setting `msg_name` and `msg_namelen` on Unix and `name`
++    /// and `namelen` on Windows.
++    pub fn with_addr(mut self, addr: &'addr mut SockAddr) -> Self {
++        sys::set_msghdr_name(&mut self.inner, addr);
++        self
++    }
++
++    /// Set the mutable buffer(s) of the message.
++    ///
++    /// Corresponds to setting `msg_iov` and `msg_iovlen` on Unix and `lpBuffers`
++    /// and `dwBufferCount` on Windows.
++    pub fn with_buffers(mut self, bufs: &'bufs mut [MaybeUninitSlice<'_>]) -> Self {
++        sys::set_msghdr_iov(&mut self.inner, bufs.as_mut_ptr().cast(), bufs.len());
++        self
++    }
++
++    /// Set the mutable control buffer of the message.
++    ///
++    /// Corresponds to setting `msg_control` and `msg_controllen` on Unix and
++    /// `Control` on Windows.
++    pub fn with_control(mut self, buf: &'control mut [MaybeUninit<u8>]) -> Self {
++        sys::set_msghdr_control(&mut self.inner, buf.as_mut_ptr().cast(), buf.len());
++        self
++    }
++
++    /// Returns the flags of the message.
++    pub fn flags(&self) -> RecvFlags {
++        sys::msghdr_flags(&self.inner)
++    }
++}
++
++#[cfg(not(any(target_os = "redox", target_os = "wasi")))]
++impl<'name, 'bufs, 'control> fmt::Debug for MsgHdrMut<'name, 'bufs, 'control> {
++    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
++        "MsgHdrMut".fmt(fmt)
++    }
++}
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sockaddr.rs b/src/sockaddr.rs
+--- a/src/sockaddr.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/sockaddr.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -1,6 +1,7 @@
+ use std::hash::Hash;
+ use std::mem::{self, size_of, MaybeUninit};
+ use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
++#[cfg(not(target_os = "wasi"))]
+ use std::path::Path;
+ use std::{fmt, io, ptr};
+ 
+@@ -146,6 +147,7 @@
+     /// Constructs a `SockAddr` with the family `AF_UNIX` and the provided path.
+     ///
+     /// Returns an error if the path is longer than `SUN_LEN`.
++    #[cfg(not(target_os = "wasi"))]
+     pub fn unix<P>(path: P) -> io::Result<SockAddr>
+     where
+         P: AsRef<Path>,
+@@ -206,7 +208,7 @@
+     }
+ 
+     /// Returns a raw pointer to the address storage.
+-    #[cfg(all(unix, not(target_os = "redox")))]
++    #[cfg(target_os = "wasi")]
+     pub(crate) const fn as_storage_ptr(&self) -> *const sockaddr_storage {
+         &self.storage
+     }
+@@ -231,7 +233,7 @@
+                 ip,
+                 port,
+                 addr.sin6_flowinfo,
+-                #[cfg(unix)]
++                #[cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))]
+                 addr.sin6_scope_id,
+                 #[cfg(windows)]
+                 unsafe {
+@@ -305,7 +307,7 @@
+             storage.sin6_port = addr.port().to_be();
+             storage.sin6_addr = crate::sys::to_in6_addr(addr.ip());
+             storage.sin6_flowinfo = addr.flowinfo();
+-            #[cfg(unix)]
++            #[cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))]
+             {
+                 storage.sin6_scope_id = addr.scope_id();
+             }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/socket.rs b/src/socket.rs
+--- a/src/socket.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/socket.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -14,13 +14,17 @@
+ #[cfg(not(target_os = "nto"))]
+ use std::net::Ipv6Addr;
+ use std::net::{self, Ipv4Addr, Shutdown};
+-#[cfg(unix)]
++#[cfg(any(unix, target_os = "wasi"))]
+ use std::os::unix::io::{FromRawFd, IntoRawFd};
+ #[cfg(windows)]
+ use std::os::windows::io::{FromRawSocket, IntoRawSocket};
+ use std::time::Duration;
+ 
+ use crate::sys::{self, c_int, getsockopt, setsockopt, Bool};
++#[cfg(not(any(target_os = "redox", target_os = "wasi")))]
++use crate::MsgHdr;
++#[cfg(all(unix, not(target_os = "redox")))]
++use crate::MsgHdrMut;
+ use crate::{Domain, Protocol, SockAddr, TcpKeepalive, Type};
+ #[cfg(not(target_os = "redox"))]
+ use crate::{MaybeUninitSlice, RecvFlags};
+@@ -100,7 +104,7 @@
+                 // Violating this assumption (fd never negative) causes UB,
+                 // something we don't want. So check for that we have this
+                 // `assert!`.
+-                #[cfg(unix)]
++                #[cfg(any(unix, target_os = "wasi"))]
+                 assert!(raw >= 0, "tried to create a `Socket` with an invalid fd");
+                 sys::socket_from_raw(raw)
+             },
+@@ -147,7 +151,7 @@
+     /// This function sets the same flags as in done for [`Socket::new`],
+     /// [`Socket::pair_raw`] can be used if you don't want to set those flags.
+     #[doc = man_links!(unix: socketpair(2))]
+-    #[cfg(all(feature = "all", unix))]
++    #[cfg(all(feature = "all", any(unix, target_os = "wasi")))]
+     #[cfg_attr(docsrs, doc(cfg(all(feature = "all", unix))))]
+     pub fn pair(
+         domain: Domain,
+@@ -164,7 +168,7 @@
+     /// Creates a pair of sockets which are connected to each other.
+     ///
+     /// This function corresponds to `socketpair(2)`.
+-    #[cfg(all(feature = "all", unix))]
++    #[cfg(all(feature = "all", any(unix, target_os = "wasi")))]
+     #[cfg_attr(docsrs, doc(cfg(all(feature = "all", unix))))]
+     pub fn pair_raw(
+         domain: Domain,
+@@ -231,7 +235,7 @@
+         match res {
+             Ok(()) => return Ok(()),
+             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {}
+-            #[cfg(unix)]
++            #[cfg(any(unix, target_os = "wasi"))]
+             Err(ref e) if e.raw_os_error() == Some(libc::EINPROGRESS) => {}
+             Err(e) => return Err(e),
+         }
+@@ -269,6 +273,7 @@
+             target_os = "fuchsia",
+             target_os = "illumos",
+             target_os = "linux",
++            target_os = "wasi",
+             target_os = "netbsd",
+             target_os = "openbsd",
+         ))]
+@@ -282,6 +287,7 @@
+             target_os = "fuchsia",
+             target_os = "illumos",
+             target_os = "linux",
++            target_os = "wasi",
+             target_os = "netbsd",
+             target_os = "openbsd",
+         )))]
+@@ -623,10 +629,24 @@
+     /// but suppresses the `WSAEMSGSIZE` error on Windows.
+     ///
+     /// [`peek_from`]: Socket::peek_from
++    #[cfg(any(doc, not(target_os = "wasi")))]
+     pub fn peek_sender(&self) -> io::Result<SockAddr> {
+         sys::peek_sender(self.as_raw())
+     }
+ 
++    /// Receive a message from a socket using a message structure.
++    ///
++    /// This is not supported on Windows as calling `WSARecvMsg` (the `recvmsg`
++    /// equivalent) is not straight forward on Windows. See
++    /// <https://github.com/microsoft/Windows-classic-samples/blob/7cbd99ac1d2b4a0beffbaba29ea63d024ceff700/Samples/Win7Samples/netds/winsock/recvmsg/rmmc.cpp>
++    /// for an example (in C++).
++    #[doc = man_links!(recvmsg(2))]
++    #[cfg(all(unix, not(target_os = "redox")))]
++    #[cfg_attr(docsrs, doc(cfg(all(unix, not(target_os = "redox")))))]
++    pub fn recvmsg(&self, msg: &mut MsgHdrMut<'_, '_, '_>, flags: sys::c_int) -> io::Result<usize> {
++        sys::recvmsg(self.as_raw(), msg, flags)
++    }
++
+     /// Sends data on the socket to a connected peer.
+     ///
+     /// This is typically used on TCP sockets or datagram sockets which have
+@@ -725,6 +745,14 @@
+     ) -> io::Result<usize> {
+         sys::send_to_vectored(self.as_raw(), bufs, addr, flags)
+     }
++
++    /// Send a message on a socket using a message structure.
++    #[doc = man_links!(sendmsg(2))]
++    #[cfg(not(any(target_os = "redox", target_os = "wasi")))]
++    #[cfg_attr(docsrs, doc(cfg(not(target_os = "redox"))))]
++    pub fn sendmsg(&self, msg: &MsgHdr<'_, '_, '_>, flags: sys::c_int) -> io::Result<usize> {
++        sys::sendmsg(self.as_raw(), msg, flags)
++    }
+ }
+ 
+ /// Set `SOCK_CLOEXEC` and `NO_HANDLE_INHERIT` on the `ty`pe on platforms that
+@@ -767,6 +795,7 @@
+             target_os = "linux",
+             target_os = "netbsd",
+             target_os = "openbsd",
++            target_os = "espidf",
+         ))
+     ))]
+     socket._set_cloexec(true)?;
+@@ -1085,8 +1114,11 @@
+     /// For more information about this option, see [`set_header_included`].
+     ///
+     /// [`set_header_included`]: Socket::set_header_included
+-    #[cfg(all(feature = "all", not(target_os = "redox")))]
+-    #[cfg_attr(docsrs, doc(cfg(all(feature = "all", not(target_os = "redox")))))]
++    #[cfg(all(feature = "all", not(any(target_os = "redox", target_os = "espidf"))))]
++    #[cfg_attr(
++        docsrs,
++        doc(cfg(all(feature = "all", not(any(target_os = "redox", target_os = "espidf")))))
++    )]
+     pub fn header_included(&self) -> io::Result<bool> {
+         unsafe {
+             getsockopt::<c_int>(self.as_raw(), sys::IPPROTO_IP, sys::IP_HDRINCL)
+@@ -1109,8 +1141,11 @@
+         any(target_os = "fuchsia", target_os = "illumos", target_os = "solaris"),
+         allow(rustdoc::broken_intra_doc_links)
+     )]
+-    #[cfg(all(feature = "all", not(target_os = "redox")))]
+-    #[cfg_attr(docsrs, doc(cfg(all(feature = "all", not(target_os = "redox")))))]
++    #[cfg(all(feature = "all", not(any(target_os = "redox", target_os = "espidf"))))]
++    #[cfg_attr(
++        docsrs,
++        doc(cfg(all(feature = "all", not(any(target_os = "redox", target_os = "espidf")))))
++    )]
+     pub fn set_header_included(&self, included: bool) -> io::Result<()> {
+         unsafe {
+             setsockopt(
+@@ -1214,6 +1249,7 @@
+         target_os = "redox",
+         target_os = "solaris",
+         target_os = "nto",
++        target_os = "espidf",
+     )))]
+     pub fn join_multicast_v4_n(
+         &self,
+@@ -1245,6 +1281,7 @@
+         target_os = "redox",
+         target_os = "solaris",
+         target_os = "nto",
++        target_os = "espidf",
+     )))]
+     pub fn leave_multicast_v4_n(
+         &self,
+@@ -1277,6 +1314,7 @@
+         target_os = "redox",
+         target_os = "fuchsia",
+         target_os = "nto",
++        target_os = "espidf",
+     )))]
+     pub fn join_ssm_v4(
+         &self,
+@@ -1312,6 +1350,7 @@
+         target_os = "redox",
+         target_os = "fuchsia",
+         target_os = "nto",
++        target_os = "espidf",
+     )))]
+     pub fn leave_ssm_v4(
+         &self,
+@@ -1489,6 +1528,7 @@
+         target_os = "solaris",
+         target_os = "haiku",
+         target_os = "nto",
++        target_os = "espidf",
+     )))]
+     pub fn set_recv_tos(&self, recv_tos: bool) -> io::Result<()> {
+         unsafe {
+@@ -1517,6 +1557,7 @@
+         target_os = "solaris",
+         target_os = "haiku",
+         target_os = "nto",
++        target_os = "espidf",
+     )))]
+     pub fn recv_tos(&self) -> io::Result<bool> {
+         unsafe {
+@@ -1732,6 +1773,8 @@
+         target_os = "redox",
+         target_os = "solaris",
+         target_os = "haiku",
++        target_os = "wasi",
++        target_os = "espidf",
+     )))]
+     pub fn recv_tclass_v6(&self) -> io::Result<bool> {
+         unsafe {
+@@ -1754,6 +1797,8 @@
+         target_os = "redox",
+         target_os = "solaris",
+         target_os = "haiku",
++        target_os = "wasi",
++        target_os = "espidf",
+     )))]
+     pub fn set_recv_tclass_v6(&self, recv_tclass: bool) -> io::Result<()> {
+         unsafe {
+@@ -1808,6 +1853,7 @@
+             target_os = "ios",
+             target_os = "linux",
+             target_os = "macos",
++            target_os = "wasi",
+             target_os = "netbsd",
+             target_os = "tvos",
+             target_os = "watchos",
+@@ -1826,6 +1872,7 @@
+                 target_os = "ios",
+                 target_os = "linux",
+                 target_os = "macos",
++                target_os = "wasi",
+                 target_os = "netbsd",
+                 target_os = "tvos",
+                 target_os = "watchos",
+@@ -1855,6 +1902,7 @@
+             target_os = "ios",
+             target_os = "linux",
+             target_os = "macos",
++            target_os = "wasi",
+             target_os = "netbsd",
+             target_os = "tvos",
+             target_os = "watchos",
+@@ -1873,6 +1921,7 @@
+                 target_os = "ios",
+                 target_os = "linux",
+                 target_os = "macos",
++                target_os = "wasi",
+                 target_os = "netbsd",
+                 target_os = "tvos",
+                 target_os = "watchos",
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sockref.rs b/src/sockref.rs
+--- a/src/sockref.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/sockref.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -2,7 +2,7 @@
+ use std::marker::PhantomData;
+ use std::mem::ManuallyDrop;
+ use std::ops::Deref;
+-#[cfg(unix)]
++#[cfg(any(unix, target_os = "wasi"))]
+ use std::os::unix::io::{AsFd, AsRawFd, FromRawFd};
+ #[cfg(windows)]
+ use std::os::windows::io::{AsRawSocket, AsSocket, FromRawSocket};
+@@ -77,8 +77,8 @@
+ }
+ 
+ /// On Windows, a corresponding `From<&impl AsSocket>` implementation exists.
+-#[cfg(unix)]
+-#[cfg_attr(docsrs, doc(cfg(unix)))]
++#[cfg(any(unix, target_os = "wasi"))]
++#[cfg_attr(docsrs, doc(cfg(any(unix, target_os = "wasi"))))]
+ impl<'s, S> From<&'s S> for SockRef<'s>
+ where
+     S: AsFd,
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/unix.rs b/src/sys/unix.rs
+--- a/src/sys/unix.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/sys/unix.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -70,9 +70,9 @@
+ use libc::ssize_t;
+ use libc::{in6_addr, in_addr};
+ 
+-#[cfg(not(target_os = "redox"))]
+-use crate::RecvFlags;
+ use crate::{Domain, Protocol, SockAddr, TcpKeepalive, Type};
++#[cfg(not(target_os = "redox"))]
++use crate::{MsgHdr, MsgHdrMut, RecvFlags};
+ 
+ pub(crate) use libc::c_int;
+ 
+@@ -81,9 +81,9 @@
+ // Used in `Type`.
+ #[cfg(all(feature = "all", target_os = "linux"))]
+ pub(crate) use libc::SOCK_DCCP;
+-#[cfg(all(feature = "all", not(target_os = "redox")))]
++#[cfg(all(feature = "all", not(any(target_os = "redox", target_os = "espidf"))))]
+ pub(crate) use libc::SOCK_RAW;
+-#[cfg(feature = "all")]
++#[cfg(all(feature = "all", not(target_os = "espidf")))]
+ pub(crate) use libc::SOCK_SEQPACKET;
+ pub(crate) use libc::{SOCK_DGRAM, SOCK_STREAM};
+ // Used in `Protocol`.
+@@ -105,12 +105,16 @@
+ pub(crate) use libc::IPPROTO_UDPLITE;
+ pub(crate) use libc::{IPPROTO_ICMP, IPPROTO_ICMPV6, IPPROTO_TCP, IPPROTO_UDP};
+ // Used in `SockAddr`.
++#[cfg(all(feature = "all", any(target_os = "freebsd", target_os = "openbsd")))]
++pub(crate) use libc::IPPROTO_DIVERT;
+ pub(crate) use libc::{
+     sa_family_t, sockaddr, sockaddr_in, sockaddr_in6, sockaddr_storage, socklen_t,
+ };
+ // Used in `RecvFlags`.
++#[cfg(not(any(target_os = "redox", target_os = "espidf")))]
++pub(crate) use libc::MSG_TRUNC;
+ #[cfg(not(target_os = "redox"))]
+-pub(crate) use libc::{MSG_TRUNC, SO_OOBINLINE};
++pub(crate) use libc::SO_OOBINLINE;
+ // Used in `Socket`.
+ #[cfg(not(target_os = "nto"))]
+ pub(crate) use libc::ipv6_mreq as Ipv6Mreq;
+@@ -123,9 +127,10 @@
+     target_os = "redox",
+     target_os = "solaris",
+     target_os = "haiku",
++    target_os = "espidf",
+ )))]
+ pub(crate) use libc::IPV6_RECVTCLASS;
+-#[cfg(all(feature = "all", not(target_os = "redox")))]
++#[cfg(all(feature = "all", not(any(target_os = "redox", target_os = "espidf"))))]
+ pub(crate) use libc::IP_HDRINCL;
+ #[cfg(not(any(
+     target_os = "aix",
+@@ -138,6 +143,7 @@
+     target_os = "solaris",
+     target_os = "haiku",
+     target_os = "nto",
++    target_os = "espidf",
+ )))]
+ pub(crate) use libc::IP_RECVTOS;
+ #[cfg(not(any(
+@@ -176,6 +182,7 @@
+     target_os = "redox",
+     target_os = "fuchsia",
+     target_os = "nto",
++    target_os = "espidf",
+ )))]
+ pub(crate) use libc::{
+     ip_mreq_source as IpMreqSource, IP_ADD_SOURCE_MEMBERSHIP, IP_DROP_SOURCE_MEMBERSHIP,
+@@ -327,6 +334,7 @@
+     target_os = "solaris",
+     target_os = "tvos",
+     target_os = "watchos",
++    target_os = "espidf",
+ ))]
+ type IovLen = c_int;
+ 
+@@ -469,10 +477,11 @@
+     libc::SOCK_DGRAM,
+     #[cfg(all(feature = "all", target_os = "linux"))]
+     libc::SOCK_DCCP,
+-    #[cfg(not(target_os = "redox"))]
++    #[cfg(not(any(target_os = "redox", target_os = "espidf")))]
+     libc::SOCK_RAW,
+-    #[cfg(not(any(target_os = "redox", target_os = "haiku")))]
++    #[cfg(not(any(target_os = "redox", target_os = "haiku", target_os = "espidf")))]
+     libc::SOCK_RDM,
++    #[cfg(not(target_os = "espidf"))]
+     libc::SOCK_SEQPACKET,
+     /* TODO: add these optional bit OR-ed flags:
+     #[cfg(any(
+@@ -520,6 +529,8 @@
+         )
+     ))]
+     libc::IPPROTO_UDPLITE,
++    #[cfg(all(feature = "all", any(target_os = "freebsd", target_os = "openbsd")))]
++    libc::IPPROTO_DIVERT,
+ );
+ 
+ /// Unix-only API.
+@@ -534,6 +545,7 @@
+     /// On Unix this corresponds to the `MSG_EOR` flag.
+     ///
+     /// [`SEQPACKET`]: Type::SEQPACKET
++    #[cfg(not(target_os = "espidf"))]
+     pub const fn is_end_of_record(self) -> bool {
+         self.0 & libc::MSG_EOR != 0
+     }
+@@ -552,11 +564,13 @@
+ #[cfg(not(target_os = "redox"))]
+ impl std::fmt::Debug for RecvFlags {
+     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+-        f.debug_struct("RecvFlags")
+-            .field("is_end_of_record", &self.is_end_of_record())
+-            .field("is_out_of_band", &self.is_out_of_band())
+-            .field("is_truncated", &self.is_truncated())
+-            .finish()
++        let mut s = f.debug_struct("RecvFlags");
++        #[cfg(not(target_os = "espidf"))]
++        s.field("is_end_of_record", &self.is_end_of_record());
++        s.field("is_out_of_band", &self.is_out_of_band());
++        #[cfg(not(target_os = "espidf"))]
++        s.field("is_truncated", &self.is_truncated());
++        s.finish()
+     }
+ }
+ 
+@@ -642,6 +656,39 @@
+     Ok(unsafe { SockAddr::new(storage, len as socklen_t) })
+ }
+ 
++// Used in `MsgHdr`.
++#[cfg(not(target_os = "redox"))]
++pub(crate) use libc::msghdr;
++
++#[cfg(not(target_os = "redox"))]
++pub(crate) fn set_msghdr_name(msg: &mut msghdr, name: &SockAddr) {
++    msg.msg_name = name.as_ptr() as *mut _;
++    msg.msg_namelen = name.len();
++}
++
++#[cfg(not(target_os = "redox"))]
++#[allow(clippy::unnecessary_cast)] // IovLen type can be `usize`.
++pub(crate) fn set_msghdr_iov(msg: &mut msghdr, ptr: *mut libc::iovec, len: usize) {
++    msg.msg_iov = ptr;
++    msg.msg_iovlen = min(len, IovLen::MAX as usize) as IovLen;
++}
++
++#[cfg(not(target_os = "redox"))]
++pub(crate) fn set_msghdr_control(msg: &mut msghdr, ptr: *mut libc::c_void, len: usize) {
++    msg.msg_control = ptr;
++    msg.msg_controllen = len as _;
++}
++
++#[cfg(not(target_os = "redox"))]
++pub(crate) fn set_msghdr_flags(msg: &mut msghdr, flags: libc::c_int) {
++    msg.msg_flags = flags;
++}
++
++#[cfg(not(target_os = "redox"))]
++pub(crate) fn msghdr_flags(msg: &msghdr) -> RecvFlags {
++    RecvFlags(msg.msg_flags)
++}
++
+ /// Unix only API.
+ impl SockAddr {
+     /// Constructs a `SockAddr` with the family `AF_VSOCK` and the provided CID/port.
+@@ -950,7 +997,9 @@
+     bufs: &mut [crate::MaybeUninitSlice<'_>],
+     flags: c_int,
+ ) -> io::Result<(usize, RecvFlags)> {
+-    recvmsg(fd, ptr::null_mut(), bufs, flags).map(|(n, _, recv_flags)| (n, recv_flags))
++    let mut msg = MsgHdrMut::new().with_buffers(bufs);
++    let n = recvmsg(fd, &mut msg, flags)?;
++    Ok((n, msg.flags()))
+ }
+ 
+ #[cfg(not(target_os = "redox"))]
+@@ -959,42 +1008,29 @@
+     bufs: &mut [crate::MaybeUninitSlice<'_>],
+     flags: c_int,
+ ) -> io::Result<(usize, RecvFlags, SockAddr)> {
+-    // Safety: `recvmsg` initialises the address storage and we set the length
++    let mut msg = MsgHdrMut::new().with_buffers(bufs);
++    // SAFETY: `recvmsg` initialises the address storage and we set the length
+     // manually.
+-    unsafe {
++    let (n, addr) = unsafe {
+         SockAddr::try_init(|storage, len| {
+-            recvmsg(fd, storage, bufs, flags).map(|(n, addrlen, recv_flags)| {
+-                // Set the correct address length.
+-                *len = addrlen;
+-                (n, recv_flags)
+-            })
+-        })
+-    }
+-    .map(|((n, recv_flags), addr)| (n, recv_flags, addr))
++            msg.inner.msg_name = storage.cast();
++            msg.inner.msg_namelen = *len;
++            let n = recvmsg(fd, &mut msg, flags)?;
++            // Set the correct address length.
++            *len = msg.inner.msg_namelen;
++            Ok(n)
++        })?
++    };
++    Ok((n, msg.flags(), addr))
+ }
+ 
+-/// Returns the (bytes received, sending address len, `RecvFlags`).
+ #[cfg(not(target_os = "redox"))]
+-#[allow(clippy::unnecessary_cast)] // For `IovLen::MAX as usize` (Already `usize` on Linux).
+-fn recvmsg(
++pub(crate) fn recvmsg(
+     fd: Socket,
+-    msg_name: *mut sockaddr_storage,
+-    bufs: &mut [crate::MaybeUninitSlice<'_>],
++    msg: &mut MsgHdrMut<'_, '_, '_>,
+     flags: c_int,
+-) -> io::Result<(usize, libc::socklen_t, RecvFlags)> {
+-    let msg_namelen = if msg_name.is_null() {
+-        0
+-    } else {
+-        size_of::<sockaddr_storage>() as libc::socklen_t
+-    };
+-    // libc::msghdr contains unexported padding fields on Fuchsia.
+-    let mut msg: libc::msghdr = unsafe { mem::zeroed() };
+-    msg.msg_name = msg_name.cast();
+-    msg.msg_namelen = msg_namelen;
+-    msg.msg_iov = bufs.as_mut_ptr().cast();
+-    msg.msg_iovlen = min(bufs.len(), IovLen::MAX as usize) as IovLen;
+-    syscall!(recvmsg(fd, &mut msg, flags))
+-        .map(|n| (n as usize, msg.msg_namelen, RecvFlags(msg.msg_flags)))
++) -> io::Result<usize> {
++    syscall!(recvmsg(fd, &mut msg.inner, flags)).map(|n| n as usize)
+ }
+ 
+ pub(crate) fn send(fd: Socket, buf: &[u8], flags: c_int) -> io::Result<usize> {
+@@ -1009,7 +1045,8 @@
+ 
+ #[cfg(not(target_os = "redox"))]
+ pub(crate) fn send_vectored(fd: Socket, bufs: &[IoSlice<'_>], flags: c_int) -> io::Result<usize> {
+-    sendmsg(fd, ptr::null(), 0, bufs, flags)
++    let msg = MsgHdr::new().with_buffers(bufs);
++    sendmsg(fd, &msg, flags)
+ }
+ 
+ pub(crate) fn send_to(fd: Socket, buf: &[u8], addr: &SockAddr, flags: c_int) -> io::Result<usize> {
+@@ -1031,30 +1068,13 @@
+     addr: &SockAddr,
+     flags: c_int,
+ ) -> io::Result<usize> {
+-    sendmsg(fd, addr.as_storage_ptr(), addr.len(), bufs, flags)
++    let msg = MsgHdr::new().with_addr(addr).with_buffers(bufs);
++    sendmsg(fd, &msg, flags)
+ }
+ 
+-/// Returns the (bytes received, sending address len, `RecvFlags`).
+ #[cfg(not(target_os = "redox"))]
+-#[allow(clippy::unnecessary_cast)] // For `IovLen::MAX as usize` (Already `usize` on Linux).
+-fn sendmsg(
+-    fd: Socket,
+-    msg_name: *const sockaddr_storage,
+-    msg_namelen: socklen_t,
+-    bufs: &[IoSlice<'_>],
+-    flags: c_int,
+-) -> io::Result<usize> {
+-    // libc::msghdr contains unexported padding fields on Fuchsia.
+-    let mut msg: libc::msghdr = unsafe { mem::zeroed() };
+-    // Safety: we're creating a `*mut` pointer from a reference, which is UB
+-    // once actually used. However the OS should not write to it in the
+-    // `sendmsg` system call.
+-    msg.msg_name = (msg_name as *mut sockaddr_storage).cast();
+-    msg.msg_namelen = msg_namelen;
+-    // Safety: Same as above about `*const` -> `*mut`.
+-    msg.msg_iov = bufs.as_ptr() as *mut _;
+-    msg.msg_iovlen = min(bufs.len(), IovLen::MAX as usize) as IovLen;
+-    syscall!(sendmsg(fd, &msg, flags)).map(|n| n as usize)
++pub(crate) fn sendmsg(fd: Socket, msg: &MsgHdr<'_, '_, '_>, flags: c_int) -> io::Result<usize> {
++    syscall!(sendmsg(fd, &msg.inner, flags)).map(|n| n as usize)
+ }
+ 
+ /// Wrapper around `getsockopt` to deal with platform specific timeouts.
+@@ -1254,6 +1274,7 @@
+     target_os = "redox",
+     target_os = "solaris",
+     target_os = "nto",
++    target_os = "espidf",
+ )))]
+ pub(crate) const fn to_mreqn(
+     multiaddr: &Ipv4Addr,
+@@ -1820,8 +1841,8 @@
+     /// Sets the value for the `SO_SETFIB` option on this socket.
+     ///
+     /// Bind socket to the specified forwarding table (VRF) on a FreeBSD.
+-    #[cfg(all(feature = "all", any(target_os = "freebsd")))]
+-    #[cfg_attr(docsrs, doc(cfg(all(feature = "all", any(target_os = "freebsd")))))]
++    #[cfg(all(feature = "all", target_os = "freebsd"))]
++    #[cfg_attr(docsrs, doc(cfg(all(feature = "all", target_os = "freebsd"))))]
+     pub fn set_fib(&self, fib: u32) -> io::Result<()> {
+         syscall!(setsockopt(
+             self.as_raw(),
+@@ -1833,6 +1854,33 @@
+         .map(|_| ())
+     }
+ 
++    /// This method is deprecated, use [`crate::Socket::bind_device_by_index_v4`].
++    #[cfg(all(
++        feature = "all",
++        any(
++            target_os = "ios",
++            target_os = "macos",
++            target_os = "tvos",
++            target_os = "watchos",
++        )
++    ))]
++    #[cfg_attr(
++        docsrs,
++        doc(cfg(all(
++            feature = "all",
++            any(
++                target_os = "ios",
++                target_os = "macos",
++                target_os = "tvos",
++                target_os = "watchos",
++            )
++        )))
++    )]
++    #[deprecated = "Use `Socket::device_index_v4` instead"]
++    pub fn bind_device_by_index(&self, interface: Option<NonZeroU32>) -> io::Result<()> {
++        self.bind_device_by_index_v4(interface)
++    }
++
+     /// Sets the value for `IP_BOUND_IF` option on this socket.
+     ///
+     /// If a socket is bound to an interface, only packets received from that
+@@ -1864,11 +1912,47 @@
+             )
+         )))
+     )]
+-    pub fn bind_device_by_index(&self, interface: Option<NonZeroU32>) -> io::Result<()> {
++    pub fn bind_device_by_index_v4(&self, interface: Option<NonZeroU32>) -> io::Result<()> {
+         let index = interface.map_or(0, NonZeroU32::get);
+         unsafe { setsockopt(self.as_raw(), IPPROTO_IP, libc::IP_BOUND_IF, index) }
+     }
+ 
++    /// Sets the value for `IPV6_BOUND_IF` option on this socket.
++    ///
++    /// If a socket is bound to an interface, only packets received from that
++    /// particular interface are processed by the socket.
++    ///
++    /// If `interface` is `None`, the binding is removed. If the `interface`
++    /// index is not valid, an error is returned.
++    ///
++    /// One can use [`libc::if_nametoindex`] to convert an interface alias to an
++    /// index.
++    #[cfg(all(
++        feature = "all",
++        any(
++            target_os = "ios",
++            target_os = "macos",
++            target_os = "tvos",
++            target_os = "watchos",
++        )
++    ))]
++    #[cfg_attr(
++        docsrs,
++        doc(cfg(all(
++            feature = "all",
++            any(
++                target_os = "ios",
++                target_os = "macos",
++                target_os = "tvos",
++                target_os = "watchos",
++            )
++        )))
++    )]
++    pub fn bind_device_by_index_v6(&self, interface: Option<NonZeroU32>) -> io::Result<()> {
++        let index = interface.map_or(0, NonZeroU32::get);
++        unsafe { setsockopt(self.as_raw(), IPPROTO_IPV6, libc::IPV6_BOUND_IF, index) }
++    }
++
+     /// Gets the value for `IP_BOUND_IF` option on this socket, i.e. the index
+     /// for the interface to which the socket is bound.
+     ///
+@@ -1895,12 +1979,72 @@
+             )
+         )))
+     )]
+-    pub fn device_index(&self) -> io::Result<Option<NonZeroU32>> {
++    pub fn device_index_v4(&self) -> io::Result<Option<NonZeroU32>> {
+         let index =
+             unsafe { getsockopt::<libc::c_uint>(self.as_raw(), IPPROTO_IP, libc::IP_BOUND_IF)? };
+         Ok(NonZeroU32::new(index))
+     }
+ 
++    /// This method is deprecated, use [`crate::Socket::device_index_v4`].
++    #[cfg(all(
++        feature = "all",
++        any(
++            target_os = "ios",
++            target_os = "macos",
++            target_os = "tvos",
++            target_os = "watchos",
++        )
++    ))]
++    #[cfg_attr(
++        docsrs,
++        doc(cfg(all(
++            feature = "all",
++            any(
++                target_os = "ios",
++                target_os = "macos",
++                target_os = "tvos",
++                target_os = "watchos",
++            )
++        )))
++    )]
++    #[deprecated = "Use `Socket::device_index_v4` instead"]
++    pub fn device_index(&self) -> io::Result<Option<NonZeroU32>> {
++        self.device_index_v4()
++    }
++
++    /// Gets the value for `IPV6_BOUND_IF` option on this socket, i.e. the index
++    /// for the interface to which the socket is bound.
++    ///
++    /// Returns `None` if the socket is not bound to any interface, otherwise
++    /// returns an interface index.
++    #[cfg(all(
++        feature = "all",
++        any(
++            target_os = "ios",
++            target_os = "macos",
++            target_os = "tvos",
++            target_os = "watchos",
++        )
++    ))]
++    #[cfg_attr(
++        docsrs,
++        doc(cfg(all(
++            feature = "all",
++            any(
++                target_os = "ios",
++                target_os = "macos",
++                target_os = "tvos",
++                target_os = "watchos",
++            )
++        )))
++    )]
++    pub fn device_index_v6(&self) -> io::Result<Option<NonZeroU32>> {
++        let index = unsafe {
++            getsockopt::<libc::c_uint>(self.as_raw(), IPPROTO_IPV6, libc::IPV6_BOUND_IF)?
++        };
++        Ok(NonZeroU32::new(index))
++    }
++
+     /// Get the value of the `SO_INCOMING_CPU` option on this socket.
+     ///
+     /// For more information about this option, see [`set_cpu_affinity`].
+@@ -1983,6 +2127,35 @@
+         }
+     }
+ 
++    /// Get the value of the `SO_REUSEPORT_LB` option on this socket.
++    ///
++    /// For more information about this option, see [`set_reuse_port_lb`].
++    ///
++    /// [`set_reuse_port_lb`]: crate::Socket::set_reuse_port_lb
++    #[cfg(all(feature = "all", target_os = "freebsd"))]
++    pub fn reuse_port_lb(&self) -> io::Result<bool> {
++        unsafe {
++            getsockopt::<c_int>(self.as_raw(), libc::SOL_SOCKET, libc::SO_REUSEPORT_LB)
++                .map(|reuse| reuse != 0)
++        }
++    }
++
++    /// Set value for the `SO_REUSEPORT_LB` option on this socket.
++    ///
++    /// This allows multiple programs or threads to bind to the same port and
++    /// incoming connections will be load balanced using a hash function.
++    #[cfg(all(feature = "all", target_os = "freebsd"))]
++    pub fn set_reuse_port_lb(&self, reuse: bool) -> io::Result<()> {
++        unsafe {
++            setsockopt(
++                self.as_raw(),
++                libc::SOL_SOCKET,
++                libc::SO_REUSEPORT_LB,
++                reuse as c_int,
++            )
++        }
++    }
++
+     /// Get the value of the `IP_FREEBIND` option on this socket.
+     ///
+     /// For more information about this option, see [`set_freebind`].
+@@ -2424,8 +2597,8 @@
+     /// Therefore, there is no corresponding `set` helper.
+     ///
+     /// For more information about this option, see [Linux patch](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=5daab9db7b65df87da26fd8cfa695fb9546a1ddb)
+-    #[cfg(all(feature = "all", any(target_os = "linux")))]
+-    #[cfg_attr(docsrs, doc(cfg(all(feature = "all", any(target_os = "linux")))))]
++    #[cfg(all(feature = "all", target_os = "linux"))]
++    #[cfg_attr(docsrs, doc(cfg(all(feature = "all", target_os = "linux"))))]
+     pub fn cookie(&self) -> io::Result<u64> {
+         unsafe { getsockopt::<libc::c_ulonglong>(self.as_raw(), libc::SOL_SOCKET, libc::SO_COOKIE) }
+     }
+@@ -2535,11 +2708,7 @@
+             payload.as_mut_ptr().cast(),
+             &mut len,
+         ))
+-        .map(|_| {
+-            let buf = &payload[..len as usize];
+-            // TODO: use `MaybeUninit::slice_assume_init_ref` once stable.
+-            unsafe { &*(buf as *const [_] as *const [u8]) }.into()
+-        })
++        .map(|_| payload[..len as usize].to_vec())
+     }
+ 
+     /// Set the value of the `TCP_CONGESTION` option for this socket.
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/windows.rs b/src/sys/windows.rs
+--- a/src/sys/windows.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/sys/windows.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -28,7 +28,7 @@
+ };
+ use windows_sys::Win32::System::Threading::INFINITE;
+ 
+-use crate::{RecvFlags, SockAddr, TcpKeepalive, Type};
++use crate::{MsgHdr, RecvFlags, SockAddr, TcpKeepalive, Type};
+ 
+ #[allow(non_camel_case_types)]
+ pub(crate) type c_int = std::os::raw::c_int;
+@@ -61,7 +61,7 @@
+     SOCKADDR_STORAGE as sockaddr_storage,
+ };
+ #[allow(non_camel_case_types)]
+-pub(crate) type sa_family_t = windows_sys::Win32::Networking::WinSock::sa_family_t;
++pub(crate) type sa_family_t = windows_sys::Win32::Networking::WinSock::ADDRESS_FAMILY;
+ #[allow(non_camel_case_types)]
+ pub(crate) type socklen_t = windows_sys::Win32::Networking::WinSock::socklen_t;
+ // Used in `Socket`.
+@@ -187,6 +187,32 @@
+     }
+ }
+ 
++// Used in `MsgHdr`.
++pub(crate) use windows_sys::Win32::Networking::WinSock::WSAMSG as msghdr;
++
++pub(crate) fn set_msghdr_name(msg: &mut msghdr, name: &SockAddr) {
++    msg.name = name.as_ptr() as *mut _;
++    msg.namelen = name.len();
++}
++
++pub(crate) fn set_msghdr_iov(msg: &mut msghdr, ptr: *mut WSABUF, len: usize) {
++    msg.lpBuffers = ptr;
++    msg.dwBufferCount = min(len, u32::MAX as usize) as u32;
++}
++
++pub(crate) fn set_msghdr_control(msg: &mut msghdr, ptr: *mut u8, len: usize) {
++    msg.Control.buf = ptr;
++    msg.Control.len = len as u32;
++}
++
++pub(crate) fn set_msghdr_flags(msg: &mut msghdr, flags: c_int) {
++    msg.dwFlags = flags as u32;
++}
++
++pub(crate) fn msghdr_flags(msg: &msghdr) -> RecvFlags {
++    RecvFlags(msg.dwFlags as c_int)
++}
++
+ fn init() {
+     static INIT: Once = Once::new();
+ 
+@@ -631,6 +657,23 @@
+             ptr::null_mut(),
+             None,
+         ),
++        PartialEq::eq,
++        SOCKET_ERROR
++    )
++    .map(|_| nsent as usize)
++}
++
++pub(crate) fn sendmsg(socket: Socket, msg: &MsgHdr<'_, '_, '_>, flags: c_int) -> io::Result<usize> {
++    let mut nsent = 0;
++    syscall!(
++        WSASendMsg(
++            socket,
++            &msg.inner,
++            flags as u32,
++            &mut nsent,
++            ptr::null_mut(),
++            None,
++        ),
+         PartialEq::eq,
+         SOCKET_ERROR
+     )

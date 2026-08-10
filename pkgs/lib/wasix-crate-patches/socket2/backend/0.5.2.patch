@@ -1,0 +1,17 @@
+--- a/src/sys/wasi.rs
++++ b/src/sys/wasi.rs
+@@ -127,6 +127,14 @@
+ 
+ unsafe impl<'a> Sync for MaybeUninitSlice<'a> {}
+ 
++impl std::fmt::Debug for RecvFlags {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        f.debug_struct("RecvFlags")
++            .field("is_truncated", &self.is_truncated())
++            .finish()
++    }
++}
++
+ impl<'a> MaybeUninitSlice<'a> {
+     pub(crate) fn new(buf: &'a mut [MaybeUninit<u8>]) -> MaybeUninitSlice<'a> {
+         MaybeUninitSlice {
