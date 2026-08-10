@@ -1,0 +1,1248 @@
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/fs/file.rs b/src/fs/file.rs
+--- a/src/fs/file.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/fs/file.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -816,14 +816,14 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ impl std::os::unix::io::AsRawFd for File {
+     fn as_raw_fd(&self) -> std::os::unix::io::RawFd {
+         self.std.as_raw_fd()
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ impl std::os::unix::io::AsFd for File {
+     fn as_fd(&self) -> std::os::unix::io::BorrowedFd<'_> {
+         unsafe {
+@@ -832,7 +832,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ impl std::os::unix::io::FromRawFd for File {
+     unsafe fn from_raw_fd(fd: std::os::unix::io::RawFd) -> Self {
+         StdFile::from_raw_fd(fd).into()
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/fs/mocks.rs b/src/fs/mocks.rs
+--- a/src/fs/mocks.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/fs/mocks.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -42,12 +42,12 @@
+     impl std::os::windows::io::FromRawHandle for File {
+         unsafe fn from_raw_handle(h: std::os::windows::io::RawHandle) -> Self;
+     }
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     impl std::os::unix::io::AsRawFd for File {
+         fn as_raw_fd(&self) -> std::os::unix::io::RawFd;
+     }
+ 
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     impl std::os::unix::io::FromRawFd for File {
+         unsafe fn from_raw_fd(h: std::os::unix::io::RawFd) -> Self;
+     }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/fs/open_options/mock_open_options.rs b/src/fs/open_options/mock_open_options.rs
+--- a/src/fs/open_options/mock_open_options.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/fs/open_options/mock_open_options.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -3,7 +3,7 @@
+ use mockall::mock;
+ 
+ use crate::fs::mocks::MockFile;
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ use std::os::unix::fs::OpenOptionsExt;
+ #[cfg(windows)]
+ use std::os::windows::fs::OpenOptionsExt;
+@@ -23,7 +23,7 @@
+     impl Clone for OpenOptions {
+         fn clone(&self) -> Self;
+     }
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     impl OpenOptionsExt for OpenOptions {
+         fn custom_flags(&mut self, flags: i32) -> &mut Self;
+         fn mode(&mut self, mode: u32) -> &mut Self;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/fs/open_options.rs b/src/fs/open_options.rs
+--- a/src/fs/open_options.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/fs/open_options.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -1,3 +1,5 @@
++#![cfg_attr(target_os = "wasi", allow(unused))]
++
+ use crate::fs::{asyncify, File};
+ 
+ use std::io;
+@@ -12,6 +14,9 @@
+ 
+ #[cfg(unix)]
+ use std::os::unix::fs::OpenOptionsExt;
++#[allow(unused_imports)]
++#[cfg(target_os = "wasi")]
++use std::os::wasi::fs::OpenOptionsExt;
+ #[cfg(windows)]
+ use std::os::windows::fs::OpenOptionsExt;
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/fs/read_dir.rs b/src/fs/read_dir.rs
+--- a/src/fs/read_dir.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/fs/read_dir.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -1,3 +1,5 @@
++#![cfg_attr(target_os = "wasi", allow(unused))]
++
+ use crate::fs::asyncify;
+ 
+ use std::collections::VecDeque;
+@@ -351,7 +353,7 @@
+     }
+ 
+     /// Returns a reference to the underlying `std::fs::DirEntry`.
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     pub(super) fn as_inner(&self) -> &std::fs::DirEntry {
+         &self.std
+     }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/io/stderr.rs b/src/io/stderr.rs
+--- a/src/io/stderr.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/io/stderr.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -73,7 +73,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/io/stdin.rs b/src/io/stdin.rs
+--- a/src/io/stdin.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/io/stdin.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -48,7 +48,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/io/stdout.rs b/src/io/stdout.rs
+--- a/src/io/stdout.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/io/stdout.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -72,7 +72,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/lib.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -19,6 +19,10 @@
+ #![cfg_attr(docsrs, feature(doc_cfg))]
+ #![cfg_attr(docsrs, allow(unused_attributes))]
+ #![cfg_attr(loom, allow(dead_code, unreachable_pub))]
++#![cfg_attr(
++    all(feature = "fs", target_os = "wasi", target_vendor = "wasmer"),
++    feature(wasi_ext)
++)]
+ 
+ //! A runtime for writing reliable network applications without compromising speed.
+ //!
+@@ -458,7 +462,7 @@
+ 
+ #[cfg(all(
+     not(tokio_unstable),
+-    target_family = "wasm",
++    all(target_family = "wasm", not(target_vendor = "wasmer")),
+     any(
+         feature = "fs",
+         feature = "io-std",
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/macros/cfg.rs b/src/macros/cfg.rs
+--- a/src/macros/cfg.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/macros/cfg.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -85,7 +85,7 @@
+     ($($item:item)*) => {
+         $(
+             #[cfg(feature = "fs")]
+-            #[cfg(not(target_os = "wasi"))]
++            #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+             #[cfg_attr(docsrs, doc(cfg(feature = "fs")))]
+             $item
+         )*
+@@ -107,13 +107,13 @@
+         $(
+             #[cfg(any(
+                 feature = "net",
+-                all(unix, feature = "process"),
+-                all(unix, feature = "signal"),
++                all(any(unix, target_os = "wasi"), feature = "process"),
++                all(any(unix, target_os = "wasi"), feature = "signal"),
+             ))]
+             #[cfg_attr(docsrs, doc(cfg(any(
+                 feature = "net",
+-                all(unix, feature = "process"),
+-                all(unix, feature = "signal"),
++                all(any(unix, target_os = "wasi"), feature = "process"),
++                all(any(unix, target_os = "wasi"), feature = "signal"),
+             ))))]
+             $item
+         )*
+@@ -125,8 +125,8 @@
+         $(
+             #[cfg(any(
+                 feature = "net",
+-                all(unix, feature = "process"),
+-                all(unix, feature = "signal"),
++                all(any(unix, target_os = "wasi"), feature = "process"),
++                all(any(unix, target_os = "wasi"), feature = "signal"),
+             ))]
+             $item
+         )*
+@@ -138,8 +138,8 @@
+         $(
+             #[cfg(not(any(
+                 feature = "net",
+-                all(unix, feature = "process"),
+-                all(unix, feature = "signal"),
++                all(any(unix, target_os = "wasi"), feature = "process"),
++                all(any(unix, target_os = "wasi"), feature = "signal"),
+             )))]
+             $item
+         )*
+@@ -276,7 +276,7 @@
+             #[cfg(feature = "process")]
+             #[cfg_attr(docsrs, doc(cfg(feature = "process")))]
+             #[cfg(not(loom))]
+-            #[cfg(not(target_os = "wasi"))]
++            #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+             $item
+         )*
+     }
+@@ -284,7 +284,7 @@
+ 
+ macro_rules! cfg_process_driver {
+     ($($item:item)*) => {
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_vendor = "wasmer"))]
+         #[cfg(not(loom))]
+         cfg_process! { $($item)* }
+     }
+@@ -293,7 +293,7 @@
+ macro_rules! cfg_not_process_driver {
+     ($($item:item)*) => {
+         $(
+-            #[cfg(not(all(unix, not(loom), feature = "process")))]
++            #[cfg(not(all(any(unix, target_vendor = "wasmer"), not(loom), feature = "process")))]
+             $item
+         )*
+     }
+@@ -305,7 +305,7 @@
+             #[cfg(feature = "signal")]
+             #[cfg_attr(docsrs, doc(cfg(feature = "signal")))]
+             #[cfg(not(loom))]
+-            #[cfg(not(target_os = "wasi"))]
++            #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+             $item
+         )*
+     }
+@@ -328,6 +328,13 @@
+     }
+ }
+ 
++macro_rules! cfg_signal_internal_and_unix_or_wasix {
++    ($($item:item)*) => {
++        #[cfg(any(unix, target_vendor = "wasmer"))]
++        cfg_signal_internal! { $($item)* }
++    }
++}
++
+ macro_rules! cfg_not_signal_internal {
+     ($($item:item)*) => {
+         $(
+@@ -337,6 +344,15 @@
+     }
+ }
+ 
++macro_rules! cfg_not_signal_internal_or_unix_or_wasix {
++    ($($item:item)*) => {
++        $(
++            #[cfg(any(loom, not(any(unix, target_vendor = "wasmer")), not(any(feature = "signal", all(unix, feature = "process")))))]
++            $item
++        )*
++    }
++}
++
+ macro_rules! cfg_sync {
+     ($($item:item)*) => {
+         $(
+@@ -372,7 +388,7 @@
+ macro_rules! cfg_rt_multi_thread {
+     ($($item:item)*) => {
+         $(
+-            #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++            #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+             #[cfg_attr(docsrs, doc(cfg(feature = "rt-multi-thread")))]
+             $item
+         )*
+@@ -563,6 +579,15 @@
+             $item
+         )*
+     }
++}
++
++macro_rules! cfg_not_wasi_classic {
++    ($($item:item)*) => {
++        $(
++            #[cfg(not(all(target_os = "wasi", not(target_vendor = "wasmer"))))]
++            $item
++        )*
++    }
+ }
+ 
+ macro_rules! cfg_is_wasm_not_wasi {
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/net/mod.rs b/src/net/mod.rs
+--- a/src/net/mod.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/net/mod.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -23,7 +23,7 @@
+ //! [`UnixDatagram`]: UnixDatagram
+ 
+ mod addr;
+-cfg_not_wasi! {
++cfg_not_wasi_classic! {
+     #[cfg(feature = "net")]
+     pub(crate) use addr::to_socket_addrs;
+ }
+@@ -36,7 +36,7 @@
+     pub mod tcp;
+     pub use tcp::listener::TcpListener;
+     pub use tcp::stream::TcpStream;
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         pub use tcp::socket::TcpSocket;
+ 
+         mod udp;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/net/tcp/listener.rs b/src/net/tcp/listener.rs
+--- a/src/net/tcp/listener.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/net/tcp/listener.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -1,7 +1,7 @@
+ use crate::io::{Interest, PollEvented};
+ use crate::net::tcp::TcpStream;
+ 
+-cfg_not_wasi! {
++cfg_not_wasi_classic! {
+     use crate::net::{to_socket_addrs, ToSocketAddrs};
+ }
+ 
+@@ -57,7 +57,7 @@
+ }
+ 
+ impl TcpListener {
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         /// Creates a new TcpListener, which will be bound to the specified address.
+         ///
+         /// The returned listener is ready for accepting connections.
+@@ -291,7 +291,7 @@
+         }
+     }
+ 
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         pub(crate) fn new(listener: mio::net::TcpListener) -> io::Result<TcpListener> {
+             let io = PollEvented::new(listener)?;
+             Ok(TcpListener { io })
+@@ -396,7 +396,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use super::TcpListener;
+     use std::os::unix::prelude::*;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/net/tcp/mod.rs b/src/net/tcp/mod.rs
+--- a/src/net/tcp/mod.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/net/tcp/mod.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -2,7 +2,7 @@
+ 
+ pub(crate) mod listener;
+ 
+-cfg_not_wasi! {
++cfg_not_wasi_classic! {
+     pub(crate) mod socket;
+ }
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/net/tcp/socket.rs b/src/net/tcp/socket.rs
+--- a/src/net/tcp/socket.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/net/tcp/socket.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -4,7 +4,7 @@
+ use std::io;
+ use std::net::SocketAddr;
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, RawFd};
+ use std::time::Duration;
+ 
+@@ -625,7 +625,7 @@
+     /// ```
+     pub async fn connect(self, addr: SocketAddr) -> io::Result<TcpStream> {
+         if let Err(err) = self.inner.connect(&addr.into()) {
+-            #[cfg(unix)]
++            #[cfg(any(unix, target_vendor = "wasmer"))]
+             if err.raw_os_error() != Some(libc::EINPROGRESS) {
+                 return Err(err);
+             }
+@@ -634,7 +634,7 @@
+                 return Err(err);
+             }
+         }
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_vendor = "wasmer"))]
+         let mio = {
+             use std::os::unix::io::{FromRawFd, IntoRawFd};
+ 
+@@ -690,7 +690,7 @@
+     /// ```
+     pub fn listen(self, backlog: u32) -> io::Result<TcpListener> {
+         self.inner.listen(backlog as i32)?;
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_vendor = "wasmer"))]
+         let mio = {
+             use std::os::unix::io::{FromRawFd, IntoRawFd};
+ 
+@@ -743,7 +743,7 @@
+     /// }
+     /// ```
+     pub fn from_std_stream(std_stream: std::net::TcpStream) -> TcpSocket {
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_vendor = "wasmer"))]
+         {
+             use std::os::unix::io::{FromRawFd, IntoRawFd};
+ 
+@@ -777,21 +777,21 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ impl AsRawFd for TcpSocket {
+     fn as_raw_fd(&self) -> RawFd {
+         self.inner.as_raw_fd()
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ impl AsFd for TcpSocket {
+     fn as_fd(&self) -> BorrowedFd<'_> {
+         unsafe { BorrowedFd::borrow_raw(self.as_raw_fd()) }
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ impl FromRawFd for TcpSocket {
+     /// Converts a `RawFd` to a `TcpSocket`.
+     ///
+@@ -805,7 +805,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ impl IntoRawFd for TcpSocket {
+     fn into_raw_fd(self) -> RawFd {
+         self.inner.into_raw_fd()
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/net/tcp/stream.rs b/src/net/tcp/stream.rs
+--- a/src/net/tcp/stream.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/net/tcp/stream.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -1,4 +1,4 @@
+-cfg_not_wasi! {
++cfg_not_wasi_classic! {
+     use crate::future::poll_fn;
+     use crate::net::{to_socket_addrs, ToSocketAddrs};
+     use std::time::Duration;
+@@ -72,7 +72,7 @@
+ }
+ 
+ impl TcpStream {
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         /// Opens a TCP connection to a remote host.
+         ///
+         /// `addr` is an address of the remote host. Anything which implements the
+@@ -1154,7 +1154,7 @@
+         self.io.set_nodelay(nodelay)
+     }
+ 
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         /// Reads the linger duration for this socket by getting the `SO_LINGER`
+         /// option.
+         ///
+@@ -1371,7 +1371,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use super::TcpStream;
+     use std::os::unix::prelude::*;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/net/udp.rs b/src/net/udp.rs
+--- a/src/net/udp.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/net/udp.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -246,7 +246,7 @@
+     /// [`std::net::UdpSocket`]: std::net::UdpSocket
+     /// [`set_nonblocking`]: fn@std::net::UdpSocket::set_nonblocking
+     pub fn into_std(self) -> io::Result<std::net::UdpSocket> {
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_vendor = "wasmer"))]
+         {
+             use std::os::unix::io::{FromRawFd, IntoRawFd};
+             self.io
+@@ -2010,7 +2010,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod sys {
+     use super::UdpSocket;
+     use std::os::unix::prelude::*;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/process/mod.rs b/src/process/mod.rs
+--- a/src/process/mod.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/process/mod.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -227,10 +227,10 @@
+ //! [`Child`]: crate::process::Child
+ 
+ #[path = "unix/mod.rs"]
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod imp;
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ pub(crate) mod unix {
+     pub(crate) use super::imp::*;
+ }
+@@ -669,7 +669,7 @@
+     /// Sets the child process's user ID. This translates to a
+     /// `setuid` call in the child process. Failure in the `setuid`
+     /// call will cause the spawn to fail.
+-    #[cfg(unix)]
++    #[cfg(any(unix))]
+     #[cfg_attr(docsrs, doc(cfg(unix)))]
+     pub fn uid(&mut self, id: u32) -> &mut Command {
+         self.std.uid(id);
+@@ -678,7 +678,7 @@
+ 
+     /// Similar to `uid` but sets the group ID of the child process. This has
+     /// the same semantics as the `uid` field.
+-    #[cfg(unix)]
++    #[cfg(any(unix))]
+     #[cfg_attr(docsrs, doc(cfg(unix)))]
+     pub fn gid(&mut self, id: u32) -> &mut Command {
+         self.std.gid(id);
+@@ -689,7 +689,7 @@
+     ///
+     /// Set the first process argument, `argv[0]`, to something other than the
+     /// default executable path.
+-    #[cfg(unix)]
++    #[cfg(any(unix))]
+     #[cfg_attr(docsrs, doc(cfg(unix)))]
+     pub fn arg0<S>(&mut self, arg: S) -> &mut Command
+     where
+@@ -728,7 +728,7 @@
+     /// When this closure is run, aspects such as the stdio file descriptors and
+     /// working directory have successfully been changed, so output to these
+     /// locations may not appear where intended.
+-    #[cfg(unix)]
++    #[cfg(any(unix))]
+     #[cfg_attr(docsrs, doc(cfg(unix)))]
+     pub unsafe fn pre_exec<F>(&mut self, f: F) -> &mut Command
+     where
+@@ -763,7 +763,7 @@
+     ///         .output().await.unwrap();
+     /// # }
+     /// ```
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     #[cfg(tokio_unstable)]
+     #[cfg_attr(docsrs, doc(cfg(all(unix, tokio_unstable))))]
+     pub fn process_group(&mut self, pgroup: i32) -> &mut Command {
+@@ -1172,11 +1172,11 @@
+     ///
+     /// ```
+     /// # #[cfg(not(unix))]fn main(){}
+-    /// # #[cfg(unix)]
++    /// # #[cfg(any(unix, target_vendor = "wasmer"))]
+     /// use tokio::io::AsyncWriteExt;
+-    /// # #[cfg(unix)]
++    /// # #[cfg(any(unix, target_vendor = "wasmer"))]
+     /// use tokio::process::Command;
+-    /// # #[cfg(unix)]
++    /// # #[cfg(any(unix, target_vendor = "wasmer"))]
+     /// use std::process::Stdio;
+     ///
+     /// # #[cfg(unix)]
+@@ -1444,7 +1444,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ #[cfg_attr(docsrs, doc(cfg(unix)))]
+ mod sys {
+     use std::{
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/runtime/blocking/schedule.rs b/src/runtime/blocking/schedule.rs
+--- a/src/runtime/blocking/schedule.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/runtime/blocking/schedule.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -23,9 +23,9 @@
+                 scheduler::Handle::CurrentThread(handle) => {
+                     handle.driver.clock.inhibit_auto_advance();
+                 }
+-                #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 scheduler::Handle::MultiThread(_) => {}
+-                #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 scheduler::Handle::MultiThreadAlt(_) => {}
+             }
+         }
+@@ -45,9 +45,9 @@
+                     handle.driver.clock.allow_auto_advance();
+                     handle.driver.unpark();
+                 }
+-                #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 scheduler::Handle::MultiThread(_) => {}
+-                #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 scheduler::Handle::MultiThreadAlt(_) => {}
+             }
+         }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/runtime/builder.rs b/src/runtime/builder.rs
+--- a/src/runtime/builder.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/runtime/builder.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -199,9 +199,9 @@
+ #[derive(Clone, Copy)]
+ pub(crate) enum Kind {
+     CurrentThread,
+-    #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++    #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+     MultiThread,
+-    #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++    #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+     MultiThreadAlt,
+ }
+ 
+@@ -224,7 +224,7 @@
+         Builder::new(Kind::CurrentThread, EVENT_INTERVAL)
+     }
+ 
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         /// Returns a new builder with the multi thread scheduler selected.
+         ///
+         /// Configuration methods can be chained on the return value.
+@@ -697,9 +697,9 @@
+     pub fn build(&mut self) -> io::Result<Runtime> {
+         match &self.kind {
+             Kind::CurrentThread => self.build_current_thread_runtime(),
+-            #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++            #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+             Kind::MultiThread => self.build_threaded_runtime(),
+-            #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++            #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+             Kind::MultiThreadAlt => self.build_alt_threaded_runtime(),
+         }
+     }
+@@ -708,9 +708,9 @@
+         driver::Cfg {
+             enable_pause_time: match self.kind {
+                 Kind::CurrentThread => true,
+-                #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 Kind::MultiThread => false,
+-                #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 Kind::MultiThreadAlt => false,
+             },
+             enable_io: self.enable_io,
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/runtime/driver.rs b/src/runtime/driver.rs
+--- a/src/runtime/driver.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/runtime/driver.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -1,3 +1,5 @@
++#![cfg_attr(target_os = "wasi", allow(unused, dead_code))]
++
+ //! Abstracts out the entire chain of runtime sub-drivers into common types.
+ 
+ // Eventually, this file will see significant refactoring / cleanup. For now, we
+@@ -97,7 +99,7 @@
+         }
+     }
+ 
+-    cfg_signal_internal_and_unix! {
++    cfg_signal_internal_and_unix_or_wasix! {
+         #[track_caller]
+         pub(crate) fn signal(&self) -> &crate::runtime::signal::Handle {
+             self.signal
+@@ -241,7 +243,7 @@
+ 
+ // ===== signal driver =====
+ 
+-cfg_signal_internal_and_unix! {
++cfg_signal_internal_and_unix_or_wasix! {
+     type SignalDriver = crate::runtime::signal::Driver;
+     pub(crate) type SignalHandle = Option<crate::runtime::signal::Handle>;
+ 
+@@ -252,7 +254,7 @@
+     }
+ }
+ 
+-cfg_not_signal_internal! {
++cfg_not_signal_internal_or_unix_or_wasix! {
+     pub(crate) type SignalHandle = ();
+ 
+     cfg_io_driver! {
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/runtime/handle.rs b/src/runtime/handle.rs
+--- a/src/runtime/handle.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/runtime/handle.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -355,9 +355,9 @@
+     pub fn runtime_flavor(&self) -> RuntimeFlavor {
+         match self.inner {
+             scheduler::Handle::CurrentThread(_) => RuntimeFlavor::CurrentThread,
+-            #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++            #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+             scheduler::Handle::MultiThread(_) => RuntimeFlavor::MultiThread,
+-            #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++            #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+             scheduler::Handle::MultiThreadAlt(_) => RuntimeFlavor::MultiThreadAlt,
+         }
+     }
+@@ -385,9 +385,9 @@
+         pub fn id(&self) -> runtime::Id {
+             let owned_id = match &self.inner {
+                 scheduler::Handle::CurrentThread(handle) => handle.owned_id(),
+-                #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 scheduler::Handle::MultiThread(handle) => handle.owned_id(),
+-                #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 scheduler::Handle::MultiThreadAlt(handle) => handle.owned_id(),
+             };
+             owned_id.into()
+@@ -529,7 +529,7 @@
+         pub async fn dump(&self) -> crate::runtime::Dump {
+             match &self.inner {
+                 scheduler::Handle::CurrentThread(handle) => handle.dump(),
+-                #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 scheduler::Handle::MultiThread(handle) => {
+                     // perform the trace in a separate thread so that the
+                     // trace itself does not appear in the taskdump.
+@@ -539,7 +539,7 @@
+                         handle.dump().await
+                     }).await
+                 },
+-                #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 scheduler::Handle::MultiThreadAlt(_) => panic!("task dump not implemented for this runtime flavor"),
+             }
+         }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/runtime/io/driver/signal.rs b/src/runtime/io/driver/signal.rs
+--- a/src/runtime/io/driver/signal.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/runtime/io/driver/signal.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -1,3 +1,5 @@
++#![cfg_attr(target_os = "wasi", allow(unused_imports))]
++
+ use super::{Driver, Handle, TOKEN_SIGNAL};
+ 
+ use std::io;
+@@ -5,8 +7,10 @@
+ impl Handle {
+     pub(crate) fn register_signal_receiver(
+         &self,
++        #[cfg(not(target_os = "wasi"))]
+         receiver: &mut mio::net::UnixStream,
+     ) -> io::Result<()> {
++        #[cfg(not(target_os = "wasi"))]
+         self.registry
+             .register(receiver, TOKEN_SIGNAL, mio::Interest::READABLE)?;
+         Ok(())
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/runtime/io/driver.rs b/src/runtime/io/driver.rs
+--- a/src/runtime/io/driver.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/runtime/io/driver.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -1,5 +1,7 @@
++#![cfg_attr(target_os = "wasi", allow(unused, dead_code))]
++
+ // Signal handling
+-cfg_signal_internal_and_unix! {
++cfg_signal_internal_and_unix_or_wasix! {
+     mod signal;
+ }
+ 
+@@ -40,8 +42,8 @@
+     synced: Mutex<registration_set::Synced>,
+ 
+     /// Used to wake up the reactor from a call to `turn`.
+-    /// Not supported on Wasi due to lack of threading support.
+-    #[cfg(not(target_os = "wasi"))]
++    /// Not supported on classic Wasi due to lack of threading support.
++    #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+     waker: mio::Waker,
+ 
+     pub(crate) metrics: IoDriverMetrics,
+@@ -93,7 +95,7 @@
+     /// creation.
+     pub(crate) fn new(nevents: usize) -> io::Result<(Driver, Handle)> {
+         let poll = mio::Poll::new()?;
+-        #[cfg(not(target_os = "wasi"))]
++        #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+         let waker = mio::Waker::new(poll.registry(), TOKEN_WAKEUP)?;
+         let registry = poll.registry().try_clone()?;
+ 
+@@ -109,7 +111,7 @@
+             registry,
+             registrations,
+             synced: Mutex::new(synced),
+-            #[cfg(not(target_os = "wasi"))]
++            #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+             waker,
+             metrics: IoDriverMetrics::default(),
+         };
+@@ -205,7 +207,7 @@
+     /// blocked in `turn`, then the next call to `turn` will not block and
+     /// return immediately.
+     pub(crate) fn unpark(&self) {
+-        #[cfg(not(target_os = "wasi"))]
++        #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+         self.waker.wake().expect("failed to wake I/O driver");
+     }
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/runtime/io/registration.rs b/src/runtime/io/registration.rs
+--- a/src/runtime/io/registration.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/runtime/io/registration.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -118,7 +118,7 @@
+ 
+     // Uses the poll path, requiring the caller to ensure mutual exclusion for
+     // correctness. Only the last task to call this function is notified.
+-    #[cfg(not(target_os = "wasi"))]
++    #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+     pub(crate) fn poll_read_io<R>(
+         &self,
+         cx: &mut Context<'_>,
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/runtime/mod.rs b/src/runtime/mod.rs
+--- a/src/runtime/mod.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/runtime/mod.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -341,7 +341,7 @@
+     pub(crate) mod time;
+ }
+ 
+-cfg_signal_internal_and_unix! {
++cfg_signal_internal_and_unix_or_wasix! {
+     pub(crate) mod signal;
+ }
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/runtime/runtime.rs b/src/runtime/runtime.rs
+--- a/src/runtime/runtime.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/runtime/runtime.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -125,11 +125,11 @@
+     CurrentThread(CurrentThread),
+ 
+     /// Execute tasks across multiple threads.
+-    #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++    #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+     MultiThread(MultiThread),
+ 
+     /// Execute tasks across multiple threads.
+-    #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++    #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+     MultiThreadAlt(MultiThreadAlt),
+ }
+ 
+@@ -146,7 +146,7 @@
+         }
+     }
+ 
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         /// Creates a new runtime instance with default configuration values.
+         ///
+         /// This results in the multi threaded scheduler, I/O driver, and time driver being
+@@ -346,9 +346,9 @@
+ 
+         match &self.scheduler {
+             Scheduler::CurrentThread(exec) => exec.block_on(&self.handle.inner, future),
+-            #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++            #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+             Scheduler::MultiThread(exec) => exec.block_on(&self.handle.inner, future),
+-            #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++            #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+             Scheduler::MultiThreadAlt(exec) => exec.block_on(&self.handle.inner, future),
+         }
+     }
+@@ -464,13 +464,13 @@
+                 let _guard = context::try_set_current(&self.handle.inner);
+                 current_thread.shutdown(&self.handle.inner);
+             }
+-            #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++            #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+             Scheduler::MultiThread(multi_thread) => {
+                 // The threaded scheduler drops its tasks on its worker threads, which is
+                 // already in the runtime's context.
+                 multi_thread.shutdown(&self.handle.inner);
+             }
+-            #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++            #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+             Scheduler::MultiThreadAlt(multi_thread) => {
+                 // The threaded scheduler drops its tasks on its worker threads, which is
+                 // already in the runtime's context.
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/runtime/scheduler/inject/shared.rs b/src/runtime/scheduler/inject/shared.rs
+--- a/src/runtime/scheduler/inject/shared.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/runtime/scheduler/inject/shared.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -40,7 +40,7 @@
+     // Kind of annoying to have to include the cfg here
+     #[cfg(any(
+         tokio_taskdump,
+-        all(feature = "rt-multi-thread", not(target_os = "wasi"))
++        all(feature = "rt-multi-thread", not(all(target_os = "wasi", target_vendor = "unknown")))
+     ))]
+     pub(crate) fn is_closed(&self, synced: &Synced) -> bool {
+         synced.is_closed
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/runtime/scheduler/mod.rs b/src/runtime/scheduler/mod.rs
+--- a/src/runtime/scheduler/mod.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/runtime/scheduler/mod.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -32,10 +32,10 @@
+     #[cfg(feature = "rt")]
+     CurrentThread(Arc<current_thread::Handle>),
+ 
+-    #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++    #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+     MultiThread(Arc<multi_thread::Handle>),
+ 
+-    #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++    #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+     MultiThreadAlt(Arc<multi_thread_alt::Handle>),
+ 
+     // TODO: This is to avoid triggering "dead code" warnings many other places
+@@ -49,10 +49,10 @@
+ pub(super) enum Context {
+     CurrentThread(current_thread::Context),
+ 
+-    #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++    #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+     MultiThread(multi_thread::Context),
+ 
+-    #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++    #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+     MultiThreadAlt(multi_thread_alt::Context),
+ }
+ 
+@@ -63,10 +63,10 @@
+             #[cfg(feature = "rt")]
+             Handle::CurrentThread(ref h) => &h.driver,
+ 
+-            #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++            #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+             Handle::MultiThread(ref h) => &h.driver,
+ 
+-            #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++            #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+             Handle::MultiThreadAlt(ref h) => &h.driver,
+ 
+             #[cfg(not(feature = "rt"))]
+@@ -89,10 +89,10 @@
+             match $self {
+                 $ty::CurrentThread($h) => $e,
+ 
+-                #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 $ty::MultiThread($h) => $e,
+ 
+-                #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 $ty::MultiThreadAlt($h) => $e,
+             }
+         }
+@@ -119,10 +119,10 @@
+             match self {
+                 Handle::CurrentThread(h) => current_thread::Handle::spawn(h, future, id),
+ 
+-                #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 Handle::MultiThread(h) => multi_thread::Handle::spawn(h, future, id),
+ 
+-                #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 Handle::MultiThreadAlt(h) => multi_thread_alt::Handle::spawn(h, future, id),
+             }
+         }
+@@ -131,10 +131,10 @@
+             match *self {
+                 Handle::CurrentThread(_) => {},
+ 
+-                #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 Handle::MultiThread(ref h) => h.shutdown(),
+ 
+-                #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 Handle::MultiThreadAlt(ref h) => h.shutdown(),
+             }
+         }
+@@ -146,7 +146,7 @@
+         pub(crate) fn as_current_thread(&self) -> &Arc<current_thread::Handle> {
+             match self {
+                 Handle::CurrentThread(handle) => handle,
+-                #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 _ => panic!("not a CurrentThread handle"),
+             }
+         }
+@@ -170,9 +170,9 @@
+             pub(crate) fn num_workers(&self) -> usize {
+                 match self {
+                     Handle::CurrentThread(_) => 1,
+-                    #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++                    #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                     Handle::MultiThread(handle) => handle.num_workers(),
+-                    #[cfg(all(tokio_unstable, feature = "rt-multi-thread", not(target_os = "wasi")))]
++                    #[cfg(all(tokio_unstable, feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                     Handle::MultiThreadAlt(handle) => handle.num_workers(),
+                 }
+             }
+@@ -216,7 +216,7 @@
+         pub(crate) fn expect_current_thread(&self) -> &current_thread::Context {
+             match self {
+                 Context::CurrentThread(context) => context,
+-                #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++                #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                 _ => panic!("expected `CurrentThread::Context`")
+             }
+         }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/runtime/signal/mod.rs b/src/runtime/signal/mod.rs
+--- a/src/runtime/signal/mod.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/runtime/signal/mod.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -1,10 +1,12 @@
+ #![cfg_attr(not(feature = "rt"), allow(dead_code))]
++#![cfg_attr(target_os = "wasi", allow(unused, dead_code))]
+ 
+ //! Signal driver
+ 
+ use crate::runtime::{driver, io};
+ use crate::signal::registry::globals;
+ 
++#[cfg(not(target_os = "wasi"))]
+ use mio::net::UnixStream;
+ use std::io::{self as std_io, Read};
+ use std::sync::{Arc, Weak};
+@@ -21,6 +23,7 @@
+     io: io::Driver,
+ 
+     /// A pipe for receiving wake events from the signal handler
++    #[cfg(not(target_os = "wasi"))]
+     receiver: UnixStream,
+ 
+     /// Shared state. The driver keeps a strong ref and the handle keeps a weak
+@@ -62,19 +65,23 @@
+         // with registering dups with the same reactor. In this case, duping is
+         // safe as each dup is registered with separate reactors **and** we
+         // only expect at least one dup to receive the notification.
+-
+-        // Manually drop as we don't actually own this instance of UnixStream.
+-        let receiver_fd = globals().receiver.as_raw_fd();
+-
+-        // safety: there is nothing unsafe about this, but the `from_raw_fd` fn is marked as unsafe.
+-        let original =
+-            ManuallyDrop::new(unsafe { std::os::unix::net::UnixStream::from_raw_fd(receiver_fd) });
+-        let mut receiver = UnixStream::from_std(original.try_clone()?);
+-
+-        io_handle.register_signal_receiver(&mut receiver)?;
++        #[cfg(not(target_os = "wasi"))]
++        let receiver = {
++            // Manually drop as we don't actually own this instance of UnixStream.
++            let receiver_fd = globals().receiver.as_raw_fd();
++
++            // safety: there is nothing unsafe about this, but the `from_raw_fd` fn is marked as unsafe.
++            let original =
++                ManuallyDrop::new(unsafe { std::os::unix::net::UnixStream::from_raw_fd(receiver_fd) });
++            let mut receiver = UnixStream::from_std(original.try_clone()?);
++
++            io_handle.register_signal_receiver(&mut receiver)?;
++            receiver
++        };
+ 
+         Ok(Self {
+             io,
++            #[cfg(not(target_os = "wasi"))]
+             receiver,
+             inner: Arc::new(()),
+         })
+@@ -111,13 +118,16 @@
+ 
+         // Drain the pipe completely so we can receive a new readiness event
+         // if another signal has come in.
+-        let mut buf = [0; 128];
+-        loop {
+-            match self.receiver.read(&mut buf) {
+-                Ok(0) => panic!("EOF on self-pipe"),
+-                Ok(_) => continue, // Keep reading
+-                Err(e) if e.kind() == std_io::ErrorKind::WouldBlock => break,
+-                Err(e) => panic!("Bad read on self-pipe: {}", e),
++        #[cfg(not(target_os = "wasi"))]
++        {
++            let mut buf = [0; 128];
++            loop {
++                match self.receiver.read(&mut buf) {
++                    Ok(0) => panic!("EOF on self-pipe"),
++                    Ok(_) => continue, // Keep reading
++                    Err(e) if e.kind() == std_io::ErrorKind::WouldBlock => break,
++                    Err(e) => panic!("Bad read on self-pipe: {}", e),
++                }
+             }
+         }
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/runtime/task/trace/mod.rs b/src/runtime/task/trace/mod.rs
+--- a/src/runtime/task/trace/mod.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/runtime/task/trace/mod.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -194,7 +194,7 @@
+             if let Some(scheduler) = scheduler {
+                 match scheduler {
+                     scheduler::Context::CurrentThread(s) => s.defer.defer(cx.waker()),
+-                    #[cfg(all(feature = "rt-multi-thread", not(target_os = "wasi")))]
++                    #[cfg(all(feature = "rt-multi-thread", any(not(target_os = "wasi"), target_vendor = "wasmer")))]
+                     scheduler::Context::MultiThread(s) => s.defer.defer(cx.waker()),
+                     #[cfg(all(
+                         tokio_unstable,
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/signal/ctrl_c.rs b/src/signal/ctrl_c.rs
+--- a/src/signal/ctrl_c.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/signal/ctrl_c.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -1,4 +1,4 @@
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ use super::unix::{self as os_impl};
+ #[cfg(windows)]
+ use super::windows::{self as os_impl};
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/signal/mod.rs b/src/signal/mod.rs
+--- a/src/signal/mod.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/signal/mod.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -26,7 +26,7 @@
+ //! Wait for SIGHUP on Unix
+ //!
+ //! ```rust,no_run
+-//! # #[cfg(unix)] {
++//! # #[cfg(any(unix, target_vendor = "wasmer"))] {
+ //! use tokio::signal::unix::{signal, SignalKind};
+ //!
+ //! #[tokio::main]
+@@ -51,7 +51,7 @@
+ pub(crate) mod registry;
+ 
+ mod os {
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     pub(crate) use super::unix::{OsExtraData, OsStorage};
+ 
+     #[cfg(windows)]
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/signal/registry.rs b/src/signal/registry.rs
+--- a/src/signal/registry.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/signal/registry.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -144,7 +144,7 @@
+         self.registry.broadcast()
+     }
+ 
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     pub(crate) fn storage(&self) -> &OsStorage {
+         &self.registry.storage
+     }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/signal/unix.rs b/src/signal/unix.rs
+--- a/src/signal/unix.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/signal/unix.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -3,8 +3,9 @@
+ //! This module is only defined on Unix platforms and contains the primary
+ //! `Signal` type for receiving notifications of signals.
+ 
+-#![cfg(unix)]
++#![cfg(any(unix, target_vendor = "wasmer"))]
+ #![cfg_attr(docsrs, doc(cfg(all(unix, feature = "signal"))))]
++#![cfg_attr(target_os = "wasi", allow(unused))]
+ 
+ use crate::runtime::scheduler;
+ use crate::runtime::signal::Handle;
+@@ -12,6 +13,7 @@
+ use crate::signal::RxFuture;
+ use crate::sync::watch;
+ 
++#[cfg(not(target_os = "wasi"))]
+ use mio::net::UnixStream;
+ use std::io::{self, Error, ErrorKind, Write};
+ use std::sync::atomic::{AtomicBool, Ordering};
+@@ -49,16 +51,24 @@
+ 
+ #[derive(Debug)]
+ pub(crate) struct OsExtraData {
++    #[cfg(not(target_os = "wasi"))]
+     sender: UnixStream,
++    #[cfg(not(target_os = "wasi"))]
+     pub(crate) receiver: UnixStream,
+ }
+ 
+ impl Init for OsExtraData {
++    #[cfg(not(target_os = "wasi"))]
+     fn init() -> Self {
+         let (receiver, sender) = UnixStream::pair().expect("failed to create UnixStream");
+ 
+         Self { sender, receiver }
+     }
++
++    #[cfg(target_os = "wasi")]
++    fn init() -> Self {
++        Self { }
++    }
+ }
+ 
+ /// Represents the specific kind of signal to listen for.
+@@ -244,8 +254,11 @@
+ 
+     // Send a wakeup, ignore any errors (anything reasonably possible is
+     // full pipe and then it will wake up anyway).
+-    let mut sender = &globals.sender;
+-    drop(sender.write(&[1]));
++    #[cfg(not(target_os = "wasi"))]
++    {
++        let mut sender = &globals.sender;
++        drop(sender.write(&[1]));
++    }
+ }
+ 
+ /// Enables this module to receive signal notifications for the `signal`
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/task/mod.rs b/src/task/mod.rs
+--- a/src/task/mod.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/task/mod.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -318,7 +318,7 @@
+ cfg_rt! {
+     pub use crate::runtime::task::{JoinError, JoinHandle};
+ 
+-    cfg_not_wasi! {
++    cfg_not_wasi_classic! {
+         mod blocking;
+         pub use blocking::spawn_blocking;
+     }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/util/markers.rs b/src/util/markers.rs
+--- a/src/util/markers.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/util/markers.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -1,3 +1,5 @@
++#![cfg_attr(target_os = "wasi", allow(unused, dead_code))]
++
+ /// Marker for types that are `Sync` but not `Send`
+ pub(crate) struct SyncNotSend(*mut ());
+ 
