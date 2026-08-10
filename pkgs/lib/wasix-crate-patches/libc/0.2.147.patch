@@ -1,0 +1,32 @@
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' a/src/wasi.rs b/src/wasi.rs
+--- a/src/wasi.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/wasi.rs	2026-08-11 00:32:58.335360048 +0200
+@@ -27,6 +27,7 @@
+ pub type c_double = f64;
+ pub type c_float = f32;
+ pub type ino_t = u64;
++#[cfg(not(target_vendor = "wasmer"))]
+ pub type sigset_t = c_uchar;
+ pub type suseconds_t = c_longlong;
+ pub type mode_t = u32;
+@@ -205,6 +206,10 @@
+ pub const F_SETFD: c_int = 2;
+ pub const F_GETFL: c_int = 3;
+ pub const F_SETFL: c_int = 4;
++#[cfg(target_vendor = "wasmer")]
++pub const F_DUPFD: c_int = 5;
++#[cfg(target_vendor = "wasmer")]
++pub const F_DUPFD_CLOEXEC: c_int = 6;
+ pub const FD_CLOEXEC: c_int = 1;
+ pub const FD_SETSIZE: size_t = 1024;
+ pub const O_APPEND: c_int = 0x0001;
+@@ -828,3 +833,9 @@
+ 
+     pub fn __errno_location() -> *mut ::c_int;
+ }
++
++#[cfg(target_vendor = "wasmer")]
++#[path = "wasi_wasix.rs"]
++mod wasix;
++#[cfg(target_vendor = "wasmer")]
++pub use self::wasix::*;

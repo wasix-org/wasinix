@@ -1,6 +1,6 @@
 diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/wasi/mod.rs b/src/wasi/mod.rs
---- a/src/wasi/mod.rs	1970-01-01 01:00:01.000000000 +0100
-+++ b/src/wasi/mod.rs	2026-07-17 11:21:05.448602763 +0200
+--- a/src/wasi/mod.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/wasi/mod.rs	2026-08-10 11:08:49.206268965 +0200
 @@ -19,6 +19,7 @@
  pub type clock_t = c_longlong;
  pub type time_t = c_longlong;
@@ -9,15 +9,15 @@ diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=tar
  pub type sigset_t = c_uchar;
  pub type suseconds_t = c_longlong;
  pub type mode_t = u32;
-@@ -166,6 +167,7 @@
-         __reserved: [c_longlong; 3],
+@@ -172,6 +173,7 @@
+         __reserved: Padding<[c_longlong; 3]>,
      }
  
 +    #[cfg(not(target_vendor = "wasmer"))]
      pub struct fd_set {
          __nfds: usize,
          __fds: [c_int; FD_SETSIZE as usize],
-@@ -201,6 +203,10 @@
+@@ -243,6 +245,10 @@
  pub const F_SETFD: c_int = 2;
  pub const F_GETFL: c_int = 3;
  pub const F_SETFL: c_int = 4;
@@ -28,30 +28,30 @@ diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=tar
  pub const FD_CLOEXEC: c_int = 1;
  pub const FD_SETSIZE: size_t = 1024;
  pub const O_APPEND: c_int = 0x0001;
-@@ -439,12 +445,14 @@
- pub const NOSTR: crate::nl_item = 0x50003;
+@@ -619,12 +625,14 @@
+ pub const TIMER_ABSTIME: c_int = 1;
  
  f! {
 +    #[cfg(not(target_vendor = "wasmer"))]
-     pub fn FD_ISSET(fd: c_int, set: *const fd_set) -> bool {
+     pub unsafe fn FD_ISSET(fd: c_int, set: *const fd_set) -> bool {
          let set = &*set;
          let n = set.__nfds;
          return set.__fds[..n].iter().any(|p| *p == fd);
      }
  
 +    #[cfg(not(target_vendor = "wasmer"))]
-     pub fn FD_SET(fd: c_int, set: *mut fd_set) -> () {
+     pub unsafe fn FD_SET(fd: c_int, set: *mut fd_set) -> () {
          let set = &mut *set;
          let n = set.__nfds;
-@@ -454,6 +462,7 @@
+@@ -634,6 +642,7 @@
          }
      }
  
 +    #[cfg(not(target_vendor = "wasmer"))]
-     pub fn FD_ZERO(set: *mut fd_set) -> () {
+     pub unsafe fn FD_ZERO(set: *mut fd_set) -> () {
          (*set).__nfds = 0;
          return;
-@@ -740,6 +749,7 @@
+@@ -918,6 +927,7 @@
      pub fn nl_langinfo(item: crate::nl_item) -> *mut c_char;
      pub fn nl_langinfo_l(item: crate::nl_item, loc: crate::locale_t) -> *mut c_char;
  
@@ -59,7 +59,7 @@ diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=tar
      pub fn select(
          nfds: c_int,
          readfds: *mut fd_set,
-@@ -846,7 +856,10 @@
+@@ -1091,7 +1101,10 @@
  }
  
  cfg_if! {
