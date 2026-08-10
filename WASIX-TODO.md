@@ -189,6 +189,11 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
   cross-process corruption.
 - Workaround: h5py's runtime test sets `HDF5_USE_FILE_LOCKING=FALSE`; DuckDB skips
   its lock calls on WASI in `duckdb-wasi-no-file-lock.patch`.
+- Blocks the `fs2` crate, whose whole API is locking, and any crate reaching the
+  filesystem through it. tantivy takes its index lock via `fs2::FileExt`, so the
+  overlay registry cannot serve it from a floor patch: a port has to replace the
+  mmap directory backend, as the wasix-org 0.18 fork does, rather than widen a
+  cfg gate.
 - Upstream fix: add record-lock operations and shared per-file lock state to
   Wasmer's WASIX filesystem ABI, then implement the fcntl commands in wasix-libc
   and remove the package workarounds.
