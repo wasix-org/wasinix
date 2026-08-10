@@ -2,6 +2,13 @@
 # the pin lives in one place. A crate's edits.nix references these by name in its
 # `adds`; crate-edits.nix writes them into consumers' locks and vendors.
 {
+  # mio's 0.8 backend predates wasix 0.13's AddrIp6 split, so that line pins 0.12.
+  wasix12 = {
+    name = "wasix";
+    version = "0.12.21";
+    checksum = "c1fbb4ef9bbca0c1170e0b00dd28abc9e3b68669821600cad1caaed606583c6d";
+    deps = ["wasi"];
+  };
   wasix = {
     name = "wasix";
     version = "0.13.2";

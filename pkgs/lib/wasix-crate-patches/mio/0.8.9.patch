@@ -1,0 +1,345 @@
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/lib.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -40,6 +40,10 @@
+ //!
+ //! The available features are described in the [`features`] module.
+ 
++// WASIX requires os-poll when using the feature net
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer", feature = "net", not(feature = "os-poll")))]
++compile_error!("WASIX requires os-poll when using the feature net");
++
+ // macros used internally
+ #[macro_use]
+ mod macros;
+@@ -48,8 +52,10 @@
+ mod poll;
+ mod sys;
+ mod token;
+-#[cfg(not(target_os = "wasi"))]
+-mod waker;
++
++cfg_os_poll! {
++    mod waker;
++}
+ 
+ pub mod event;
+ 
+@@ -66,14 +72,25 @@
+ pub use interest::Interest;
+ pub use poll::{Poll, Registry};
+ pub use token::Token;
+-#[cfg(not(target_os = "wasi"))]
+-pub use waker::Waker;
+ 
+-#[cfg(all(unix, feature = "os-ext"))]
+-#[cfg_attr(docsrs, doc(cfg(all(unix, feature = "os-ext"))))]
++mod wasi {
++    #[allow(unused)]
++    #[cfg(all(target_os = "wasi", target_vendor = "unknown"))]
++    pub use ::wasi::*;
++    #[allow(unused)]
++    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++    pub use ::wasix::*;
++}
++
++cfg_os_poll! {
++    pub use waker::Waker;
++}
++
++#[cfg(all(any(unix, target_vendor = "wasmer"), feature = "os-ext"))]
++#[cfg_attr(docsrs, doc(cfg(all(any(unix, target_vendor = "wasmer"), feature = "os-ext"))))]
+ pub mod unix {
+     //! Unix only extensions.
+-
++    #[cfg(unix)]
+     pub mod pipe {
+         //! Unix pipe.
+         //!
+@@ -82,6 +99,7 @@
+         pub use crate::sys::pipe::{new, Receiver, Sender};
+     }
+ 
++    #[allow(unused)]
+     pub use crate::sys::SourceFd;
+ }
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/net/mod.rs b/src/net/mod.rs
+--- a/src/net/mod.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/net/mod.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -28,12 +28,14 @@
+ mod tcp;
+ pub use self::tcp::{TcpListener, TcpStream};
+ 
+-#[cfg(not(target_os = "wasi"))]
++#[cfg(not(all(target_os = "wasi", target_vendor = "unknown")))]
+ mod udp;
+-#[cfg(not(target_os = "wasi"))]
++#[cfg(not(all(target_os = "wasi", target_vendor = "unknown")))]
+ pub use self::udp::UdpSocket;
+ 
+ #[cfg(unix)]
+ mod uds;
+ #[cfg(unix)]
+ pub use self::uds::{SocketAddr, UnixDatagram, UnixListener, UnixStream};
++#[cfg(any(target_vendor = "wasmer"))]
++pub use std::net::SocketAddr;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/net/tcp/listener.rs b/src/net/tcp/listener.rs
+--- a/src/net/tcp/listener.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/net/tcp/listener.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -9,9 +9,9 @@
+ 
+ use crate::io_source::IoSource;
+ use crate::net::TcpStream;
+-#[cfg(unix)]
++#[cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))]
+ use crate::sys::tcp::set_reuseaddr;
+-#[cfg(not(target_os = "wasi"))]
++#[cfg(not(all(target_os = "wasi", target_vendor = "unknown")))]
+ use crate::sys::tcp::{bind, listen, new_for_addr};
+ use crate::{event, sys, Interest, Registry, Token};
+ 
+@@ -55,11 +55,13 @@
+     /// 2. Set the `SO_REUSEADDR` option on the socket on Unix.
+     /// 3. Bind the socket to the specified address.
+     /// 4. Calls `listen` on the socket to prepare it to receive new connections.
+-    #[cfg(not(target_os = "wasi"))]
++    #[cfg(not(all(target_os = "wasi", target_vendor = "unknown")))]
+     pub fn bind(addr: SocketAddr) -> io::Result<TcpListener> {
+         let socket = new_for_addr(addr)?;
+         #[cfg(unix)]
+         let listener = unsafe { TcpListener::from_raw_fd(socket) };
++        #[cfg(target_os = "wasi")]
++        let listener = unsafe { TcpListener::from_raw_fd(socket) };
+         #[cfg(windows)]
+         let listener = unsafe { TcpListener::from_raw_socket(socket as _) };
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/net/tcp/stream.rs b/src/net/tcp/stream.rs
+--- a/src/net/tcp/stream.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/net/tcp/stream.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -9,7 +9,7 @@
+ use std::os::windows::io::{AsRawSocket, FromRawSocket, IntoRawSocket, RawSocket};
+ 
+ use crate::io_source::IoSource;
+-#[cfg(not(target_os = "wasi"))]
++#[cfg(not(all(target_os = "wasi", target_vendor = "unknown")))]
+ use crate::sys::tcp::{connect, new_for_addr};
+ use crate::{event, Interest, Registry, Token};
+ 
+@@ -75,16 +75,19 @@
+     ///     went wrong.
+     ///  5. Now the stream can be used.
+     ///
++    /// [read interest]: Interest::READABLE
+     /// This may return a `WouldBlock` in which case the socket connection
+     /// cannot be completed immediately, it usually means there are insufficient
+     /// entries in the routing cache.
+     ///
+     /// [write interest]: Interest::WRITABLE
+-    #[cfg(not(target_os = "wasi"))]
++    #[cfg(not(all(target_os = "wasi", target_vendor = "unknown")))]
+     pub fn connect(addr: SocketAddr) -> io::Result<TcpStream> {
+         let socket = new_for_addr(addr)?;
+         #[cfg(unix)]
+         let stream = unsafe { TcpStream::from_raw_fd(socket) };
++        #[cfg(target_os = "wasi")]
++        let stream = unsafe { TcpStream::from_raw_fd(socket) };
+         #[cfg(windows)]
+         let stream = unsafe { TcpStream::from_raw_socket(socket as _) };
+         connect(&stream.inner, addr)?;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/net/udp.rs b/src/net/udp.rs
+--- a/src/net/udp.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/net/udp.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -16,6 +16,8 @@
+ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+ #[cfg(unix)]
+ use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
++#[cfg(target_os = "wasi")]
++use std::os::wasi::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
+ #[cfg(windows)]
+ use std::os::windows::io::{AsRawSocket, FromRawSocket, IntoRawSocket, RawSocket};
+ 
+@@ -642,21 +644,21 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_os = "wasi"))]
+ impl IntoRawFd for UdpSocket {
+     fn into_raw_fd(self) -> RawFd {
+         self.inner.into_inner().into_raw_fd()
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_os = "wasi"))]
+ impl AsRawFd for UdpSocket {
+     fn as_raw_fd(&self) -> RawFd {
+         self.inner.as_raw_fd()
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_os = "wasi"))]
+ impl FromRawFd for UdpSocket {
+     /// Converts a `RawFd` to a `UdpSocket`.
+     ///
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/poll.rs b/src/poll.rs
+--- a/src/poll.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/poll.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -689,17 +689,20 @@
+ 
+     /// Internal check to ensure only a single `Waker` is active per [`Poll`]
+     /// instance.
+-    #[cfg(all(debug_assertions, not(target_os = "wasi")))]
+-    pub(crate) fn register_waker(&self) {
++    #[allow(dead_code)]
++    #[cfg(all(debug_assertions))]
++    pub fn register_waker(&self) {
++        #[cfg(all(debug_assertions, not(target_os = "wasi")))]
+         assert!(
+-            !self.has_waker.swap(true, Ordering::AcqRel),
++            !self.has_waker.swap(true, std::sync::atomic::Ordering::AcqRel),
+             "Only a single `Waker` can be active per `Poll` instance"
+         );
+     }
+ 
+     /// Get access to the `sys::Selector`.
+-    #[cfg(any(not(target_os = "wasi"), feature = "net"))]
+-    pub(crate) fn selector(&self) -> &sys::Selector {
++    #[allow(dead_code)]
++    #[cfg(any(not(target_os = "wasi"), feature = "net", feature = "os-poll"))]
++    pub fn selector(&self) -> &sys::Selector {
+         &self.selector
+     }
+ }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/mod.rs b/src/sys/mod.rs
+--- a/src/sys/mod.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/sys/mod.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -15,6 +15,7 @@
+ //! * `Waker`: see [`crate::Waker`].
+ 
+ cfg_os_poll! {
++    #[allow(unused_macros)]
+     macro_rules! debug_detail {
+         (
+             $type: ident ($event_type: ty), $test: path,
+@@ -67,18 +68,33 @@
+ cfg_os_poll! {
+     mod wasi;
+     pub(crate) use self::wasi::*;
++
++    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++    pub use self::wasi::SourceFd;
++
++    #[allow(unused_imports)]
++    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++    pub use std::net::SocketAddr;
+ }
+ 
+ cfg_not_os_poll! {
+     mod shell;
+     pub(crate) use self::shell::*;
+ 
++    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++    cfg_any_os_ext! {
++        mod wasi;
++        pub use self::wasi::SourceFd;
++    }
++    #[allow(unused_imports)]
++    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++    pub use std::net::SocketAddr;
++
+     #[cfg(unix)]
+     cfg_any_os_ext! {
+         mod unix;
+         pub use self::unix::SourceFd;
+     }
+-
+     #[cfg(unix)]
+     cfg_net! {
+         pub use self::unix::SocketAddr;
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/shell/mod.rs b/src/sys/shell/mod.rs
+--- a/src/sys/shell/mod.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/sys/shell/mod.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -9,6 +9,7 @@
+ 
+ #[cfg(not(target_os = "wasi"))]
+ mod waker;
++#[allow(unused_imports)]
+ #[cfg(not(target_os = "wasi"))]
+ pub(crate) use self::waker::Waker;
+ 
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/shell/selector.rs b/src/sys/shell/selector.rs
+--- a/src/sys/shell/selector.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/sys/shell/selector.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -18,6 +18,12 @@
+     pub fn select(&self, _: &mut Events, _: Option<Duration>) -> io::Result<()> {
+         os_required!();
+     }
++
++    #[allow(dead_code)]
++    #[cfg(all(debug_assertions))]
++    pub fn register_waker(&self) -> bool {
++        os_required!();
++    }
+ }
+ 
+ #[cfg(unix)]
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/shell/waker.rs b/src/sys/shell/waker.rs
+--- a/src/sys/shell/waker.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/sys/shell/waker.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -6,10 +6,12 @@
+ pub struct Waker {}
+ 
+ impl Waker {
++    #[allow(dead_code)]
+     pub fn new(_: &Selector, _: Token) -> io::Result<Waker> {
+         os_required!();
+     }
+ 
++    #[allow(dead_code)]
+     pub fn wake(&self) -> io::Result<()> {
+         os_required!();
+     }
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/unix/net.rs b/src/sys/unix/net.rs
+--- a/src/sys/unix/net.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/sys/unix/net.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -19,6 +19,7 @@
+         target_os = "freebsd",
+         target_os = "illumos",
+         target_os = "linux",
++        target_os = "wasi",
+         target_os = "netbsd",
+         target_os = "openbsd",
+     ))]
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/unix/pipe.rs b/src/sys/unix/pipe.rs
+--- a/src/sys/unix/pipe.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/sys/unix/pipe.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -13,6 +13,7 @@
+         target_os = "dragonfly",
+         target_os = "freebsd",
+         target_os = "linux",
++        target_os = "wasi",
+         target_os = "netbsd",
+         target_os = "openbsd",
+         target_os = "illumos",
+@@ -62,6 +63,7 @@
+         target_os = "ios",
+         target_os = "linux",
+         target_os = "macos",
++        target_os = "wasi",
+         target_os = "netbsd",
+         target_os = "openbsd",
+         target_os = "redox",
+diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' '--exclude=target' '--exclude=*.orig' '--exclude=*.rej' a/src/sys/unix/tcp.rs b/src/sys/unix/tcp.rs
+--- a/src/sys/unix/tcp.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/src/sys/unix/tcp.rs	2006-07-24 03:21:28.000000000 +0200
+@@ -65,6 +65,7 @@
+         target_os = "freebsd",
+         target_os = "illumos",
+         target_os = "linux",
++        target_os = "wasi",
+         target_os = "netbsd",
+         target_os = "openbsd",
+     ))]

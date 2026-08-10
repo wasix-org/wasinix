@@ -1,0 +1,3 @@
+
+[target.'cfg(all(target_os = "wasi", target_vendor = "wasmer"))'.dependencies.wasix]
+version = "0.12"
