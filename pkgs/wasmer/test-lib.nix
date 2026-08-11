@@ -198,28 +198,31 @@ in rec {
       # backtrace in $out. Set on the host process, not the forwarded guest env.
       // lib.optionalAttrs (localBacktrace != "") {RUST_BACKTRACE = localBacktrace;}) ''
             export HOME=$TMPDIR/home
-            mkdir -p "$HOME"
+            ${pkgs.coreutils}/bin/mkdir -p "$HOME"
 
-            shim_dir=$(mktemp -d)
+            # The harness and the shims call their own tools by store path: a
+            # wasixPkgs entry can put wasm builds of the same names on PATH
+            # (coreutils), and those run in the guest.
+            shim_dir=$(${pkgs.coreutils}/bin/mktemp -d)
             for pkg_bin_dir in ${wasixBinDirs}; do
               [ -d "$pkg_bin_dir" ] || continue
               for original_bin in "$pkg_bin_dir/"*; do
                 [ -f "$original_bin" ] || continue
-                bin_name=$(basename "$original_bin")
-                cat > "$shim_dir/$bin_name" <<SHIMEOF
+                bin_name=$(${pkgs.coreutils}/bin/basename "$original_bin")
+                ${pkgs.coreutils}/bin/cat > "$shim_dir/$bin_name" <<SHIMEOF
       #!/bin/sh
       env_flags=""
       for _v in ${forwardEnvNames}; do
-        _val=\$(printenv "\$_v" 2>/dev/null) && env_flags="\$env_flags --env \$_v=\$_val"
+        _val=\$(${pkgs.coreutils}/bin/printenv "\$_v" 2>/dev/null) && env_flags="\$env_flags --env \$_v=\$_val"
       done
-      export WASMER_FLAGS="--volume \$HOME:\$HOME --volume \$WASIX_TEST_ROOT:\$WASIX_TEST_ROOT --cwd \$(pwd)\$env_flags ${extraFlags}"
+      export WASMER_FLAGS="--volume \$HOME:\$HOME --volume \$WASIX_TEST_ROOT:\$WASIX_TEST_ROOT --cwd \$(${pkgs.coreutils}/bin/pwd)\$env_flags ${extraFlags}"
       exec "$original_bin" "\$@"
       SHIMEOF
-                chmod +x "$shim_dir/$bin_name"
+                ${pkgs.coreutils}/bin/chmod +x "$shim_dir/$bin_name"
               done
             done
 
-            export WASIX_TEST_ROOT="$(mktemp -d)"
+            export WASIX_TEST_ROOT="$(${pkgs.coreutils}/bin/mktemp -d)"
             cd "$WASIX_TEST_ROOT"
             if PATH="$shim_dir:$PATH" ${pkgs.coreutils}/bin/timeout ${toString timeout} ${pkgs.bash}/bin/bash -euo pipefail ${scriptFile} >"$out" 2>&1; then
               ${verdict.onCheckPass}
