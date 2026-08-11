@@ -1,6 +1,6 @@
 {
-  stdenv,
   lib,
+  stdenv,
   bash,
   rustPlatform,
   fetchFromGitHub,
@@ -25,15 +25,14 @@ rustPlatform.buildRustPackage (finalAttrs: {
       --replace-fail '#!/bin/bash' '#!${shellPath}'
   '';
 
-  # The e2e harness otherwise assumes a separate target/debug build exists.
+  # The test harness otherwise assumes a separate target/debug build exists.
   preCheck = ''
     export ANYBUILD_BIN="$PWD/target/${stdenv.hostPlatform.rust.rustcTarget}/release/anybuild"
   '';
 
   passthru.updateScript = {
     command = nix-update-script {extraArgs = ["--flake"];};
-    # Compatibility alias; packagesByHost.native.anybuild is the same drv.
-    attrPath = "toolchain.anybuild";
+    attrPath = "nativePackages.anybuild";
   };
 
   meta = {

@@ -41,9 +41,6 @@
     wasixSysrootEhpic = variants.ehpic.sysroot;
   };
   binaryen = pkgs.binaryen;
-  # Crossable product recipe; the same definition is instantiated in every
-  # WASIX profile before its target-specific overlay adapter is applied.
-  anybuild = pkgs.anybuild;
   wasixcc = pkgs.callPackage ./wasixcc.nix {
     inherit wasixLlvm binaryen wasixSysroot;
   };
@@ -53,7 +50,7 @@
 in {
   # The wasix rustPlatform is assembled in pkgs/default.nix, where the pkgsCross
   # it needs is in scope.
-  inherit anybuild wasixLlvm wasixSysroot wasixRustToolchain binaryen wasixcc cargoWasix;
+  inherit wasixLlvm wasixSysroot wasixRustToolchain binaryen wasixcc cargoWasix;
   inherit llvm variants sysroot tests libc compiler-rt libcxx flang flangCross;
   # Internal inputs for pkgs/default.nix and the overlay. Profile-sensitive
   # outputs are public through toolchainByProfile, never as implicit defaults.

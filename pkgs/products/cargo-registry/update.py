@@ -23,7 +23,7 @@ sys.path.insert(
 from updater_lib import gh, prefetch_github, raw_file, run_nix_update  # noqa: E402
 
 PACKAGE = Path(__file__).parent
-NIX = PACKAGE.parents[3] / "crossable" / "packages" / "cargo-registry" / "package.nix"
+NIX = PACKAGE / "package.nix"
 LOCK = PACKAGE / "Cargo.lock"
 SOURCE_PIN = re.compile(
     r'(owner = "wasix-org";\s*repo = "cargo-registry";\s*rev = ")([0-9a-f]{40})(";\s*hash = ")(sha256-[^"]+)(";)',

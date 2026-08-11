@@ -12,6 +12,5 @@ helpers.libTweaks {
     # A deployed server, not a version-pinned library.
     retention = "none";
   };
-  meta.description = "Overlay cargo registry server, built to WASIX";
 }
 prev.cargo-registry

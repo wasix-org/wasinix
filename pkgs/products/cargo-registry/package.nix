@@ -5,7 +5,6 @@
   fetchFromGitHub,
   nix-update-script,
 }: let
-  packageAssets = ../../../overlay/packages/cargo-registry;
   # Upstream dogfoods the overlay registry. Use its exact resolution with the
   # +wasix suffixes stripped, then let the WASIX rustPlatform reapply the fork
   # sources when this recipe is instantiated in a WASIX package set.
@@ -18,7 +17,7 @@
     }} "$out"
     chmod -R u+w "$out"
     rm -f "$out"/.cargo/config.toml "$out"/.cargo/config "$out"/Cargo.toml.old "$out"/Cargo.lock.old
-    cp ${packageAssets + "/Cargo.lock"} "$out/Cargo.lock"
+    cp ${./Cargo.lock} "$out/Cargo.lock"
   '';
 
   updateScript = buildPackages.writeShellApplication {
@@ -27,7 +26,7 @@
       (buildPackages.python3.withPackages (ps: [ps.tomlkit]))
     ];
     text = ''
-      pkg=$(git rev-parse --show-toplevel)/pkgs/overlay/packages/cargo-registry
+      pkg=$(git rev-parse --show-toplevel)/pkgs/products/cargo-registry
       PYTHONDONTWRITEBYTECODE=1 python3 "$pkg/update.py" "$@"
     '';
   };

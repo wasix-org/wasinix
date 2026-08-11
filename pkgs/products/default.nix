@@ -1,8 +1,8 @@
-# Package recipes instantiated in both the native set and every WASIX profile.
-# The directory name is the package attr; target-specific product policy stays
-# in overlay/packages, layered over these definitions only for a WASIX host.
+# Product recipes instantiated in both the native set and every WASIX profile.
+# Sibling directory names are package attrs; target-specific product policy
+# stays in overlay/packages and applies only for a WASIX host.
 let
-  dir = ./packages;
+  dir = ./.;
   entries = builtins.readDir dir;
   names =
     builtins.filter

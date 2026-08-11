@@ -10,7 +10,7 @@
   # are built. Empty in every normal eval; nothing that ships may set it.
   spotOverlays ? {},
 }: let
-  crossable = import ./crossable;
+  products = import ./products;
   pkgs = import nixpkgs {
     inherit system;
     overlays = [
@@ -24,7 +24,7 @@
             ];
         });
       })
-      (crossable.overlay {})
+      (products.overlay {})
     ];
   };
   inherit (pkgs) lib;
@@ -94,9 +94,9 @@
     inherit toolchain nixpkgs preferredProfilePackages wasixRustPlatform wasmerDependencies;
     inherit (pkgs) nix-update-script;
   };
-  crossableOverlay = crossable.overlay {nativeNixUpdateScript = pkgs.nix-update-script;};
+  productsOverlay = products.overlay {nativeNixUpdateScript = pkgs.nix-update-script;};
   mkWasixPkgs = import ./set/mk-pkgs.nix {
-    inherit system nixpkgs mkWasixStdenv crossableOverlay wasixOverlay;
+    inherit system nixpkgs mkWasixStdenv productsOverlay wasixOverlay;
   };
   nixpkgsByProfile = lib.mapAttrs (name: spec: mkWasixPkgs (spotOverlays.${name} or []) spec) profilesCfg.profiles;
 
@@ -124,62 +124,9 @@
     profilesCfg.profiles;
   defaultToolchain = toolchainByProfile.${defaultProfileName};
 
-  # Shared product recipes by host platform. `native` is an independent native
-  # package-set product, never a buildPackages splice from a cross set.
-  nativePackages = lib.genAttrs crossable.names (name: pkgs.${name});
-  crossablePackagesByProfile =
-    lib.mapAttrs (
-      profile: profilePkgs:
-        lib.filterAttrs
-        (_: wasixLib.supportedIn profile)
-        (lib.genAttrs crossable.names (name: profilePkgs.${name}))
-    )
-    nixpkgsByProfile;
-  packagesByHost = {
-    native = nativePackages;
-    wasixByProfile = crossablePackagesByProfile;
-    preferredWasix = lib.genAttrs crossable.names (name: preferredProfilePackages.${name});
-  };
-
-  # Toolchain roles make the bootstrap direction explicit. Hosted products tag
-  # their WASIX adapter, so crossable tools and specialized LLVM/Rust builders
-  # can join without adding another profile matrix.
-  hostedToolNames =
-    lib.filter
-    (name: ((wasixLib.wasixMetaOf nixpkgsByProfile.${defaultProfileName}.${name}).toolchainRole or null) == "hosted")
-    wasixPkgNames;
-  hostedToolchainsByProfile =
-    lib.mapAttrs (
-      profile: profilePkgs:
-        lib.filterAttrs
-        (_: wasixLib.supportedIn profile)
-        (lib.genAttrs hostedToolNames (name: profilePkgs.${name}))
-    )
-    nixpkgsByProfile;
-  runtimeToolchainsByProfile =
-    lib.mapAttrs (_: tc: {
-      inherit (tc) sysroot libc compiler-rt libcxx flangRt openmp;
-    })
-    toolchainByProfile;
-  toolchains = {
-    build = {
-      inherit
-        (toolchain)
-        anybuild
-        binaryen
-        cargoWasix
-        flang
-        flangCross
-        haskell
-        llvm
-        wasixcc
-        wasixLlvm
-        wasixRustToolchain
-        ;
-    };
-    hostedByProfile = hostedToolchainsByProfile;
-    runtimesByProfile = runtimeToolchainsByProfile;
-  };
+  # Shared product recipes built independently for the native host, never taken
+  # from a cross set's buildPackages splice.
+  nativePackages = lib.genAttrs products.names (name: pkgs.${name});
 
   # Profiles whose executables wasmer can execute, for the compile+link+run tests:
   # everything except legacy EH, whose `try` opcode wasmer has no feature flag for.
@@ -277,16 +224,24 @@
   };
 
   # ── package matrices for CI / consumers ──────────────────────────────────────
-  # Libraries (the non-shipped overlay packages), built across all profiles.
-  libPkgNames = lib.filter (n: !(lib.elem n shippedCommands)) wasixPkgNames;
-  librariesByProfile =
+  # Complete public view: every package under every profile it supports.
+  packagesByProfile =
     lib.genAttrs (lib.attrNames profilesCfg.profiles)
     (profile:
-      # Reads passthru, not meta.availableOn, so libs whose meta.platforms is
-      # merely unix-only are kept.
+      # Reads passthru, not meta.availableOn, so packages whose meta.platforms
+      # is merely unix-only are kept.
         lib.filterAttrs
         (_: wasixLib.supportedIn profile)
-        (lib.genAttrs libPkgNames (n: nixpkgsByProfile.${profile}.${n})));
+        (lib.genAttrs wasixPkgNames (n: nixpkgsByProfile.${profile}.${n})));
+
+  # CI policy transposed into the same profile/package shape. This stays
+  # separate from packagesByProfile so reducing coverage never hides a build.
+  ciPackagesByProfile =
+    lib.mapAttrs (
+      profile: packages:
+        lib.filterAttrs (_: drv: builtins.elem profile (wasixLib.ciProfilesOf drv)) packages
+    )
+    packagesByProfile;
 
   # One check per profile over that profile's whole column: objects must carry the
   # profile's exception-handling feature and PIC relocation flavor, guarding against
@@ -298,16 +253,10 @@
     lib.mapAttrs (
       profile: enc: let
         notBroken = lib.filterAttrs (_: d: !(d.meta.broken or false));
-        shippedHere =
-          lib.filter
-          (n: lib.elem n shippedCommands && preferredProfileOf n == profile)
-          wasixPkgNames;
       in
         abiCheck {
           name = profile;
-          paths =
-            lib.attrValues (notBroken librariesByProfile.${profile})
-            ++ map (n: preferredProfilePackages.${n}) shippedHere;
+          paths = lib.attrValues (notBroken ciPackagesByProfile.${profile});
           inherit (enc) eh pic;
           dylink = enc.pic;
         }
@@ -393,9 +342,9 @@
   };
 in {
   inherit pkgs pkgsCross nixUpdate defaultProfileName wasixPkgNames;
-  inherit nativePackages packagesByHost toolchains;
+  inherit nativePackages packagesByProfile ciPackagesByProfile;
   inherit toolchain toolchainByProfile nixpkgsByProfile preferredProfilePackages allWasmerPackages;
-  inherit shippedCommands wasmerPackages librariesByProfile toolchainTestPkgs abiChecks;
+  inherit shippedCommands wasmerPackages toolchainTestPkgs abiChecks;
   inherit libraryTestPkgs;
   inherit pythonWheels pythonRegistry cargoRegistry;
 }

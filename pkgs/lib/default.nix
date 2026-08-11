@@ -1,6 +1,6 @@
 # Helpers for wasix package files, and the optional passthru.wasix declaration:
-# supportedProfiles, preferredProfile, shipped, broken, toolchainRole,
-# retention, retentionHook, updateNotes (docs/packaging.md, docs/updating.md).
+# supportedProfiles, preferredProfile, ciProfiles, shipped, broken, retention,
+# retentionHook, updateNotes (docs/packaging.md, docs/updating.md).
 # applyWasixMeta below is the only writer of meta.badPlatforms/meta.broken.
 {lib}: let
   profilesCfg = import ../profiles.nix;
@@ -108,13 +108,35 @@ in rec {
   preferredProfileOf = drv: let
     w = wasixMetaOf drv;
     supported = w.supportedProfiles or profiles.all;
-  in
-    w.preferredProfile
-    or (
-      if builtins.elem defaultProfileName supported
+    preferred =
+      if w ? preferredProfile
+      then w.preferredProfile
+      else if builtins.elem defaultProfileName supported
       then defaultProfileName
-      else builtins.head supported
-    );
+      else builtins.head supported;
+  in
+    lib.throwIf (!(builtins.elem preferred supported))
+    "${drv.pname or drv.name}: preferredProfile '${preferred}' is not in supportedProfiles"
+    preferred;
+
+  # CI coverage is independent of platform support. Shipped products already
+  # have a canonical build through wasmerPackages, while an explicit preference
+  # likewise opts into one canonical profile unless ciProfiles says otherwise.
+  ciProfilesOf = drv: let
+    w = wasixMetaOf drv;
+    supported = w.supportedProfiles or profiles.all;
+    selected =
+      w.ciProfiles
+      or (
+        if w ? preferredProfile || shippedOf drv
+        then [(preferredProfileOf drv)]
+        else supported
+      );
+    invalid = builtins.filter (profile: !(builtins.elem profile supported)) selected;
+  in
+    lib.throwIf (invalid != [])
+    "${drv.pname or drv.name}: ciProfiles contains unsupported profile(s): ${lib.concatStringsSep ", " invalid}"
+    selected;
 
   # Applied to every package by the overlay loader. All profiles share one system
   # string, so badPlatforms is only meaningful within the setting profile's set.

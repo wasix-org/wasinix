@@ -142,7 +142,6 @@
           # These carry their test suites as passthru.tests.
           inherit (wasix.toolchainTestPkgs) sysroot wasixcc;
 
-          anybuild = toolchain.anybuild;
           cargo-wasix = toolchain.cargoWasix;
           rust-toolchain = toolchain.wasixRustToolchain;
           libc = toolchain.libc;
@@ -152,10 +151,10 @@
           flang = toolchain.flang; # host Fortran->wasm compiler (wasm32 target patch)
           runtime = wasmerRuntime; # the wasmer runtime (input, patched)
         };
-        librariesByProfile = wasix.librariesByProfile; # <profile>.<lib>
-        # Shared Wasmer/WASIX product recipes built for the native host. The
-        # WASIX profile matrix is available through the packagesByHost escape
-        # hatch below and is already covered by the product-oriented outputs.
+        # Every overlay package under every profile it supports. CI replaces
+        # this complete view with the package-declared ciProfiles selection.
+        packagesByProfile = wasix.packagesByProfile;
+        # Shared Wasmer/WASIX product recipes built for the native host.
         nativePackages = wasix.nativePackages;
         # <name> = wasm cross build; .pkg = its wasmer package; .webc = the built webc; .tests = its tests
         wasmerPackages = wasix.wasmerPackages;
@@ -202,16 +201,17 @@
             else {}
         );
       # One derivation per dotted key for nix-eval-jobs / nix-fast-build.
-      # toolchain.anybuild remains a compatibility alias for the native
-      # product; nativePackages.anybuild is its single CI job.
-      ciBuildable = buildable // {toolchain = removeAttrs buildable.toolchain ["anybuild"];};
+      ciBuildable =
+        buildable
+        // {
+          packagesByProfile = wasix.ciPackagesByProfile;
+        };
       ci = flattenDrvs "" ciBuildable // flattenDrvs "checks" flakeChecks;
     in
       buildable
       // {
         # Escape hatches / aggregates: reachable via `.#`, but not ci jobs.
         inherit (wasix) nixpkgsByProfile toolchainByProfile defaultProfileName;
-        inherit (wasix) packagesByHost toolchains;
 
         # Rebuild one target against the working tree with everything below it
         # pinned to a pristine base (./spot.nix). A function, so never a ci job.
@@ -431,7 +431,7 @@
 
     packages.${system} = {
       # the webc packages and the merged registry live under legacyPackages
-      anybuild = toolchain.anybuild;
+      anybuild = wasix.nativePackages.anybuild;
       wasixcc = toolchain.wasixcc;
       cargo-wasix = toolchain.cargoWasix;
       wasix-rust-toolchain = toolchain.wasixRustToolchain;
