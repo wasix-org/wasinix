@@ -6,6 +6,7 @@
   final,
   prev,
   helpers,
+  preferredProfilePackages,
   ...
 }: let
   offProfile = (final.stdenv.hostPlatform.wasmExceptions or "yes") == "no";
@@ -17,8 +18,8 @@ in
       "--disable-process-substitution" # needs mkfifo/mknod, absent on WASIX.
       "--disable-job-control" # no process groups; setpgid() EINVAL spam.
       "bash_cv_getenv_redef=no" # else getenv.o redefines putenv/setenv, clashes under wasm-ld.
-      "bash_cv_func_sigsetjmp=missing" # off-EH <setjmp.h> gates sigsetjmp out.
-      "ac_cv_func_siginterrupt=no" # libc has it but <signal.h> doesn't declare it.
+      # libc's sigsetjmp ignores the signal mask, so take bash's own save/restore.
+      "bash_cv_func_sigsetjmp=missing"
     ];
     postPatch = ''
       # NO_MAIN_ENV_ARG drops main()'s `env`, but shell.c still uses it.
@@ -28,12 +29,25 @@ in
       substituteInPlace lib/sh/getcwd.c \
         --replace-fail '#if !defined (HAVE_GETCWD)' \
                        '#if !defined (HAVE_GETCWD) && !defined(__wasi__)'
-      substituteInPlace lib/sh/winsize.c \
-        --replace-fail '#if defined (TIOCGWINSZ) || defined (HAVE_TCGETWINSIZE)' \
-                       '#if (defined (TIOCGWINSZ) || defined (HAVE_TCGETWINSIZE)) && !defined(__wasi__)'
     '';
     passthru.wasix.supportedProfiles = ["off"];
     passthru.wasix.shipped = true;
+    # Both commands share the one module, so dependents get /bin/sh as well as
+    # /bin/bash and the webc still carries a single wasm. A second command means
+    # wasmer no longer infers one, hence the explicit entrypoint.
+    passthru.wasmer.entrypoint = "bash";
+    # A shell with nothing to run is not a shell: wasmer mounts each dependency
+    # command under /bin, which is where DEFAULT_PATH_VALUE points.
+    passthru.wasmer.dependencies = [preferredProfilePackages.coreutils];
+    passthru.wasmer.commands = [
+      {name = "bash";}
+      {
+        name = "sh";
+        module = "bash";
+        wasm = "bash.wasm";
+        output = "bash.wasm";
+      }
+    ];
     preConfigure = final.lib.optionalString (!offProfile) ''
       echo 'bash must be built in the off-EH profile (wasmExceptions = "no")' >&2
       exit 1
@@ -52,6 +66,15 @@ in
       # asyncify bash.wasm at link: wasixcc auto-adds --asyncify for the off
       # profile, and bash also needs --fpcast-emu.
       WASIXCC_WASM_OPT_FLAGS = "--fpcast-emu";
+      # nixpkgs bakes /no-such-path as the fallback PATH and command -p path.
+      # wasmer mounts a webc's dependency commands at /bin and /usr/bin, so an
+      # unset PATH must search there. Clang takes the last -D, hence the -U.
+      NIX_CFLAGS_COMPILE = old:
+        old
+        + ''
+          -UDEFAULT_PATH_VALUE -DDEFAULT_PATH_VALUE="/bin:/usr/bin"
+          -USTANDARD_UTILS_PATH -DSTANDARD_UTILS_PATH="/bin:/usr/bin"
+        '';
     };
     # mkbuiltins et al. run on the build host: native cc, same gnu17 pin.
     preBuild = ''

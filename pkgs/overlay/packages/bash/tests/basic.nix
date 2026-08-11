@@ -1,4 +1,5 @@
 {
+  pkgs,
   wasmerPkgs,
   testLib,
   ...
@@ -86,6 +87,58 @@ in {
         *readline-live-42*) echo interactive-ok ;;
         *) echo "interactive mode failed: $out"; exit 1 ;;
       esac
+    '';
+  };
+
+  # COLUMNS/LINES come from TIOCGWINSZ, which wasix-libc answers from
+  # __wasi_tty_get. --noediting keeps readline from setting them instead, so
+  # only bash's own winsize path can satisfy this.
+  winsize = testLib.mkWasixRun {
+    name = "bash-winsize";
+    wasixPkgs = [bashPkg];
+    nativePkgs = [pkgs.python3];
+    script = ''
+      cat > pty-size.py <<'PYEOF'
+      import os, pty, select, struct, sys, fcntl, termios
+
+      pid, fd = pty.fork()
+      if pid == 0:
+          os.execvp(sys.argv[1], sys.argv[1:])
+      fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 41, 137, 0, 0))
+      os.write(fd, b"echo MARK COLUMNS=$COLUMNS LINES=$LINES\nexit\n")
+      out = b""
+      while select.select([fd], [], [], 60)[0]:
+          try:
+              chunk = os.read(fd, 4096)
+          except OSError:
+              break
+          if not chunk:
+              break
+          out += chunk
+      os.waitpid(pid, 0)
+      sys.stdout.write(out.decode(errors="replace"))
+      PYEOF
+      out=$(python3 pty-size.py bash --noediting -i 2>&1)
+      case "$out" in
+        *"MARK COLUMNS=137 LINES=41"*) echo winsize-ok ;;
+        *) echo "window size not picked up: $out"; exit 1 ;;
+      esac
+    '';
+  };
+
+  # The sh command atom shares bash's module, and dependents exec it by that
+  # name, so argv[0] must arrive as sh. PATH must reach the /bin where wasmer
+  # mounts a webc's dependency commands.
+  sh = testLib.mkWasixRun {
+    name = "bash-sh";
+    wasixPkgs = [bashPkg];
+    script = ''
+      out=$(sh -c 'echo "argv0=$0 path=$PATH"')
+      if [ "$out" != "argv0=sh path=/bin:/usr/bin" ]; then
+        echo "unexpected sh invocation: $out"
+        exit 1
+      fi
+      echo sh-ok
     '';
   };
 }
