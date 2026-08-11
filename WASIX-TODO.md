@@ -226,6 +226,21 @@ current toolchain before relying on it.
 - Fix: answer self-inspection in wasmer (pid 1 exists, so `Process()` should
   resolve it), which also gets loky off the fallback path.
 
+### `subprocess` rejects `cwd` with NotImplementedError 🟡
+
+- CPython's wasm `_execute_child` refuses the options it cannot honor, so
+  `subprocess.run(..., cwd=...)` raises
+  `NotImplementedError: cwd is not supported on wasix` rather than running the
+  child in that directory.
+- Consequence: the usual guard around an optional subprocess catches `OSError`
+  and `CalledProcessError`, neither of which is a `NotImplementedError`, so code
+  that degrades gracefully everywhere else raises at import instead. optree's
+  `version.py` shells out to `git describe` for a dev version and dies this way;
+  `overlay/python-packages/optree.nix` marks the tree as a release so the block
+  is skipped.
+- Fix: honor `cwd` by chdir'ing in the spawned child (wasix has `chdir`, and
+  posix_spawn has an addchdir file action), then let CPython stop rejecting it.
+
 ### exec'ing a symlinked helper in a webc fails ENOEXEC 🟢
 
 - `WebcVolumeFileSystem::open()` read raw (non-following) metadata, so a symlink
