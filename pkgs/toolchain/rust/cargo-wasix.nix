@@ -1,14 +1,13 @@
-# cargo-wasix, built from source; the bin/ wrapper pins the toolchain env
-# (wasixcc + LLVM + binaryen + sysroot) and links the from-source rust toolchain
-# into rustup before exec'ing.
+# cargo-wasix, the cargo subcommand driving WASIX builds. The binary is a
+# product (products/cargo-wasix-unwrapped); the bin/ wrapper pins the toolchain
+# env (wasixcc + LLVM + binaryen + sysroot) and links the from-source rust
+# toolchain into rustup before exec'ing.
 {
   lib,
   stdenvNoCC,
-  rustPlatform,
-  fetchFromGitHub,
   makeWrapper,
-  nix-update-script,
   rustup,
+  cargo-wasix-unwrapped,
   wasixRustToolchain,
   wasixcc,
   wasixLlvm,
@@ -16,27 +15,8 @@
   wasixSysroot,
 }: let
   env = import ../env.nix {inherit lib;};
-
-  version = "0.1.33";
-
-  src = fetchFromGitHub {
-    owner = "wasix-org";
-    repo = "cargo-wasix";
-    tag = "v${version}";
-    hash = "sha256-Jd9Dr2P9lqPhlHo1VAU6QBLY4RIAuAuNC7RKUdJL/ZI=";
-  };
-
-  cargoWasixUnwrapped = rustPlatform.buildRustPackage {
-    pname = "cargo-wasix-unwrapped";
-    inherit version src;
-    cargoHash = "sha256-0bQGbrYpqusf1yviMHihhtxyu2ACqiCHgmWtZbhsBn4=";
-
-    # The integration suite creates empty CARGO_HOMEs then invokes cargo-wasix,
-    # which downloads the WASIX target. Its download_toolchain unit test also
-    # contacts GitHub. Keep the remaining offline library unit tests.
-    cargoTestFlags = ["--lib"];
-    checkFlags = ["--skip" "toolchain::tests::test_download_toolchain"];
-  };
+  inherit (cargo-wasix-unwrapped) version;
+  cargoWasixUnwrapped = cargo-wasix-unwrapped;
 
   # cargo-wasix resolves its toolchain through rustup; before exec, (re-)link
   # ours under the names it looks for. Idempotent, quiet on the happy path.
@@ -80,13 +60,9 @@ in
     '';
 
     passthru = {
+      # The recipe is products/cargo-wasix-unwrapped, which carries the version,
+      # the src and the updateScript; this wrapper only adds the toolchain env.
       unwrapped = cargoWasixUnwrapped;
-      # nix-update needs version + src on the drv it evals: the wrapper has
-      # neither, so point it at the unwrapped package
-      updateScript = {
-        command = nix-update-script {extraArgs = ["--flake"];};
-        attrPath = "toolchain.cargo-wasix.unwrapped";
-      };
     };
 
     meta = {
