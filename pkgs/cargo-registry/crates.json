@@ -1,6 +1,20 @@
 {
+  "async-rs": {
+    "0.8.11": "sha256-VT+YvUuEyhz+vlpF/hd4uHXgqJhZLZzgVwlEDmkAVL0="
+  },
   "boring-sys2": {
     "4.15.13": "sha256-AtjG0cVqg6mQgFCANrit0ujZmxrBxxMH+jq5I1b2KoI="
+  },
+  "clocksource": {
+    "0.8.3": "sha256-qAyHao1XNJPkBKiVjDyItDqCOpOrwO2TBVYPAga1Xck=",
+    "1.0.0": "sha256-UYliiZPPtiTw0rk09PoFnISMRqCMyFeM/uL8gKvfM3Y=",
+    "1.0.1": "sha256-TeEo+sIscV3vVhq4C+mVQ0MIVI5IZtFtYk1tUu+Patc="
+  },
+  "crc-fast": {
+    "1.10.0": "sha256-ipb45fNzDY3MfcVFBa7FDgM2Tm8wDLAkhzT2hW/yegw="
+  },
+  "deadpool-postgres": {
+    "0.14.1": "sha256-Wd4cstbjHDsPy/CBspLw+e6OHLJ3fbCRju+a1fI5uoc="
   },
   "esaxx-rs": {
     "0.1.10": "sha256-fCxZBEeuGWghPVpuOTdMpjRzCCSsx0nusoQyNW2wR+o="
@@ -14,6 +28,10 @@
     "0.4.1": "sha256-hUiODX5wi1h1oUKHSwmNdWelriwFNABgzP2/fcpwh9o=",
     "0.4.2": "sha256-sdmICWF7BGxEd/kxhqU83XhMn1gsoDVdTUc6So4DhX4=",
     "0.4.3": "sha256-mrq7A2TXUKj7Bq72bae8Os3IFmrYvr3a8JssWKNiYNA="
+  },
+  "google-cloud-auth": {
+    "1.14.0": "sha256-mqIFP9ACvWjfjwv6RtROgPIPjnNqMOM1+eY6qRkGTmk=",
+    "1.15.0": "sha256-8bKh0AXEdg+b13qwuSYP2ACiOuVJfmnvbTASg/xkDHo="
   },
   "h2": {
     "0.3.21": "sha256-qeaXCzeqlZYkW7FaBQFOLnj0XJaFlN2OFxpGRZetTzE="
@@ -81,6 +99,12 @@
     "26.0.1": "sha256-ppt6SBdX67CSnZw1NfURdaAxOVCa0Z5CnAfi5kKrUeI=",
     "27.0.0": "sha256-7IQ5dp/mJS62iDYprSIFHTTrBK8Rf1hD1LT5tbPODeE=",
     "28.0.0": "sha256-8pgTlCZ8+ANBRRi+6HPTZsso6cWohQs0f3Id9aN3OX0="
+  },
+  "netif": {
+    "0.1.6": "sha256-/92VXS+sU1d+8aLne4khYMrcFWjAyYLMPl7wzgSo70U="
+  },
+  "parking_lot_core": {
+    "0.9.12": "sha256-EoLH+cNcdZnNTXHLU6St1b4fUYXyMfaWIEdHGivqv2g="
   },
   "pyo3-async-runtimes": {
     "0.26.0": "sha256-3ekKGld3dEORGLuL4OmtqiA8uNtuiNybIFB4aJs7vnU=",
@@ -155,6 +179,9 @@
     "0.6.1": "sha256-3ra0LAGdpASsDSPmvt8k8UACJRkYjuHW5jjxbHA8D9g=",
     "0.6.2": "sha256-ufCwFcx3Lhn5T+2IM4RtLf5t1V2b7LQzgucLXupfKeA="
   },
+  "symlink": {
+    "0.1.0": "sha256-KRuoQhxcK8dS1TKuuzVl2HOH/yb6fUP6ydO/e/Z0L5I="
+  },
   "sys-info": {
     "0.9.1": "sha256-tzgOsQis9Pr6G4JZ/81BT4+CTNcy5EtRhTb9HlK0ud0="
   },
@@ -195,6 +222,9 @@
     "1.53.0": "sha256-JCz/2R8SiejvMRncOpKXuVP7QjBB30VKptdqPUrMsD4=",
     "1.53.1": "sha256-OV+cxziLuLsTxp2usuWFjWTM1Nf/3qtcp0SEA8vlFEc="
   },
+  "tokio-postgres": {
+    "0.7.18": "sha256-GvG5XVkXenLJp1HWHcfkjhkENbzfN/UHm417UjuiC4M="
+  },
   "tonic": {
     "0.14.2": "sha256-Pk1d/bHOjX140gPYb/tQAZ6IKt5ii1erDvh9VYwziXg=",
     "0.14.3": "sha256-IG/yDAZgLN3lxT9Z1EYiMJvnCjDTF1UwTjVsHXKxRKY=",
@@ -204,5 +234,8 @@
   },
   "trust-dns-resolver": {
     "0.23.1": "sha256-e0ECINiZnlU/gu3++VeozEGHEt6SdyU1XTIWry26+OM="
+  },
+  "wasite": {
+    "1.0.2": "sha256-YYeIgXPWwM+bds+9Ucyr5jcwToa86eJoquGHeDvJ9MU="
   }
 }
