@@ -24,5 +24,5 @@ in
   }) (
     # drop nixpkgs' postPatch: it references extensions.sharedLibrary (unset for
     # wasm32) and rewrites find_library itself, both superseded here.
-    (pyprev.pyzbar.override {inherit zbar;}).overridePythonAttrs (_: {postPatch = "";})
+    (pyprev.pyzbar.override {pkgs = {inherit zbar;};}).overridePythonAttrs (_: {postPatch = "";})
   )
