@@ -282,16 +282,20 @@
 
   # Monolithic fetchCargoVendor vendor: extend its OWN buildCommand (keeps raw's
   # re-pointable vendorStaging that the history rebase reaches into).
-  patchInPlace = raw: let
-    presents = presentEdits raw;
-  in
-    if presents == []
-    then raw
-    else
-      raw.overrideAttrs (o: {
-        nativeBuildInputs = (o.nativeBuildInputs or []) ++ [hostPkgs.jq hostPkgs.python3];
-        buildCommand = (o.buildCommand or "") + applyPlan presents;
-      });
+  # presentEdits is an IFD, so it is forced inside overrideAttrs rather than by a
+  # branch out here. A branch has to build the vendor before `cargoDeps` can be
+  # read at all, which a version bump cannot satisfy: the stored hash is stale
+  # until something reads `cargoDeps.vendorStaging` to re-derive it. With no
+  # edits present the added value is empty and the derivation is unchanged.
+  patchInPlace = raw:
+    raw.overrideAttrs (o: let
+      presents = presentEdits raw;
+    in {
+      nativeBuildInputs =
+        (o.nativeBuildInputs or [])
+        ++ lib.optionals (presents != []) [hostPkgs.jq hostPkgs.python3];
+      buildCommand = (o.buildCommand or "") + applyPlan presents;
+    });
 
   # Granular importCargoLock vendor: mirror the per-crate farm as symlinks so
   # unpatched crates stay shared; applyOne materializes the patched ones. Name
