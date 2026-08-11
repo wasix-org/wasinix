@@ -134,7 +134,12 @@
         (o.passthru or {})
         // {
           tests = mkTestGroup "wasixcc" (
-            (lib.mapAttrs' (p: tc:
+            {
+              relocatable = pkgs.callPackage ./toolchain/tests/relocatable-link-test.nix {
+                toolchain = defaultToolchain;
+              };
+            }
+            // (lib.mapAttrs' (p: tc:
               lib.nameValuePair "link-${p}" (pkgs.callPackage ./toolchain/tests/link-test.nix {
                 wasmer = wasmerRuntime;
                 toolchain = tc;

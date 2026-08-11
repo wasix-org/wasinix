@@ -35,6 +35,9 @@
     patches = [
       ./wasixcc-map-libstdcxx-to-libcxx.patch
       ./wasixcc-openmp-link.patch
+      # Relocatable links must bypass executable setup. Meson prelinking exposed
+      # the driver's attempt to add crt and resolve main for `-r`.
+      ./wasixcc-relocatable-link-passthrough.patch
     ];
 
     doCheck = true;
@@ -76,6 +79,9 @@ in
         command = nix-update-script {extraArgs = ["--flake"];};
         attrPath = "toolchain.wasixcc.unwrapped";
       };
+      wasix.updateNotes = [
+        {message = "check whether wasixcc-relocatable-link-passthrough.patch landed upstream";}
+      ];
     };
 
     meta = {
