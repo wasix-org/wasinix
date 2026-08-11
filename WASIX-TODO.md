@@ -133,7 +133,8 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
   with undefined symbols at link or dylib import. `if_indextoname` and
   `if_nametoindex` are declared in `net/if.h` but not defined at all.
 - Workaround: libuv's `libuv-0013-wasix-ifaddrs-names-no-if_index.patch` maps
-  the names and stubs the `if_*` lookups.
+  the names and stubs the `if_*` lookups. nix short-circuits its "are we
+  online" probe instead (`unsupported-posix-apis-on-wasi.patch`).
 - Fix: define the standard names in wasix-libc (alias or rename), and
   implement/stub `if_indextoname`/`if_nametoindex`.
 
@@ -260,6 +261,15 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
   with the usual `makedev`/`major`/`minor` macros, and a `sync()` stub in
   `wasix-libc-stubs.c`. That unblocks most util-linux programs; the rest need
   `fork` (`off` only), `sys/ipc.h`, or `PRIO_*`/`get,setpriority`.
+
+### `statvfs` fails on a `--mapdir` directory 🟡
+
+- `statvfs()` on a host directory mounted with `--mapdir`/`--volume` returns
+  ENOTSUP, so free-space checks fail. nix's local store calls it on every
+  operation that could trigger GC, which makes `nix --store /some/dir` unusable
+  (`nix eval --store dummy://` is unaffected: no filesystem, no statvfs).
+- Fix: report the backing filesystem's numbers (or plausible ones) for mounted
+  host directories.
 
 ## Toolchain
 

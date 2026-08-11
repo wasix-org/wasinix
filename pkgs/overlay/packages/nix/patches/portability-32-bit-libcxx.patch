@@ -1,0 +1,140 @@
+Portability fixes for a 32-bit target with libc++.
+
+  - `std::string(sv.begin(), n)`, `std::string_view{it, n}` and passing
+    string_view iterators to <regex> only compile where string_view's iterator
+    is a raw `const char *`, as in libstdc++.
+  - `constexpr std::string` holds only for a literal short enough for the
+    small-string buffer. That is 11 bytes on a 32-bit target, so both of these
+    heap-allocate, and heap allocation is not a constant expression.
+  - `UploadData::sizeHint` is a file size: every caller passes a uint64_t and
+    curl takes a curl_off_t, so size_t only narrows (on a 32-bit target, it
+    fails the build outright).
+
+Upstream: report against NixOS/nix; none of these are wasi-specific.
+
+--- a/src/libutil/args.cc	2026-07-22 21:47:04.808057740 +0200
++++ b/src/libutil/args.cc	2026-07-22 21:47:09.718043563 +0200
+@@ -77,7 +77,7 @@
+         return {};
+     auto i = s.find(completionMarker);
+     if (i != std::string::npos)
+-        return std::string(s.begin(), i);
++        return std::string(s.substr(0, i));
+     return {};
+ }
+
+--- a/src/libstore/names.cc	2026-07-22 22:29:31.706463927 +0200
++++ b/src/libstore/names.cc	2026-07-22 22:29:31.759232621 +0200
+@@ -71,7 +71,9 @@
+         while (p != end && (!isdigit(*p) && *p != '.' && *p != '-'))
+             p++;
+
+-    return {s, size_t(p - s)};
++    /* Iterator pair, not (pointer, length): string_view::const_iterator is
++       only a raw pointer in libstdc++. */
++    return {s, p};
+ }
+
+ static bool componentsLT(const std::string_view c1, const std::string_view c2)
+--- a/src/libstore/include/nix/store/binary-cache-store.hh	2026-07-22 22:27:13.060080362 +0200
++++ b/src/libstore/include/nix/store/binary-cache-store.hh	2026-07-22 22:27:19.905060471 +0200
+@@ -92,9 +92,13 @@
+     /**
+      * The prefix under which realisation infos will be stored
+      */
+-    constexpr const static std::string realisationsPrefix = "realisations";
++    /* Not `constexpr`: that only holds for a literal short enough for the
++       small-string buffer, which is 11 bytes on a 32-bit target -- both of
++       these heap-allocate there, and heap allocation is not a constant
++       expression. */
++    inline const static std::string realisationsPrefix = "realisations";
+
+-    constexpr const static std::string cacheInfoFile = "nix-cache-info";
++    inline const static std::string cacheInfoFile = "nix-cache-info";
+
+     BinaryCacheStore(Config &);
+
+--- a/src/libstore/include/nix/store/filetransfer.hh	2026-07-22 22:27:13.075080318 +0200
++++ b/src/libstore/include/nix/store/filetransfer.hh	2026-07-22 22:27:29.752031858 +0200
+@@ -204,13 +204,15 @@
+         {
+         }
+
+-        UploadData(std::size_t sizeHint, RestartableSource & source)
++        UploadData(uint64_t sizeHint, RestartableSource & source)
+             : sizeHint(sizeHint)
+             , source(&source)
+         {
+         }
+
+-        std::size_t sizeHint = 0;
++        /* uint64_t, not size_t: every caller passes one, and it reaches curl
++           as a curl_off_t. size_t narrows on a 32-bit target. */
++        uint64_t sizeHint = 0;
+         RestartableSource * source = nullptr;
+     };
+
+--- a/src/nix/diff-closures.cc	2026-07-22 22:44:19.908096723 +0200
++++ b/src/nix/diff-closures.cc	2026-07-22 22:44:19.949220715 +0200
+@@ -39,7 +39,7 @@
+         std::string_view const origName = path.name();
+         std::string outputName;
+
+-        if (std::regex_match(origName.begin(), origName.end(), match, regex)) {
++        if (std::regex_match(origName.data(), origName.data() + origName.size(), match, regex)) {
+             name = match[1];
+             outputName = match[2];
+         }
+--- a/src/nix/nix-build/nix-build.cc	2026-07-22 22:50:26.493031854 +0200
++++ b/src/nix/nix-build/nix-build.cc	2026-07-22 22:50:26.524042935 +0200
+@@ -42,7 +42,11 @@
+ static std::vector<std::string> shellwords(std::string_view s)
+ {
+     std::regex whitespace("^\\s+");
+-    auto begin = s.cbegin();
++    /* Raw pointers, not string_view iterators: std::cmatch is an iterator
++       range over `const char *`, and string_view::const_iterator is only that
++       in libstdc++. */
++    const char * begin = s.data();
++    const char * end = s.data() + s.size();
+     std::vector<std::string> res;
+     std::string cur;
+
+@@ -50,14 +54,14 @@
+
+     state st = sBegin;
+     auto it = begin;
+-    for (; it != s.cend(); ++it) {
++    for (; it != end; ++it) {
+         if (st == sBegin) {
+             std::cmatch match;
+-            if (regex_search(it, s.cend(), match, whitespace)) {
++            if (regex_search(it, end, match, whitespace)) {
+                 cur.append(begin, it);
+                 res.push_back(cur);
+                 it = match[0].second;
+-                if (it == s.cend())
++                if (it == end)
+                     return res;
+                 begin = it;
+                 cur.clear();
+--- a/src/libexpr/primops.cc	2026-07-22 22:33:47.230934927 +0200
++++ b/src/libexpr/primops.cc	2026-07-22 23:24:51.014770058 +0200
+@@ -4759,7 +4759,7 @@
+             state.forceString(*args[1], context, pos, "while evaluating the second argument passed to builtins.match");
+
+         std::cmatch match;
+-        if (!std::regex_match(str.begin(), str.end(), match, *regex)) {
++        if (!std::regex_match(str.data(), str.data() + str.size(), match, *regex)) {
+             v.mkNull();
+             return;
+         }
+@@ -4832,7 +4832,7 @@
+         const auto str =
+             state.forceString(*args[1], context, pos, "while evaluating the second argument passed to builtins.split");
+
+-        auto begin = std::cregex_iterator(str.begin(), str.end(), *regex);
++        auto begin = std::cregex_iterator(str.data(), str.data() + str.size(), *regex);
+         auto end = std::cregex_iterator();
+
+         // Any matches results are surrounded by non-matching results.

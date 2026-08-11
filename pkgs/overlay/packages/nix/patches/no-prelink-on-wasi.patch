@@ -1,0 +1,251 @@
+Skip the prelink step on wasi.
+
+Meson prelinks each static library (a `wasm-ld -r` merge) so that C++ static
+initializers survive archive-member selection at the final link. wasm-ld can't
+do that here: the local-exec TLS relocation behind every `errno` reference has
+no encoding against an undefined symbol, and libc's `errno` stays undefined
+until the final link.
+
+The packaging compensates by whole-archiving these libraries in the consumers
+(see pkgs/overlay/packages/nix/package.nix), which pulls in every member and so
+keeps the same initializers.
+
+--- a/src/libcmd/meson.build	2026-07-22 22:22:27.176911160 +0200
++++ b/src/libcmd/meson.build	2026-07-22 22:22:50.255996697 +0200
+@@ -110,7 +110,11 @@
+   dependencies : deps_public + deps_private + deps_other,
+   include_directories : include_dirs,
+   link_args : linker_export_flags,
+-  prelink : true, # For C++ static initializers
++  # For C++ static initializers. wasm-ld can't do the relocatable link this
++  # needs: local-exec TLS relocations (every errno reference) have no
++  # encoding against an undefined symbol, and libc's errno is undefined
++  # until the final link. Consumers whole-archive these libraries instead.
++  prelink : host_machine.system() not in ['wasi', 'wasip1'],
+   install : true,
+   cpp_pch : do_pch ? [ 'pch/precompiled-headers.hh' ] : [],
+ )
+--- a/src/libexpr-c/meson.build	2026-07-22 22:22:27.065911482 +0200
++++ b/src/libexpr-c/meson.build	2026-07-22 22:22:50.254978897 +0200
+@@ -54,7 +54,11 @@
+   dependencies : deps_public + deps_private + deps_other,
+   include_directories : include_dirs,
+   link_args : linker_export_flags,
+-  prelink : true, # For C++ static initializers
++  # For C++ static initializers. wasm-ld can't do the relocatable link this
++  # needs: local-exec TLS relocations (every errno reference) have no
++  # encoding against an undefined symbol, and libc's errno is undefined
++  # until the final link. Consumers whole-archive these libraries instead.
++  prelink : host_machine.system() not in ['wasi', 'wasip1'],
+   install : true,
+ )
+
+--- a/src/libexpr/meson.build	2026-07-22 21:35:15.774105081 +0200
++++ b/src/libexpr/meson.build	2026-07-22 22:22:50.254366789 +0200
+@@ -240,7 +240,11 @@
+   include_directories : include_dirs,
+   link_args : linker_export_flags,
+   link_whole : [ parser_library ],
+-  prelink : true, # For C++ static initializers
++  # For C++ static initializers. wasm-ld can't do the relocatable link this
++  # needs: local-exec TLS relocations (every errno reference) have no
++  # encoding against an undefined symbol, and libc's errno is undefined
++  # until the final link. Consumers whole-archive these libraries instead.
++  prelink : host_machine.system() not in ['wasi', 'wasip1'],
+   install : true,
+   cpp_pch : do_pch ? [ 'pch/precompiled-headers.hh' ] : [],
+ )
+--- a/src/libexpr-test-support/meson.build	2026-07-22 22:22:27.030911584 +0200
++++ b/src/libexpr-test-support/meson.build	2026-07-22 22:22:50.254603338 +0200
+@@ -50,7 +50,11 @@
+   # TODO: Remove `-lrapidcheck` when https://github.com/emil-e/rapidcheck/pull/326
+   #       is available. See also ../libutil/build.meson
+   link_args : linker_export_flags + [ '-lrapidcheck' ],
+-  prelink : true, # For C++ static initializers
++  # For C++ static initializers. wasm-ld can't do the relocatable link this
++  # needs: local-exec TLS relocations (every errno reference) have no
++  # encoding against an undefined symbol, and libc's errno is undefined
++  # until the final link. Consumers whole-archive these libraries instead.
++  prelink : host_machine.system() not in ['wasi', 'wasip1'],
+   install : true,
+ )
+
+--- a/src/libfetchers-c/meson.build	2026-07-22 22:22:27.041911553 +0200
++++ b/src/libfetchers-c/meson.build	2026-07-22 22:22:50.254741126 +0200
+@@ -57,7 +57,11 @@
+   dependencies : deps_public + deps_private + deps_other,
+   include_directories : include_dirs,
+   link_args : linker_export_flags,
+-  prelink : true, # For C++ static initializers
++  # For C++ static initializers. wasm-ld can't do the relocatable link this
++  # needs: local-exec TLS relocations (every errno reference) have no
++  # encoding against an undefined symbol, and libc's errno is undefined
++  # until the final link. Consumers whole-archive these libraries instead.
++  prelink : host_machine.system() not in ['wasi', 'wasip1'],
+   install : true,
+ )
+
+--- a/src/libfetchers/meson.build	2026-07-22 22:22:27.054911514 +0200
++++ b/src/libfetchers/meson.build	2026-07-22 22:22:50.254862212 +0200
+@@ -64,7 +64,11 @@
+   dependencies : deps_public + deps_private + deps_other,
+   include_directories : include_dirs,
+   link_args : linker_export_flags,
+-  prelink : true, # For C++ static initializers
++  # For C++ static initializers. wasm-ld can't do the relocatable link this
++  # needs: local-exec TLS relocations (every errno reference) have no
++  # encoding against an undefined symbol, and libc's errno is undefined
++  # until the final link. Consumers whole-archive these libraries instead.
++  prelink : host_machine.system() not in ['wasi', 'wasip1'],
+   install : true,
+   cpp_pch : do_pch ? [ 'pch/precompiled-headers.hh' ] : [],
+ )
+--- a/src/libflake-c/meson.build	2026-07-22 22:22:27.111911349 +0200
++++ b/src/libflake-c/meson.build	2026-07-22 22:22:50.255337972 +0200
+@@ -57,7 +57,11 @@
+   dependencies : deps_public + deps_private + deps_other,
+   include_directories : include_dirs,
+   link_args : linker_export_flags,
+-  prelink : true, # For C++ static initializers
++  # For C++ static initializers. wasm-ld can't do the relocatable link this
++  # needs: local-exec TLS relocations (every errno reference) have no
++  # encoding against an undefined symbol, and libc's errno is undefined
++  # until the final link. Consumers whole-archive these libraries instead.
++  prelink : host_machine.system() not in ['wasi', 'wasip1'],
+   install : true,
+ )
+
+--- a/src/libflake/meson.build	2026-07-22 22:22:27.124911311 +0200
++++ b/src/libflake/meson.build	2026-07-22 22:22:50.255475051 +0200
+@@ -62,7 +62,11 @@
+   dependencies : deps_public + deps_private + deps_other,
+   include_directories : include_dirs,
+   link_args : linker_export_flags,
+-  prelink : true, # For C++ static initializers
++  # For C++ static initializers. wasm-ld can't do the relocatable link this
++  # needs: local-exec TLS relocations (every errno reference) have no
++  # encoding against an undefined symbol, and libc's errno is undefined
++  # until the final link. Consumers whole-archive these libraries instead.
++  prelink : host_machine.system() not in ['wasi', 'wasip1'],
+   install : true,
+ )
+
+--- a/src/libmain-c/meson.build	2026-07-22 22:22:27.137911274 +0200
++++ b/src/libmain-c/meson.build	2026-07-22 22:22:50.255600263 +0200
+@@ -49,7 +49,11 @@
+   dependencies : deps_public + deps_private + deps_other,
+   include_directories : include_dirs,
+   link_args : linker_export_flags,
+-  prelink : true, # For C++ static initializers
++  # For C++ static initializers. wasm-ld can't do the relocatable link this
++  # needs: local-exec TLS relocations (every errno reference) have no
++  # encoding against an undefined symbol, and libc's errno is undefined
++  # until the final link. Consumers whole-archive these libraries instead.
++  prelink : host_machine.system() not in ['wasi', 'wasip1'],
+   install : true,
+ )
+
+--- a/src/libmain/meson.build	2026-07-22 22:22:27.087911419 +0200
++++ b/src/libmain/meson.build	2026-07-22 22:22:50.255099587 +0200
+@@ -81,7 +81,11 @@
+   dependencies : deps_public + deps_private + deps_other,
+   include_directories : include_dirs,
+   link_args : linker_export_flags,
+-  prelink : true, # For C++ static initializers
++  # For C++ static initializers. wasm-ld can't do the relocatable link this
++  # needs: local-exec TLS relocations (every errno reference) have no
++  # encoding against an undefined symbol, and libc's errno is undefined
++  # until the final link. Consumers whole-archive these libraries instead.
++  prelink : host_machine.system() not in ['wasi', 'wasip1'],
+   install : true,
+ )
+
+--- a/src/libstore-c/meson.build	2026-07-22 22:22:27.152911230 +0200
++++ b/src/libstore-c/meson.build	2026-07-22 22:22:50.255728871 +0200
+@@ -52,7 +52,11 @@
+   dependencies : deps_public + deps_private + deps_other,
+   include_directories : include_dirs,
+   link_args : linker_export_flags,
+-  prelink : true, # For C++ static initializers
++  # For C++ static initializers. wasm-ld can't do the relocatable link this
++  # needs: local-exec TLS relocations (every errno reference) have no
++  # encoding against an undefined symbol, and libc's errno is undefined
++  # until the final link. Consumers whole-archive these libraries instead.
++  prelink : host_machine.system() not in ['wasi', 'wasip1'],
+   install : true,
+ )
+
+--- a/src/libstore/meson.build	2026-07-22 21:35:15.763105114 +0200
++++ b/src/libstore/meson.build	2026-07-22 22:22:50.254114500 +0200
+@@ -381,7 +381,11 @@
+   dependencies : deps_public + deps_private + deps_other,
+   include_directories : include_dirs,
+   link_args : linker_export_flags,
+-  prelink : true, # For C++ static initializers
++  # For C++ static initializers. wasm-ld can't do the relocatable link this
++  # needs: local-exec TLS relocations (every errno reference) have no
++  # encoding against an undefined symbol, and libc's errno is undefined
++  # until the final link. Consumers whole-archive these libraries instead.
++  prelink : host_machine.system() not in ['wasi', 'wasip1'],
+   install : true,
+   cpp_pch : do_pch ? [ 'pch/precompiled-headers.hh' ] : [],
+ )
+--- a/src/libstore-test-support/meson.build	2026-07-22 22:22:27.211911058 +0200
++++ b/src/libstore-test-support/meson.build	2026-07-22 22:22:50.256123598 +0200
+@@ -56,7 +56,11 @@
+   # TODO: Remove `-lrapidcheck` when https://github.com/emil-e/rapidcheck/pull/326
+   #       is available. See also ../libutil/build.meson
+   link_args : linker_export_flags + [ '-lrapidcheck' ],
+-  prelink : true, # For C++ static initializers
++  # For C++ static initializers. wasm-ld can't do the relocatable link this
++  # needs: local-exec TLS relocations (every errno reference) have no
++  # encoding against an undefined symbol, and libc's errno is undefined
++  # until the final link. Consumers whole-archive these libraries instead.
++  prelink : host_machine.system() not in ['wasi', 'wasip1'],
+   install : true,
+ )
+
+--- a/src/libutil-c/meson.build	2026-07-22 22:22:27.099911384 +0200
++++ b/src/libutil-c/meson.build	2026-07-22 22:22:50.255221347 +0200
+@@ -57,7 +57,11 @@
+   dependencies : deps_public + deps_private + deps_other,
+   include_directories : include_dirs,
+   link_args : linker_export_flags,
+-  prelink : true, # For C++ static initializers
++  # For C++ static initializers. wasm-ld can't do the relocatable link this
++  # needs: local-exec TLS relocations (every errno reference) have no
++  # encoding against an undefined symbol, and libc's errno is undefined
++  # until the final link. Consumers whole-archive these libraries instead.
++  prelink : host_machine.system() not in ['wasi', 'wasip1'],
+   install : true,
+ )
+
+--- a/src/libutil/meson.build	2026-07-22 21:35:15.751105148 +0200
++++ b/src/libutil/meson.build	2026-07-22 22:22:50.253847595 +0200
+@@ -215,7 +215,11 @@
+   dependencies : deps_public + deps_private + deps_other,
+   include_directories : include_dirs,
+   link_args : linker_export_flags,
+-  prelink : true, # For C++ static initializers
++  # For C++ static initializers. wasm-ld can't do the relocatable link this
++  # needs: local-exec TLS relocations (every errno reference) have no
++  # encoding against an undefined symbol, and libc's errno is undefined
++  # until the final link. Consumers whole-archive these libraries instead.
++  prelink : host_machine.system() not in ['wasi', 'wasip1'],
+   install : true,
+   cpp_pch : do_pch ? [ 'pch/precompiled-headers.hh' ] : [],
+ )
+--- a/src/libutil-test-support/meson.build	2026-07-22 22:22:27.163911198 +0200
++++ b/src/libutil-test-support/meson.build	2026-07-22 22:22:50.255869941 +0200
+@@ -47,7 +47,11 @@
+   # TODO: Remove `-lrapidcheck` when https://github.com/emil-e/rapidcheck/pull/326
+   #       is available. See also ../libutil/build.meson
+   link_args : linker_export_flags + [ '-lrapidcheck' ],
+-  prelink : true, # For C++ static initializers
++  # For C++ static initializers. wasm-ld can't do the relocatable link this
++  # needs: local-exec TLS relocations (every errno reference) have no
++  # encoding against an undefined symbol, and libc's errno is undefined
++  # until the final link. Consumers whole-archive these libraries instead.
++  prelink : host_machine.system() not in ['wasi', 'wasip1'],
+   install : true,
+ )

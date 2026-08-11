@@ -1,0 +1,198 @@
+Report the POSIX APIs wasi does not have as unimplemented.
+
+  - pseudoterminals: wasi has none and wasix-libc has no ptsname_r/unlockpt.
+    Only the derivation builder opens one, and that never runs here.
+  - fork: wasix has it only in its asyncify build, which the wasm
+    exception-handling ABI this target uses rules out. Failing in doFork turns
+    every spawn into the existing "unable to fork" error.
+  - sync(): wasi can only flush a file descriptor it holds.
+  - flock() and POSIX record locks: neither exists, and nothing here shares a
+    store with another process, so every lock is reported as taken.
+  - getifaddrs: declared by wasix-libc but defined under another name, so it
+    does not link; assume we are online, as on Windows.
+  - dlopen: no dlfcn.h, so builtins.importNative, builtins.exec and plugin
+    loading drop out the same way they do on Windows. The first two are gated
+    on the native-code setting; loading a plugin now reports the same error
+    Windows gives. Boost.Stacktrace has no backend either, so the crash handler
+    prints an empty trace.
+
+--- a/src/libutil/terminal.cc	2026-07-22 21:47:04.812057728 +0200
++++ b/src/libutil/terminal.cc	2026-07-22 21:47:30.892982423 +0200
+@@ -194,7 +194,12 @@
+ #ifndef _WIN32
+ std::string getPtsName(int fd)
+ {
+-#  ifdef __APPLE__
++#  ifdef __wasi__
++    // wasi has no pseudoterminals at all. Only the derivation builder calls
++    // this, and that never runs here.
++    (void) fd;
++    throw UnimplementedError("pseudoterminals are not available on this platform");
++#  elif defined(__APPLE__)
+     static std::mutex ptsnameMutex;
+     // macOS doesn't have ptsname_r, use mutex-protected ptsname
+     std::lock_guard<std::mutex> lock(ptsnameMutex);
+--- a/src/libutil/unix/processes.cc	2026-07-22 21:50:29.028465871 +0200
++++ b/src/libutil/unix/processes.cc	2026-07-22 21:52:14.191160864 +0200
+@@ -190,15 +190,25 @@
+
+ static pid_t doFork(bool allowVfork, ChildWrapperFunction & fun)
+ {
+-#ifdef __linux__
+-    pid_t pid = allowVfork ? vfork() : fork();
++#ifdef __wasi__
++    /* wasix exposes fork() only in its asyncify build, which the wasm
++       exception-handling ABI used here rules out. Nothing on the eval path
++       spawns a process; the caller reports this as "unable to fork". */
++    (void) allowVfork;
++    (void) fun;
++    errno = ENOSYS;
++    return -1;
+ #else
++#  ifdef __linux__
++    pid_t pid = allowVfork ? vfork() : fork();
++#  else
+     pid_t pid = fork();
+-#endif
++#  endif
+     if (pid != 0)
+         return pid;
+     fun();
+     unreachable();
++#endif
+ }
+
+ #ifdef __linux__
+--- a/src/libstore/local-store.cc	2026-07-22 22:29:31.724984821 +0200
++++ b/src/libstore/local-store.cc	2026-07-22 22:29:31.759912297 +0200
+@@ -895,7 +895,8 @@
+
+ void LocalStore::registerValidPaths(const ValidPathInfos & infos)
+ {
+-#ifndef _WIN32
++/* wasi has no sync(): it can only flush a file descriptor it holds. */
++#if !defined(_WIN32) && !defined(__wasi__)
+     /* SQLite will fsync by default, but the new valid paths may not
+        be fsync-ed.  So some may want to fsync them before registering
+        the validity, at the expense of some speed of the path
+--- a/src/libstore/unix/build/derivation-builder.cc	2026-07-22 22:31:26.001345319 +0200
++++ b/src/libstore/unix/build/derivation-builder.cc	2026-07-22 22:58:04.495928654 +0200
+@@ -849,6 +849,10 @@
+     miscMethods->openLogFile();
+
+     /* Create a pseudoterminal to get the output of the builder. */
++#ifdef __wasi__
++    /* wasi has no pseudoterminals, and no fork to run a builder in either. */
++    throw UnimplementedError("building derivations is not supported on this platform");
++#else
+     builderOut = posix_openpt(O_RDWR | O_NOCTTY);
+     if (!builderOut)
+         throw SysError("opening pseudoterminal master");
+@@ -870,6 +874,7 @@
+
+     if (unlockpt(builderOut.get()))
+         throw SysError("unlocking pseudoterminal");
++#endif
+
+     buildResult.startTime = time(nullptr);
+
+--- a/src/libmain/plugin.cc	2026-07-22 22:38:57.299033871 +0200
++++ b/src/libmain/plugin.cc	2026-07-22 22:39:11.766689016 +0200
+@@ -1,4 +1,4 @@
+-#ifndef _WIN32
++#if !defined(_WIN32) && !defined(__wasi__)
+ #  include <dlfcn.h>
+ #endif
+
+@@ -92,7 +92,7 @@
+             checkInterrupt();
+             /* handle is purposefully leaked as there may be state in the
+                DSO needed by the action of the plugin. */
+-#ifndef _WIN32 // TODO implement via DLL loading on Windows
++#if !defined(_WIN32) && !defined(__wasi__) // TODO implement via DLL loading on Windows
+             void * handle = dlopen(file.c_str(), RTLD_LAZY | RTLD_LOCAL);
+             if (!handle)
+                 throw Error("could not dynamically open plugin file %s: %s", PathFmt(file), dlerror());
+--- a/src/nix/crash-handler.cc	2026-07-22 22:44:19.923096679 +0200
++++ b/src/nix/crash-handler.cc	2026-07-22 22:44:19.949443345 +0200
+@@ -12,6 +12,12 @@
+ #  define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED
+ #endif
+
++#ifdef __wasi__
++// Every Boost.Stacktrace backend needs either dlfcn.h or a platform unwinder;
++// wasi has neither, so traces come out empty.
++#  define BOOST_STACKTRACE_USE_NOOP
++#endif
++
+ #include <boost/stacktrace/stacktrace.hpp>
+
+ #ifndef _WIN32
+--- a/src/nix/main.cc	2026-07-22 22:58:04.454701334 +0200
++++ b/src/nix/main.cc	2026-07-22 23:21:59.807206155 +0200
+@@ -55,7 +55,9 @@
+ /* Check if we have a non-loopback/link-local network interface. */
+ static bool haveInternet()
+ {
+-#ifndef _WIN32
++/* wasix-libc declares getifaddrs but only defines getif_addrs (WASIX-TODO.md),
++   so this cannot link. Assume we are online, as on Windows. */
++#if !defined(_WIN32) && !defined(__wasi__)
+     struct ifaddrs * addrs;
+
+     if (getifaddrs(&addrs))
+--- a/src/libstore/unix/pathlocks.cc	2026-07-22 22:58:04.467701296 +0200
++++ b/src/libstore/unix/pathlocks.cc	2026-07-22 22:58:04.495142392 +0200
+@@ -39,6 +39,14 @@
+
+ bool lockFile(Descriptor desc, LockType lockType, bool wait)
+ {
++#ifdef __wasi__
++    /* wasi has neither flock() nor POSIX record locks. Nothing here shares a
++       store with another process, so report every lock as taken. */
++    (void) desc;
++    (void) lockType;
++    (void) wait;
++    return true;
++#else
+     int type;
+     if (lockType == ltRead)
+         type = LOCK_SH;
+@@ -68,6 +76,7 @@
+     }
+
+     return true;
++#endif
+ }
+
+ bool PathLocks::lockPaths(const std::set<std::filesystem::path> & paths, const std::string & waitMsg, bool wait)
+--- a/src/libexpr/primops.cc	2026-07-22 23:24:51.014770058 +0200
++++ b/src/libexpr/primops.cc	2026-07-22 22:36:05.525138829 +0200
+@@ -33,7 +33,8 @@
+ #include <sstream>
+ #include <regex>
+
+-#ifndef _WIN32
++/* wasi has no dlfcn.h; see the importNative/exec primops below. */
++#if !defined(_WIN32) && !defined(__wasi__)
+ #  include <dlfcn.h>
+ #endif
+
+@@ -435,7 +436,7 @@
+          import(state, pos, *args[0], nullptr, v);
+      }});
+
+-#ifndef _WIN32 // TODO implement via DLL loading on Windows
++#if !defined(_WIN32) && !defined(__wasi__) // TODO implement via DLL loading on Windows
+
+ /* Want reasonable symbol names, so extern C */
+ /* !!! Should we pass the Pos or the file name too? */
+@@ -5350,7 +5351,7 @@
+         )",
+         });
+
+-#ifndef _WIN32 // TODO implement on Windows
++#if !defined(_WIN32) && !defined(__wasi__) // TODO implement on Windows
+     // Miscellaneous
+     if (settings.enableNativeCode) {
+         addPrimOp({

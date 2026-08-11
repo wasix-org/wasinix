@@ -1,0 +1,41 @@
+Skip the Boost.Iostreams memory-mapped read path on wasi.
+
+readFile()'s fast path maps the file with boost::iostreams::mapped_file_source,
+a compiled Boost library with no wasm32 build. The streaming fallback right
+below it is already the general path.
+
+--- a/src/libutil/file-system.cc	2026-07-22 21:35:15.740105180 +0200
++++ b/src/libutil/file-system.cc	2026-07-22 21:36:19.881919980 +0200
+@@ -21,8 +21,10 @@
+ #include <sys/time.h>
+ #include <unistd.h>
+
+-#include <boost/iostreams/device/mapped_file.hpp>
+-#include <boost/filesystem/path.hpp>
++#ifndef __wasi__
++#  include <boost/iostreams/device/mapped_file.hpp>
++#  include <boost/filesystem/path.hpp>
++#endif
+
+ #ifdef __FreeBSD__
+ #  include <sys/param.h>
+@@ -272,6 +274,9 @@
+ void readFile(const std::filesystem::path & path, Sink & sink, bool memory_map)
+ {
+     // Memory-map the file for faster processing where possible.
++    // Boost.Iostreams has no wasm32 build (see the include above), so wasi
++    // always takes the streaming path.
++#ifndef __wasi__
+     if (memory_map) {
+         try {
+             /* mapped_file_source can't be constructed from a std::filesystem::path. */
+@@ -284,6 +289,9 @@
+         }
+         debug("memory-mapping failed for path: %s", PathFmt(path));
+     }
++#else
++    (void) memory_map;
++#endif
+
+     // Stream the file instead if memory-mapping fails or is disabled.
+     auto fd = openFileReadonly(std::filesystem::path(path));
