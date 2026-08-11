@@ -33,7 +33,7 @@ in
       owner = "DataDog";
       repo = "dd-trace-py";
       tag = "v${version}";
-      hash = "sha256-iEABtHcmjhdhoV5L30fXeRw3YFWMyNUrcfekyBj57PQ=";
+      hash = "sha256-5YQENtzc1BET5RMvNa5nrh+N9TFvUXuZct2L6a5i0GQ=";
     };
 
     cargoRoot = "src/native";
