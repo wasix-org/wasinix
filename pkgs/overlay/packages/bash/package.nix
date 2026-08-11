@@ -15,7 +15,11 @@ in
     configureFlags = [
       "--without-bash-malloc" # bash's malloc assumes sbrk/brk; use libc's.
       "--disable-nls"
-      "--disable-process-substitution" # needs mkfifo/mknod, absent on WASIX.
+      # Process substitution over /dev/fd, which the runtime resolves to the
+      # caller's fd. mkfifo is ENOSYS, so deny the named-pipe path outright
+      # rather than let bash fall back to it.
+      "bash_cv_dev_fd=standard"
+      "bash_cv_sys_named_pipes=missing"
       "--disable-job-control" # no process groups; setpgid() EINVAL spam.
       "bash_cv_getenv_redef=no" # else getenv.o redefines putenv/setenv, clashes under wasm-ld.
       # libc's sigsetjmp ignores the signal mask, so take bash's own save/restore.
@@ -29,6 +33,12 @@ in
       substituteInPlace lib/sh/getcwd.c \
         --replace-fail '#if !defined (HAVE_GETCWD)' \
                        '#if !defined (HAVE_GETCWD) && !defined(__wasi__)'
+      # Without mkfifo, bash builds its own out of mknod, which WASIX lacks
+      # too. Process substitution only reaches that path when HAVE_DEV_FD is
+      # unset, and it is set here.
+      substituteInPlace lib/sh/oslib.c \
+        --replace-fail '#if !defined (HAVE_MKFIFO) && defined (PROCESS_SUBSTITUTION)' \
+                       '#if !defined (HAVE_MKFIFO) && defined (PROCESS_SUBSTITUTION) && !defined(__wasi__)'
     '';
     passthru.wasix.supportedProfiles = ["off"];
     passthru.wasix.shipped = true;

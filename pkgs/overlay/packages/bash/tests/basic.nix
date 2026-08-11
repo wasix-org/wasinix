@@ -76,6 +76,28 @@ in {
     '';
   };
 
+  # Process substitution names a pipe as /dev/fd/<n> and hands it to a child,
+  # so the runtime has to resolve that path against the opener's own fds.
+  process-substitution = testLib.mkWasixRun {
+    name = "bash-process-substitution";
+    wasixPkgs = [bashPkg];
+    script = ''
+      out=$(bash -c 'read -r line < <(echo from-procsub); echo "$line"')
+      if [ "$out" != "from-procsub" ]; then
+        echo "reading <(...) failed: $out"
+        exit 1
+      fi
+      # The name must survive being passed to a child that opens it itself.
+      out=$(bash -c 'cat <(echo piped-in)')
+      if [ "$out" != "piped-in" ]; then
+        echo "child could not open the substituted fd: $out"
+        exit 1
+      fi
+      bash -c 'echo to-procsub > >(cat > /dev/null)'
+      echo procsub-ok
+    '';
+  };
+
   # Interactive mode: readline must initialize and run commands. Feed a line on
   # stdin (a pipe, not a tty); -i forces interactive, EOF exits.
   interactive = testLib.mkWasixRun {
