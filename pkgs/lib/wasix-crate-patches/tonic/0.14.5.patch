@@ -1,0 +1,29 @@
+--- a/src/transport/channel/uds_connector.rs
++++ b/src/transport/channel/uds_connector.rs
+@@ -9,10 +9,10 @@
+ 
+ use crate::status::ConnectError;
+ 
+-#[cfg(not(target_os = "windows"))]
++#[cfg(unix)]
+ use tokio::net::UnixStream;
+ 
+-#[cfg(not(target_os = "windows"))]
++#[cfg(unix)]
+ async fn connect_uds(uds_path: String) -> Result<UnixStream, ConnectError> {
+     UnixStream::connect(uds_path)
+         .await
+@@ -21,11 +21,11 @@
+ 
+ // Dummy type that will allow us to compile and match trait bounds
+ // but is never used.
+-#[cfg(target_os = "windows")]
++#[cfg(not(unix))]
+ #[allow(dead_code)]
+ type UnixStream = tokio::io::DuplexStream;
+ 
+-#[cfg(target_os = "windows")]
++#[cfg(not(unix))]
+ async fn connect_uds(_uds_path: String) -> Result<UnixStream, ConnectError> {
+     Err(ConnectError(
+         "uds connections are not allowed on windows".into(),

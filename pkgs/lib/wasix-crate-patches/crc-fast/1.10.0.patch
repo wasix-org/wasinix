@@ -1,0 +1,11 @@
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -75,8 +75,6 @@
+ name = "crc_fast"
+ crate-type = [
+     "lib",
+-    "cdylib",
+-    "staticlib",
+ ]
+ path = "src/lib.rs"
+ bench = true

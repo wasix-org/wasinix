@@ -1,0 +1,35 @@
+--- a/src/credentials/external_account_sources/executable_sourced.rs
++++ b/src/credentials/external_account_sources/executable_sourced.rs
+@@ -26,6 +26,7 @@
+     fmt::{Display, Formatter},
+     time::{Duration, SystemTime, UNIX_EPOCH},
+ };
++#[cfg(not(target_os = "wasi"))]
+ use tokio::{process::Command, time::timeout as tokio_timeout};
+ 
+ #[derive(Serialize, Deserialize, Debug, Clone)]
+@@ -142,6 +143,7 @@
+ 
+     /// See details on security reason on [executable sourced credentials].
+     /// [executable sourced credentials]: https://google.aip.dev/auth/4117#determining-the-subject-token-in-executable-sourced-credentials
++    #[cfg(not(target_os = "wasi"))]
+     async fn from_command(command: String, args: Vec<String>, timeout: Duration) -> Result<String> {
+         // For security reasons, we need our consumers to set this environment variable to allow executables to be run.
+         let allow_executable = std::env::var(ALLOW_EXECUTABLE_ENV)
+@@ -178,6 +180,16 @@
+         Self::parse_token(output)
+     }
+ 
++    // wasix has no subprocess spawning via tokio::process; executable-sourced
++    // external-account credentials are unsupported.
++    #[cfg(target_os = "wasi")]
++    async fn from_command(_command: String, _args: Vec<String>, _timeout: Duration) -> Result<String> {
++        Err(CredentialsError::from_msg(
++            false,
++            "executable-sourced credentials are not supported on wasix",
++        ))
++    }
++
+     /// Parses a full command string into a command and its arguments.
+     fn split_command(command: String) -> (String, Vec<String>) {
+         let mut parts = command.split_whitespace();

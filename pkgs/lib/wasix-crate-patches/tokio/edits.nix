@@ -20,7 +20,7 @@
     hasResidual = lib.versionAtLeast version "1.52.3";
   in {
     patches = lib.optional (!modern || hasResidual) floorPatch;
-    patchPhase = lib.optionalString modern ''
+    patchPhase = lib.optionalString (modern && !hasResidual) ''
       needle='    target_family = "wasm",'
       replacement='    all(target_family = "wasm", not(target_vendor = "wasmer")),'
       matches="$(grep -Fxc "$needle" src/lib.rs)" || {

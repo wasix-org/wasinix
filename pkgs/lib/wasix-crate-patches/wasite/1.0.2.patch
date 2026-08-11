@@ -1,0 +1,29 @@
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,6 +1,11 @@
+ //! Abstraction over Wasite - Terminal interface conventions for WASI
+ 
+-#![no_std]
++// wasix: the stock crate targets WASI preview 2 via the `wasi` component-model
++// crate (`wasi:cli/environment`), an import a preview1 host (wasmer/wasix)
++// cannot satisfy. On wasi read the environment through std (preview1
++// `environ_get`); the unused terminal ops (`state`/`execute`) the object store
++// never calls are dropped by the linker.
++#![cfg_attr(not(target_os = "wasi"), no_std)]
+ #![forbid(unsafe_code)]
+ #![doc(
+     html_logo_url = "https://ardaku.github.io/mm/logo.svg",
+@@ -159,7 +164,12 @@
+         },
+     };
+ 
+-    for (key, value) in wasi::cli::environment::get_environment() {
++    #[cfg(not(target_os = "wasi"))]
++    let vars = wasi::cli::environment::get_environment();
++    #[cfg(target_os = "wasi")]
++    let vars = std::env::vars();
++
++    for (key, value) in vars {
+         match key.as_str() {
+             "USER" => env.user.username = value,
+             "HOSTNAME" => env.host.hostname = value,

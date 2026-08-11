@@ -405,9 +405,19 @@ in
         # setEnv points CARGO_TARGET_<wasm>_LINKER at the wasi clang, which can't
         # take rustc's raw wasm-ld flags; override it with the toolchain's rust-lld
         # (the spec's native flavor). Flows through cargoBuildHook to cargo-wasix.
-        cargoBuildFlags =
+        cargoBuildFlags = let
+          inherited = prevArgs.cargoBuildFlags or [];
+          # Nixpkgs still has a few simple shell-word strings despite the hook's
+          # list interface. Normalize them before adding the WASIX linker argv.
+          normalized =
+            if builtins.isList inherited
+            then inherited
+            else if builtins.isString inherited
+            then lib.filter (arg: arg != "") (lib.splitString " " inherited)
+            else throw "wasix rustPlatform: cargoBuildFlags must be a list or string";
+        in
           ["--config" ''target.wasm32-wasmer-wasi.linker="${rustLld}"'']
-          ++ (prevArgs.cargoBuildFlags or []);
+          ++ normalized;
 
         # Install each CLI cargo-wasix emitted (<name>.wasm; skip its .wasi/.rustc
         # intermediates).

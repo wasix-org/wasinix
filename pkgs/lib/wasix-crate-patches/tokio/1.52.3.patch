@@ -1,6 +1,5 @@
-diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' a/Cargo.toml b/Cargo.toml
---- a/Cargo.toml	2006-07-24 03:21:28.000000000 +0200
-+++ b/Cargo.toml	2026-07-21 18:32:43.100402757 +0200
+--- a/Cargo.toml
++++ b/Cargo.toml
 @@ -978,5 +978,6 @@
      "cfg(tokio_no_parking_lot)",
      "cfg(tokio_no_tuning_tests)",
@@ -8,13 +7,17 @@ diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' a/Cargo.toml b
 +    "cfg(tokio_wasix_waker)",
      'cfg(target_os, values("cygwin"))',
  ]
-diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' a/src/lib.rs b/src/lib.rs
---- a/src/lib.rs	2006-07-24 03:21:28.000000000 +0200
-+++ b/src/lib.rs	2026-07-21 18:32:43.087993058 +0200
-@@ -22,6 +22,10 @@
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -22,6 +22,15 @@
  #![cfg_attr(docsrs, allow(unused_attributes))]
  #![cfg_attr(loom, allow(dead_code, unreachable_pub))]
  #![cfg_attr(windows, allow(rustdoc::broken_intra_doc_links))]
++// The wasix std fork aliases `std::os::unix` to `std::os::wasi` on wasmer
++// (`library/std/src/os/mod.rs`), and its `os/wasix/fs.rs` carries
++// `#![unstable(feature = "wasi_ext")]`. So the fs-feature code paths that reach
++// the `std::os::unix::fs` extension traits land in a nightly-gated module and
++// need the feature opted in. Drop this once the fork stabilises those.
 +#![cfg_attr(
 +    all(feature = "fs", target_os = "wasi", target_vendor = "wasmer"),
 +    feature(wasi_ext)
@@ -22,21 +25,32 @@ diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' a/src/lib.rs b
  
  //! A runtime for writing reliable network applications without compromising speed.
  //!
-diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' a/src/net/tcp/stream.rs b/src/net/tcp/stream.rs
---- a/src/net/tcp/stream.rs	2006-07-24 03:21:28.000000000 +0200
-+++ b/src/net/tcp/stream.rs	2026-07-21 18:32:43.088980477 +0200
-@@ -1564,7 +1564,7 @@
+@@ -465,7 +474,7 @@
+ 
+ #[cfg(all(
+     not(tokio_unstable),
+-    target_family = "wasm",
++    all(target_family = "wasm", not(target_vendor = "wasmer")),
+     any(
+         feature = "fs",
+         feature = "io-std",
+--- a/src/net/tcp/stream.rs
++++ b/src/net/tcp/stream.rs
+@@ -1564,7 +1564,11 @@
      }
  }
  
 -#[cfg(all(tokio_unstable, target_os = "wasi"))]
++// Upstream also gates this on `tokio_unstable`. We do not build with that cfg,
++// and the wasix stack takes raw fds from tokio sockets, so the impls have to be
++// available on a stable-cfg build. Additive (trait impls only), unlike the
++// `tokio_wasix_waker` gates below which must stay opt-in.
 +#[cfg(target_os = "wasi")]
  mod sys {
      use super::TcpStream;
      use std::os::fd::{AsFd, AsRawFd, BorrowedFd, RawFd};
-diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' a/src/runtime/io/driver.rs b/src/runtime/io/driver.rs
---- a/src/runtime/io/driver.rs	2006-07-24 03:21:28.000000000 +0200
-+++ b/src/runtime/io/driver.rs	2026-07-21 18:32:43.095970719 +0200
+--- a/src/runtime/io/driver.rs
++++ b/src/runtime/io/driver.rs
 @@ -46,7 +46,7 @@
  
      /// Used to wake up the reactor from a call to `turn`.
@@ -64,7 +78,7 @@ diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' a/src/runtime/
              waker,
              metrics: IoDriverMetrics::default(),
              #[cfg(all(
-@@ -189,9 +189,16 @@
+@@ -189,9 +189,18 @@
              Ok(()) => {}
              Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {}
              #[cfg(target_os = "wasi")]
@@ -77,14 +91,16 @@ diff -ruN '--exclude=.cargo-checksum.json' '--exclude=Cargo.lock' a/src/runtime/
 +                    io::ErrorKind::InvalidInput | io::ErrorKind::Unsupported
 +                ) =>
 +            {
-+                // wasm32-wasi: an empty subscription set has nothing to wait on.
-+                // The reference runtime returns InvalidInput here; wasmer/wasix
-+                // returns Unsupported (ENOTSUP). Either way just return from the
-+                // park (see WASIX-TODO: wasmer poll_oneoff errno for empty sets).
++                // wasm32-wasi: InvalidInput is the reference runtime's errno for
++                // a poll with no subscriptions, i.e. nothing to wait on, so just
++                // return from the park. Unsupported is tolerated the same way so
++                // that an errno we did not anticipate cannot abort the process
++                // from inside the I/O driver (see WASIX-TODO.md, "tokio's I/O
++                // driver panics on an unexpected park errno").
              }
              Err(e) => panic!("unexpected error when polling the I/O driver: {e:?}"),
          }
-@@ -256,7 +263,7 @@
+@@ -256,7 +265,7 @@
      /// blocked in `turn`, then the next call to `turn` will not block and
      /// return immediately.
      pub(crate) fn unpark(&self) {

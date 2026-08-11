@@ -1,0 +1,94 @@
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,5 +1,6 @@
+ //! A small, cross-platform crate for creating symlinks.
+ //!
++#![cfg_attr(target_os = "wasi", feature(wasi_ext))]
+-#![cfg_attr(not(any(target_os = "redox", unix, windows)), doc = "**This platform is not Unix, Windows or Redox; symlinks are not available.**")]
++#![cfg_attr(not(any(target_os = "redox", unix, windows, target_os = "wasi")), doc = "**This platform is not Unix, Windows or Redox; symlinks are not available.**")]
+ //!
+ //! For efficiency, you should prefer to use `symlink_file` or `symlink_dir`—whichever is
+@@ -14,19 +15,28 @@
+ #[cfg(windows)]
+ #[path = "windows/mod.rs"]
+ mod internal;
+ 
+-#[cfg(any(target_os = "redox", unix))]
++#[cfg(all(any(target_os = "redox", unix), not(target_os = "wasi")))]
+ mod internal {
+     pub use std::fs::remove_file as remove_symlink_dir;
+     pub use std::fs::remove_file as remove_symlink_auto;
+     // Note that this symlink function takes src and dst as &Path rather than as impl AsRef<Path>.
+     // I don’t know why that is, but I think we’ll go with impl AsRef<Path> in our public
+     // functions. Because of this disparity of signature, when I say that things are equivalent to
+     // calling std::os::unix::fs::symlink on Unix, you can see that I’m not being *quite* rigorous.
+     pub use std::os::unix::fs::{symlink as symlink_auto,
+                                 symlink as symlink_file,
+                                 symlink as symlink_dir};
+ }
++
++#[cfg(target_os = "wasi")]
++mod internal {
++    pub use std::fs::remove_file as remove_symlink_dir;
++    pub use std::fs::remove_file as remove_symlink_auto;
++    pub use std::os::wasi::fs::{symlink_path as symlink_auto,
++                                symlink_path as symlink_file,
++                                symlink_path as symlink_dir};
++}
+ 
+ /// Create a symlink (non-preferred way).
+ ///
+@@ -49,7 +59,7 @@
+ ///
+ /// An error will be returned if the symlink cannot be created, or—on Windows—if the destination
+ /// does not exist or cannot be read.
+-#[cfg(any(target_os = "redox", unix, windows))]
++#[cfg(any(target_os = "redox", unix, windows, target_os = "wasi"))]
+ #[inline]
+ pub fn symlink_auto<P: AsRef<Path>, Q: AsRef<Path>>(src: P, dst: Q) -> io::Result<()> {
+     internal::symlink_auto(src.as_ref(), dst.as_ref())
+@@ -67,7 +77,7 @@
+ /// # Errors
+ ///
+ /// An error will be returned if the symlink cannot be created.
+-#[cfg(any(target_os = "redox", unix, windows))]
++#[cfg(any(target_os = "redox", unix, windows, target_os = "wasi"))]
+ #[inline]
+ pub fn symlink_file<P: AsRef<Path>, Q: AsRef<Path>>(src: P, dst: Q) -> io::Result<()> {
+     internal::symlink_file(src.as_ref(), dst.as_ref())
+@@ -85,7 +95,7 @@
+ /// # Errors
+ ///
+ /// An error will be returned if the symlink cannot be created.
+-#[cfg(any(target_os = "redox", unix, windows))]
++#[cfg(any(target_os = "redox", unix, windows, target_os = "wasi"))]
+ #[inline]
+ pub fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(src: P, dst: Q) -> io::Result<()> {
+     internal::symlink_dir(src.as_ref(), dst.as_ref())
+@@ -107,7 +117,7 @@
+ /// # Errors
+ ///
+ /// An error will be returned if the symlink cannot be removed.
+-#[cfg(any(target_os = "redox", unix, windows))]
++#[cfg(any(target_os = "redox", unix, windows, target_os = "wasi"))]
+ #[inline]
+ pub fn remove_symlink_auto<P: AsRef<Path>>(path: P) -> io::Result<()> {
+     internal::remove_symlink_auto(path)
+@@ -118,7 +128,7 @@
+ /// On Windows, this corresponds to `std::fs::remove_dir`.
+ ///
+ /// On Unix, this corresponds to `std::fs::remove_file`.
+-#[cfg(any(target_os = "redox", unix, windows))]
++#[cfg(any(target_os = "redox", unix, windows, target_os = "wasi"))]
+ #[inline]
+ pub fn remove_symlink_dir<P: AsRef<Path>>(path: P) -> io::Result<()> {
+     internal::remove_symlink_dir(path)
+@@ -130,7 +140,7 @@
+ /// `remove_symlink_dir`.
+ ///
+ /// On Unix, this corresponds to `std::fs::remove_file`.
+-#[cfg(any(target_os = "redox", unix, windows))]
++#[cfg(any(target_os = "redox", unix, windows, target_os = "wasi"))]
+ #[inline]
+ pub fn remove_symlink_file<P: AsRef<Path>>(path: P) -> io::Result<()> {
+     fs::remove_file(path)

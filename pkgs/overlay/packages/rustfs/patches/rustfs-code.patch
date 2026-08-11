@@ -1,0 +1,322 @@
+--- a/crates/ecstore/src/client/api_get_object_file.rs
++++ b/crates/ecstore/src/client/api_get_object_file.rs
+@@ -15,7 +15,7 @@
+ use std::io;
+ use std::path::{Path, PathBuf};
+ 
+-#[cfg(not(windows))]
++#[cfg(unix)]
+ use std::os::unix::fs::PermissionsExt;
+ 
+ use tokio::fs::{self, OpenOptions};
+@@ -40,7 +40,7 @@
+     {
+         fs::create_dir_all(parent).await?;
+ 
+-        #[cfg(not(windows))]
++        #[cfg(unix)]
+         {
+             let mut permissions = fs::metadata(parent).await?.permissions();
+             permissions.set_mode(0o700);
+@@ -59,7 +59,7 @@
+     let mut options = OpenOptions::new();
+     options.create(true).read(true).write(true);
+ 
+-    #[cfg(not(windows))]
++    #[cfg(unix)]
+     options.mode(0o600);
+ 
+     options.open(file_part_path).await
+--- a/crates/ecstore/src/disk/fs.rs
++++ b/crates/ecstore/src/disk/fs.rs
+@@ -50,7 +50,7 @@
+     })
+ }
+ 
+-#[cfg(not(windows))]
++#[cfg(unix)]
+ pub fn same_file(f1: &Metadata, f2: &Metadata) -> bool {
+     use std::os::unix::fs::MetadataExt;
+ 
+@@ -76,7 +76,7 @@
+     true
+ }
+ 
+-#[cfg(windows)]
++#[cfg(not(unix))]
+ pub fn same_file(f1: &Metadata, f2: &Metadata) -> bool {
+     if f1.permissions() != f2.permissions() {
+         return false;
+--- a/crates/ecstore/src/disk/os.rs
++++ b/crates/ecstore/src/disk/os.rs
+@@ -762 +762,34 @@
+-    #[cfg(all(not(unix), not(windows)))]
++    #[cfg(target_os = "wasi")]
++    {
++        let mut current = base_dir.to_path_buf();
++        let metadata = std::fs::symlink_metadata(&current)?;
++        if metadata.file_type().is_symlink() || !metadata.is_dir() {
++            return Err(io::Error::new(
++                io::ErrorKind::InvalidInput,
++                "rename base must be a real directory",
++            ));
++        }
++
++        for component in relative.components() {
++            let Component::Normal(component) = component else {
++                continue;
++            };
++            current.push(component);
++            match std::fs::create_dir(&current) {
++                Ok(()) => {}
++                Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {}
++                Err(err) => return Err(err),
++            }
++            let metadata = std::fs::symlink_metadata(&current)?;
++            if metadata.file_type().is_symlink() || !metadata.is_dir() {
++                return Err(io::Error::new(
++                    io::ErrorKind::InvalidInput,
++                    "rename destination contains a symlink or non-directory component",
++                ));
++            }
++        }
++
++        Ok(())
++    }
++
++    #[cfg(all(not(unix), not(windows), not(target_os = "wasi")))]
+@@ -887,0 +888,6 @@
++    // wasix std does not categorize WASI ENOTEMPTY (55) as
++    // DirectoryNotEmpty, so recognize its raw errno as well.
++    #[cfg(target_os = "wasi")]
++    if err.raw_os_error() == Some(55) {
++        return true;
++    }
+--- a/crates/ecstore/src/layout/endpoints.rs
++++ b/crates/ecstore/src/layout/endpoints.rs
+@@ -1252,7 +1252,7 @@
+         };
+         let canonical_path = canonical.to_string_lossy().into_owned();
+         diagnostic.canonical_path = Some(canonical_path.clone());
+-        #[cfg(not(windows))]
++        #[cfg(unix)]
+         if let Ok(stat) = rustix::fs::stat(canonical.as_path()) {
+             diagnostic.device_numbers = Some(format!("{}:{}", rustix::fs::major(stat.st_dev), rustix::fs::minor(stat.st_dev)));
+         }
+--- a/crates/ecstore/src/store/init.rs
++++ b/crates/ecstore/src/store/init.rs
+@@ -338,8 +338,12 @@
+                         retry_delay_secs = interval,
+                         "Retrying storage format load"
+                     );
++                    #[cfg(not(target_os = "wasi"))]
++                    let ctrl_c = tokio::signal::ctrl_c();
++                    #[cfg(target_os = "wasi")]
++                    let ctrl_c = std::future::pending::<std::io::Result<()>>();
+                     select! {
+-                        _ = tokio::signal::ctrl_c() => {
++                        _ = ctrl_c => {
+                             info!(
+                                 event = EVENT_STORE_FORMAT_RETRY,
+                                 component = LOG_COMPONENT_ECSTORE,
+--- a/crates/targets/src/target/redis.rs
++++ b/crates/targets/src/target/redis.rs
+@@ -34,8 +34,10 @@
+     AsyncCommands, Client, ClientTlsConfig, ConnectionInfo, IntoConnectionInfo, RedisError, TlsCertificates,
+     aio::{ConnectionManager, ConnectionManagerConfig},
+     cmd,
+-    io::tcp::{TcpSettings, socket2},
++    io::tcp::TcpSettings,
+ };
++#[cfg(not(target_family = "wasm"))]
++use redis::io::tcp::socket2;
+ use rustfs_config::{REDIS_TLS_CA, REDIS_TLS_CLIENT_CERT, REDIS_TLS_CLIENT_KEY, REDIS_TLS_POLICY};
+ use rustls::pki_types::CertificateDer;
+ use rustls::pki_types::pem::PemObject;
+--- a/crates/utils/src/os/mod.rs
++++ b/crates/utils/src/os/mod.rs
+@@ -23,6 +23,9 @@
+ #[cfg(target_os = "windows")]
+ mod windows;
+ 
++#[cfg(all(not(unix), not(windows)))]
++mod wasi;
++
+ #[cfg(target_os = "linux")]
+ pub use linux::{check_cross_device_mounts, get_drive_stats, get_info, get_physical_device_ids, same_disk};
+ 
+@@ -34,6 +37,9 @@
+     check_cross_device_mounts, get_drive_stats, get_info, get_physical_device_ids, get_volume_serial_number, same_disk,
+ };
+ 
++#[cfg(all(not(unix), not(windows)))]
++pub use wasi::{check_cross_device_mounts, get_drive_stats, get_info, get_physical_device_ids, same_disk};
++
+ #[derive(Debug, Default, PartialEq)]
+ pub struct IOStats {
+     pub read_ios: u64,
+--- a/crates/utils/src/os/wasi.rs
++++ b/crates/utils/src/os/wasi.rs
+@@ -0,0 +1,39 @@
++// Copyright 2024 RustFS Team
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++// wasix has no statvfs, block-device introspection, or /proc; these are
++// best-effort stubs so the storage engine builds. Capacity/rotational/IO stats
++// are unavailable and reported as defaults.
++use super::{DiskInfo, IOStats};
++use std::path::Path;
++
++pub fn get_info(_p: impl AsRef<Path>) -> std::io::Result<DiskInfo> {
++    Ok(DiskInfo::default())
++}
++
++pub fn same_disk(_disk1: &str, _disk2: &str) -> std::io::Result<bool> {
++    Ok(false)
++}
++
++pub fn get_physical_device_ids(_disk: &str) -> std::io::Result<Vec<String>> {
++    Ok(Vec::new())
++}
++
++pub fn check_cross_device_mounts(_paths: &[String]) -> std::io::Result<()> {
++    Ok(())
++}
++
++pub fn get_drive_stats(_major: u32, _minor: u32) -> std::io::Result<IOStats> {
++    Ok(IOStats::default())
++}
+--- a/rustfs/src/admin/console.rs
++++ b/rustfs/src/admin/console.rs
+@@ -587 +587 @@
+-        .layer(RequestBodyLimitLayer::new(5 * 1024 * 1024 * 1024));
++        .layer(RequestBodyLimitLayer::new(5usize.saturating_mul(1024 * 1024 * 1024)));
+--- a/rustfs/src/allocator_reclaim.rs
++++ b/rustfs/src/allocator_reclaim.rs
+@@ -111,12 +111,12 @@
+ }
+ 
+ pub fn allocator_backend() -> &'static str {
+-    #[cfg(not(target_os = "windows"))]
++    #[cfg(all(not(target_os = "windows"), not(target_family = "wasm")))]
+     {
+         "mimalloc"
+     }
+ 
+-    #[cfg(target_os = "windows")]
++    #[cfg(any(target_os = "windows", target_family = "wasm"))]
+     {
+         "mimalloc-windows"
+     }
+@@ -294,7 +294,7 @@
+     )
+ }
+ 
+-#[cfg(not(target_os = "windows"))]
++#[cfg(all(not(target_os = "windows"), not(target_family = "wasm")))]
+ #[allow(unsafe_code)]
+ fn collect_allocator_memory(force: bool) -> Result<(), String> {
+     // SAFETY: `mi_collect` is provided by the active global allocator backend
+@@ -306,7 +306,7 @@
+     Ok(())
+ }
+ 
+-#[cfg(target_os = "windows")]
++#[cfg(any(target_os = "windows", target_family = "wasm"))]
+ fn collect_allocator_memory(_force: bool) -> Result<(), String> {
+     Err("allocator reclaim is not supported on Windows".to_string())
+ }
+--- a/rustfs/src/main.rs
++++ b/rustfs/src/main.rs
+@@ -12,6 +12,7 @@
+ // See the License for the specific language governing permissions and
+ // limitations under the License.
+ 
++#[cfg(not(target_family = "wasm"))]
+ #[global_allocator]
+ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+ 
+--- a/rustfs/src/memory_observability.rs
++++ b/rustfs/src/memory_observability.rs
+@@ -20,7 +20,7 @@
+ #[cfg(any(test, not(target_os = "windows")))]
+ use serde_json::Value;
+ use std::collections::HashMap;
+-#[cfg(not(target_os = "windows"))]
++#[cfg(all(not(target_os = "windows"), not(target_family = "wasm")))]
+ use std::ffi::CStr;
+ use std::path::Path;
+ use std::sync::{Arc, Mutex, OnceLock};
+@@ -279,7 +279,7 @@
+     }
+ }
+ 
+-#[cfg(not(target_os = "windows"))]
++#[cfg(all(not(target_os = "windows"), not(target_family = "wasm")))]
+ #[allow(unsafe_code)]
+ fn read_allocator_memory_snapshot() -> Option<AllocatorMemorySnapshot> {
+     // SAFETY: `mi_stats_get_json` returns a null-terminated JSON buffer owned by
+@@ -302,7 +302,7 @@
+     })
+ }
+ 
+-#[cfg(target_os = "windows")]
++#[cfg(any(target_os = "windows", target_family = "wasm"))]
+ fn read_allocator_memory_snapshot() -> Option<AllocatorMemorySnapshot> {
+     None
+ }
+--- a/rustfs/src/server/http.rs
++++ b/rustfs/src/server/http.rs
+@@ -434,6 +434,15 @@
+ 
+     // The listening address and port are obtained from the parameters
+     let listener = {
++        // wasix: socket2's raw socket creation (libc::socket with CLOEXEC + IPPROTO_TCP)
++        // returns ENOTSUP on wasmer; bind via tokio (native wasix sock_open through the
++        // mio wasi backend) and skip the socket2 tuning wasix does not support.
++        #[cfg(target_os = "wasi")]
++        {
++            TcpListener::bind(server_addr).await?
++        }
++        #[cfg(not(target_os = "wasi"))]
++        {
+         let mut server_addr = server_addr;
+ 
+         // Try to create a socket for the address family; if that fails, fallback to IPv4.
+@@ -590,6 +599,7 @@
+             socket.listen(backlog)?;
+         }
+         TcpListener::from_std(socket.into())?
++        }
+     };
+ 
+     let tls_path = config.tls_path.as_deref().map(str::trim).unwrap_or_default();
+--- a/rustfs/src/server/service_state.rs
++++ b/rustfs/src/server/service_state.rs
+@@ -78,7 +78,14 @@
+     }
+ }
+ 
+-#[cfg(not(unix))]
++#[cfg(target_os = "wasi")]
++pub async fn wait_for_shutdown() -> ShutdownSignal {
++    // wasix has no tokio signal support; wasmer terminates the instance.
++    std::future::pending::<()>().await;
++    ShutdownSignal::CtrlC
++}
++
++#[cfg(all(not(unix), not(target_os = "wasi")))]
+ pub async fn wait_for_shutdown() -> ShutdownSignal {
+     tokio::select! {
+         _ = tokio::signal::ctrl_c() => {

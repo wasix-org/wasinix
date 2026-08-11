@@ -1,0 +1,42 @@
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -61,9 +61,29 @@
+ #[cfg(target_os = "windows")]
+ pub use windows::*;
+ 
+-#[cfg(not(target_os = "windows"))]
++#[cfg(all(not(target_os = "windows"), not(target_os = "wasi")))]
+ pub use unix::*;
+ 
++#[cfg(target_os = "wasi")]
++pub use wasi_stub::*;
++
++#[cfg(target_os = "wasi")]
++mod wasi_stub {
++    use super::Interface;
++    use std::io;
++    // wasix has no getifaddrs/AF_LINK interface enumeration; yield nothing.
++    pub fn up() -> io::Result<Up> {
++        Ok(Up)
++    }
++    pub struct Up;
++    impl Iterator for Up {
++        type Item = Interface;
++        fn next(&mut self) -> Option<Interface> {
++            None
++        }
++    }
++}
++
+ #[cfg(target_os = "windows")]
+ mod windows {
+     use super::Interface;
+@@ -271,7 +291,7 @@
+     }
+ }
+ 
+-#[cfg(not(target_os = "windows"))]
++#[cfg(all(not(target_os = "windows"), not(target_os = "wasi")))]
+ mod unix {
+     use super::Interface;
+     use libc as c;

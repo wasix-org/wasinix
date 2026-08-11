@@ -1,0 +1,59 @@
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -225,7 +225,7 @@
+ astral-tokio-tar = "0.6.4"
+ atoi = "3.1.0"
+ atomic_enum = "0.3.0"
+-aws-config = { version = "1.10.1" }
++aws-config = { version = "1.10.1", default-features = false, features = ["rt-tokio", "behavior-version-latest"] }
+ aws-credential-types = { version = "1.3.0" }
+ aws-sdk-s3 = { default-features = false, version = "1.140.0" }
+ aws-sdk-sts = { default-features = false, version = "1.110.0" }
+@@ -326,7 +326,7 @@
+ dial9-tokio-telemetry = "0.3"
+ opentelemetry = { version = "0.32.0" }
+ opentelemetry-appender-tracing = { version = "0.32.0" }
+-opentelemetry-otlp = { version = "0.32.0" }
++opentelemetry-otlp = { version = "0.32.0", default-features = false, features = ["http-proto", "reqwest-client", "trace", "metrics", "logs", "gzip-http"] }
+ opentelemetry-proto = { version = "0.32.0", default-features = false, features = ["metrics", "gen-tonic-messages"] }
+ opentelemetry_sdk = { version = "0.32.1" }
+ opentelemetry-semantic-conventions = { version = "0.32.1" }
+--- a/crates/ecstore/Cargo.toml
++++ b/crates/ecstore/Cargo.toml
+@@ -107,7 +107,7 @@
+ hyper-rustls = { workspace = true, default-features = false, features = ["native-tokio", "http1", "tls12", "logging", "http2", "aws-lc-rs"] }
+ rustls = { workspace = true, default-features = false, features = ["aws-lc-rs", "logging", "tls12", "prefer-post-quantum", "std"] }
+ rustls-pki-types.workspace = true
+-tokio = { workspace = true, features = ["io-util", "sync", "signal", "fs", "rt-multi-thread"] }
++tokio = { workspace = true, features = ["io-util", "sync", "fs", "rt-multi-thread"] }
+ tonic = { workspace = true, features = ["gzip", "deflate"] }
+ xxhash-rust = { workspace = true, features = ["xxh64", "xxh3"] }
+ tower = { workspace = true, features = ["timeout"] }
+--- a/rustfs/Cargo.toml
++++ b/rustfs/Cargo.toml
+@@ -121,7 +121,7 @@
+ http-body-util.workspace = true
+ reqwest = { workspace = true, features = ["json", "stream"] }
+ socket2 = { workspace = true, features = ["all"] }
+-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "process", "io-util", "fs"] }
++tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "io-util", "fs"] }
+ tokio-rustls = { workspace = true, default-features = false, features = ["logging", "tls12", "aws-lc-rs"] }
+ aws-sdk-s3 = { workspace = true, default-features = false, features = ["sigv4a", "default-https-client", "rt-tokio"] }
+ tokio-stream.workspace = true
+@@ -191,13 +191,14 @@
+ tracing-opentelemetry = { workspace = true }
+ # Data structures
+ hashbrown = { workspace = true, features = ["serde", "rayon"] }
+-mimalloc = { workspace = true }
++# mimalloc is native C; not built for wasm (see [target...] block below)
+ 
+ [target.'cfg(target_os = "linux")'.dependencies]
+ libsystemd.workspace = true
+ 
+-[target.'cfg(not(target_os = "windows"))'.dependencies]
++[target.'cfg(all(not(target_os = "windows"), not(target_family = "wasm")))'.dependencies]
+ libmimalloc-sys = { version = "0.1.49", features = ["extended"] }
++mimalloc = { workspace = true }
+ 
+ [dev-dependencies]
+ uuid = { workspace = true, features = ["v4", "fast-rng", "macro-diagnostics"] }
