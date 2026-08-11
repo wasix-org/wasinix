@@ -263,10 +263,15 @@ current toolchain before relying on it.
   wrappers forward the query (stdin is always wrapped).
 - Verified: `[ -t 0/1/2 ]` under bash is y on a pty and n on a pipe.
 
-### no default `TERM` 🔴
+### no default `TERM` 🟢
 
-- wasmer starts processes with `TERM` unset (verified); terminal programs
-  degrade. Fix: a runtime default.
+- wasmer started processes with `TERM` unset, so ncurses aborted with
+  "terminals database is inaccessible" (less, nano) and readline dropped line
+  editing.
+- Fixed by `patches/wasmer-forward-term-on-tty.patch`: `wasmer run` forwards the
+  host `TERM` when stdio is a terminal, on both the module and the webc path.
+- Verified: interactive bash on a pty reports the host `TERM` and enables
+  bracketed paste; less renders full-screen.
 
 ### `getifaddrs`/`freeifaddrs` misnamed in wasix-libc 🟡
 

@@ -48,6 +48,8 @@
       ./patches/wasmer-fd-readdir-stable-cookie.patch
       # isatty must be false for redirected stdio; see WASIX-TODO.md
       ./patches/wasmer-isatty-non-tty-unknown.patch
+      # terminal programs need TERM; see WASIX-TODO.md
+      ./patches/wasmer-forward-term-on-tty.patch
     ];
     wasmerRuntime = wasmer.packages.${system}.wasmer.overrideAttrs (old: {
       patches = (old.patches or []) ++ wasmerPatches;
