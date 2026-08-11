@@ -1,0 +1,16 @@
+diff -ruN ta/crates/dbt-main/src/ctrl_c.rs tb/crates/dbt-main/src/ctrl_c.rs
+--- ta/crates/dbt-main/src/ctrl_c.rs	2026-08-10 20:13:31.324819739 +0200
++++ tb/crates/dbt-main/src/ctrl_c.rs	2026-08-10 20:13:31.403207142 +0200
+@@ -25,7 +25,12 @@
+         // Windows) and the fail-fast signal (triggered by critical errors in
+         // any task). We listen to both signals concurrently and trigger the
+         // same cancellation logic.
++        #[cfg(not(target_os = "wasi"))]
+         let ctrl_c = tokio::signal::ctrl_c();
++        // wasmer delivers no Ctrl+C to the guest, so fail-fast is the only
++        // cancellation source that can fire here.
++        #[cfg(target_os = "wasi")]
++        let ctrl_c = std::future::pending::<std::io::Result<()>>();
+         debug_assert!(
+             !fail_fast_flag || !fail_fast.has_triggered(),
+             "run_future_with_ctrlc_support called with fail-fast already triggered"

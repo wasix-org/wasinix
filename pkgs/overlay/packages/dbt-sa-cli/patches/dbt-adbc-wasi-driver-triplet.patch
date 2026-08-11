@@ -1,0 +1,12 @@
+diff -ruN pa/crates/dbt-adbc/src/install.rs pb/crates/dbt-adbc/src/install.rs
+--- pa/crates/dbt-adbc/src/install.rs	2026-08-10 19:44:19.920546117 +0200
++++ pb/crates/dbt-adbc/src/install.rs	2026-08-10 19:44:19.953232965 +0200
+@@ -332,6 +332,8 @@
+     const OS: &str = MACOS_TARGET_OS;
+     #[cfg(target_os = "windows")]
+     const OS: &str = WINDOWS_TARGET_OS;
++    #[cfg(target_os = "wasi")]
++    const OS: &str = "wasix";
+ 
+     let (backend_name, version) = backend_name_and_version(backend);
+     let triplet = DriverTriplet {

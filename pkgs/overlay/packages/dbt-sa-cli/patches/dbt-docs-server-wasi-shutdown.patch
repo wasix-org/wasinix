@@ -1,0 +1,19 @@
+diff -ruN qa/crates/dbt-docs-server/src/server.rs qb/crates/dbt-docs-server/src/server.rs
+--- qa/crates/dbt-docs-server/src/server.rs	2026-08-10 19:51:21.493388189 +0200
++++ qb/crates/dbt-docs-server/src/server.rs	2026-08-10 19:51:21.549367605 +0200
+@@ -175,10 +175,14 @@
+             _ = term.recv() => {},
+         }
+     }
+-    #[cfg(not(unix))]
++    #[cfg(all(not(unix), not(target_os = "wasi")))]
+     {
+         let _ = tokio::signal::ctrl_c().await;
+     }
++    #[cfg(target_os = "wasi")]
++    {
++        std::future::pending::<()>().await;
++    }
+ 
+     // TODO(META-7739): analytics events buffered in the vortex_sender worker are
+     // not flushed on shutdown. Loss on Ctrl-C is acceptable (worker flushes every

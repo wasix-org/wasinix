@@ -1,0 +1,61 @@
+diff -ruN sa/crates/dbt-deps/src/git_client/generic.rs sb/crates/dbt-deps/src/git_client/generic.rs
+--- sa/crates/dbt-deps/src/git_client/generic.rs	2026-08-10 20:02:51.610670611 +0200
++++ sb/crates/dbt-deps/src/git_client/generic.rs	2026-08-10 20:08:02.823063200 +0200
+@@ -7,8 +7,57 @@
+ 
+ use async_trait::async_trait;
+ use dbt_common::{ErrorCode, FsResult, fs_err, tokiofs};
++#[cfg(not(target_os = "wasi"))]
+ use tokio::process::Command;
+ 
++// tokio ships no process module for wasi, but spawning itself works, so drive
++// std's Command and keep the async shape the one call site expects.
++#[cfg(target_os = "wasi")]
++use wasi_command::Command;
++
++#[cfg(target_os = "wasi")]
++mod wasi_command {
++    use std::ffi::OsStr;
++    use std::path::Path;
++    use std::process::Output;
++
++    pub struct Command(std::process::Command);
++
++    impl Command {
++        pub fn new<S: AsRef<OsStr>>(program: S) -> Self {
++            Command(std::process::Command::new(program))
++        }
++
++        pub fn args<I, S>(&mut self, args: I) -> &mut Self
++        where
++            I: IntoIterator<Item = S>,
++            S: AsRef<OsStr>,
++        {
++            self.0.args(args);
++            self
++        }
++
++        pub fn env<K: AsRef<OsStr>, V: AsRef<OsStr>>(&mut self, key: K, val: V) -> &mut Self {
++            self.0.env(key, val);
++            self
++        }
++
++        pub fn current_dir<P: AsRef<Path>>(&mut self, dir: P) -> &mut Self {
++            self.0.current_dir(dir);
++            self
++        }
++
++        // output() waits for the child, so there is no dropped handle to kill
++        pub fn kill_on_drop(&mut self, _kill: bool) -> &mut Self {
++            self
++        }
++
++        pub async fn output(&mut self) -> std::io::Result<Output> {
++            self.0.output()
++        }
++    }
++}
++
+ use super::ParsedGitUrl;
+ use super::traits::GitHostClient;
+ use super::{DownloadMethod, DownloadOutcome, ResolveMethod};
