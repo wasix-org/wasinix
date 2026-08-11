@@ -135,6 +135,45 @@
       echo "OK ${name}" > "$out"
     '';
 
+  # Static guard on the published metadata: pip resolves a wheel through its
+  # Requires-Dist, but `import` above runs off the installed closure, so a
+  # requirement naming something the registry cannot serve fails only for the
+  # user. The registry serves the closure, so every requirement must name a
+  # member of it that builds a wheel.
+  # The same served set pythonRegistry publishes (python-registry/default.nix):
+  # a requirement may be met by another entry or its closure, as snowflake's
+  # boto3 is, without appearing in the requiring wheel's own. Names only, so
+  # this stays a string input rather than a dependency on every wheel.
+  servedNames = let
+    entries = map (e: python3.pkgs.${e.attr}) (lib.filter (e: lib.elem pyKey (e.variants or allVariants)) wheelList);
+  in
+    lib.unique (map (m: m.pname or m.name)
+      (lib.filter (m: m ? dist) (entries ++ python3.pkgs.requiredPythonModules entries)));
+
+  depsTest = name: wheel: let
+    checker = pkgs.python3.withPackages (ps: [ps.packaging]);
+  in
+    pkgs.runCommand "wheel-deps-${name}" {} ''
+      ${checker.interpreter} ${./python-wheel-deps.py} \
+        ${wheel.dist} ${python3.pythonVersion} \
+        ${lib.escapeShellArgs servedNames} > "$out"
+    '';
+
+  # Static guard on the loader's view: a PIC extension resolves what it does not
+  # define through GOT imports, and wasm-ld makes an undefined symbol one of
+  # those rather than failing the link, so a missing library builds cleanly and
+  # breaks only when wasmer loads the module (google-re2 shipped that way
+  # against abseil). Require something the loader will have to export each one.
+  dynamicTest = name: wheel: let
+    members = lib.filter (m: m ? dist) ([wheel] ++ python3.pkgs.requiredPythonModules [wheel]);
+    sites = map (m: "${m}/${python3.sitePackages}") members;
+  in
+    pkgs.runCommand "wheel-dynamic-${name}" {} ''
+      ${pkgs.python3.interpreter} ${./python-wheel-dyn.py} \
+        ${python3}/bin/python${python3.pythonVersion}.wasm \
+        ${lib.escapeShellArgs sites} > "$out"
+    '';
+
   # Guards a `noarch` mark (a python-version-independent package, e.g. a redistributed binary): the
   # wheel AND its whole python-dep closure must be py3-none-any. A version-specific (cp-tagged)
   # member builds only on the default python, so the other interpreter can't resolve it from the
@@ -216,14 +255,21 @@
     wheel.overrideAttrs (o: {
       passthru =
         removeAttrs (o.passthru or {}) ["tests"]
-        // lib.optionalAttrs (!(e.skipTest or false)) {
+        // {
+          # `skipTest` marks a wheel that cannot be imported on its own, so it
+          # gates the tests that run one; the static guards read the artifact
+          # and apply to every wheel.
           tests = mkTestGroup "wheel-${name}" ({
-              import = importTest name e wheel;
               self-contained = selfContainedTest name wheel;
+              deps = depsTest name wheel;
+              dynamic = dynamicTest name wheel;
             }
-            // lib.optionalAttrs (historyVersion != null) {version = versionTest name historyVersion wheel;}
             // lib.optionalAttrs (e.noarch or false) {noarch-closure = noarchClosureTest name wheel;}
-            // lib.optionalAttrs (name == e.attr && builtins.pathExists (pkgTestsDir e.attr)) (pkgTests e));
+            // lib.optionalAttrs (!(e.skipTest or false)) ({
+                import = importTest name e wheel;
+              }
+              // lib.optionalAttrs (historyVersion != null) {version = versionTest name historyVersion wheel;}
+              // lib.optionalAttrs (name == e.attr && builtins.pathExists (pkgTestsDir e.attr)) (pkgTests e)));
         };
     });
 
@@ -232,6 +278,9 @@
   # driven by python-packages/history.json). Never noarch. `spec.variants` is the
   # generic history gate (see load-packages.nix): the build variants an entry is
   # limited to; for this set a variant IS an interpreter (pyKey), default both.
+  # A worklist entry reads the same `variants` gate as a history entry, for a
+  # package one interpreter cannot run (cramjam's pyo3 predates 3.14).
+  allVariants = ["py313" "py314" "noarch"];
   historyUnder = v: lib.replaceStrings ["."] ["_"] v;
   historyOf = e:
     lib.concatMap (
@@ -251,5 +300,5 @@ in
     (lib.listToAttrs (
       lib.concatMap
       (e: [(lib.nameValuePair e.attr (mkWheel e.attr e python3.pkgs.${e.attr}))] ++ historyOf e)
-      (lib.filter select wheelList)
+      (lib.filter (e: select e && lib.elem pyKey (e.variants or allVariants)) wheelList)
     )))
