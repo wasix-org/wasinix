@@ -98,7 +98,12 @@
   '';
 
   injectAdds = presents: let
-    need = lib.filter (a: lib.any (e: e.crate == a.crate) presents) crateEdits.adds;
+    # An add belongs to the versions that actually pull it, so a consumer on a
+    # version that does not declare it must not get the crate written into its
+    # lock (watchfiles pins mio 1.0.3 and has no wasix in its vendor).
+    need =
+      lib.filter (a: lib.any (e: e.crate == a.crate && lib.elem e.version a.versions) presents)
+      crateEdits.adds;
   in
     lib.optionalString (need != []) (
       lib.concatMapStrings (a: ''
