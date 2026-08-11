@@ -272,6 +272,68 @@ current toolchain before relying on it.
 - Verified: interactive bash on a pty reports the host `TERM` and enables
   bracketed paste; less renders full-screen.
 
+### stray "Program recieved fatal signal: Quit" on a guest exit 🔴
+
+- A git run occasionally emits that line (wasmer's spelling) between two
+  commands while still exiting 0, which fails the output comparisons:
+  `checks.git.diff-compare` hit it once, having passed on the same runtime in
+  an earlier run of the same tree.
+- Not reproducible outside the nix sandbox: 0 of 15 runs of the same
+  `git --no-pager diff` and 0 of 5 of the whole test script. Each command in
+  the harness is its own wasmer process, so a late-exiting one printing after
+  the next command's output fits.
+- Fix: find what raises SIGQUIT at teardown. Same family as the flaky
+  "JoinHandle polled after completion" in host_fs.
+
+### no readable controlling terminal, so no pager 🔴
+
+- A program whose stdin is a pipe reads keystrokes from the terminal instead.
+  Under WASIX neither route works: `/dev/tty` is a `NullFile` (the webc runner,
+  `runners/wasi_common.rs`, never calls `with_tty`, and `RootFileSystemBuilder`
+  falls back to one) so it opens and reads EOF, and fd 2 is a write-only
+  `host_fs::Stderr` so reading it fails at once. Verified in a guest pipeline:
+  `read </dev/tty` and `read <&2` both return immediately, while `[ -t 2 ]` is
+  true.
+- Consequence: less draws nothing and ignores `q` (`open_tty` in its ttyin.c
+  tries ttyname(2), then /dev/tty, then fd 2 — all dead ends here), so `git log`
+  on a terminal hangs the moment a pager exists. Not the pager pipeline: `cat`
+  as `GIT_PAGER` streams and exits 0, and `less FILE`, whose stdin is the
+  terminal, is fine.
+- Workaround: git ships no pager, so paged commands print directly.
+- Fix: back `/dev/tty` with the host terminal in the webc runner. Two parts,
+  and the first alone is not enough (tried: less then renders but still takes
+  no input). (1) `RootFileSystemBuilder` must not install a `NullFile`
+  `/dev/tty`, since a device that opens and reads EOF defeats every fallback.
+  (2) The runner needs a readable terminal device. It cannot be
+  `DeviceFile::new(STDIN)`, which is what the CLI's module path passes:
+  `path_open` shortcuts a file reporting `get_special_fd()` to a dup of the
+  _caller's_ fd, which in a pipeline is the pipe, so a pager would read its own
+  output as keystrokes. It needs a host-terminal device reporting no special fd.
+
+### no FIFOs and no `/dev/fd`, so no process substitution 🔴
+
+- `mkfifo`/`mkfifoat`/`mknod` are absent from `libc.a`, and the coreutils
+  `mkfifo` fails with ENOSYS (verified under wasmer). wasmer's virtual root
+  synthesizes `/dev/{null,zero,urandom,stdin,stdout,stderr,tty,shm}`
+  (`lib/virtual-fs/src/builder.rs`) but no `/dev/fd`.
+- Consequence: bash cannot offer `<(...)`, which needs one of the two; it is
+  built `--disable-process-substitution`.
+- Fix: resolve a `/dev/fd/<n>` path_open to a dup of the caller's fd n, which
+  also covers `exec {fd}<>` style use. A FIFO in the memfs would work too but is
+  the larger change. Needs a design call with the wasmer team.
+
+### no process groups, so no job control 🔴
+
+- The WASIX ABI has no process-group call (`api_wasix.h` has
+  `proc_fork`/`proc_spawn`/`proc_signal` and nothing else), and wasix-libc's
+  `setpgid` returns EINVAL for any pid but 0 while `tcsetpgrp` writes a
+  process-local variable.
+- Consequence: bash is built `--disable-job-control`, so `jobs`, `fg`, `bg` and
+  `disown` do not exist (verified: `type jobs` fails in the shipped webc).
+  Background `&` and `wait` still work.
+- Fix: process-group tracking in wasmer's control plane plus the witx calls to
+  reach it, then drop the bash flag.
+
 ### `sigsetjmp` ignores the signal mask 🟡
 
 - wasix-libc defines `sigsetjmp` as a plain `setjmp` ("TODO: ignoring signal
