@@ -310,17 +310,21 @@ current toolchain before relying on it.
   pipe, so a pager would read its own output as keystrokes. It needs a
   host-terminal device reporting no special fd.
 
-### no FIFOs and no `/dev/fd`, so no process substitution 🔴
+### no FIFOs, and /dev/fd had to be synthesized 🟢
 
-- `mkfifo`/`mkfifoat`/`mknod` are absent from `libc.a`, and the coreutils
-  `mkfifo` fails with ENOSYS (verified under wasmer). wasmer's virtual root
-  synthesizes `/dev/{null,zero,urandom,stdin,stdout,stderr,tty,shm}`
-  (`lib/virtual-fs/src/builder.rs`) but no `/dev/fd`.
-- Consequence: bash cannot offer `<(...)`, which needs one of the two; it is
-  built `--disable-process-substitution`.
-- Fix: resolve a `/dev/fd/<n>` path_open to a dup of the caller's fd n, which
-  also covers `exec {fd}<>` style use. A FIFO in the memfs would work too but is
-  the larger change. Needs a design call with the wasmer team.
+- `mkfifo`/`mkfifoat`/`mknod` are absent from `libc.a` and the coreutils
+  `mkfifo` fails with ENOSYS, so named pipes are not an option, and wasmer's
+  virtual root synthesized
+  `/dev/{null,zero,urandom,stdin,stdout,stderr,tty,shm}` but no `/dev/fd`. bash
+  was built `--disable-process-substitution`.
+- `/dev/fd/<n>` cannot be a file: it names the _caller's_ fd n, and a shell
+  hands the path to a child that must open it and get the pipe.
+- Fixed by `patches/wasmer-dev-fd.patch`: `path_open` resolves a `/dev/fd/<n>`
+  path to a dup of the opener's fd n, so bash now builds with
+  `bash_cv_dev_fd=standard`. Its own mkfifo-from-mknod fallback is compiled out,
+  since `HAVE_DEV_FD` makes that path unreachable.
+- Verified: `read < <(...)`, `cat <(...)` (the child opens the name),
+  `> >(...)`, and two substitutions in one command line.
 
 ### no process groups, so no job control 🔴
 
