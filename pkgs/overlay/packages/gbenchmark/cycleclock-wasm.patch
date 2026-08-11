@@ -1,0 +1,12 @@
+diff -ruN a/src/cycleclock.h b/src/cycleclock.h
+--- a/src/cycleclock.h	2026-08-11 09:25:57.317300291 +0200
++++ b/src/cycleclock.h	2026-08-11 09:25:57.354002865 +0200
+@@ -235,7 +235,7 @@
+   struct timeval tv;
+   gettimeofday(&tv, nullptr);
+   return static_cast<int64_t>(tv.tv_sec) * 1000000 + tv.tv_usec;
+-#elif defined(__hppa__) || defined(__linux__)
++#elif defined(__hppa__) || defined(__linux__) || defined(__wasm__)
+   // Fallback for all other architectures with a recent Linux kernel, e.g.:
+   // HP PA-RISC provides a user-readable clock counter (cr16), but
+   // it's not syncronized across CPUs and only 32-bit wide when programs
