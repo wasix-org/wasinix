@@ -1,0 +1,11 @@
+--- a/src/sys/mod.rs
++++ b/src/sys/mod.rs
+@@ -7,3 +7,8 @@
+ mod windows;
+ #[cfg(windows)]
+ pub(crate) use windows::*;
++
++#[cfg(all(not(unix), not(windows)))]
++mod wasi;
++#[cfg(all(not(unix), not(windows)))]
++pub(crate) use wasi::*;

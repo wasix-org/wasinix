@@ -11,13 +11,14 @@ edits are baked into the vendored sources before `cargo build` sees them.
 ```
 <crate>/edits.nix        the spec (below)
 <crate>/<version>.patch  floor patches, named by the version authored against
+helpers.nix              eval-time patchPhase helpers
 rewriters/<name>.nix     reusable source rewriters, one script drv each
 ```
 
 ## `edits.nix`
 
 ```nix
-{ lib, rewriters, adds }: {
+{ lib, helpers, rewriters, adds }: {
   edited     = [ ">=1.0.3" ];            # versions we patch (floored)
   stock      = [ ">=1.2.2" ];            # optional: versions known good unpatched
   notMinted  = null;                     # optional reason to skip the registry
@@ -62,4 +63,6 @@ a rewriter rebuilds only the crates that use it and adding one rebuilds nothing.
 Large files that are mostly stable across releases can live next to the crate's
 `edits.nix` and be copied explicitly from its `patchPhase`. Keep only upstream
 integration hunks in floor patches, and overlay payload variants at explicit
-API boundaries from that phase.
+API boundaries from that phase. Use
+`helpers.addFile ./payload.rs "src/sys/payload.rs"` to copy a new file and fail
+if upstream already supplies the destination.

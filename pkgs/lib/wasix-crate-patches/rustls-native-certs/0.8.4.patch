@@ -1,0 +1,20 @@
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -43,6 +43,17 @@
+ #[cfg(target_os = "macos")]
+ use macos as platform;
+ 
++#[cfg(all(not(unix), not(windows)))]
++mod wasi_platform {
++    use super::CertificateResult;
++    // wasix has no native cert store; return empty (callers supply roots explicitly).
++    pub fn load_native_certs() -> CertificateResult {
++        CertificateResult::default()
++    }
++}
++#[cfg(all(not(unix), not(windows)))]
++use wasi_platform as platform;
++
+ /// Load root certificates found in the platform's native certificate store.
+ ///
+ /// ## Environment Variables

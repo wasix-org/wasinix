@@ -11,6 +11,7 @@
   lib = pkgs.lib;
   rewriters = import (dir + "/rewriters") {inherit pkgs;};
   adds = import (dir + "/adds.nix");
+  helpers = import (dir + "/helpers.nix") {inherit lib;};
 
   skip = ["rewriters" "__pycache__"];
   crateNames =
@@ -53,7 +54,7 @@
     files = builtins.readDir crateDir;
     spec =
       if files ? "edits.nix"
-      then import (crateDir + "/edits.nix") {inherit lib rewriters adds;}
+      then import (crateDir + "/edits.nix") {inherit lib rewriters adds helpers;}
       else throw "crate-edits: ${crate} has no edits.nix";
     isPatch = n: t:
       t == "regular" && lib.hasSuffix ".patch" n && builtins.match "[0-9].*" n != null;

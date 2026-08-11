@@ -1,0 +1,21 @@
+--- a/src/sys/mod.rs
++++ b/src/sys/mod.rs
+@@ -1,9 +1,16 @@
+-#[cfg(not(target_os = "windows"))]
++#[cfg(all(not(target_os = "windows"), not(target_os = "wasi")))]
+ mod unix;
+-#[cfg(not(target_os = "windows"))]
++#[cfg(all(not(target_os = "windows"), not(target_os = "wasi")))]
+ pub use unix::*;
+ 
+ #[cfg(target_os = "windows")]
+ mod windows;
+ #[cfg(target_os = "windows")]
+ pub use windows::*;
++
++// wasix: clockid_t is a non-primitive newtype and CLOCK_*_COARSE are absent, so
++// the unix backend does not compile. Use clockid_t with the plain clocks.
++#[cfg(target_os = "wasi")]
++mod wasi;
++#[cfg(target_os = "wasi")]
++pub use wasi::*;
