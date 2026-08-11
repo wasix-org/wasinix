@@ -3,7 +3,7 @@
 ## A package provided natively and for WASIX
 
 Put its standard nixpkgs-style recipe in
-`pkgs/crossable/<name>/package.nix`. The directory is enumerated
+`pkgs/products/<name>/package.nix`. The directory is enumerated
 automatically and the recipe is called in both the native package set and every
 WASIX profile set. Use ordinary function arguments such as `stdenv`,
 `rustPlatform`, and named dependencies; do not take a native build from a cross
@@ -26,11 +26,9 @@ compiler families instead share their source/version bundle between explicit
 native build-tool and WASIX-hosted builders; a hosted compiler must depend on
 the build toolchain, never the reverse.
 
-The results are `nativePackages.<name>`,
-`packagesByHost.wasixByProfile.<profile>.<name>`, and
-`packagesByHost.preferredWasix.<name>`. A tool that runs under WASIX declares
-`passthru.wasix.toolchainRole = "hosted"` and is then also exposed through
-`toolchains.hostedByProfile`.
+The results are `nativePackages.<name>` and
+`packagesByProfile.<profile>.<name>`. `preferredProfilePackages.<name>` remains
+the convenient canonical WASIX build.
 
 ## A WASIX-only package
 
@@ -76,8 +74,22 @@ passthru.wasix.supportedProfiles = helpers.profiles.withoutPic;
 passthru.wasix.broken = "reason + upstream link";   # defect, not a limit
 ```
 
-The result is `nixpkgsByProfile.<profile>.foo`, and a `librariesByProfile` entry unless
-it's a shipped CLI.
+CI coverage is separate from support. It defaults to every supported profile,
+or to the singleton explicit `preferredProfile` when one is declared. Shipped
+products likewise default to their effective preferred profile. Override it
+without hiding the other supported builds:
+
+```nix
+passthru.wasix = {
+  supportedProfiles = ["eh" "ehpic"];
+  preferredProfile = "eh";
+  ciProfiles = ["eh" "ehpic"];
+};
+```
+
+`ciProfiles` must be a subset of `supportedProfiles`. The complete result is
+always available as `packagesByProfile.<profile>.foo`; CI selects from that
+matrix using the package declaration.
 
 ## A Rust CLI
 

@@ -43,9 +43,9 @@ through cargo-wasix, `buildRustPackage` gets WASIX defaults, and a maturin
 hook covers Python wheels with Rust extensions. Rust only has a std for `eh`
 and `ehpic`.
 
-## 3. Crossable products and the package overlay
+## 3. Product recipes and the package overlay
 
-`pkgs/crossable/<name>/package.nix` contains the standard recipe for each product
+`pkgs/products/<name>/package.nix` contains the standard recipe for each product
 provided both natively and with a WASIX host. Its overlay is applied to the
 native package set and, before the WASIX overlay, to every profile set. The
 same recipe therefore receives the native or WASIX `stdenv`, `rustPlatform`,
@@ -55,18 +55,18 @@ independent product, never `buildPackages` taken from a cross set.
 Target-specific product policy remains in `pkgs/overlay/packages/`: WASIX
 patches and flags, `passthru.wasix`, runtime dependencies, wasm command names,
 webc configuration, and WASIX tests. These entries are adapters, not duplicate
-recipes. A crossable package's overlay entry derives from
+recipes. A product's overlay entry derives from
 `prev.<name>`, the shared recipe instantiated by the preceding overlay.
 
-The role-oriented views preserve the toolchain bootstrap direction:
-`toolchains.build` contains native tools that produce WASIX artifacts,
-`toolchains.runtimesByProfile` contains target sysroots and runtimes, and
-`toolchains.hostedByProfile` contains tools that themselves run under WASIX.
-Hosted tools opt in with `passthru.wasix.toolchainRole = "hosted"`; the profile
-sets are still derived from `pkgs/profiles.nix`.
+`packagesByProfile` exposes every package under every supported profile.
+`passthru.wasix.ciProfiles` narrows only continuous-build coverage; it never
+hides a supported build. It defaults to the explicit `preferredProfile` when
+one is declared, to the effective preferred profile for shipped products, and
+otherwise to all supported profiles. The transposed `ciPackagesByProfile` set
+is internal CI wiring, not another public package taxonomy.
 
 `pkgs/overlay/` otherwise holds all WASIX package adaptations. Each overrides
-its nixpkgs or crossable counterpart (`prev.<name>`). Entries are found by
+its nixpkgs or product counterpart (`prev.<name>`). Entries are found by
 `pkgs/lib/load-packages.nix`: a name in `trivial.nix`, a flat `<name>.nix`,
 or a `<name>/package.nix` dir. The same loader produces the package name list
 used elsewhere.
@@ -211,12 +211,12 @@ patch tree, so the two can't drift:
   `pkgs/toolchain/tests/abi-check.nix`), `treefmt`.
 - `apps.<system>.update`: the pin updater.
 - `legacyPackages.<system>`: the buildable trees, attr path = build target:
-  `toolchain.<part>`, `librariesByProfile.<profile>.<lib>`,
+  `toolchain.<part>`, `packagesByProfile.<profile>.<name>`,
   `nativePackages.<name>`,
   `wasmerPackages.<name>` (with `.pkg`, `.webc`, `.tests`),
   `pythonWheels.<py>.<attr>`;
-  plus `packagesByHost`, `toolchains`, `nixpkgsByProfile`,
-  `toolchainByProfile`, `pkgsCross`, `allWasmerPackages`.
+  plus `nixpkgsByProfile`, `toolchainByProfile`, `pkgsCross`,
+  `allWasmerPackages`.
 - `ci`: the same trees flattened to dotted names, so a job name is a build
   path. Unsupported/broken packages are filtered out before becoming jobs.
   `scripts/ci-build.sh` runs it with nix-fast-build and incremental cache

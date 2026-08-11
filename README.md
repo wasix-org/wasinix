@@ -18,8 +18,8 @@ nix build .#wasix-llvm            # the LLVM fork (slow)
 nix build .#legacyPackages.x86_64-linux.wasmerPackages.git         # a CLI
 nix build .#legacyPackages.x86_64-linux.wasmerPackages.git.webc    # its webc
 nix build .#legacyPackages.x86_64-linux.nativePackages.anybuild   # native shared recipe
-nix build .#legacyPackages.x86_64-linux.packagesByHost.wasixByProfile.eh.anybuild
-nix build .#legacyPackages.x86_64-linux.librariesByProfile.exnrefEh.zlib # a library
+nix build .#legacyPackages.x86_64-linux.packagesByProfile.eh.anybuild # WASIX shared recipe
+nix build .#legacyPackages.x86_64-linux.packagesByProfile.exnrefEh.zlib # a library
 nix build .#legacyPackages.x86_64-linux.pythonWheels.py314.numpy    # a wheel
 nix build .#legacyPackages.x86_64-linux.pythonRegistry              # static wheel index
 nix build .#legacyPackages.x86_64-linux.allWasmerPackages                   # all webcs
@@ -34,7 +34,7 @@ driven by `scripts/ci-build.sh`). A job's dotted name is its build path.
 
 `pkgs/toolchain/` builds the toolchain from source; `pkgs/profiles.nix` +
 `pkgs/set/` turn it into five ABI profiles, each a full nixpkgs cross
-package set; `pkgs/crossable/` holds product recipes instantiated for both the
+package set; `pkgs/products/` holds product recipes instantiated for both the
 native host and WASIX, while `pkgs/overlay/` holds WASIX adaptations and small
 overrides of nixpkgs packages, including a dynamic-linking CPython and wheels;
 `pkgs/wasmer/` packages CLIs as webc and tests them under Wasmer.

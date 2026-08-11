@@ -11,7 +11,7 @@ C/C++, Rust, and Python packages, and CLIs are packaged as webc.
 ```text
 pkgs/default.nix     wiring            pkgs/profiles.nix  the ABI profile table
 pkgs/lib/            helpers + passthru.wasix machinery
-pkgs/crossable/      recipes instantiated natively and for WASIX
+pkgs/products/       recipes instantiated natively and for WASIX
 pkgs/set/            per-profile cross sets (stdenv, rustPlatform)
 pkgs/toolchain/      llvm.nix, sysroot/, rust/, wasixcc.nix, env.nix, tests/
 pkgs/overlay/        packages/, trivial.nix, python-packages/
@@ -24,8 +24,8 @@ scripts/update.py    pin updater (nix run .#scripts.update)
 - Profiles (`off`, `eh`, `ehpic`, `exnrefEh` = default, `exnrefEhpic`) are
   defined once in `pkgs/profiles.nix`; derive from the table, never restate
   the matrix.
-- Where a package works is declared as `passthru.wasix`
-  (`supportedProfiles`, `preferredProfile`, `broken = "reason"`; see
+- Where a package works and which variants CI covers is declared as `passthru.wasix`
+  (`supportedProfiles`, `preferredProfile`, `ciProfiles`, `broken = "reason"`; see
   `pkgs/lib/default.nix`). Never set `meta.badPlatforms`/`meta.broken`
   directly.
 - Package placement: name in `trivial.nix` / flat `packages/<name>.nix` /
@@ -33,7 +33,7 @@ scripts/update.py    pin updater (nix run .#scripts.update)
   `{names, packages}` for version families (icu). Same in
   `python-packages/`. Only `pkgs/lib/load-packages.nix` enumerates these
   dirs. A package we provide both natively and for WASIX has its standard
-  recipe in `pkgs/crossable/<name>/package.nix`; its WASIX-only
+  recipe in `pkgs/products/<name>/package.nix`; its WASIX-only
   tweaks and webc policy stay in the matching overlay entry.
 - Tweaks go through `helpers.libTweaks` (phases concatenate, lists append,
   attrsets merge, scalars replace, functions get the old value). No
@@ -94,7 +94,7 @@ with `ssh "$(scripts/remote-builder.sh host)"` + `nix log`, not a rebuild.
 builtins.attrNames`. For behaviour-preserving refactors, also diff
   `--apply 'j: builtins.mapAttrs (_: d: d.drvPath) j'` before/after; meta and
   passthru changes don't move drv paths.
-- A CI job name is a build path: `nix build .#librariesByProfile.exnrefEh.zlib`,
+- A CI job name is a build path: `nix build .#packagesByProfile.exnrefEh.zlib`,
   `.#wasmerPackages.git.webc`, `.#pythonWheels.py314.numpy`.
 - Toolchain suites: `.#toolchain.wasixcc.tests` (compile+link+run per
   profile), `.#toolchain.sysroot.tests`; the Rust suite is
