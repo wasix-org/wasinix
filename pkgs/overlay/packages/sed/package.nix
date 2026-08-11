@@ -4,7 +4,10 @@
   helpers,
   ...
 }:
-helpers.wasmRename {wasmName = "sed";} (
+helpers.wasmRename {
+  wasmName = "sed";
+  posixAlias = true;
+} (
   helpers.libTweaks {
     passthru.wasix.shipped = true;
     meta.platforms = _: final.lib.platforms.all;

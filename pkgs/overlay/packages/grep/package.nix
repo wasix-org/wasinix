@@ -6,7 +6,10 @@
   helpers,
   ...
 }:
-helpers.wasmRename {wasmName = "grep";} (
+helpers.wasmRename {
+  wasmName = "grep";
+  posixAlias = true;
+} (
   helpers.libTweaks {
     passthru.wasix.shipped = true;
     postPatch = ''

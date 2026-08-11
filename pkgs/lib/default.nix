@@ -217,8 +217,13 @@ in rec {
   libTweaks = tweaks: pkg:
     pkg.overrideAttrs (old: extendDrv old ({doCheck = false;} // tweaks));
 
-  # The webc packaging derives one command per bin/*.wasm.
-  wasmRename = {wasmName}: pkg:
+  # The webc packaging derives one command per bin/*.wasm. posixAlias also keeps
+  # the unsuffixed name as a symlink, for consumers that exec it by store path
+  # (git's shell subcommands run ${gnused}/bin/sed).
+  wasmRename = {
+    wasmName,
+    posixAlias ? false,
+  }: pkg:
     pkg.overrideAttrs (old: {
       # Indented strings drop their leading newline, so `+` would glue onto
       # old.postInstall. bin/ is usually in $out but can be in $bin (curl).
@@ -228,6 +233,7 @@ in rec {
           for _bindir in "$out" ''${bin:+"$bin"}; do
             if [ -f "$_bindir/bin/${wasmName}" ]; then
               mv "$_bindir/bin/${wasmName}" "$_bindir/bin/${wasmName}.wasm"
+              ${lib.optionalString posixAlias ''ln -s "${wasmName}.wasm" "$_bindir/bin/${wasmName}"''}
             fi
           done
         ''
