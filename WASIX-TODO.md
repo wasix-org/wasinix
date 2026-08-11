@@ -265,9 +265,8 @@ current toolchain before relying on it.
 
 ### no default `TERM` 🟢
 
-- wasmer started processes with `TERM` unset, so ncurses aborted with
-  "terminals database is inaccessible" (less, nano) and readline dropped line
-  editing.
+- wasmer started processes with `TERM` unset, so ncurses aborted with "terminals
+  database is inaccessible" (less, nano) and readline dropped line editing.
 - Fixed by `patches/wasmer-forward-term-on-tty.patch`: `wasmer run` forwards the
   host `TERM` when stdio is a terminal, on both the module and the webc path.
 - Verified: interactive bash on a pty reports the host `TERM` and enables
@@ -473,6 +472,8 @@ current toolchain before relying on it.
   applies the pass in the EH profiles like it does on its own in the off
   profile. git additionally skips building its test binaries (`TEST_PROGRAMS=`,
   `CLAR_TEST_PROG=`), which contain setjmp and can never run in a cross build.
+  coreutils has no such seam (the setjmp reaches the one multi-call binary), so
+  it is off-EH only, like bash.
 - Fix: binaryen asyncify support for EH; upstream the wasixcc setting.
 
 ### `wasm-opt` corrupts autoconf/cmake feature detection 🟡
