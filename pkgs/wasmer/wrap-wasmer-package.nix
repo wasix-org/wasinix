@@ -20,24 +20,25 @@ in
   ''
       set -euo pipefail
       mkdir -p "$out/bin"
-      for wasm_path in "${package}/pkg/"*/bin/*.wasm; do
-        [ -f "$wasm_path" ] || continue
-        wasm_file=$(basename "$wasm_path")
-        cmd_name="''${wasm_file%.wasm}"
-        # The package dir (…/pkg/<name>, holding wasmer.toml). Run the package with
-        # `--entrypoint <command>` rather than the bare .wasm module, so wasmer
-        # applies the command's webc annotations (main-args/env) — e.g. gunzip =
-        # gzip + "-d -f". Running the raw module skips that layer.
-        pkg_dir=$(dirname "$(dirname "$wasm_path")")
+      # One wrapper per [[command]] in wasmer.toml rather than per bin/*.wasm,
+      # since two commands can share one module (bash also serves sh).
+      for pkg_dir in "${package}/pkg/"*; do
+        [ -f "$pkg_dir/wasmer.toml" ] || continue
+        # Run the package with `--entrypoint <command>` rather than the bare
+        # .wasm module, so wasmer applies the command's webc annotations
+        # (main-args/env), e.g. gunzip = gzip + "-d -f".
         target=${
       if runTarget == null
       then "\"$pkg_dir\""
       else pkgs.lib.escapeShellArg runTarget
     }
-        cat > "$out/bin/$cmd_name" <<WRAP
+        while IFS= read -r cmd_name; do
+          [ -n "$cmd_name" ] || continue
+          cat > "$out/bin/$cmd_name" <<WRAP
     #!/bin/sh
     exec wasmer run \$WASMER_FLAGS ${depFlags} "$target" --entrypoint "$cmd_name" -- "\$@"
     WRAP
-        chmod +x "$out/bin/$cmd_name"
+          chmod +x "$out/bin/$cmd_name"
+        done < <(sed -n '/^\[\[command\]\]/{n;s/^name = "\(.*\)"$/\1/p;}' "$pkg_dir/wasmer.toml")
       done
   ''
