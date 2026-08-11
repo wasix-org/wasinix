@@ -1,7 +1,7 @@
 # Built in the default profile; execs the off-profile bash at runtime via
 # SHELL_PATH=/bin/bash, mounted from the bash webc dependency (see the wasmer
-# block) rather than bundled. gnugrep/gnused are our wasix builds (git bakes
-# their paths into scripts); gawk/coreutils are build tools.
+# block) rather than bundled. gnugrep/gnused/gawk/coreutils are our wasix
+# builds, since git bakes their paths into the shell subcommands.
 {
   final,
   prev,
@@ -10,18 +10,25 @@
 }: let
   lib = final.lib;
   bash = preferredProfilePackages.bash;
+  nano = preferredProfilePackages.nano;
+  # The shell subcommands run these by store path, so they must be the wasix
+  # builds; both only build in the off-EH profile, like bash.
+  coreutils' = preferredProfilePackages.coreutils;
+  gawk' = preferredProfilePackages.gawk;
 in
   (prev.gitMinimal.override {
     gnugrep = final.grep;
     gnused = final.sed;
-    gawk = final.buildPackages.gawk;
-    coreutils = final.buildPackages.coreutils;
+    gawk = gawk';
+    coreutils = coreutils';
     gettext = final.gettext;
     inherit bash;
     # makeWrapper only wraps the Perl subcommands gitMinimal omits.
     makeWrapper = null;
     nlsSupport = false;
     doInstallCheck = false;
+    # gitMinimal turns pcre2 off; without it `git grep -P` is a fatal error.
+    withpcre2 = true;
   })
   .overrideAttrs (old: {
     passthru =
@@ -37,14 +44,30 @@ in
           commandEnv.git = {
             SSL_CERT_FILE = "/etc/ssl/certs/ca-bundle.crt";
             GIT_SSL_CAINFO = "/etc/ssl/certs/ca-bundle.crt";
+            # nano is a dependency command wasmer mounts under /bin. Without an
+            # editor `git commit` and `git rebase -i` have nothing to open.
+            # No pager: git's pager child hangs, see WASIX-TODO.md.
+            GIT_EDITOR = "/bin/nano";
           };
           # git execs SHELL_PATH=/bin/bash (set below); wasmer's use_package
           # mounts this dependency's `bash` command there at load, so bash is
           # not bundled into git's webc.
-          dependencies = [bash];
+          # The rest populate /bin for the shell git hands user-supplied code
+          # to (hooks, aliases, filter-branch filters), which searches PATH.
+          dependencies = [
+            bash
+            nano
+            coreutils'
+            gawk'
+            preferredProfilePackages.grep
+            preferredProfilePackages.sed
+          ];
           # git execs its libexec helpers at absolute /nix/store paths; mount
           # whatever git.wasm embeds (bash is no longer embedded).
           autoSelfMount = true;
+          # The shell subcommands exec grep, sed and the coreutils programs by
+          # store path, which the wasm scan behind autoSelfMount cannot see.
+          selfMounts = [final.grep final.sed coreutils' gawk'];
         };
       };
     makeFlags =
