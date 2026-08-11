@@ -31,19 +31,36 @@
     ...
   }: let
     system = "x86_64-linux";
+    wasmerPatches = [
+      # proc_fork must inherit the parent's signal dispositions; see WASIX-TODO.md
+      ./patches/wasmer-signal-inherit-on-fork.patch
+      # futex_wake dropped a wake when the first waiter was still
+      # mid-registration (Some(None)), starving a genuinely-sleeping waiter;
+      # deadlocked tokio multi-thread spawn+blocking (e.g. rustfs server).
+      ./patches/wasmer-futex-wake-lost-wakeup.patch
+      # fd_datasync/fd_sync denied with EACCES when path_open's rights
+      # delegation masked the implied FD_DATASYNC/FD_SYNC off files under
+      # mapped host dirs; rustfs object writes (fdatasync durability) 500'd.
+      ./patches/wasmer-fd-sync-rights-durability.patch
+      # Host hard links and their rename/unlink cache entries are broken.
+      ./patches/wasmer-path-rename-hardlink.patch
+      # fd_readdir cookies must remain valid while callers delete entries.
+      ./patches/wasmer-fd-readdir-stable-cookie.patch
+    ];
     wasmerRuntime = wasmer.packages.${system}.wasmer.overrideAttrs (old: {
-      patches =
-        (old.patches or [])
-        ++ [
-          # proc_fork must inherit the parent's signal dispositions; see WASIX-TODO.md
-          ./patches/wasmer-signal-inherit-on-fork.patch
-        ];
+      patches = (old.patches or []) ++ wasmerPatches;
+      # The inherited artifact contains unpatched workspace crates and can
+      # retain their rlibs and vtables after source patches are applied.
+      cargoArtifacts = null;
       passthru =
         (old.passthru or {})
         // {
           wasix = {
             # upstream's version stands still across our rev bumps
             noteVersion = "${old.version}-${wasmer.shortRev or "dirty"}";
+            updateNotes = [
+              {message = "recheck and drop any Wasmer patches that landed upstream; see WASIX-TODO.md";}
+            ];
           };
         };
     });

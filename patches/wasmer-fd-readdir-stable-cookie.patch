@@ -1,0 +1,124 @@
+--- a/lib/wasix/src/fs/fd.rs
++++ b/lib/wasix/src/fs/fd.rs
+@@ -6,7 +6,7 @@
+ };
+
+ use virtual_fs::{Pipe, PipeRx, PipeTx, VirtualFile};
+-use wasmer_wasix_types::wasi::{Fdflags, Fdflagsext, Filestat, Rights};
++use wasmer_wasix_types::wasi::{Fdflags, Fdflagsext, Filestat, Filetype, Rights};
+
+ use crate::net::socket::InodeSocket;
+ use crate::os::epoll::EpollState;
+@@ -37,6 +37,8 @@
+     pub flags: Fdflags,         // This is file table related flags, not fd flags
+     pub offset: Arc<AtomicU64>, // This also belongs in the file table
+     pub fd_flags: Fdflagsext,   // This is the actual FD flags that belongs here
++    /// Stable directory entries for `fd_readdir` continuation cookies.
++    pub readdir_snapshot: Arc<RwLock<Option<Vec<(String, Filetype, u64)>>>>,
+ }
+
+ impl Fd {
+--- a/lib/wasix/src/fs/fd_list.rs
++++ b/lib/wasix/src/fs/fd_list.rs
+@@ -331,6 +331,7 @@
+                 rights_inheriting: Rights::empty(),
+                 flags: Fdflags::from_bits_preserve(n),
+                 fd_flags: Fdflagsext::empty(),
++                readdir_snapshot: Arc::new(RwLock::new(None)),
+             },
+         }
+     }
+--- a/lib/wasix/src/fs/mod.rs
++++ b/lib/wasix/src/fs/mod.rs
+@@ -2026,6 +2026,7 @@
+                 flags: fs_flags,
+                 offset: Arc::new(AtomicU64::new(0)),
+                 fd_flags,
++                readdir_snapshot: Arc::new(RwLock::new(None)),
+             },
+             open_flags,
+             inode,
+@@ -2094,6 +2095,7 @@
+                     rights_inheriting: fd.inner.rights_inheriting,
+                     flags: fd.inner.flags,
+                     offset: fd.inner.offset.clone(),
++                    readdir_snapshot: fd.inner.readdir_snapshot.clone(),
+                     fd_flags: match cloexec {
+                         None => fd.inner.fd_flags,
+                         Some(cloexec) => {
+@@ -2132,6 +2134,7 @@
+                 flags: Fdflags::empty(),
+                 offset: Arc::new(AtomicU64::new(0)),
+                 fd_flags: Fdflagsext::empty(),
++                readdir_snapshot: Arc::new(RwLock::new(None)),
+             },
+             open_flags: 0,
+             inode: root_inode,
+@@ -2182,6 +2185,7 @@
+             let new_fd_entry = Fd {
+                 inner: FdInner {
+                     offset: fd_entry.inner.offset.clone(),
++                    readdir_snapshot: fd_entry.inner.readdir_snapshot.clone(),
+                     rights: fd_entry.inner.rights_inheriting,
+                     fd_flags: {
+                         let mut f = fd_entry.inner.fd_flags;
+@@ -2599,6 +2603,7 @@
+                     flags: fd_flags,
+                     offset: Arc::new(AtomicU64::new(0)),
+                     fd_flags: Fdflagsext::empty(),
++                    readdir_snapshot: Arc::new(RwLock::new(None)),
+                 },
+                 // since we're not calling open on this, we don't need open flags
+                 open_flags: 0,
+--- a/lib/wasix/src/syscalls/wasi/fd_readdir.rs
++++ b/lib/wasix/src/syscalls/wasi/fd_readdir.rs
+@@ -37,9 +37,24 @@
+     let working_dir = wasi_try_ok!(state.fs.get_fd(fd));
+     let mut buf_idx = 0usize;
+
+-    let entries: Vec<(String, Filetype, u64)> = {
++    // Cookies index a stable snapshot for the lifetime of this directory
++    // stream. Rebuilding the sorted list for every call makes deletions shift
++    // later entries below the caller's cookie, so recursive removal skips them.
++    let cached_entries = if cookie == 0 {
++        None
++    } else {
++        working_dir
++            .inner
++            .readdir_snapshot
++            .read()
++            .unwrap()
++            .clone()
++    };
++    let entries: Vec<(String, Filetype, u64)> = if let Some(entries) = cached_entries {
++        entries
++    } else {
+         let guard = working_dir.inode.read();
+-        match guard.deref() {
++        let entries = match guard.deref() {
+             Kind::Dir { path, entries, .. } => {
+                 trace!("reading dir {:?}", path);
+                 // TODO: refactor this code
+@@ -115,7 +130,9 @@
+             | Kind::DuplexPipe { .. }
+             | Kind::EventNotifications { .. }
+             | Kind::Epoll { .. } => return Ok(Errno::Notdir),
+-        }
++        };
++        *working_dir.inner.readdir_snapshot.write().unwrap() = Some(entries.clone());
++        entries
+     };
+
+     for (cur_cookie, (entry_path_str, wasi_file_type, ino)) in
+--- a/lib/wasix/tests/wasm_tests/wasi_fyi/fs_remove_dir_all.rs
++++ b/lib/wasix/tests/wasm_tests/wasi_fyi/fs_remove_dir_all.rs
+@@ -11,6 +11,9 @@
+             .collect::<Vec<_>>(),
+         vec!["bar", "baz"]
+     );
++    for index in 0..16 {
++        fs::write(format!("/fyi/foo/entry-with-a-long-name-{index:02}"), b"data").unwrap();
++    }
+     assert!(fs::remove_dir_all("/fyi/foo").is_ok());
+     assert!(fs::read_dir("/fyi/foo").is_err());
+ }

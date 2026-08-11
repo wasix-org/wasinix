@@ -54,6 +54,162 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
 - Fix: wasmer's signal delivery must cancel in-flight blocking syscalls
   (EINTR or instance termination).
 
+### tokio's I/O driver panics on an unexpected park errno 🟡
+
+- tokio's I/O driver parks in `mio::Poll::poll` and `panic!`s ("unexpected error
+  when polling the I/O driver") on any errno it does not explicitly tolerate.
+  Upstream tolerates only `Interrupted` and, on wasi, `InvalidInput`, the errno
+  the reference runtime returns for a poll with zero subscriptions
+  (`runtime/io/driver.rs`, arm commented "poll without subscriptions"). Under
+  panic=abort a park panic takes the process down.
+- Workaround (`tokio/1.52.3.patch`): also tolerate `Unsupported` (ENOTSUP,
+  errno 58) in that arm, treating it like the empty-poll case.
+- The ENOTSUP was originally attributed to wasmer's `poll_oneoff` rejecting a
+  zero-length subscription set. That attribution does not hold against the
+  pinned wasmer: upstream fixed the empty-subscription case in January 2026
+  (commit `350a7306`, "handle empty subscription list in poll_oneoff", with a
+  test), and `poll_oneoff` now returns `Errno::Inval` there, via both the early
+  return and `validate_poll_subscriptions_count`. Neither `poll_oneoff` nor
+  `epoll_wait` returns `Errno::Notsup` on any path in the pinned tree, and on
+  wasmer our mio uses the epoll backend (`mio/1.2.2.patch`), not `poll_oneoff`.
+- So the tolerance is kept as cheap insurance, not as a workaround for a known
+  live wasmer bug: it converts a would-be abort into the same graceful park
+  return tokio already performs for the analogous `InvalidInput`. Drop it if the
+  panic never reappears; reopen this entry with a real trace if it does.
+
+### `futex_wake` lost a wakeup when a waiter was mid-registration 🟢
+
+- wasmer's `futex_wake` woke "the first waiter" by taking the first entry of the
+  futex's `wakers` map and calling its stored `Waker`. But a thread that has
+  entered `futex_wait` and inserted its id with `None` (waker not installed yet)
+  sits in that map as `Some(None)`; `futex_wake` consumed that slot, woke nobody,
+  and skipped a truly sleeping waiter that still held its installed waker. A
+  tokio worker parked on the futex then never woke: `tokio::spawn` + a task doing
+  a WASI syscall + `join_all` hung (reproduced minimally; also stalled the rustfs
+  erasure-init metadata-read fanout, blocking `rustfs server` startup entirely).
+- Fix (`patches/wasmer-futex-wake-lost-wakeup.patch`): wake the first waiter that
+  has an installed waker; if none is installed yet, increment a `pending_wakes`
+  counter on the futex that the next `futex_wait` consumes before parking, so the
+  wake survives the register race. Upstreamable to wasmer.
+- A token is scoped to the waiters it was meant for: only recorded while `wakers`
+  is non-empty, only claimable by a poller that still holds its slot, and dropped
+  with the futex once the last waiter leaves. Without those three bounds a token
+  can outlive its waiters, and since a wake then finds no sleeper in the empty
+  map it records another one, so the counter grows unbounded and the futex entry
+  is never reclaimed. The slot check also stops a poller that `futex_wake` has
+  already claimed from swallowing a token owed to a waiter still asleep.
+
+### tokio's I/O driver compiles out the mio `Waker` on wasi 🟡
+
+- tokio gates its `mio::Waker` (the handle that wakes the reactor parked in
+  `epoll_wait` from another thread) behind `#[cfg(not(target_os = "wasi"))]`,
+  because stock mio's wasip1 backend has no `Waker`. Our vendored mio backend
+  (`mio/1.2.2.patch`, the wasix-org wasi backend) does implement an eventfd
+  `Waker`, but tokio still skips it, so any completion that must re-schedule a
+  task through the I/O driver (e.g. `tokio::fs`, which rustfs uses for
+  `access()`) parks the reactor forever with nothing able to wake it.
+- Workaround (`tokio/1.52.3.patch`): widen those four gates to
+  `any(not(target_os = "wasi"), all(target_vendor = "wasmer", tokio_wasix_waker))`,
+  and have the consumer opt in with `RUSTFLAGS = "--cfg tokio_wasix_waker"`
+  (rustfs does). With the futex_wake fix above, a spawned `tokio::fs` task +
+  `join_all` completes and rustfs storage init reaches "store ready".
+- The opt-in is load-bearing, not caution: the Waker is only sound with a mio that
+  has the wasix backend. Enabling it for all of `target_vendor = "wasmer"` broke
+  primp, which pins mio 1.2.0 (`cannot find type Waker in crate mio` -> tokio
+  fails to compile). mio only exports `Waker` off-wasi, and its 1.2.0 wasi arm is
+  the `single_threaded` `AtomicBool` waker, which by its own docs cannot wake an
+  already-blocked thread. Backporting the wasix backend to 1.2.0 is not a fix
+  either: it adds a `wasix` crate dependency, and crate-patches apply post-vendor,
+  so every consumer's lock would need it.
+- Fix: once mio's upstream wasi backend ships a real `Waker` on every version in
+  play, tokio can relax the blanket `not(wasi)` gate and the opt-in can go.
+
+### `fd_datasync`/`fd_sync` deny with EACCES under mapped host dirs 🟢
+
+- wasmer's `fd_datasync`/`fd_sync` return `Errno::Access` unless the fd holds the
+  `FD_DATASYNC`/`FD_SYNC` right. But `path_open` computes a file's rights as
+  `(requested | implied_by_open_mode) & parent_dir.rights_inheriting`
+  (`path_open2.rs`, whose own TODO notes "WASI isn't giving appropriate rights
+  here"): the inheriting mask on a `--mapdir`/`--volume` host preopen strips the
+  implied sync rights, so files opened for writing under it cannot fsync/fdatasync.
+- Symptom: rustfs object writes call `fdatasync` for durability; the EACCES maps
+  (ecstore `to_file_error`: PermissionDenied -> FileAccessDenied) to a 500
+  `InternalError "File access denied"` on every `PutObject`/`UploadPart`, while
+  bucket/metadata ops (no data fsync) succeed. `mc mb` worked, `mc pipe` 500'd.
+- Fix (`patches/wasmer-fd-sync-rights-durability.patch`): drop the rights gate in
+  both syscalls. fsync/fdatasync are durability barriers, not security
+  capabilities (POSIX needs no special permission); sync any regular-file fd.
+  With the fix a full `mc` put/get round-trip against `rustfs server` passes.
+- Cleaner upstream fix would stop masking implied sync rights in path_open, but
+  the syscalls should not hard-deny a durability barrier either way.
+
+### wasix Rust std does not map wasi ENOTEMPTY to `DirectoryNotEmpty` 🟡
+
+- wasix std's error decoding returns an uncategorized `io::ErrorKind` (not
+  `DirectoryNotEmpty`) for wasi `ENOTEMPTY` (errno 55). Rust code that branches on
+  `err.kind() == ErrorKind::DirectoryNotEmpty` (the common "rmdir of a non-empty
+  dir is fine" idiom) then falls through to its error path.
+- Symptom: rustfs object DELETE (`mc rm`) 500'd with "File access denied". Its
+  `delete_file` (ecstore `disk/local.rs`) tolerates NotFound + DirectoryNotEmpty on
+  `remove_dir` and treats anything else as fatal `FileAccessDenied`; the object dir
+  is legitimately non-empty (the xl versioned-delete rename dance stages old data
+  in a sub-dir), so on wasix that ENOTEMPTY aborted + rolled back the delete.
+  Traced: `path_remove_directory -> Errno::notempty` on the object dir.
+- Workaround (`rustfs-code.patch`): `delete_file` also tolerates
+  `err.raw_os_error() == Some(55)` under `cfg(target_os = "wasi")`.
+- Fix: the wasix rust-std fork's `decode_error_kind` should map wasi ENOTEMPTY
+  (and any other missing codes) to the matching `ErrorKind`, so any package keying
+  on `DirectoryNotEmpty` works without per-crate patches. Broader than rustfs and
+  touches the toolchain (expensive rebuild), hence the local workaround for now.
+
+### `path_rename` mishandles hard links and replacement renames 🟡
+
+- Wasmer recursively rebases cached inode paths after renaming a directory and
+  assumed every inode reachable from that directory had a path below it. A hard
+  link can make the same inode reachable outside the moved tree, so `adjust_path`
+  panicked when `strip_prefix` failed and poisoned the filesystem lock.
+- After a successful rename over an existing destination, Wasmer also retained
+  the replaced destination in its inode cache instead of inserting the moved
+  source entry.
+- Unlink removed a hard-linked entry from the cache but skipped the host unlink
+  while another link remained, leaving transaction cleanup directories
+  physically non-empty.
+- Unlink removed directory entries from the cache before returning `EISDIR`, so
+  a remove-file-then-remove-directory probe could leave the cache inconsistent.
+- Host-backed mounts did not implement `hard_link`, so `path_link` fell back to
+  a cache-only alias and reported success without creating the host pathname.
+- The blanket `FileSystem` implementation for dereferenceable wrappers omitted
+  `hard_link`, turning supported host operations into `ENOTSUP` through `Arc`.
+- Cross-directory `HostFileSystem::rename` used `fs_extra` copy/move semantics
+  instead of the host's atomic rename operation.
+- Symptom: RustFS beta.12 atomically publishes multipart metadata by renaming a
+  transaction directory containing an inode also linked as sibling
+  `part.1.meta`. `mc pipe` then hung after Wasmer panicked in `path_rename`.
+- Fix (`patches/wasmer-path-rename-hardlink.patch`): rebase descendants, keep
+  out-of-tree hard-link aliases unchanged, and replace the cached destination
+  entry after the host rename. Materialize host hard links, forward them through
+  dereferenceable wrappers, remove the cache-only success fallback, preserve
+  directory entries on `EISDIR`, unlink every host pathname including non-final
+  links, and use the host's rename operation. Includes unit tests for path
+  rebasing. Upstreamable to Wasmer.
+
+### `fd_readdir` cookies skip entries after directory mutation 🟡
+
+- Wasmer rebuilt and sorted the live directory listing on every `fd_readdir`
+  call, then treated the caller's continuation cookie as an index into that
+  changing list.
+- Rust's `remove_dir_all` deletes each returned chunk before requesting the next
+  one. Those deletions shifted later entries below the previous cookie, so
+  Wasmer skipped the final file and `rmdir` correctly returned `ENOTEMPTY`.
+- Symptom: RustFS beta.12 multipart cleanup consistently left `old.meta` or
+  `old.meta.absent` in `.part-txn-settled-*` directories, causing `mc pipe` to
+  fail with errno 55.
+- Fix (`patches/wasmer-fd-readdir-stable-cookie.patch`): snapshot the sorted
+  entries per open directory stream when reading from cookie zero, and use that
+  stable snapshot for continuation calls. Duplicated descriptors share the
+  snapshot. The Wasmer `fs_remove_dir_all` test now covers enough long-named
+  entries to require multiple reads while deleting them. Upstreamable to Wasmer.
+
 ### spawned commands and PATH 🟢
 
 - Fixed in current wasmer: `posix_spawnp` and fork + `execvp` both resolve the
@@ -77,12 +233,12 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
   `NoSuchProcess process PID not found (pid=1)` for the calling process itself
   (verified under wasmer; `overlay/python-packages/psutil/tests/basic.nix`).
   `os.sched_getaffinity` does not answer either.
-- Consequence: joblib/loky's `cpu_count(only_physical_cores=True)` falls through
-  both to that `psutil.Process()` and propagates the error, since its `try` only
-  catches `ImportError`. scikit-learn's `_openmp_effective_n_threads()` calls it
-  whenever `OMP_NUM_THREADS` is unset, so every OpenMP-parallel estimator needs
-  that variable in the environment on wasix; with it set sklearn takes the
-  `omp_get_max_threads()` branch and never reaches psutil. Both directions are
+- Joblib currently masks this limitation: its semaphore probe gets `ENOTSUP`
+  first and disables multiprocessing, so scikit-learn's
+  `_openmp_effective_n_threads()` returns one when `OMP_NUM_THREADS` is unset.
+  If semaphores become available before process introspection does, joblib will
+  reach the `psutil.Process()` failure again. OpenMP-parallel estimators need
+  `OMP_NUM_THREADS` to use more than one thread on WASIX; both directions are
   pinned by `overlay/python-packages/scikit-learn/tests/basic.nix`.
 - Fix: answer self-inspection in wasmer (pid 1 exists, so `Process()` should
   resolve it), which also gets loky off the fallback path.

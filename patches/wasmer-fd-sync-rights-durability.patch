@@ -1,0 +1,34 @@
+--- a/lib/wasix/src/syscalls/wasi/fd_datasync.rs
++++ b/lib/wasix/src/syscalls/wasi/fd_datasync.rs
+@@ -14,9 +14,11 @@
+     let env = ctx.data();
+     let (_, state) = unsafe { env.get_memory_and_wasi_state(&ctx, 0) };
+     let fd_entry = wasi_try_ok!(state.fs.get_fd(fd));
+-    if !fd_entry.inner.rights.contains(Rights::FD_DATASYNC) {
+-        return Ok(Errno::Access);
+-    }
++    // fdatasync is a durability barrier, not a security capability (POSIX needs no
++    // special permission). path_open's rights delegation masks the implied
++    // FD_DATASYNC off files opened under mapped host dirs (see path_open2.rs TODO
++    // on rights traversal), so gating on it here fails legitimate syncs (rustfs).
++    // Sync any regular-file fd regardless of the right.
+ 
+     let file = {
+         let guard = fd_entry.inode.read();
+--- a/lib/wasix/src/syscalls/wasi/fd_sync.rs
++++ b/lib/wasix/src/syscalls/wasi/fd_sync.rs
+@@ -17,9 +17,11 @@
+     let env = ctx.data();
+     let (_, mut state) = unsafe { env.get_memory_and_wasi_state(&ctx, 0) };
+     let fd_entry = wasi_try_ok!(state.fs.get_fd(fd));
+-    if !fd_entry.inner.rights.contains(Rights::FD_SYNC) {
+-        return Ok(Errno::Access);
+-    }
++    // fsync is a durability barrier, not a security capability (POSIX needs no
++    // special permission). path_open's rights delegation masks the implied
++    // FD_SYNC off files opened under mapped host dirs (see path_open2.rs TODO on
++    // rights traversal), so gating on it here fails legitimate syncs (rustfs).
++    // Sync any regular-file fd regardless of the right.
+     let inode = fd_entry.inode;
+ 
+     // TODO: implement this for more than files

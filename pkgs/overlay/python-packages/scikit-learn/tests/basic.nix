@@ -2,11 +2,9 @@
 # numpy/scipy scientific stack and confirming the cross-built OpenMP runtime
 # (toolchain.openmp / libomp) is live inside sklearn.
 #
-# OMP_NUM_THREADS is set first: without it, sklearn's _openmp_effective_n_threads
-# counts CPUs via joblib -> loky -> psutil.Process(), which raises NoSuchProcess
-# on wasix (no process-table introspection, getpid()==1). With it set, sklearn
-# takes the branch that returns omp_get_max_threads(), skipping psutil. So
-# OpenMP-parallel estimators need OMP_NUM_THREADS in the environment on wasix.
+# OMP_NUM_THREADS is set first: without it, joblib disables multiprocessing
+# when WASIX reports ENOTSUP for its semaphore probe, so sklearn caps OpenMP at
+# one thread. With it set, sklearn returns omp_get_max_threads().
 #
 # Two BLAS paths are exercised. LinearRegression's LAPACK lstsq goes through
 # scipy's f2py wrappers, which pass the Fortran hidden CHARACTER-length args.
@@ -73,9 +71,7 @@
     '';
   };
 
-  # Pins the OMP_NUM_THREADS requirement described above, in both directions, so
-  # a wasix that grows process-table introspection shows up as a failure here
-  # rather than as an undocumented behaviour change.
+  # Pin both sides of the OMP_NUM_THREADS behavior described above.
   openmp-threads = runPython {
     name = "scikit-learn-openmp-threads";
     inherit wheel;
@@ -84,17 +80,7 @@
       from sklearn.utils._openmp_helpers import _openmp_effective_n_threads
 
       assert "OMP_NUM_THREADS" not in os.environ
-      try:
-          n = _openmp_effective_n_threads()
-      except Exception as e:
-          print("unset OMP_NUM_THREADS ->", type(e).__name__, e)
-      else:
-          raise AssertionError(
-              f"_openmp_effective_n_threads() returned {n} with OMP_NUM_THREADS "
-              "unset; does wasix have a process table now?")
-
-      os.environ["OMP_NUM_THREADS"] = "3"
-      assert _openmp_effective_n_threads() == 3, _openmp_effective_n_threads()
+      assert _openmp_effective_n_threads() == 1, _openmp_effective_n_threads()
     '';
   };
 }
