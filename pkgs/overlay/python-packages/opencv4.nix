@@ -31,5 +31,13 @@ in
     # libwebp's encoder references SharpYuv* from the split libsharpyuv.a that
     # find_package(WebP) does not propagate; libwebp's -L is already on the link.
     env.NIX_LDFLAGS = "-lsharpyuv";
+
+    # The generated config.py prepends the install lib dir to BINARIES_PATHS,
+    # baking a store path a bare wasix pip target cannot resolve into every wheel
+    # carrying cv2. That dir holds only static archives here, and the loader uses
+    # the list solely to find shared libraries, so it has nothing to contribute.
+    postInstall = ''
+      echo "BINARIES_PATHS = []" > "$out/${py.sitePackages}/cv2/config.py"
+    '';
   }
   pyprev.opencv4
