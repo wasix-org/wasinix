@@ -1,0 +1,29 @@
+Gate the JS-hosted wasm binding on "not WASI".
+
+The `__wasm__` block declares wasm_on_* imports supplied by llhttp's
+JavaScript wrapper (undici's llhttp.wasm), and makes llhttp_alloc/llhttp_free
+bind to them. A wasm32-wasi/wasix target is a standalone C target with no such
+host, so every consumer that links libllhttp.a fails at link with undefined
+wasm_on_* symbols. WASI builds want the ordinary C API.
+
+Upstream: report against nodejs/llhttp; the guard should exclude __wasi__.
+
+--- a/src/api.c
++++ b/src/api.c
+@@ -39,7 +39,7 @@
+ }
+
+
+-#if defined(__wasm__)
++#if defined(__wasm__) && !defined(__wasi__)
+
+ extern int wasm_on_message_begin(llhttp_t * p);
+ extern int wasm_on_url(llhttp_t* p, const char* at, size_t length);
+@@ -78,7 +78,7 @@ void llhttp_free(llhttp_t* parser) {
+   free(parser);
+ }
+
+-#endif  // defined(__wasm__)
++#endif  // defined(__wasm__) && !defined(__wasi__)
+
+ /* Some getters required to get stuff from the parser */
