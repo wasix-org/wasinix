@@ -1,0 +1,53 @@
+diff -ruN a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	2026-08-10 19:14:15.659025661 +0200
++++ b/src/lib.rs	2026-08-10 19:17:23.479185286 +0200
+@@ -1,4 +1,8 @@
+ #![no_std]
++#![cfg_attr(
++    all(target_arch = "wasm32", target_os = "wasi"),
++    feature(stdarch_wasm_atomic_wait)
++)]
+ #![doc = include_str!("../README.md")]
+ 
+ use core::sync::atomic::AtomicU32;
+@@ -19,6 +23,10 @@
+ #[path = "freebsd.rs"]
+ mod platform;
+ 
++#[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
++#[path = "wasi.rs"]
++mod platform;
++
+ /// If the value is `value`, wait until woken up.
+ ///
+ /// This function might also return spuriously,
+diff -ruN a/src/wasi.rs b/src/wasi.rs
+--- a/src/wasi.rs	1970-01-01 01:00:00.000000000 +0100
++++ b/src/wasi.rs	2026-08-10 19:17:23.478993594 +0200
+@@ -0,0 +1,26 @@
++use core::sync::atomic::AtomicU32;
++
++#[inline]
++pub fn wait(a: &AtomicU32, expected: u32) {
++    unsafe {
++        core::arch::wasm32::memory_atomic_wait32(
++            a as *const AtomicU32 as *mut i32,
++            expected as i32,
++            -1,
++        );
++    };
++}
++
++#[inline]
++pub fn wake_one(ptr: *const AtomicU32) {
++    unsafe {
++        core::arch::wasm32::memory_atomic_notify(ptr as *mut i32, 1);
++    };
++}
++
++#[inline]
++pub fn wake_all(ptr: *const AtomicU32) {
++    unsafe {
++        core::arch::wasm32::memory_atomic_notify(ptr as *mut i32, u32::MAX);
++    };
++}

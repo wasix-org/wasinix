@@ -1,0 +1,31 @@
+diff -ruN '--exclude=*.orig' '--exclude=*.rej' a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	2026-08-11 01:10:11.737497562 +0200
++++ b/src/lib.rs	2026-08-11 01:10:12.092783015 +0200
+@@ -404,6 +404,8 @@
+             "wasm32-unknown-emscripten" => "gcc",
+             "wasm32-unknown-unknown" => "gcc",
+             "wasm32-wasi" => "gcc",
++            "wasm32-wasmer-wasi" => "gcc",
++            "wasm32-wasmer-wasi-dl" => "gcc",
+             "aarch64-apple-ios" => "ios64-cross",
+             "x86_64-apple-ios" => "iossimulator-xcrun",
+             "aarch64-apple-ios-sim" => "iossimulator-xcrun",
+@@ -421,6 +423,9 @@
+         let mut ios_isysroot: std::option::Option<String> = None;
+ 
+         configure.arg(os);
++        if target.contains("wasi") {
++            configure.arg("no-secure-memory");
++        }
+ 
+         // If we're not on MSVC we configure cross compilers and cross tools and
+         // whatnot. Note that this doesn't happen on MSVC b/c things are pretty
+@@ -768,7 +773,7 @@
+         if self.target.contains("windows") {
+             println!("cargo:rustc-link-lib=user32");
+             println!("cargo:rustc-link-lib=crypt32");
+-        } else if self.target == "wasm32-wasi" {
++        } else if self.target.contains("wasi") {
+             println!("cargo:rustc-link-lib=wasi-emulated-signal");
+             println!("cargo:rustc-link-lib=wasi-emulated-process-clocks");
+             println!("cargo:rustc-link-lib=wasi-emulated-mman");

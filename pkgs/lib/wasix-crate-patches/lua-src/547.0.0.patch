@@ -1,0 +1,13 @@
+diff -ruN a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	2026-08-11 02:05:45.938142980 +0200
++++ b/src/lib.rs	2026-08-11 02:05:46.033533689 +0200
+@@ -104,6 +104,9 @@
+                 // Defined in Lua >= 5.3
+                 config.define("LUA_USE_WINDOWS", None);
+             }
++            _ if target.contains("wasi") => {
++                config.define("LUA_USE_POSIX", None);
++            }
+             _ if target.ends_with("emscripten") => {
+                 config
+                     .define("LUA_USE_POSIX", None)

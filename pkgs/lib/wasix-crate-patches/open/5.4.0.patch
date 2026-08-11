@@ -1,0 +1,50 @@
+diff -ruN a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	2026-08-10 19:25:02.907237323 +0200
++++ b/src/lib.rs	2026-08-10 19:25:02.957420469 +0200
+@@ -115,6 +115,9 @@
+ #[cfg(target_os = "redox")]
+ use redox as os;
+ 
++#[cfg(target_os = "wasi")]
++use wasi as os;
++
+ #[cfg(any(
+     target_os = "linux",
+     target_os = "android",
+@@ -145,7 +148,8 @@
+     target_os = "haiku",
+     target_os = "redox",
+     target_os = "aix",
+-    target_os = "hurd"
++    target_os = "hurd",
++    target_os = "wasi"
+ )))]
+ compile_error!("open is not supported on this platform");
+ 
+@@ -410,6 +414,9 @@
+ #[cfg(target_os = "redox")]
+ mod redox;
+ 
++#[cfg(target_os = "wasi")]
++mod wasi;
++
+ #[cfg(any(
+     test,
+     target_os = "linux",
+diff -ruN a/src/wasi.rs b/src/wasi.rs
+--- a/src/wasi.rs	1970-01-01 01:00:00.000000000 +0100
++++ b/src/wasi.rs	2026-08-10 19:25:02.957070089 +0200
+@@ -0,0 +1,13 @@
++use std::{ffi::OsStr, process::Command};
++
++pub fn commands<T: AsRef<OsStr>>(path: T) -> Vec<Command> {
++    let mut cmd = Command::new("xdg-open");
++    cmd.arg(path.as_ref());
++    vec![cmd]
++}
++
++pub fn with_command<T: AsRef<OsStr>>(path: T, app: impl Into<String>) -> Command {
++    let mut cmd = Command::new(app.into());
++    cmd.arg(path.as_ref());
++    cmd
++}

@@ -1,52 +1,109 @@
-diff --git a/src/lib.rs b/src/lib.rs
---- a/src/lib.rs
-+++ b/src/lib.rs
-@@ -39 +39 @@
+diff -ruN a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml	2026-08-10 19:11:01.956227407 +0200
++++ b/Cargo.toml	2026-08-10 19:11:02.033571532 +0200
+@@ -74,6 +74,9 @@
+ [target."cfg(unix)".dependencies.cfg-if]
+ version = "1"
+ 
++[target."cfg(target_family = \"wasm\")".dependencies.cfg-if]
++version = "1"
++
+ [target."cfg(windows)".dependencies.windows-link]
+ version = "0.2"
+ 
+diff -ruN a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	2026-08-10 19:11:01.956470432 +0200
++++ b/src/lib.rs	2026-08-10 19:11:01.965229877 +0200
+@@ -36,7 +36,7 @@
+ //! The compiler will ensure that the loaded function will not outlive the `Library` from which it comes,
+ //! preventing the most common memory-safety issues.
+ #![cfg_attr(
 -    any(unix, windows),
 +    any(unix, windows, target_family = "wasm"),
-@@ -47 +47 @@ pub mod os;
+     deny(missing_docs, clippy::all, unreachable_pub, unused)
+ )]
+ #![cfg_attr(libloading_docs, feature(doc_cfg))]
+@@ -44,12 +44,12 @@
+ pub mod changelog;
+ mod error;
+ pub mod os;
 -#[cfg(any(unix, windows, libloading_docs))]
 +#[cfg(any(unix, windows, target_family = "wasm", libloading_docs))]
-@@ -52 +52 @@ pub use self::error::Error;
+ mod safe;
+ mod util;
+ 
+ pub use self::error::Error;
 -#[cfg(any(unix, windows, libloading_docs))]
 +#[cfg(any(unix, windows, target_family = "wasm", libloading_docs))]
-diff --git a/src/os/mod.rs b/src/os/mod.rs
---- a/src/os/mod.rs
-+++ b/src/os/mod.rs
-@@ -20 +20 @@
+ pub use self::safe::{Library, Symbol};
+ use std::env::consts::{DLL_PREFIX, DLL_SUFFIX};
+ use std::ffi::{OsStr, OsString};
+diff -ruN a/src/os/mod.rs b/src/os/mod.rs
+--- a/src/os/mod.rs	2026-08-10 19:11:01.956793564 +0200
++++ b/src/os/mod.rs	2026-08-10 19:11:01.965319264 +0200
+@@ -17,7 +17,7 @@
+ //! ```
+ 
+ /// UNIX implementation of dynamic library loading.
 -#[cfg(any(unix, libloading_docs))]
 +#[cfg(any(unix, target_family = "wasm", libloading_docs))]
-diff --git a/src/os/unix/consts.rs b/src/os/unix/consts.rs
---- a/src/os/unix/consts.rs
-+++ b/src/os/unix/consts.rs
-@@ -61,2 +61,4 @@ mod posix {
+ #[cfg_attr(libloading_docs, doc(cfg(unix)))]
+ pub mod unix;
+ 
+diff -ruN a/src/os/unix/consts.rs b/src/os/unix/consts.rs
+--- a/src/os/unix/consts.rs	2026-08-10 19:11:01.956854736 +0200
++++ b/src/os/unix/consts.rs	2026-08-10 19:11:01.965546305 +0200
+@@ -58,7 +58,9 @@
+     use self::cfg_if::cfg_if;
+     use super::c_int;
+     cfg_if! {
 -        if #[cfg(target_os = "haiku")] {
 +        if #[cfg(target_os = "wasi")] {
 +            pub(super) const RTLD_LAZY: c_int = 1;
 +        } else if #[cfg(target_os = "haiku")] {
              pub(super) const RTLD_LAZY: c_int = 0;
-@@ -102,2 +104,4 @@ mod posix {
+         } else if #[cfg(target_os = "aix")] {
+             pub(super) const RTLD_LAZY: c_int = 4;
+@@ -99,7 +101,9 @@
+     }
+ 
+     cfg_if! {
 -        if #[cfg(target_os = "haiku")] {
 +        if #[cfg(target_os = "wasi")] {
 +            pub(super) const RTLD_NOW: c_int = 2;
 +        } else if #[cfg(target_os = "haiku")] {
              pub(super) const RTLD_NOW: c_int = 1;
-@@ -144,2 +148,4 @@ mod posix {
+         } else if #[cfg(any(
+             target_os = "linux",
+@@ -141,7 +145,9 @@
+     }
+ 
+     cfg_if! {
 -        if #[cfg(any(
 +        if #[cfg(target_os = "wasi")] {
 +            pub(super) const RTLD_GLOBAL: c_int = 4;
 +        } else if #[cfg(any(
              target_os = "haiku",
-@@ -195,2 +201,4 @@ mod posix {
+             all(target_os = "android",target_pointer_width = "32"),
+         ))] {
+@@ -192,7 +198,9 @@
+     }
+ 
+     cfg_if! {
 -        if #[cfg(any(
 +        if #[cfg(target_os = "wasi")] {
 +            pub(super) const RTLD_LOCAL: c_int = 0;
 +        } else if #[cfg(any(
             target_os = "netbsd",
-diff --git a/src/os/unix/mod.rs b/src/os/unix/mod.rs
---- a/src/os/unix/mod.rs
-+++ b/src/os/unix/mod.rs
-@@ -5,4 +5,8 @@ mod unix_imports {}
+            target_os = "nto",
+         ))] {
+diff -ruN a/src/os/unix/mod.rs b/src/os/unix/mod.rs
+--- a/src/os/unix/mod.rs	2026-08-10 19:11:01.956854736 +0200
++++ b/src/os/unix/mod.rs	2026-08-10 19:11:01.965835591 +0200
+@@ -2,10 +2,14 @@
+ // same rustdoc build visible.
+ #[cfg(all(libloading_docs, not(unix)))]
+ mod unix_imports {}
 -#[cfg(any(not(libloading_docs), unix))]
 +#[cfg(all(not(libloading_docs), unix))]
  mod unix_imports {
@@ -56,7 +113,10 @@ diff --git a/src/os/unix/mod.rs b/src/os/unix/mod.rs
 +mod unix_imports {
 +    pub(super) use std::os::wasi::ffi::OsStrExt;
 +}
-@@ -468,18 +472,46 @@ impl<T> fmt::Debug for Symbol<T> {
+ 
+ pub use self::consts::*;
+ use self::unix_imports::*;
+@@ -468,6 +472,7 @@
  // Platform specific things
  #[cfg_attr(any(target_os = "linux", target_os = "android"), link(name = "dl"))]
  #[cfg_attr(any(target_os = "freebsd", target_os = "dragonfly"), link(name = "c"))]
@@ -64,15 +124,7 @@ diff --git a/src/os/unix/mod.rs b/src/os/unix/mod.rs
  extern "C" {
      fn dlopen(filename: *const raw::c_char, flags: raw::c_int) -> *mut raw::c_void;
      fn dlclose(handle: *mut raw::c_void) -> raw::c_int;
-     fn dlsym(handle: *mut raw::c_void, symbol: *const raw::c_char) -> *mut raw::c_void;
-     fn dlerror() -> *mut raw::c_char;
-     fn dladdr(addr: *mut raw::c_void, info: *mut DlInfo) -> raw::c_int;
- }
- 
- #[repr(C)]
- struct DlInfo {
-     dli_fname: *const raw::c_char,
-     dli_fbase: *mut raw::c_void,
+@@ -483,3 +488,30 @@
      dli_sname: *const raw::c_char,
      dli_saddr: *mut raw::c_void,
  }
@@ -103,9 +155,14 @@ diff --git a/src/os/unix/mod.rs b/src/os/unix/mod.rs
 +
 +#[cfg(all(target_os = "wasi", target_vendor = "wasmer", not(target_env = "dl")))]
 +unsafe fn dladdr(_addr: *mut raw::c_void, _info: *mut DlInfo) -> raw::c_int { 0 }
-diff --git a/src/safe.rs b/src/safe.rs
---- a/src/safe.rs
-+++ b/src/safe.rs
-@@ -3 +3 @@ use super::os::unix as imp; // the implementation used here doesn't matter particularly much...
+diff -ruN a/src/safe.rs b/src/safe.rs
+--- a/src/safe.rs	2026-08-10 19:11:01.956943105 +0200
++++ b/src/safe.rs	2026-08-10 19:11:01.966076861 +0200
+@@ -1,6 +1,6 @@
+ #[cfg(libloading_docs)]
+ use super::os::unix as imp; // the implementation used here doesn't matter particularly much...
 -#[cfg(all(not(libloading_docs), unix))]
 +#[cfg(all(not(libloading_docs), any(unix, target_family = "wasm")))]
+ use super::os::unix as imp;
+ #[cfg(all(not(libloading_docs), windows))]
+ use super::os::windows as imp;

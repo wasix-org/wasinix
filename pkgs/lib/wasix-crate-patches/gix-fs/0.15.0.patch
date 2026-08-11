@@ -1,0 +1,55 @@
+diff -ruN a/src/capabilities.rs b/src/capabilities.rs
+--- a/src/capabilities.rs	2026-08-10 19:20:45.597091975 +0200
++++ b/src/capabilities.rs	2026-08-10 19:20:45.604007235 +0200
+@@ -39,6 +39,18 @@
+     }
+ }
+ 
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++impl Default for Capabilities {
++    fn default() -> Self {
++        Capabilities {
++            precompose_unicode: false,
++            ignore_case: false,
++            executable_bit: false,
++            symlink: true,
++        }
++    }
++}
++
+ impl Capabilities {
+     /// try to determine all values in this context by probing them in the given `git_dir`, which
+     /// should be on the file system the git repository is located on.
+diff -ruN a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	2026-08-10 19:20:45.597560066 +0200
++++ b/src/lib.rs	2026-08-10 19:20:45.604148684 +0200
+@@ -1,4 +1,5 @@
+ //! A crate with file-system specific utilities.
++#![cfg_attr(all(target_os = "wasi", target_vendor = "wasmer"), feature(wasi_ext))]
+ #![deny(rust_2018_idioms, missing_docs)]
+ #![forbid(unsafe_code)]
+ 
+diff -ruN a/src/symlink.rs b/src/symlink.rs
+--- a/src/symlink.rs	2026-08-10 19:20:45.597560066 +0200
++++ b/src/symlink.rs	2026-08-10 19:20:45.604231193 +0200
+@@ -3,11 +3,19 @@
+ /// Create a new symlink at `link` which points to `original`.
+ ///
+ /// Note that `original` doesn't have to exist.
+-#[cfg(not(windows))]
++#[cfg(all(
++    not(windows),
++    not(all(target_os = "wasi", target_vendor = "wasmer"))
++))]
+ pub fn create(original: &Path, link: &Path) -> io::Result<()> {
+     std::os::unix::fs::symlink(original, link)
+ }
+ 
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++pub fn create(original: &Path, link: &Path) -> io::Result<()> {
++    std::os::wasi::fs::symlink_path(original, link)
++}
++
+ /// Remove a symlink.
+ ///
+ /// Note that on only on windows this is special.

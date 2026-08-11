@@ -1,0 +1,36 @@
+diff -ruN a/src/search.rs b/src/search.rs
+--- a/src/search.rs	2026-08-10 19:31:31.783588415 +0200
++++ b/src/search.rs	2026-08-10 19:35:03.980985493 +0200
+@@ -280,7 +280,7 @@
+         // By default, go builds the libraries with '-Wl -z nodelete' which does not
+         // unload the go runtime. This isn't respected on mac ( https://github.com/golang/go/issues/11100#issuecomment-932638093 )
+         // so we need to explicitly load the library with RTLD_NODELETE( which prevents unloading )
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_os = "wasi"))]
+         let library: libloading::Library = unsafe {
+             use std::os::raw::c_int;
+ 
+@@ -766,7 +766,7 @@
+         })
+     }
+ 
+-    #[cfg(all(unix, not(target_os = "macos")))]
++    #[cfg(all(any(unix, target_os = "wasi"), not(target_os = "macos")))]
+     {
+         env::var_os("XDG_CONFIG_HOME")
+             .map(PathBuf::from)
+@@ -791,12 +791,12 @@
+         Some(PathBuf::from("/Library/Application Support/ADBC/Drivers"))
+     }
+ 
+-    #[cfg(all(unix, not(target_os = "macos")))]
++    #[cfg(all(any(unix, target_os = "wasi"), not(target_os = "macos")))]
+     {
+         Some(PathBuf::from("/etc/adbc/drivers"))
+     }
+ 
+-    #[cfg(not(unix))]
++    #[cfg(all(not(unix), not(target_os = "wasi")))]
+     {
+         None
+     }
