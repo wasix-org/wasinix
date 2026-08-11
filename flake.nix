@@ -46,6 +46,8 @@
       ./patches/wasmer-path-rename-hardlink.patch
       # fd_readdir cookies must remain valid while callers delete entries.
       ./patches/wasmer-fd-readdir-stable-cookie.patch
+      # isatty must be false for redirected stdio; see WASIX-TODO.md
+      ./patches/wasmer-isatty-non-tty-unknown.patch
     ];
     wasmerRuntime = wasmer.packages.${system}.wasmer.overrideAttrs (old: {
       patches = (old.patches or []) ++ wasmerPatches;

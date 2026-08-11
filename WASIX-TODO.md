@@ -253,12 +253,15 @@ current toolchain before relying on it.
   `WASIXCC_WASM_OPT_FLAGS=--asyncify:-O2` (below).
 - Fix: expose fork from the sysroot under EH, or upstream the shim.
 
-### `isatty` returns true for redirected stdout 🟡
+### `isatty` returns true for redirected stdout 🟢
 
-- `isatty(1)` is 1 even with stdout redirected (verified). Tools colorize into
-  files (jq emits ANSI into `>file`).
-- Workaround: tests strip ANSI (`testLib.normalizers.stripAnsi`).
-- Fix: report non-TTY for regular files/pipes.
+- `isatty(1)` was 1 even with stdout redirected, because `fdstat` reported the
+  std fds as `CharacterDevice` unconditionally. Tools colorized into files (jq
+  emitted ANSI into `>file`) and git ran its pager on a pipe.
+- Fixed by `patches/wasmer-isatty-non-tty-unknown.patch`: the std fds report
+  `Unknown` unless the host stream is a terminal, and the `ArcFile`/`ArcBoxFile`
+  wrappers forward the query (stdin is always wrapped).
+- Verified: `[ -t 0/1/2 ]` under bash is y on a pty and n on a pipe.
 
 ### no default `TERM` 🔴
 

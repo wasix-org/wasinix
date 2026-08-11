@@ -1,0 +1,158 @@
+--- a/lib/virtual-fs/src/host_fs.rs
++++ b/lib/virtual-fs/src/host_fs.rs
+@@ -616,6 +616,10 @@ impl VirtualFile for Stdout {
+         Some(1)
+     }
+ 
++    fn is_terminal(&self) -> bool {
++        std::io::IsTerminal::is_terminal(&std::io::stdout())
++    }
++
+     fn poll_read_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<usize>> {
+         Poll::Ready(Ok(0))
+     }
+@@ -790,6 +794,10 @@ impl VirtualFile for Stderr {
+         Some(2)
+     }
+ 
++    fn is_terminal(&self) -> bool {
++        std::io::IsTerminal::is_terminal(&std::io::stderr())
++    }
++
+     fn poll_read_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<usize>> {
+         Poll::Ready(Ok(0))
+     }
+@@ -905,6 +913,11 @@ impl VirtualFile for Stdin {
+     fn get_special_fd(&self) -> Option<u32> {
+         Some(0)
+     }
++
++    fn is_terminal(&self) -> bool {
++        std::io::IsTerminal::is_terminal(&std::io::stdin())
++    }
++
+     fn poll_read_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<usize>> {
+         {
+             let read_buffer = self.read_buffer.lock().unwrap();
+--- a/lib/virtual-fs/src/lib.rs
++++ b/lib/virtual-fs/src/lib.rs
+@@ -389,6 +389,14 @@ pub trait VirtualFile:
+         None
+     }
+ 
++    /// Indicates whether this file is connected to a terminal.
++    ///
++    /// Virtual files are not terminals by default. Implementations that wrap
++    /// host standard streams may override this to report the host TTY state.
++    fn is_terminal(&self) -> bool {
++        false
++    }
++
+     /// Writes to this file using an mmap offset and reference
+     /// (this method only works for mmap optimized file systems)
+     fn write_from_mmap(&mut self, _offset: u64, _len: u64) -> std::io::Result<()> {
+--- a/lib/wasix/src/fs/mod.rs
++++ b/lib/wasix/src/fs/mod.rs
+@@ -1838,11 +1838,25 @@ impl WasiFs {
+         Ok(*guard.deref())
+     }
+ 
++    fn std_fd_filetype(is_tty: bool) -> Filetype {
++        if is_tty {
++            Filetype::CharacterDevice
++        } else {
++            Filetype::Unknown
++        }
++    }
++
++    fn std_fd_is_terminal(&self, fd: WasiFd) -> bool {
++        WasiInodes::std_dev_get(&self.fd_map, fd)
++            .map(|file| file.is_terminal())
++            .unwrap_or(false)
++    }
++
+     pub fn fdstat(&self, fd: WasiFd) -> Result<Fdstat, Errno> {
+         match fd {
+             __WASI_STDIN_FILENO => {
+                 return Ok(Fdstat {
+-                    fs_filetype: Filetype::CharacterDevice,
++                    fs_filetype: Self::std_fd_filetype(self.std_fd_is_terminal(fd)),
+                     fs_flags: Fdflags::empty(),
+                     fs_rights_base: STDIN_DEFAULT_RIGHTS,
+                     fs_rights_inheriting: Rights::empty(),
+@@ -1850,7 +1864,7 @@ impl WasiFs {
+             }
+             __WASI_STDOUT_FILENO => {
+                 return Ok(Fdstat {
+-                    fs_filetype: Filetype::CharacterDevice,
++                    fs_filetype: Self::std_fd_filetype(self.std_fd_is_terminal(fd)),
+                     fs_flags: Fdflags::APPEND,
+                     fs_rights_base: STDOUT_DEFAULT_RIGHTS,
+                     fs_rights_inheriting: Rights::empty(),
+@@ -1858,7 +1872,7 @@ impl WasiFs {
+             }
+             __WASI_STDERR_FILENO => {
+                 return Ok(Fdstat {
+-                    fs_filetype: Filetype::CharacterDevice,
++                    fs_filetype: Self::std_fd_filetype(self.std_fd_is_terminal(fd)),
+                     fs_flags: Fdflags::APPEND,
+                     fs_rights_base: STDERR_DEFAULT_RIGHTS,
+                     fs_rights_inheriting: Rights::empty(),
+@@ -2899,13 +2913,30 @@ mod tests {
+     use super::*;
+     use once_cell::sync::OnceCell;
+     use tempfile::tempdir;
+-    use virtual_fs::{RootFileSystemBuilder, TmpFileSystem};
++    use virtual_fs::{NullFile, RootFileSystemBuilder, TmpFileSystem};
+     use wasmer::Engine;
+     use wasmer_config::package::PackageId;
+ 
+     use crate::WasiEnvBuilder;
+     use crate::bin_factory::{BinaryPackage, BinaryPackageMount, BinaryPackageMounts};
+ 
++    #[test]
++    fn fdstat_uses_swapped_stdio_terminal_state() {
++        let inodes = WasiInodes::new();
++        let fs_backing =
++            WasiFsRoot::from_filesystem(Arc::new(RootFileSystemBuilder::default().build_tmp()));
++        let wasi_fs = WasiFs::new_init(fs_backing, &inodes, FS_ROOT_INO).unwrap();
++
++        for fd in [
++            __WASI_STDIN_FILENO,
++            __WASI_STDOUT_FILENO,
++            __WASI_STDERR_FILENO,
++        ] {
++            wasi_fs.swap_file(fd, Box::<NullFile>::default()).unwrap();
++            assert_eq!(wasi_fs.fdstat(fd).unwrap().fs_filetype, Filetype::Unknown);
++        }
++    }
++
+     fn webc_symlink_fs() -> virtual_fs::WebcVolumeFileSystem {
+         let timestamps = webc::v3::Timestamps::default();
+         let dir = webc::v3::write::Directory::new(
+--- a/lib/virtual-fs/src/arc_file.rs
++++ b/lib/virtual-fs/src/arc_file.rs
+@@ -138,6 +138,10 @@ where
+         let inner = self.inner.lock().unwrap();
+         inner.get_special_fd()
+     }
++    fn is_terminal(&self) -> bool {
++        let inner = self.inner.lock().unwrap();
++        inner.is_terminal()
++    }
+     fn poll_read_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<usize>> {
+         let mut inner = self.inner.lock().unwrap();
+         let inner = Pin::new(inner.as_mut());
+--- a/lib/virtual-fs/src/arc_box_file.rs
++++ b/lib/virtual-fs/src/arc_box_file.rs
+@@ -122,6 +122,10 @@ impl VirtualFile for ArcBoxFile {
+         let inner = self.inner.lock().unwrap();
+         inner.get_special_fd()
+     }
++    fn is_terminal(&self) -> bool {
++        let inner = self.inner.lock().unwrap();
++        inner.is_terminal()
++    }
+     fn poll_read_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<usize>> {
+         let mut inner = self.inner.lock().unwrap();
+         let inner = Pin::new(inner.as_mut());
