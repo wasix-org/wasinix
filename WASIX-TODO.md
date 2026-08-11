@@ -152,6 +152,15 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
   duckdb/opencv `__wasi__` guard patches are now redundant and removed. Upstream
   this stub file into wasix-libc.
 
+### `mprotect` is not linkable 🟡
+
+- Boost.Context's `protected_fixedsize_stack` needs `mprotect` to install a
+  guard page, but wasix-libc provides no linkable implementation.
+- Workaround: the Boost package aliases it to `fixedsize_stack`, preserving the
+  allocator API without guard-page protection.
+- Fix: implement `mprotect` for WASIX linear-memory mappings, then remove the
+  package fallback.
+
 ### `<fenv.h>` omits the directed-rounding and exception-flag macros 🟡
 
 - wasix-libc's `<fenv.h>` defines `FE_TONEAREST` and `FE_ALL_EXCEPT` (both 0)

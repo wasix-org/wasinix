@@ -1,0 +1,10 @@
+--- a/libs/context/boost-context-features.jam
++++ b/libs/context/boost-context-features.jam
+@@ -25,6 +25,7 @@ feature.feature binary-format
+    : elf
+      mach-o
+      pe
++     wasm
+      xcoff
+    : propagated
+    ;

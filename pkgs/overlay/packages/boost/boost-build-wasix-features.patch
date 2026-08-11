@@ -1,0 +1,23 @@
+--- a/src/tools/features/architecture-feature.jam
++++ b/src/tools/features/architecture-feature.jam
+@@ -51,5 +51,8 @@ feature.feature architecture
+         # Combined architecture(s)
+         arm+x86
++        # WebAssembly
++        wasm
++
+     :
+         propagated optional
+     ;
+--- a/src/tools/features/os-feature.jam
++++ b/src/tools/features/os-feature.jam
+@@ -9,8 +9,8 @@ import os ;
+
+ .os-names =
+     none
+     aix android appletv bsd cygwin darwin freebsd haiku hpux iphone linux
+-    netbsd openbsd osf qnx qnxnto sgi solaris unix unixware windows vms vxworks
++    netbsd openbsd osf qnx qnxnto sgi solaris unix unixware wasi wasip1 windows vms vxworks
+     freertos
+
+     # Not actually an OS -- used for targeting bare metal where object
