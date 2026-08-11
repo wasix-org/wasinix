@@ -126,11 +126,16 @@ nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
    time.
 
 2. The webc manifest is generated; most packages need zero config. Deviations go
-   in `passthru.wasmer`: `name`, `version`, `commands` (aliases),
+   in `passthru.wasmer`: `name`, `version`, `commands` (aliases), `entrypoint`,
    `fs."<path>" = <store path>`, `commandEnv.<cmd>`, `autoSelfMount` (mount
    store paths found in the wasm), `selfMounts` (paths referenced from scripts,
    which autoSelfMount can't see). See git's package.nix for an example with
    several deviations.
+
+   `commands` also names several commands on one module, which is how bash
+   serves `sh` and coreutils serves a command per program without repeating the
+   wasm. More than one command means wasmer no longer infers an entrypoint, so
+   set one.
 
    Runtime webc dependencies accept a derivation or an attrset containing
    `package` and `version`. The helpers derive requirements from the package's

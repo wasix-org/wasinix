@@ -276,12 +276,12 @@ current toolchain before relying on it.
 
 - A git run occasionally emits that line (wasmer's spelling) between two
   commands while still exiting 0, which fails the output comparisons:
-  `checks.git.diff-compare` hit it once, having passed on the same runtime in
-  an earlier run of the same tree.
+  `checks.git.diff-compare` hit it once, having passed on the same runtime in an
+  earlier run of the same tree.
 - Not reproducible outside the nix sandbox: 0 of 15 runs of the same
-  `git --no-pager diff` and 0 of 5 of the whole test script. Each command in
-  the harness is its own wasmer process, so a late-exiting one printing after
-  the next command's output fits.
+  `git --no-pager diff` and 0 of 5 of the whole test script. Each command in the
+  harness is its own wasmer process, so a late-exiting one printing after the
+  next command's output fits.
 - Fix: find what raises SIGQUIT at teardown. Same family as the flaky
   "JoinHandle polled after completion" in host_fs.
 
@@ -300,15 +300,15 @@ current toolchain before relying on it.
   as `GIT_PAGER` streams and exits 0, and `less FILE`, whose stdin is the
   terminal, is fine.
 - Workaround: git ships no pager, so paged commands print directly.
-- Fix: back `/dev/tty` with the host terminal in the webc runner. Two parts,
-  and the first alone is not enough (tried: less then renders but still takes
-  no input). (1) `RootFileSystemBuilder` must not install a `NullFile`
-  `/dev/tty`, since a device that opens and reads EOF defeats every fallback.
-  (2) The runner needs a readable terminal device. It cannot be
-  `DeviceFile::new(STDIN)`, which is what the CLI's module path passes:
-  `path_open` shortcuts a file reporting `get_special_fd()` to a dup of the
-  _caller's_ fd, which in a pipeline is the pipe, so a pager would read its own
-  output as keystrokes. It needs a host-terminal device reporting no special fd.
+- Fix: back `/dev/tty` with the host terminal in the webc runner. Two parts, and
+  the first alone is not enough (tried: less then renders but still takes no
+  input). (1) `RootFileSystemBuilder` must not install a `NullFile` `/dev/tty`,
+  since a device that opens and reads EOF defeats every fallback. (2) The runner
+  needs a readable terminal device. It cannot be `DeviceFile::new(STDIN)`, which
+  is what the CLI's module path passes: `path_open` shortcuts a file reporting
+  `get_special_fd()` to a dup of the _caller's_ fd, which in a pipeline is the
+  pipe, so a pager would read its own output as keystrokes. It needs a
+  host-terminal device reporting no special fd.
 
 ### no FIFOs and no `/dev/fd`, so no process substitution 🔴
 
