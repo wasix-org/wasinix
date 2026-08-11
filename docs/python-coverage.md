@@ -21,16 +21,20 @@ packages' closures. 85.4% of the top-10k is pure, but only 58.5% has a fully
 pure closure. The gap is pure packages held hostage by one native dep, and that
 gap is what a native build buys back.
 
+A native package that also publishes a `py3-none-any` fallback wheel resolves
+from PyPI like a pure one, so it never blocks either; 73 of the survey's native
+packages do. Shipping one still buys speed or a real C path, but not coverage.
+
 ## Where we are
 
 A package counts as buildable when every native package in its dependency
-closure is published. Against the current registry closure (215 wheels):
+closure is published or resolves from PyPI:
 
-| cutoff     | buildable | blocked | out of scope |
-| ---------- | --------- | ------- | ------------ |
-| top 100    | 98.0%     | 2       | 0            |
-| top 1,000  | 88.6%     | 110     | 32           |
-| top 10,000 | 78.5%     | 2,084   | 304          |
+| cutoff     | buildable | blocked |
+| ---------- | --------- | ------- |
+| top 100    | 100.0%    | 0       |
+| top 1,000  | 95.1%     | 47      |
+| top 10,000 | 84.3%     | 1,480   |
 
 Out-of-scope packages are excluded from the denominator; see below.
 
@@ -41,30 +45,50 @@ each `pkgs/overlay/packages/<pkg>.nix` /
 
 ## Recompute
 
-Take the shipped set from
+Take the shipped set from every interpreter, since a `publishOnce` entry
+appears under only one:
 
 ```
-nix eval --json .#legacyPackages.x86_64-linux.pythonRegistry.wheels.py313 \
-  --apply builtins.attrNames
+nix eval --json .#legacyPackages.x86_64-linux.pythonRegistry.wheels \
+  --apply 'ws: builtins.concatLists (map builtins.attrNames (builtins.attrValues ws))'
 ```
 
-and intersect it with the closures in `pypi-survey/data/transitive.json`.
+`transitive.json` records each package's DIRECT native deps, not its closure, so
+the blocked set is not a lookup: rebuild the closures from the survey's cached
+PyPI metadata (`pypi-survey/scripts/transitive.py` does the same walk), then
+count a package blocked when its closure holds a native package that is neither
+shipped nor in `native_optional.json`.
 
 ## Burn-down
 
-Greedy order, each build unblocking the most still-blocked packages:
+Greedy order, each build unblocking the most still-blocked packages. The head
+is flat now: no remaining native package unblocks more than ~15, and most
+unblock 3-7, so progress is a long tail rather than a few big levers.
 
-| target            | builds needed |
-| ----------------- | ------------- |
-| top 1,000 to 90%  | 7             |
-| top 1,000 to 95%  | 30            |
-| top 1,000 to 99%  | 64            |
-| top 10,000 to 90% | 38            |
-| top 10,000 to 95% | 100           |
-| top 10,000 to 99% | 183           |
+Budget the tail by what a package needs, not by its unblock count. Measured
+over ~130 attempted builds:
 
-`scipy` dominates the head: 344 top-10k packages (3.5 points) hang off it alone,
-more than the next six combined.
+| shape                                     | builds                         |
+| ----------------------------------------- | ------------------------------ |
+| grammar or extension with no external dep | most pass                      |
+| rust/pyo3 wheel                           | ~1 in 6 pass first try         |
+| anything naming an external C library     | gated on that library crossing |
+
+A wheel that upstream ships self-contained still needs its C dependency built
+here, so the survey's "no bundled libs" signal describes upstream's wheel, not
+this build. The recurring failure shapes, in rough order of how often they came
+up:
+
+- a build step running on the build host imports the wasm interpreter's modules
+  (numpy for `get_include()`, cffi's `_cffi_backend`): add the build-host
+  module to `nativeBuildInputs`, as `ml-dtypes.nix` does.
+- the extension compiles against the native python headers and dies on
+  `pyport.h: LONG_BIT definition appears wrong for platform`: point it at the
+  cross include.
+- setup.py finds a library through `pkg-config` or a `*-config` binary, so
+  `buildInputs` never reaches it.
+- the nixpkgs expression rejects the wasm system outright, or pulls a test-only
+  dependency that does.
 
 ## Out of scope
 
