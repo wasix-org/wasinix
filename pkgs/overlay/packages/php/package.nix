@@ -90,8 +90,8 @@
     "jpeg"
     "lzma"
     "onig"
-    "pgcommon_shlib"
-    "pgport_shlib"
+    "pgcommon"
+    "pgport"
     "png16"
     "pq"
     "sharpyuv"
@@ -126,13 +126,13 @@
     # pgsql: --with-pgsql=<prefix> (a path) makes PHP's config.m4 skip pkg-config, so it reads these;
     # libpq is the synthetic merged prefix (libpq splits dev/lib).
     PGSQL_CFLAGS = "-I${libpqPrefix}/include";
-    PGSQL_LIBS = "-lpq -lpgcommon_shlib -lpgport_shlib -lz -lm";
+    PGSQL_LIBS = "-lpq -lpgcommon -lpgport -lz -lm";
     PHP_BUILD_SYSTEM = "clang(WASIX+WasmEH)";
     PHP_IPV6 = "yes";
     CFLAGS = "-g -O2 -mtail-call";
     CXXFLAGS = "-g -O2 -mtail-call";
     # pg's static libs at the final link (+ libm); other search dirs come from buildInputs.
-    LIBS = "-L${libpqLibraryDir} -lpgcommon_shlib -lpgport_shlib -lm";
+    LIBS = "-L${libpqLibraryDir} -lpgcommon -lpgport -lm";
     # libpq link-checks can't run on wasm; assert the symbols exist.
     ac_cv_lib_pq_PQlibVersion = "yes";
     ac_cv_lib_pq_PQencryptPasswordConn = "yes";
