@@ -108,12 +108,15 @@ in
     # consumer naming one gets "undeclared identifier"; inet-addr also adds musl's
     # inet_addr.c, missing from the Makefile source list. fcntl-locking exposes the
     # record-lock API but returns ENOSYS until Wasmer provides shared lock state.
+    # xsi-signal is the same unhiding for the XSI signal calls (siginterrupt and
+    # friends), which are built on sigaction.
     patches = [
       ./libc-select-exceptfds.patch
       ./wasix-libc-tzname.patch
       ./wasix-libc-inet-addr.patch
       ./wasix-libc-sched.patch
       ./wasix-libc-fcntl-locking.patch
+      ./wasix-libc-xsi-signal.patch
     ];
 
     passthru.wasix.updateNotes = [

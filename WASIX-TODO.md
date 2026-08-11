@@ -273,6 +273,17 @@ current toolchain before relying on it.
 - Verified: interactive bash on a pty reports the host `TERM` and enables
   bracketed paste; less renders full-screen.
 
+### `sigsetjmp` ignores the signal mask 🟡
+
+- wasix-libc defines `sigsetjmp` as a plain `setjmp` ("TODO: ignoring signal
+  masking for now" in `setjmplongjmp.c`) and the off-EH `<setjmp.h>` does not
+  declare it, so a consumer that finds the symbol gets silently wrong mask
+  behaviour.
+- Workaround: bash and readline pass `bash_cv_func_sigsetjmp=missing` and do
+  their own save/restore.
+- Fix: implement the mask save/restore (musl's `sigsetjmp_tail.c` is in the tree
+  but not in the build), then declare it.
+
 ### `getifaddrs`/`freeifaddrs` misnamed in wasix-libc 🟡
 
 - wasix-libc's `ifaddrs.h` declares the standard `getifaddrs`/`freeifaddrs`, but
