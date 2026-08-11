@@ -1,7 +1,8 @@
 # Python wheels wasinix ships (nixpkgs python3.pkgs attr names); drives the
 # pythonWheels targets and import smoke-tests. Entry: {attr, pyImport ? nixpkgs'
 # pythonImportsCheck, skipTest, noarch = build once for packages shipping no
-# python code, publishOnce = publish the default interpreter's ABI3 artifact}.
+# python code, publishOnce = publish the default interpreter's ABI3 artifact,
+# variants = the interpreters to build on, default all}.
 # Fixes in <attr>.nix, tests in <attr>/tests/, docs/packaging.md.
 [
   # ── pure-python (no C extension) ───────────────────────────────────────────────
@@ -224,7 +225,91 @@
   {attr = "setproctitle";} # no prctl and no argv to rewrite; falls back to its no-op pure module
   {attr = "ijson";} # the pure default backend; the C one needs yajl
   {attr = "tree-sitter";} # vendored tree-sitter core
+  # grammars: a generated parser.c per language, no dep beyond the core above.
+  {attr = "tree-sitter-bash";}
+  {attr = "tree-sitter-c-sharp";}
+  {attr = "tree-sitter-embedded-template";}
+  {attr = "tree-sitter-html";}
+  {attr = "tree-sitter-javascript";}
+  {attr = "tree-sitter-json";}
+  {attr = "tree-sitter-markdown";}
+  {attr = "tree-sitter-python";}
+  {attr = "tree-sitter-rust";}
+  {attr = "tree-sitter-sql";}
+  {attr = "tree-sitter-yaml";}
+  # overlay/python-packages/tree-sitter-grammars (the ones nixpkgs lacks)
+  {attr = "tree-sitter-c";}
+  {attr = "tree-sitter-cpp";}
+  {attr = "tree-sitter-css";}
+  {attr = "tree-sitter-elixir";}
+  {attr = "tree-sitter-fortran";}
+  {attr = "tree-sitter-go";}
+  {attr = "tree-sitter-groovy";}
+  {attr = "tree-sitter-java";}
+  {attr = "tree-sitter-julia";}
+  {attr = "tree-sitter-kotlin";}
+  {attr = "tree-sitter-lua";}
+  {attr = "tree-sitter-objc";}
+  {attr = "tree-sitter-php";}
+  {attr = "tree-sitter-powershell";}
+  {attr = "tree-sitter-regex";}
+  {attr = "tree-sitter-scala";}
+  {attr = "tree-sitter-swift";}
+  {attr = "tree-sitter-toml";}
+  {attr = "tree-sitter-typescript";}
+  {attr = "tree-sitter-verilog";}
+  {attr = "tree-sitter-xml";}
+  {attr = "tree-sitter-zig";}
   {attr = "ujson";} # vendored double-conversion; -lstdc++ mapped by wasixcc
+  {attr = "bitarray";}
+  {attr = "ciso8601";}
+  {attr = "crc32c";}
+  {attr = "crcmod";}
+  {attr = "cytoolz";} # cython over toolz
+  {attr = "hiredis";}
+  {attr = "maxminddb";}
+  {attr = "optree";} # pybind11; keras' pytree backend
+  {attr = "pyroaring";}
+  {attr = "time-machine";}
+  {attr = "zopfli";}
+  {attr = "asyncpg";}
+  {attr = "bitstruct";}
+  {attr = "cwcwidth";}
+  {attr = "editdistance";}
+  {attr = "forbiddenfruit";}
+  {attr = "geoarrow-c";}
+  {attr = "json-stream-rs-tokenizer";}
+  {attr = "pyahocorasick";}
+  {attr = "pyclipper";}
+  {attr = "pyiceberg";}
+  {attr = "pyinstrument";}
+  {attr = "pyjson5";}
+  {attr = "python-crfsuite";}
+  {attr = "traits";}
+  {attr = "yappi";}
+  {attr = "zope-proxy";}
+  {attr = "google-re2";} # re2 + abseil; overlay/python-packages/google-re2.nix
+  {attr = "onigurumacffi";}
+  {attr = "pycocotools";}
+  {attr = "bottleneck";}
+  {
+    attr = "python-rapidjson";
+    pyImport = "rapidjson";
+  } # overlay/packages/rapidjson.nix
+  {attr = "aiokafka";}
+  {attr = "backports-datetime-fromisoformat";}
+  {attr = "biopython";}
+  {attr = "cftime";}
+  {attr = "dependency-injector";}
+  {attr = "ephem";}
+  {attr = "immutables";}
+  {attr = "lmdb";}
+  {attr = "lru-dict";}
+  {attr = "marisa-trie";}
+  {attr = "mutf8";}
+  {attr = "mwparserfromhell";}
+  {attr = "pystemmer";}
+  {attr = "zlib-ng";}
   {attr = "pymongo";} # optional bson C speedups, vendored
   # spaCy's cython C++ support libs; each drops a hand-added host include (cymem.nix).
   {attr = "cymem";}
@@ -322,6 +407,11 @@
   } # renamed psycopg-c (pip's `psycopg[binary]`); overlay/python-packages/psycopg-binary.nix
   {attr = "psycopg2";} # libpq via native pg_config splice; overlay/python-packages/psycopg2.nix
   {
+    attr = "psycopg2-binary";
+    # renamed psycopg2, so it still imports psycopg2.
+    pyImport = "psycopg2";
+  } # overlay/python-packages/psycopg2-binary.nix
+  {
     attr = "pyzbar";
     # loads libzbar.so via ctypes at this import, exercising the dylib.
     pyImport = "pyzbar.pyzbar";
@@ -337,9 +427,12 @@
   {attr = "h5py";} # cython ext links static libhdf5; overlay/packages/hdf5.nix + overlay/python-packages/h5py.nix
   {
     attr = "opencv-python";
-    # nixpkgs' opencv-python is a metapackage over the python `opencv4` module.
     pyImport = "cv2";
-  } # overlay/packages/opencv4 + overlay/python-packages/opencv4.nix
+  } # overlay/packages/opencv4 + overlay/python-packages/{opencv4.nix,opencv-python}
+  {
+    attr = "opencv-python-headless";
+    pyImport = "cv2";
+  } # overlay/python-packages/opencv-python (same cv2, headless name)
   {attr = "snowflake-connector-python";} # bundled nanoarrow C++ result-parser ext; overlay/python-packages/snowflake-connector-python.nix (dontCheckRuntimeDeps)
   {
     attr = "onnx";
@@ -380,11 +473,31 @@
     pyImport = "pendulum._pendulum";
   } # maturin
   {attr = "safetensors";} # maturin (pyo3)
+  {attr = "blake3";}
+  {
+    attr = "cramjam";
+    # pyo3 gained 3.14 support in 0.26; every cramjam release constrains ^0.25,
+    # so the extension's init raises "exceptions must derive from BaseException".
+    variants = ["py313"];
+  }
+  {attr = "jellyfish";}
+  {attr = "nh3";} # ammonia bindings; twine/readme-renderer's sanitizer
+  {attr = "py-rust-stemmers";}
+  {attr = "hypothesis";}
+  {attr = "rustworkx";}
+  {attr = "burner-redis";}
   {attr = "cachebox";} # maturin/pyo3 (not in nixpkgs); overlay/python-packages/cachebox.nix
   {
     attr = "dbt-extractor";
     pyImport = "dbt_extractor";
   } # maturin/pyo3 (dbt jinja parser)
+  {
+    attr = "dbt-core-experimental-parser";
+    # ships one executable and no python module, so there is nothing to import;
+    # the artifact is interpreter-independent, so publish it once.
+    skipTest = true;
+    publishOnce = true;
+  } # overlay/packages/dbt-sa-cli + overlay/python-packages/dbt-core-experimental-parser.nix
   {attr = "libcst";} # setuptools-rust (native CST parser)
   {
     attr = "hf-xet";
