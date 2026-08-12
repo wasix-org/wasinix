@@ -277,6 +277,9 @@
           # set (patch versions + supportedVersions constraints enumerated against
           # the crates.io index) and each crate's hash (.#cargoRegistry.pinInputs).
           crate-pins = run "crate-pins" [p.nixVersions.latest] "python3" "crate-pins.py";
+          # Re-resolve the PyPI pins the hermetic anybuild template tests serve
+          # as their primary index (pkgs/overlay/packages/anybuild/tests).
+          anybuild-mirror = run "anybuild-mirror" [p.uv] "python3" "anybuild-mirror.py";
         };
 
         # rels.json key -> served upstream versions. Read by scripts/update.py (prune
