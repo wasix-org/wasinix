@@ -315,6 +315,7 @@
     crossPkgsPic = nixpkgsByProfile.exnrefEhpic;
     wasmer = wasmerRuntime;
     packagesDir = ./overlay/packages;
+    inherit pythonRegistry;
   };
   # keyed by program name, each carrying passthru.pkg / .webc / .tests
   inherit (wasmerLayer) wasmerPackages allWasmerPackages libraryTestPkgs;

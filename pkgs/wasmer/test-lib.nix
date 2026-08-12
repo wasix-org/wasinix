@@ -113,6 +113,10 @@
 in rec {
   inherit defaultForwardEnv defaultTimeout defaultWasixTimeout;
 
+  # The runtime the wasix runs use, for a native test that needs the binary
+  # itself (a tool shelling out to `wasmer`) rather than mkWasixRun's shims.
+  wasmer = effectiveWasmer;
+
   # Normalizers for mkScriptComparison's `normalize` hook: executables filtering
   # stdin. The native/wasix argument is ignored (both sides get the same cleanup).
   normalizers = {

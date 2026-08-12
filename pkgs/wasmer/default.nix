@@ -16,6 +16,9 @@
   shippedCommands,
   # overlay/packages dir, used to locate each package's tests/.
   packagesDir,
+  # the served wheel index, for tests that resolve against it. Forced only by a
+  # test, and it reads wasmerPackages.python.shim, which never forces .tests.
+  pythonRegistry,
 }: let
   testLib = import ./test-lib.nix {inherit pkgs wasmer;};
   mkTestGroup = import ../lib/test-group.nix {inherit pkgs lib posOf;};
@@ -33,10 +36,15 @@
         then import (dir + "/helpers.nix") {inherit pkgs;}
         else {};
       scope = {
-        inherit pkgs testLib helpers crossPkgs crossPkgsPic makeWasmerPackage;
-        # Reading a shim never forces .tests, so a test using another package does
-        # not cycle. .shim drives the packed .webc, .pkg.shim the source dir.
+        inherit pkgs testLib helpers crossPkgs crossPkgsPic makeWasmerPackage pythonRegistry;
+        inherit preferredProfilePackages;
+        # Shims, for putting another package's commands on PATH. .shim drives the
+        # packed .webc, .pkg.shim the source dir.
         wasmerPkgs = lib.mapAttrs (_: p: p.shim) wasmerPackages;
+        # The packages themselves, for a test that needs a .webc or .pkg rather
+        # than something runnable. Reaching for another package's .tests from
+        # here would cycle; nothing stops you, so don't.
+        inherit wasmerPackages;
       };
       testFiles = lib.attrNames (lib.filterAttrs
         (n: t: t == "regular" && lib.hasSuffix ".nix" n && n != "helpers.nix")

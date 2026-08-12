@@ -32,7 +32,37 @@
     } ''
       python3 ${./make-mirror-index.py} "$distsJsonPath" "$out"
     '';
+
+  mirrorUrl = "http://127.0.0.1:8741/simple";
+  overlayUrl = "http://127.0.0.1:8742/simple";
 in {
   inherit (lock) templates providers requirements;
-  inherit mirror;
+  inherit mirror mirrorUrl overlayUrl;
+
+  # Bring both indexes up on loopback and export the environment an anybuild
+  # python build resolves through. Needs python3 and curl on PATH.
+  serveIndexes = pythonRegistry: ''
+    python3 -m http.server 8741 --bind 127.0.0.1 --directory ${mirror} &
+    python3 -m http.server 8742 --bind 127.0.0.1 --directory ${pythonRegistry} &
+    trap 'kill %1 %2 2>/dev/null || true' EXIT
+    for url in ${mirrorUrl} ${overlayUrl}; do
+      for _ in $(seq 1 150); do
+        curl -fsS "$url/" >/dev/null 2>&1 && break
+        sleep 0.2
+      done
+      curl -fsS "$url/" >/dev/null || { echo "anybuild: $url never became ready" >&2; exit 1; }
+    done
+
+    # The primary index anybuild's cross-wheel steps compile against, and the one
+    # uv itself resolves the local venv and `uvx pip` from.
+    export ANYBUILD_PYTHON_INDEX_URL=${mirrorUrl}
+    export ANYBUILD_PYTHON_EXTRA_INDEX_URL=${overlayUrl}
+    export UV_DEFAULT_INDEX=${mirrorUrl}
+    # Only the interpreter on PATH. Probing for managed installations reads an
+    # ELF interpreter from /bin/sh and friends, which the sandbox has not got.
+    # The same variable the pyproject install branch sets, so they agree.
+    export UV_PYTHON_PREFERENCE=only-system
+    export UV_PYTHON_DOWNLOADS=never
+    export UV_NO_CACHE=1
+  '';
 }
