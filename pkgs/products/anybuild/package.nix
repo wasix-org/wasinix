@@ -20,6 +20,17 @@ rustPlatform.buildRustPackage (finalAttrs: {
 
   cargoHash = "sha256-BiEVEJe5uEHbpyx2p/CREIdEwgJAwZykb6Pedu/47kE=";
 
+  patches = [
+    # python_index_url / ANYBUILD_PYTHON_INDEX_URL: the cross-wheel steps
+    # hardcode --index-url=https://pypi.org/simple, and --emit-index-url bakes
+    # it into cross-requirements.txt, so nothing can resolve off pypi.org.
+    ./python-index-url.patch
+    # ANYBUILD_WASMER_PACKAGE_<DEP>: the runtime package a toolchain dependency
+    # maps to is a fixed table entry, so a build cannot target another build of
+    # the same runtime.
+    ./wasmer-package-override.patch
+  ];
+
   postPatch = ''
     substituteInPlace crates/anybuild/src/run/local.rs \
       --replace-fail '#!/bin/bash' '#!${shellPath}'

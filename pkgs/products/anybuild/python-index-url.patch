@@ -1,0 +1,289 @@
+diff --git a/crates/anybuild/resources/starlib/tools/python.bzl b/crates/anybuild/resources/starlib/tools/python.bzl
+index 51bb9d4..40a6883 100644
+--- a/crates/anybuild/resources/starlib/tools/python.bzl
++++ b/crates/anybuild/resources/starlib/tools/python.bzl
+@@ -78,19 +78,20 @@ def _cross_wheel_steps(config, venv, local_venv):
+     python_version = config.python_version
+     extra = ", ".join(config.python_extra_dependencies)
+     index = config.python_extra_index_url
++    primary = config.python_index_url or "https://pypi.org/simple"
+     all_files = config.python_install_requires_all_files
+     in_subdir = config.app_subdir != None
+     cross_packages = "{}/lib/python{}/site-packages".format(venv.path, python_version)
+ 
+     if file_exists("pyproject.toml"):
+         compile_step = run(
+-            "uv pip compile pyproject.toml --universal --extra-index-url {} --index-url=https://pypi.org/simple --emit-index-url --no-deps -o cross-requirements.txt".format(index),
++            "uv pip compile pyproject.toml --universal --extra-index-url {} --index-url={} --emit-index-url --no-deps -o cross-requirements.txt".format(index, primary),
+             outputs = ["cross-requirements.txt"],
+         )
+     else:
+         inputs = None if (in_subdir or all_files) else config.python_install_inputs
+         compile_step = run(
+-            "uv pip compile requirements.txt --python-version={} --universal --extra-index-url {} --index-url=https://pypi.org/simple --emit-index-url --no-deps -o cross-requirements.txt".format(python_version, index),
++            "uv pip compile requirements.txt --python-version={} --universal --extra-index-url {} --index-url={} --emit-index-url --no-deps -o cross-requirements.txt".format(python_version, index, primary),
+             inputs = inputs,
+             outputs = ["cross-requirements.txt"],
+         )
+diff --git a/crates/anybuild/src/providers/mkdocs.rs b/crates/anybuild/src/providers/mkdocs.rs
+index 16425a5..c516a26 100644
+--- a/crates/anybuild/src/providers/mkdocs.rs
++++ b/crates/anybuild/src/providers/mkdocs.rs
+@@ -70,6 +70,7 @@ fn default_python_config() -> PythonConfig {
+         ("python_precompile", Value::Bool(true)),
+         ("python_cross_platform", Value::Null),
+         ("python_extra_index_url", Value::Null),
++        ("python_index_url", Value::Null),
+         ("python_install_inputs", Value::Null),
+         ("python_mcp_self_running", Value::Bool(false)),
+     ] {
+diff --git a/crates/anybuild/src/providers/python.rs b/crates/anybuild/src/providers/python.rs
+index 6207b49..f3b5ea8 100644
+--- a/crates/anybuild/src/providers/python.rs
++++ b/crates/anybuild/src/providers/python.rs
+@@ -146,6 +146,9 @@ pub struct PythonConfig {
+     #[serde(rename = "python_cross_platform")]
+     pub cross_platform: Option<String>,
+     pub python_extra_index_url: Option<String>,
++    /// Primary index the cross-platform wheel steps resolve against
++    /// (None => https://pypi.org/simple). Repoints resolution at a mirror.
++    pub python_index_url: Option<String>,
+     /// Derived install inputs for the Starlark provider (None => all files).
+     #[serde(rename = "python_install_inputs")]
+     pub install_inputs: Option<Vec<String>>,
+@@ -175,6 +178,7 @@ impl Default for PythonConfig {
+             precompile_python: true,
+             cross_platform: None,
+             python_extra_index_url: None,
++            python_index_url: None,
+             install_inputs: None,
+             mcp_self_running: false,
+         }
+@@ -225,6 +229,7 @@ impl PythonConfig {
+             precompile_python: env_bool(operation, "python_precompile")?.unwrap_or(true),
+             cross_platform: env_str(operation, "python_cross_platform"),
+             python_extra_index_url: env_str(operation, "python_extra_index_url"),
++            python_index_url: env_str(operation, "python_index_url"),
+             install_inputs: env_json(operation, "python_install_inputs")?,
+             mcp_self_running: env_bool(operation, "python_mcp_self_running")?.unwrap_or(false),
+         })
+diff --git a/fixtures/manifest.json b/fixtures/manifest.json
+index 0375633..9ff9a68 100644
+--- a/fixtures/manifest.json
++++ b/fixtures/manifest.json
+@@ -98,6 +98,7 @@
+     "python_precompile": true,
+     "python_cross_platform": null,
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [],
+     "python_mcp_self_running": false,
+     "static_convert_redirects": true,
+@@ -139,6 +140,7 @@
+     "python_precompile": true,
+     "python_cross_platform": "wasix_wasm32",
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [],
+     "python_mcp_self_running": false,
+     "static_convert_redirects": true,
+@@ -177,6 +179,7 @@
+     "python_precompile": true,
+     "python_cross_platform": null,
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "requirements.txt"
+     ],
+@@ -218,6 +221,7 @@
+     "python_precompile": true,
+     "python_cross_platform": "wasix_wasm32",
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "requirements.txt"
+     ],
+@@ -2593,6 +2597,7 @@
+     "python_precompile": true,
+     "python_cross_platform": null,
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "pyproject.toml",
+      "uv.lock",
+@@ -2633,6 +2638,7 @@
+     "python_precompile": true,
+     "python_cross_platform": "wasix_wasm32",
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "pyproject.toml",
+      "uv.lock",
+@@ -2670,6 +2676,7 @@
+     "python_precompile": true,
+     "python_cross_platform": null,
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "pyproject.toml",
+      "uv.lock",
+@@ -2708,6 +2715,7 @@
+     "python_precompile": true,
+     "python_cross_platform": "wasix_wasm32",
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "pyproject.toml",
+      "uv.lock",
+@@ -2745,6 +2753,7 @@
+     "python_precompile": true,
+     "python_cross_platform": null,
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "requirements.txt"
+     ],
+@@ -2781,6 +2790,7 @@
+     "python_precompile": true,
+     "python_cross_platform": "wasix_wasm32",
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "requirements.txt"
+     ],
+@@ -2818,6 +2828,7 @@
+     "python_precompile": true,
+     "python_cross_platform": null,
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "requirements.txt"
+     ],
+@@ -2856,6 +2867,7 @@
+     "python_precompile": true,
+     "python_cross_platform": "wasix_wasm32",
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "requirements.txt"
+     ],
+@@ -2893,6 +2905,7 @@
+     "python_precompile": true,
+     "python_cross_platform": null,
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "requirements.txt"
+     ],
+@@ -2931,6 +2944,7 @@
+     "python_precompile": true,
+     "python_cross_platform": "wasix_wasm32",
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "requirements.txt"
+     ],
+@@ -2968,6 +2982,7 @@
+     "python_precompile": true,
+     "python_cross_platform": null,
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "pyproject.toml",
+      "uv.lock",
+@@ -3008,6 +3023,7 @@
+     "python_precompile": true,
+     "python_cross_platform": "wasix_wasm32",
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "pyproject.toml",
+      "uv.lock",
+@@ -3047,6 +3063,7 @@
+     "python_precompile": true,
+     "python_cross_platform": null,
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "requirements.txt"
+     ],
+@@ -3085,6 +3102,7 @@
+     "python_precompile": true,
+     "python_cross_platform": "wasix_wasm32",
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "requirements.txt"
+     ],
+@@ -3122,6 +3140,7 @@
+     "python_precompile": true,
+     "python_cross_platform": null,
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "requirements.txt"
+     ],
+@@ -3160,6 +3179,7 @@
+     "python_precompile": true,
+     "python_cross_platform": "wasix_wasm32",
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "requirements.txt"
+     ],
+@@ -3195,6 +3215,7 @@
+     "python_precompile": true,
+     "python_cross_platform": null,
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "requirements.txt"
+     ],
+@@ -3231,6 +3252,7 @@
+     "python_precompile": true,
+     "python_cross_platform": "wasix_wasm32",
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "requirements.txt"
+     ],
+@@ -3266,6 +3288,7 @@
+     "python_precompile": true,
+     "python_cross_platform": null,
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [],
+     "python_mcp_self_running": false
+    },
+@@ -3300,6 +3323,7 @@
+     "python_precompile": true,
+     "python_cross_platform": "wasix_wasm32",
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [],
+     "python_mcp_self_running": false
+    }
+@@ -3333,6 +3357,7 @@
+     "python_precompile": true,
+     "python_cross_platform": null,
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "requirements.txt"
+     ],
+@@ -3369,6 +3394,7 @@
+     "python_precompile": true,
+     "python_cross_platform": "wasix_wasm32",
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "requirements.txt"
+     ],
+@@ -3491,6 +3517,7 @@
+     "python_precompile": true,
+     "python_cross_platform": null,
+     "python_extra_index_url": null,
++    "python_index_url": null,
+     "python_install_inputs": [
+      "requirements.txt"
+     ],

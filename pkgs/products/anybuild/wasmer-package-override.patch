@@ -1,0 +1,45 @@
+diff --git a/crates/anybuild/src/run/wasmer.rs b/crates/anybuild/src/run/wasmer.rs
+index 7420a0c..5d2f87a 100644
+--- a/crates/anybuild/src/run/wasmer.rs
++++ b/crates/anybuild/src/run/wasmer.rs
+@@ -129,6 +129,15 @@ fn rewrite_binary(program: &str) -> Option<&'static str> {
+     })
+ }
+ 
++/// `ANYBUILD_WASMER_PACKAGE_<DEP>` replacement for the package a toolchain
++/// dependency maps to, so a build can target a package other than the pinned
++/// one (a local rebuild, a fork, a different namespace). The value is a full
++/// `namespace/name@=version` reference, as in the mapper table.
++fn mapped_dependency_override(operation: &OperationContext, dep: &str) -> Option<String> {
++    let field = format!("wasmer_package_{}", dep.replace('-', "_"));
++    crate::providers::base::env_var(operation, &field).filter(|value| !value.is_empty())
++}
++
+ /// Port of `WasmerRunner.mapper`.
+ pub fn mapper() -> &'static IndexMap<&'static str, MapperItem> {
+     static MAPPER: LazyLock<IndexMap<&'static str, MapperItem>> = LazyLock::new(|| {
+@@ -614,8 +623,13 @@ impl WasmerRunner {
+                     }
+                 }
+             }
+-            let Some(mapped_dependency) = mapped_dependencies.get(version.as_str()) else {
+-                bail!("Dependency {}@{} not found in Wasmer", dep.name, version);
++            let overridden = mapped_dependency_override(&self.operation, &dep.name);
++            let mapped_dependency = match overridden.as_deref() {
++                Some(value) => value,
++                None => match mapped_dependencies.get(version.as_str()) {
++                    Some(value) => value.as_str(),
++                    None => bail!("Dependency {}@{} not found in Wasmer", dep.name, version),
++                },
+             };
+             let source = dep
+                 .version
+@@ -627,7 +641,7 @@ impl WasmerRunner {
+                 );
+             package_mappings.push(WasmerPackageMapping {
+                 source,
+-                target: (*mapped_dependency).to_owned(),
++                target: mapped_dependency.to_owned(),
+             });
+             let (package_name, package_version) = mapped_dependency
+                 .split_once('@')
