@@ -274,21 +274,21 @@
   # Shipped Python wheels (overlay/python-packages/wheels.nix). cpython needs PIC
   # (ctypes/dl) and the exnref EH encoding wasmer accepts, so the wheels are one set
   # anchored at exnrefEhpic. noarch builds once, everything else per interpreter.
-  mkPythonWheels = pyKey: pyAttr: webcName: select:
+  mkPythonWheels = pyKey: pyAttr: select:
     import ./python-wheels.nix {
       inherit pkgs lib mkTestGroup select pyKey;
       python3 = nixpkgsByProfile.exnrefEhpic.${pyAttr};
       wasmer = wasmerRuntime;
-      pythonWebc = wasmerLayer.wasmerPackages.${webcName}.webc;
+      pythonWebc = wasmerLayer.wasmerPackages.${pyAttr}.webc;
     };
   isNoarch = e: e.noarch or false;
   publishOnceWheelNames =
     map (e: e.attr)
     (lib.filter (e: e.publishOnce or false) (import ./overlay/python-packages/wheels.nix));
   pythonWheels = {
-    noarch = mkPythonWheels "noarch" "python314" "python3.14" isNoarch;
-    py313 = mkPythonWheels "py313" "python313" "python3.13" (e: !isNoarch e);
-    py314 = mkPythonWheels "py314" "python314" "python3.14" (e: !isNoarch e);
+    noarch = mkPythonWheels "noarch" "python314" isNoarch;
+    py313 = mkPythonWheels "py313" "python313" (e: !isNoarch e);
+    py314 = mkPythonWheels "py314" "python314" (e: !isNoarch e);
   };
 
   # The overlay cargo registry: the minted +wasix.N payload and its checks. The

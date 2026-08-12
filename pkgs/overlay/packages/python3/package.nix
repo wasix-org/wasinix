@@ -263,19 +263,33 @@
             wasmer = {
               name = webcName;
               entrypoint = "python${pyVer}";
+              # The atom is the module name, and a consumer's manifest refers to
+              # an interpreter as <package>:python (anybuild's serve command
+              # does). The command keeps its version, so `--entrypoint
+              # python3.13` and the run-by-name shims are unaffected.
+              commands = [
+                {
+                  name = "python${pyVer}";
+                  module = "python";
+                  wasm = "python${pyVer}.wasm";
+                  output = "python${pyVer}.wasm";
+                  # commandEnv only reaches auto-globbed commands, so a declared
+                  # one carries its own.
+                  env = {
+                    SSL_CERT_FILE = "/etc/ssl/certs/ca-bundle.crt";
+                    SSL_CERT_DIR = "/etc/ssl/certs";
+                    # getpath can't resolve argv0 (no PATH in the guest), leaving sys.executable
+                    # empty, which breaks subprocess([sys.executable, ..]) and spawn.
+                    PYTHONEXECUTABLE = "${py}/bin/python${pyVer}.wasm";
+                  };
+                }
+              ];
               autoSelfMount = true;
               # autoSelfMount only scans bin/*.wasm, but bash is baked into subprocess.py and
               # tzdata into _sysconfigdata (else zoneinfo raises "No time zone found").
               selfMounts = [preferredProfilePackages.bash final.buildPackages.tzdata];
               # Without a bundled CA set, https raises SSLCertVerificationError.
               fs."/etc/ssl" = "${final.cacert}/etc/ssl";
-              commandEnv."python${pyVer}" = {
-                SSL_CERT_FILE = "/etc/ssl/certs/ca-bundle.crt";
-                SSL_CERT_DIR = "/etc/ssl/certs";
-                # getpath can't resolve argv0 (no PATH in the guest), leaving sys.executable
-                # empty, which breaks subprocess([sys.executable, ..]) and spawn.
-                PYTHONEXECUTABLE = "${py}/bin/python${pyVer}.wasm";
-              };
             };
           };
         } (base.override {
@@ -327,8 +341,10 @@
     in
       py;
   in {
-    python313 = mkWasixPython prev.python313 "python3.13";
-    python314 = mkWasixPython prev.python314 "python3.14";
+    # No dot: a wasmer manifest rejects a dependency name carrying one, so
+    # `wasmer/python3.13` is a package nothing can depend on.
+    python313 = mkWasixPython prev.python313 "python313";
+    python314 = mkWasixPython prev.python314 "python314";
     python3 = mkWasixPython prev.python314 "python";
   };
 }

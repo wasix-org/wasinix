@@ -24,7 +24,7 @@ in {
       tag = "";
     }
     // instantiate {
-      python = wasmerPkgs."python3.13";
+      python = wasmerPkgs.python313;
       tag = "313";
     };
 }
