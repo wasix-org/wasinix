@@ -875,3 +875,40 @@ giving `3.7.0.2` -> `3.7.2` and `3.7.1` -> `3.7.100`.
 
 Nothing to fix upstream; noted because the next four-component package will
 hit the throw and needs to know why truncating is not the answer.
+
+### anybuild pins a python runtime our wheels cannot load 🟡
+
+`crates/anybuild/src/run/wasmer.rs` maps a `python@3.13` dependency onto
+`python/python@=3.13.5`. An app built against our wheel index installs cp313
+`wasix_wasm32` wheels, and that runtime cannot load them: a FastAPI app dies at
+startup with `ModuleNotFoundError: No module named
+'pydantic_core._pydantic_core'`, while the identical `site-packages` imports
+fine under this repo's own `python313` webc.
+
+The published interpreter is built without threads, so its import machinery
+accepts `['.cpython-313-wasm32-wasi.so', '.abi3.so', '.so']`. Ours has threads,
+puts `-threads` in the platform triple, and its wheels ship
+`_pydantic_core.cpython-313-wasm32-wasi-threads.so`, which is on neither list.
+The file is simply never a candidate; nothing is dlopened and no ABI error is
+raised, hence the bare "no module named". abi3 extensions (`.abi3.so`) carry no
+triple and do load on both, so a wheel set is only partly broken.
+
+Substituting ours needed two shapes our webcs did not have, both since fixed in
+`overlay/packages/python3`: a wasmer manifest rejects a dependency whose name
+carries a dot, so the versioned interpreters are `wasmer/python313` and
+`wasmer/python314` rather than `wasmer/python3.13`; and a consumer's manifest
+refers to an interpreter as `<package>:python`, so the module (and therefore the
+atom) is `python` while the command keeps its version.
+
+- Workaround: the serve check substitutes our own interpreter through the
+  vendored `ANYBUILD_WASMER_PACKAGE_<DEP>` knob plus `--include-webc`.
+- Fix: republish `python/python` from a threads-enabled interpreter (this
+  repo's), or point anybuild's mapper at the package we publish. Not a wheel
+  fix: the `-threads` triple is what the wheels are built for, and a wheel set
+  is only usable on an interpreter whose `EXT_SUFFIX` matches.
+
+Both anybuild knobs the tests lean on are vendored patches, not upstream:
+`python_index_url` (`ANYBUILD_PYTHON_INDEX_URL`), because the cross-wheel steps
+hardcode `--index-url=https://pypi.org/simple` and bake it into
+`cross-requirements.txt`, and `ANYBUILD_WASMER_PACKAGE_<DEP>` above. Both live
+in `pkgs/products/anybuild/` and should go upstream to wasmerio/anybuild.
