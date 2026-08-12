@@ -269,7 +269,8 @@
           wheel-natives = run "wheel-natives" [] "python3" "wheel-natives.py";
           preview-diff = run "preview-diff" [] "python3" "preview-diff.py";
           preview-index-deploy = run "preview-index-deploy" [wasmerRuntime p.jq] "bash" "preview-index-deploy.sh";
-          update = run "update" [wasix.nixUpdate p.nix-prefetch-git p.cargo] "python3" "update.py";
+          # uv: the anybuild retention hook re-resolves its PyPI pins.
+          update = run "update" [wasix.nixUpdate p.nix-prefetch-git p.cargo p.uv] "python3" "update.py";
           # Runs the wasix server (overlay package) under wasmer, seeded from the
           # fresh mint; cargo relocks/builds against the local instance.
           cargo-registry-serve = run "cargo-registry-serve" [p.nixVersions.latest p.cargo wasmerRuntime] "python3" "cargo-registry-serve.py";

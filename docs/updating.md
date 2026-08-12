@@ -23,8 +23,11 @@ latest-per-minor, `none` to opt out), the rels.json prune (drop keys nothing
 serves), and finally the `passthru.wasix.retentionHook`s: a per-package command
 that re-syncs a listing derived from the pins (icu regenerates its
 `versions.nix` from the nixpkgs majors, so a dropped or added major tracks
-automatically). They run in that order, for every target rather than any one of
-them, because either can move a served version. Retention fetches and hashes the
+automatically; anybuild re-resolves the PyPI pins its template tests build
+against, which come from that release's `examples/`). They run in that order,
+for every target rather than any one of them, because either can move a served
+version. A hook that would otherwise redo expensive work on an unrelated bump
+gates itself: anybuild's compares the version recorded in its lock. Retention fetches and hashes the
 outgoing release, so a bump run can do network work beyond the pins themselves
 (see "Registry history" in `docs/packaging.md`). The `update.yml` workflow runs
 it weekly with one PR per moved target; a manual dispatch with `only` bundles

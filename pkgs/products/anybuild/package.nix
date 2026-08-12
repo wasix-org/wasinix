@@ -41,9 +41,14 @@ rustPlatform.buildRustPackage (finalAttrs: {
     export ANYBUILD_BIN="$PWD/target/${stdenv.hostPlatform.rust.rustcTarget}/release/anybuild"
   '';
 
-  passthru.updateScript = {
-    command = nix-update-script {extraArgs = ["--flake"];};
-    attrPath = "nativePackages.anybuild";
+  passthru = {
+    updateScript = {
+      command = nix-update-script {extraArgs = ["--flake"];};
+      attrPath = "nativePackages.anybuild";
+    };
+    # The template tests pin PyPI from this source's examples/, so a bump has to
+    # re-resolve them. The script no-ops unless the recorded version moved.
+    wasix.retentionHook = ["scripts/anybuild-mirror.py"];
   };
 
   meta = {
