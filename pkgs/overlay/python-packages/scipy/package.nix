@@ -55,28 +55,22 @@ in
     # traps under wasm's strictly-typed call_indirect; the patches append them.
     # 1.18 moved the generator's wrapper code, so an older release takes the
     # variant cut against the layout it still has.
-    patches = [
-      (
-        if lib.versionOlder pyprev.scipy.version "1.18"
-        then ../patches/scipy-cython-blas-fortran-charlen-pre118.patch
-        else ../patches/scipy-cython-blas-fortran-charlen.patch
-      )
-      (
-        if lib.versionOlder pyprev.scipy.version "1.18"
-        then ../patches/scipy-hand-c-blas-fortran-charlen-pre118.patch
-        else ../patches/scipy-hand-c-blas-fortran-charlen.patch
-      )
-    ];
-
-    # __config__.py records the store paths of the tools that built it, and
-    # nixpkgs nuke-refs it and drops its opt-1 bytecode. The plain .pyc holds the
-    # same strings and survives, so the output keeps a build host python
-    # reference and fails the check. Later than postInstall so the order against
-    # that cleanup does not matter.
-    postFixup = lib.optionalString isHistory ''
-      rm -f $out/${pyprev.python.sitePackages}/scipy/__pycache__/__config__.*.pyc
-      nuke-refs $out/${pyprev.python.sitePackages}/scipy/__config__.py
-    '';
+    # nixpkgs carries an upstream cross-compilation backport cut against the
+    # current release, whose hunks miss on an older src; ours are the port's own.
+    patches = old:
+      lib.optionals (!isHistory) old
+      ++ [
+        (
+          if lib.versionOlder pyprev.scipy.version "1.18"
+          then ../patches/scipy-cython-blas-fortran-charlen-pre118.patch
+          else ../patches/scipy-cython-blas-fortran-charlen.patch
+        )
+        (
+          if lib.versionOlder pyprev.scipy.version "1.18"
+          then ../patches/scipy-hand-c-blas-fortran-charlen-pre118.patch
+          else ../patches/scipy-hand-c-blas-fortran-charlen.patch
+        )
+      ];
 
     # _test_internal calls fesetround(FE_UPWARD); wasm has no dynamic rounding
     # modes, so wasix-libc omits those fenv.h macros.

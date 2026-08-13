@@ -80,43 +80,12 @@
         postPatch = helpers.mergeScript [(o.postPatch or "") unboundBuildTools];
       })
     else drv;
-  # scikit-learn pins the version meson reads, and nixpkgs unbounds three build
-  # requirements by matching the current release's literal ranges, which an older
-  # release spells differently, so that postPatch goes and the generic sed above
-  # covers it. It cannot take a package file: declaring one makes the set fail to
-  # evaluate with "unsupported system: wasm32-wasip1", so the correction rides
-  # here, where only minted entries are reached.
-  # scipy carries an upstream backport patch cut against the current release, so
-  # its hunks miss on an older src; the charlen patches beside it are the port's
-  # own and stay. Like scikit-learn it cannot take a package file, so this rides
-  # here where only minted entries are reached.
-  scipyFixup = drv:
-    if (drv.pname or "") == "scipy" && (drv.passthru.wasmer.history or false)
-    then
-      drv.overrideAttrs (o: {
-        patches =
-          builtins.filter
-          (p: builtins.match ".*charlen.*" (baseNameOf (toString p)) != null)
-          (o.patches or []);
-      })
-    else drv;
-  sklearnFixup = drv:
-    if (drv.pname or "") == "scikit-learn" && (drv.passthru.wasmer.history or false)
-    then
-      drv.overrideAttrs (_: {
-        postPatch =
-          unboundBuildTools
-          + ''
-            sed -i "s|run_command('sklearn/_build_utils/version.py', check: true).stdout().strip(),|'$version',|" meson.build
-          '';
-      })
-    else drv;
   # A build backend that imports the package writes bytecode beside it, and it
   # lands in the wheel. A py3-none-any artifact then differs per interpreter,
   # and the registry refuses the two as one filename with conflicting contents.
   noBuildBytecode = drv: drv.overrideAttrs (_: {PYTHONDONTWRITEBYTECODE = "1";});
 in
-  builtins.mapAttrs (_: drv: noBuildBytecode (scipyFixup (sklearnFixup (historyFixups drv))))
+  builtins.mapAttrs (_: drv: noBuildBytecode (historyFixups drv))
   (
     (callArgs.helpers.loadPackageDir {
       dir = ./.;
