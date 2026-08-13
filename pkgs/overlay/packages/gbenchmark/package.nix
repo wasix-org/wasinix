@@ -9,5 +9,12 @@
 }:
 helpers.libTweaks {
   patches = [./cycleclock-wasm.patch];
+
+  # gtest is built with exceptions, so its `__cxa_throw` finds nothing in the
+  # exception-free profiles' libc++abi and the test executables fail to link.
+  # A cross build cannot run them regardless.
+  cmakeFlags = ["-DBENCHMARK_ENABLE_TESTING=OFF"];
+  buildInputs = helpers.dropInputsByName ["gtest"];
+  doCheck = false;
 }
 prev.gbenchmark
