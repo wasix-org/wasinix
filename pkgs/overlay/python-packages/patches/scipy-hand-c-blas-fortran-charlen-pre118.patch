@@ -1,0 +1,227 @@
+The SuperLU half of scipy-hand-c-blas-fortran-charlen.patch, for the releases up
+to 1.17 that predate scipy's Fortran-to-C migration: the optimize, linalg,
+integrate, PROPACK and arnaud declaration headers the full patch also fixes do
+not exist there, and those routines are still Fortran, where flang emits the
+hidden CHARACTER lengths on both sides of the call.
+
+SuperLU's bundled C code declares the Fortran BLAS symbols without the hidden
+lengths, which traps under wasm's strictly typed call_indirect
+(signature_mismatch:<sym>); each header binds the flang symbol to a declaration
+that carries them.
+
+--- a/scipy/sparse/linalg/_dsolve/SuperLU/SRC/slu_sdefs.h
++++ b/scipy/sparse/linalg/_dsolve/SuperLU/SRC/slu_sdefs.h
+@@ -273,6 +273,51 @@
+ extern void sgemv_(char *, slu_blasint *, slu_blasint *, float *, float *a, slu_blasint *,
+                   float *, slu_blasint *, float *, float *, slu_blasint *);
+ 
++
++/*
++ * WASIX: flang compiles the Netlib reference BLAS/LAPACK with the standard F77
++ * hidden-CHARACTER-length ABI: one trailing size_t per CHARACTER*1 flag arg
++ * (TRANS/UPLO/DIAG/SIDE/JOBZ/...), appended after ALL explicit args. These
++ * declarations omit those lengths (and declare ?getrf/?getri as CBLAS_INT-
++ * returning though the flang subroutines return void), which is harmless where a
++ * lax C ABI ignores the difference but traps under wasm's strictly typed
++ * call_indirect / dylib import (signature_mismatch:<sym>). For each affected
++ * routine, bind the true flang symbol to a private C name via an asm label (with
++ * the hidden lengths / void return), then redirect the public name to a static
++ * inline wrapper that appends length 1 per char arg (every wrapped arg is
++ * CHARACTER*1; LSAME reads only the first character). The wrapper needs a
++ * DISTINCT name from the true symbol: reusing it makes the asm label bind the
++ * call back to the wrapper (self-recursion under wasm-ld). Counts/return types
++ * verified against the flang-built reference lib arities. See scipy.nix.
++ */
++#if defined(__wasi__) || defined(__wasm__)
++#include <stddef.h>
++#ifndef SCIPY_WASIX_STR
++#define SCIPY_WASIX_STR2(x) #x
++#define SCIPY_WASIX_STR(x) SCIPY_WASIX_STR2(x)
++#endif
++
++#undef sgemm_
++extern void scipy_wasix_real_sgemm(const char* a0, const char* a1, const slu_blasint* a2, const slu_blasint* a3, const slu_blasint* a4, const float* a5, const float* a6, const slu_blasint* a7, const float* a8, const slu_blasint* a9, const float* a10, float* a11, const slu_blasint* a12, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(sgemm)));
++static inline void scipy_wasix_slu_sgemm(const char* a0, const char* a1, const slu_blasint* a2, const slu_blasint* a3, const slu_blasint* a4, const float* a5, const float* a6, const slu_blasint* a7, const float* a8, const slu_blasint* a9, const float* a10, float* a11, const slu_blasint* a12) { scipy_wasix_real_sgemm(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, 1, 1); }
++#define sgemm_ scipy_wasix_slu_sgemm
++
++#undef strsv_
++extern void scipy_wasix_real_strsv(char* a0, char* a1, char* a2, slu_blasint* a3, float* a4, slu_blasint* a5, float* a6, slu_blasint* a7, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(strsv)));
++static inline void scipy_wasix_slu_strsv(char* a0, char* a1, char* a2, slu_blasint* a3, float* a4, slu_blasint* a5, float* a6, slu_blasint* a7) { scipy_wasix_real_strsv(a0, a1, a2, a3, a4, a5, a6, a7, 1, 1, 1); }
++#define strsv_ scipy_wasix_slu_strsv
++
++#undef strsm_
++extern void scipy_wasix_real_strsm(char* a0, char* a1, char* a2, char* a3, slu_blasint* a4, slu_blasint* a5, float* a6, float* a7, slu_blasint* a8, float* a9, slu_blasint* a10, size_t, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(strsm)));
++static inline void scipy_wasix_slu_strsm(char* a0, char* a1, char* a2, char* a3, slu_blasint* a4, slu_blasint* a5, float* a6, float* a7, slu_blasint* a8, float* a9, slu_blasint* a10) { scipy_wasix_real_strsm(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, 1, 1, 1, 1); }
++#define strsm_ scipy_wasix_slu_strsm
++
++#undef sgemv_
++extern void scipy_wasix_real_sgemv(char * a0, slu_blasint * a1, slu_blasint * a2, float * a3, float * a4, slu_blasint * a5, float * a6, slu_blasint * a7, float * a8, float * a9, slu_blasint * a10, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(sgemv)));
++static inline void scipy_wasix_slu_sgemv(char * a0, slu_blasint * a1, slu_blasint * a2, float * a3, float * a4, slu_blasint * a5, float * a6, slu_blasint * a7, float * a8, float * a9, slu_blasint * a10) { scipy_wasix_real_sgemv(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, 1); }
++#define sgemv_ scipy_wasix_slu_sgemv
++#endif  /* wasm charlen redirects */
++
+ extern void susolve(int, int, float*, float*);
+ extern void slsolve(int, int, float*, float*);
+ extern void smatvec(int, int, int, float*, float*, float*);
+--- a/scipy/sparse/linalg/_dsolve/SuperLU/SRC/slu_ddefs.h
++++ b/scipy/sparse/linalg/_dsolve/SuperLU/SRC/slu_ddefs.h
+@@ -273,6 +273,51 @@
+ extern void dgemv_(char *, slu_blasint *, slu_blasint *, double *, double *a, slu_blasint *,
+                   double *, slu_blasint *, double *, double *, slu_blasint *);
+ 
++
++/*
++ * WASIX: flang compiles the Netlib reference BLAS/LAPACK with the standard F77
++ * hidden-CHARACTER-length ABI: one trailing size_t per CHARACTER*1 flag arg
++ * (TRANS/UPLO/DIAG/SIDE/JOBZ/...), appended after ALL explicit args. These
++ * declarations omit those lengths (and declare ?getrf/?getri as CBLAS_INT-
++ * returning though the flang subroutines return void), which is harmless where a
++ * lax C ABI ignores the difference but traps under wasm's strictly typed
++ * call_indirect / dylib import (signature_mismatch:<sym>). For each affected
++ * routine, bind the true flang symbol to a private C name via an asm label (with
++ * the hidden lengths / void return), then redirect the public name to a static
++ * inline wrapper that appends length 1 per char arg (every wrapped arg is
++ * CHARACTER*1; LSAME reads only the first character). The wrapper needs a
++ * DISTINCT name from the true symbol: reusing it makes the asm label bind the
++ * call back to the wrapper (self-recursion under wasm-ld). Counts/return types
++ * verified against the flang-built reference lib arities. See scipy.nix.
++ */
++#if defined(__wasi__) || defined(__wasm__)
++#include <stddef.h>
++#ifndef SCIPY_WASIX_STR
++#define SCIPY_WASIX_STR2(x) #x
++#define SCIPY_WASIX_STR(x) SCIPY_WASIX_STR2(x)
++#endif
++
++#undef dgemm_
++extern void scipy_wasix_real_dgemm(const char* a0, const char* a1, const slu_blasint* a2, const slu_blasint* a3, const slu_blasint* a4, const double* a5, const double* a6, const slu_blasint* a7, const double* a8, const slu_blasint* a9, const double* a10, double* a11, const slu_blasint* a12, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(dgemm)));
++static inline void scipy_wasix_slu_dgemm(const char* a0, const char* a1, const slu_blasint* a2, const slu_blasint* a3, const slu_blasint* a4, const double* a5, const double* a6, const slu_blasint* a7, const double* a8, const slu_blasint* a9, const double* a10, double* a11, const slu_blasint* a12) { scipy_wasix_real_dgemm(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, 1, 1); }
++#define dgemm_ scipy_wasix_slu_dgemm
++
++#undef dtrsv_
++extern void scipy_wasix_real_dtrsv(char* a0, char* a1, char* a2, slu_blasint* a3, double* a4, slu_blasint* a5, double* a6, slu_blasint* a7, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(dtrsv)));
++static inline void scipy_wasix_slu_dtrsv(char* a0, char* a1, char* a2, slu_blasint* a3, double* a4, slu_blasint* a5, double* a6, slu_blasint* a7) { scipy_wasix_real_dtrsv(a0, a1, a2, a3, a4, a5, a6, a7, 1, 1, 1); }
++#define dtrsv_ scipy_wasix_slu_dtrsv
++
++#undef dtrsm_
++extern void scipy_wasix_real_dtrsm(char* a0, char* a1, char* a2, char* a3, slu_blasint* a4, slu_blasint* a5, double* a6, double* a7, slu_blasint* a8, double* a9, slu_blasint* a10, size_t, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(dtrsm)));
++static inline void scipy_wasix_slu_dtrsm(char* a0, char* a1, char* a2, char* a3, slu_blasint* a4, slu_blasint* a5, double* a6, double* a7, slu_blasint* a8, double* a9, slu_blasint* a10) { scipy_wasix_real_dtrsm(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, 1, 1, 1, 1); }
++#define dtrsm_ scipy_wasix_slu_dtrsm
++
++#undef dgemv_
++extern void scipy_wasix_real_dgemv(char * a0, slu_blasint * a1, slu_blasint * a2, double * a3, double * a4, slu_blasint * a5, double * a6, slu_blasint * a7, double * a8, double * a9, slu_blasint * a10, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(dgemv)));
++static inline void scipy_wasix_slu_dgemv(char * a0, slu_blasint * a1, slu_blasint * a2, double * a3, double * a4, slu_blasint * a5, double * a6, slu_blasint * a7, double * a8, double * a9, slu_blasint * a10) { scipy_wasix_real_dgemv(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, 1); }
++#define dgemv_ scipy_wasix_slu_dgemv
++#endif  /* wasm charlen redirects */
++
+ extern void dusolve(int, int, double*, double*);
+ extern void dlsolve(int, int, double*, double*);
+ extern void dmatvec(int, int, int, double*, double*, double*);
+--- a/scipy/sparse/linalg/_dsolve/SuperLU/SRC/slu_cdefs.h
++++ b/scipy/sparse/linalg/_dsolve/SuperLU/SRC/slu_cdefs.h
+@@ -276,6 +276,51 @@
+ extern void cgemv_(char *, slu_blasint *, slu_blasint *, singlecomplex *, singlecomplex *a, slu_blasint *,
+                   singlecomplex *, slu_blasint *, singlecomplex *, singlecomplex *, slu_blasint *);
+ 
++
++/*
++ * WASIX: flang compiles the Netlib reference BLAS/LAPACK with the standard F77
++ * hidden-CHARACTER-length ABI: one trailing size_t per CHARACTER*1 flag arg
++ * (TRANS/UPLO/DIAG/SIDE/JOBZ/...), appended after ALL explicit args. These
++ * declarations omit those lengths (and declare ?getrf/?getri as CBLAS_INT-
++ * returning though the flang subroutines return void), which is harmless where a
++ * lax C ABI ignores the difference but traps under wasm's strictly typed
++ * call_indirect / dylib import (signature_mismatch:<sym>). For each affected
++ * routine, bind the true flang symbol to a private C name via an asm label (with
++ * the hidden lengths / void return), then redirect the public name to a static
++ * inline wrapper that appends length 1 per char arg (every wrapped arg is
++ * CHARACTER*1; LSAME reads only the first character). The wrapper needs a
++ * DISTINCT name from the true symbol: reusing it makes the asm label bind the
++ * call back to the wrapper (self-recursion under wasm-ld). Counts/return types
++ * verified against the flang-built reference lib arities. See scipy.nix.
++ */
++#if defined(__wasi__) || defined(__wasm__)
++#include <stddef.h>
++#ifndef SCIPY_WASIX_STR
++#define SCIPY_WASIX_STR2(x) #x
++#define SCIPY_WASIX_STR(x) SCIPY_WASIX_STR2(x)
++#endif
++
++#undef cgemm_
++extern void scipy_wasix_real_cgemm(const char* a0, const char* a1, const slu_blasint* a2, const slu_blasint* a3, const slu_blasint* a4, const singlecomplex* a5, const singlecomplex* a6, const slu_blasint* a7, const singlecomplex* a8, const slu_blasint* a9, const singlecomplex* a10, singlecomplex* a11, const slu_blasint* a12, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(cgemm)));
++static inline void scipy_wasix_slu_cgemm(const char* a0, const char* a1, const slu_blasint* a2, const slu_blasint* a3, const slu_blasint* a4, const singlecomplex* a5, const singlecomplex* a6, const slu_blasint* a7, const singlecomplex* a8, const slu_blasint* a9, const singlecomplex* a10, singlecomplex* a11, const slu_blasint* a12) { scipy_wasix_real_cgemm(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, 1, 1); }
++#define cgemm_ scipy_wasix_slu_cgemm
++
++#undef ctrsv_
++extern void scipy_wasix_real_ctrsv(char* a0, char* a1, char* a2, slu_blasint* a3, singlecomplex* a4, slu_blasint* a5, singlecomplex* a6, slu_blasint* a7, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(ctrsv)));
++static inline void scipy_wasix_slu_ctrsv(char* a0, char* a1, char* a2, slu_blasint* a3, singlecomplex* a4, slu_blasint* a5, singlecomplex* a6, slu_blasint* a7) { scipy_wasix_real_ctrsv(a0, a1, a2, a3, a4, a5, a6, a7, 1, 1, 1); }
++#define ctrsv_ scipy_wasix_slu_ctrsv
++
++#undef ctrsm_
++extern void scipy_wasix_real_ctrsm(char* a0, char* a1, char* a2, char* a3, slu_blasint* a4, slu_blasint* a5, singlecomplex* a6, singlecomplex* a7, slu_blasint* a8, singlecomplex* a9, slu_blasint* a10, size_t, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(ctrsm)));
++static inline void scipy_wasix_slu_ctrsm(char* a0, char* a1, char* a2, char* a3, slu_blasint* a4, slu_blasint* a5, singlecomplex* a6, singlecomplex* a7, slu_blasint* a8, singlecomplex* a9, slu_blasint* a10) { scipy_wasix_real_ctrsm(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, 1, 1, 1, 1); }
++#define ctrsm_ scipy_wasix_slu_ctrsm
++
++#undef cgemv_
++extern void scipy_wasix_real_cgemv(char * a0, slu_blasint * a1, slu_blasint * a2, singlecomplex * a3, singlecomplex * a4, slu_blasint * a5, singlecomplex * a6, slu_blasint * a7, singlecomplex * a8, singlecomplex * a9, slu_blasint * a10, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(cgemv)));
++static inline void scipy_wasix_slu_cgemv(char * a0, slu_blasint * a1, slu_blasint * a2, singlecomplex * a3, singlecomplex * a4, slu_blasint * a5, singlecomplex * a6, slu_blasint * a7, singlecomplex * a8, singlecomplex * a9, slu_blasint * a10) { scipy_wasix_real_cgemv(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, 1); }
++#define cgemv_ scipy_wasix_slu_cgemv
++#endif  /* wasm charlen redirects */
++
+ extern void cusolve(int, int, singlecomplex*, singlecomplex*);
+ extern void clsolve(int, int, singlecomplex*, singlecomplex*);
+ extern void cmatvec(int, int, int, singlecomplex*, singlecomplex*, singlecomplex*);
+--- a/scipy/sparse/linalg/_dsolve/SuperLU/SRC/slu_zdefs.h
++++ b/scipy/sparse/linalg/_dsolve/SuperLU/SRC/slu_zdefs.h
+@@ -276,6 +276,51 @@
+ extern void zgemv_(char *, slu_blasint *, slu_blasint *, doublecomplex *, doublecomplex *a, slu_blasint *,
+                   doublecomplex *, slu_blasint *, doublecomplex *, doublecomplex *, slu_blasint *);
+ 
++
++/*
++ * WASIX: flang compiles the Netlib reference BLAS/LAPACK with the standard F77
++ * hidden-CHARACTER-length ABI: one trailing size_t per CHARACTER*1 flag arg
++ * (TRANS/UPLO/DIAG/SIDE/JOBZ/...), appended after ALL explicit args. These
++ * declarations omit those lengths (and declare ?getrf/?getri as CBLAS_INT-
++ * returning though the flang subroutines return void), which is harmless where a
++ * lax C ABI ignores the difference but traps under wasm's strictly typed
++ * call_indirect / dylib import (signature_mismatch:<sym>). For each affected
++ * routine, bind the true flang symbol to a private C name via an asm label (with
++ * the hidden lengths / void return), then redirect the public name to a static
++ * inline wrapper that appends length 1 per char arg (every wrapped arg is
++ * CHARACTER*1; LSAME reads only the first character). The wrapper needs a
++ * DISTINCT name from the true symbol: reusing it makes the asm label bind the
++ * call back to the wrapper (self-recursion under wasm-ld). Counts/return types
++ * verified against the flang-built reference lib arities. See scipy.nix.
++ */
++#if defined(__wasi__) || defined(__wasm__)
++#include <stddef.h>
++#ifndef SCIPY_WASIX_STR
++#define SCIPY_WASIX_STR2(x) #x
++#define SCIPY_WASIX_STR(x) SCIPY_WASIX_STR2(x)
++#endif
++
++#undef zgemm_
++extern void scipy_wasix_real_zgemm(const char* a0, const char* a1, const slu_blasint* a2, const slu_blasint* a3, const slu_blasint* a4, const doublecomplex* a5, const doublecomplex* a6, const slu_blasint* a7, const doublecomplex* a8, const slu_blasint* a9, const doublecomplex* a10, doublecomplex* a11, const slu_blasint* a12, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(zgemm)));
++static inline void scipy_wasix_slu_zgemm(const char* a0, const char* a1, const slu_blasint* a2, const slu_blasint* a3, const slu_blasint* a4, const doublecomplex* a5, const doublecomplex* a6, const slu_blasint* a7, const doublecomplex* a8, const slu_blasint* a9, const doublecomplex* a10, doublecomplex* a11, const slu_blasint* a12) { scipy_wasix_real_zgemm(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, 1, 1); }
++#define zgemm_ scipy_wasix_slu_zgemm
++
++#undef ztrsv_
++extern void scipy_wasix_real_ztrsv(char* a0, char* a1, char* a2, slu_blasint* a3, doublecomplex* a4, slu_blasint* a5, doublecomplex* a6, slu_blasint* a7, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(ztrsv)));
++static inline void scipy_wasix_slu_ztrsv(char* a0, char* a1, char* a2, slu_blasint* a3, doublecomplex* a4, slu_blasint* a5, doublecomplex* a6, slu_blasint* a7) { scipy_wasix_real_ztrsv(a0, a1, a2, a3, a4, a5, a6, a7, 1, 1, 1); }
++#define ztrsv_ scipy_wasix_slu_ztrsv
++
++#undef ztrsm_
++extern void scipy_wasix_real_ztrsm(char* a0, char* a1, char* a2, char* a3, slu_blasint* a4, slu_blasint* a5, doublecomplex* a6, doublecomplex* a7, slu_blasint* a8, doublecomplex* a9, slu_blasint* a10, size_t, size_t, size_t, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(ztrsm)));
++static inline void scipy_wasix_slu_ztrsm(char* a0, char* a1, char* a2, char* a3, slu_blasint* a4, slu_blasint* a5, doublecomplex* a6, doublecomplex* a7, slu_blasint* a8, doublecomplex* a9, slu_blasint* a10) { scipy_wasix_real_ztrsm(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, 1, 1, 1, 1); }
++#define ztrsm_ scipy_wasix_slu_ztrsm
++
++#undef zgemv_
++extern void scipy_wasix_real_zgemv(char * a0, slu_blasint * a1, slu_blasint * a2, doublecomplex * a3, doublecomplex * a4, slu_blasint * a5, doublecomplex * a6, slu_blasint * a7, doublecomplex * a8, doublecomplex * a9, slu_blasint * a10, size_t) __asm__(SCIPY_WASIX_STR(SLU_BLAS_FUNC(zgemv)));
++static inline void scipy_wasix_slu_zgemv(char * a0, slu_blasint * a1, slu_blasint * a2, doublecomplex * a3, doublecomplex * a4, slu_blasint * a5, doublecomplex * a6, slu_blasint * a7, doublecomplex * a8, doublecomplex * a9, slu_blasint * a10) { scipy_wasix_real_zgemv(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, 1); }
++#define zgemv_ scipy_wasix_slu_zgemv
++#endif  /* wasm charlen redirects */
++
+ extern void zusolve(int, int, doublecomplex*, doublecomplex*);
+ extern void zlsolve(int, int, doublecomplex*, doublecomplex*);
+ extern void zmatvec(int, int, int, doublecomplex*, doublecomplex*, doublecomplex*);

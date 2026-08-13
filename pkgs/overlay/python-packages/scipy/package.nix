@@ -6,6 +6,7 @@
   final,
   wasixPython,
   helpers,
+  lib,
   ...
 }: let
   lapack = final.lapack-reference;
@@ -15,8 +16,14 @@
   buildBoost = final.buildPackages.boost191;
 in
   helpers.libTweaks {
+    # 1.16 added the use-system-libraries option, so an older release aborts on
+    # the flag; the vendored copies it then falls back to are what it shipped.
     mesonFlags = old:
-      helpers.dropFlagsByPrefix ["-Dblas=" "-Dlapack="] old
+      helpers.dropFlagsByPrefix (
+        ["-Dblas=" "-Dlapack="]
+        ++ lib.optional (lib.versionOlder pyprev.scipy.version "1.16") "-Duse-system-libraries="
+      )
+      old
       ++ [
         "-Dblas=blas"
         "-Dlapack=lapack"
@@ -29,9 +36,19 @@ in
 
     # scipy's callers omit the hidden CHARACTER-length args flang emits, which
     # traps under wasm's strictly-typed call_indirect; the patches append them.
+    # 1.18 moved the generator's wrapper code, so an older release takes the
+    # variant cut against the layout it still has.
     patches = [
-      ../patches/scipy-cython-blas-fortran-charlen.patch
-      ../patches/scipy-hand-c-blas-fortran-charlen.patch
+      (
+        if lib.versionOlder pyprev.scipy.version "1.18"
+        then ../patches/scipy-cython-blas-fortran-charlen-pre118.patch
+        else ../patches/scipy-cython-blas-fortran-charlen.patch
+      )
+      (
+        if lib.versionOlder pyprev.scipy.version "1.18"
+        then ../patches/scipy-hand-c-blas-fortran-charlen-pre118.patch
+        else ../patches/scipy-hand-c-blas-fortran-charlen.patch
+      )
     ];
 
     # _test_internal calls fesetround(FE_UPWARD); wasm has no dynamic rounding

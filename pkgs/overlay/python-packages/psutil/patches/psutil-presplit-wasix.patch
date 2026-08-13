@@ -1,0 +1,269 @@
+diff -ruN a/psutil/arch/linux/disk.c b/psutil/arch/linux/disk.c
+--- a/psutil/arch/linux/disk.c	1970-01-01 01:00:01.000000000 +0100
++++ b/psutil/arch/linux/disk.c	2026-08-11 15:34:44.492834398 +0200
+@@ -5,7 +5,9 @@
+  */
+ 
+ #include <Python.h>
++#ifndef __wasi__
+ #include <mntent.h>
++#endif
+ 
+ #include "../../_psutil_common.h"
+ 
+@@ -14,6 +16,10 @@
+ // mount point and filesystem type.
+ PyObject *
+ psutil_disk_partitions(PyObject *self, PyObject *args) {
++#ifdef __wasi__
++    PyErr_SetString(PyExc_NotImplementedError, "not supported on wasi");
++    return NULL;
++#else
+     FILE *file = NULL;
+     struct mntent *entry;
+     char *mtab_path;
+@@ -72,4 +78,5 @@
+     Py_XDECREF(py_tuple);
+     Py_DECREF(py_retlist);
+     return NULL;
++#endif
+ }
+diff -ruN a/psutil/arch/linux/mem.c b/psutil/arch/linux/mem.c
+--- a/psutil/arch/linux/mem.c	1970-01-01 01:00:01.000000000 +0100
++++ b/psutil/arch/linux/mem.c	2026-08-11 15:34:44.495915956 +0200
+@@ -12,6 +12,10 @@
+ 
+ PyObject *
+ psutil_linux_sysinfo(PyObject *self, PyObject *args) {
++#ifdef __wasi__
++    PyErr_SetString(PyExc_NotImplementedError, "not supported on wasi");
++    return NULL;
++#else
+     struct sysinfo info;
+ 
+     if (sysinfo(&info) != 0)
+@@ -27,4 +31,5 @@
+         info.freeswap,  // swap free
+         info.mem_unit  // multiplier
+     );
++#endif
+ }
+diff -ruN a/psutil/arch/linux/net.c b/psutil/arch/linux/net.c
+--- a/psutil/arch/linux/net.c	1970-01-01 01:00:01.000000000 +0100
++++ b/psutil/arch/linux/net.c	2026-08-11 15:34:44.496077472 +0200
+@@ -5,6 +5,15 @@
+  */
+ 
+ #include <Python.h>
++#ifdef __wasi__
++#include "../../_psutil_common.h"
++
++PyObject *
++psutil_net_if_duplex_speed(PyObject *self, PyObject *args) {
++    PyErr_SetString(PyExc_NotImplementedError, "not supported on wasi");
++    return NULL;
++}
++#else
+ #include <linux/sockios.h>
+ #include <sys/socket.h>
+ #include <sys/ioctl.h>
+@@ -118,3 +127,4 @@
+         close(sock);
+     return NULL;
+ }
++#endif  // __wasi__
+diff -ruN a/psutil/arch/linux/proc.h b/psutil/arch/linux/proc.h
+--- a/psutil/arch/linux/proc.h	1970-01-01 01:00:01.000000000 +0100
++++ b/psutil/arch/linux/proc.h	2026-08-11 15:34:44.496193556 +0200
+@@ -17,7 +17,7 @@
+ #endif
+ 
+ // Should exist starting from CentOS 6 (year 2011).
+-#ifdef CPU_ALLOC
++#if defined(CPU_ALLOC) && !defined(__wasi__)
+     #define PSUTIL_HAVE_CPU_AFFINITY
+ 
+     PyObject *psutil_proc_cpu_affinity_get(PyObject *self, PyObject *args);
+diff -ruN a/psutil/arch/linux/users.c b/psutil/arch/linux/users.c
+--- a/psutil/arch/linux/users.c	1970-01-01 01:00:01.000000000 +0100
++++ b/psutil/arch/linux/users.c	2026-08-11 15:34:44.496314337 +0200
+@@ -5,6 +5,13 @@
+  */
+ 
+ #include <Python.h>
++#ifdef __wasi__
++PyObject *
++psutil_users(PyObject *self, PyObject *args) {
++    PyErr_SetString(PyExc_NotImplementedError, "not supported on wasi");
++    return NULL;
++}
++#else
+ #include <utmp.h>
+ #include <string.h>
+ 
+@@ -69,3 +76,4 @@
+     endutent();
+     return NULL;
+ }
++#endif  // __wasi__
+diff -ruN a/psutil/_common.py b/psutil/_common.py
+--- a/psutil/_common.py	1970-01-01 01:00:01.000000000 +0100
++++ b/psutil/_common.py	2026-08-11 15:34:44.500440150 +0200
+@@ -88,7 +88,7 @@
+ 
+ POSIX = os.name == "posix"
+ WINDOWS = os.name == "nt"
+-LINUX = sys.platform.startswith("linux")
++LINUX = sys.platform.startswith(("linux", "wasix"))
+ MACOS = sys.platform.startswith("darwin")
+ OSX = MACOS  # deprecated alias
+ FREEBSD = sys.platform.startswith(("freebsd", "midnightbsd"))
+diff -ruN a/psutil/_pslinux.py b/psutil/_pslinux.py
+--- a/psutil/_pslinux.py	1970-01-01 01:00:01.000000000 +0100
++++ b/psutil/_pslinux.py	2026-08-11 15:34:44.506090100 +0200
+@@ -106,7 +106,7 @@
+     AF_LINK = socket.AF_PACKET
+ else:
+     AddressFamily = enum.IntEnum(
+-        'AddressFamily', {'AF_LINK': int(socket.AF_PACKET)}
++        'AddressFamily', {'AF_LINK': int(getattr(socket, "AF_PACKET", 17))}
+     )
+     AF_LINK = AddressFamily.AF_LINK
+ 
+@@ -833,7 +833,7 @@
+         tcp6 = ("tcp6", socket.AF_INET6, socket.SOCK_STREAM)
+         udp4 = ("udp", socket.AF_INET, socket.SOCK_DGRAM)
+         udp6 = ("udp6", socket.AF_INET6, socket.SOCK_DGRAM)
+-        unix = ("unix", socket.AF_UNIX, None)
++        unix = ("unix", getattr(socket, "AF_UNIX", None), None)
+         self.tmap = {
+             "all": (tcp4, tcp6, udp4, udp6, unix),
+             "tcp": (tcp4, tcp6),
+diff -ruN a/psutil/_psutil_linux.c b/psutil/_psutil_linux.c
+--- a/psutil/_psutil_linux.c	1970-01-01 01:00:01.000000000 +0100
++++ b/psutil/_psutil_linux.c	2026-08-11 15:34:44.500259590 +0200
+@@ -10,7 +10,12 @@
+     #define _GNU_SOURCE 1
+ #endif
+ #include <Python.h>
+-#include <linux/ethtool.h>  // DUPLEX_*
++#ifdef __wasi__
++#define DUPLEX_HALF 0x00
++#define DUPLEX_FULL 0x01
++#else
++#include <linux/ethtool.h>
++#endif  // DUPLEX_*
+ 
+ #include "_psutil_common.h"
+ #include "arch/linux/disk.h"
+diff -ruN a/psutil/_psutil_posix.c b/psutil/_psutil_posix.c
+--- a/psutil/_psutil_posix.c	1970-01-01 01:00:01.000000000 +0100
++++ b/psutil/_psutil_posix.c	2026-08-11 15:34:44.500002308 +0200
+@@ -25,10 +25,19 @@
+     #include <ifaddrs.h>
+ #endif
+ 
++#ifdef __wasi__
++int getif_addrs(struct ifaddrs **);
++void freeif_addrs(struct ifaddrs *);
++#define getifaddrs getif_addrs
++#define freeifaddrs freeif_addrs
++#endif
++
+ #if defined(PSUTIL_LINUX)
+     #include <netdb.h>
++    #ifndef __wasi__
+     #include <linux/types.h>
+     #include <linux/if_packet.h>
++    #endif
+ #endif
+ #if defined(PSUTIL_BSD) || defined(PSUTIL_OSX)
+     #include <netdb.h>
+@@ -180,7 +189,9 @@
+     if (! PyArg_ParseTuple(args, _Py_PARSE_PID, &pid))
+         return NULL;
+ 
+-#ifdef PSUTIL_OSX
++#if defined(__wasi__)
++    priority = 0;
++#elif defined(PSUTIL_OSX)
+     priority = getpriority(PRIO_PROCESS, (id_t)pid);
+ #else
+     priority = getpriority(PRIO_PROCESS, pid);
+@@ -203,7 +214,9 @@
+     if (! PyArg_ParseTuple(args, _Py_PARSE_PID "i", &pid, &priority))
+         return NULL;
+ 
+-#ifdef PSUTIL_OSX
++#if defined(__wasi__)
++    retval = 0;
++#elif defined(PSUTIL_OSX)
+     retval = setpriority(PRIO_PROCESS, (id_t)pid, priority);
+ #else
+     retval = setpriority(PRIO_PROCESS, pid, priority);
+@@ -252,7 +265,7 @@
+             return Py_BuildValue("s", buf);
+         }
+     }
+-#ifdef PSUTIL_LINUX
++#if defined(PSUTIL_LINUX) && !defined(__wasi__)
+     else if (family == AF_PACKET) {
+         struct sockaddr_ll *lladdr = (struct sockaddr_ll *)addr;
+         len = lladdr->sll_halen;
+@@ -390,6 +403,10 @@
+  */
+ static PyObject *
+ psutil_net_if_mtu(PyObject *self, PyObject *args) {
++#ifdef __wasi__
++    PyErr_SetString(PyExc_NotImplementedError, "not supported on wasi");
++    return NULL;
++#else
+     char *nic_name;
+     int sock = -1;
+     int ret;
+@@ -427,6 +444,7 @@
+     if (sock != -1)
+         close(sock);
+     return PyErr_SetFromErrno(PyExc_OSError);
++#endif
+ }
+ 
+ static int
+@@ -455,6 +473,10 @@
+  */
+ static PyObject *
+ psutil_net_if_flags(PyObject *self, PyObject *args) {
++#ifdef __wasi__
++    PyErr_SetString(PyExc_NotImplementedError, "not supported on wasi");
++    return NULL;
++#else
+     char *nic_name;
+     int sock = -1;
+     int ret;
+@@ -631,6 +653,7 @@
+     if (sock != -1)
+         close(sock);
+     return NULL;
++#endif
+ }
+ 
+ 
+@@ -641,6 +664,10 @@
+  */
+ static PyObject *
+ psutil_net_if_is_running(PyObject *self, PyObject *args) {
++#ifdef __wasi__
++    PyErr_SetString(PyExc_NotImplementedError, "not supported on wasi");
++    return NULL;
++#else
+     char *nic_name;
+     int sock = -1;
+     int ret;
+@@ -668,6 +695,7 @@
+     if (sock != -1)
+         close(sock);
+     return PyErr_SetFromErrno(PyExc_OSError);
++#endif
+ }
+ 
+ 
