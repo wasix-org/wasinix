@@ -290,7 +290,11 @@
   {attr = "zope-proxy";}
   {attr = "google-re2";} # re2 + abseil; overlay/python-packages/google-re2.nix
   {attr = "onigurumacffi";}
-  {attr = "pycocotools";}
+  {
+    attr = "pycocotools";
+    # cp312-abi3, so both interpreters emit the same wheel filename.
+    publishOnce = true;
+  }
   {attr = "bottleneck";}
   {
     attr = "python-rapidjson";
