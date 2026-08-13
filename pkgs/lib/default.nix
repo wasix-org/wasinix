@@ -224,7 +224,22 @@ in rec {
 
   # doCheck defaults to false: cross builds can't run target tests.
   libTweaks = tweaks: pkg:
-    pkg.overrideAttrs (old: extendDrv old ({doCheck = false;} // tweaks));
+    pkg.overrideAttrs (old:
+      extendDrv old ({doCheck = false;} // tweaks)
+      # buildPythonPackage derives passthru.requiredPythonModules when it is
+      # called, and overrideAttrs runs after that, so a python dependency added
+      # here is otherwise missing from the closure the wheel tests and the
+      # registry walk read.
+      // lib.optionalAttrs (pkg ? pythonModule) {
+        passthru =
+          (old.passthru or {})
+          // (tweaks.passthru or {})
+          // {
+            requiredPythonModules =
+              pkg.pythonModule.pkgs.requiredPythonModules
+              (extendDrv old tweaks).propagatedBuildInputs or [];
+          };
+      });
 
   # The webc packaging derives one command per bin/*.wasm.
   wasmRename = {wasmName}: pkg:
