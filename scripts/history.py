@@ -156,6 +156,30 @@ def cli_map():
     return m
 
 
+@functools.cache
+def wheel_attrs(py):
+    out = run(
+        [
+            "nix",
+            "eval",
+            "--json",
+            f".#pythonWheels.{py}",
+            "--apply",
+            "builtins.attrNames",
+        ]
+    ).stdout
+    return set(json.loads(out))
+
+
+def wheel_path(attr):
+    """Where to read a wheel's coordinates. Not every wheel is in every
+    interpreter set (opencv-python is py313 only), so take the newest that has it."""
+    for py in reversed(INTERPRETERS):
+        if attr in wheel_attrs(py):
+            return f'pythonWheels.{py}."{attr}"'
+    return f'pythonWheels.{INTERPRETERS[-1]}."{attr}"'
+
+
 def try_resolve(name, set_hint=None):
     # set_hint disambiguates names in both sets (e.g. jq is a wheel binding AND a
     # CLI). None = search both and report ambiguity.
@@ -165,9 +189,7 @@ def try_resolve(name, set_hint=None):
     if a is not None and e is not None:
         sys.exit(f"{name}: in both the wheel and CLI sets; pass --set wheel|cli")
     if a is not None:
-        return Target(
-            "wheel", a, f'pythonWheels.py314."{a}"', WHEEL_HISTORY, True, INTERPRETERS
-        )
+        return Target("wheel", a, wheel_path(a), WHEEL_HISTORY, True, INTERPRETERS)
     if e is not None:
         return Target(
             "cli", e["attr"], f'wasmerPackages."{e["webc"]}"', CLI_HISTORY, False, None
@@ -195,10 +217,12 @@ def src_coords(target):
             "--json",
             f".#{target.path}",
             "--apply",
-            "p: { version = p.version; tag = p.src.tag or null; "
-            "rev = p.src.rev or null; url = p.src.url or null; "
-            "owner = p.src.owner or null; repo = p.src.repo or null; "
-            "hasOverride = p.src ? override; cargoDeps = p ? cargoDeps; }",
+            # a package assembled without a single src (opencv-python) has no
+            # fetcher to re-point, so report that instead of failing to eval
+            "p: let s = p.src or {}; in { version = p.version; "
+            "hasSrc = p ? src; tag = s.tag or null; rev = s.rev or null; "
+            "url = s.url or null; owner = s.owner or null; repo = s.repo or null; "
+            "hasOverride = s ? override; cargoDeps = p ? cargoDeps; }",
         ]
     ).stdout
     return json.loads(out)
@@ -231,6 +255,26 @@ def list_versions(target, project, coords):
     )
 
 
+@functools.cache
+def mirror_site(name):
+    """One entry of nixpkgs' fetchurl mirror table. Selected by name rather than
+    read whole: the table also carries a hashedMirrors attr that throws."""
+    expr = (
+        f'(import ((builtins.getFlake "{REPO}").inputs.nixpkgs '
+        f'+ "/pkgs/build-support/fetchurl/mirrors.nix")).{name}'
+    )
+    return json.loads(run(["nix", "eval", "--json", "--impure", "--expr", expr]).stdout)
+
+
+def concrete_url(url):
+    """A mirror:// url resolved to one real host, for hashing only; the spec keeps
+    the mirror:// form so the fetcher still walks the whole list."""
+    m = re.match(r"mirror://([^/]+)/(.*)", url)
+    if not m:
+        return url
+    return mirror_site(m.group(1))[0].rstrip("/") + "/" + m.group(2)
+
+
 def nix_attrs(spec):
     return "{ " + " ".join(f'{k} = "{v}";' for k, v in spec.items()) + " }"
 
@@ -240,17 +284,22 @@ def tofu_hash(target, override_args):
     # fixed-output mismatch reports the real one. The fake hash is required: a
     # FOD is keyed by its output hash, so keeping the old one would return the
     # cached old content instead of fetching. Reuses the package's fetcher.
-    expr = (
-        f'(builtins.getFlake "{REPO}").legacyPackages.{SYSTEM}'
-        f".{target.path}.src.override "
-        f"({nix_attrs({**override_args, 'hash': FAKE_HASH})})"
-    )
-    r = subprocess.run(
-        ["nix", "build", "--impure", "--no-link", "--expr", expr],
-        cwd=REPO,
-        text=True,
-        capture_output=True,
-    )
+    def attempt(field):
+        e = (
+            f'(builtins.getFlake "{REPO}").legacyPackages.{SYSTEM}'
+            f".{target.path}.src.override "
+            f"({nix_attrs({**override_args, field: FAKE_HASH})})"
+        )
+        return subprocess.run(
+            ["nix", "build", "--impure", "--no-link", "--expr", e],
+            cwd=REPO,
+            text=True,
+            capture_output=True,
+        )
+
+    r = attempt("hash")
+    if "multiple hashes passed" in r.stderr:
+        r = attempt("sha256")  # the fetcher already carries a sha256 argument
     m = re.search(r"got:\s*(sha256-\S+)", r.stderr)
     if not m:
         raise SystemExit(
@@ -295,12 +344,37 @@ def substitute_version(field, value, cur, version):
     refuse instead."""
     out = value.replace(cur, version)
     if out == value:
+        # some tags spell the version with a separator of their own
+        # (sqlalchemy's rel_2_0_51), so try the field's own punctuation
+        for sep in ("_", "-"):
+            spelled = cur.replace(".", sep)
+            if spelled in value:
+                out = value.replace(spelled, version.replace(".", sep))
+                break
+    if out == value:
         raise ValueError(
             f'cannot re-point src.{field} "{value}" from {cur} to {version}: '
             f"the current version does not appear in it, so the older release "
             f"has to be added by hand"
         )
     return out
+
+
+@functools.cache
+def hash_field(target):
+    """Which hash argument the package's fetcher takes. A fetchPypi call written
+    with sha256 rejects a second `hash`, so the spec has to match it."""
+    expr = (
+        f'(builtins.getFlake "{REPO}").legacyPackages.{SYSTEM}'
+        f'.{target.path}.src.override {{ hash = "{FAKE_HASH}"; }}'
+    )
+    r = subprocess.run(
+        ["nix", "eval", "--impure", "--expr", expr, "--apply", "d: d.outputHash"],
+        cwd=REPO,
+        text=True,
+        capture_output=True,
+    )
+    return "sha256" if "multiple hashes passed" in r.stderr else "hash"
 
 
 def fetch_spec(target, version, coords, files):
@@ -329,13 +403,14 @@ def _src_spec(target, version, coords, files):
         digest = sdists[0]["digests"]["sha256"]
         return {
             "version": version,
-            "hash": "sha256-" + base64.b64encode(bytes.fromhex(digest)).decode(),
+            hash_field(target): "sha256-"
+            + base64.b64encode(bytes.fromhex(digest)).decode(),
         }
     # fetchurl release tarball: substitute the version into the url
-    if not coords["url"]:
+    if not coords["hasSrc"] or not coords["url"]:
         raise ValueError(f"{target.attr}: cannot determine how to re-point its fetcher")
     url = substitute_version("url", coords["url"], cur, version)
-    out = run(["nix", "store", "prefetch-file", "--json", url]).stdout
+    out = run(["nix", "store", "prefetch-file", "--json", concrete_url(url)]).stdout
     return {"url": url, "hash": json.loads(out)["hash"]}
 
 
