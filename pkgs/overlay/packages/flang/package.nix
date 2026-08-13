@@ -18,9 +18,26 @@
     extraPatches = [../clang/wasm-visibility.patch];
     devExtraCmakeFlags = ["-DUNIX=ON"];
   };
+  # MLIR runs mlir-linalg-ods-yaml-gen during its own build, so a cross build
+  # needs a host copy; without one the wasm binary is invoked and the build stops
+  # at "cannot execute binary file". Upstream's setup_host_tool accepts one, and
+  # the tblgen helper already builds host LLVM tools with MLIR enabled.
+  nativeOdsYamlGen = final.buildPackages.llvmPackages.tblgen.overrideAttrs (old: {
+    targets = old.targets ++ ["mlir-linalg-ods-yaml-gen"];
+    ninjaFlags = old.ninjaFlags ++ ["mlir-linalg-ods-yaml-gen"];
+  });
   mlir =
     helpers.libTweaks {
       patches = [./external-mlir-tblgen.patch];
+      # get_host_tool_path caches MLIR_LINALG_ODS_YAML_GEN and derives the _EXE
+      # variable from it, so the setting name is what a caller supplies.
+      # LLVM_BUILD_UTILS keeps the target in the build: supplying a host tool marks
+      # it EXCLUDE_FROM_ALL, yet add_mlir_tool still installs it, so the install
+      # phase looks for a binary nothing built. The wasm copy is never executed.
+      cmakeFlags = [
+        "-DMLIR_LINALG_ODS_YAML_GEN=${nativeOdsYamlGen}/bin/mlir-linalg-ods-yaml-gen"
+        "-DLLVM_BUILD_UTILS=ON"
+      ];
     }
     (prev.llvmPackages.mlir.override {
       version = toolchain.llvm.llvm.version;
