@@ -55,6 +55,15 @@ def default_flake():
     return f".#legacyPackages.{system}.ci"
 
 
+def eval_workers():
+    # EVAL_WORKERS is the same knob ci-build.sh takes, so a shared builder can
+    # dial both down from one place.
+    override = os.environ.get("EVAL_WORKERS")
+    if override:
+        return int(override)
+    return min(os.cpu_count() or 1, 8)
+
+
 def progress_ticker(jobs_path, activity, stop, every=30):
     # One vendor build keeps nix quiet for minutes, so pair the finished-job
     # count (stdout goes straight to the file) with what nix is realizing: a
@@ -73,21 +82,22 @@ def eval_jobs(flake, jobs_path):
     # nix-eval-jobs comes from PATH (the .#scripts.rebuild-diff wrapper and the
     # devShell both pin it to the locked nixpkgs); `nix run nixpkgs#` would
     # fetch and unpack the registry's channel tarball on every CI run.
-    # --check-cache-status so ci-build.sh can reuse this eval for its
-    # build-dep push list. Returns the nix error on a top-level eval failure
-    # (broken flake): that becomes report content, not a step crash; the
-    # build step fails the job on the same error.
+    # No --check-cache-status: it answers "is this cached" per job, and with
+    # nothing cached (a bump) each answer re-walks the toolchain closure
+    # through the one nix-daemon, which turns a 1-minute eval into an hour.
+    # ci-build.sh gets the same list from one batched dry-run instead.
+    # Returns the nix error on a top-level eval failure (broken flake): that
+    # becomes report content, not a step crash; the build step fails the job
+    # on the same error.
     cmd = [
         "nix-eval-jobs",
         "--flake",
         flake,
-        "--check-cache-status",
-        # one worker per core: the ci key set is cheap to compute (flake.nix
-        # reads meta, not drvPath), so workers share little warmup and
-        # parallelize both instantiation and the cache-status lookups.
-        # nix-eval-jobs defaults to a single worker.
+        # Workers parallelize instantiation, but each one holds a full nixpkgs
+        # evaluation and they register drvs through a single daemon, so cores
+        # stop paying off well before a 16-core runner has 16 of them.
         "--workers",
-        str(os.cpu_count() or 1),
+        str(eval_workers()),
         # meta rides along for ci-report.py: meta.position anchors failure
         # annotations at the package definition
         "--meta",

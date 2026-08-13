@@ -31,10 +31,10 @@ else
 fi
 
 # --copy-to pushes only runtime closures, so build-only deps never reach the
-# cache. Capture the needed builds before building (afterwards they would read
-# "local", not "notBuilt"); they are pushed after the build. JOBS_FILE reuses
-# the eval from the rebuild-diff step (scripts/eval-diff.py) instead of
-# evaling a second time.
+# cache. Capture the needed builds before building (afterwards they are all
+# local, with nothing to tell them apart); they are pushed after the build.
+# JOBS_FILE reuses the eval from the rebuild-diff step (scripts/eval-diff.py)
+# instead of evaling a second time.
 # Eval parallelism. One worker per core is right on a dedicated runner, but
 # every worker registers drvs through the one nix-daemon: on a shared builder
 # the bottleneck is daemon/SQLite contention, not CPU, so callers there set a
@@ -45,17 +45,25 @@ MAX_JOBS="${MAX_JOBS:-$(nproc)}"
 PUSH_DRVS=""
 if [ -n "${NIX_SIGNING_KEY:-}" ]; then
   if [ -n "${JOBS_FILE:-}" ] && [ -s "$JOBS_FILE" ]; then
-    PUSH_DRVS=$(jq -r '.neededBuilds[]?' "$JOBS_FILE" | sort -u)
+    drvs=$(jq -r '.drvPath' "$JOBS_FILE" | sort -u)
   else
-    PUSH_DRVS=$(
+    drvs=$(
       nix-eval-jobs \
         --flake "$CI_ATTR" \
-        --check-cache-status \
         --workers "$EVAL_WORKERS" \
         --option accept-flake-config true 2>/dev/null |
-        jq -r '.neededBuilds[]?' | sort -u
+        jq -r '.drvPath' | sort -u
     )
   fi
+  # What no substituter has, from one dry-run over the whole set: nix walks the
+  # union of the DAGs and asks the substituters once. Asking per job instead
+  # (nix-eval-jobs --check-cache-status) re-walks the toolchain closure for
+  # every one of them, which with nothing cached takes over an hour.
+  # shellcheck disable=SC2046,SC2086
+  PUSH_DRVS=$(
+    nix build --dry-run $(printf '%s^*\n' $drvs) --option accept-flake-config true 2>&1 >/dev/null |
+      awk '/derivations? will be built:/ {f = 1; next} /will be fetched/ {f = 0} f && /^ *\/nix\/store\/.*\.drv/ {print $1}'
+  )
 fi
 
 echo "Building all packages under $CI_ATTR independently..."
