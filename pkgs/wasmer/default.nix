@@ -81,7 +81,7 @@
         # nixpkgs' own passthru.tests are native, and would leak into `checks`
         removeAttrs (o.passthru or {}) ["tests"]
         // {
-          # gitMinimal -> "git" webc, but history.json keys by overlay attr, so
+          # git -> "git" webc, but history.json keys by overlay attr, so
           # scripts/{history,update}.py need this to map a webc back to its entry.
           inherit overlayName;
           inherit pkg;
@@ -92,7 +92,7 @@
         // (lib.optionalAttrs (group != null) {tests = group;});
     });
 
-  # Keyed by webc/program name (gitMinimal -> "git"); a history version keys as
+  # Keyed by webc/program name (git -> "git"); a history version keys as
   # <name>-<semver>, so the by-name key stays the current version.
   ident = import ./ident.nix {inherit lib;};
   shippedInfo =

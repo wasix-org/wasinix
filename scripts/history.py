@@ -133,7 +133,7 @@ def wheel_worklist():
 @functools.cache
 def cli_map():
     # webc name -> overlay attr, for the current (non-history) shipped CLIs; the
-    # history.json / loader key by overlay attr (gitMinimal), the package is
+    # history.json / loader key by overlay attr (git), the package is
     # eval'd by webc name (git). Resolvable under either name.
     out = run(
         [

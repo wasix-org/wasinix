@@ -11,23 +11,16 @@
   lib = final.lib;
   bash = preferredProfilePackages.bash;
   nano = preferredProfilePackages.nano;
-  # The shell subcommands run these by store path, so they must be the wasix
-  # builds; both only build in the off-EH profile, like bash.
-  coreutils' = preferredProfilePackages.coreutils;
-  gawk' = preferredProfilePackages.gawk;
+  coreutils = preferredProfilePackages.coreutils;
+  gawk = preferredProfilePackages.gawk;
 in
-  (prev.gitMinimal.override {
-    gnugrep = final.grep;
-    gnused = final.sed;
-    gawk = gawk';
-    coreutils = coreutils';
-    gettext = final.gettext;
-    inherit bash;
-    # makeWrapper only wraps the Perl subcommands gitMinimal omits.
+  (prev.git.override {
+    inherit (final) gnused gnugrep gettext;
+    inherit bash gawk coreutils;
+    # makeWrapper only wraps the Perl subcommands git omits.
     makeWrapper = null;
     nlsSupport = false;
     doInstallCheck = false;
-    # gitMinimal turns pcre2 off; without it `git grep -P` is a fatal error.
     withpcre2 = true;
   })
   .overrideAttrs (old: {
@@ -36,8 +29,6 @@ in
       // {
         inherit bash;
         wasix.shipped = true;
-        # wasmer packaging (name "git" comes from meta.mainProgram; the rest
-        # is derived):
         wasmer = {
           # certs for HTTPS clones, mounted where git/openssl look for them.
           fs."/etc/ssl" = "${final.cacert}/etc/ssl";
@@ -57,8 +48,8 @@ in
           dependencies = [
             bash
             nano
-            coreutils'
-            gawk'
+            coreutils
+            gawk
             preferredProfilePackages.grep
             preferredProfilePackages.sed
           ];
@@ -67,7 +58,7 @@ in
           autoSelfMount = true;
           # The shell subcommands exec grep, sed and the coreutils programs by
           # store path, which the wasm scan behind autoSelfMount cannot see.
-          selfMounts = [final.grep final.sed coreutils' gawk'];
+          selfMounts = [final.grep final.sed coreutils gawk];
         };
       };
     makeFlags =

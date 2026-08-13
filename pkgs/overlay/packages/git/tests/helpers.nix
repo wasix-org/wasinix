@@ -1,5 +1,5 @@
 {pkgs}: rec {
-  gitNative = pkgs.gitMinimal.override {
+  gitNative = pkgs.git.override {
     nlsSupport = false;
     svnSupport = false;
     guiSupport = false;

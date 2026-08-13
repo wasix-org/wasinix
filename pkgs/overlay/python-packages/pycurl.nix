@@ -2,7 +2,7 @@
 # PATH (native flags, shared libcurl.so, wrong file type for wasm-ld); point it
 # at the wasix curl's script through a wrapper that answers --libs with
 # --static-libs, so the extension links libcurl.a with its transitive deps
-# (openssl/zlib/brotli/zstd, cf. gitMinimal). The wrapper (not a setup.py
+# (openssl/zlib/brotli/zstd, cf. git). The wrapper (not a setup.py
 # substitution) because nixpkgs' preConfigure already rewrote the option list.
 {
   final,
