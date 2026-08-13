@@ -16,6 +16,13 @@
       "rev": "apache-arrow-23.0.1"
     }
   },
+  "duckdb": {
+    "1.4.5": {
+      "hash": "sha256-kPF9TN8B5GWN8dWvkjQhdmKiHX3HYGUSxCpSdujY0PY=",
+      "note": "pairs with the duckdb 1.4.5 wheel, which builds against this source tree",
+      "tag": "v1.4.5"
+    }
+  },
   "jq": {
     "1.6": {
       "hash": "sha256-XejI4pqqP7nMa0e7JymfJxNU67clFOOsytx9OLW7qnI=",

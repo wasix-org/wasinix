@@ -4,10 +4,21 @@
 {
   wasixPython,
   pyprev,
+  final,
   helpers,
+  lib,
   ...
 }: let
   py = wasixPython;
+  # nixpkgs symlinks the C++ duckdb's src into external/duckdb, so a rebased
+  # wheel compiles its own release against whichever tree that package carries.
+  wheel =
+    if (pyprev.duckdb.passthru.wasix.historySpec or null) == null
+    then pyprev.duckdb
+    else
+      pyprev.duckdb.override {
+        duckdb = final."duckdb_${lib.replaceStrings ["."] ["_"] pyprev.duckdb.version}";
+      };
 in
   helpers.libTweaks {
     # The build-host importlib.metadata cannot resolve a cross-layout version.
@@ -25,4 +36,4 @@ in
       "-DCMAKE_CXX_LINK_LIBRARY_USING_WHOLE_ARCHIVE=LINKER:--whole-archive;<LINK_ITEM>;LINKER:--no-whole-archive"
     ];
   }
-  pyprev.duckdb
+  wheel

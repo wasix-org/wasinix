@@ -1,0 +1,14 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -879,7 +879,10 @@
+ 
+   string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
+ 
+-  if(EMSCRIPTEN)
++  # wasi has no dynamic extension loading (DISABLE_EXTENSION_LOAD); build the
++  # loadable extension as a STATIC lib like emscripten does, so the SHARED link
++  # (with -Wl,--exclude-libs,ALL, which wasm-ld rejects) is never run.
++  if(EMSCRIPTEN OR CMAKE_SYSTEM_NAME MATCHES "WASI|Wasi")
+      add_library(${TARGET_NAME} STATIC ${FILES})
+   else()
+      add_library(${TARGET_NAME} SHARED ${FILES})

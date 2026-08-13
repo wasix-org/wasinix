@@ -1,19 +1,30 @@
-# duckdb for wasix. Patches go in the src, not patchPhase: the python duckdb wheel
+# duckdb for wasix. 1.5 moved the loadable-extension function out of the root
+# CMakeLists.txt, so an older release takes the same edit cut against that file,
+# and its wheel build still links the shell, which reaches httplib's if2ip.
+# Patches go in the src, not patchPhase: the python duckdb wheel
 # symlinks this src into its external/duckdb submodule (nixpkgs: ln -s ${duckdb.src}).
 {
   prev,
   helpers,
   ...
 }: let
+  inherit (prev) lib;
   patchedSrc = prev.buildPackages.applyPatches {
     name = "duckdb-source-wasi-${prev.duckdb.version}";
     src = prev.duckdb.src;
-    patches = [
-      ./patches/duckdb-wasi-no-file-lock.patch
-      ./patches/duckdb-wasi-posix-semaphore.patch
-      ./patches/duckdb-wasi-static-loadable-ext.patch
-      ./patches/duckdb-icu-double-conversion-wasm.patch
-    ];
+    patches =
+      [
+        ./patches/duckdb-wasi-no-file-lock.patch
+        ./patches/duckdb-wasi-posix-semaphore.patch
+        (
+          if lib.versionOlder prev.duckdb.version "1.5"
+          then ./patches/duckdb-wasi-static-loadable-ext-pre15.patch
+          else ./patches/duckdb-wasi-static-loadable-ext.patch
+        )
+        ./patches/duckdb-icu-double-conversion-wasm.patch
+      ]
+      ++ lib.optional (lib.versionOlder prev.duckdb.version "1.5")
+      ./patches/duckdb-wasi-no-if2ip-pre15.patch;
   };
 in
   helpers.libTweaks {

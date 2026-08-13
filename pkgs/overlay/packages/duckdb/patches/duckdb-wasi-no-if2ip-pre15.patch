@@ -1,0 +1,15 @@
+--- a/third_party/httplib/httplib.hpp
++++ b/third_party/httplib/httplib.hpp
+@@ -3230,7 +3230,11 @@
+   return ret;
+ }
+ 
+-#if !defined _WIN32 && !defined ANDROID && !defined _AIX && !defined __MVS__
++// wasix-libc declares getifaddrs in ifaddrs.h but defines only the underscored
++// names (WASIX-TODO.md), so if2ip leaves them undefined at link. Its one caller
++// is under the same gate, and an interface name is not resolvable here anyway.
++#if !defined _WIN32 && !defined ANDROID && !defined _AIX && !defined __MVS__ && \
++    !defined __wasi__
+ #define USE_IF2IP
+ #endif
+ 
