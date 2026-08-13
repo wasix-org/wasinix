@@ -48,6 +48,10 @@ final.rustPlatform.buildRustPackage rec {
 
   doCheck = false;
 
+  # 113 MB of wasm from an 819-crate workspace, and the wheel takes it through
+  # preferredProfilePackages, so one profile is the build anyone consumes.
+  passthru.wasix.preferredProfile = "eh";
+
   meta = {
     description = "dbt Fusion engine CLI, built to WASIX";
     homepage = "https://github.com/dbt-labs/dbt-core";
