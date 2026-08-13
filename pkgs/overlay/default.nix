@@ -162,6 +162,11 @@ in
   // wrapperFix
   // lib.optionalAttrs isWasixHost {
     inherit haskellPackages;
+    # nixpkgs builds this by calling bash's expression again rather than
+    # overriding the `bash` attr, so it would miss every wasix tweak and fail to
+    # compile. It backs `runtimeShellPackage`, which any package wanting a
+    # runtime shell pulls in. Same build as ours, minus readline.
+    bashNonInteractive = final.bash.override {interactive = false;};
     # Opt-in setup hook: disables wasm-opt during configurePhase so a wasm-opt
     # failure on a throwaway conftest can't corrupt feature detection (e.g.
     # sqlite/libzip's libm checks).
