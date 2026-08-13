@@ -145,6 +145,12 @@
       "hash": "sha256-xMe+gQl4/CfoT+H21ltbo+aPILoRYCAlylsqnB7Ms8s=",
       "note": "head of the 46.x line (18% of installs); 49.0.0 has 110 names removed",
       "tag": "46.0.7"
+    },
+    "49.0.0": {
+      "cargoHash": "sha256-yMCBu/RGRcEQST8tEWCNgVvlQsp2KamOqt60qvOYdt8=",
+      "hash": "sha256-yHUIGauFZYnjcoROvocT1UqQ0B8ZuVTaJ0ZAfri6T1E=",
+      "note": "latest 49.x (outgoing major)",
+      "tag": "49.0.0"
     }
   },
   "cymem": {
