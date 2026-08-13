@@ -5,16 +5,28 @@
 # filenames with differing bytes. Disable the limited API so it builds a
 # normal cpXY-cpXY wheel per interpreter (distinct filenames), matching every
 # other C-extension wheel here.
+#
+# 6.5 gates that on can_use_limited_api; 6.4 instead sets py_limited_api on the
+# extension and forces a cp38-abi3 tag from a bdist_wheel subclass, so an older
+# release needs whichever of the two it actually uses turned off.
 {
   pyprev,
   helpers,
   ...
 }:
 helpers.libTweaks {
-  postPatch = ''
-    substituteInPlace setup.py \
-      --replace-fail 'can_use_limited_api = not sysconfig.get_config_var("Py_GIL_DISABLED")' \
-                     'can_use_limited_api = False'
-  '';
+  postPatch = _:
+    if (pyprev.tornado.passthru.wasix.historySpec or null) == null
+    then ''
+      substituteInPlace setup.py \
+        --replace-fail 'can_use_limited_api = not sysconfig.get_config_var("Py_GIL_DISABLED")' \
+                       'can_use_limited_api = False'
+    ''
+    else ''
+      sed -i -e 's/can_use_limited_api = .*/can_use_limited_api = False/' \
+             -e 's/py_limited_api=True/py_limited_api=False/' \
+             -e '/define_macros=\[("Py_LIMITED_API"/d' \
+             -e 's/^if wheel is not None:/if False:/' setup.py
+    '';
 }
 pyprev.tornado
