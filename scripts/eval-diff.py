@@ -16,10 +16,12 @@
 # existing eval instead of running one; --base-map reads the base from a file.
 
 import argparse
+import collections
 import json
 import os
 import subprocess
 import sys
+import threading
 import urllib.error
 import urllib.request
 
@@ -35,6 +37,9 @@ MASS_REBUILD_PREFIXES = ("toolchain.",)
 # excludes them too).
 TREE_TRACKING = ("checks.treefmt",)
 
+# nix lines that name what an IFD input is doing, for the progress heartbeat
+REALIZING = ("building ", "copying ", "waiting for lock", "substituting ")
+
 
 def log(msg):
     print(msg, file=sys.stderr)
@@ -48,6 +53,20 @@ def default_flake():
         capture_output=True,
     ).stdout.strip()
     return f".#legacyPackages.{system}.ci"
+
+
+def progress_ticker(jobs_path, activity, stop, every=30):
+    # One vendor build keeps nix quiet for minutes, so pair the finished-job
+    # count (stdout goes straight to the file) with what nix is realizing: a
+    # climbing count is progress, a flat one under the same `waiting for lock`
+    # line is a stall.
+    while not stop.wait(every):
+        try:
+            with open(jobs_path) as f:
+                done = sum(1 for _ in f)
+        except OSError:
+            done = 0
+        log(f"  ... {done} jobs; {activity[0] or 'nothing being realized'}")
 
 
 def eval_jobs(flake, jobs_path):
@@ -77,13 +96,35 @@ def eval_jobs(flake, jobs_path):
         "true",
     ]
     log(f"$ {' '.join(cmd)}")
-    with open(jobs_path, "w") as f:
-        p = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, text=True)
-    sys.stderr.write(p.stderr)
-    if p.returncode == 0:
+    # Stream nix's stderr rather than capturing it. An eval that has to realize
+    # IFD inputs (a bump moving cargo or python rebuilds every crate vendor)
+    # spends most of its time inside `building '...'`, and a captured pipe holds
+    # every such line back until the eval ends, which reads as a hung step.
+    # Only the tail is kept, for the error below.
+    lines = collections.deque(maxlen=400)
+    activity = [""]
+    stop = threading.Event()
+    threading.Thread(
+        target=progress_ticker, args=(jobs_path, activity, stop), daemon=True
+    ).start()
+    try:
+        with open(jobs_path, "w") as f:
+            p = subprocess.Popen(
+                cmd, stdout=f, stderr=subprocess.PIPE, text=True, bufsize=1
+            )
+            for line in p.stderr:
+                sys.stderr.write(line)
+                sys.stderr.flush()
+                if line.startswith(REALIZING):
+                    activity[0] = line.strip()
+                lines.append(line.rstrip("\n"))
+            returncode = p.wait()
+    finally:
+        stop.set()
+    if returncode == 0:
         return None
     # the last error: block is the complete one (workers print partials)
-    lines = p.stderr.splitlines()
+    lines = list(lines)
     starts = [i for i, ln in enumerate(lines) if ln.startswith("error:")]
     tail = lines[starts[-1] :] if starts else lines[-30:]
     return "\n".join(tail[:60])
