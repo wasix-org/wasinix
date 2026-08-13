@@ -1,0 +1,34 @@
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -45,11 +45,17 @@
+ )]
+ #![cfg_attr(
+     all(
+-        feature = "nightly",
++        // wasix: the wasix rust toolchain is always nightly-channel, so enable the
++        // unstable atomic-wait intrinsics on wasi too. The stock `nightly`-only gate
++        // otherwise falls through to `wasm.rs`, whose parker panics "Parking not
++        // supported"; multi-threaded wasix (tokio/datafusion) needs a real parker.
++        any(feature = "nightly", target_os = "wasi"),
+         target_arch = "wasm32",
+         target_feature = "atomics"
+     ),
+-    feature(stdsimd)
++    // rustc removed the `stdsimd` gate; the intrinsics this file already calls
++    // now sit behind this one.
++    feature(stdarch_wasm_atomic_wait)
+ )]
+ 
+ mod parking_lot;
+--- a/src/thread_parker/mod.rs
++++ b/src/thread_parker/mod.rs
+@@ -67,7 +67,8 @@
+         #[path = "sgx.rs"]
+         mod imp;
+     } else if #[cfg(all(
+-        feature = "nightly",
++        // wasix: always nightly-channel; pick the atomic parker (see lib.rs).
++        any(feature = "nightly", target_os = "wasi"),
+         target_arch = "wasm32",
+         target_feature = "atomics"
+     ))] {
