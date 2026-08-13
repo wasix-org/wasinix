@@ -132,7 +132,10 @@
       "tag": "43.0.3",
       "variants": [
         "py313"
-      ]
+      ],
+      "vendorLayout": {
+        "cargoRoot": "src/rust"
+      }
     },
     "45.0.4": {
       "cargoHash": "sha256-dKwNnWBzBM9QEcRbbvkNhFJnFxFakqZ/MS7rqE8/tNQ=",

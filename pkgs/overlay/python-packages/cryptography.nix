@@ -21,8 +21,8 @@
   # version boundary so it stays right across nixpkgs bumps.
   isHistory = (pyprev.cryptography.passthru.wasix.historySpec or null) != null;
   # the rust crate and its lock sat under src/rust until 45 moved both to the
-  # repo root; the vendor cds to cargoRoot before reading ./Cargo.lock, and the
-  # setup hook validates $cargoRoot/Cargo.lock against it, so both need it.
+  # repo root; the setup hook validates $cargoRoot/Cargo.lock. The vendor reads
+  # the same lock, from the history entry's vendorLayout.
   splitCargoRoot = lib.versionOlder pyprev.cryptography.version "45";
 in
   helpers.libTweaks ({
@@ -48,11 +48,5 @@ in
       maturinBuildFlags = ["--features" "pyo3/extension-module"];
     }
     // lib.optionalAttrs isHistory {patches = _: [];}
-    // lib.optionalAttrs splitCargoRoot {
-      cargoRoot = "src/rust";
-      cargoDeps = old:
-        old.overrideAttrs (o: {
-          vendorStaging = o.vendorStaging.overrideAttrs (_: {cargoRoot = "src/rust";});
-        });
-    })
+    // lib.optionalAttrs splitCargoRoot {cargoRoot = "src/rust";})
   pyprev.cryptography
