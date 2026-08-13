@@ -1,6 +1,9 @@
 # PyPI top-10k native-dependency survey: detailed findings
 
-Survey date: **2026-07-16**, ranking by 30-day downloads ([hugovk/top-pypi-packages](https://hugovk.github.io/top-pypi-packages/), snapshot 2026-07-01, ClickHouse source). See README.md for methodology and reproduction steps.
+Survey date: **2026-07-16**, ranking by 30-day downloads
+([hugovk/top-pypi-packages](https://hugovk.github.io/top-pypi-packages/),
+snapshot 2026-07-01, ClickHouse source). See README.md for methodology and
+reproduction steps.
 
 ## 1. Pure Python vs native (the package itself)
 
@@ -10,7 +13,11 @@ Survey date: **2026-07-16**, ranking by 30-day downloads ([hugovk/top-pypi-packa
 | top 1,000  | 792   | 208    | 20.8%    | 28                            |
 | top 10,000 | 8,538 | 1,460  | 14.6%    | 73                            |
 
-“Native” = the latest release publishes at least one platform-specific wheel, or its sdist builds compiled code (`ext_modules`, Cython, Cargo, CMake/meson, …). Two placeholder packages (`aaaaaaaaa`, `timedelta`) are 404/fileless and excluded from top-10k percentages. `pyspark` counts as pure: its 450 MB payload is JVM jars, not compiled CPython extensions.
+“Native” = the latest release publishes at least one platform-specific wheel, or
+its sdist builds compiled code (`ext_modules`, Cython, Cargo, CMake/meson, …).
+Two placeholder packages (`aaaaaaaaa`, `timedelta`) are 404/fileless and
+excluded from top-10k percentages. `pyspark` counts as pure: its 450 MB payload
+is JVM jars, not compiled CPython extensions.
 
 ## 2. Transitive: does the runtime dependency closure contain native code?
 
@@ -22,7 +29,8 @@ Markers evaluated for CPython 3.12 / linux / x86_64, default extras only.
 | top 1,000  | 465          | 327                   | 208           | 535 (53.5%)           |
 | top 10,000 | 4,147        | 4,390                 | 1,460         | 5,850 (58.5%)         |
 
-Most common _direct_ native dependencies among pure packages that pull native code:
+Most common _direct_ native dependencies among pure packages that pull native
+code:
 
 | top 1,000    | count | top 10,000   | count |
 | ------------ | ----- | ------------ | ----- |
@@ -54,7 +62,8 @@ Most common _direct_ native dependencies among pure packages that pull native co
 | bazel         | 1   |     |             |     |     | binary/unknown   | 1   |
 | scikit-build  | 1   |     |             |     |     | c++              | 1   |
 
-cffi runtime users: 1. Most-bundled shared libraries (auditwheel-vendored in manylinux wheels):
+cffi runtime users: 1. Most-bundled shared libraries (auditwheel-vendored in
+manylinux wheels):
 
 | lib           | pkgs | lib           | pkgs | lib         | pkgs |
 | ------------- | ---- | ------------- | ---- | ----------- | ---- |
@@ -77,7 +86,8 @@ cffi runtime users: 1. Most-bundled shared libraries (auditwheel-vendored in man
 | pipcl         | 2   |     |                 |     |     |                  |     |
 | bazel         | 1   |     |                 |     |     |                  |     |
 
-cffi runtime users: 8. Most-bundled shared libraries (auditwheel-vendored in manylinux wheels):
+cffi runtime users: 8. Most-bundled shared libraries (auditwheel-vendored in
+manylinux wheels):
 
 | lib         | pkgs | lib              | pkgs | lib           | pkgs |
 | ----------- | ---- | ---------------- | ---- | ------------- | ---- |
@@ -121,7 +131,8 @@ cffi runtime users: 8. Most-bundled shared libraries (auditwheel-vendored in man
 | nuitka                             | 1   |     |                 |     |     |                  |     |
 | makepanda                          | 1   |     |                 |     |     |                  |     |
 
-cffi runtime users: 42. Most-bundled shared libraries (auditwheel-vendored in manylinux wheels):
+cffi runtime users: 42. Most-bundled shared libraries (auditwheel-vendored in
+manylinux wheels):
 
 | lib           | pkgs | lib        | pkgs | lib        | pkgs |
 | ------------- | ---- | ---------- | ---- | ---------- | ---- |
@@ -166,7 +177,9 @@ cffi runtime users: 42. Most-bundled shared libraries (auditwheel-vendored in ma
 
 ## 5. Native reach: how much each native package is pulled
 
-For every top-10k package, its runtime closure was computed; a native package's _reach_ is how many top-10k packages contain it. Download-weighting sums the dependents' 30-day downloads.
+For every top-10k package, its runtime closure was computed; a native package's
+_reach_ is how many top-10k packages contain it. Download-weighting sums the
+dependents' 30-day downloads.
 
 | native package         | own rank | pulled by (pkgs) | dl-weighted (30d) | own downloads (30d) | language       |
 | ---------------------- | -------- | ---------------- | ----------------- | ------------------- | -------------- |
@@ -221,4 +234,6 @@ For every top-10k package, its runtime closure was computed; a native package's 
 | pendulum               | 437      | 139              | 0.51 B            | 75 M                | rust           |
 | msgspec                | 625      | 134              | 0.99 B            | 44 M                | c              |
 
-The interactive flame chart (`flame.html`) shows the same data subdivided by _route_: under each native package, the direct dependents through which the pulls flow.
+The interactive flame chart (`flame.html`) shows the same data subdivided by
+_route_: under each native package, the direct dependents through which the
+pulls flow.

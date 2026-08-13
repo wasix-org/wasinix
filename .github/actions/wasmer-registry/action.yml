@@ -2,10 +2,10 @@ name: Select wasmer registry
 description: >
   Export WASMER_REGISTRY and the matching WASMER_TOKEN into the job env.
   Registries are per-environment: wasmer.io (prod), wasmer.fun (bugtopia,
-  staging), wasmer.wtf (dev). Tokens are per-registry (wasmer rejects a
-  token minted on another registry, WASIX-TODO.md); deriving the token from
-  the registry here keeps the pair from drifting at any use site. Via
-  GITHUB_ENV so later step conditions can test `env.WASMER_TOKEN != ''`.
+  staging), wasmer.wtf (dev). Tokens are per-registry (wasmer rejects a token
+  minted on another registry, WASIX-TODO.md); deriving the token from the
+  registry here keeps the pair from drifting at any use site. Via GITHUB_ENV so
+  later step conditions can test `env.WASMER_TOKEN != ''`.
 inputs:
   registry:
     description: Wasmer registry host or URL (wasmer.io, wasmer.fun, wasmer.wtf)

@@ -73,7 +73,9 @@ jobs:
       - name: Rebuild diff
         continue-on-error: true
         env:
-          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.merge_group.base_ref }}
+          BASE_REF:
+            ${{ github.event.pull_request.base.ref ||
+            github.event.merge_group.base_ref }}
         run: nix run .#scripts.rebuild-diff
 
       # after the eval (which realizes every input) but before the build, so a
@@ -99,7 +101,8 @@ jobs:
       # the final Post report. Fork PRs (read-only token) only get the final
       # report, via test-report.yml.
       - name: Post eval report
-        if: ${{ github.event_name != 'pull_request' ||
+        if:
+          ${{ github.event_name != 'pull_request' ||
           github.event.pull_request.head.repo.full_name == github.repository }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
@@ -178,7 +181,8 @@ jobs:
       # pin bump) never fire workflow_run, and in-job is faster anyway.
       # Fork PRs have a read-only token here; test-report.yml covers them.
       - name: Post report
-        if: ${{ always() && steps.build.conclusion != 'skipped' &&
+        if:
+          ${{ always() && steps.build.conclusion != 'skipped' &&
           (github.event_name != 'pull_request' ||
           github.event.pull_request.head.repo.full_name == github.repository) }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0

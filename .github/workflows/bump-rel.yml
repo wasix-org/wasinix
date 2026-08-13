@@ -8,7 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       packages:
-        description: Packages to bump (rels.json attr paths, unambiguous names, or fnmatch globs; prefix --all-versions to include every served history version)
+        description:
+          Packages to bump (rels.json attr paths, unambiguous names, or fnmatch
+          globs; prefix --all-versions to include every served history version)
         required: true
         type: string
 

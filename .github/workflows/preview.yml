@@ -18,7 +18,9 @@ on:
     types: [labeled]
 
 concurrency:
-  group: preview-${{ github.event.pull_request.number || github.event.workflow_run.head_branch }}
+  group:
+    preview-${{ github.event.pull_request.number ||
+    github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
 permissions:
@@ -52,7 +54,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           WR_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          WR_HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          WR_HEAD_REPO:
+            ${{ github.event.workflow_run.head_repository.full_name }}
           EVENT_PR: ${{ github.event.pull_request.number }}
           EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |

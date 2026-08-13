@@ -1,8 +1,9 @@
 # PyPI top-10k native-dependency survey
 
-**Survey date: 2026-07-16.** How many of the top 100 / 1,000 / 10,000 PyPI packages
-(by 30-day downloads) are pure Python vs ship native code, what the native ones are
-built from, and how native packages get pulled into dependency closures.
+**Survey date: 2026-07-16.** How many of the top 100 / 1,000 / 10,000 PyPI
+packages (by 30-day downloads) are pure Python vs ship native code, what the
+native ones are built from, and how native packages get pulled into dependency
+closures.
 
 Motivation: sizing the native-code problem for WASIX Python packaging (wasinix).
 
@@ -14,8 +15,8 @@ Motivation: sizing the native-code problem for WASIX Python packaging (wasinix).
 | top 1,000  | 79.2% | 20.8%         | 53.5%                                |
 | top 10,000 | 85.4% | 14.6%         | ~58.5%                               |
 
-Full numbers, per-cutoff breakdowns (languages, build backends, ABI kinds, bundled
-shared libraries) and the reach ranking: **[findings.md](findings.md)**.
+Full numbers, per-cutoff breakdowns (languages, build backends, ABI kinds,
+bundled shared libraries) and the reach ranking: **[findings.md](findings.md)**.
 
 The reproduce pipeline also emits `flame.html`, an interactive
 reverse-dependency chart: roots are native packages sized by how much they're
@@ -45,7 +46,8 @@ generated, not vendored in this copy; regenerate them with the reproduce steps.
 
 ## Reproducing
 
-Needs python3 (stdlib + `packaging`), ~55 MB of PyPI JSON metadata cache, ~15 min:
+Needs python3 (stdlib + `packaging`), ~55 MB of PyPI JSON metadata cache, ~15
+min:
 
 ```
 python3 scripts/fetch_meta.py 10000        # PyPI JSON metadata -> cache/
@@ -62,22 +64,24 @@ python3 scripts/gen_page.py OUT            # flame.html from template.html
 
 ## Method notes & caveats
 
-- **Native** = latest release publishes a platform-specific wheel, or its sdist builds
-  compiled code (`ext_modules` / Cython / Cargo / CMake / meson signals). Packages whose
-  compiled part is optional but which ship a pure fallback wheel still count as native
-  (tracked separately in `native_optional.json`). `pyspark` counts as pure (JARs, not
-  CPython extensions). Two junk packages (`aaaaaaaaa`, `timedelta`) excluded.
-- **Closure**: `requires_dist` of latest releases, markers evaluated for CPython 3.12 /
-  linux / x86_64, no extras. Extras and version-range back-solving are not modeled, so
-  transitive numbers slightly undercount.
-- **Flame attribution**: each (package, native dep) pair contributes once, along the
-  package's shortest dependency path, so a package reaching numpy both directly and via
-  pandas is counted on the direct edge only. Most pulls of big libraries are direct,
-  which is why "(other)" (folded one-off dependents) dominates under the roots.
-- **Language** is a single primary label per package (source-file majority + toolchain
-  signals). Vendored sources are the main hazard (numpy vendors `.rs` files; Eigen
-  vendors Fortran LAPACK), so Rust requires a toolchain signal, not just
-  sources. ~29% of native packages publish no sdist (binary-only: torch, CUDA wheels,
-  repackaged CLIs) and stay unattributed.
+- **Native** = latest release publishes a platform-specific wheel, or its sdist
+  builds compiled code (`ext_modules` / Cython / Cargo / CMake / meson signals).
+  Packages whose compiled part is optional but which ship a pure fallback wheel
+  still count as native (tracked separately in `native_optional.json`).
+  `pyspark` counts as pure (JARs, not CPython extensions). Two junk packages
+  (`aaaaaaaaa`, `timedelta`) excluded.
+- **Closure**: `requires_dist` of latest releases, markers evaluated for CPython
+  3.12 / linux / x86_64, no extras. Extras and version-range back-solving are
+  not modeled, so transitive numbers slightly undercount.
+- **Flame attribution**: each (package, native dep) pair contributes once, along
+  the package's shortest dependency path, so a package reaching numpy both
+  directly and via pandas is counted on the direct edge only. Most pulls of big
+  libraries are direct, which is why "(other)" (folded one-off dependents)
+  dominates under the roots.
+- **Language** is a single primary label per package (source-file majority +
+  toolchain signals). Vendored sources are the main hazard (numpy vendors `.rs`
+  files; Eigen vendors Fortran LAPACK), so Rust requires a toolchain signal, not
+  just sources. ~29% of native packages publish no sdist (binary-only: torch,
+  CUDA wheels, repackaged CLIs) and stay unattributed.
 - Downloads are the ranking snapshot's 30-day counts; mirrors/CI dominate PyPI
   download stats, as always.
