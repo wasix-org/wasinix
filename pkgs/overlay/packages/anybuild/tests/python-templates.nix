@@ -49,12 +49,16 @@
     };
   };
 
+  # A webc names its dependencies but does not carry them, so the tree needs each
+  # package's closure too (bash pulls coreutils).
+  depTrees = pkgs': lib.concatMapStringsSep " " (p: "${p.pkg.depTree}") (lib.filter (p: p.pkg.depTree != null) pkgs');
+
   # anybuild resolves the app's serve-time packages by name; supplying them from
   # the store is what lets a sandboxed run work at all.
   runtimeWebcs = interpreter:
     pkgs.runCommand "anybuild-runtime-webcs-${interpreter.webc.pkg.id.name}" {} ''
       mkdir -p "$out"
-      for tree in ${interpreter.webc.webc} ${wasmerPackages.bash.webc}; do
+      for tree in ${interpreter.webc.webc} ${wasmerPackages.bash.webc} ${depTrees [interpreter.webc wasmerPackages.bash]}; do
         cp -R --no-preserve=mode,ownership "$tree/." "$out/"
       done
     '';

@@ -193,7 +193,10 @@ in
     passAsFile = ["readme"];
     passthru = {
       id = {inherit owner name version baseVersion;};
-      inherit depWebcs;
+      # depTree is the closure as one --include-webc tree, null when there are no
+      # dependencies; a consumer assembling its own offline tree needs it, since
+      # a package's own webc carries no dependency.
+      inherit depWebcs depTree;
       # The built webc at owner/name/version.webc, ready to symlinkJoin into an
       # --include-webc tree. Its .shim drives this packed artifact (what ships),
       # vs the pkg .shim below which drives the wasmer.toml source dir.
