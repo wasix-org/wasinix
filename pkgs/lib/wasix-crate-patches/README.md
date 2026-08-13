@@ -1,68 +1,49 @@
 # wasix-crate-patches
 
-The wasix edits for upstream Rust crates, applied at vendor time by
-`patchVendor` (set/rust-platform.nix) and republished by the cargo-registry
-mint. Both resolve the same spec through `crate-edits.nix`, so an edit is
-defined once. Packages stay plain `buildRustPackage { cargoHash = ...; }`; the
-edits are baked into the vendored sources before `cargo build` sees them.
+Crate edits applied at vendor time and published by the cargo registry. Both
+paths read `edits.nix` through `crate-edits.nix`, so each edit is defined once.
 
 ## Layout
 
-```
-<crate>/edits.nix        the spec (below)
-<crate>/<version>.patch  floor patches, named by the version authored against
-helpers.nix              eval-time patchPhase helpers
-rewriters/<name>.nix     reusable source rewriters, one script drv each
+```text
+<crate>/edits.nix        edit specification
+<crate>/<version>.patch  floor patch authored against that version
+helpers.nix              patchPhase helpers
+rewriters/<name>.nix     reusable source rewriters
 ```
 
 ## `edits.nix`
 
 ```nix
 { lib, helpers, rewriters, adds }: {
-  edited     = [ ">=1.0.3" ];            # versions we patch (floored)
-  stock      = [ ">=1.2.2" ];            # optional: versions known good unpatched
-  notMinted  = null;                     # optional reason to skip the registry
+  edited = [ ">=1.0.3" ];
+  stock = [ ">=1.2.2" ];
+  notMinted = null;
   forVersion = { version, floorPatch }: {
-    patches    = [ ./thread-id.patch ] ++ lib.optional (floorPatch != null) floorPatch;
+    patches = [ ./thread-id.patch ]
+      ++ lib.optional (floorPatch != null) floorPatch;
     patchPhase = ''${rewriters.wasmerAsNative}'';
-    adds       = [ adds.wasix ];
+    adds = [ adds.wasix ];
   };
 }
 ```
 
-Each resolved version of an edited crate is `edited`, `stock`, or `unsupported`;
-the last hard-fails the vendor, so a version drifting past its coverage surfaces
-loudly instead of miscompiling downstream.
+| field        | meaning                                                                                                               |
+| ------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `edited`     | Patched version ranges. Prefer an open floor such as `>=1.0.3`; the highest applicable `<version>.patch` is selected. |
+| `stock`      | Optional ranges verified to work without edits.                                                                       |
+| `notMinted`  | Optional reason the crate is not published.                                                                           |
+| `forVersion` | Per-version patches, rewrite phase, and dependencies absent upstream.                                                 |
 
-- `edited` (constant): the versions we patch, a semver constraint (comparator
-  terms `>= <= < > =`, comma-AND per element, the array OR-ed). Prefer an
-  open-ended floor range (`>=X`): `floorFor` applies the highest `<version>.patch`
-  at or below the resolved version, and a version the patch no longer fits
-  hard-fails for a fresh patch. It is the coverage the vendor patches and the
-  registry publishes.
-- `stock` (constant, optional): versions deliberately left as upstream ships
-  them. Set it only for versions known good unpatched: a durable upstream fix (a
-  boundary like `>=0.6.3`), or one you have built green. Never an optimistic
-  range.
-- `notMinted` (constant): keep a crate off the registry (git-sourced libdd,
-  vendor-only rewrites) with a reason.
-- `forVersion`: per-version, may branch on `version`. `patches` is the stack
-  (residuals prepend, the engine-selected `floorPatch` last; all compose).
-  `patchPhase` is postPatch shell that runs the `rewriters` drvs. `adds` are deps
-  the edit pulls in that upstream lacks (declared once in `adds.nix`).
-
-A crate with only `<version>.patch` files needs just `{ edited = [...]; }`.
+Ranges use semver comparators, comma-separated AND terms, and one OR branch per
+list element. A resolved version outside both `edited` and `stock` fails. A
+crate needing only floor patches can use `{ edited = [ ">=1.0.3" ]; }`.
 
 ## Rewriters
 
-`rewriters/<name>.nix` is a script derivation run against the crate dir (`$PWD`),
-failing loud if its target or expected source shape is gone. A `patchPhase` runs
-one by interpolating its store path (`${rewriters.wasmerAsNative}`), so editing
-a rewriter rebuilds only the crates that use it and adding one rebuilds nothing.
+A rewriter is a script derivation run from the crate directory. It must fail if
+the expected source shape is absent. Invoke it from `patchPhase` by
+interpolating its store path, for example `${rewriters.wasmerAsNative}`.
 
-Large files that are mostly stable across releases can live next to the crate's
-`edits.nix` and be copied explicitly from its `patchPhase`. Keep only upstream
-integration hunks in floor patches, and overlay payload variants at explicit
-API boundaries from that phase. Use
-`helpers.addFile ./payload.rs "src/sys/payload.rs"` to copy a new file and fail
-if upstream already supplies the destination.
+Use `helpers.addFile ./payload.rs "src/sys/payload.rs"` for a new source file;
+it fails if the destination already exists.

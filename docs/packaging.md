@@ -1,13 +1,15 @@
 # Adding a package
 
+Writing the recipe and its tests. Getting the result out to consumers, and
+keeping older versions rebuildable, is `docs/registry.md`.
+
 ## A package provided natively and for WASIX
 
-Put its standard nixpkgs-style recipe in
-`pkgs/products/<name>/package.nix`. The directory is enumerated
-automatically and the recipe is called in both the native package set and every
-WASIX profile set. Use ordinary function arguments such as `stdenv`,
-`rustPlatform`, and named dependencies; do not take a native build from a cross
-set's `buildPackages`.
+Put its standard nixpkgs-style recipe in `pkgs/products/<name>/package.nix`. The
+directory is enumerated automatically and the recipe is called in both the
+native package set and every WASIX profile set. Use ordinary function arguments
+such as `stdenv`, `rustPlatform`, and named dependencies; do not take a native
+build from a cross set's `buildPackages`.
 
 Keep the matching overlay entry. Put only WASIX-specific adaptation in
 `pkgs/overlay/packages/<name>/package.nix`, deriving from the preceding shared
@@ -20,11 +22,9 @@ helpers.libTweaks {
 } prev.foo
 ```
 
-Small source-build differences may derive from
-`stdenv.hostPlatform.isWasix` in the shared recipe. Bootstrap-sensitive
-compiler families instead share their source/version bundle between explicit
-native build-tool and WASIX-hosted builders; a hosted compiler must depend on
-the build toolchain, never the reverse.
+Where the native and WASIX builds differ in something small, branch on
+`stdenv.hostPlatform.isWasix` inside the shared recipe rather than forking it
+into two.
 
 The results are `nativePackages.<name>` and
 `packagesByProfile.<profile>.<name>`. `preferredProfilePackages.<name>` remains
@@ -36,11 +36,12 @@ Lightest form that works (the loader finds all of these):
 
 - No changes: name in `pkgs/overlay/trivial.nix`.
 - Changes, no extra files: `pkgs/overlay/packages/<name>.nix`.
-- Patches/tests: `pkgs/overlay/packages/<name>/` with `package.nix`,
-  `patches/`, `tests/`.
-- Version families (icu, icu-data): one dir whose `package.nix` evaluates to
-  `{names, packages}` instead of a function; `names` is the static attr list
-  it provides, `packages = callArgs: {<name> = drv;}`.
+- Patches/tests: `pkgs/overlay/packages/<name>/` with `package.nix`, `patches/`,
+  `tests/`.
+- Version families: one dir whose `package.nix` evaluates to `{names, packages}`
+  instead of a function; `names` is the static attr list it provides,
+  `packages = callArgs: {<name> = drv;}`. See `pkgs/overlay/packages/icu/` for
+  an example.
 
 A package file is a function over one argument set:
 
@@ -51,7 +52,18 @@ A package file is a function over one argument set:
 `prev.<name>` is the nixpkgs package, already compiling with the WASIX stdenv
 and resolving deps within the profile. `final.<dep>` names a same-profile dep
 explicitly. `preferredProfilePackages.<tool>` is for tools executed at runtime,
-which may need another profile (bash only builds in `off`).
+which may need another profile.
+
+Those two are the only ways a package file names a dependency. Reaching for
+`nixpkgsByProfile.<profile>.<dep>` from a package file pins a profile the
+package does not control; use `final` for linking and `preferredProfilePackages`
+for runtime tools.
+
+Patches live next to the file that applies them, so a package's patches belong
+in its own `patches/` directory and toolchain patches under `pkgs/toolchain/`.
+Do not vendor a file, lockfile, or bindist without stating the reason in the
+commit. Prefer nixpkgs plus a vendored patch over maintaining separate sources,
+and a version tag over a pinned hash.
 
 ## Tweaks
 
@@ -74,8 +86,8 @@ passthru.wasix.supportedProfiles = helpers.profiles.withoutPic;
 passthru.wasix.broken = "reason + upstream link";   # defect, not a limit
 ```
 
-CI coverage is separate from support. It defaults to every supported profile,
-or to the singleton explicit `preferredProfile` when one is declared. Shipped
+CI coverage is separate from support. It defaults to every supported profile, or
+to the singleton explicit `preferredProfile` when one is declared. Shipped
 products likewise default to their effective preferred profile. Override it
 without hiding the other supported builds:
 
@@ -94,14 +106,13 @@ matrix using the package declaration.
 ## A Rust CLI
 
 Usually `{ prev, ... }: prev.foo`; the WASIX rustPlatform builds it through
-cargo-wasix, installs the `.wasm`s, and limits it to `eh`/`ehpic`. For crates
-not in nixpkgs, call `final.rustPlatform.buildRustPackage` (see
-`packages/crabsay.nix`).
+cargo-wasix, installs the `.wasm`s, and limits it to `eh`/`ehpic`. Crates not in
+nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
 
 ## A CLI shipped as webc
 
-1. Rename the binary to `<name>.wasm` and declare it shipped
-   (`shippedCommands` in `pkgs/default.nix` is derived from the flag):
+1. Rename the binary to `<name>.wasm` and declare it shipped (`shippedCommands`
+   in `pkgs/default.nix` is derived from the flag):
 
    ```nix
    { prev, helpers, ... }:
@@ -110,15 +121,16 @@ not in nixpkgs, call `final.rustPlatform.buildRustPackage` (see
    } prev.foo)
    ```
 
-   Programs needing fork/setjmp set `env.WASIXCC_WASM_OPT_FLAGS =
-"--asyncify:-O2"` so wasixcc asyncifies at link (see `find`, `gitMinimal`).
+   Programs needing `fork()` or `setjmp` set
+   `env.WASIXCC_WASM_OPT_FLAGS = "--asyncify:-O2"` so wasixcc asyncifies at link
+   time.
 
-2. The webc manifest is generated; most packages need zero config. Deviations
-   go in `passthru.wasmer`: `name`, `version`, `commands` (aliases),
+2. The webc manifest is generated; most packages need zero config. Deviations go
+   in `passthru.wasmer`: `name`, `version`, `commands` (aliases),
    `fs."<path>" = <store path>`, `commandEnv.<cmd>`, `autoSelfMount` (mount
-   store paths found in the wasm), `selfMounts` (paths referenced from
-   scripts, which autoSelfMount can't see). See git's package.nix for a full
-   example.
+   store paths found in the wasm), `selfMounts` (paths referenced from scripts,
+   which autoSelfMount can't see). See git's package.nix for an example with
+   several deviations.
 
    Runtime webc dependencies accept a derivation or an attrset containing
    `package` and `version`. The helpers derive requirements from the package's
@@ -138,174 +150,31 @@ not in nixpkgs, call `final.rustPlatform.buildRustPackage` (see
    explicit `{ package = drv; version = "..."; }` for another semver range.
 
 3. Ship an older release too (a version consumers pin): see
-   [Registry history](#registry-history).
-
-## Publishing to the registry
-
-`nix run .#scripts.publish-webc -- --registry wasmer.io [name...]` builds the
-named webcs (none = all shipped) and publishes those the registry does not
-already have (`--dry-run` previews). Existing versions are hash-verified
-against the registry, so a changed webc under an unchanged version fails
-loudly; republishing one needs a rel encoding the registry supports, which
-does not exist yet (WASIX-TODO.md). Auth: `wasmer login` or `WASMER_TOKEN`.
-Packages publish in dependency
-order; a webc dependency that is neither published nor part of the run is an
-error. Failures are isolated per package and reported at the end. Webcs publish under `wasmer/` on
-wasmer.io (the owner default in `make-wasmer-package.nix`). The `publish-webc`
-workflow runs the same script, manual dispatch only, with the `WASMER_TOKEN`
-secret. Provenance rides the package README on the registry: the generated
-README carries the attr and rel, and the publish step appends the source rev
-and a rebuild command. Verification restages the local build with the
-recorded rev to reproduce the published bytes, then compares registry hashes
-(`wasmer publish` can exit 0 without tagging, WASIX-TODO.md).
-
-## Registry history
-
-Both registries are append-only and never delete, so a version we publish stays
-installable forever; a history entry keeps an older version REBUILDABLE too (for
-a version consumers still pin, so a regenerated lockfile resolves to it, or to
-rel-bump it against a toolchain fix). It works the same for every package set,
-one shared table shape, one file per set:
-
-- wheels: `overlay/python-packages/history.json`
-- CLIs / libraries: `overlay/packages/history.json`
-
-Keyed `{<attr>: {<version>: <spec>}}`. The spec re-points the package's OWN src
-fetcher at that version (its real fetcher, never an imposed one): `{version,
-hash}` for `fetchPypi`, `{tag|rev, hash}` for `fetchFromGitHub`, `{url, hash}`
-for a `fetchurl` release tarball, plus `cargoHash` when the package vendors
-rust crates (they come from the Cargo.lock in that src, so the vendor follows
-it; `scripts/history.py` derives the hash); plus optional `note` and `variants` (the
-set-neutral gate: the build variants an entry is limited to; for wheels a
-variant is an interpreter, e.g. `["py313"]`; a single-variant set like CLIs
-omits it).
-
-The loader (`load-packages.nix`) mints a `<attr>_<version>` attr in the same
-set by re-importing the package file with the src rebased, so the package's own
-`lib.version*` conditionals carry the per-version drift (see `numpy.nix`,
-`jq/package.nix`). Drift the generic rebase can't cover is corrected in the
-package file, which reads the entry back off
-`passthru.wasix.historySpec` (see `cryptography.nix`, which drops nixpkgs'
-patches on any version they weren't written for). Wheels build at `.#pythonWheels.py313."numpy-2.1.3"`; a
-webc keys `wasmerPackages` as `<name>-<semver>` (`jq-1.6.0`) and publishes
-under the same webc name. The run-by-name stubs are keyed the same way, so a
-test asks for an older build by key: `wasmerPkgs."jq-1.6.0"`.
-
-Maintain the tables with `nix run .#scripts.history`: `add <attr>==<version>`,
-or `--per-major`/`--per-minor` where the source has a version index (PyPI, or
-github tags for a `fetchFromGitHub` package); `--set wheel|cli` disambiguates a
-name in both sets (jq). A nixpkgs bump that crosses a major auto-appends the
-outgoing version, for both sets (`scripts/update.py`). A package tunes this with
-`passthru.wasix.retention`: `minor` retains latest-per-minor, `none` opts out
-(icu-data, whose majors are already first-class attrs). Keep history to what
-consumers actually pin: latest per major, occasionally latest per minor.
-
-(icu-style `{names, packages}` families are only for packages nixpkgs itself
-carries at multiple versions, not for minting historical ones. Their major list
-tracks nixpkgs: icu declares `passthru.wasix.retentionHook =
-["…/sync-versions.py"]`, which `scripts/update.py` runs after a bump to
-regenerate `icu/versions.nix` from the majors the pinned nixpkgs actually
-carries.)
-
-## PR previews
-
-Label a same-repo PR `preview`: after its Build goes green (the CI cache
-then serves every artifact; labeling an already-green PR triggers
-immediately), `preview.yml` diffs it against its base at the drvPath level
-(`scripts/preview-diff.py`) and publishes what changed.
-Webcs go to the dev registry as `<version>-pr<N>.g<sha7>` prereleases:
-distinct versions per iteration, hidden from `latest`, not deletable (they
-accumulate on wasmer.wtf). Changed wheels become an ephemeral per-PR Edge
-app serving an overlay index; `pip install --index-url <preview>/simple
---extra-index-url <prod>/simple` prefers the preview wheels by their longer
-local version. The app is deleted when the PR closes or drops the label
-(`preview-cleanup.yml`), and the PR gets a comment with the URLs.
+   [Registry history](registry.md#registry-history).
 
 ## A Python package or wheel
 
 - Ship a wheel: add `{attr = "<python3.pkgs name>";}` to
-  `overlay/python-packages/wheels.nix` (`pyImport` if the module name
+  `pkgs/overlay/python-packages/wheels.nix` (`pyImport` if the module name
   differs). Most need nothing else; test phases are already skipped by cross.
-- Fix a build: `overlay/python-packages/<attr>.nix`, same form as top-level
-  plus `pyfinal`/`pyprev` for Python-set deps. Patches in
-  `python-packages/patches/`, Rust-wheel helpers in `python-packages/lib/`.
+- Fix a build: `pkgs/overlay/python-packages/<attr>.nix`, same form as top-level
+  plus `pyfinal`/`pyprev` for Python-set deps. Patches live in
+  `pkgs/overlay/python-packages/patches/`; Rust-wheel helpers live in
+  `pkgs/overlay/python-packages/lib/`.
 - Ship an older release too (a version consumers pin): see
-  [Registry history](#registry-history).
+  [Registry history](registry.md#registry-history).
 - Which wheel to add next, and what it unblocks: `python-coverage.md`.
-
-All shipped wheels (plus their transitive python deps) are also published as a
-static PEP 503 "simple" index: `.#pythonRegistry` (`pkgs/python-registry/`).
-Serve the output from any static file host, or install directly:
-`pip install --index-url file://$(readlink -f result)/simple <pkg>`. A new
-wheels.nix entry lands in the registry automatically. Its test suite
-(`checks.python-registry`) walks the index for hash/metadata integrity and
-pip-installs representative packages (deps resolved from the index too), then
-imports them under wasmer.
-
-The index is also what anybuild resolves an app's wasix wheels from, as its
-overlay index over PyPI. `checks.anybuild` builds anybuild's own example
-templates against it: the wasix build plans all of them and builds the static
-ones, and native anybuild builds the python ones for real, with the registry
-and a pinned PyPI mirror both served over loopback so nothing leaves the
-sandbox. One built app is then booted under wasmer and asked for a page, on each
-interpreter the registry serves wheels for, with its serve-time packages
-supplied from the store since anybuild's own pinned interpreter cannot load
-these wheels (WASIX-TODO.md). The template sweep itself stays on 3.13, the
-version anybuild's provider pins: the templates' own requirements decide what
-can resolve, and python-flask pins a MarkupSafe with no cp314 wheel.
-
-The mirror is `pkgs/overlay/packages/anybuild/tests/mirror-lock.json`,
-regenerated by `nix run .#scripts.anybuild-mirror` (one version per project, so
-the resolution inside the test has no choice left to make); add a template to
-its `templates` list and re-run to cover it. It is also anybuild's
-`retentionHook`, so an anybuild bump re-resolves the pins against that release's
-`examples/`, and a template whose dependencies moved past what the wheel index
-serves fails on the bump PR.
-
-Every wheel is published as `<version>+wasix.<rel>` (PEP 440 local version):
-`rel` counts our builds of one upstream version and comes from the root
-`rels.json`, keyed by attr path (`pythonRegistry.wheels.<pname>`,
-`wasmerPackages.<name>` for webcs) then version, default 1, shared across
-python versions (the cp tag keeps filenames distinct). Bump it to republish a
-changed build, with `nix run .#scripts.bump-rel` or the manual `bump-rel.yml`
-workflow (takes a list of packages, opens a PR); an upstream version bump
-resets it by key miss (`nix run .#scripts.update` drops the stale key).
-For a deliberate whole-registry rebuild, use `nix run .#scripts.bump-rel --
---all-versions 'pythonRegistry.wheels.*'`; the flag also bumps every served
-history version, so it remains explicit.
-Published filenames are immutable and accumulate. A normal registry rebuild can
-change the bytes of an existing filename through a nixpkgs, toolchain, or
-runtime update; the volume keeps its original artifact in that case. Bump the
-rel only when that rebuilt wheel is itself a release. GitHub Pages is different:
-it is always deployed from the fresh `.#pythonRegistry` result, so it is a
-bleeding-edge snapshot and may serve new bytes under an existing filename. Use
-the volume-backed index for immutable, reproducible installs. Webc rels land in
-`[package.metadata] wasix-rel` only for now: the registry has no version
-encoding for republishing (WASIX-TODO.md), so a bumped webc still cannot
-republish. The `publish-index` workflow (on a green Build of
-main) builds the patched wasmer, fetches the volume's S3 credentials with the
-`WASMER_TOKEN` secret (provisioning them on the first run via the vendored
-`rotateS3Credentials` fix), pushes only new wheel filenames with `publish.py`,
-and deploys the fresh snapshot to GitHub Pages even if volume publication
-fails. The Edge app serving the volume is
-`python-registry/app.yaml` (static-web-server, deployed once by hand).
-
-Each wheel's `manifests/<wheel>.json` (served from the volume) records its
-build provenance: `wasinix_rev`, `attr`, and `drv_path`. So any wheel is
-reproducible with `nix build github:wasix-org/wasinix/<wasinix_rev>#<attr>`
-(e.g. `#pythonRegistry.wheels.numpy^dist`); every closure wheel, transitive
-deps included, is exposed under `pythonRegistry.wheels`.
 
 ## Tests
 
 `pkgs/overlay/packages/<name>/tests/*.nix`, each returning an attrset of
 derivations built with `pkgs/wasmer/test-lib.nix` (a `helpers.nix` is shared
-setup). They attach as `passthru.tests` and appear under `checks.<name>`.
-Besides `pkgs`/`testLib`/`wasmerPkgs`, test files can take `crossPkgs` (the
-default-profile cross set) and `makeWasmerPackage` to cross-build and package
-a consumer program (see icu-data's smoke test).
-`mkScriptComparison` diffs against the native tool; `expectFail` marks a
-must-fail test; `broken "reason"` tolerates a known failure and fails loudly
+setup). They attach as `passthru.tests` and appear under
+`checks.<system>.<name>`. Besides `pkgs`/`testLib`/`wasmerPkgs`, test files can
+take `crossPkgs` (the default-profile cross set) and `makeWasmerPackage` to
+cross-build and package a consumer program. See icu-data's smoke test for an
+example. `mkScriptComparison` diffs against the native tool; `expectFail` marks
+a must-fail test; `broken "reason"` tolerates a known failure and fails loudly
 once it starts passing.
 
 To run tests against a locally built runtime instead of the pinned one:
@@ -313,9 +182,14 @@ To run tests against a locally built runtime instead of the pinned one:
 
 ## Pitfalls
 
-- `nix build` reads the git-tracked tree; `git add` new files first.
+- Nix only sees git-tracked files, so `git add -N` a new one before building
+  (`docs/building.md`).
 - Off-only packages fail in other profiles on purpose; use
   `preferredProfilePackages`.
 - `configure` misdetecting features can be wasm-opt failing on test programs:
   add `disableWasmOptInConfigureHook` to `nativeBuildInputs`.
-- Check `WASIX-TODO.md` before debugging odd runtime behaviour.
+- Odd runtime behaviour, such as unexpected exit codes or output formatting, is
+  usually a known WASIX quirk rather than a bug in the package, so check
+  `WASIX-TODO.md` first. Older entries are still being triaged onto its entry
+  format, so verify one against the current toolchain before relying on it.
+  Adding an entry follows the format in that file's header.

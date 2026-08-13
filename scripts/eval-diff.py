@@ -6,7 +6,7 @@
 # thing costs one eval per run.
 #
 # Only the drv-level view: meta/passthru-only changes do not move drvPaths and
-# stay invisible here (that is the point; see CLAUDE.md "Checking your work").
+# stay invisible here (that is the point; see docs/building.md "Before you commit").
 #
 # Usage:
 #   eval-diff.py --jobs-out eval-jobs.jsonl --map-out eval-map.json \

@@ -34,11 +34,10 @@ closure is published. Against the current registry closure (215 wheels):
 
 Out-of-scope packages are excluded from the denominator; see below.
 
-The shipped native set is the registry closure, not `wheels.nix`: transitively
-pulled deps (pyyaml, fonttools, wrapt, websockets, brotli) publish without a
-worklist entry. Per-package build details live in each
-`overlay/packages/<pkg>.nix` / `overlay/python-packages/<pkg>.nix` and the
-commit that added it.
+The shipped native set is the registry closure, not `wheels.nix`: transitive
+dependencies publish without a worklist entry. Per-package build details live in
+each `pkgs/overlay/packages/<pkg>.nix` /
+`pkgs/overlay/python-packages/<pkg>.nix` and the commit that added it.
 
 ## Recompute
 
@@ -69,25 +68,18 @@ more than the next six combined.
 
 ## Out of scope
 
-Declared, not attempted. Roughly 3% of the top-10k.
-
-- GPU and CUDA: `torch`, `triton`, `nvidia-*`, `cuda-*`, `jaxlib`,
-  `torchvision`, `torchaudio`, `onnxruntime` (GPU), `tensorflow`, `vllm`,
-  `sglang`, `flash-attn`, `xformers`, `deepspeed`. No GPU under wasmer, and
-  these publish binary-only wheels regardless.
-- macOS frameworks: all `pyobjc-*`. Never pulled on a wasix target anyway;
-  they appear in the survey only because it evaluates markers for linux.
-- Runtime JIT: `llvmlite` and `numba` (49 and 47) need an LLVM JIT at runtime.
-- `libclang` (22), `playwright` (17): bundled toolchain or browser payloads.
+Declared, not attempted. Roughly 3% of the top-10k. Categories include GPU and
+CUDA packages, macOS frameworks, runtime JITs, and bundled toolchain or browser
+payloads. The survey data owns the package inventory.
 
 ## Demand side
 
-Unblocking a native package does not by itself publish the packages it
-unblocks. They reach the registry only as the closure of something in
-`wheels.nix`. Two ways to close that gap:
+Unblocking a native package does not by itself publish the packages it unblocks.
+They reach the registry only as the closure of something in `wheels.nix`. Two
+ways to close that gap:
 
-- Curated apps, the current model: add top-level packages, deps ride along.
-  Good signal per entry, uneven coverage.
+- Curated apps, the current model: add top-level packages, deps ride along. Good
+  signal per entry, uneven coverage.
 - Survey-driven worklist: generate `wheels.nix` pure entries for every top-N
   package whose native closure is already satisfied. Pure builds are cheap, so
   this is what turns the coverage percentage into an actually populated
