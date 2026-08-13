@@ -1,5 +1,5 @@
 {
-  "anybuild": "0.27.0",
+  "anybuild": "0.27.2",
   "dists": [
     {
       "files": [
@@ -2122,13 +2122,13 @@
     {
       "files": [
         {
-          "filename": "uvicorn-0.52.1-py3-none-any.whl",
-          "sha256": "e4403f9d93188cf9d1088e9f40e3acd12630e2df8675316704379a7fc20fff6a",
-          "url": "https://files.pythonhosted.org/packages/c7/d5/68e6e9bca63c0badf67002890a46d3784c958de45b65e1275ec583ca1f06/uvicorn-0.52.1-py3-none-any.whl"
+          "filename": "uvicorn-0.52.2-py3-none-any.whl",
+          "sha256": "0b916d247cf5500b320638ea11abf0fed7f348e8e1c7fde53a0e6b6319803512",
+          "url": "https://files.pythonhosted.org/packages/c1/08/0d834cf3e61e476c9f422e856a9e37d12d708d7ada942a2774b1f42aee6c/uvicorn-0.52.2-py3-none-any.whl"
         }
       ],
       "project": "uvicorn",
-      "version": "0.52.1"
+      "version": "0.52.2"
     },
     {
       "files": [
@@ -2271,38 +2271,38 @@
     {
       "files": [
         {
-          "filename": "xxhash-3.8.1-cp313-cp313-macosx_11_0_arm64.whl",
-          "sha256": "bcab50a389cc04d87f90092af78a6adba2ab3deca63175a3344ca83514045315",
-          "url": "https://files.pythonhosted.org/packages/07/3f/5072f1f0f5714186f0ac2a0b5a4929ce30d4b845e94886b6c01b6ebda0be/xxhash-3.8.1-cp313-cp313-macosx_11_0_arm64.whl"
+          "filename": "xxhash-4.0.0-cp313-cp313-macosx_11_0_arm64.whl",
+          "sha256": "6838e142ac44cb0838c395db285d040784404dd33f6b7d92b2338f2d849f8b97",
+          "url": "https://files.pythonhosted.org/packages/c4/a3/c65f35ea36754998e4359cd4be71b3685c8847e1ff3c7217ef5d624e237c/xxhash-4.0.0-cp313-cp313-macosx_11_0_arm64.whl"
         },
         {
-          "filename": "xxhash-3.8.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
-          "sha256": "98ee81b4b7f3023c9cb04a78cc67610baffcb5812d92f2096cb5a5efc6f19437",
-          "url": "https://files.pythonhosted.org/packages/29/83/e361d3c1acd1b21e1d489616de6fa4aaf843365d8179f612e3743eac20a9/xxhash-3.8.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
+          "filename": "xxhash-4.0.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+          "sha256": "5ae29aa4ca0d8be4c13154bea4a82f77ed62062d400ead38b599b2d7bbf5b727",
+          "url": "https://files.pythonhosted.org/packages/4e/33/2e50c9a828240d76a956d2b4426f8f1e5264a60a06b84c9150b718ec8633/xxhash-4.0.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
         },
         {
-          "filename": "xxhash-3.8.1-cp313-cp313-win_amd64.whl",
-          "sha256": "538f5f865df6cd8c32dd63158a0e5b4f5dd08d732a7da8b7228a5a0776c8ce55",
-          "url": "https://files.pythonhosted.org/packages/96/2a/2a0b84798448e766f7b89ceed073cb0cb5a43fc9ebbacbdea74a38de18e3/xxhash-3.8.1-cp313-cp313-win_amd64.whl"
+          "filename": "xxhash-4.0.0-cp313-cp313-win_amd64.whl",
+          "sha256": "c5f7268147219bad4ffa56a06a0416d30b9a4c16dd1f2fc847bcee0a82babdb7",
+          "url": "https://files.pythonhosted.org/packages/2c/39/34472a4ee5bba5abba4f5cbe6b4e6e9636a408b9e1d1dfbb856e057b193a/xxhash-4.0.0-cp313-cp313-win_amd64.whl"
         },
         {
-          "filename": "xxhash-3.8.1-cp314-cp314-macosx_11_0_arm64.whl",
-          "sha256": "af0c9fedc4a2c24e8664953882fe8185f3790b8338c9c700f76f5ad660817711",
-          "url": "https://files.pythonhosted.org/packages/ca/29/df598e738ff37558ac627264deb2e560902d9bf7f46d3bd5175c9eee593e/xxhash-3.8.1-cp314-cp314-macosx_11_0_arm64.whl"
+          "filename": "xxhash-4.0.0-cp314-cp314-macosx_11_0_arm64.whl",
+          "sha256": "63572670b457b18404aa2bf1e4eccf15b11897cb84c1d8d37f245ac3c0398564",
+          "url": "https://files.pythonhosted.org/packages/4a/1c/03d2ef7526bea146d10247fbb546ac5c204374825e00f333e050034da9a9/xxhash-4.0.0-cp314-cp314-macosx_11_0_arm64.whl"
         },
         {
-          "filename": "xxhash-3.8.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
-          "sha256": "c31a2649bcf1fe97cf11c79848d761df33ac46b3896942d31b640557b486ff6b",
-          "url": "https://files.pythonhosted.org/packages/03/f0/6db07590ed7e0a77f186ef0bcea8d52553bf1ba57833e09467a2411f0f2d/xxhash-3.8.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
+          "filename": "xxhash-4.0.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+          "sha256": "0a2fcead5cdff26b002e8336cdec6f6eea588d350b1ec1010801878c9381779f",
+          "url": "https://files.pythonhosted.org/packages/55/d9/ad3a313fbaea9116cd33b1f1c454eb363012ce46933e1760ac072b1ee9f9/xxhash-4.0.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
         },
         {
-          "filename": "xxhash-3.8.1-cp314-cp314-win_amd64.whl",
-          "sha256": "6cee733fe4ccb1737e0997135283c82341e5cfa9cf214b165f9087fb663aaf4f",
-          "url": "https://files.pythonhosted.org/packages/d7/99/e9e44588c0b62837bbec5ba7927816de0afa03406b1a0b6c7a7e1d1a30a0/xxhash-3.8.1-cp314-cp314-win_amd64.whl"
+          "filename": "xxhash-4.0.0-cp314-cp314-win_amd64.whl",
+          "sha256": "77dbca7da50340f2bddb1ab16ced523ae275f319d209362a7bdb7f306dd9cfdb",
+          "url": "https://files.pythonhosted.org/packages/b9/0a/4cebdfd9970a7859e0287621954270ca3ac63807b95e9d4dec316de13c80/xxhash-4.0.0-cp314-cp314-win_amd64.whl"
         }
       ],
       "project": "xxhash",
-      "version": "3.8.1"
+      "version": "4.0.0"
     },
     {
       "files": [
