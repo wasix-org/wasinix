@@ -2,7 +2,6 @@
 # `libTweaks {} prev.<name>`. Move one to packages/<name>.nix as soon as it
 # needs a flag/patch/test/passthru.
 [
-  "binaryen" # wasm-opt et al, running under wasmer rather than on the build host
   "brotli"
   "bzip2"
   "editline" # nix repl
