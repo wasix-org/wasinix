@@ -21,6 +21,15 @@ in rec {
   dropInputsByNameInfix = names: xs:
     builtins.filter (x: x != null && !(lib.any (n: lib.hasInfix n (lib.getName x)) names)) (orEmpty xs);
 
+  # Swap inputs by name, for a release that caps a sibling the set has moved
+  # past and so takes that sibling's history entry. Nulls pass through, since
+  # getName cannot read them.
+  replaceInputsByName = swaps: xs:
+    map (x:
+      if x == null
+      then x
+      else swaps.${lib.getName x} or x) (orEmpty xs);
+
   # The static cross layer mirrors buildInputs into propagatedBuildInputs (a static
   # archive records no link deps), so an input filter has to cover both.
   linkInputs = f: {

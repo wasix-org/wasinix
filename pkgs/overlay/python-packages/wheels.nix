@@ -432,6 +432,11 @@
     pyImport = "pydantic_ai";
   } # Pydantic AI (pydantic-core; no new Rust)
   {attr = "langgraph";} # LangGraph (ormsgpack + uuid-utils)
+  # already in the registry closure; named here so their history is maintainable
+  # for the consumers that pin a sibling to their own release
+  {attr = "langgraph-prebuilt";}
+  {attr = "langgraph-sdk";}
+  {attr = "pydantic-graph";}
   {attr = "langchain";} # LangChain (langgraph + langchain-core)
   {attr = "litellm";} # LiteLLM (tokenizers + tiktoken + fastuuid + openai)
 ]

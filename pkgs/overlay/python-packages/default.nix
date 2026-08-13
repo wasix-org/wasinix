@@ -33,6 +33,20 @@
   # release spells differently. It cannot take a package file: declaring one makes
   # the set fail to evaluate with "unsupported system: wasm32-wasip1", so the
   # correction rides here, where only minted entries are reached.
+  # scipy carries an upstream backport patch cut against the current release, so
+  # its hunks miss on an older src; the charlen patches beside it are the port's
+  # own and stay. Like scikit-learn it cannot take a package file, so this rides
+  # here where only minted entries are reached.
+  scipyFixup = drv:
+    if (drv.pname or "") == "scipy" && (drv.passthru.wasmer.history or false)
+    then
+      drv.overrideAttrs (o: {
+        patches =
+          builtins.filter
+          (p: builtins.match ".*charlen.*" (baseNameOf (toString p)) != null)
+          (o.patches or []);
+      })
+    else drv;
   sklearnFixup = drv:
     if (drv.pname or "") == "scikit-learn" && (drv.passthru.wasmer.history or false)
     then
@@ -47,7 +61,7 @@
   # and the registry refuses the two as one filename with conflicting contents.
   noBuildBytecode = drv: drv.overrideAttrs (_: {PYTHONDONTWRITEBYTECODE = "1";});
 in
-  builtins.mapAttrs (_: drv: noBuildBytecode (sklearnFixup (historyFixups drv)))
+  builtins.mapAttrs (_: drv: noBuildBytecode (scipyFixup (sklearnFixup (historyFixups drv))))
   (
     (callArgs.helpers.loadPackageDir {
       dir = ./.;

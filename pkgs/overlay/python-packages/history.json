@@ -237,6 +237,20 @@
       "tag": "1.0.10"
     }
   },
+  "langgraph-prebuilt": {
+    "1.0.8": {
+      "hash": "sha256-Gsh2bCcity0zf9A+FENxwktK5j3WhQOG/jZmhJ18KVE=",
+      "note": "sibling pin for a rebased consumer",
+      "tag": "prebuilt==1.0.8"
+    }
+  },
+  "langgraph-sdk": {
+    "0.3.0": {
+      "hash": "sha256-64FlCtUz49KKQoz78NYMVaY3Wcy/AE/D7XGQW4gIMMg=",
+      "note": "sibling pin for a rebased consumer",
+      "tag": "sdk==0.3.0"
+    }
+  },
   "markupsafe": {
     "3.0.2": {
       "hash": "sha256-BqCkQqPhjEx3qB/k3d3fSirR/HDBa7e4kpx3/VSwXJM=",
@@ -486,6 +500,27 @@
     "2.9.0": {
       "hash": "sha256-XzLimh24dmRLTJ7zKsuiSl/xvv4sP2FBHS9NpIBSEZM=",
       "note": "head of the 2.x line (33% of installs); 2.21.0 has 42 names removed",
+      "tag": "v2.9.0"
+    }
+  },
+  "pydantic-core": {
+    "2.27.2": {
+      "hash": "sha256-dGef0WflrjktAxukT8TEZhq1mrkXjcz5UE7FNQ0RINU=",
+      "note": "the version pydantic 2.10.6 pins exactly; predates the move into the pydantic monorepo",
+      "owner": "pydantic",
+      "repo": "pydantic-core",
+      "tag": "v2.27.2"
+    }
+  },
+  "pydantic-graph": {
+    "1.107.0": {
+      "hash": "sha256-++tAI+KRCscDWqPQx5oswrjDq2txpzdI1ls/O/aAClE=",
+      "note": "sibling pin for a rebased consumer",
+      "tag": "v1.107.0"
+    },
+    "2.9.0": {
+      "hash": "sha256-XzLimh24dmRLTJ7zKsuiSl/xvv4sP2FBHS9NpIBSEZM=",
+      "note": "sibling pin for a rebased consumer",
       "tag": "v2.9.0"
     }
   },
@@ -741,6 +776,13 @@
       "hash": "sha256-b9XVxyR9yv65SxlOc1Tn5t5qEEJw7qSpBfvlBGOWhPM=",
       "note": "97% of installs still land here; 2.5.3 has 18 names removed",
       "tag": "release-v2.5.2"
+    }
+  },
+  "starlette": {
+    "0.46.2": {
+      "hash": "sha256-K/0Y6plw+zbRKpzSLbEG6xb30e/Ou//4jddpUYdfs/k=",
+      "note": "satisfies fastapi 0.115.x, which caps starlette<0.47",
+      "tag": "0.46.2"
     }
   },
   "thrift": {
