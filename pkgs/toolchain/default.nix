@@ -50,7 +50,12 @@
     (import ../profiles.nix).profiles;
   openmpByProfile = pkgs.lib.mapAttrs (_: v: v.openmp) variants;
 
-  crateEdits = import ../lib/crate-edits.nix {inherit pkgs;} ../lib/wasix-crate-patches;
+  crateEdits =
+    import ../lib/crate-edits.nix {
+      inherit pkgs;
+      pins = builtins.fromJSON (builtins.readFile ../cargo-registry/crates.json);
+    }
+    ../lib/wasix-crate-patches;
   vendorPatches = import ../lib/patch-rust-vendor.nix {
     inherit (pkgs) lib;
     hostPkgs = pkgs;
