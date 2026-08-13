@@ -15,8 +15,15 @@
   gawk = preferredProfilePackages.gawk;
 in
   (prev.git.override {
-    inherit (final) gnused gnugrep gettext;
+    # gettext lands in nativeBuildInputs too, so the bare argument splices to
+    # the build platform; git-sh-i18n needs the path it bakes to be the wasix
+    # one. gnugrep/gnused need no such push: they are ours under those names.
+    inherit (final) gettext;
     inherit bash gawk coreutils;
+    # `git p4` is the only consumer (exec'd, not linked) and
+    # it needs a Perforce client which we don't have yet,
+    # so there's no reason to pull in python yet.
+    pythonSupport = false;
     # makeWrapper only wraps the Perl subcommands git omits.
     makeWrapper = null;
     nlsSupport = false;
@@ -50,15 +57,15 @@ in
             nano
             coreutils
             gawk
-            preferredProfilePackages.grep
-            preferredProfilePackages.sed
+            preferredProfilePackages.gnugrep
+            preferredProfilePackages.gnused
           ];
           # git execs its libexec helpers at absolute /nix/store paths; mount
           # whatever git.wasm embeds (bash is no longer embedded).
           autoSelfMount = true;
           # The shell subcommands exec grep, sed and the coreutils programs by
           # store path, which the wasm scan behind autoSelfMount cannot see.
-          selfMounts = [final.grep final.sed coreutils gawk];
+          selfMounts = [final.gnugrep final.gnused coreutils gawk];
         };
       };
     makeFlags =
