@@ -1,0 +1,25 @@
+Fortran COMMON blocks lower to LLVM common linkage, which wasm cannot
+represent: MCWasmStreamer::emitCommonSymbol is an llvm_unreachable, so a
+release LLVM runs into undefined behaviour and segfaults while emitting the
+object (llvm-project main turns it into a diagnostic, still not support).
+clang has defaulted to -fno-common since clang 11, so only Fortran reaches
+this. Weak linkage keeps the cross-unit merging COMMON needs.
+
+--- a/lib/Lower/ConvertVariable.cpp
++++ b/lib/Lower/ConvertVariable.cpp
+@@ -1564,7 +1564,14 @@
+   Fortran::semantics::MutableSymbolVector cmnBlkMems =
+       getCommonMembersWithInitAliases(common);
+   mlir::Location loc = converter.genLocation(common.name());
+-  mlir::StringAttr linkage = builder.createCommonLinkage();
++  // wasm has no common symbols: MCWasmStreamer::emitCommonSymbol is
++  // unimplemented, so common linkage runs into undefined behaviour in a release
++  // LLVM and crashes object emission. Weak still merges the block across the
++  // translation units that declare it.
++  mlir::StringAttr linkage =
++      fir::getTargetTriple(builder.getModule()).isWasm()
++          ? builder.createWeakLinkage()
++          : builder.createCommonLinkage();
+   const auto *details =
+       common.detailsIf<Fortran::semantics::CommonBlockDetails>();
+   assert(details && "Expect CommonBlockDetails on the common symbol");
