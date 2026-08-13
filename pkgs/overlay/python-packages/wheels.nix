@@ -102,7 +102,8 @@
   }
   {
     attr = "protobuf4";
-    pyImport = "google._upb._message";
+    # 4.x predates the move to upb and builds the older C++ extension instead
+    pyImport = "google.protobuf.pyext._message";
   }
 
   {attr = "boto3";}
