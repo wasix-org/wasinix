@@ -442,9 +442,9 @@
   },
   "psycopg-pool": {
     "3.3.1": {
-      "hash": "sha256-nNiiiMHAeaMJ+51RtjHeWRdOML4x05afZ/DBD3B1sM0=",
+      "hash": "sha256-hHgswbqaoQRQrUxhNFG6tfmlap1mVUo/OkNsWF686U4=",
       "note": "100% of installs still land here",
-      "tag": "3.3.1"
+      "tag": "pool-3.3.1"
     }
   },
   "pyarrow": {
