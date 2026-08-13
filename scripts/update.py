@@ -360,6 +360,28 @@ def run_update_script(t):
     return None
 
 
+def commit_step(message):
+    # nix fmt first: an update script may write an unformatted pin and CI
+    # rejects unformatted files, so each commit has to stand on its own.
+    run(["nix", "fmt"], cwd=REPO)
+    run(["git", "-C", str(REPO), "add", "-A"])
+    clean = subprocess.run(
+        ["git", "-C", str(REPO), "diff", "--cached", "--quiet"]
+    ).returncode
+    if clean == 0:
+        return
+    run(["git", "-C", str(REPO), "commit", "-m", message])
+    print(f"  committed: {message}")
+
+
+def commit_summary(name, outcome):
+    # The backends already return "<old> -> <new>" for a real bump, which is
+    # the nixpkgs summary for a version bump (docs/style.md).
+    if outcome and re.fullmatch(r"\S+ -> \S+", outcome.strip()):
+        return f"{name}: {outcome.strip()}"
+    return f"{name}: update"
+
+
 def flake_input_rev(name):
     node = json.loads((REPO / "flake.lock").read_text())["nodes"][name]["locked"]
     return node.get("rev") or node.get("ref") or ""
@@ -404,6 +426,11 @@ def main():
         "--summary-out",
         metavar="FILE",
         help="write a markdown summary (the auto-update PR body)",
+    )
+    ap.add_argument(
+        "--commit",
+        action="store_true",
+        help="commit each target and repo-wide step separately (the update workflow)",
     )
     args = ap.parse_args()
 
@@ -471,6 +498,8 @@ def main():
         if outcome is None:
             outcome = "updated" if changed else "up to date"
         results.append((t.name, normalize_outcome(t, outcome, changed)))
+        if args.commit and changed:
+            commit_step(commit_summary(t.name, outcome))
 
     # Retain before pruning: prune_rels drops the rel key of any version no
     # longer served, which is exactly the version retention just brought back.
@@ -479,6 +508,8 @@ def main():
             retained = regen_history()
             if retained:
                 results.append(("history", retained))
+                if args.commit:
+                    commit_step("pkgs: retain outgoing versions in registry history")
         except Exception as e:
             failures.append("history retention")
             results.append(("history", f"FAILED: {failure_line(e)}"))
@@ -487,6 +518,8 @@ def main():
         pruned = prune_rels()
         if pruned:
             results.append(("rels", pruned))
+            if args.commit:
+                commit_step("pkgs: prune rels keys nothing serves")
     except Exception as e:
         failures.append("rels prune")
         results.append(("rels", f"FAILED: {failure_line(e)}"))
@@ -509,6 +542,8 @@ def main():
             # noise in the summary on every PR, unlike history/rels above.
             if repo_status() != before:
                 results.append((name, outcome or "re-synced"))
+                if args.commit:
+                    commit_step(f"{name}: re-sync generated listing")
 
     notes = fired_notes(priors)
     for n in notes:

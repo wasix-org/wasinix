@@ -19,7 +19,8 @@ on:
         required: false
         default: ""
       batch:
-        description: "One combined PR (auto/update-pins) instead of one per target"
+        description:
+          "One combined PR (auto/update-pins) instead of one per target"
         required: false
         type: boolean
         default: false
@@ -122,8 +123,13 @@ jobs:
           # the end of the job, after the partial PR is opened.
           # Summary outside the checkout so create-pull-request doesn't commit it.
           summary="$RUNNER_TEMP/update-summary.md"
+          # --commit lands one commit per bumped target, so the PR reads as a
+          # list of bumps rather than one squash. It runs nix fmt before each,
+          # so there is no separate format step.
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           set +e
-          nix run .#scripts.update -- "${args[@]}" --summary-out "$summary"
+          nix run .#scripts.update -- "${args[@]}" --summary-out "$summary" --commit
           code=$?
           set -e
           {
@@ -132,10 +138,6 @@ jobs:
             cat "$summary" 2>/dev/null || echo "(the updater crashed before writing a summary)"
             echo EOF
           } >>"$GITHUB_OUTPUT"
-
-      - name: Format
-        shell: bash
-        run: nix fmt
 
       # UPDATE_PR_TOKEN: events from the default GITHUB_TOKEN don't cascade,
       # so a PR created with it never triggers CI (someone has to press
@@ -147,8 +149,15 @@ jobs:
         with:
           token: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
           branch: auto/update-${{ matrix.job.name }}
-          title: "${{ matrix.job.name == 'pins' && 'pins: automated source-pin bump' || format('pins: bump {0}', matrix.job.name) }}"
-          commit-message: "${{ matrix.job.name == 'pins' && 'pins: bump repo source pins (automated)' || format('pins: bump {0} (automated)', matrix.job.name) }}"
+          title:
+            "${{ matrix.job.name == 'pins' && 'pins: automated source-pin bump'
+            || format('pins: bump {0}', matrix.job.name) }}"
+          # Fallback only: the updater has already committed each bump. This
+          # labels anything it somehow left in the tree.
+          commit-message:
+            "${{ matrix.job.name == 'pins' && 'pins: bump repo source pins
+            (automated)' || format('pins: bump {0} (automated)',
+            matrix.job.name) }}"
           body: |
             Automated source-pin bump.
 
