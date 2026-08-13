@@ -646,6 +646,7 @@
     "2.2.3": {
       "hash": "sha256-LhzMlBfU2jWLnebxdOOsCUOR6h1PvvLWZ4ZdgZ39Cv4=",
       "note": "head of the 2.x line (10% of installs); 3.1.8 has 315 names removed and 16 signatures narrowed",
+      "pname": "Werkzeug",
       "version": "2.2.3"
     },
     "3.0.6": {

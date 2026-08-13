@@ -220,6 +220,7 @@ def src_coords(target):
             # a package assembled without a single src (opencv-python) has no
             # fetcher to re-point, so report that instead of failing to eval
             "p: let s = p.src or {}; in { version = p.version; "
+            "pname = p.pname or null; "
             "hasSrc = p ? src; tag = s.tag or null; rev = s.rev or null; "
             "url = s.url or null; owner = s.owner or null; repo = s.repo or null; "
             "hasOverride = s ? override; cargoDeps = p ? cargoDeps; }",
@@ -401,11 +402,24 @@ def _src_spec(target, version, coords, files):
                 f"no sdist on PyPI for {version}; cannot build from source"
             )
         digest = sdists[0]["digests"]["sha256"]
-        return {
+        spec = {
             "version": version,
             hash_field(target): "sha256-"
             + base64.b64encode(bytes.fromhex(digest)).decode(),
         }
+        # PyPI normalised sdist filenames in 2023 (PEP 625). An older release can
+        # still be published under the project's original capitalisation, and
+        # fetchPypi builds the url out of pname, so carry the name that release
+        # actually used (Werkzeug-2.2.3.tar.gz, not werkzeug-2.2.3.tar.gz).
+        stem = sdists[0]["filename"]
+        for ext in (".tar.gz", ".zip", ".tar.bz2"):
+            if stem.endswith(ext):
+                stem = stem[: -len(ext)]
+                break
+        released_as = stem.rsplit("-", 1)[0]
+        if coords.get("pname") and released_as != coords["pname"]:
+            spec["pname"] = released_as
+        return spec
     # fetchurl release tarball: substitute the version into the url
     if not coords["hasSrc"] or not coords["url"]:
         raise ValueError(f"{target.attr}: cannot determine how to re-point its fetcher")
