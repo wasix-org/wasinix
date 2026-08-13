@@ -8,10 +8,10 @@
  #include "flang/Optimizer/Dialect/FIRType.h"
  #include "flang/Runtime/CUDA/init.h"
  #include "flang/Runtime/main.h"
-@@ -39,10 +40,17 @@ void fir::runtime::genMain(fir::FirOpBuilder &builder, mlir::Location loc) {
+@@ -39,10 +40,14 @@ void fir::runtime::genMain(fir::FirOpBuilder &builder, mlir::Location loc) {
        builder.createFunction(loc, RTNAME_STRING(ProgramEndStatement),
                               mlir::FunctionType::get(context, {}, {}));
-
+ 
 -  // int main(int argc, char** argv, char** envp)
 +  // WASI's crt calls __main_argc_argv(argc, argv) and passes no envp.
 +  const bool isWasm = fir::getTargetTriple(builder.getModule()).isWasm();
@@ -28,10 +28,10 @@
        loc, "_QQmain", mlir::FunctionType::get(context, {}, {}));
 @@ -60,6 +68,8 @@ void fir::runtime::genMain(fir::FirOpBuilder &builder, mlir::Location loc) {
    auto env = fir::runtime::genEnvironmentDefaults(builder, loc, defs);
-
+ 
    llvm::SmallVector<mlir::Value, 4> args(block->getArguments());
 +  if (isWasm)
 +    args.push_back(builder.create<fir::ZeroOp>(loc, ptrTy));
    args.push_back(env);
-
+ 
    builder.create<fir::CallOp>(loc, startFn, args);
