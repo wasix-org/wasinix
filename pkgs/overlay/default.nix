@@ -143,7 +143,8 @@
           inherit final prev helpers preferredProfilePackages wasmerDependencies nixpkgs nix-update-script;
           toolchain = profileToolchain;
         };
-        mkTrivial = n: helpers.libTweaks {} prev.${n};
+        # takes the set so a history rebase reaches a trivial name too
+        mkTrivial = set: n: helpers.libTweaks {} set.${n};
         trivialPosition = ./trivial.nix;
       });
 

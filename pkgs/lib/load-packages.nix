@@ -46,6 +46,24 @@
     (lib.attrNames (lib.filterAttrs (_: t: t == "directory") entries));
   dirEntry = n: import (dir + "/${n}/package.nix");
   isMulti = e: !builtins.isFunction e;
+  # A package unit, written either way: <name>.nix or <name>/package.nix. The
+  # two are read identically, and either may evaluate to {names, packages}
+  # rather than a function; a directory is for a unit that carries files
+  # alongside it (patches, a version list), not a different kind of package.
+  units =
+    map (n: {
+      name = n;
+      entry = import (dir + "/${n}.nix");
+      file = dir + "/${n}.nix";
+    })
+    fileNames
+    ++ map (n: {
+      name = n;
+      entry = dirEntry n;
+      file = dir + "/${n}/package.nix";
+    })
+    dirNames;
+  unitOf = name: lib.findFirst (u: u.name == name) null units;
 
   # Most packages here override a nixpkgs drv, whose meta.position points into
   # nixpkgs; restamp it to our file so `nix edit`, error messages, and update
@@ -60,22 +78,6 @@
         line = 1;
       };
     });
-  # (function, file) for a name, for history re-imports. Only single-function
-  # packages: a version family (icu) already IS multi-version in nixpkgs, and a
-  # trivial name has no tweak file to re-run conditionals in.
-  sourceOf = name:
-    if builtins.elem name fileNames
-    then {
-      fn = import (dir + "/${name}.nix");
-      file = dir + "/${name}.nix";
-    }
-    else if builtins.elem name dirNames && !(isMulti (dirEntry name))
-    then {
-      fn = dirEntry name;
-      file = dir + "/${name}/package.nix";
-    }
-    else throw "load-packages: history for '${name}' needs a single-function package file";
-
   # A drv re-pointed at a history version, reusing its OWN fetcher:
   # src.override with the spec's fetch args (rev/tag/version + hash). fetchurl
   # release tarballs aren't overridable, so patch the src derivation's url +
@@ -140,16 +142,13 @@
 
   # everything this dir declares outright, before history mints anything
   declaredNames =
-    fileNames
-    ++ lib.concatMap (
-      n: let
-        e = dirEntry n;
-      in
-        if isMulti e
-        then e.names
-        else [n]
+    lib.concatMap (
+      u:
+        if isMulti u.entry
+        then u.entry.names
+        else [u.name]
     )
-    dirNames
+    units
     ++ trivial;
 in {
   names = declaredNames ++ historyNames;
@@ -158,7 +157,7 @@ in {
   # attrset; trivial names go through `mkTrivial`.
   mkPackages = {
     callArgs,
-    mkTrivial ? name: throw "load-packages: '${name}' is in the trivial list but no mkTrivial was given",
+    mkTrivial ? _set: name: throw "load-packages: '${name}' is in the trivial list but no mkTrivial was given",
     # meta.position for the trivial names (the list that declares them)
     trivialPosition ? null,
   }: let
@@ -166,6 +165,32 @@ in {
       if trivialPosition != null
       then stampPosition trivialPosition
       else lib.id;
+    # (function, file) for a name, however it is written. A trivial name and a
+    # name with no file at all are both just the base set, so both rebase the
+    # same way as a package file does. A version family is refused: it already
+    # is multi-version in nixpkgs.
+    sourceOf = name: let
+      u = unitOf name;
+    in
+      if u != null && !(isMulti u.entry)
+      then {
+        fn = u.entry;
+        file = u.file;
+      }
+      else if u != null
+      then throw "load-packages: history for '${name}' is a version family, which nixpkgs already carries at several versions; ship those attrs instead"
+      else if builtins.elem name trivial
+      then {
+        fn = args: mkTrivial args.${historyFrom} name;
+        file = trivialPosition;
+      }
+      else {
+        fn = args:
+          lib.throwIf (!(args.${historyFrom} ? ${name}))
+          "load-packages: history names '${name}', which has no package file here and is not in the base set"
+          args.${historyFrom}.${name};
+        file = null;
+      };
     historyDrv = name: version: spec: let
       s = sourceOf name;
       built = s.fn (callArgs // {${historyFrom} = rebaseHistory callArgs.${historyFrom} name version spec;});
@@ -179,7 +204,11 @@ in {
         then built
         else pinToHistory version spec built;
     in
-      stampPosition s.file (rebased.overrideAttrs (o: {
+      (
+        if s.file == null
+        then lib.id
+        else stampPosition s.file
+      ) (rebased.overrideAttrs (o: {
         passthru =
           (o.passthru or {})
           // {wasmer = (o.passthru.wasmer or {}) // {history = true;};};
@@ -199,20 +228,16 @@ in {
   in
     lib.throwIf (taken != [])
     "load-packages: history mints ${lib.concatStringsSep ", " taken}, which already exist(s) in the set; that attr would shadow the existing package"
-    ((lib.genAttrs trivial (n: stampTrivial (mkTrivial n)))
-      // (lib.genAttrs fileNames (n: stampPosition (dir + "/${n}.nix") (import (dir + "/${n}.nix") callArgs)))
+    ((lib.genAttrs trivial (n: stampTrivial (mkTrivial callArgs.${historyFrom} n)))
       // (builtins.foldl' (
-          acc: n: let
-            e = dirEntry n;
-            file = dir + "/${n}/package.nix";
-          in
+          acc: u:
             acc
             // (
-              if isMulti e
-              then lib.mapAttrs (_: stampPosition file) (e.packages callArgs)
-              else {${n} = stampPosition file (e callArgs);}
+              if isMulti u.entry
+              then lib.mapAttrs (_: stampPosition u.file) (u.entry.packages callArgs)
+              else {${u.name} = stampPosition u.file (u.entry callArgs);}
             )
         ) {}
-        dirNames)
+        units)
       // historyPackages);
 }
