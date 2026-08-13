@@ -66,7 +66,10 @@
     "0.16.2": {
       "hash": "sha256-74qEwAYHXV4HakJQ05A9K7LuO0xP28Hub6no09KO4r4=",
       "note": "head of the 0.16.x line (8% of installs); 0.18.1 has 5 names removed",
-      "tag": "0.16.2"
+      "tag": "0.16.2",
+      "variants": [
+        "py313"
+      ]
     },
     "0.17.0": {
       "hash": "sha256-AocS5Z4WkHTR+nO5/4B7oV/fb/ASG0aGrG/722Ioup0=",
