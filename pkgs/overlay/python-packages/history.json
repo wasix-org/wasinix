@@ -88,6 +88,13 @@
       "tag": "0.9.25"
     }
   },
+  "charset-normalizer": {
+    "3.4.7": {
+      "hash": "sha256-dOdJ4f98smCYdskp3BwtQG6aOyK+2a73+x580FKRWDk=",
+      "note": "97% of installs still land here; probing real cause",
+      "tag": "3.4.7"
+    }
+  },
   "click": {
     "8.1.7": {
       "hash": "sha256-8YqIKRyw5MegnRwAO7YTCZateEFQFTH2PHpE8gTPTow=",
