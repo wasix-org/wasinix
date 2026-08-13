@@ -6,7 +6,10 @@
 }: let
   haskell = import ./haskell {inherit pkgs ghcWasm;};
   inherit (import ./llvm.nix {inherit pkgs;}) llvm llvmTree version;
-  flang = import ./flang.nix {inherit pkgs;};
+  flang = import ./flang.nix {
+    inherit pkgs;
+    llvmPackages = llvm;
+  };
   flangCross = import ./flang-cross.nix {inherit (pkgs) lib;};
   sysroots = import ./sysroot {
     inherit pkgs llvm flang;

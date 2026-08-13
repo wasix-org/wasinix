@@ -526,6 +526,33 @@ current toolchain before relying on it.
   the target data layout (not host `sizeof`) and emit a target-appropriate main
   entry; then all four workarounds drop.
 
+### a Fortran COMMON block segfaults flang for wasm32 🟡
+
+- **Symptom**: flang dies with no diagnostic while emitting a wasm32 object for
+  any COMMON block. Two narrower reproducers show it is not a flang bug:
+
+  ```
+  clang --target=wasm32-unknown-wasi -fcommon -c x.c   # int x;
+  echo '@c_ = common global [4 x i8] zeroinitializer' > ir.ll
+  llc -mtriple=wasm32-unknown-wasi -filetype=obj ir.ll
+  ```
+
+  `MCWasmStreamer::emitCommonSymbol` is an `llvm_unreachable`, which a release
+  build compiles to `__builtin_unreachable`, so the caller runs into UB and dies
+  in the unwinder. An assertions build prints the message instead.
+
+- **Consequence**: any Fortran declaring COMMON. clang has defaulted to
+  `-fno-common` since clang 11 and reference LAPACK declares none, so scipy's
+  bundled PROPACK is the first to reach it. Checked against LLVM 21.1.2.
+- **Workaround**: `flang-wasm32-common-linkage.patch` gives COMMON blocks weak
+  linkage on wasm. Implementing common symbols in the wasm object writer is the
+  wrong fix, since wasm-ld has no common-symbol concept; weak links, at the cost
+  of silently taking one size if two units declare the block differently.
+- **Fix**: lower COMMON per target in upstream flang, and cherry-pick
+  llvm-project main's `getContext().reportError` for both stubs onto
+  wasix-org/llvm-project so the crash reports itself. release/21.x carries
+  neither.
+
 ### scipy calls the flang reference BLAS/LAPACK without F77 hidden CHARACTER lengths 🟢
 
 - Symptom: scipy's C and Cython BLAS/LAPACK wrappers omit the hidden `size_t`

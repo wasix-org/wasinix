@@ -1,6 +1,12 @@
 # Host flang (x86) emitting wasm32-wasi objects; flang-rt is a separate cross build.
-{pkgs}:
-pkgs.llvmPackages_21.flang-unwrapped.overrideAttrs (old: {
+# Built from the fork scope, so Fortran objects come out of the same WebAssembly
+# backend as everything else: nixpkgs' llvm carries neither the multi-def
+# stackify fix nor the non-emscripten TLS model the fork does.
+{
+  pkgs,
+  llvmPackages,
+}:
+llvmPackages.flang-unwrapped.overrideAttrs (old: {
   # flang derives the target ABI from the host: no wasm case in Target.cpp, i64
   # _FortranA* lengths from RTBuilder.h, and a 3-arg main WASI's crt never calls.
   patches =
