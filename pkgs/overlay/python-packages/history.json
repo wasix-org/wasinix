@@ -230,6 +230,20 @@
       "tag": "langchain==0.3.30"
     }
   },
+  "langchain-core": {
+    "0.3.86": {
+      "hash": "sha256-bpNRCbGML3rZXblc73dtRiZ6fwylAPottNuFCHPBCck=",
+      "note": "sibling pinned by langchain 0.3.30",
+      "tag": "langchain-core==0.3.86"
+    }
+  },
+  "langchain-text-splitters": {
+    "0.3.11": {
+      "hash": "sha256-SShVzssXi18j5gcDSwwDT+umObEk7uhaCP2mMolQJxI=",
+      "note": "sibling pinned by langchain 0.3.30",
+      "tag": "langchain-text-splitters==0.3.11"
+    }
+  },
   "langgraph": {
     "1.0.10": {
       "hash": "sha256-NJSmpVshj/x6ws+jFYXGarNKNztbk5OIIMA1neFOyIY=",
@@ -488,7 +502,10 @@
     "2.10.6": {
       "hash": "sha256-vkXvHQ5ipcLfx4qJKY6J4rKXCAfP2rj88GnwGMjM2go=",
       "note": "head of the 2.x line (89% of installs); no python API to compare",
-      "tag": "v2.10.6"
+      "tag": "v2.10.6",
+      "variants": [
+        "py313"
+      ]
     }
   },
   "pydantic-ai-slim": {
@@ -505,11 +522,18 @@
   },
   "pydantic-core": {
     "2.27.2": {
+      "cargoHash": "sha256-DC25ABR31bntUacPhqdPqoR743aH1U8nnkpC1mk3Avw=",
       "hash": "sha256-dGef0WflrjktAxukT8TEZhq1mrkXjcz5UE7FNQ0RINU=",
       "note": "the version pydantic 2.10.6 pins exactly; predates the move into the pydantic monorepo",
       "owner": "pydantic",
       "repo": "pydantic-core",
-      "tag": "v2.27.2"
+      "tag": "v2.27.2",
+      "variants": [
+        "py313"
+      ],
+      "vendorLayout": {
+        "sourceRoot": "source"
+      }
     }
   },
   "pydantic-graph": {

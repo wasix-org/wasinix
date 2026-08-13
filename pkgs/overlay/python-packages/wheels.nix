@@ -437,6 +437,8 @@
   {attr = "langgraph-prebuilt";}
   {attr = "langgraph-sdk";}
   {attr = "pydantic-graph";}
+  {attr = "langchain-core";}
+  {attr = "langchain-text-splitters";}
   {attr = "langchain";} # LangChain (langgraph + langchain-core)
   {attr = "litellm";} # LiteLLM (tokenizers + tiktoken + fastuuid + openai)
 ]

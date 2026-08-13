@@ -11,14 +11,19 @@
 helpers.libTweaks (lib.optionalAttrs ((pyprev.pydantic.passthru.wasix.historySpec or null) != null) {
   patches = _: [];
   # 2.10.6 pins pydantic-core to its own release, which the set no longer ships.
-  propagatedBuildInputs = ps:
-    map (p:
-      if (p.pname or "") == "pydantic-core" && lib.versionOlder pyprev.pydantic.version "2.11"
-      then pyfinal.pydantic-core_2_27_2
-      else p) (
-      if ps == null
-      then []
-      else ps
-    );
+  # 1.x predates the rewrite and needs none of the 2.x runtime trio.
+  propagatedBuildInputs =
+    if lib.versionOlder pyprev.pydantic.version "2"
+    then
+      helpers.dropInputsByName [
+        "pydantic-core"
+        "annotated-types"
+        "typing-inspection"
+      ]
+    else
+      helpers.replaceInputsByName (
+        lib.optionalAttrs (lib.versionOlder pyprev.pydantic.version "2.11")
+        {pydantic-core = pyfinal.pydantic-core_2_27_2;}
+      );
 })
 pyprev.pydantic
