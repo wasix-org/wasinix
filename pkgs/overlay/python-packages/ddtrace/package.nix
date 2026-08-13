@@ -44,32 +44,49 @@ in
       hash = "sha256-/R6AyuNQEQVo0hPMfieTU+7RUlpcuwvZlPU7JyuM3SI=";
     };
 
+    # locks/: a release whose own lock does not resolve its manifest vendors from
+    # one generated here, named for the release, which its history entry vendors
+    # from too. The rebase reaches this file with the version only in the build
+    # environment (pkgs/lib/load-packages.nix).
+    # settings/: 4.x moved the package under ddtrace/internal.
+    # cmake and patchelf: build requirements we satisfy from nixpkgs, spelled
+    # with an environment marker in one release and bare in another, and listed
+    # in only one of the two files below 4.x.
     # library_config: stable-config path consts are OS-gated, their const fns aren't.
     # IAST cmake: prepend the wasm python's headers (build python's fail pyport LONG_BIT).
     # psutil: de-vendored onto ours, which is the same upstream release carrying
     # the wasix port (overlay/python-packages/psutil). Building the vendored copy
     # would mean maintaining that port twice, and its .py side cannot import here
     # at all.
-    # build_py: libddwaf is installed below, so skip the artifact wipe
-    # ("if False") and the download (no network in the sandbox).
+    # build_py: libddwaf is installed below, so skip the artifact wipe and the
+    # download (no network in the sandbox). 4.x guards the wipe on an INCREMENTAL
+    # flag and 3.x calls it outright, so neuter the call the download follows,
+    # which leaves the guard in place and the clean command untouched.
     postPatch = ''
+      if [ -f ${./locks}/$version.lock ]; then
+        cp ${./locks}/$version.lock src/native/Cargo.lock
+      fi
+
       substituteInPlace src/native/library_config.rs \
         --replace-fail 'Configurator::FLEET_STABLE_CONFIGURATION_PATH' 'Configurator::fleet_stable_configuration_path(libdd_library_config::Target::Linux)' \
         --replace-fail 'Configurator::LOCAL_STABLE_CONFIGURATION_PATH' 'Configurator::local_stable_configuration_path(libdd_library_config::Target::Linux)'
 
       substituteInPlace setup.py \
         --replace-fail 'CURRENT_OS = platform.system()' 'CURRENT_OS = "wasi"' \
-        --replace-fail "        if not CustomBuildExt.INCREMENTAL:" "        if False:" \
-        --replace-fail "        LibDDWafDownload.run()" "" \
         --replace-fail 'import cmake' "" \
         --replace-fail 'Path(cmake.CMAKE_BIN_DIR) / "cmake"' 'Path(shutil.which("cmake"))' \
-        --replace-fail 'f"-DPython3_ROOT_DIR={python_root}",' "" \
         --replace-fail ' + get_exts_for("psutil")' "" \
         --replace-fail "cache=True" "cache=False"
 
-      substituteInPlace pyproject.toml setup.py \
-        --replace-fail '"cmake>=3.24.2,<3.28",' "" \
-        --replace-fail "\"patchelf>=0.17.0.0; sys_platform == 'linux'\"," ""
+      sed -i -E 's/"(cmake|patchelf)>=[^"]*", ?//' pyproject.toml setup.py
+      ! grep -qE '"(cmake|patchelf)>=' pyproject.toml setup.py
+
+      grep -q "DPython3_ROOT_DIR" setup.py
+      sed -i -E '/^ +f"-DPython3_ROOT_DIR=/d' setup.py
+
+      sed -i -E '/^ +LibDDWafDownload\.run\(\)$/d' setup.py
+      sed -i -E '/^ +CleanLibraries\.remove_artifacts\(\)$/{N;s/^( +)CleanLibraries\.remove_artifacts\(\)\n( +BuildPyCommand\.run\(self\))$/\1pass\n\2/}' setup.py
+      grep -q "^ \+pass$" setup.py
 
       substituteInPlace ddtrace/appsec/_iast/_taint_tracking/CMakeLists.txt \
         --replace-fail 'include_directories(".")' \
@@ -78,13 +95,15 @@ in
 
       install -Dm755 ${lib.getLib final.libddwaf}/lib/libddwaf.so \
         ddtrace/appsec/_ddwaf/libddwaf/wasm32/lib/libddwaf.so
-      substituteInPlace ddtrace/internal/settings/asm.py \
+      settings=ddtrace/internal/settings
+      [ -d $settings ] || settings=ddtrace/settings
+      substituteInPlace $settings/asm.py \
         --replace-fail '{"Linux": "so", "Darwin": "dylib", "Windows": "dll"}' \
                        '{"Linux": "so", "Darwin": "dylib", "Windows": "dll", "wasi": "so", "wasix": "so"}'
 
       substituteInPlace ddtrace/internal/runtime/metric_collectors.py \
         --replace-fail '"ddtrace.vendor.psutil"' '"psutil"'
-      substituteInPlace ddtrace/internal/settings/profiling.py \
+      substituteInPlace $settings/profiling.py \
         --replace-fail 'from ddtrace.vendor import psutil' 'import psutil'
       substituteInPlace pyproject.toml \
         --replace-fail '    "envier~=0.6.1",' '    "envier~=0.6.1",
@@ -119,8 +138,15 @@ in
       wrapt
     ];
 
+    # setuptools-scm has no git tree to read here. Exported from the build
+    # environment rather than set in `env`, where the rec-bound version above
+    # would freeze the current release's number into a rebased build and its
+    # METADATA would then disagree with the derivation.
+    preBuild = ''
+      export SETUPTOOLS_SCM_PRETEND_VERSION="$version"
+    '';
+
     env = {
-      SETUPTOOLS_SCM_PRETEND_VERSION = version;
       # tokio's mio Waker is off on wasi; opting in (tokio/1.51.0.patch) needs
       # mio's wasix backend from the crate patches. Without it the reactor parks
       # with nothing able to wake it and the runtime never drops.

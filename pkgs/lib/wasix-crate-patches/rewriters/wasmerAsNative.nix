@@ -1,7 +1,8 @@
 # Narrows every `target_arch = "wasm32"` cfg gate (and its negation, and an
 # explicit linux/macos/windows allowlist) to exclude `target_vendor = "wasmer"`,
 # so wasmer takes the crate's native branch instead of its browser-wasm one.
-# Runs against the unpacked crate dir ($PWD) and fails loud if it matches nothing.
+# Runs against the unpacked crate dir ($PWD) and fails loud when a crate names a
+# wasm target it could not rewrite.
 {writers}:
 writers.writePython3 "wasmerAsNative" {flakeIgnore = ["E501" "E302" "E305"];} ''
   import glob
@@ -26,16 +27,21 @@ writers.writePython3 "wasmerAsNative" {flakeIgnore = ["E501" "E302" "E305"];} ''
       return text
 
   changed = False
+  mentions_wasm = False
   for pattern in ("Cargo.toml", "**/*.rs"):
       for path in glob.glob(pattern, recursive=True):
           with open(path, encoding="utf-8") as fh:
               before = fh.read()
+          mentions_wasm = mentions_wasm or "wasm" in before
           after = narrow(before)
           if after != before:
               with open(path, "w", encoding="utf-8") as fh:
                   fh.write(after)
               changed = True
 
-  if not changed:
-      raise SystemExit("wasmerAsNative: no target_arch = \"wasm32\" gate to narrow")
+  # A crate that names no wasm target at all keeps its native branch
+  # unconditionally, which is what narrowing aims for; one that names a wasm
+  # target we did not rewrite spells its gate some way this does not know.
+  if not changed and mentions_wasm:
+      raise SystemExit("wasmerAsNative: wasm is named but no gate matched, so the spelling moved")
 ''

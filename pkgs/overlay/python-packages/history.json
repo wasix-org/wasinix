@@ -163,13 +163,16 @@
   },
   "ddtrace": {
     "3.19.7": {
-      "cargoHash": "sha256-V2MLgPNxrYGmzmWw9jTF1nt8nOvgQ3qJx7OkI+kfSh0=",
+      "cargoHash": "sha256-wxL6SsGNQVSbROhUdx/c/yLJ5LNmDDKt+t32Zk7D6tQ=",
       "hash": "sha256-o/5SUrE9cbu9lZx7AGUj7IpiUuIJv6D0Ruclcq+ujZs=",
       "note": "head of the 3.x line (11% of installs); 4.12.2 has 522 names removed and 108 signatures narrowed",
-      "tag": "v3.19.7"
+      "tag": "v3.19.7",
+      "vendorLayout": {
+        "lockFile": "locks/3.19.7.lock"
+      }
     },
     "4.8.2": {
-      "cargoHash": "sha256-V2MLgPNxrYGmzmWw9jTF1nt8nOvgQ3qJx7OkI+kfSh0=",
+      "cargoHash": "sha256-yFgxjWF0ysShO1tRnNPN0w6BvZ3CncZ7KgzWCwQuTUo=",
       "hash": "sha256-Cd4Z76r2yeZOuU78y/Eay3SsHbO/0qFY0e9g2uh0wnw=",
       "note": "head of the 4.x line (56% of installs); 4.12.2 has 33 names removed and 1 signature narrowed",
       "tag": "v4.8.2"
