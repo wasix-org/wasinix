@@ -31,7 +31,7 @@
   historyFrom ? "prev",
 }: let
   # non-fetch spec keys, stripped before the args go to the src fetcher
-  historyMeta = ["note" "variants" "cargoHash"];
+  historyMeta = ["note" "variants" "cargoHash" "vendorLayout"];
   entries = builtins.readDir dir;
   historyUnder = v: lib.replaceStrings ["."] ["_"] v;
   historyNames = lib.concatLists (lib.mapAttrsToList
@@ -99,16 +99,21 @@
     # rebased src needs a rebased vendor. Two vendor shapes (set/rust-platform.nix):
     # a granular importCargoLock vendor carries `wasixRebuildVendor`, which
     # re-vendors the rebased src's lock directly (per-crate hashes live in the
-    # lock, so no stored cargoHash). A monolithic fetchCargoVendor vendor is a
+    # lock, so no stored cargoHash). Where the lock sits differs between the two
+    # releases (pydantic-core is its own repo below 2.42, a monorepo directory
+    # above), and the entry's vendorLayout says so: correcting it in the package
+    # file is too late, since reading the rebuilt vendor's attributes forces the
+    # broken one. A monolithic fetchCargoVendor vendor is a
     # runCommand over one re-pointable vendorStaging FOD; nothing derives its
     # hash, so the entry carries it (scripts/history.py TOFUs it).
     rustVendor = old:
       if old.cargoDeps ? wasixRebuildVendor
       then
-        old.cargoDeps.wasixRebuildVendor {
-          inherit src;
-          cargoHash = spec.cargoHash or null;
-        }
+        old.cargoDeps.wasixRebuildVendor ({
+            inherit src;
+            cargoHash = spec.cargoHash or null;
+          }
+          // (spec.vendorLayout or {}))
       else
         lib.throwIf (!(spec ? cargoHash))
         "load-packages: ${drv.pname or drv.name} ${version} vendors rust deps; its history entry needs a cargoHash (nix run .#scripts.history -- add <attr>==${version} re-derives it)"

@@ -312,13 +312,16 @@ def tofu_hash(target, override_args):
 def tofu_cargo_hash(target, src_args):
     """Vendor hash for the rebased src. A rust wheel vendors its crates from the
     Cargo.lock inside its own source, so an older src needs its own vendor and
-    nothing derives that hash. Mirrors the rebase in pkgs/lib/load-packages.nix,
-    so what we record is what the loader will build."""
+    nothing derives that hash. Calls the same wasixRebuildVendor the loader does,
+    so what we record is what the loader will build. Returns None for a vendor
+    shape that needs no stored hash."""
     expr = (
         f'let p = (builtins.getFlake "{REPO}").legacyPackages.{SYSTEM}'
         f".{target.path}; "
         f"newSrc = p.src.override ({nix_attrs(src_args)}); in "
-        f"p.cargoDeps.overrideAttrs (o: {{ vendorStaging = o.vendorStaging.overrideAttrs "
+        f"if p.cargoDeps ? wasixRebuildVendor "
+        f'then p.cargoDeps.wasixRebuildVendor {{ src = newSrc; cargoHash = "{FAKE_HASH}"; }} '
+        f"else p.cargoDeps.overrideAttrs (o: {{ vendorStaging = o.vendorStaging.overrideAttrs "
         f'(_: {{ src = newSrc; outputHash = "{FAKE_HASH}"; }}); }})'
     )
     r = subprocess.run(
@@ -328,13 +331,17 @@ def tofu_cargo_hash(target, src_args):
         capture_output=True,
     )
     m = re.search(r"got:\s*(sha256-\S+)", r.stderr)
-    if not m:
-        raise ValueError(
-            "could not vendor rust deps for this version "
-            f"(the lock may have moved, which the package file has to correct): "
-            f"{r.stderr.strip()[-300:]}"
-        )
-    return m.group(1)
+    if m:
+        return m.group(1)
+    # A granular importCargoLock vendor carries per-crate hashes in the lock and
+    # ignores the one passed in, so it builds straight through and stores nothing.
+    if r.returncode == 0:
+        return None
+    raise ValueError(
+        "could not vendor rust deps for this version "
+        f"(the lock may have moved, which the package file has to correct): "
+        f"{r.stderr.strip()[-300:]}"
+    )
 
 
 def substitute_version(field, value, cur, version):
@@ -385,7 +392,9 @@ def fetch_spec(target, version, coords, files):
     spec = _src_spec(target, version, coords, files)
     if coords.get("cargoDeps"):
         src_args = {k: v for k, v in spec.items() if k != "cargoHash"}
-        spec["cargoHash"] = tofu_cargo_hash(target, src_args)
+        cargo_hash = tofu_cargo_hash(target, src_args)
+        if cargo_hash is not None:
+            spec["cargoHash"] = cargo_hash
     return spec
 
 

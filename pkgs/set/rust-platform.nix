@@ -339,21 +339,38 @@
     # calls this to re-vendor a pinned older src (patchInPlace keeps raw's
     # vendorStaging, but the rebase re-runs the wrapper so an older release's
     # layout, such as a lock that moved to src/rust, is handled by re-deciding
-    # scoped-vs-full, using the entry's cargoHash).
+    # scoped-vs-full, using the entry's cargoHash). A fetchCargoVendor rebuild
+    # takes any key besides cargoHash as an override of the original vendor call,
+    # which is how a history entry corrects a layout that moved between the two
+    # releases; the importCargoLock rebuild re-reads the lock and so honours
+    # cargoRoot alone.
     attach = drv: rebuild: drv.overrideAttrs (o: {passthru = (o.passthru or {}) // {wasixRebuildVendor = rebuild;};});
   in {
     importCargoLock = lib.makeOverridable (
       args:
         attach (patchFarm (vendorPlatform.importCargoLock args))
-        ({src, ...}: patchFarm (vendorPlatform.importCargoLock {lockFileContents = builtins.readFile "${src}/Cargo.lock";}))
+        ({
+          src,
+          cargoRoot ? null,
+          ...
+        }:
+          patchFarm (vendorPlatform.importCargoLock {
+            lockFileContents = builtins.readFile (
+              if cargoRoot == null
+              then "${src}/Cargo.lock"
+              else "${src}/${cargoRoot}/Cargo.lock"
+            );
+          }))
     );
     fetchCargoVendor = lib.makeOverridable (
       args: let
-        rebuild = {
-          src,
-          cargoHash ? null,
-        }:
-          final.fetchCargoVendor (args // {inherit src;} // lib.optionalAttrs (cargoHash != null) {hash = cargoHash;});
+        # One fixed-output tree: keeping the current release's hash would make nix
+        # hand back the vendor already at that path, so a rebased src is only
+        # correct with the entry's own hash.
+        rebuild = {cargoHash ? null, ...} @ overrides:
+          lib.throwIf (cargoHash == null)
+          "wasixRebuildVendor: a fetchCargoVendor package needs a cargoHash in its history entry (nix run .#scripts.history -- add <attr>==<version> derives it)"
+          (final.fetchCargoVendor (args // builtins.removeAttrs overrides ["cargoHash"] // {hash = cargoHash;}));
       in
         attach (patchInPlace (vendorPlatform.fetchCargoVendor args)) rebuild
     );
