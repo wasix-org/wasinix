@@ -422,17 +422,19 @@ def supported_pythons(files):
     None: no wheels published at all (caller decides)."""
     supported = set()
     saw_wheel = False
+    saw_native = False
     for f in files:
         name = f["filename"]
         if not name.endswith(".whl"):
             continue
         saw_wheel = True
         try:
-            py, abi, _plat = name[: -len(".whl")].rsplit("-", 3)[1:]
+            py, abi, plat = name[: -len(".whl")].rsplit("-", 3)[1:]
         except ValueError:
             continue
-        if abi == "none" and "py3" in py:
-            return set(INTERPRETERS)  # pure
+        if plat == "any" and abi == "none" and "py3" in py:
+            continue  # pure: says nothing about which interpreter the ext builds for
+        saw_native = True
         if abi == "abi3":
             m = re.search(r"cp3(\d+)", py)
             if m:  # stable ABI: forward-compatible from its floor
@@ -441,7 +443,13 @@ def supported_pythons(files):
         for i in INTERPRETERS:
             if f"cp3{i[3:]}" in py:
                 supported.add(i)
-    return supported if saw_wheel else None
+    if not saw_wheel:
+        return None
+    # Pure wheels only: nothing is compiled, so either interpreter runs it. A
+    # release that also ships native wheels is built from ITS OWN source here,
+    # taking the compiled path, so a pure fallback alongside them is not the
+    # artifact we produce and its tags are not the ones that apply.
+    return set(INTERPRETERS) if not saw_native else supported
 
 
 # ── writing entries ──────────────────────────────────────────────────────────
