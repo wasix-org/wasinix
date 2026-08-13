@@ -39,12 +39,10 @@ helpers.libTweaks {
 
   passthru.wasix.shipped = true;
 
-  # The registry hides prereleases from `latest`, and a published WebC version
-  # is numeric MAJOR.MINOR.PATCH. Fold 1.0.0-beta.N to 0.0.N until RustFS cuts a
-  # stable release; the assertion makes that transition explicit.
-  passthru.wasmer.version = v: let
-    beta = builtins.match ".*-beta[.]([0-9]+)" v;
-  in
-    assert final.lib.assertMsg (beta != null) "rustfs: version ${v} is not <ver>-beta.N; update the semver fold"; "0.0.${builtins.head beta}";
+  # RustFS ships prereleases (1.0.0-rc.1), which semver expresses directly, so
+  # publish the upstream version as it stands; the default coercion would read
+  # the trailing number as a fourth component and refuse. `wasmer run
+  # wasmer/rustfs` with no version cannot select a prerelease (WASIX-TODO.md).
+  passthru.wasmer.version = v: v;
 }
 prev.rustfs
