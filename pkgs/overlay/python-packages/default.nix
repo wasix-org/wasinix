@@ -8,7 +8,7 @@
   # declares none, so pypa/build falls back to setuptools.build_meta and needs
   # setuptools present. The current version's build-system is what the rebase
   # carries over, and the cross set's copy cannot run at build time.
-  legacyBackendTools = drv:
+  historyFixups = drv:
     if drv.passthru.wasmer.history or false
     then
       drv.overrideAttrs (o: {
@@ -17,8 +17,12 @@
           ++ [buildPy.pkgs.setuptools buildPy.pkgs.wheel];
       })
     else drv;
+  # A build backend that imports the package writes bytecode beside it, and it
+  # lands in the wheel. A py3-none-any artifact then differs per interpreter,
+  # and the registry refuses the two as one filename with conflicting contents.
+  noBuildBytecode = drv: drv.overrideAttrs (_: {PYTHONDONTWRITEBYTECODE = "1";});
 in
-  builtins.mapAttrs (_: legacyBackendTools)
+  builtins.mapAttrs (_: drv: noBuildBytecode (historyFixups drv))
   (
     (callArgs.helpers.loadPackageDir {
       dir = ./.;
