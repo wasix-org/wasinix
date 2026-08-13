@@ -1,6 +1,7 @@
 # scipy for wasix. openblas throws "unsupported system: wasm32-wasi" at eval, so
-# the provider becomes the flang-built reference LAPACK; flang is not a wasix link
-# driver, and _without-fortran=true costs only scipy.odr.
+# the provider becomes the flang-built reference LAPACK. 1.18 builds no Fortran
+# of its own (_without-fortran=true costs only scipy.odr); an older release does,
+# through wasixflang, which compiles with flang and links through wasixcc.
 {
   pyprev,
   final,
@@ -27,8 +28,14 @@ in
       ++ [
         "-Dblas=blas"
         "-Dlapack=lapack"
-        "-D_without-fortran=true"
-      ];
+      ]
+      ++ (
+        if lib.versionAtLeast pyprev.scipy.version "1.18"
+        then ["-D_without-fortran=true"]
+        # its project defaults ask for gfortran's -std=legacy, which flang has no
+        # equivalent of; meson offers "none" alone for this compiler
+        else ["-Dfortran_std=none"]
+      );
 
     # dependency('boost')'s system method errors unless both dirs are set.
     env.BOOST_INCLUDEDIR = "${buildBoost.dev}/include";
@@ -53,9 +60,17 @@ in
 
     # _test_internal calls fesetround(FE_UPWARD); wasm has no dynamic rounding
     # modes, so wasix-libc omits those fenv.h macros.
-    postPatch = ''
-      sed -i "/^py3.extension_module('_test_internal',$/,/^)$/d" scipy/special/meson.build
-    '';
+    postPatch =
+      ''
+        sed -i "/^py3.extension_module('_test_internal',$/,/^)$/d" scipy/special/meson.build
+      ''
+      # The linker script hides everything but PyInit_*, and the probe that
+      # guards it links through wasixcc, which takes the flag where wasm-ld does
+      # not. 1.18 reaches the same code and drops it for us.
+      + lib.optionalString (lib.versionOlder pyprev.scipy.version "1.18") ''
+        sed -i "s|^version_link_args = \['-Wl,--version-script=' + _linker_script\]|version_link_args = []|" meson.build
+        grep -q "^version_link_args = \[\]" meson.build
+      '';
   }
   (pyprev.scipy.override {
     blas = lapack;
