@@ -67,6 +67,7 @@
   }
   {attr = "greenback";}
   {attr = "chardet";}
+  {attr = "chardet_5";}
   {attr = "tomli";}
   {attr = "pytokens";}
   {attr = "black";} # mypyc speedups optional; ships a pure fallback
@@ -95,12 +96,23 @@
     # as its own attr, so this is a family attr, not a history.json entry.
     pyImport = "google._upb._message";
   }
+  {
+    attr = "protobuf5";
+    pyImport = "google._upb._message";
+  }
+  {
+    attr = "protobuf4";
+    pyImport = "google._upb._message";
+  }
 
   {attr = "boto3";}
   {attr = "botocore";}
   {attr = "jmespath";}
   {attr = "s3transfer";}
   {attr = "pytest";}
+  {attr = "pytest_9_0";}
+  {attr = "pytest_8_3";}
+  {attr = "pytest_7";}
   {attr = "pluggy";}
   {attr = "iniconfig";}
   {attr = "beautifulsoup4";} # imports bs4 (nixpkgs pythonImportsCheck)
@@ -145,6 +157,7 @@
   {attr = "redis";}
   {attr = "prompt-toolkit";}
   {attr = "pytest-asyncio";}
+  {attr = "pytest-asyncio_0";}
   {attr = "rsa";}
   {attr = "textual";}
 

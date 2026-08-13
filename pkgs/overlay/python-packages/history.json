@@ -1,9 +1,117 @@
 {
+  "anthropic": {
+    "0.76.0": {
+      "hash": "sha256-QEwUOPL/9ROV/UgD6KF2ePzjXDKHYrYrFvbJpVV8MO0=",
+      "note": "head of the 0.76.x line (5% of installs); 0.109.1 has 18 names removed and 2 signatures narrowed",
+      "tag": "v0.76.0"
+    }
+  },
+  "async-timeout": {
+    "4.0.3": {
+      "hash": "sha256-gJGVRm7YMWnVicz2juHKW8kjJBxn4/vQ/kc2kQyl1i4=",
+      "note": "head of the 4.x line (27% of installs); 5.0.1 drops Timeout.__init__, Timeout.deadline",
+      "tag": "v4.0.3"
+    }
+  },
+  "attrs": {
+    "23.2.0": {
+      "hash": "sha256-k13DtSnCYvbPduUId9NaS9PB3hlP1B9HoreujxmXHzA=",
+      "note": "221 published projects resolve here",
+      "version": "23.2.0"
+    }
+  },
+  "beautifulsoup4": {
+    "4.12.3": {
+      "hash": "sha256-dOPRko7cBw0hdIGFxG4/szSQ8i9So63e6a7g9Pd4EFE=",
+      "note": "340 published projects resolve here; 4.15.0 drops BeautifulSoup.NO_PARSER_SPECIFIED_WARNING",
+      "version": "4.12.3"
+    },
+    "4.14.3": {
+      "hash": "sha256-YpKxxRhtNWu6Zp759/BRdXCZVlrZraXdYwvZ3l+n+4Y=",
+      "note": "100% of installs still land here; 4.15.0 has 4 names removed and 7 signatures narrowed",
+      "version": "4.14.3"
+    }
+  },
+  "black": {
+    "24.10.0": {
+      "hash": "sha256-JijlsRYOR+GI+D+992czIPQVKNMEsS6v2xnIiLe7B+c=",
+      "note": "head of the 24.x line (8% of installs); 26.5.1 drops nullcontext, path_empty",
+      "tag": "24.10.0",
+      "variants": [
+        "py313"
+      ]
+    },
+    "25.1.0": {
+      "hash": "sha256-S9UopeXQ8vmG5JmE4SY+FclHV5GllRq8Y8pD4//xNiU=",
+      "note": "219 published projects resolve here; 26.5.1 drops nullcontext, path_empty",
+      "tag": "25.1.0",
+      "variants": [
+        "py313"
+      ]
+    },
+    "26.3.1": {
+      "hash": "sha256-X7Jx61FH0uu3MmJAJ8tfh7SFH3tCzpUaM4zD+ltP0Rk=",
+      "note": "57% of installs still land here; 26.5.1 has 6 names removed",
+      "tag": "26.3.1"
+    }
+  },
+  "botocore": {
+    "1.37.38": {
+      "hash": "sha256-2kKQiBteqJiYPcQDYp6b6H5B7KXZwBfzmQ++XUEsioY=",
+      "note": "47% of installs still land here; 1.42.31 drops NullHandler, NullHandler.emit",
+      "tag": "1.37.38"
+    }
+  },
+  "bytecode": {
+    "0.16.2": {
+      "hash": "sha256-74qEwAYHXV4HakJQ05A9K7LuO0xP28Hub6no09KO4r4=",
+      "note": "head of the 0.16.x line (8% of installs); 0.18.1 has 5 names removed",
+      "tag": "0.16.2"
+    },
+    "0.17.0": {
+      "hash": "sha256-AocS5Z4WkHTR+nO5/4B7oV/fb/ASG0aGrG/722Ioup0=",
+      "note": "head of the 0.17.x line (48% of installs); 0.18.1 has 5 names removed",
+      "tag": "0.17.0"
+    }
+  },
+  "cachetools": {
+    "5.5.2": {
+      "hash": "sha256-CWgl2UW7+rBXRQ6N/QY3vJiLsrPfmplmQbxPp2vcdU0=",
+      "note": "head of the 5.x line (30% of installs); 7.1.4 drops MRUCache, MRUCache.__init__",
+      "tag": "v5.5.2"
+    }
+  },
+  "caio": {
+    "0.9.25": {
+      "hash": "sha256-uKQJWGYtBdpcfFD6yDKjIz0H0FEq4dmCP50sbVGYRGU=",
+      "note": "head of the 0.9.x line (87% of installs)",
+      "tag": "0.9.25"
+    }
+  },
   "click": {
+    "8.1.7": {
+      "hash": "sha256-8YqIKRyw5MegnRwAO7YTCZateEFQFTH2PHpE8gTPTow=",
+      "note": "538 published projects resolve here; 8.3.3 drops BaseCommand, MultiCommand",
+      "tag": "8.1.7"
+    },
     "8.1.8": {
       "hash": "sha256-pAAqf8jZbDfVZUoltwIFpov/1ys6HSYMyw3WV2qcE/M=",
       "note": "supports the pinned python-flask template dependency",
       "tag": "8.1.8"
+    }
+  },
+  "colorama": {
+    "0.4.4": {
+      "note": "100% of installs still land here; 0.4.6 has 5 names removed",
+      "sha256": "sha256-WUGytIogFD0iZ+lbHCp2A84FfuOf2I5zKbDCkqoWhps=",
+      "version": "0.4.4"
+    }
+  },
+  "coverage": {
+    "7.15.0": {
+      "hash": "sha256-4fDSXp9vlQ/6Y4mICxlMh319+8B0uenMYZwmP8o8Bfo=",
+      "note": "88% of installs still land here; 7.15.2 has 11 names removed",
+      "tag": "7.15.0"
     }
   },
   "cryptography": {
@@ -21,6 +129,46 @@
       "hash": "sha256-rKgMUVj5IdeWIdLWQ4E6zhC6dwJMi+BRHCh2JG73Zgc=",
       "note": "served by pythonindex.wasix.org",
       "tag": "45.0.4"
+    },
+    "46.0.7": {
+      "cargoHash": "sha256-5ElDEl7MdcQfu/hy+POSBcvkNCFAMo6La5s6uRhZ/fM=",
+      "hash": "sha256-xMe+gQl4/CfoT+H21ltbo+aPILoRYCAlylsqnB7Ms8s=",
+      "note": "head of the 46.x line (18% of installs); 49.0.0 has 110 names removed",
+      "tag": "46.0.7"
+    }
+  },
+  "cymem": {
+    "2.0.13": {
+      "hash": "sha256-n65tkACZi1G4qS/VQWB5ghopzCd5QHRyp9qit+yENIs=",
+      "note": "100% of installs still land here; ships no python modules to compare",
+      "tag": "release-v2.0.13"
+    }
+  },
+  "cython": {
+    "3.0.12": {
+      "hash": "sha256-clJXjQb6rVECirKRUGX0vD5a6LILzPwNo7+6KKYs2pI=",
+      "note": "78% of installs still land here; 3.2.5 has 175 names removed and 26 signatures narrowed",
+      "tag": "3.0.12",
+      "variants": [
+        "py313"
+      ]
+    }
+  },
+  "docutils": {
+    "0.16": {
+      "hash": "sha256-fU6ZnMp0pSYRdzpCkSCIB4NjowkS6IIvej04BDt2dXM=",
+      "note": "head of the 0.16.x line (12% of installs); 0.23 has 506 names removed and 16 signatures narrowed",
+      "url": "mirror://sourceforge/docutils/docutils-0.16.tar.gz"
+    },
+    "0.19": {
+      "hash": "sha256-M5laZ1PDC39Xf+v8LFBBH+xqrH9//rfEz+WZEHLc+eY=",
+      "note": "head of the 0.19.x line (42% of installs); 0.23 has 102 names removed and 12 signatures narrowed",
+      "url": "mirror://sourceforge/docutils/docutils-0.19.tar.gz"
+    },
+    "0.21.2": {
+      "hash": "sha256-OmsYcy7fGC2qPNEndbuzOM9WkUaPke7rEJ3v9uv6mG8=",
+      "note": "head of the 0.21.x line (7% of installs); 0.23 has 40 names removed and 7 signatures narrowed",
+      "url": "mirror://sourceforge/docutils/docutils-0.21.2.tar.gz"
     }
   },
   "gevent": {
@@ -50,6 +198,40 @@
       ]
     }
   },
+  "more-itertools": {
+    "10.8.0": {
+      "hash": "sha256-ZKvucnPFCA6Q4EQn/nKC9LIevOdSYXHIJ3w3Frregic=",
+      "note": "head of the 10.x line (23% of installs); 11.1.0 has 2 names removed and 6 signatures narrowed",
+      "tag": "v10.8.0"
+    }
+  },
+  "msgspec": {
+    "0.19.0": {
+      "hash": "sha256-CajdPNAkssriY/sie5gR+4k31b3Wd7WzqcsFmrlSoPY=",
+      "note": "head of the 0.19.x line (17% of installs); 0.21.1 drops get_versions",
+      "tag": "0.19.0",
+      "variants": [
+        "py313"
+      ]
+    }
+  },
+  "networkx": {
+    "2.6.3": {
+      "hash": "sha256-wJRu0x1x8bcytaqm2loDiKNFAZryMs4vScdm4tZ5XFE=",
+      "note": "head of the 2.x line (7% of installs); 3.6.1 has 70 names removed and 14 signatures narrowed",
+      "version": "2.6.3"
+    },
+    "3.2.1": {
+      "hash": "sha256-nxu1zzQJvzJOCnIsIL20wg7jm/HDDOiuSZyFArC14MY=",
+      "note": "215 published projects resolve here; 3.6.1 has 16 names removed and 5 signatures narrowed",
+      "version": "3.2.1"
+    },
+    "3.4.2": {
+      "hash": "sha256-MHw2aUKMU2KqsnyKEmCqj0fE6R04kfSL4BQXONjQU+E=",
+      "note": "93% of installs still land here; 3.6.1 has 8 names removed and 4 signatures narrowed",
+      "version": "3.4.2"
+    }
+  },
   "numpy": {
     "2.1.3": {
       "hash": "sha256-xqLRMwQz0VQpLe7xjYVMGXELtXa/wQx2KgQftBe+q/Q=",
@@ -58,6 +240,19 @@
       "variants": [
         "py313"
       ]
+    },
+    "2.2.6": {
+      "hash": "sha256-5pCZsJcbm3Qa4DfTV1vMvCwFZJDPcgVMdLfUjcpyZa8=",
+      "note": "528 published projects resolve here; 2.5.1 has 48 names removed and 2 signatures narrowed",
+      "tag": "v2.2.6",
+      "variants": [
+        "py313"
+      ]
+    },
+    "2.3.5": {
+      "hash": "sha256-CMgJmsjPLgMCWN2iJk0OzcKIlnRRcayrTAns51S4B6k=",
+      "note": "71% of installs still land here",
+      "tag": "v2.3.5"
     }
   },
   "openai": {
@@ -67,11 +262,28 @@
       "tag": "v2.45.0"
     }
   },
+  "openpyxl": {
+    "3.1.2": {
+      "hash": "sha256-SWRbjA83AOLrfe6on2CSb64pH5EWXkfyYcTqWJNBEP0=",
+      "note": "100% of installs still land here; 3.1.5 has 66 names removed and 3 signatures narrowed",
+      "tag": "3.1.2"
+    }
+  },
   "packaging": {
     "24.2": {
       "hash": "sha256-wiim3F6TLTRrxXOTeRCdSeiFPdgiNXHHxbVSYO3AuX8=",
       "note": "supports the pinned python-flask template dependency",
       "version": "24.2"
+    },
+    "25.0": {
+      "hash": "sha256-1EOHLJjWd79g9qHy+MHLdI6P52LSv50xSLVZkpWw/E8=",
+      "note": "466 published projects resolve here; 26.2 has 21 names removed",
+      "version": "25.0"
+    },
+    "26.0": {
+      "hash": "sha256-ACQ641GiVxF7aiQQYXlmhLCE7RxRagjEij9+FHqdgLQ=",
+      "note": "89% of installs still land here; 26.2 has 21 names removed",
+      "version": "26.0"
     }
   },
   "pandas": {
@@ -90,6 +302,47 @@
       "variants": [
         "py313"
       ]
+    },
+    "2.3.3": {
+      "hash": "sha256-8VWoq6eOErjHR+033VMxG34IDne0zSIAg6lhZmBzjtI=",
+      "note": "head of the 2.x line (50% of installs); 3.0.4 drops read_gbq, value_counts",
+      "tag": "v2.3.3"
+    }
+  },
+  "pillow": {
+    "10.4.0": {
+      "hash": "sha256-Q3yvFyJf4gFaVY9X4PlgCE2rU1l9NEXkHBaNZfoHhvU=",
+      "note": "head of the 10.x line (5% of installs); 12.3.0 has 39 names removed and 3 signatures narrowed",
+      "tag": "10.4.0",
+      "variants": [
+        "py313"
+      ]
+    },
+    "11.3.0": {
+      "hash": "sha256-VOOIxzTyERI85CvA2oIutybiivU14kIko8ysXpmwUN8=",
+      "note": "head of the 11.x line (11% of installs); 12.3.0 has 19 names removed and 3 signatures narrowed",
+      "tag": "11.3.0"
+    }
+  },
+  "prompt-toolkit": {
+    "3.0.51": {
+      "hash": "sha256-pNYmjAgnP9nK40VS/qvPR3g+809Yra2ISASWJDdQKrU=",
+      "note": "99% of installs still land here; 3.0.52 has 16 names removed",
+      "tag": "3.0.51"
+    }
+  },
+  "psycopg": {
+    "3.2.13": {
+      "hash": "sha256-sd3LAuBgZtWMx/hVNzET65vEXIFQvgevmCkoRjrsh5c=",
+      "note": "100% of installs still land here; 3.3.4 has 43 names removed",
+      "tag": "3.2.13"
+    }
+  },
+  "psycopg-pool": {
+    "3.3.1": {
+      "hash": "sha256-nNiiiMHAeaMJ+51RtjHeWRdOML4x05afZ/DBD3B1sM0=",
+      "note": "100% of installs still land here",
+      "tag": "3.3.1"
     }
   },
   "pyarrow": {
@@ -108,6 +361,162 @@
       "variants": [
         "py313"
       ]
+    },
+    "23.0.1": {
+      "hash": "sha256-p/IUYanW11u7gusZad1Bb4VhisTKBm4a+XGOuNXjx+I=",
+      "note": "144 published projects resolve here",
+      "rev": "apache-arrow-23.0.1"
+    }
+  },
+  "pycparser": {
+    "2.22": {
+      "hash": "sha256-RY0xQ4Mj8IfYAcypZQx4lDBmcgzYqtM4ARm9NSccBgA=",
+      "note": "217 published projects resolve here; 3.00 has 547 names removed",
+      "tag": "release_v2.22"
+    },
+    "2.23": {
+      "hash": "sha256-dkteM8VizYf9ZLPOe8od5CZgg7a3fs4Hy+t8bGLV/GI=",
+      "note": "head of the 2.x line (18% of installs); 3.00 has 555 names removed",
+      "tag": "release_v2.23"
+    }
+  },
+  "pycryptodome": {
+    "3.20.0": {
+      "hash": "sha256-RPaBUj/BJCO+10maGDmugeEXxaIrlk2UHIvkbrQVM8c=",
+      "note": "100% of installs still land here; 3.23.0 has 103 names removed",
+      "tag": "v3.20.0"
+    }
+  },
+  "pycryptodomex": {
+    "3.19.0": {
+      "hash": "sha256-WD+OEjePVtqlmn7h1CIfraLuEQlodkvjmYQ8q7nNoGU=",
+      "note": "100% of installs still land here; 3.23.0 has 103 names removed",
+      "tag": "v3.19.0"
+    }
+  },
+  "pygments": {
+    "2.18.0": {
+      "hash": "sha256-eG/4AvMukTEb/ziJ9umoboFQX+mfJzW7bWCuDFAE8Zk=",
+      "note": "100% of installs still land here",
+      "version": "2.18.0"
+    }
+  },
+  "pymongo": {
+    "4.16.0": {
+      "hash": "sha256-i6hAUGX24lim+HL+YteXoo84OhIXjHFTwB7QToRcYAw=",
+      "note": "87% of installs still land here; 4.17.0 has 27 names removed",
+      "version": "4.16.0"
+    }
+  },
+  "pyopenssl": {
+    "23.3.0": {
+      "hash": "sha256-+F5o+0jp0kPgwxiYhWXc+CHBHEIVF+yfuOc+7wp8ZXU=",
+      "note": "head of the 23.x line (10% of installs); 26.3.0 has 66 names removed",
+      "tag": "23.3.0"
+    },
+    "24.3.0": {
+      "hash": "sha256-otK7Y7Kb/l3QOErhAcuDHB/CKG9l1vH2BTnOieAWNc0=",
+      "note": "head of the 24.x line (11% of installs); 26.3.0 has 23 names removed",
+      "tag": "24.3.0"
+    },
+    "25.3.0": {
+      "hash": "sha256-lNXS3lIGFPeM7DKMFTLBiOWn+AwZtenXF5KGN5DRwO4=",
+      "note": "head of the 25.x line (23% of installs); 26.3.0 has 23 names removed",
+      "tag": "25.3.0"
+    },
+    "26.2.0": {
+      "hash": "sha256-vANWf6qlrVlX6iJDYRSm7dxDTkdtQ951qxgLqJFWRPI=",
+      "note": "50% of installs still land here; 26.3.0 has 13 names removed",
+      "tag": "26.2.0"
+    }
+  },
+  "pyparsing": {
+    "3.2.5": {
+      "hash": "sha256-BJkA1FBCZ38eCIgVTiIs3yF7HfP7ysgNPtLdop+1mN8=",
+      "note": "97% of installs still land here; 3.3.2 has 2 names removed and 27 signatures narrowed",
+      "tag": "3.2.5"
+    }
+  },
+  "pytest": {
+    "8.4.2": {
+      "hash": "sha256-hsDQuTMGuWHVjWKk20h58n/iVRPUuWnfNRq93bPDDgE=",
+      "note": "head of the 8.x line (42% of installs); 9.1.1 drops PytestRemovedIn9Warning",
+      "version": "8.4.2"
+    }
+  },
+  "pytest-asyncio": {
+    "0.20.3": {
+      "hash": "sha256-oq28wJ/Tq4yuQ/98tdzYKDyatpliS0Xcbc6T46ZTP7I=",
+      "note": "head of the 0.20.x line (5% of installs); 1.4.0 has 14 names removed",
+      "tag": "v0.20.3"
+    },
+    "0.24.0": {
+      "hash": "sha256-4/wRDQz0kotUdSK7Z55IpW15W+tIvX8oH7dpsmxjohw=",
+      "note": "201 published projects resolve here; 1.4.0 has 12 names removed",
+      "tag": "v0.24.0"
+    }
+  },
+  "qrcode": {
+    "7.4.2": {
+      "hash": "sha256-Le7mUthDozKQa9qHOg37gyM2JubKvqDYmG9xU/YYdAk=",
+      "note": "head of the 7.x line (24% of installs); 8.2 has 3 names removed",
+      "tag": "v7.4.2"
+    }
+  },
+  "redis": {
+    "5.3.1": {
+      "hash": "sha256-hF2KSlxx0vTkWq8yxOCYhFW6XFcwkVEl4D0szV7iYKk=",
+      "note": "head of the 5.x line (24% of installs); 8.0.1 has 234 names removed and 2 signatures narrowed",
+      "tag": "v5.3.1"
+    },
+    "6.4.0": {
+      "hash": "sha256-oFVqe8W9wQWzJy9AHUl2joycD8qywrJhsMgnyTlC+8A=",
+      "note": "head of the 6.x line (10% of installs); 8.0.1 has 23 names removed",
+      "tag": "v6.4.0"
+    },
+    "7.4.1": {
+      "hash": "sha256-9a24lo3Mir6CYo43e18btT3dJW+M9a1w9j66YbpKZFk=",
+      "note": "head of the 7.x line (18% of installs); 8.0.1 has 21 names removed",
+      "tag": "v7.4.1"
+    }
+  },
+  "requests": {
+    "2.31.0": {
+      "hash": "sha256-kaO5p2sjD6+h69DnlLC+cd3guDqzN0GMckDP9G0GtF8=",
+      "note": "1003 published projects resolve here; 2.34.2 drops FileModeWarning, RequestsDependencyWarning",
+      "tag": "v2.31.0"
+    },
+    "2.32.3": {
+      "hash": "sha256-+RAPd/l+mwdmz1yAYZ/0gwHpFm91/dFVGlC2cjEAAKg=",
+      "note": "1179 published projects resolve here; 2.34.2 drops FileModeWarning, RequestsDependencyWarning",
+      "tag": "v2.32.3"
+    },
+    "2.32.4": {
+      "hash": "sha256-sD9GLCAa3y9L1J+fcd+ZXBtW4jNL40hOesKXORhcjGQ=",
+      "note": "242 published projects resolve here; 2.34.2 drops FileModeWarning, RequestsDependencyWarning",
+      "tag": "v2.32.4"
+    },
+    "2.32.5": {
+      "hash": "sha256-cEBalMFoYFaGG8M48k+OEBvzLegzrTNP1NxH2ljP6qg=",
+      "note": "772 published projects resolve here; 2.34.2 drops FileModeWarning, RequestsDependencyWarning",
+      "tag": "v2.32.5"
+    }
+  },
+  "rich": {
+    "13.7.1": {
+      "hash": "sha256-7LvmPrCpHfPEfJ1r8IFnQhYkBstvtIrWYhGwcchlc0s=",
+      "note": "250 published projects resolve here",
+      "tag": "v13.7.1"
+    },
+    "13.9.4": {
+      "hash": "sha256-Zaop9zR+Sz9lMQjQP1ddJSid5jEmf0tQYuTeLuWNGA8=",
+      "note": "head of the 13.x line (10% of installs); 15.0.0 has 16 names removed and 1 signature narrowed",
+      "tag": "v13.9.4"
+    },
+    "14.3.3": {
+      "hash": "sha256-6udVO7N17ineQozlCG/tI9jJob811gqb4GtY50JZFb0=",
+      "note": "head of the 14.x line (24% of installs); 15.0.0 has 14 names removed",
+      "tag": "v14.3.3"
     }
   },
   "rpds-py": {
@@ -118,7 +527,132 @@
       "version": "0.30.0"
     }
   },
+  "s3transfer": {
+    "0.10.4": {
+      "hash": "sha256-EiJmKftWXfV+WlazcHH7rBmZXu48ihkAalw6a54Bjmo=",
+      "note": "head of the 0.10.x line (9% of installs); 0.16.0 drops NullHandler, NullHandler.emit",
+      "tag": "0.10.4"
+    },
+    "0.11.5": {
+      "hash": "sha256-vMiqgJ4yugDiJUnSKnHCaOqMn6/8wRZLLAs7mFNxvx8=",
+      "note": "head of the 0.11.x line (10% of installs); 0.16.0 drops NullHandler, NullHandler.emit",
+      "tag": "0.11.5"
+    },
+    "0.8.2": {
+      "hash": "sha256-sdoPjkZHN5wVCK9V6V+fkGvQvEQo2ABy2lqefEKfg6o=",
+      "note": "head of the 0.8.x line (6% of installs); 0.16.0 drops NullHandler, NullHandler.emit",
+      "tag": "0.8.2"
+    }
+  },
+  "shapely": {
+    "2.0.7": {
+      "hash": "sha256-oq08nDeCdS6ARISai/hKM74v+ezSxO2PpSzas/ZFVaw=",
+      "note": "96% of installs still land here; 2.1.2 has 5 names removed",
+      "tag": "2.0.7",
+      "variants": [
+        "py313"
+      ]
+    }
+  },
+  "snowflake-connector-python": {
+    "3.18.1": {
+      "hash": "sha256-q3VGMi2lhKlD+gwLLxElm9uX85DB52gukXYDjEkyx0o=",
+      "note": "head of the 3.x line (46% of installs); 4.3.0 has 61 names removed and 2 signatures narrowed",
+      "tag": "v3.18.1",
+      "variants": [
+        "py313"
+      ]
+    },
+    "4.0.0": {
+      "hash": "sha256-Fwb6G4tn9A8xMKn0zSO3jZSGBcm8cLdlj1pPvEcM3LQ=",
+      "note": "41% of installs still land here; 4.3.0 has 12 names removed and 1 signature narrowed",
+      "tag": "v4.0.0",
+      "variants": [
+        "py313"
+      ]
+    }
+  },
+  "sqlalchemy": {
+    "2.0.41": {
+      "hash": "sha256-DixgBUI+HJLTCsunN5Y+ogcAHnRnQ3CKSFc6HrxzsPM=",
+      "note": "86% of installs still land here; 2.0.51 has 83 names removed and 11 signatures narrowed",
+      "tag": "rel_2_0_41",
+      "variants": [
+        "py313"
+      ]
+    }
+  },
+  "srsly": {
+    "2.5.2": {
+      "hash": "sha256-b9XVxyR9yv65SxlOc1Tn5t5qEEJw7qSpBfvlBGOWhPM=",
+      "note": "97% of installs still land here; 2.5.3 has 18 names removed",
+      "tag": "release-v2.5.2"
+    }
+  },
+  "thrift": {
+    "0.16.0": {
+      "hash": "sha256-K1tkiPze0h+dMSqiPJ/2oBldD2ribdvVrZ4+Jd/BRAg=",
+      "note": "head of the 0.16.x line (26% of installs)",
+      "version": "0.16.0"
+    },
+    "0.20.0": {
+      "hash": "sha256-TdZi6t9riuvopBcpUnvWmt9s6qKoaBy+9k0Sc7Po/ro=",
+      "note": "head of the 0.20.x line (12% of installs)",
+      "version": "0.20.0"
+    }
+  },
+  "typing-extensions": {
+    "4.13.2": {
+      "hash": "sha256-6wG+f0+sGI3sWy4EYeWDTffLicMiIkACHwrw0oP4Z1w=",
+      "note": "100% of installs still land here; 4.16.0 has 4 names removed",
+      "tag": "4.13.2"
+    }
+  },
+  "urllib3": {
+    "1.26.20": {
+      "hash": "sha256-CgeBdAduBbZh7n7WL2QkOp11odOxdmaAH1zL+1FKuis=",
+      "note": "head of the 1.x line (15% of installs); 2.7.0 drops get_host",
+      "tag": "1.26.20"
+    }
+  },
+  "uvloop": {
+    "0.21.0": {
+      "hash": "sha256-Ne7sT+fdHBJ97tf3G3afz3quXz0BEW9DdDEcLYBponY=",
+      "note": "head of the 0.21.x line (6% of installs); 0.22.1 drops EventLoopPolicy, install",
+      "tag": "v0.21.0",
+      "variants": [
+        "py313"
+      ]
+    }
+  },
+  "watchdog": {
+    "4.0.2": {
+      "hash": "sha256-tN+7bEkiG+RTViPqRHSk1u4KnO9KgLIMKNtNhYtk4nA=",
+      "note": "head of the 4.x line (6% of installs); 6.0.0 has 21 names removed",
+      "variants": [
+        "py313"
+      ],
+      "version": "4.0.2"
+    }
+  },
+  "websocket-client": {
+    "1.8.0": {
+      "hash": "sha256-Mjnfn0TaYy+WASRygF1AojKBqZECfOEdL0Wm8krEw9o=",
+      "note": "98% of installs still land here; 1.9.0 drops setReconnect",
+      "version": "1.8.0"
+    }
+  },
   "werkzeug": {
+    "2.2.3": {
+      "hash": "sha256-LhzMlBfU2jWLnebxdOOsCUOR6h1PvvLWZ4ZdgZ39Cv4=",
+      "note": "head of the 2.x line (10% of installs); 3.1.8 has 315 names removed and 16 signatures narrowed",
+      "version": "2.2.3"
+    },
+    "3.0.6": {
+      "hash": "sha256-qN1Z1N4oynBHGjTLp5vtX37y4Danazqwg1R0JG60H40=",
+      "note": "87% of installs still land here; 3.1.8 has 26 names removed and 6 signatures narrowed",
+      "version": "3.0.6"
+    },
     "3.1.3": {
       "hash": "sha256-YHI86UXBkyhnl5DjKCzHWKpKYEDkuzMPU9MPpUbUR0Y=",
       "note": "supports the pinned python-flask template dependency",

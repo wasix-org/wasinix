@@ -9,6 +9,11 @@
       "hash": "sha256-6RFa4GTNgjsHSX5LYp4t6p8ynmmr7Nuotj9C7mTmvlM=",
       "note": "pairs with the pyarrow 21 wheel; pyarrow IS arrow-cpp releases",
       "rev": "apache-arrow-21.0.0"
+    },
+    "23.0.1": {
+      "hash": "sha256-p/IUYanW11u7gusZad1Bb4VhisTKBm4a+XGOuNXjx+I=",
+      "note": "pairs with the pyarrow 23.0.1 history entry",
+      "rev": "apache-arrow-23.0.1"
     }
   },
   "jq": {
