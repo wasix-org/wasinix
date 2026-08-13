@@ -4,6 +4,7 @@
 # through wasixflang, which compiles with flang and links through wasixcc.
 {
   pyprev,
+  pyfinal,
   final,
   wasixPython,
   helpers,
@@ -15,6 +16,15 @@
   buildPythran = wasixPython.pythonOnBuildForHost.pkgs.pythran;
   # Boost.Build rejects architecture=wasm; boost.math is header-only anyway.
   buildBoost = final.buildPackages.boost191;
+  isHistory = (pyprev.scipy.passthru.wasix.historySpec or null) != null;
+  # A release caps numpy a minor or two past itself, and the set's numpy is
+  # beyond both caps, so a rebase takes the newest history entry under its own.
+  # The one argument feeds both the meson include dir and the propagated
+  # dependency, so the wheel compiles against the release it then declares.
+  historyNumpy =
+    if lib.versionOlder pyprev.scipy.version "1.15"
+    then pyfinal.numpy_2_2_6
+    else pyfinal.numpy_2_3_5;
 in
   helpers.libTweaks {
     # 1.16 added the use-system-libraries option, so an older release aborts on
@@ -58,11 +68,40 @@ in
       )
     ];
 
+    # __config__.py records the store paths of the tools that built it, and
+    # nixpkgs nuke-refs it and drops its opt-1 bytecode. The plain .pyc holds the
+    # same strings and survives, so the output keeps a build host python
+    # reference and fails the check. Later than postInstall so the order against
+    # that cleanup does not matter.
+    postFixup = lib.optionalString isHistory ''
+      rm -f $out/${pyprev.python.sitePackages}/scipy/__pycache__/__config__.*.pyc
+      nuke-refs $out/${pyprev.python.sitePackages}/scipy/__config__.py
+    '';
+
     # _test_internal calls fesetround(FE_UPWARD); wasm has no dynamic rounding
     # modes, so wasix-libc omits those fenv.h macros.
     postPatch =
       ''
         sed -i "/^py3.extension_module('_test_internal',$/,/^)$/d" scipy/special/meson.build
+      ''
+      # show_config() reports where each dependency was found, and configure_file
+      # bakes those store paths into __config__.py and from there into the wheel,
+      # where the reference check cannot see them inside the zip. They are
+      # build-time locations of statically linked libraries and of build host
+      # tooling (pythran), so none of them mean anything to a wheel consumer.
+      # Substituted in the template, which every release spells identically,
+      # rather than per dependency in meson.build. "unknown" is what meson.build
+      # itself substitutes for a dependency it did not find.
+      + ''
+        sed -i -E 's#r"@[A-Z0-9_]+_(INCDIR|INCLUDEDIR|LIBDIR|PCFILEDIR)@"#r"unknown"#g' scipy/__config__.py.in
+        ! grep -qE 'r"@[A-Z0-9_]+_(INCDIR|INCLUDEDIR|LIBDIR|PCFILEDIR)@"' scipy/__config__.py.in
+      ''
+      # The interpreter is reported the same way. The upstream cross backport
+      # above names the host one, a real runtime dependency worth keeping, but a
+      # rebase drops that patch and is left naming the build host's.
+      + lib.optionalString isHistory ''
+        sed -i -E "s|^conf_data\.set\('PYTHON_PATH', .*\)$|conf_data.set('PYTHON_PATH', 'unknown')|" scipy/meson.build
+        grep -q "^conf_data.set('PYTHON_PATH', 'unknown')$" scipy/meson.build
       ''
       # The linker script hides everything but PyInit_*, and the probe that
       # guards it links through wasixcc, which takes the flag where wasm-ld does
@@ -70,11 +109,21 @@ in
       + lib.optionalString (lib.versionOlder pyprev.scipy.version "1.18") ''
         sed -i "s|^version_link_args = \['-Wl,--version-script=' + _linker_script\]|version_link_args = []|" meson.build
         grep -q "^version_link_args = \[\]" meson.build
+      ''
+      # cimport numpy resolves through sys.path, which carries the build host's
+      # numpy because pythran propagates it, while the headers come from the
+      # numpy below. Cythonising against the newer pxd emits accessors the older
+      # headers do not declare (PyDataType_TYPEOBJ, _PyUFuncObject_GET_ITEM_DATA).
+      # An --include-dir is searched before sys.path and leaves imports alone.
+      + lib.optionalString isHistory ''
+        sed -i "s|^cython_args = \['-3',|cython_args = ['-3', '--include-dir', '${historyNumpy}/${pyprev.python.sitePackages}',|" scipy/meson.build
+        grep -q "'--include-dir', '${historyNumpy}/${pyprev.python.sitePackages}'" scipy/meson.build
       '';
   }
-  (pyprev.scipy.override {
-    blas = lapack;
-    lapack = lapack;
-    pythran = buildPythran;
-    boost191 = buildBoost;
-  })
+  (pyprev.scipy.override ({
+      blas = lapack;
+      lapack = lapack;
+      pythran = buildPythran;
+      boost191 = buildBoost;
+    }
+    // lib.optionalAttrs isHistory {numpy = historyNumpy;}))
