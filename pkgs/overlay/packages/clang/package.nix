@@ -37,6 +37,7 @@ in
           {message = "recheck the WASIX Clang resource headers and default driver arguments when the toolchain fork base version moves";}
           {message = "drop wasm-visibility.patch once upstream Clang recognizes the standard __wasm__ target macro";}
           {message = "drop no-fork-remote-jit.patch once upstream Clang guards the out-of-process JIT launcher on platforms without fork";}
+          {message = "drop dlfcn-optional.patch once upstream Clang guards the libclang dlfcn.h include with CLANG_HAVE_DLFCN_H";}
         ];
       };
       passthru.wasmer = {
@@ -62,6 +63,7 @@ in
       patches = [
         ./wasm-visibility.patch
         ./no-fork-remote-jit.patch
+        ./dlfcn-optional.patch
       ];
       nativeBuildInputs = [final.disableWasmOptInConfigureHook];
     }

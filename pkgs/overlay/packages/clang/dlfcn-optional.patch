@@ -1,0 +1,11 @@
+--- a/tools/libclang/CIndexer.cpp
++++ b/tools/libclang/CIndexer.cpp
+@@ -31,7 +31,7 @@
+ #elif defined(_AIX)
+ #include <errno.h>
+ #include <sys/ldr.h>
+-#else
++#elif defined(CLANG_HAVE_DLFCN_H)
+ #include <dlfcn.h>
+ #endif
+ 

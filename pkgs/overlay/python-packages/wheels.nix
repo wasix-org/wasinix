@@ -224,42 +224,146 @@
   {attr = "pybase64";}
   {attr = "setproctitle";} # no prctl and no argv to rewrite; falls back to its no-op pure module
   {attr = "ijson";} # the pure default backend; the C one needs yajl
-  {attr = "tree-sitter";} # vendored tree-sitter core
+  {
+    attr = "tree-sitter";
+    publishOnce = true;
+  } # vendored tree-sitter core
   # grammars: a generated parser.c per language, no dep beyond the core above.
-  {attr = "tree-sitter-bash";}
-  {attr = "tree-sitter-c-sharp";}
-  {attr = "tree-sitter-embedded-template";}
-  {attr = "tree-sitter-html";}
-  {attr = "tree-sitter-javascript";}
-  {attr = "tree-sitter-json";}
-  {attr = "tree-sitter-markdown";}
-  {attr = "tree-sitter-python";}
-  {attr = "tree-sitter-rust";}
-  {attr = "tree-sitter-sql";}
-  {attr = "tree-sitter-yaml";}
+  # They build against the limited API, so one cp3xx-abi3 filename serves every
+  # interpreter and only the default one's wheel is published.
+  {
+    attr = "tree-sitter-bash";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-c-sharp";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-embedded-template";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-html";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-javascript";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-json";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-markdown";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-python";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-rust";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-sql";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-yaml";
+    publishOnce = true;
+  }
   # overlay/python-packages/tree-sitter-grammars (the ones nixpkgs lacks)
-  {attr = "tree-sitter-c";}
-  {attr = "tree-sitter-cpp";}
-  {attr = "tree-sitter-css";}
-  {attr = "tree-sitter-elixir";}
-  {attr = "tree-sitter-fortran";}
-  {attr = "tree-sitter-go";}
-  {attr = "tree-sitter-groovy";}
-  {attr = "tree-sitter-java";}
-  {attr = "tree-sitter-julia";}
-  {attr = "tree-sitter-kotlin";}
-  {attr = "tree-sitter-lua";}
-  {attr = "tree-sitter-objc";}
-  {attr = "tree-sitter-php";}
-  {attr = "tree-sitter-powershell";}
-  {attr = "tree-sitter-regex";}
-  {attr = "tree-sitter-scala";}
-  {attr = "tree-sitter-swift";}
-  {attr = "tree-sitter-toml";}
-  {attr = "tree-sitter-typescript";}
-  {attr = "tree-sitter-verilog";}
-  {attr = "tree-sitter-xml";}
-  {attr = "tree-sitter-zig";}
+  {
+    attr = "tree-sitter-c";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-cpp";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-css";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-elixir";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-fortran";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-go";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-groovy";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-java";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-julia";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-kotlin";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-lua";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-objc";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-php";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-powershell";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-regex";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-scala";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-swift";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-toml";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-typescript";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-verilog";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-xml";
+    publishOnce = true;
+  }
+  {
+    attr = "tree-sitter-zig";
+    publishOnce = true;
+  }
   {attr = "ujson";} # vendored double-conversion; -lstdc++ mapped by wasixcc
   {attr = "bitarray";}
   {attr = "ciso8601";}
