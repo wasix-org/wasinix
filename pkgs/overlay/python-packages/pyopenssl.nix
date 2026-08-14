@@ -1,14 +1,33 @@
 # pyopenssl for wasix. nixpkgs builds it multi-output for the sphinx docs and
 # attaches propagatedBuildInputs to dev, so a dependent propagating pyopenssl gets
 # a dev output with no python module and `import OpenSSL` raises ModuleNotFoundError.
+#
+# Releases below 26 read _lib.GEN_EMAIL, a cffi binding cryptography dropped in
+# 49, so a rebased build takes the newest cryptography history entry that still
+# declares it. 23.3.0 caps cryptography below 42, under everything the set ships,
+# so it takes the oldest entry and skips the runtime dependency check.
 {
   pyprev,
+  pyfinal,
   helpers,
+  lib,
   ...
-}:
-helpers.libTweaks (
-  helpers.python.dropSphinxDocs []
-  # dev holds no module, so keep out (module) + dist (wheel) only.
-  // {outputs = _: ["out" "dist"];}
-)
-pyprev.pyopenssl
+}: let
+  version = pyprev.pyopenssl.version;
+  cryptography =
+    if lib.versionOlder version "25"
+    then pyfinal.cryptography_43_0_3
+    else if lib.versionOlder version "26"
+    then pyfinal.cryptography_46_0_7
+    else null;
+in
+  helpers.libTweaks (
+    helpers.python.dropSphinxDocs []
+    # dev holds no module, so keep out (module) + dist (wheel) only.
+    // {outputs = _: ["out" "dist"];}
+    // lib.optionalAttrs (cryptography != null) {
+      propagatedBuildInputs = helpers.replaceInputsByName {inherit cryptography;};
+    }
+    // lib.optionalAttrs (lib.versionOlder version "24") {dontCheckRuntimeDeps = true;}
+  )
+  pyprev.pyopenssl

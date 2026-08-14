@@ -571,13 +571,19 @@
   "pyopenssl": {
     "23.3.0": {
       "hash": "sha256-+F5o+0jp0kPgwxiYhWXc+CHBHEIVF+yfuOc+7wp8ZXU=",
-      "note": "head of the 23.x line (10% of installs); 26.3.0 has 66 names removed",
-      "tag": "23.3.0"
+      "note": "head of the 23.x line (10% of installs); 26.3.0 has 66 names removed; caps cryptography below 42, and the entry it takes builds on cp313 only",
+      "tag": "23.3.0",
+      "variants": [
+        "py313"
+      ]
     },
     "24.3.0": {
       "hash": "sha256-otK7Y7Kb/l3QOErhAcuDHB/CKG9l1vH2BTnOieAWNc0=",
-      "note": "head of the 24.x line (11% of installs); 26.3.0 has 23 names removed",
-      "tag": "24.3.0"
+      "note": "head of the 24.x line (11% of installs); 26.3.0 has 23 names removed; caps cryptography below 45, and the entry it takes builds on cp313 only",
+      "tag": "24.3.0",
+      "variants": [
+        "py313"
+      ]
     },
     "25.3.0": {
       "hash": "sha256-lNXS3lIGFPeM7DKMFTLBiOWn+AwZtenXF5KGN5DRwO4=",
