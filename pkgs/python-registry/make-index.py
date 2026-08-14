@@ -493,6 +493,9 @@ def main() -> None:
     # published filename -> {name, attr, drv_path}, folded into each wheel's
     # manifest by publish.py (with the wasinix rev added there).
     provenance: dict[str, dict] = {}
+    # Collected rather than fatal on the first, so one run names every entry that
+    # needs `publishOnce` instead of one per rebuild.
+    conflicts: list[tuple[str, str]] = []
     tmp = Path(tempfile.mkdtemp(prefix="wasix-wheels-"))
     for i, entry in enumerate(dists):
         wheels = sorted(Path(entry["dist"]).glob("*.whl"))
@@ -505,7 +508,7 @@ def main() -> None:
             project = normalize(moved.name.split("-", 1)[0])
             prev = projects.setdefault(project, {}).setdefault(moved.name, moved)
             if prev != moved and prev.read_bytes() != moved.read_bytes():
-                sys.exit(f"conflicting contents for {moved.name}:\n  {prev}\n  {moved}")
+                conflicts.append((moved.name, entry["attr"]))
             provenance[moved.name] = {
                 "name": entry["name"],
                 "rel_key": entry["relKey"],
@@ -514,6 +517,15 @@ def main() -> None:
                 "drv_path": entry["drvPath"],
                 **({"source": entry["source"]} if entry.get("source") else {}),
             }
+
+    if conflicts:
+        listed = "\n".join(
+            f"  {name}  ({attr})" for name, attr in sorted(set(conflicts))
+        )
+        sys.exit(
+            "wheels of the same name differ between interpreters; mark each entry"
+            f" `publishOnce` in wheels.nix:\n{listed}"
+        )
 
     for project, wheels in sorted(projects.items()):
         pdir = out / "simple" / project

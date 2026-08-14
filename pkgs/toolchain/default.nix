@@ -16,10 +16,7 @@
   llvmMonorepoSrc = monorepoSrc;
   flang = pkgs.wasix-flang;
   flangCross = import ./flang-cross.nix {inherit (pkgs) lib;};
-  sysroots = import ./sysroot {
-    inherit pkgs llvm flang;
-    llvmVersion = version;
-  };
+  sysroots = pkgs.wasix-sysroot.passthru // {sysroot = pkgs.wasix-sysroot;};
   inherit
     (sysroots)
     variants

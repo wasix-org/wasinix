@@ -77,7 +77,14 @@ in
       fs."/sysroot" = toolchain.variants.exnrefEh.sysroot;
     };
 
-    cmakeFlags = ["-DUNIX=ON"];
+    # The bare driver cmake probes with cannot find its builtins archive: the
+    # cross stdenv installs it as wasip1/libclang_rt.builtins-wasm32.a while the
+    # driver looks for <triple>/libclang_rt.builtins.a. Compiling the probe to a
+    # static library skips the link the real build never performs this way.
+    cmakeFlags = [
+      "-DUNIX=ON"
+      "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY"
+    ];
     nativeBuildInputs = [final.disableWasmOptInConfigureHook];
     ninjaFlags = ["flang"];
     installPhase = _old: ''

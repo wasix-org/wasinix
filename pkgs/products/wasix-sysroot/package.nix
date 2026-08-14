@@ -3,10 +3,12 @@
 # combined `sysroot` holds one subdir per variant, as WASIXCC_SYSROOT_PREFIX expects.
 {
   pkgs,
-  llvm,
-  llvmVersion,
-  flang,
+  wasix-llvm,
+  wasix-flang,
+  ...
 }: let
+  inherit (wasix-llvm.passthru) llvm llvmVersion;
+  flang = wasix-flang;
   inherit (pkgs) lib;
   # One sysroot variant per profile, encoded {eh, pic, exnref}; PIC needs EH.
   profilesCfg = import ../../profiles.nix;
@@ -84,17 +86,17 @@
 
     # The Fortran and OpenMP runtimes stage against the full sysroot, unlike
     # compiler-rt and libcxx, which build the stages it is made of.
-    flangRt = pkgs.callPackage ../flang-rt.nix {
+    flangRt = pkgs.callPackage ./flang-rt.nix {
       inherit name pic flang llvm toolchainFile sysroot runtimesPreConfigure;
       version = llvmVersion;
     };
 
-    openmp = pkgs.callPackage ../openmp.nix {
+    openmp = pkgs.callPackage ./openmp.nix {
       inherit name pic llvm toolchainFile sysroot runtimesPreConfigure;
       version = llvmVersion;
     };
 
-    test = pkgs.callPackage ../tests/sysroot-test.nix {
+    test = pkgs.callPackage ./tests/sysroot-test.nix {
       inherit name eh pic toolchainFile sysroot llvm;
     };
   in {
@@ -116,8 +118,11 @@
 
   tests = lib.mapAttrs (_: v: v.test) variants;
 in
-  {
-    inherit variants sysroot tests;
-  }
-  # The undecorated component attrs are the `off` variant.
-  // {inherit (variants.off) libc compiler-rt libcxx;}
+  # One derivation for the products loader; the per-variant pieces ride along as
+  # passthru. The undecorated component attrs are the `off` variant.
+  sysroot.overrideAttrs (old: {
+    passthru =
+      (old.passthru or {})
+      // {inherit variants tests;}
+      // {inherit (variants.off) libc compiler-rt libcxx;};
+  })
