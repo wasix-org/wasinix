@@ -9,6 +9,8 @@
   ...
 }:
 helpers.libTweaks {
+  # no suite: the tests drive the bin/ CLIs skipped above.
+  doCheck = false;
   mesonFlags = ["-Dbin=false" "-Dtests=false"];
 }
 prev.fribidi

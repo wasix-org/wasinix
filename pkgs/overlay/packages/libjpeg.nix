@@ -11,5 +11,6 @@ helpers.libTweaks {
   # materialise the dir so the output isn't empty.
   postInstall = ''mkdir -p "$man/share/man"'';
   cmakeFlags = ["-DWITH_SIMD=OFF"];
+  checkFlagsArray = [''ARGS=--output-on-failure''];
 }
 prev.libjpeg

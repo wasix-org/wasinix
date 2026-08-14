@@ -1,12 +1,13 @@
-# geos for wasix (shapely's C++ backend). Library-only: geosop uses fenv
-# FE_* macros the wasm32 <fenv.h> doesn't define. C++ exceptions are load-
-# bearing (throw everywhere), so no off profile.
+# geos for wasix (shapely's C++ backend). Library-only, no suite: geosop and
+# tests/unit use fenv FE_* macros the wasm32 <fenv.h> does not define
+# (WASIX-TODO.md). C++ exceptions are load-bearing, so no off profile.
 {
   prev,
   helpers,
   ...
 }:
 helpers.libTweaks {
+  doCheck = false;
   cmakeFlags = ["-DBUILD_GEOSOP=OFF"];
   # This geos is static-only: there is no shared libgeos_c.so to pull the C++
   # core transitively, so geos-config --clibs (which consumers like shapely

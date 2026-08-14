@@ -24,6 +24,14 @@ in
           else "OFF"
         }"
       ];
+      # BUILD_TESTS=OFF above means no libgit2_tests binary is ever built
+      # (see comment there: cross can't run it anyway). doCheck=false stops
+      # a check job from being generated for it at all; wasixCheckPrebuild
+      # additionally stops the check-output wrapper's own build-time
+      # snapshot from attempting a prebuild, since doCheck composes after
+      # that wrapper reads old.doCheck and is invisible to it.
+      doCheck = false;
+      wasixCheckPrebuild = ":";
     }
     // helpers.linkInputs (helpers.dropInputsByName ["libssh2"])
   )
