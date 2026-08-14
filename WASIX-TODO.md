@@ -591,6 +591,26 @@ current toolchain before relying on it.
   actually works, then drop the hook. Scanning is off because it misreports
   probes, not because C++20 modules are unwanted.
 
+### protobuf 4's C++ python extension links without abseil 🔴
+
+- protobuf's python `setup.py` gives the `google.protobuf.pyext._message`
+  extension `libraries=['protobuf']` and nothing else, because on a
+  shared-object platform `libprotobuf.so` carries abseil transitively. A static
+  cross build has no such closure, so abseil stays undefined and wasm-ld turns
+  each reference into a module import.
+- Consequence: importing the extension aborts with
+  `Unresolved global 'GOT.mem'._ZN4absl...MixingHashState5kSeedE due to: Missing export`.
+  Only the 4.x wheel is affected: 5.x and later select the upb backend, which is
+  C and uses no abseil. `api_implementation` catches the ImportError and falls
+  back to the pure-python backend, so `import google.protobuf` still works, one
+  order of magnitude slower and with none of the C++ descriptor pool semantics.
+- Workaround: none. The `wheel-py313-protobuf4` import test names the extension
+  and so is red, matching the other protobuf entries, which all test the
+  compiled backend rather than the wrapper that silently degrades.
+- Fix: put the abseil archives on the extension's link line in the order
+  `pkg-config --libs protobuf` reports, keeping them after the objects that
+  reference them.
+
 ## Packages that don't cross-build
 
 - **tzdata** 🟡: `localtime.c` needs getresuid/tzname/…, absent on WASIX.
