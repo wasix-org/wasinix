@@ -513,6 +513,18 @@ current toolchain before relying on it.
 
 ## Toolchain
 
+### a wasix-hosted flang cannot run its codegen job 🔴
+
+- `flang -c x.f90` schedules a clang `-cc1` command and spawns it; the spawn
+  fails with `posix_spawn failed: Exec format error`, the same shape as find's
+  `-exec` and xargs. Declaring `wasmer/clang` as a webc dependency does not make
+  it resolvable.
+- Workaround: `pkgs/overlay/packages/flang` is `passthru.wasix.broken` and not
+  shipped. The host flang (`products/wasix-flang`) is unaffected and is what
+  builds Fortran for scipy.
+- Fix: make a dependency's command resolvable to a spawning guest, or give flang
+  the in-process frontend dispatch clang has for `cc1`.
+
 ### flang folds constants at one rounding mode 🟡
 
 - wasm exposes neither directed rounding nor floating-point exception flags, so

@@ -7,6 +7,7 @@
   helpers,
   toolchain,
   nixpkgs,
+  preferredProfilePackages,
   ...
 }: let
   wasixLlvm = final.wasix-llvm.passthru;
@@ -59,7 +60,11 @@ in
       ./wasm32-fenv.patch
     ];
     passthru.wasix = {
-      shipped = true;
+      # The driver hands codegen to a clang -cc1 command and the spawn fails with
+      # ENOEXEC under wasmer, so the frontend builds but compiles nothing. Not
+      # shipped while that holds: the webc would carry a compiler that cannot
+      # compile. Its declared clang dependency does not resolve it.
+      broken = "flang cannot spawn the clang -cc1 job its driver schedules (WASIX-TODO.md)";
       updateNotes = [
         {message = "drop wasm32-target.patch once upstream Flang has a WebAssembly target ABI";}
         {message = "drop wasm32-main.patch once upstream Flang emits WASI's two-argument main entry";}
@@ -83,6 +88,9 @@ in
         }
       ];
       fs."/sysroot" = toolchain.variants.exnrefEh.sysroot;
+      # The Fortran job is flang's own, but the driver hands codegen to a clang
+      # -cc1 command, so this needs a clang to spawn as clang needs an lld.
+      dependencies = [preferredProfilePackages.clang];
     };
 
     cmakeFlags = ["-DUNIX=ON"];
