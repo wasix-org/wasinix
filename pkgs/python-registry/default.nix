@@ -144,7 +144,7 @@ in
     passthru =
       (o.passthru or {})
       // {
-        tests = mkTestGroup "python-registry" tests;
+        tests = mkTestGroup "python-registry" {behavior = tests;};
         inherit wheelVersions wheels published;
         wasix.updateNotes = lib.optional (staleRels != []) {
           message = "rels.json has stale keys (${lib.concatStringsSep ", " staleRels}); nix run .#update -- nixpkgs drops them";

@@ -20,17 +20,26 @@
   # test, and it reads preferredProfilePackages.python3.shim, which never forces
   # .tests.
   pythonRegistry,
+  # drv -> its declared emulated build-system checks (pkgs/emulated-check.nix).
+  emulatedChecksFor ? (_: {}),
 }: let
   testLib = import ./test-lib.nix {inherit pkgs wasmer;};
   mkTestGroup = import ../lib/test-group.nix {inherit pkgs lib posOf;};
 
-  # Every *.nix except helpers.nix contributes tests, called with only the args it
-  # declares. The group runs all of them and exposes each as a sub-attribute.
-  testGroupFor = overlayName: let
+  # Collect tests from packages/<overlayName>/tests/: every *.nix file except
+  # helpers.nix contributes tests, called with only the args it declares, joined
+  # by `extraTests` (the package's declared emulated check). The returned
+  # namespace exposes each test directly and the aggregate as `all`.
+  testGroupFor = overlayName: extraTests: let
     dir = packagesDir + "/${overlayName}/tests";
   in
     if !(builtins.pathExists dir)
-    then null
+    then
+      (
+        if extraTests == {}
+        then null
+        else mkTestGroup overlayName extraTests
+      )
     else let
       helpers =
         if builtins.pathExists (dir + "/helpers.nix")
@@ -66,16 +75,31 @@
         ) {}
         testFiles;
     in
-      mkTestGroup overlayName tests;
+      mkTestGroup overlayName ({behavior = tests;} // extraTests);
+
+  cliSmoke = import ./cli-smoke.nix {inherit lib testLib;};
 
   # Forcing the package or its .pkg.shim never forces .tests, so tests referencing
   # other packages' shims do not cycle.
   augment = overlayName: packageKey: crossPkg: servedVersions: let
-    group = testGroupFor overlayName;
+    group = testGroupFor overlayName (emulatedChecksFor crossPkg);
     pkg = makeWasmerPackage {
       package = crossPkg;
       inherit servedVersions;
     };
+    # With no hand-written suite and no emulated check, fall back to the
+    # liveness smoke so every shipped CLI runs under wasmer at least once. A
+    # webc shipping no command opts out with passthru.wasmer.smokeArgs = [].
+    smokeArgs = crossPkg.passthru.wasmer.smokeArgs or null;
+    effGroup =
+      if group != null
+      then group
+      else if smokeArgs == []
+      then null
+      else
+        mkTestGroup overlayName {
+          behavior.smoke = cliSmoke overlayName crossPkg pkg.webc.shim;
+        };
   in
     crossPkg.overrideAttrs (o: {
       passthru =
@@ -94,7 +118,7 @@
             ((o.passthru or {}).wasix or {})
             // {inherit (pkg.passthru.wasix) publication;};
         }
-        // (lib.optionalAttrs (group != null) {tests = group;});
+        // (lib.optionalAttrs (effGroup != null) {tests = effGroup;});
     });
 
   # Keyed by webc/program name (git -> "git"); a history version keys as
@@ -184,7 +208,7 @@
         (preferredProfilePackages.${n}).overrideAttrs (o: {
           passthru =
             removeAttrs (o.passthru or {}) ["tests"]
-            // {tests = testGroupFor n;};
+            // {tests = testGroupFor n {};};
         })
     );
 in {

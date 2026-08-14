@@ -10,10 +10,12 @@
     helpers,
     toolchain,
     nix-update-script,
+    wasixRunStub,
     ...
   }: let
     lib = prev.lib;
     current = prev.python314;
+    inherit (import ../../../lib/check-output.nix {inherit lib;}) usable;
 
     mkWasixPython = base: let
       pyVer = base.pythonVersion;
@@ -235,10 +237,16 @@
                       --replace-fail '"vxworks", "wasi", "watchos"' '"vxworks", "wasi", "wasix", "watchos"'
           '';
 
-          # Scrub -latomic wherever an extension build reads link flags, else meson feeds it to
-          # wasm-ld. build-details.json comes from the build interpreter, so it lacks EXT_SUFFIX.
+          # Keep python*.wasm raw for WebC and guest exec; host build hooks need
+          # an executable wrapper. Link metadata must omit phantom -latomic,
+          # and build-details.json must use the cross interpreter's ABI.
           postInstall = ''
-            for n in python${pyVer} python3 python; do ln -sf python${pyVer}.wasm "$out/bin/$n"; done
+            rm -f "$out/bin/python${pyVer}" "$out/bin/python3" "$out/bin/python"
+            printf '#!%s/bin/sh\nexec %s/bin/wasix-run %s/bin/python%s.wasm "$@"\n' \
+              "${final.buildPackages.bashNonInteractive}" "${wasixRunStub}" "$out" "${pyVer}" \
+              > "$out/bin/python${pyVer}"
+            chmod +x "$out/bin/python${pyVer}"
+            ln "$out/bin/python${pyVer}" "$out/bin/python3"
 
             # `python -m pip` works under wasix, but ensurepip installs it by running
             # the target interpreter, which a cross build cannot do. The wheel it
@@ -335,15 +343,21 @@
               pyfinal
               pyprev
               // {
-                # PYO3_CROSS_LIB_DIR for every rust/pyo3 wheel, set on the python's own builder
-                # because it is interpreter-specific. extendMkDerivation keeps the functor set
-                # intact, but forwards neither `override` nor the wrapper, so re-attach both.
+                # PYO3_CROSS_LIB_DIR is interpreter-specific, so its natural home is the python's
+                # own buildPythonPackage rather than a per-wheel override; applying it to every
+                # package here (not just pyo3 ones) is harmless, since non-pyo3 builds never read
+                # the var. extendMkDerivation keeps the functor set intact, but forwards neither
+                # `override` nor the wrapper, so re-attach both.
                 buildPythonPackage = let
                   withPyo3 = bpp:
                     lib.extendMkDerivation {
                       constructDrv = bpp;
                       extendDrvArgs = _finalAttrs: prevArgs: {
                         env = {PYO3_CROSS_LIB_DIR = "${py}/lib/${py.libPrefix}";} // (prevArgs.env or {});
+                        # Cross builds drop check inputs. The wheel layer recovers
+                        # them from the native package without adding them to the
+                        # shipped wheel; package overrides can declare a replacement
+                        # guest list for optional stacks that do not exist on wasix.
                       };
                     };
                 in

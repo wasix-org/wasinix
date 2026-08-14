@@ -184,7 +184,7 @@ in
         crates =
           lib.mapAttrs (_: ds: lib.listToAttrs (map (d: lib.nameValuePair d.passthru.version d) ds))
           (lib.groupBy (d: d.passthru.crate) minted);
-        tests = mkTestGroup "cargo-registry" tests;
+        tests = mkTestGroup "cargo-registry" {behavior = tests;};
         wasix.updateNotes = lib.optional (staleRels != []) {
           message = "rels.json has stale keys (${lib.concatStringsSep ", " staleRels}); nix run .#update -- nixpkgs drops them";
           when = _: _: true;

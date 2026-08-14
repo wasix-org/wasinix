@@ -23,6 +23,9 @@ import nixpkgs {
       config = "wasm32-unknown-wasi";
       useLLVM = true;
       isWasix = true;
+      # hostPlatform.emulator needs no override: selectEmulator maps isWasi to
+      # wasmtime, which the overlay shadows with the wasmer-free wasix-run shim
+      # (overlay/default.nix).
     }
     // profileSpec;
   config.allowUnsupportedSystem = true;

@@ -14,6 +14,9 @@
   preferredProfilePackages,
   wasmerDependencies,
   wasixRustPlatform,
+  # wasmer-free emulation trampoline (wasmer/wasix-run.nix), used wherever an
+  # emulator path is baked into a build.
+  wasixRunStub,
   # the native instance: cross buildPackages would carry a different store
   # path that the update driver's environment never realizes
   nix-update-script,
@@ -58,8 +61,13 @@
       # build-platform script so eval proceeds. Meson never runs it
       # (mesonEmulatorHook is no-op'd below), and nothing in a wasm sysroot
       # depends on wasmtime-the-package, so shadowing it is harmless.
-      wasmtime = final.buildPackages.writeShellScriptBin "wasmtime" ''
-        exec ${final.buildPackages.wasmer}/bin/wasmer run "$1" -- "''${@:2}"
+      #
+      # It is the wasix-run stub, not a wasmer: hostPlatform.emulator is
+      # interpolated into build phases, and a real runtime there would put the
+      # fast-moving wasmer input into package build closures.
+      wasmtime = final.buildPackages.runCommand "wasmtime-wasix-run" {} ''
+        mkdir -p "$out/bin"
+        ln -s ${wasixRunStub}/bin/wasix-run "$out/bin/wasmtime"
       '';
 
       # Do NOT wire an exe_wrapper into meson's cross file: the stock
@@ -147,7 +155,7 @@
     in
       lib.mapAttrs (_: applyWasixMeta) (loaded.mkPackages {
         callArgs = {
-          inherit final prev helpers preferredProfilePackages wasmerDependencies nixpkgs nix-update-script;
+          inherit final prev helpers preferredProfilePackages wasmerDependencies nixpkgs nix-update-script wasixRunStub;
           toolchain = profileToolchain;
         };
         # takes the set so a history rebase reaches a trivial name too

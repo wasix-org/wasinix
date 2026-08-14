@@ -21,6 +21,15 @@
   hostTriple = hostPkgs.stdenv.hostPlatform.rust.rustcTarget;
   rustLld = "${wasixRustToolchain}/lib/rustlib/${hostTriple}/bin/rust-lld";
 
+  # cargoBuildFlags/cargoTestFlags accept either a list or a shell-word string
+  # per the cargoBuildHook interface; normalize to a list before `++`.
+  normalizeCargoFlags = argName: flags:
+    if builtins.isList flags
+    then flags
+    else if builtins.isString flags
+    then lib.filter (arg: arg != "") (lib.splitString " " flags)
+    else throw "wasix rustPlatform: ${argName} must be a list or string";
+
   # cc-rs (a dependency's build.rs compiling a vendored C library, e.g. ring's
   # BoringSSL) resolves the compiler from CC_<target>, defaulting to the nix cc
   # wrapper, which is stock wasi for the base target and rejects the `-dl`
@@ -70,17 +79,22 @@
       export CXX_wasm32_wasmer_wasi_dl=${depCcDl}/bin/c++
     '');
 
-  # `cargo build` goes through cargo-wasix, everything else (metadata, etc.)
-  # to the real cargo.
+  # `cargo build`/`cargo test` go through cargo-wasix, everything else
+  # (metadata, etc.) to the real cargo. Routing `test` gives test binaries the
+  # wasm-opt EH->exnref pass before cargo-wasix defers to the runner in
+  # CARGO_TARGET_WASM32_WASMER_WASI_RUNNER (our wasix-run). cargo-wasix wants a
+  # writable HOME/RUSTUP_HOME for its rustup state.
   cargoWasixCargo = pkgsCross.buildPackages.writeShellScriptBin "cargo" ''
-    if [ "''${1-}" = build ]; then
-      shift
-      # cargo-wasix wants a writable HOME/RUSTUP_HOME for its rustup state.
-      export HOME="$PWD/.home"
-      export RUSTUP_HOME="$HOME/.rustup"
-      mkdir -p "$HOME" "$RUSTUP_HOME"
-      exec ${cargoWasix}/bin/cargo-wasix wasix build "$@"
-    fi
+    case "''${1-}" in
+      build | test)
+        sub=$1
+        shift
+        export HOME="$PWD/.home"
+        export RUSTUP_HOME="$HOME/.rustup"
+        mkdir -p "$HOME" "$RUSTUP_HOME"
+        exec ${cargoWasix}/bin/cargo-wasix wasix "$sub" "$@"
+        ;;
+    esac
     exec ${cargo}/bin/cargo "$@"
   '';
 
@@ -239,9 +253,11 @@ in
     buildRustPackage = lib.extendMkDerivation {
       constructDrv = patchedPlatform.buildRustPackage;
       extendDrvArgs = finalAttrs: prevArgs: {
-        # wasm can't run tests / installChecks on the build host.
-        doCheck = false;
-        doInstallCheck = false;
+        # wasm can't run tests on the build host. extendDrvArgs re-runs on
+        # overrideAttrs, so read prevArgs rather than forcing false; that is
+        # how an emulated check (pkgs/emulated-check.nix) turns doCheck on.
+        doCheck = prevArgs.doCheck or false;
+        doInstallCheck = prevArgs.doInstallCheck or false;
         # cargo-auditable would re-link via the host rustc; unneeded for wasm.
         auditable = false;
 
@@ -250,19 +266,17 @@ in
         # setEnv points CARGO_TARGET_<wasm>_LINKER at the wasi clang, which can't
         # take rustc's raw wasm-ld flags; override it with the toolchain's rust-lld
         # (the spec's native flavor). Flows through cargoBuildHook to cargo-wasix.
-        cargoBuildFlags = let
-          inherited = prevArgs.cargoBuildFlags or [];
-          # Nixpkgs still has a few simple shell-word strings despite the hook's
-          # list interface. Normalize them before adding the WASIX linker argv.
-          normalized =
-            if builtins.isList inherited
-            then inherited
-            else if builtins.isString inherited
-            then lib.filter (arg: arg != "") (lib.splitString " " inherited)
-            else throw "wasix rustPlatform: cargoBuildFlags must be a list or string";
-        in
+        # Nixpkgs still has a few simple shell-word strings (e.g. rustfs's
+        # cargoBuildFlags/cargoTestFlags) despite the hook's list interface;
+        # normalize before appending the WASIX linker argv.
+        cargoBuildFlags =
           ["--config" ''target.wasm32-wasmer-wasi.linker="${rustLld}"'']
-          ++ normalized;
+          ++ normalizeCargoFlags "cargoBuildFlags" (prevArgs.cargoBuildFlags or []);
+
+        # `cargo test` links its own binaries, so it needs the same override.
+        cargoTestFlags =
+          ["--config" ''target.wasm32-wasmer-wasi.linker="${rustLld}"'']
+          ++ normalizeCargoFlags "cargoTestFlags" (prevArgs.cargoTestFlags or []);
 
         # Install each CLI cargo-wasix emitted (<name>.wasm; skip its .wasi/.rustc
         # intermediates).

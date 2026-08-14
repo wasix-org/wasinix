@@ -1,6 +1,7 @@
 # The shipped Python wheels + import smoke-tests. Exposes each wheel in
 # overlay/python-packages/wheels.nix as pythonWheels.<attr> (the wasm cross build) and
-# .tests (an import run under wasmer), for `.#pythonWheels.<attr>` targets + checks.wheel-<attr>.
+# `.tests` (named leaves plus `.all`) for targeted builds and flat
+# `checks.wheel-<py>-<attr>-<test>` CI projections.
 {
   pkgs,
   lib,
@@ -12,6 +13,9 @@
   # wasmer runtime for the smoke-tests (flake input; null -> pkgs.wasmer).
   wasmer ? null,
   mkTestGroup,
+  # the shared check machinery (pkgs/emulated-check.nix, pkgs/lib/check-output.nix)
+  emulatedChecks,
+  installCheckOutputArgsIf,
   # Which worklist entries this call builds. noarch wheels (python-version-independent: they ship
   # no python code, e.g. a redistributed binary) build once on the default python; everything else
   # builds per interpreter. See pkgs/default.nix.
@@ -19,14 +23,11 @@
   # This call's key in the pythonWheels set ("py313"/"py314"/"noarch"); history entries gate on it.
   pyKey,
 }: let
-  effWasmer =
-    if wasmer != null
-    then wasmer
-    else pkgs.wasmer;
+  testLib = import ./python-test-lib.nix {inherit pkgs lib python3 pythonWebc wasmer;};
 
   wheelList = import ./overlay/python-packages/wheels.nix;
   # Older releases also served (registry history), keyed by worklist attr then version;
-  # JSON so the history and update tools can edit it (schema: see wheels.nix header).
+  # JSON so scripts/history.py and update.py can edit it (schema: see wheels.nix header).
   historyTable = builtins.fromJSON (builtins.readFile ./overlay/python-packages/history.json);
   unknownHistory = lib.filter (n: !(lib.elem n (map (e: e.attr) wheelList))) (lib.attrNames historyTable);
   # A noarch entry builds once on the default python, so its history versions
@@ -34,11 +35,8 @@
   noarchHistory =
     map (e: e.attr)
     (lib.filter (e: (e.noarch or false) && historyTable ? ${e.attr}) wheelList);
-  # Import target: nixpkgs' own pythonImportsCheck names the real module, and
-  # often a compiled submodule too; the attr with '-' -> '_' is the guess for
-  # the packages nixpkgs sets none on. An explicit pyImport still wins, which is
-  # how an entry reaches a compiled module nixpkgs' list would let fall back to
-  # a pure impl (pyyaml, protobuf), or skips one wasix can't run (watchdog).
+  # Prefer an explicit import, then nixpkgs' imports, then the normalized attr
+  # name. Explicit imports can select a compiled implementation.
   pyImportOf = e: wheel:
     e.pyImport
     or (
@@ -50,59 +48,7 @@
         else lib.replaceStrings ["-"] ["_"] e.attr
     );
 
-  # Run a python `script` on the SELF-CONTAINED python webc with the wheel + its
-  # dep closure copied into a plain (non-store) dir and NO /nix/store mounted -- as
-  # `pip install --target` then a run would on a bare wasix target. A wheel that
-  # reaches an unmounted store path (a ctypes .so, a spawned binary) fails here, as
-  # it would under real pip. Only HOME is writable (some wheels resolve a config dir
-  # at import, e.g. matplotlib.get_configdir). The script fails the check by raising;
-  # the trailing marker confirms it ran through. Shared by the import smoke-test and
-  # the per-package tests/ (see mkWheel).
-  runPython = {
-    name,
-    wheel,
-    script,
-  }: let
-    pythonPath = python3.pkgs.makePythonPath [wheel];
-    marker = "PYRUN_OK ${name}";
-    file = pkgs.writeText "${name}.py" ''
-      ${script}
-      print(${builtins.toJSON marker})
-    '';
-  in
-    pkgs.runCommand name {
-      nativeBuildInputs = [effWasmer];
-    } ''
-      export HOME=$TMPDIR/home
-      mkdir -p "$HOME"
-      webc=$(${pkgs.findutils}/bin/find ${pythonWebc} -name '*.webc' | head -1)
-
-      site=$TMPDIR/site
-      mkdir -p "$site"
-      IFS=: read -ra _paths <<< ${lib.escapeShellArg pythonPath}
-      for p in "''${_paths[@]}"; do
-        [ -d "$p" ] && ${pkgs.rsync}/bin/rsync -a --chmod=u+w "$p"/ "$site"/
-      done
-      cp ${file} "$site/__pyrun__.py"
-
-      log=$(mktemp)
-      # stdin from /dev/null: a guest that touches a socket makes wasmer prompt for
-      # the networking capability, and the prompt blocks until the 600s timeout kills
-      # it, losing python's buffered stdout (ddtrace imports such a socket).
-      if timeout 600 wasmer run --quiet \
-        --volume "$site":/site \
-        --mapdir /home:"$HOME" \
-        --env HOME=/home \
-        --env PYTHONPATH=/site \
-        "$webc" -- /site/__pyrun__.py >"$log" 2>&1 </dev/null \
-        && ${pkgs.gnugrep}/bin/grep -q ${lib.escapeShellArg marker} "$log"; then
-        cp "$log" "$out"
-      else
-        echo "python test '${name}' failed (no /nix/store, pip-like):" >&2
-        cat "$log" >&2
-        exit 1
-      fi
-    '';
+  inherit (testLib) runPython;
 
   # `import <mod>` smoke-test: the runtime counterpart to the static
   # `self-contained` guard below.
@@ -113,12 +59,8 @@
       script = "import ${pyImportOf e wheel}";
     };
 
-  # Static guard: a wheel must not bake a /nix/store path it loads at runtime
-  # (ctypes/cffi .so, a spawned binary) - that path won't exist on a bare wasix
-  # pip target, so the wheel would import/run only under a store mount. Bundle
-  # the artifact instead (overlay/python-packages/lib/bundle.nix). Excludes, as
-  # non-runtime: .dist-info metadata (provenance), line-1 shebangs (a lib is
-  # never exec'd), and the eeee-sanitized build paths recorded by some configs.
+  # Runtime store paths break bare pip targets. Metadata, shebangs, and
+  # sanitized build paths do not become runtime references.
   selfContainedTest = name: wheel:
     pkgs.runCommand "wheel-selfcontained-${name}" {} ''
       site="${wheel}/${python3.sitePackages}"
@@ -200,12 +142,8 @@
       echo "OK ${name}: closure all py3-none-any" > "$out"
     '';
 
-  # A history wheel is served under its entry's version, but the artifact's
-  # version comes from the build, and not every build takes it from the src
-  # (pandas derives it via versioneer, which cannot recover it from a tarball
-  # with no git, so it silently keeps nixpkgs'). Serving that hands a resolver
-  # asking for one version a wheel claiming another. Current wheels need no
-  # such check: their version IS the one the build derives.
+  # A history entry's served version must match the version in its wheel
+  # filename, which some build systems derive independently from src.
   versionTest = name: version: wheel:
     pkgs.runCommand "wheel-version-${name}" {} ''
       whl=$(${pkgs.findutils}/bin/find "${wheel.dist}" -name '*.whl' | head -1)
@@ -220,16 +158,16 @@
       echo "OK ${name}: artifact is $got" > "$out"
     '';
 
-  # Per-package behavioural tests: overlay/python-packages/<attr>/tests/*.nix, each
-  # a function over a subset of {wheel, runPython, lib} returning named test
-  # derivations, folded into the wheel's test group -- the wheel analogue of the
-  # wasmer packages/<name>/tests/ convention.
+  # Package tests follow overlay/python-packages/<attr>/tests/*.nix and return
+  # named derivations from the supplied scope.
   pkgTestsDir = attr: ./overlay/python-packages + "/${attr}/tests";
   pkgTests = e: let
     dir = pkgTestsDir e.attr;
     scope = {
       wheel = python3.pkgs.${e.attr};
-      inherit runPython lib;
+      # for `deps` (test-only wheels: pytest plugins, fixture libs)
+      pythonPkgs = python3.pkgs;
+      inherit runPython pkgs lib;
     };
   in
     builtins.foldl' (
@@ -247,7 +185,6 @@
   # suites that would leak into `checks`. Per-package tests/ run only on the
   # primary (current) wheel (name == e.attr), not history versions.
   inherit (import ./python-publish.nix {inherit pkgs lib;}) publishOf;
-
   mkWheel = name: e: wheel: let
     historyVersion =
       if name == e.attr
@@ -257,6 +194,111 @@
       if historyVersion == null
       then e.variants or allVariants
       else historyTable.${e.attr}.${historyVersion}.variants or ["py313" "py314"];
+    # Read doInstallCheck from the native package because querying the cross
+    # finalAttrs package would recurse.
+    nativeWheel = pkgs.python3Packages.${e.attr} or null;
+    # passthru.wasix.installCheck overrides per package; true is the only way
+    # to run a suite nixpkgs does not run.
+    declaredHere = ((wheel.passthru or {}).wasix or {}).installCheck or null;
+    wantsInstallCheck =
+      if declaredHere != null
+      then declaredHere
+      else
+        nativeWheel
+        != null
+        && ((builtins.tryEval ((nativeWheel.drvAttrs or {}).doInstallCheck or false)).value or false) == true;
+    # Input to the emulated check only, never the shipped artifact: the extra
+    # output changes the derivation, splitting the package from the copy
+    # dependents resolve, which the registry rejects as conflicting wheels.
+    withCheck = wheel.overrideAttrs (old:
+      (installCheckOutputArgsIf wantsInstallCheck old)
+      // lib.optionalAttrs wantsInstallCheck {
+        # The snapshot retains the build environment. Apply reference checks
+        # only to the outputs that ship.
+        __structuredAttrs = true;
+        disallowedReferences = [];
+        outputChecks = lib.genAttrs (old.outputs or ["out"]) (output: let
+          checks = (old.outputChecks or {}).${output} or {};
+        in
+          checks
+          // {
+            disallowedReferences = (old.disallowedReferences or []) ++ (checks.disallowedReferences or []);
+          });
+      });
+    derivedUpstream =
+      if withCheck ? check
+      then
+        emulatedChecks.checkFor {
+          drv = withCheck;
+          # timeout / expectFail / broken, same declaration the C side uses
+          spec = ((wheel.passthru or {}).wasix or {}).emulatedCheck or {};
+          # pytestCheckHook's own phase, run verbatim: it assembles pytestFlags,
+          # disabledTests and disabledTestPaths itself.
+          phase = "pythonCheckPhase";
+          # The runner, every check input, and the TRANSITIVE closure of both:
+          # PYTHONPATH does no propagation, so a plugin's own dependencies must
+          # be named too or their imports fail in the guest.
+          guestInputs = let
+            # drops deps whose closure cannot even evaluate on wasi; a suite
+            # that truly needs one fails visibly
+            evalOk = d: d != null && (builtins.tryEval (builtins.seq d.outPath true)).success;
+            # Map native Python check inputs back into this interpreter's cross
+            # package set.
+            guestFromNative = inputs:
+              lib.filter (d: d != null) (map (
+                  d: let
+                    candidate = builtins.tryEval (
+                      let
+                        attr = d.pname or (lib.getName d);
+                      in
+                        if builtins.hasAttr attr python3.pkgs
+                        then python3.pkgs.${attr}
+                        else null
+                    );
+                  in
+                    if candidate.success
+                    then candidate.value
+                    else null
+                )
+                inputs);
+            # Python's derivation machinery folds nativeCheckInputs into
+            # nativeBuildInputs. overrideAttrs still sees the package author's
+            # original fields, which keeps build tools out of the guest list.
+            nativeDeclared =
+              if nativeWheel == null
+              then []
+              else
+                (nativeWheel.overrideAttrs (old: {
+                  passthru =
+                    (old.passthru or {})
+                    // {
+                      wasixOriginalCheckInputs =
+                        (old.nativeCheckInputs or [])
+                        ++ (old.nativeInstallCheckInputs or []);
+                    };
+                })).wasixOriginalCheckInputs;
+            # the guest can import python modules and the builder shell can
+            # source hooks; a native tool is neither and only forces a pointless
+            # cross build
+            guestUsable = d: d ? pythonModule || lib.hasInfix "check-hook" (lib.getName d);
+            # An explicit WASIX list replaces nixpkgs' optional test matrix.
+            # Absence means to recover and remap the native declaration.
+            explicit = wheel.wasixDeclaredCheckInputs or null;
+            selected =
+              if explicit != null
+              then explicit
+              else guestFromNative nativeDeclared;
+            declared =
+              [
+                python3.pkgs.pytest
+                python3.pkgs.pytestCheckHook
+              ]
+              ++ lib.filter (d: evalOk d && guestUsable d) selected;
+          in
+            lib.filter evalOk (declared ++ python3.pkgs.requiredPythonModules declared);
+          name = "wheel-${name}";
+        }
+      else null;
   in
     wheel.overrideAttrs (o: {
       passthru =
@@ -279,16 +321,22 @@
           # gates the tests that run one; the static guards read the artifact
           # and apply to every wheel.
           tests = mkTestGroup "wheel-${name}" ({
-              self-contained = selfContainedTest name wheel;
-              deps = depsTest name wheel;
-              dynamic = dynamicTest name wheel;
+              behavior =
+                {
+                  self-contained = selfContainedTest name wheel;
+                  deps = depsTest name wheel;
+                  dynamic = dynamicTest name wheel;
+                }
+                // lib.optionalAttrs (e.noarch or false) {noarch-closure = noarchClosureTest name wheel;}
+                // lib.optionalAttrs (!(e.skipTest or false)) ({
+                    import = importTest name e wheel;
+                  }
+                  // lib.optionalAttrs (historyVersion != null) {version = versionTest name historyVersion wheel;}
+                  // lib.optionalAttrs (name == e.attr && builtins.pathExists (pkgTestsDir e.attr)) (pkgTests e));
             }
-            // lib.optionalAttrs (e.noarch or false) {noarch-closure = noarchClosureTest name wheel;}
-            // lib.optionalAttrs (!(e.skipTest or false)) ({
-                import = importTest name e wheel;
-              }
-              // lib.optionalAttrs (historyVersion != null) {version = versionTest name historyVersion wheel;}
-              // lib.optionalAttrs (name == e.attr && builtins.pathExists (pkgTestsDir e.attr)) (pkgTests e)));
+            // lib.optionalAttrs (name == e.attr && derivedUpstream != null) {
+              upstream = derivedUpstream;
+            });
         };
     });
 
@@ -300,6 +348,7 @@
   # A worklist entry reads the same `variants` gate as a history entry, for a
   # package one interpreter cannot run (cramjam's pyo3 predates 3.14).
   allVariants = ["py313" "py314" "noarch"];
+
   historyUnder = v: lib.replaceStrings ["."] ["_"] v;
   historyOf = e:
     lib.concatMap (

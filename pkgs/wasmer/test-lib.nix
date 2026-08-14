@@ -72,57 +72,9 @@
     }
     else null;
 
-  # Decide a test's verdict from two optional, composable markers:
-  #   expectFail = reason: negative test, the check is EXPECTED to fail
-  #                (pass/fail inverted).
-  #   broken     = reason: known defect, the expectation is currently unmet;
-  #                tolerated (does not block CI) but tracked.
-  # Verdicts:
-  #   * expectation met, not broken               -> succeed
-  #   * expectation unmet, marked broken          -> log "known broken", succeed
-  #   * expectation met while marked broken       -> XPASS: hard-fail, remove marker
-  #   * expectation unmet, expectFail, not broken -> XPASS: hard-fail (regression)
-  #   * expectation unmet, unmarked               -> failHard
-  # The XPASS hard-fails stop stale markers from masking future regressions.
-  #
-  # Caller runs the check and branches: `if <check>; then ${onCheckPass} else ${onCheckFail} fi`.
-  #   succeed:  shell that makes the derivation succeed
-  #   failHard: shell for a genuine, unmarked failure (report + exit 1)
-  xverdict = {
-    name,
-    expectFail ? null,
-    broken ? null,
-    succeed,
-    failHard,
-  }: let
-    expectsFail = expectFail != null;
-    isBroken = broken != null;
-    tolerateBroken = ''echo "known broken: '${name}' (${broken}) — not blocking CI." >&2; ${succeed}'';
-    expectedFailOk = ''echo "expected failure: '${name}' (${expectFail})." >&2; ${succeed}'';
-    xpassRegression = ''echo "XPASS: '${name}' was expected to FAIL (${expectFail}) but passed — fix the test or investigate the regression." >&2; exit 1'';
-    xpassRemoveBroken = ''echo "XPASS: '${name}' is marked broken (${broken}) but now behaves as expected — remove the broken marker." >&2; exit 1'';
-  in {
-    # the program's check succeeded (expectation = met unless expectFail)
-    onCheckPass =
-      if !expectsFail
-      then
-        if isBroken
-        then xpassRemoveBroken
-        else succeed
-      else if isBroken
-      then tolerateBroken
-      else xpassRegression;
-    # the program's check failed (expectation = met only if expectFail)
-    onCheckFail =
-      if expectsFail
-      then
-        if isBroken
-        then xpassRemoveBroken
-        else expectedFailOk
-      else if isBroken
-      then tolerateBroken
-      else failHard;
-  };
+  # expectFail/broken markers -> onCheckPass/onCheckFail shell. Shared with the
+  # emulated build-system checks (pkgs/emulated-check.nix).
+  xverdict = import ../lib/xverdict.nix;
 in rec {
   inherit defaultForwardEnv defaultTimeout defaultWasixTimeout;
 
@@ -229,7 +181,7 @@ in rec {
       for _v in ${forwardEnvNames}; do
         _val=\$(${pkgs.coreutils}/bin/printenv "\$_v" 2>/dev/null) && env_flags="\$env_flags --env \$_v=\$_val"
       done
-      export WASMER_FLAGS="--quiet --volume \$HOME:\$HOME --volume \$WASIX_TEST_ROOT:\$WASIX_TEST_ROOT --cwd \$(${pkgs.coreutils}/bin/pwd)\$env_flags ${extraFlags}"
+      export WASMER_FLAGS="--volume \$HOME:\$HOME --volume \$WASIX_TEST_ROOT:\$WASIX_TEST_ROOT --cwd \$(${pkgs.coreutils}/bin/pwd)\$env_flags ${extraFlags}"
       exec "$original_bin" "\$@"
       SHIMEOF
                 ${pkgs.coreutils}/bin/chmod +x "$shim_dir/$bin_name"
