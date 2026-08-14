@@ -1,13 +1,19 @@
 --- a/lib/Evaluate/host.cpp
 +++ b/lib/Evaluate/host.cpp
-@@ -11,6 +11,34 @@
+@@ -9,10 +9,42 @@
+ #include "host.h"
+ 
  #include "flang/Common/idioms.h"
  #include "llvm/Support/Errno.h"
  #include <cfenv>
 +
 +// wasm exposes neither directed rounding nor floating-point exception flags, so
 +// its fenv.h defines only FE_TONEAREST. Fold at the one mode the host has and
-+// read the exception flags as clear.
++// read the exception flags as clear. The guard fails once wasm grows them, so
++// this stops being a silent no-op the moment it is obsolete.
++#if defined(__wasm__) && defined(FE_UPWARD)
++#error "wasm now defines the directed rounding modes; drop wasm32-fenv.patch"
++#endif
 +#ifndef FE_TOWARDZERO
 +#define FE_TOWARDZERO FE_TONEAREST
 +#endif
@@ -35,3 +41,5 @@
  #if __x86_64__
  #include <xmmintrin.h>
  #endif
+ 
+ namespace Fortran::evaluate::host {

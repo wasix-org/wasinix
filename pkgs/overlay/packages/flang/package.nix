@@ -62,8 +62,6 @@ in
       updateNotes = [
         {message = "drop wasm32-target.patch once upstream Flang has a WebAssembly target ABI";}
         {message = "drop wasm32-main.patch once upstream Flang emits WASI's two-argument main entry";}
-        {message = "drop wasm32-pointer-width.patch once upstream Flang stops equating a 32-bit pointer with an unsupported CPU";}
-        {message = "drop wasm32-fenv.patch once wasm exposes directed rounding and exception flags, or upstream Flang guards its fenv use";}
         {message = "drop external-mlir-tblgen.patch once standalone MLIR preserves a supplied native tablegen when cross compiling";}
         {message = "recheck standalone WASIX Flang linking when the profile-specific runtime can be selected inside a webc";}
       ];

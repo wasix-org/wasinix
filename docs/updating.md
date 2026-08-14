@@ -31,3 +31,15 @@ targets into one PR.
 Things to check on a bump are declared as `passthru.wasix.updateNotes`
 (`pkgs/lib/default.nix`) and surface in the PR body. Toolchain and nixpkgs bumps
 rebuild the world.
+
+A note is the last resort, for a drift nothing catches. Before writing one, ask
+what the bump does when the thing it warns about happens: a vendored patch whose
+context moved fails to apply, a renamed attribute fails to evaluate, a changed
+interface fails to build or fails a test. Those need no note, and a note that
+repeats them is noise a reader has to re-derive.
+
+Where nothing fails, make something fail instead. A patch that only adds a
+fallback stays silently inert once upstream supplies the real thing, so give it
+a guard that errors when the fallback is no longer needed; a value copied from
+upstream gets a test that compares the two. Write the note only when the drift
+is genuinely invisible to the build.

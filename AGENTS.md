@@ -48,6 +48,9 @@ often missed:
 - **Fix the root cause.** `docs/style.md`. Excluding, skipping, or marking
   broken to go green is the user's call, never yours, and they can only make it
   once you have said what it costs.
+- **Make it fail, don't note it.** `docs/updating.md`. An `updateNotes` entry
+  restating a failure the build already produces is noise; where the drift is
+  silent, add the guard or test that catches it.
 
 ## Working with the user
 
