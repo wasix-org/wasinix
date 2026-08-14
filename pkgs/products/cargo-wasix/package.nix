@@ -1,29 +1,80 @@
-# cargo-wasix, the cargo subcommand driving WASIX builds. The toolchain wraps
-# this with the compiler env and the rustup linking it expects; the recipe lives
-# here so a WASIX build of the subcommand is the same program as the native one.
+# cargo-wasix, the cargo subcommand driving WASIX builds. The binary is a
+# binary is products/cargo-wasix-unwrapped; this wrapper pins the toolchain
+# env (wasixcc + LLVM + binaryen + sysroot) and links the from-source rust
+# toolchain into rustup before exec'ing.
 {
-  rustPlatform,
-  fetchFromGitHub,
-  nix-update-script,
-}:
-rustPlatform.buildRustPackage (finalAttrs: {
-  pname = "cargo-wasix";
-  version = "0.1.33";
+  lib,
+  stdenvNoCC,
+  makeWrapper,
+  rustup,
+  cargo-wasix-unwrapped,
+  wasix-rust,
+  wasixcc,
+  wasix-llvm,
+  binaryen,
+  wasix-sysroot,
+  ...
+}: let
+  env = import ../../toolchain/env.nix {inherit lib;};
+  cargoWasixUnwrapped = cargo-wasix-unwrapped;
+  wasixRustToolchain = wasix-rust;
+  wasixLlvm = wasix-llvm;
+  wasixSysroot = wasix-sysroot;
+  inherit (cargoWasixUnwrapped) version;
 
-  src = fetchFromGitHub {
-    owner = "wasix-org";
-    repo = "cargo-wasix";
-    tag = "v${finalAttrs.version}";
-    hash = "sha256-Jd9Dr2P9lqPhlHo1VAU6QBLY4RIAuAuNC7RKUdJL/ZI=";
-  };
+  # cargo-wasix resolves its toolchain through rustup; before exec, (re-)link
+  # ours under the names it looks for. Idempotent, quiet on the happy path.
+  rustupLink = ''
+    "${rustup}/bin/rustup" toolchain remove wasix >/dev/null 2>&1 || true
+    "${rustup}/bin/rustup" toolchain link wasix "${wasixRustToolchain}" >/dev/null || exit 1
+    "${rustup}/bin/rustup" toolchain remove wasix-default >/dev/null 2>&1 || true
+    "${rustup}/bin/rustup" toolchain link wasix-default "${wasixRustToolchain}" >/dev/null || exit 1
+    "${rustup}/bin/rustup" default wasix-default >/dev/null || exit 1
+  '';
+in
+  stdenvNoCC.mkDerivation {
+    pname = "cargo-wasix";
+    inherit version;
+    dontUnpack = true;
 
-  cargoHash = "sha256-0bQGbrYpqusf1yviMHihhtxyu2ACqiCHgmWtZbhsBn4=";
+    nativeBuildInputs = [makeWrapper];
 
-  # The integration suite creates empty CARGO_HOMEs then invokes cargo-wasix,
-  # which downloads the WASIX target. Its download_toolchain unit test also
-  # contacts GitHub. Keep the remaining offline library unit tests.
-  cargoTestFlags = ["--lib"];
-  checkFlags = ["--skip" "toolchain::tests::test_download_toolchain"];
+    installPhase = ''
+      runHook preInstall
+      install -Dm755 "${cargoWasixUnwrapped}/bin/cargo-wasix" "$out/libexec/cargo-wasix"
+      makeWrapper "$out/libexec/cargo-wasix" "$out/bin/cargo-wasix" \
+        --prefix PATH : "${lib.makeBinPath [rustup wasixcc]}" \
+        ${env.makeWrapperFlagsOf (
+        env.locationEnv {inherit wasixLlvm binaryen wasixSysroot;}
+        // env.autoconfEnv
+        // env.ccEnv
+        // {
+          CARGO_WASIX_OFFLINE = "1";
+          # Since 0.1.30 cargo-wasix writes overlay-registry source replacement
+          # into the workspace .cargo/config.toml on build. Nix resolves from a
+          # vendored `directory` source instead, so the write is at best a
+          # warning about cargoSetupHook's own replace-with and at worst points
+          # resolution at a network registry the sandbox can't reach.
+          CARGO_WASIX_NO_REGISTRY_CONFIG = "1";
+        }
+      )} \
+        --set-default WASM_OPT "${binaryen}/bin/wasm-opt" \
+        --run ${lib.escapeShellArg rustupLink}
+      runHook postInstall
+    '';
 
-  passthru.updateScript = nix-update-script {};
-})
+    passthru = {
+      # The recipe is products/cargo-wasix, which carries the version,
+      # the src and the updateScript; this wrapper only adds the toolchain env.
+      unwrapped = cargoWasixUnwrapped;
+    };
+
+    meta = {
+      description = "cargo subcommand driving WASIX builds, wrapped with the from-source wasix toolchain";
+      homepage = "https://github.com/wasix-org/cargo-wasix";
+      license = with lib.licenses; [mit asl20];
+      # The wrapped toolchain (LLVM fork, rust fork) is only built for x86_64-linux.
+      platforms = ["x86_64-linux"];
+      mainProgram = "cargo-wasix";
+    };
+  }
