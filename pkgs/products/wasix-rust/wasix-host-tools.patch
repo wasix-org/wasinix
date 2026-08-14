@@ -1,16 +1,41 @@
 diff --git a/compiler/rustc/Cargo.toml b/compiler/rustc/Cargo.toml
 --- a/compiler/rustc/Cargo.toml
 +++ b/compiler/rustc/Cargo.toml
-@@ -13 +12,0 @@
+@@ -8,11 +8,10 @@
+ 
+ # Make sure rustc_codegen_ssa ends up in the sysroot, because this
+ # crate is intended to be used by codegen backends, which may not be in-tree.
+ rustc_codegen_ssa = { path = "../rustc_codegen_ssa" }
+ 
 -rustc_driver = { path = "../rustc_driver" }
-@@ -24,0 +24,3 @@
+ rustc_driver_impl = { path = "../rustc_driver_impl" }
+ 
+ rustc_public = { path = "../rustc_public" }
+ 
+ # Make sure rustc_public_bridge ends up in the sysroot, because this
+@@ -20,10 +19,13 @@
+ rustc_public_bridge = { path = "../rustc_public_bridge" }
+ # tidy-alphabetical-end
+ 
+ # Pin these to avoid pulling in a package with a binary blob
+ # <https://github.com/rust-lang/rust/pull/136395#issuecomment-2692769062>
 +[target.'cfg(not(target_family = "wasm"))'.dependencies]
 +rustc_driver = { path = "../rustc_driver" }
 +
+ [target.'cfg(target_os = "wasi")'.dependencies]
+ getrandom = "=0.3.3"
+ wasi = "=0.14.2"
+ 
+ 
 diff --git a/compiler/rustc/src/main.rs b/compiler/rustc/src/main.rs
 --- a/compiler/rustc/src/main.rs
 +++ b/compiler/rustc/src/main.rs
-@@ -44 +44,8 @@
+@@ -39,7 +39,14 @@
+ // for an example of how to do so.
+ #[cfg(feature = "jemalloc")]
+ use tikv_jemalloc_sys as _;
+ 
+ fn main() -> ExitCode {
 -    rustc_driver::main()
 +    #[cfg(target_family = "wasm")]
 +    {
@@ -20,39 +45,61 @@ diff --git a/compiler/rustc/src/main.rs b/compiler/rustc/src/main.rs
 +    {
 +        rustc_driver::main()
 +    }
+ }
 diff --git a/compiler/rustc_driver_impl/src/lib.rs b/compiler/rustc_driver_impl/src/lib.rs
 --- a/compiler/rustc_driver_impl/src/lib.rs
 +++ b/compiler/rustc_driver_impl/src/lib.rs
-@@ -38,2 +38,4 @@ use rustc_errors::{ColorConfig, DiagCtxt, ErrCode, PResult, markdown};
+@@ -35,10 +35,12 @@
+ };
+ pub use rustc_errors::catch_fatal_errors;
+ use rustc_errors::emitter::stderr_destination;
+ use rustc_errors::{ColorConfig, DiagCtxt, ErrCode, PResult, markdown};
  use rustc_feature::find_gated_cfg;
 +#[cfg(target_family = "wasm")]
 +use rustc_const_eval as _;
  // This avoids a false positive with `-Wunused_crate_dependencies`.
+ // `rust_index` isn't used in this crate's code, but it must be named in the
+ // `Cargo.toml` for the `rustc_randomized_layouts` feature.
+ use rustc_index as _;
+ use rustc_interface::passes::collect_crate_types;
 diff --git a/compiler/rustc_fs_util/src/lib.rs b/compiler/rustc_fs_util/src/lib.rs
 --- a/compiler/rustc_fs_util/src/lib.rs
 +++ b/compiler/rustc_fs_util/src/lib.rs
-@@ -1 +1,3 @@
+@@ -1,6 +1,8 @@
 -use std::ffi::{CString, OsStr};
 +#[cfg(any(unix, windows, target_family = "wasm"))]
 +use std::ffi::CString;
 +use std::ffi::OsStr;
-@@ -87 +89 @@ pub enum LinkOrCopy {
+ use std::path::{Path, PathBuf, absolute};
+ use std::{fs, io};
+ 
+ use tempfile::TempDir;
+ 
+@@ -82,16 +84,16 @@
+ 
+     // Hard linking failed, fall back to copying.
+     fs::copy(p, q).map(|_| LinkOrCopy::Copy)
+ }
+ 
 -#[cfg(any(unix, all(target_os = "wasi", target_env = "p1")))]
 +#[cfg(any(unix, target_family = "wasm"))]
-@@ -92 +94 @@ pub fn path_to_c_string(p: &Path) -> CString {
+ pub fn path_to_c_string(p: &Path) -> CString {
+     use std::ffi::OsStr;
+     #[cfg(unix)]
+     use std::os::unix::ffi::OsStrExt;
 -    #[cfg(all(target_os = "wasi", target_env = "p1"))]
 +    #[cfg(target_family = "wasm")]
-diff --git a/compiler/rustc_session/src/filesearch.rs b/compiler/rustc_session/src/filesearch.rs
---- a/compiler/rustc_session/src/filesearch.rs
-+++ b/compiler/rustc_session/src/filesearch.rs
-@@ -6 +6,2 @@ use std::{env, fs};
--use rustc_fs_util::try_canonicalize;
-+#[cfg(any(unix, windows))]
-+use rustc_fs_util::try_canonicalize;
+     use std::os::wasi::ffi::OsStrExt;
+ 
+     let p: &OsStr = p.as_ref();
+     CString::new(p.as_bytes()).unwrap()
+ }
 diff --git a/compiler/rustc_session/src/config.rs b/compiler/rustc_session/src/config.rs
 --- a/compiler/rustc_session/src/config.rs
 +++ b/compiler/rustc_session/src/config.rs
-@@ -1359,7 +1359,12 @@ pub struct Sysroot {
+@@ -1345,11 +1345,16 @@
+     pub default: PathBuf,
+ }
  
  impl Sysroot {
      pub fn new(explicit: Option<PathBuf>) -> Sysroot {
@@ -66,16 +113,44 @@ diff --git a/compiler/rustc_session/src/config.rs b/compiler/rustc_session/src/c
      }
  
      /// Return explicit sysroot if it was passed with `--sysroot`, or default sysroot otherwise.
+     pub fn path(&self) -> &Path {
+         self.explicit.as_deref().unwrap_or(&self.default)
+diff --git a/compiler/rustc_session/src/filesearch.rs b/compiler/rustc_session/src/filesearch.rs
+--- a/compiler/rustc_session/src/filesearch.rs
++++ b/compiler/rustc_session/src/filesearch.rs
+@@ -1,10 +1,11 @@
+ //! A module for searching for libraries
+ 
+ use std::path::{Path, PathBuf};
+ use std::{env, fs};
+ 
++#[cfg(any(unix, windows))]
+ use rustc_fs_util::try_canonicalize;
+ use rustc_target::spec::Target;
+ 
+ use crate::search_paths::{PathKind, SearchPath};
+ 
 diff --git a/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs b/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs
-index d25684241a5..fbef79545e7 100644
 --- a/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs
 +++ b/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs
-@@ -74 +74,3 @@
+@@ -69,11 +69,13 @@
+ //! The wasi target is **very** new in its specification. It's likely going to
+ //! be a long effort to get it standardized and stable. We'll be following it as
+ //! best we can with this target. Don't start relying on too much here unless
+ //! you know what you're getting in to!
+ 
 -use crate::spec::{Arch, Cc, LinkSelfContainedDefault, LinkerFlavor, Os, Target, base, crt_objects};
 +use crate::spec::{
 +    Arch, Cc, LinkSelfContainedDefault, LinkerFlavor, Os, Target, add_link_args, base, crt_objects,
 +};
-@@ -112,6 +114,29 @@ pub(crate) fn target() -> Target {
+ 
+ // The `vendor` field is normally set via the target tuple; wasmer targets set
+ // it explicitly.
+ #[allow(rustc::bad_opt_access)]
+ pub(crate) fn target() -> Target {
+@@ -108,10 +110,33 @@
+     options.add_pre_link_args(LinkerFlavor::WasmLld(Cc::Yes), &["--target=wasm32-wasi"]);
+ 
      options.add_pre_link_args(LinkerFlavor::WasmLld(Cc::Yes), args!("-Wl,"));
      options.add_pre_link_args(LinkerFlavor::WasmLld(Cc::No), args!(""));
  
@@ -105,7 +180,11 @@ index d25684241a5..fbef79545e7 100644
      options.pre_link_objects_self_contained = crt_objects::pre_wasi_self_contained();
      options.post_link_objects_self_contained = crt_objects::post_wasi_self_contained();
  
-@@ -149,7 +174,7 @@ pub(crate) fn target() -> Target {
+     // FIXME: Figure out cases in which WASM needs to link with a native toolchain.
+     options.link_self_contained = LinkSelfContainedDefault::True;
+@@ -147,11 +172,11 @@
+     Target {
+         llvm_target: "wasm32-wasi".into(),
          metadata: crate::spec::TargetMetadata {
              description: None,
              tier: None,
@@ -114,21 +193,66 @@ index d25684241a5..fbef79545e7 100644
              std: None,
          },
          pointer_width: 32,
+         data_layout: "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-i128:128-n32:64-S128-ni:1:10:20".into(),
+         arch: Arch::Wasm32,
 diff --git a/src/bootstrap/src/core/build_steps/llvm.rs b/src/bootstrap/src/core/build_steps/llvm.rs
-index 25f06d448d0..49dd3901b12 100644
 --- a/src/bootstrap/src/core/build_steps/llvm.rs
 +++ b/src/bootstrap/src/core/build_steps/llvm.rs
-@@ -366,0 +367,5 @@
+@@ -362,10 +362,15 @@
+             .define("LLVM_PARALLEL_COMPILE_JOBS", builder.jobs().to_string())
+             .define("LLVM_TARGET_ARCH", target_native.split('-').next().unwrap())
+             .define("LLVM_DEFAULT_TARGET_TRIPLE", target_native)
+             .define("LLVM_ENABLE_WARNINGS", enable_warnings);
+ 
 +        if target.triple.contains("wasmer-wasi") {
 +            cfg.define("LLVM_BUILD_TOOLS", "OFF");
 +            cfg.define("LLVM_BUILD_UTILS", "OFF");
 +        }
 +
+         // Parts of our test suite rely on the `FileCheck` tool, which is built by default in
+         // `build/$TARGET/llvm/build/bin` is but *not* then installed to `build/$TARGET/llvm/bin`.
+         // This flag makes sure `FileCheck` is copied in the final binaries directory.
+         cfg.define("LLVM_INSTALL_UTILS", "ON");
+ 
+diff --git a/src/bootstrap/src/core/build_steps/tool.rs b/src/bootstrap/src/core/build_steps/tool.rs
+--- a/src/bootstrap/src/core/build_steps/tool.rs
++++ b/src/bootstrap/src/core/build_steps/tool.rs
+@@ -847,11 +847,11 @@
+             extra_features: Vec::new(),
+             // Cargo is compilable with a stable compiler, but since we run in bootstrap,
+             // with RUSTC_BOOTSTRAP being set, some "clever" build scripts enable specialization
+             // based on this, which breaks stuff. We thus have to explicitly allow these features
+             // here.
+-            allow_features: "min_specialization,specialization",
++            allow_features: "min_specialization,specialization,wasi_ext",
+             cargo_args: Vec::new(),
+             artifact_kind: ToolArtifactKind::Binary,
+         })
+     }
+ 
+@@ -936,11 +936,15 @@
+     let target = target_compiler.host;
+ 
+     let libdir_bin = builder.sysroot_target_bindir(target_compiler, target);
+     t!(fs::create_dir_all(&libdir_bin));
+ 
+-    let src_exe = exe("lld", target);
++    let src_exe = if target.triple.contains("wasmer-wasi") {
++        "lld".into()
++    } else {
++        exe("lld", target)
++    };
+     let dst_exe = exe("rust-lld", target);
+ 
+     builder.copy_link(
+         &lld_wrapper.lld_dir.join("bin").join(src_exe),
+         &libdir_bin.join(dst_exe),
 diff --git a/src/tools/cargo/Cargo.toml b/src/tools/cargo/Cargo.toml
-index 20b7f4e6c81..6fbb823507f 100644
 --- a/src/tools/cargo/Cargo.toml
 +++ b/src/tools/cargo/Cargo.toml
-@@ -45,13 +45,13 @@
+@@ -43,17 +43,17 @@
+ clap_complete = { version = "4.6.0", features = ["unstable-dynamic"] }
+ color-print = "0.3.7"
  core-foundation = { version = "0.10.1", features = ["mac_os_10_7_support"] }
  crates-io = { version = "0.41.0", path = "crates/crates-io" }
  criterion = { version = "0.8.2", features = ["html_reports"] }
@@ -144,57 +268,96 @@ index 20b7f4e6c81..6fbb823507f 100644
  git2-curl = "0.21.0"
  # When updating this, also see if `gix-transport` further down needs updating or some auth-related tests will fail.
  gix = { version = "0.83.0", default-features = false, features = ["sha1", "progress-tree", "parallel", "dirwalk", "status"] }
+ gix-transport = "0.57.0"
+ glob = "0.3.3"
 diff --git a/src/tools/cargo/crates/cargo-util/Cargo.toml b/src/tools/cargo/crates/cargo-util/Cargo.toml
-index 8c781569239..15f69493ea2 100644
 --- a/src/tools/cargo/crates/cargo-util/Cargo.toml
 +++ b/src/tools/cargo/crates/cargo-util/Cargo.toml
-@@ -27 +27 @@ core-foundation.workspace = true
+@@ -22,11 +22,11 @@
+ walkdir.workspace = true
+ 
+ [target.'cfg(target_os = "macos")'.dependencies]
+ core-foundation.workspace = true
+ 
 -[target.'cfg(unix)'.dependencies]
 +[target.'cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))'.dependencies]
-diff --git a/src/bootstrap/src/core/build_steps/tool.rs b/src/bootstrap/src/core/build_steps/tool.rs
-index 20d2053c755..8e60a4ed5be 100644
---- a/src/bootstrap/src/core/build_steps/tool.rs
-+++ b/src/bootstrap/src/core/build_steps/tool.rs
-@@ -852 +852 @@ impl Step for Cargo {
--            allow_features: "min_specialization,specialization",
-+            allow_features: "min_specialization,specialization,wasi_ext",
-@@ -941 +941,5 @@ pub(crate) fn copy_lld_artifacts(
--    let src_exe = exe("lld", target);
-+    let src_exe = if target.triple.contains("wasmer-wasi") {
-+        "lld".into()
-+    } else {
-+        exe("lld", target)
-+    };
+ libc.workspace = true
+ 
+ [target.'cfg(windows)'.dependencies]
+ miow.workspace = true
+ windows-sys = { workspace = true, features = ["Win32_Storage_FileSystem", "Win32_Foundation", "Win32_System_Console"] }
 diff --git a/src/tools/cargo/crates/cargo-util/src/lib.rs b/src/tools/cargo/crates/cargo-util/src/lib.rs
-index 884bcb390a7..5e501e9a5c1 100644
 --- a/src/tools/cargo/crates/cargo-util/src/lib.rs
 +++ b/src/tools/cargo/crates/cargo-util/src/lib.rs
-@@ -6,0 +7 @@
+@@ -2,10 +2,11 @@
+ //!
+ //! > This crate is maintained by the Cargo team, primarily for use by Cargo
+ //! > and not intended for external use (except as a transitive dependency). This
+ //! > crate may make major changes to its APIs or be deprecated without warning.
+ 
 +#![cfg_attr(all(target_os = "wasi", target_vendor = "wasmer"), feature(wasi_ext))]
+ #![allow(clippy::disallowed_methods)]
+ 
+ pub use self::read2::read2;
+ pub use du::du;
+ pub use process_builder::ProcessBuilder;
 diff --git a/src/tools/cargo/crates/cargo-util/src/paths.rs b/src/tools/cargo/crates/cargo-util/src/paths.rs
-index c359d3411ce..385472b05ba 100644
 --- a/src/tools/cargo/crates/cargo-util/src/paths.rs
 +++ b/src/tools/cargo/crates/cargo-util/src/paths.rs
-@@ -398,0 +399,5 @@ pub fn path2bytes(path: &Path) -> Result<&[u8]> {
+@@ -394,10 +394,15 @@
+     #[cfg(unix)]
+     {
+         use std::os::unix::prelude::*;
+         Ok(path.as_os_str().as_bytes())
+     }
 +    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
 +    {
 +        use std::os::wasi::prelude::*;
 +        Ok(path.as_os_str().as_bytes())
 +    }
-@@ -417,0 +423,5 @@ pub fn bytes2path(bytes: &[u8]) -> Result<PathBuf> {
+     #[cfg(windows)]
+     {
+         match path.as_os_str().to_str() {
+             Some(s) => Ok(s.as_bytes()),
+             None => Err(anyhow::format_err!(
+@@ -413,10 +418,15 @@
+     #[cfg(unix)]
+     {
+         use std::os::unix::prelude::*;
+         Ok(PathBuf::from(OsStr::from_bytes(bytes)))
+     }
 +    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
 +    {
 +        use std::os::wasi::prelude::*;
 +        Ok(PathBuf::from(OsStr::from_bytes(bytes)))
 +    }
-@@ -626,0 +637,2 @@ pub fn link_or_copy(src: &Path, dst: &Path) -> Result<()> {
+     #[cfg(windows)]
+     {
+         use std::str;
+         match str::from_utf8(bytes) {
+             Ok(s) => Ok(PathBuf::from(s)),
+@@ -622,10 +632,12 @@
+     }
+ 
+     let link_result = if src.is_dir() {
+         #[cfg(unix)]
+         use std::os::unix::fs::symlink;
 +        #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
 +        use std::os::wasi::fs::symlink_path as symlink;
+         #[cfg(windows)]
+         // FIXME: This should probably panic or have a copy fallback. Symlinks
+         // are not supported in all windows environments. Currently symlinking
+         // is only used for .dSYM directories on macos, but this shouldn't be
+         // accidentally relied upon.
 diff --git a/src/tools/cargo/crates/cargo-util/src/process_builder.rs b/src/tools/cargo/crates/cargo-util/src/process_builder.rs
-index f3859080cc8..2618523a5f3 100644
 --- a/src/tools/cargo/crates/cargo-util/src/process_builder.rs
 +++ b/src/tools/cargo/crates/cargo-util/src/process_builder.rs
-@@ -621,0 +622,35 @@ mod imp {
+@@ -617,10 +617,45 @@
+ 
+     pub fn command_line_too_big(err: &io::Error) -> bool {
+         err.raw_os_error() == Some(libc::E2BIG)
+     }
+ }
 +#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
 +mod imp {
 +    use super::{ProcessBuilder, close_tempfile_and_log_error, debug_force_argfile};
@@ -230,28 +393,52 @@ index f3859080cc8..2618523a5f3 100644
 +    }
 +}
 +
+ 
+ #[cfg(windows)]
+ mod imp {
+     use super::{ProcessBuilder, ProcessError};
+     use anyhow::Result;
 diff --git a/src/tools/cargo/crates/cargo-util/src/process_error.rs b/src/tools/cargo/crates/cargo-util/src/process_error.rs
-index 8ab8ef9c7f9..9c5ea918e6b 100644
 --- a/src/tools/cargo/crates/cargo-util/src/process_error.rs
 +++ b/src/tools/cargo/crates/cargo-util/src/process_error.rs
-@@ -139,0 +140,5 @@ pub fn exit_status_to_string(status: ExitStatus) -> String {
+@@ -135,10 +135,15 @@
+             format!("signal: {}{}", signal, name)
+         } else {
+             status.to_string()
+         }
+     }
 +    #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
 +    fn status_to_string(status: ExitStatus) -> String {
 +        status.to_string()
 +    }
 +
+ 
+     #[cfg(windows)]
+     fn status_to_string(status: ExitStatus) -> String {
+         use windows_sys::Win32::Foundation::*;
+ 
 diff --git a/src/tools/cargo/crates/cargo-util/src/read2.rs b/src/tools/cargo/crates/cargo-util/src/read2.rs
-index 9b76461c360..6bc17a5454e 100644
 --- a/src/tools/cargo/crates/cargo-util/src/read2.rs
 +++ b/src/tools/cargo/crates/cargo-util/src/read2.rs
-@@ -3 +3 @@ pub use self::imp::read2;
+@@ -1,8 +1,8 @@
+ pub use self::imp::read2;
+ 
 -#[cfg(unix)]
 +#[cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))]
+ mod imp {
+     use libc::{F_GETFL, F_SETFL, O_NONBLOCK, c_int, fcntl};
+     use std::io;
+     use std::io::prelude::*;
+     use std::mem;
 diff --git a/src/tools/cargo/crates/cargo-util-terminal/src/shell.rs b/src/tools/cargo/crates/cargo-util-terminal/src/shell.rs
-index 241c97b2dbc..60e8583c5b1 100644
 --- a/src/tools/cargo/crates/cargo-util-terminal/src/shell.rs
 +++ b/src/tools/cargo/crates/cargo-util-terminal/src/shell.rs
-@@ -646,0 +647,14 @@ mod imp {
+@@ -642,10 +642,24 @@
+         // to the end of line.
+         // https://en.wikipedia.org/wiki/ANSI_escape_code#CSI_sequences
+         let _ = shell.output.stderr().write_all(b"\x1B[K");
+     }
+ }
 +#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
 +mod imp {
 +    use super::{Shell, TtyWidth};
@@ -266,35 +453,49 @@ index 241c97b2dbc..60e8583c5b1 100644
 +    }
 +}
 +
-diff --git a/src/tools/cargo/credential/cargo-credential/src/stdio.rs b/src/tools/cargo/credential/cargo-credential/src/stdio.rs
-index b7b03edff2a..42a6bdb6bfa 100644
---- a/src/tools/cargo/credential/cargo-credential/src/stdio.rs
-+++ b/src/tools/cargo/credential/cargo-credential/src/stdio.rs
-@@ -82 +82 @@ mod imp {
--#[cfg(unix)]
-+#[cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))]
+ 
+ #[cfg(windows)]
+ mod imp {
+     use std::{cmp, mem, ptr};
+ 
 diff --git a/src/tools/cargo/credential/cargo-credential/Cargo.toml b/src/tools/cargo/credential/cargo-credential/Cargo.toml
-index c217d9d79e3..b49f8e3a38f 100644
 --- a/src/tools/cargo/credential/cargo-credential/Cargo.toml
 +++ b/src/tools/cargo/credential/cargo-credential/Cargo.toml
-@@ -17 +17 @@ time.workspace = true
+@@ -12,11 +12,11 @@
+ serde = { workspace = true, features = ["derive"] }
+ serde_json.workspace = true
+ thiserror.workspace = true
+ time.workspace = true
+ 
 -[target.'cfg(unix)'.dependencies]
 +[target.'cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))'.dependencies]
-diff --git a/src/tools/cargo/src/cargo/util/flock.rs b/src/tools/cargo/src/cargo/util/flock.rs
-index 42799f7e11e..30e9369743a 100644
---- a/src/tools/cargo/src/cargo/util/flock.rs
-+++ b/src/tools/cargo/src/cargo/util/flock.rs
-@@ -469,0 +470,5 @@ fn error_unsupported(err: &std::io::Error) -> bool {
-+#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
-+fn error_unsupported(err: &std::io::Error) -> bool {
-+    err.kind() == std::io::ErrorKind::Unsupported
-+}
-+
+ libc.workspace = true
+ 
+ [target.'cfg(windows)'.dependencies]
+ windows-sys = { workspace = true, features = ["Win32_System_Console", "Win32_Foundation"] }
+ 
+diff --git a/src/tools/cargo/credential/cargo-credential/src/stdio.rs b/src/tools/cargo/credential/cargo-credential/src/stdio.rs
+--- a/src/tools/cargo/credential/cargo-credential/src/stdio.rs
++++ b/src/tools/cargo/credential/cargo-credential/src/stdio.rs
+@@ -77,11 +77,11 @@
+             }
+         }
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, all(target_os = "wasi", target_vendor = "wasmer")))]
+ mod imp {
+     use super::Stdio;
+     use libc::{STDIN_FILENO, STDOUT_FILENO, close, dup, dup2};
+     use std::{fs::File, io::Error, os::fd::AsRawFd};
+     pub const IN_DEVICE: &str = "/dev/tty";
 diff --git a/src/tools/cargo/src/bin/cargo/main.rs b/src/tools/cargo/src/bin/cargo/main.rs
-index c009cd0904d..8c49a0ad383 100644
 --- a/src/tools/cargo/src/bin/cargo/main.rs
 +++ b/src/tools/cargo/src/bin/cargo/main.rs
-@@ -342,6 +342,10 @@
+@@ -340,10 +340,14 @@
+ }
+ #[cfg(windows)]
  fn is_executable<P: AsRef<Path>>(path: P) -> bool {
      path.as_ref().is_file()
  }
@@ -305,11 +506,36 @@ index c009cd0904d..8c49a0ad383 100644
  
  fn search_directories(gctx: &GlobalContext) -> Vec<PathBuf> {
      let mut path_dirs = if let Some(val) = gctx.get_env_os("PATH") {
+         env::split_paths(&val).collect()
+     } else {
+diff --git a/src/tools/cargo/src/cargo/util/flock.rs b/src/tools/cargo/src/cargo/util/flock.rs
+--- a/src/tools/cargo/src/cargo/util/flock.rs
++++ b/src/tools/cargo/src/cargo/util/flock.rs
+@@ -465,10 +465,15 @@
+         Some(libc::ENOSYS) => true,
+         _ => err.kind() == std::io::ErrorKind::Unsupported,
+     }
+ }
+ 
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++fn error_unsupported(err: &std::io::Error) -> bool {
++    err.kind() == std::io::ErrorKind::Unsupported
++}
++
+ #[cfg(windows)]
+ fn error_unsupported(err: &std::io::Error) -> bool {
+     use windows_sys::Win32::Foundation::ERROR_INVALID_FUNCTION;
+     match err.raw_os_error() {
+         Some(code) if code == ERROR_INVALID_FUNCTION as i32 => true,
 diff --git a/src/tools/cargo/src/cargo/util/job.rs b/src/tools/cargo/src/cargo/util/job.rs
-index b152097fa61..4cbf4d265c5 100644
 --- a/src/tools/cargo/src/cargo/util/job.rs
 +++ b/src/tools/cargo/src/cargo/util/job.rs
-@@ -48,0 +49,10 @@ mod imp {
+@@ -44,10 +44,20 @@
+         }
+         Some(())
+     }
+ }
+ 
 +#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
 +mod imp {
 +    pub type Setup = ();
@@ -320,3 +546,8 @@ index b152097fa61..4cbf4d265c5 100644
 +    }
 +}
 +
+ #[cfg(windows)]
+ mod imp {
+     use std::io;
+     use std::mem;
+     use std::ptr;
