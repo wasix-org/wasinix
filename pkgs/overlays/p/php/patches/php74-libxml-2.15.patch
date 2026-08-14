@@ -1,0 +1,13 @@
+diff --git a/ext/libxml/libxml.c b/ext/libxml/libxml.c
+index 49982ea059..e19ecf0dd8 100644
+--- a/ext/libxml/libxml.c
++++ b/ext/libxml/libxml.c
+@@ -479 +479 @@ php_libxml_output_buffer_create_filename(const char *URI,
+-                              int compression ATTRIBUTE_UNUSED)
++                              ZEND_ATTRIBUTE_UNUSED int compression)
+@@ -533 +533 @@ static int _php_libxml_free_error(xmlErrorPtr error)
+-static void _php_list_set_error_structure(xmlErrorPtr error, const char *msg)
++static void _php_list_set_error_structure(const xmlError *error, const char *msg)
+@@ -785 +785 @@ PHP_LIBXML_API void php_libxml_ctx_warning(void *ctx, const char *msg, ...)
+-PHP_LIBXML_API void php_libxml_structured_error_handler(void *userData, xmlErrorPtr error)
++PHP_LIBXML_API void php_libxml_structured_error_handler(void *userData, const xmlError *error)
