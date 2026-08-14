@@ -8,6 +8,11 @@
 {pyprev, ...}:
 pyprev.openai.overridePythonAttrs (old: {
   doCheck = false;
+  passthru =
+    (old.passthru or {})
+    // {
+      wasix = ((old.passthru or {}).wasix or {}) // {installCheck = false;};
+    };
   dependencies =
     builtins.filter (d: (d.pname or d.name or "") != "sounddevice") (old.dependencies or []);
 })

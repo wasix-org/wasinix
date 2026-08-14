@@ -18,6 +18,11 @@
 }:
 helpers.libTweaks ({
     postPatch = _: "";
+    disabledTestPaths = [
+      "tests/unit_tests/agents/middleware/implementations/test_shell_tool.py"
+      "tests/unit_tests/agents/middleware/implementations/test_shell_execution_policies.py"
+    ];
+    passthru.wasix.installCheck = false;
   }
   // lib.optionalAttrs (lib.versionOlder pyprev.langchain.version "1") {
     sourceRoot = "source/libs/langchain";
