@@ -28,18 +28,26 @@
   forVersion = {
     version,
     floorPatch,
-  }: {
+  }: let
+    dest =
+      if lib.versionAtLeast version "0.2.159"
+      then "src/wasi/wasix.rs"
+      else "src/wasi_wasix.rs";
+  in {
     patches = lib.optional (floorPatch != null) floorPatch;
-    patchPhase = ''
-      cp --no-preserve=mode ${
-        if lib.versionAtLeast version "0.2.164"
-        then ./wasix/0.2.164.rs
-        else ./wasix/pre-0.2.164.rs
-      } ${
-        if lib.versionAtLeast version "0.2.159"
-        then "src/wasi/wasix.rs"
-        else "src/wasi_wasix.rs"
-      }
-    '';
+    # From 0.2.177 libc reexports the core types through its own prelude so it
+    # builds as a dependency of std, where the standard prelude is absent. The
+    # payload names Option, so it needs that import in the releases that have one.
+    patchPhase =
+      ''
+        cp --no-preserve=mode ${
+          if lib.versionAtLeast version "0.2.164"
+          then ./wasix/0.2.164.rs
+          else ./wasix/pre-0.2.164.rs
+        } ${dest}
+      ''
+      + lib.optionalString (lib.versionAtLeast version "0.2.177") ''
+        sed -i '1i use crate::prelude::*;' ${dest}
+      '';
   };
 }
