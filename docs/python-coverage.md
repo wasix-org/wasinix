@@ -45,8 +45,8 @@ each `pkgs/overlay/packages/<pkg>.nix` /
 
 ## Recompute
 
-Take the shipped set from every interpreter, since a `publishOnce` entry
-appears under only one:
+Take the shipped set from every interpreter, since a `publishOnce` entry appears
+under only one:
 
 ```
 nix eval --json .#legacyPackages.x86_64-linux.pythonRegistry.wheels \
@@ -61,12 +61,12 @@ shipped nor in `native_optional.json`.
 
 ## Burn-down
 
-Greedy order, each build unblocking the most still-blocked packages. The head
-is flat now: no remaining native package unblocks more than ~15, and most
-unblock 3-7, so progress is a long tail rather than a few big levers.
+Greedy order, each build unblocking the most still-blocked packages. The head is
+flat now: no remaining native package unblocks more than ~15, and most unblock
+3-7, so progress is a long tail rather than a few big levers.
 
-Budget the tail by what a package needs, not by its unblock count. Measured
-over ~130 attempted builds:
+Budget the tail by what a package needs, not by its unblock count. Measured over
+~130 attempted builds:
 
 | shape                                     | builds                         |
 | ----------------------------------------- | ------------------------------ |
@@ -80,8 +80,8 @@ this build. The recurring failure shapes, in rough order of how often they came
 up:
 
 - a build step running on the build host imports the wasm interpreter's modules
-  (numpy for `get_include()`, cffi's `_cffi_backend`): add the build-host
-  module to `nativeBuildInputs`, as `ml-dtypes.nix` does.
+  (numpy for `get_include()`, cffi's `_cffi_backend`): add the build-host module
+  to `nativeBuildInputs`, as `ml-dtypes.nix` does.
 - the extension compiles against the native python headers and dies on
   `pyport.h: LONG_BIT definition appears wrong for platform`: point it at the
   cross include.

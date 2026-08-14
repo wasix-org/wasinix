@@ -777,11 +777,12 @@ current toolchain before relying on it.
 
 ### rustc incremental compilation requires file locking 🟡
 
-- The WASIX stdlib reports `File::lock` as unsupported because the WASIX ABI
-  has no cross-process advisory locking operation. rustc therefore rejects its
+- The WASIX stdlib reports `File::lock` as unsupported because the WASIX ABI has
+  no cross-process advisory locking operation. rustc therefore rejects its
   incremental session directory before compiling a crate.
-- Workaround: the hosted Cargo command sets `CARGO_INCREMENTAL=0`. Non-incremental
-  builds remain correct and avoid pretending that lock acquisition succeeded.
+- Workaround: the hosted Cargo command sets `CARGO_INCREMENTAL=0`.
+  Non-incremental builds remain correct and avoid pretending that lock
+  acquisition succeeded.
 - Fix: add shared advisory locking to the Wasmer WASIX filesystem ABI, implement
   it in wasix-libc and Rust std, then remove the command environment override.
 
@@ -819,9 +820,8 @@ current toolchain before relying on it.
   out for WASI.
 - Workaround: the vendored crate patch selects a WASIX epoll backend with an
   eventfd notifier, allowing consumers such as `async-io` to build.
-- Fix: upstream the WASIX backend to `polling`. It uses the existing WASIX
-  epoll API directly rather than routing through `rustix`'s WASI preview
-  backends.
+- Fix: upstream the WASIX backend to `polling`. It uses the existing WASIX epoll
+  API directly rather than routing through `rustix`'s WASI preview backends.
 
 ### library/Cargo.lock pins libc 0.2.183 from two sources 🟡
 

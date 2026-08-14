@@ -9,15 +9,7 @@
   ...
 }: let
   libllvm = final.llvm.passthru.wasix.libllvm;
-  libclang = prev.llvmPackages.libclang.override {
-    version = toolchain.llvm.llvm.version;
-    release_version = toolchain.llvmVersion;
-    monorepoSrc = toolchain.llvmMonorepoSrc;
-    inherit libllvm;
-    enableClangToolsExtra = false;
-    extraPatches = [../clang/wasm-visibility.patch];
-    devExtraCmakeFlags = ["-DUNIX=ON"];
-  };
+  libclang = final.clang;
   # MLIR runs mlir-linalg-ods-yaml-gen during its own build, so a cross build
   # needs a host copy; without one the wasm binary is invoked and the build stops
   # at "cannot execute binary file". Upstream's setup_host_tool accepts one, and

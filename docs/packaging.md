@@ -186,8 +186,8 @@ Every wheel also gets the guards in `pkgs/python-wheels.nix`: `import` runs the
 module on the shipped python, `self-contained` rejects a baked `/nix/store`
 path, and `deps` checks the published METADATA names only distributions the
 registry serves. The first two read the installed closure, so `deps` is what
-covers the artifact pip actually resolves; `skipTest` gates only the guards
-that import.
+covers the artifact pip actually resolves; `skipTest` gates only the guards that
+import.
 
 To run tests against a locally built runtime instead of the pinned one:
 `WASMER_BIN=/path/to/wasmer nix build --impure .#checks.x86_64-linux.<name>`.
