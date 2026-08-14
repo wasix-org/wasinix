@@ -224,20 +224,23 @@ in rec {
 
   # doCheck defaults to false: cross builds can't run target tests.
   libTweaks = tweaks: pkg:
-    pkg.overrideAttrs (old:
-      extendDrv old ({doCheck = false;} // tweaks)
+    pkg.overrideAttrs (old: let
+      merged = extendDrv old ({doCheck = false;} // tweaks);
+    in
+      merged
       # buildPythonPackage derives passthru.requiredPythonModules when it is
       # called, and overrideAttrs runs after that, so a python dependency added
       # here is otherwise missing from the closure the wheel tests and the
-      # registry walk read.
+      # registry walk read. extendDrv answers only for the attrs tweaks names,
+      # so the inputs come from the same old // new the override itself applies.
       // lib.optionalAttrs (pkg ? pythonModule) {
         passthru =
           (old.passthru or {})
-          // (tweaks.passthru or {})
+          // (merged.passthru or {})
           // {
             requiredPythonModules =
               pkg.pythonModule.pkgs.requiredPythonModules
-              (extendDrv old tweaks).propagatedBuildInputs or [];
+              ((old // merged).propagatedBuildInputs or []);
           };
       });
 
