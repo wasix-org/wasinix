@@ -167,6 +167,7 @@ in
     patches = optionals hostedOnWasix [
       ./wasix-host-tools.patch
       ./wasix-process-fds.patch
+      ./tool-atomic-wait-feature.patch
     ];
 
     nativeBuildInputs =

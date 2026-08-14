@@ -1,0 +1,11 @@
+--- a/src/bootstrap/src/core/builder/cargo.rs
++++ b/src/bootstrap/src/core/builder/cargo.rs
+@@ -839,7 +839,7 @@
+                 // If this is ever removed, be sure to add something else in
+                 // its place to keep the restrictions in place (or make a way
+                 // to unset RUSTC_BOOTSTRAP).
+-                "binary-dep-depinfo,proc_macro_span,proc_macro_span_shrink,proc_macro_diagnostic"
++                "binary-dep-depinfo,proc_macro_span,proc_macro_span_shrink,proc_macro_diagnostic,stdarch_wasm_atomic_wait"
+                     .to_string()
+             }
+             Mode::Std | Mode::Rustc | Mode::Codegen | Mode::ToolRustcPrivate => String::new(),

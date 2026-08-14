@@ -294,12 +294,17 @@ diff --git a/src/tools/cargo/src/bin/cargo/main.rs b/src/tools/cargo/src/bin/car
 index c009cd0904d..8c49a0ad383 100644
 --- a/src/tools/cargo/src/bin/cargo/main.rs
 +++ b/src/tools/cargo/src/bin/cargo/main.rs
-@@ -336,0 +337,5 @@ fn is_executable<P: AsRef<Path>>(path: P) -> bool {
+@@ -342,6 +342,10 @@
+ fn is_executable<P: AsRef<Path>>(path: P) -> bool {
+     path.as_ref().is_file()
+ }
 +#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
 +fn is_executable<P: AsRef<Path>>(path: P) -> bool {
 +    path.as_ref().is_file()
 +}
-+
+ 
+ fn search_directories(gctx: &GlobalContext) -> Vec<PathBuf> {
+     let mut path_dirs = if let Some(val) = gctx.get_env_os("PATH") {
 diff --git a/src/tools/cargo/src/cargo/util/job.rs b/src/tools/cargo/src/cargo/util/job.rs
 index b152097fa61..4cbf4d265c5 100644
 --- a/src/tools/cargo/src/cargo/util/job.rs
