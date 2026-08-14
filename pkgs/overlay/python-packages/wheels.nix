@@ -497,7 +497,7 @@
   } # lz4
   {attr = "pycurl";} # curl; overlay/python-packages/pycurl.nix
   {attr = "jq";} # jq + oniguruma
-  {attr = "jqpy";} # spawns the jq CLI; overlay/python-packages/jqpy.nix
+  {attr = "jqpy";}
   {attr = "pypandoc";} # spawns the wasm pandoc CLI; overlay/python-packages/pypandoc.nix
   {
     attr = "pypandoc-binary";

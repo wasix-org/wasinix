@@ -64,5 +64,13 @@ in
       // {
         c = psycopg-c;
         pool = psycopg-pool;
+        # Replaces the stashed check inputs: the inherited list drags
+        # psycopg-c, which does not cross-build; anyio brings the plugin that
+        # owns the anyio mark.
+        wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.pytest-asyncio pyfinal.anyio];
+        # No suite: the libpq dylib fails symbol resolution mid-run
+        # ("pg_vsnprintf"), killing the session; WASIX-TODO.md tracks the
+        # dylib symbol-resolution defect.
+        wasix = ((o.passthru or {}).wasix or {}) // {installCheck = false;};
       };
   })

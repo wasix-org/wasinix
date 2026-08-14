@@ -14,5 +14,15 @@
 helpers.libTweaks {
   env.GEOS_CONFIG = "${final.geos}/bin/geos-config";
   env.NIX_LDFLAGS = "-lc++ -lc++abi -lunwind";
+  # Replaces nixpkgs' preCheck: its `cd $out` breaks in the run-only check
+  # derivation, where $out is unwritten; resolve the installed tree off the
+  # guest PYTHONPATH so the source dir cannot shadow the extension.
+  preCheck = _: ''
+    _site=$(echo "$PYTHONPATH" | tr ':' '\n' | grep -m1 -- '-shapely-.*site-packages$')
+    cd "$_site"
+  '';
+  # Suite off: the tests reach geos and die on a wasm out-of-bounds memory
+  # access, a real cross geos/shapely defect (WASIX-TODO.md).
+  passthru.wasix.installCheck = false;
 }
 pyprev.shapely

@@ -1,5 +1,5 @@
 # envier for wasix (not in nixpkgs): DataDog's env-var configuration library,
-# pure python; ddtrace's runtime dep.
+# pure python; ddtrace's runtime dep. No suite: the sdist ships no tests.
 {
   pyfinal,
   nix-update-script,

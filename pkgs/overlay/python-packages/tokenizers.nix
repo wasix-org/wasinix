@@ -35,5 +35,12 @@ in
       # legacy encoding is fine, the maturin hook translates the .so to exnref.
       CFLAGS = "-fwasm-exceptions";
     };
+    # No suite: every meaningful test file imports datasets (whose pyarrow
+    # kills the session) or trains via fork-based multiprocessing.
+    passthru = old:
+      old
+      // {
+        wasix = (old.wasix or {}) // {installCheck = false;};
+      };
   }
   pyprev.tokenizers

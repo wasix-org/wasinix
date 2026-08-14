@@ -14,5 +14,12 @@ helpers.libTweaks {
     pyfinal.typing-extensions
     pyfinal.pypng
   ];
+  # Replaces the stashed check inputs: the inherited pillow is the
+  # build-platform one, with no loadable _imaging.
+  passthru = old:
+    old
+    // {
+      wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.pillow];
+    };
 }
 pyprev.qrcode
