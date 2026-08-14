@@ -260,6 +260,11 @@ in rec {
           for _bindir in "$out" ''${bin:+"$bin"}; do
             if [ -f "$_bindir/bin/${wasmName}" ]; then
               mv "$_bindir/bin/${wasmName}" "$_bindir/bin/${wasmName}.wasm"
+              for _link in "$_bindir/bin/"*; do
+                if [ -L "$_link" ] && [ "$(basename "$(readlink "$_link")")" = "${wasmName}" ]; then
+                  ln -sf "${wasmName}.wasm" "$_link"
+                fi
+              done
               ${lib.optionalString posixAlias ''ln -s "${wasmName}.wasm" "$_bindir/bin/${wasmName}"''}
             fi
           done
