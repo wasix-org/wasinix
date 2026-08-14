@@ -15,7 +15,7 @@
   name,
   pic ? false,
 }: let
-  flangCross = import ./flang-cross.nix {inherit lib;};
+  flangCross = import ../../toolchain/flang-cross.nix {inherit lib;};
 in
   stdenvNoCC.mkDerivation {
     __structuredAttrs = true;

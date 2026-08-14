@@ -16,7 +16,7 @@
   toolchainFile,
   # staged sysroot to build against (libc + compiler-rt, per build32).
   sysroot,
-  # compiler env + prefix-map cmake flags, shared with compiler-rt.nix (see ./default.nix).
+  # compiler env + prefix-map cmake flags, shared with compiler-rt.nix (see ./package.nix).
   runtimesPreConfigure,
   name,
   eh ? false,
@@ -85,7 +85,7 @@ in
       (lib.cmakeBool "LIBUNWIND_ENABLE_THREADS" eh)
       (lib.cmakeBool "LIBUNWIND_HAS_PTHREAD_LIB" eh)
       (lib.cmakeBool "LIBUNWIND_INSTALL_LIBRARY" eh)
-      # PIC: global-dynamic TLS comes from the patched toolchain file (see ./default.nix).
+      # PIC: global-dynamic TLS comes from the patched toolchain file (see ./package.nix).
       (lib.cmakeBool "CMAKE_POSITION_INDEPENDENT_CODE" pic)
       (lib.cmakeBool "LLVM_ENABLE_PIC" pic)
     ];

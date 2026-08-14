@@ -2,10 +2,7 @@
 # Built from the fork scope, so Fortran objects come out of the same WebAssembly
 # backend as everything else: nixpkgs' llvm carries neither the multi-def
 # stackify fix nor the non-emscripten TLS model the fork does.
-{
-  wasix-llvm,
-  ...
-}:
+{wasix-llvm, ...}:
 wasix-llvm.passthru.llvm.flang-unwrapped.overrideAttrs (old: {
   # flang derives the target ABI from the host: no wasm case in Target.cpp, i64
   # _FortranA* lengths from RTBuilder.h, and a 3-arg main WASI's crt never calls.

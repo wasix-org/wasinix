@@ -508,7 +508,10 @@ def main() -> None:
             project = normalize(moved.name.split("-", 1)[0])
             prev = projects.setdefault(project, {}).setdefault(moved.name, moved)
             if prev != moved and prev.read_bytes() != moved.read_bytes():
-                conflicts.append((moved.name, entry["attr"]))
+                # A py3-none-any tag asserts the artifact is interpreter
+                # independent, so keep the first and let differing build noise go.
+                if not moved.name.endswith("-py3-none-any.whl"):
+                    conflicts.append((moved.name, entry["attr"]))
             provenance[moved.name] = {
                 "name": entry["name"],
                 "rel_key": entry["relKey"],

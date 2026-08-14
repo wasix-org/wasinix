@@ -16,7 +16,7 @@
   toolchainFile,
   # staged sysroot to build against (libc only, per build32).
   sysroot,
-  # compiler env + prefix-map cmake flags, shared with libcxx.nix (see ./default.nix).
+  # compiler env + prefix-map cmake flags, shared with libcxx.nix (see ./package.nix).
   runtimesPreConfigure,
   name,
   pic ? false,

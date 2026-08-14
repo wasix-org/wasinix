@@ -375,7 +375,10 @@
   {attr = "optree";} # pybind11; keras' pytree backend
   {attr = "pyroaring";}
   {attr = "time-machine";}
-  {attr = "zopfli";}
+  {
+    attr = "zopfli";
+    publishOnce = true;
+  } # cp310-abi3
   {attr = "asyncpg";}
   {attr = "bitstruct";}
   {attr = "cwcwidth";}
