@@ -70,9 +70,7 @@
     hostedOnWasix = true;
   };
   binaryen = pkgs.binaryen;
-  wasixcc = pkgs.callPackage ./wasixcc.nix {
-    inherit wasixLlvm binaryen wasixSysroot;
-  };
+  wasixcc = pkgs.wasixcc;
   cargoWasix = pkgs.callPackage ./rust/cargo-wasix.nix {
     inherit
       wasixRustToolchain

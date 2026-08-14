@@ -1,48 +1,62 @@
-# The WASIX cc driver. One binary, wasixccenv, dispatching on argv0; the
-# toolchain wraps it under each tool name with the sysroot locations baked in.
-# The recipe lives here so the WASIX build carries the same fixes as the native
-# one the cross sets compile with.
+# wasixcc, the WASIX cc driver. The wasixccenv binary is a product
+# (products/wasixcc); this wraps it, holding one makeWrapper wrapper
+# per tool name with the toolchain locations from env.nix baked in.
 {
-  rustPlatform,
-  fetchFromGitHub,
-  nix-update-script,
-}:
-rustPlatform.buildRustPackage (finalAttrs: {
-  pname = "wasixcc";
-  version = "0.4.5";
+  lib,
+  stdenvNoCC,
+  makeWrapper,
+  wasixcc-unwrapped,
+  wasix-llvm,
+  binaryen,
+  wasix-sysroot,
+  ...
+}: let
+  env = import ../../toolchain/env.nix {inherit lib;};
+  wasixccUnwrapped = wasixcc-unwrapped;
+  wasixLlvm = wasix-llvm;
+  wasixSysroot = wasix-sysroot;
+  inherit (wasixccUnwrapped) version;
 
-  src = fetchFromGitHub {
-    owner = "wasix-org";
-    repo = "wasixcc";
-    tag = "v${finalAttrs.version}";
-    hash = "sha256-dCBNXceJO9Wx91o7+g/iVzHiCeanC71NPk0PUsf4xN0=";
-  };
+  # wasixccenv dispatches on its invoked name; expose it under every tool name.
+  tools = ["wasixcc" "wasix++" "wasixcc++" "wasixar" "wasixnm" "wasixranlib" "wasixld" "wasixccenv"];
+in
+  stdenvNoCC.mkDerivation {
+    pname = "wasixcc";
+    inherit version;
+    dontUnpack = true;
 
-  cargoHash = "sha256-6f0LnlsAKK/VywTFfjPIMBmG+Ht1q2ItRSvmKkd8qpU=";
+    nativeBuildInputs = [makeWrapper];
 
-  # A shared module gets no C++ runtime injected (that block is executable-only),
-  # so a build system passing the GNU name -lstdc++ fails to link. -fopenmp is a
-  # driver flag that never reaches wasm-ld, so the omp symbols go unresolved
-  # unless the driver names libomp itself, as clang's own does. The remaining
-  # four keep the driver from synthesising executable setup for a link that is
-  # not producing one.
-  patches = [
-    ./wasixcc-map-libstdcxx-to-libcxx.patch
-    ./wasixcc-openmp-link.patch
-    ./wasixcc-relocatable-link-passthrough.patch
-    ./wasixcc-rlib-linker-input.patch
-    ./wasixcc-nodefaultlibs.patch
-    ./wasixcc-nostartfiles.patch
-  ];
+    installPhase = ''
+      runHook preInstall
+      install -Dm755 "${wasixccUnwrapped}/libexec/wasixccenv" "$out/libexec/wasixccenv"
+      for cmd in ${lib.escapeShellArgs tools}; do
+        makeWrapper "$out/libexec/wasixccenv" "$out/bin/$cmd" \
+          --argv0 "$cmd" \
+          ${env.makeWrapperFlagsOf (env.locationEnv {inherit wasixLlvm binaryen wasixSysroot;})}
+      done
+      runHook postInstall
+    '';
 
-  doCheck = true;
+    passthru = {
+      # The recipe is products/wasixcc, which carries the version, the
+      # src and the updateScript; this wrapper only adds the toolchain locations.
+      unwrapped = wasixccUnwrapped;
+      wasix.updateNotes = [
+        {message = "check whether wasixcc-relocatable-link-passthrough.patch landed upstream";}
+        {message = "regenerate wasixcc.Cargo.lock: delete upstream's Cargo.lock and .cargo/config.toml, then `cargo generate-lockfile`; drop the override once upstream keeps the WASIX registry out of the default build";}
+        {message = "drop wasixcc-rlib-linker-input.patch once wasixcc recognizes Rust .rlib archives as linker inputs";}
+        {message = "drop wasixcc-nodefaultlibs.patch once wasixcc honors -nodefaultlibs without forwarding it to wasm-ld";}
+        {message = "drop wasixcc-nostartfiles.patch once wasixcc honors -nostartfiles without forwarding it to wasm-ld";}
+      ];
+    };
 
-  installPhase = ''
-    runHook preInstall
-    mkdir -p "$out/libexec"
-    cp "$(find target -type f -path '*/release/wasixccenv' | head -n 1)" "$out/libexec/wasixccenv"
-    runHook postInstall
-  '';
-
-  passthru.updateScript = nix-update-script {};
-})
+    meta = {
+      description = "WASIX C/C++ compiler driver (clang/lld/binaryen orchestrator), wrapped with the from-source toolchain";
+      homepage = "https://github.com/wasix-org/wasixcc";
+      license = with lib.licenses; [mit asl20];
+      # The wrapped toolchain (LLVM fork, sysroot) is only built for x86_64-linux.
+      platforms = ["x86_64-linux"];
+      mainProgram = "wasixcc";
+    };
+  }
