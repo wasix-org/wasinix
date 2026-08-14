@@ -197,6 +197,25 @@ import.
 To run tests against a locally built runtime instead of the pinned one:
 `WASMER_BIN=/path/to/wasmer nix build --impure .#checks.x86_64-linux.<name>`.
 
+### Emulated build-system checks
+
+Packages with `doCheck` capture their configured test tree and build environment
+in a compressed `check` output. `pkgs/emulated-check.nix` restores that output
+and runs the declared check phase under Wasmer, without adding the runtime to
+the package build closure. Executable wasm test programs are exposed through
+host-side wrappers so build systems can invoke them by filename.
+
+C and C++ packages use their nixpkgs `checkPhase`. Python wheels use the native
+nixpkgs `doInstallCheck` declaration and run the corresponding pytest, unittest,
+or install check hook. Override that choice with `passthru.wasix.installCheck`;
+configure the run with `passthru.wasix.emulatedCheck` (`timeout`, `expectFail`,
+or `broken`).
+
+These checks appear as `passthru.tests.upstream`. Handwritten package tests
+remain appropriate for focused behavior and for suites that cannot use the
+installed package tree. `pkgs/python-closure-tests.nix` separately imports the
+dependency closure of every shipped wheel.
+
 ## Update scripts
 
 A package that pins its own source (rather than overriding nixpkgs) declares its
