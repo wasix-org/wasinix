@@ -102,8 +102,10 @@
   }
   {
     attr = "protobuf4";
-    # 4.x predates the move to upb and builds the older C++ extension instead
-    pyImport = "google.protobuf.pyext._message";
+    # 4.x builds the C++ extension rather than upb, and that extension does not
+    # link (WASIX-TODO.md), so this is nixpkgs' own check that
+    # --cpp_implementation took effect, one step short of loading it.
+    pyImport = "google.protobuf.internal._api_implementation";
   }
 
   {attr = "boto3";}

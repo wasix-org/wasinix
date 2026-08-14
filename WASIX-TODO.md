@@ -591,7 +591,7 @@ current toolchain before relying on it.
   actually works, then drop the hook. Scanning is off because it misreports
   probes, not because C++20 modules are unwanted.
 
-### protobuf 4's C++ python extension links without abseil 🔴
+### protobuf 4's C++ python extension links without abseil 🟡
 
 - protobuf's python `setup.py` gives the `google.protobuf.pyext._message`
   extension `libraries=['protobuf']` and nothing else, because on a
@@ -604,9 +604,12 @@ current toolchain before relying on it.
   C and uses no abseil. `api_implementation` catches the ImportError and falls
   back to the pure-python backend, so `import google.protobuf` still works, one
   order of magnitude slower and with none of the C++ descriptor pool semantics.
-- Workaround: none. The `wheel-py313-protobuf4` import test names the extension
-  and so is red, matching the other protobuf entries, which all test the
-  compiled backend rather than the wrapper that silently degrades.
+- Workaround: the `wheel-py313-protobuf4` entry in
+  `overlay/python-packages/wheels.nix` imports
+  `google.protobuf.internal._api_implementation`, nixpkgs' own check that
+  `--cpp_implementation` took effect, instead of the extension the other
+  protobuf entries import. The wheel ships and degrades quietly, so nothing
+  reports the slower backend.
 - Fix: put the abseil archives on the extension's link line in the order
   `pkg-config --libs protobuf` reports, keeping them after the objects that
   reference them.
