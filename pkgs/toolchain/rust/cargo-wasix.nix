@@ -1,5 +1,5 @@
 # cargo-wasix, the cargo subcommand driving WASIX builds. The binary is a
-# product (products/cargo-wasix-unwrapped); the bin/ wrapper pins the toolchain
+# product (products/cargo-wasix); the bin/ wrapper pins the toolchain
 # env (wasixcc + LLVM + binaryen + sysroot) and links the from-source rust
 # toolchain into rustup before exec'ing.
 {
@@ -7,7 +7,7 @@
   stdenvNoCC,
   makeWrapper,
   rustup,
-  cargo-wasix-unwrapped,
+  cargo-wasix,
   wasixRustToolchain,
   wasixcc,
   wasixLlvm,
@@ -15,8 +15,8 @@
   wasixSysroot,
 }: let
   env = import ../env.nix {inherit lib;};
-  inherit (cargo-wasix-unwrapped) version;
-  cargoWasixUnwrapped = cargo-wasix-unwrapped;
+  inherit (cargo-wasix) version;
+  cargoWasixUnwrapped = cargo-wasix;
 
   # cargo-wasix resolves its toolchain through rustup; before exec, (re-)link
   # ours under the names it looks for. Idempotent, quiet on the happy path.
@@ -60,7 +60,7 @@ in
     '';
 
     passthru = {
-      # The recipe is products/cargo-wasix-unwrapped, which carries the version,
+      # The recipe is products/cargo-wasix, which carries the version,
       # the src and the updateScript; this wrapper only adds the toolchain env.
       unwrapped = cargoWasixUnwrapped;
     };

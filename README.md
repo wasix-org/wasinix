@@ -10,14 +10,13 @@ for the Wasmer registry.
 ```sh
 nix develop                       # shell with wasixcc + cargo-wasix on PATH
 
-nix build .#wasixcc               # the C/C++ toolchain (also the default output)
 nix build .#wasix-sysroot         # the per-profile sysroots
-nix build .#wasix-llvm            # WASIX LLVM (slow)
 
 # example targets under legacyPackages (the system is explicit):
 nix build .#legacyPackages.x86_64-linux.wasmerPackages.git         # a CLI
 nix build .#legacyPackages.x86_64-linux.wasmerPackages.git.webc    # its webc
 nix build .#legacyPackages.x86_64-linux.nativePackages.anybuild   # native shared recipe
+nix build .#legacyPackages.x86_64-linux.nativePackages.wasixcc    # the C/C++ driver
 nix build .#legacyPackages.x86_64-linux.packagesByProfile.eh.anybuild # WASIX shared recipe
 nix build .#legacyPackages.x86_64-linux.packagesByProfile.exnrefEh.zlib # a library
 nix build .#legacyPackages.x86_64-linux.pythonWheels.py314.numpy    # a wheel

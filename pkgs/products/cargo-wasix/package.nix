@@ -7,7 +7,7 @@
   nix-update-script,
 }:
 rustPlatform.buildRustPackage (finalAttrs: {
-  pname = "cargo-wasix-unwrapped";
+  pname = "cargo-wasix";
   version = "0.1.33";
 
   src = fetchFromGitHub {

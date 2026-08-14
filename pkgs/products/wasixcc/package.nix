@@ -8,7 +8,7 @@
   nix-update-script,
 }:
 rustPlatform.buildRustPackage (finalAttrs: {
-  pname = "wasixcc-unwrapped";
+  pname = "wasixcc";
   version = "0.4.5";
 
   src = fetchFromGitHub {

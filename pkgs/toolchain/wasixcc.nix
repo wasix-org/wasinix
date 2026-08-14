@@ -1,18 +1,18 @@
 # wasixcc, the WASIX cc driver. The wasixccenv binary is a product
-# (products/wasixcc-unwrapped); this wraps it, holding one makeWrapper wrapper
+# (products/wasixcc); this wraps it, holding one makeWrapper wrapper
 # per tool name with the toolchain locations from env.nix baked in.
 {
   lib,
   stdenvNoCC,
   makeWrapper,
-  wasixcc-unwrapped,
+  wasixcc,
   wasixLlvm,
   binaryen,
   wasixSysroot,
 }: let
   env = import ./env.nix {inherit lib;};
-  inherit (wasixcc-unwrapped) version;
-  wasixccUnwrapped = wasixcc-unwrapped;
+  inherit (wasixcc) version;
+  wasixccUnwrapped = wasixcc;
 
   # wasixccenv dispatches on its invoked name; expose it under every tool name.
   tools = ["wasixcc" "wasix++" "wasixcc++" "wasixar" "wasixnm" "wasixranlib" "wasixld" "wasixccenv"];
@@ -36,7 +36,7 @@ in
     '';
 
     passthru = {
-      # The recipe is products/wasixcc-unwrapped, which carries the version, the
+      # The recipe is products/wasixcc, which carries the version, the
       # src and the updateScript; this wrapper only adds the toolchain locations.
       unwrapped = wasixccUnwrapped;
       wasix.updateNotes = [

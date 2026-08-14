@@ -447,20 +447,16 @@
     packages.${system} = {
       # the webc packages and the merged registry live under legacyPackages
       anybuild = wasix.nativePackages.anybuild;
-      wasixcc = toolchain.wasixcc;
-      cargo-wasix = toolchain.cargoWasix;
       wasix-rust-toolchain = toolchain.wasixRustToolchain;
-      default = toolchain.wasixcc;
 
       # From-source toolchain parts, buildable in isolation.
       wasix-libc = toolchain.libc;
-      wasix-llvm = toolchain.llvm.clang;
       # direct cmake of llvm-project, driven by wasix-libc's clang-wasix*.cmake_toolchain
       wasix-compiler-rt = toolchain.compiler-rt;
       wasix-libcxx = toolchain.libcxx;
       wasix-sysroot = toolchain.sysroot;
 
-      wasmer-bin = wasmerRuntime;
+      wasmer = wasmerRuntime;
     };
   };
 }

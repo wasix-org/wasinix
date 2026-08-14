@@ -51,7 +51,7 @@ dependencies that may use another profile.
 
 ## Flake outputs
 
-- `packages.<system>`: convenient development outputs; `wasixcc` is the default
+- `packages.<system>`: convenient development outputs
 - `checks.<system>`: package tests plus generated ABI, wheel, and formatting
   checks
 - `legacyPackages.<system>`: the complete build trees
