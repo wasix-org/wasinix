@@ -1,8 +1,13 @@
 # Helpers for wasix package files, and the optional passthru.wasix declaration:
-# supportedProfiles, preferredProfile, ciProfiles, ciTags, shipped, broken, retention,
-# postUpdateHook (old/new version arguments), updateNotes (docs/updating.md).
+# supportedProfiles, preferredProfile, ciProfiles, ciTags, shipped, broken,
+# retention, retentionHook, postUpdateHook (old/new version arguments),
+# emulatedCheck, updateNotes (docs/packaging.md, docs/updating.md).
 # applyWasixMeta below is the only writer of meta.badPlatforms/meta.broken.
-{lib}: let
+{
+  lib,
+  referenceScanner ? null,
+  snapshotZstd ? null,
+}: let
   profilesCfg = import ../profiles.nix;
   # extendDrv hands the filters below `null` for an attr the package never set.
   orEmpty = xs:
@@ -48,6 +53,9 @@ in rec {
 
   loadPackageDir = import ./load-packages.nix {inherit lib;};
 
+  # The `check` output machinery (see check-output.nix).
+  checkOutput = import ./check-output.nix {inherit lib referenceScanner snapshotZstd;};
+
   # Profile name for a host platform (from wasmExceptions/wasmPic).
   inherit (profilesCfg) profileOf defaultProfileName;
 
@@ -60,11 +68,12 @@ in rec {
     withEh = lib.filter (n: table.${n}.wasmExceptions != "no") all;
   };
 
+  # eh/exnref/pic booleans for a host platform's profile, so a package file
+  # tests `(traitsOf hp).eh` instead of `elem (profileOf hp) profiles.withEh`.
+  profileTraitsOf = hp: profilesCfg.sysrootEncodings.${profileOf hp};
+
   wasixMetaOf = drv: (drv.passthru or {}).wasix or {};
 
-  # Capabilities a CI request must enable before scheduling this derivation.
-  # Keep the vocabulary open; validation only makes the wire representation
-  # unambiguous and safe to use in command-line interfaces.
   ciTagsOf = drv: let
     tags = (wasixMetaOf drv).ciTags or [];
     invalid =
@@ -79,8 +88,6 @@ in rec {
       "${drv.pname or drv.name}: invalid ciTags; use lowercase kebab-case names"
       (lib.unique tags));
 
-  # Human-facing CI metadata. Published artifacts override the derivation's
-  # upstream version with their registry version and release.
   ciInfoOf = drv: let
     publication = (wasixMetaOf drv).publication or {};
     testExpectation = (wasixMetaOf drv).testExpectation or null;
@@ -260,10 +267,11 @@ in rec {
     )
     new;
 
-  # doCheck defaults to false: cross builds can't run target tests.
+  # Apply tweaks (merged per extendDrv). The cross gate keeps the phase out of
+  # the shipped build; emulated-check.nix un-gates declared suites separately.
   libTweaks = tweaks: pkg:
     pkg.overrideAttrs (old: let
-      merged = extendDrv old ({doCheck = false;} // tweaks);
+      merged = extendDrv old tweaks;
     in
       merged
       # buildPythonPackage derives passthru.requiredPythonModules when it is

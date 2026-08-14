@@ -55,7 +55,7 @@
         # release_version above is untouched by this). `pos` restamps
         # meta.position to this file, where the pin lives (mkDerivation derives
         # meta.position from pos, clobbering a meta.position attr).
-        llvm = prev.llvm.overrideAttrs (_old: {
+        libllvm = prev.libllvm.overrideAttrs (_old: {
           inherit version;
           __intentionallyOverridingVersion = true;
         });

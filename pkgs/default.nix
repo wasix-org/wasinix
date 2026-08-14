@@ -37,7 +37,11 @@
   };
   inherit (pkgs) lib;
   nixUpdate = pkgs.nix-update;
-  wasixLib = import ./lib {inherit lib;};
+  referenceScanner = pkgs.callPackage ./lib/check-reference-scanner.nix {};
+  wasixLib = import ./lib {
+    inherit lib referenceScanner;
+    snapshotZstd = pkgs.zstd;
+  };
   wasmerDependencies = import ./wasmer/dependencies.nix {inherit lib;};
   toolchain = import ./toolchain {inherit pkgs ghcWasm;};
 
@@ -80,7 +84,10 @@
   # Each profile is a full nixpkgs cross set with the wasixcc stdenv injected via
   # replaceCrossStdenv plus the wasix overlay; linked deps resolve within the profile.
   profilesCfg = import ./profiles.nix;
-  mkWasixStdenv = import ./set/stdenv.nix {inherit lib toolchain;};
+  mkWasixStdenv = import ./set/stdenv.nix {
+    inherit lib toolchain referenceScanner;
+    snapshotZstd = pkgs.zstd;
+  };
 
   # Enumerated eval-only through the same loader and history table the overlay
   # builds from, so the two can't drift.
@@ -100,6 +107,7 @@
 
   wasixOverlay = import ./overlay {
     inherit toolchain nixpkgs preferredProfilePackages wasixRustPlatform wasmerDependencies;
+    wasixRunStub = wasixRun.stub;
     inherit (pkgs) nix-update-script;
   };
   productsOverlay = products.overlay {nativeNixUpdateScript = pkgs.nix-update-script;};
@@ -167,6 +175,15 @@
       passthru =
         (o.passthru or {})
         // {
+          repros =
+            (o.passthru.repros or {})
+            // {
+              wide-arithmetic = pkgs.callPackage ./toolchain/tests/wide-arithmetic-repro.nix {
+                toolchain = toolchainByProfile.exnrefEh;
+                inherit (toolchain) wasixcc;
+                inherit wasixRun;
+              };
+            };
           tests = mkTestGroup "wasixcc" (
             {
               relocatable = pkgs.callPackage ./toolchain/tests/relocatable-link-test.nix {
@@ -238,21 +255,176 @@
               rustPlatform = wasixRustPlatform;
               wasmer = wasmerRuntime;
             };
+            cargo-test = pkgs.callPackage ./toolchain/tests/rust-cargo-test.nix {
+              rustPlatform = wasixRustPlatform;
+              inherit wasixRun;
+              inherit (toolchain) binaryen;
+            };
           };
         };
     });
   };
 
+  # ── emulated build-system checks ─────────────────────────────────────────────
+  # wasix-run trampoline: `.stub` carries no wasmer and is safe to bake into
+  # builds, `.run` pins the runtime for the check derivations, so a wasmer bump
+  # never rebuilds the package set.
+  wasixRun = import ./wasmer/wasix-run.nix {
+    inherit pkgs;
+    wasmer =
+      if wasmerRuntime != null
+      then wasmerRuntime
+      else pkgs.wasmer;
+  };
+  emulatedChecks = import ./emulated-check.nix {
+    inherit lib pkgs wasixRun;
+  };
+  linkSmoke = import ./link-smoke.nix {
+    inherit lib pkgs wasixRun;
+    helpers = wasixLib;
+  };
+
+  # Phase the package's declared suite (doCheck) runs in, or null: the value
+  # feeds `checkFor`'s `phase` argument below, which wants a phase name
+  # (python-wheels.nix's installCheck path feeds it "pythonCheckPhase" the
+  # same way). Read via overrideAttrs: make-derivation rebinds the built value
+  # to the cross-gated one, but the argument the package passed is still
+  # visible there. Needs the `check` output (lib/check-output.nix); installCheck
+  # suites go through python-wheels.nix.
+  declaresCheck = drv:
+    if !(drv ? check)
+    then null
+    else
+      (drv.overrideAttrs (old: {
+        passthru =
+          (old.passthru or {})
+          // {
+            wasixCheckPhaseName =
+              if (old.doCheck or false)
+              then "checkPhase"
+              else null;
+          };
+      }))
+    .wasixCheckPhaseName;
+
+  # Test producers compose only through the package-local namespace. `all`
+  # and `names` are regenerated after every addition so they always cover
+  # the current leaves.
+  testLeavesOf = drv: removeAttrs ((drv.passthru or {}).tests or {}) ["all" "names"];
+  withTest = groupName: testName: test: drv:
+    drv.overrideAttrs (old: {
+      passthru =
+        (old.passthru or {})
+        // {
+          tests = mkTestGroup groupName ((testLeavesOf drv) // {${testName} = test;});
+        };
+    });
+
+  # nixpkgs passthru.tests are native x86 suites, not tests of the cross build.
+  withoutNativeTests = drv:
+    if (drv.passthru or {}) ? tests
+    then
+      drv.overrideAttrs (old: {
+        passthru = removeAttrs (old.passthru or {}) ["tests"];
+      })
+    else drv;
+
+  # Replay only the package's declared upstream suite. Synthetic checks do not
+  # participate in its detection, profile selection, or opt-out policy.
+  withEmulatedCheck = profile: name: drv: let
+    meta = wasixLib.wasixMetaOf drv;
+    declared = meta.emulatedCheck or null;
+    # emulatedCheck carries only what is not derivable (expectFail/broken,
+    # timeout); `false` opts out.
+    spec =
+      if declared == null
+      then {}
+      else if declared == false
+      then null
+      else declared;
+    profiles =
+      if spec != null && spec ? profiles
+      then spec.profiles
+      else meta.supportedProfiles or [profile];
+    checkPhaseName =
+      if spec == null
+      then null
+      else let
+        r = builtins.tryEval (declaresCheck drv);
+      in
+        if r.success
+        then r.value
+        else null;
+    runHere = !(drv.meta.broken or false) && checkPhaseName != null && lib.elem profile profiles;
+  in
+    if !runHere
+    then drv
+    else
+      withTest "${name}-${profile}" "upstream" (emulatedChecks.checkFor {
+        inherit drv spec;
+        phase = checkPhaseName;
+        name = "${name}-check";
+      })
+      drv;
+
+  # Independently attach the synthetic link probe. It neither substitutes for
+  # nor implies the existence of an upstream suite.
+  withLinkCheck = profile: name: drv: let
+    runHere = !(drv.meta.broken or false) && linkSmoke.enabledFor drv;
+  in
+    if !runHere
+    then drv
+    else withTest "${name}-${profile}" "link" (linkSmoke.linkFor nixpkgsByProfile.${profile} drv) drv;
+
+  # A package whose evaluation throws produces no CI jobs at all, which reads
+  # exactly like "no suite"; no runtime guard can see that. Names come from the
+  # overlay loader, independent of whether the packages evaluate.
+  evalSanity = let
+    broken = lib.concatMap (
+      profile:
+        lib.concatMap (
+          name: let
+            r = builtins.tryEval (
+              let
+                d = nixpkgsByProfile.${profile}.${name};
+              in
+                # meta.broken makes nixpkgs assert on drvPath by design, and a
+                # profile the package does not claim is not a failure either.
+                if wasixLib.supportedIn profile d && !(d.meta.broken or false)
+                then builtins.seq d.drvPath "ok"
+                else "skipped"
+            );
+          in
+            lib.optional (!r.success) "${profile}.${name}"
+        )
+        wasixPkgNames
+    ) (lib.attrNames profilesCfg.profiles);
+  in
+    pkgs.runCommand "wasix-eval-sanity" {} ''
+      ${
+        if broken == []
+        then ''echo "all ${toString (builtins.length wasixPkgNames)} packages evaluate on every profile"''
+        else ''
+          echo "these packages fail to EVALUATE, so they produce no CI jobs at all:" >&2
+          ${lib.concatMapStringsSep "\n" (b: ''echo "  ${b}" >&2'') broken}
+          exit 1
+        ''
+      }
+      touch "$out"
+    '';
+
   # ── package matrices for CI / consumers ──────────────────────────────────────
-  # Complete public view: every package under every profile it supports.
+  # Complete public view: every package under every supported profile.
   packagesByProfile =
     lib.genAttrs (lib.attrNames profilesCfg.profiles)
     (profile:
-      # Reads passthru, not meta.availableOn, so packages whose meta.platforms
-      # is merely unix-only are kept.
-        lib.filterAttrs
+      lib.mapAttrs (name: drv:
+        if lib.elem name shippedCommands
+        then drv
+        else withLinkCheck profile name (withEmulatedCheck profile name (withoutNativeTests drv)))
+      (lib.filterAttrs
         (_: wasixLib.supportedIn profile)
-        (lib.genAttrs wasixPkgNames (n: nixpkgsByProfile.${profile}.${n})));
+        (lib.genAttrs wasixPkgNames (n: nixpkgsByProfile.${profile}.${n}))));
 
   # CI policy transposed into the same profile/package shape. This stays
   # separate from packagesByProfile so reducing coverage never hides a build.
@@ -297,18 +469,19 @@
   publicationRels = builtins.fromJSON (builtins.readFile ../rels.json);
   mkPythonWheels = pyKey: pyAttr: select: let
     wheels = import ./python-wheels.nix {
-      inherit pkgs lib mkTestGroup select pyKey;
+      inherit pkgs lib mkTestGroup select pyKey emulatedChecks;
+      inherit (wasixLib.checkOutput) installCheckOutputArgsIf;
       python3 = nixpkgsByProfile.exnrefEhpic.${pyAttr};
       wasmer = wasmerRuntime;
       pythonWebc = preferredProfilePackagesWithWebc.${pyAttr}.webc;
     };
     withPublication = _: drv:
-      drv.overrideAttrs (o: {
+      drv.overrideAttrs (old: {
         passthru =
-          (o.passthru or {})
+          (old.passthru or {})
           // {
             wasix =
-              ((o.passthru or {}).wasix or {})
+              ((old.passthru or {}).wasix or {})
               // {
                 publication = {
                   inherit (drv) version;
@@ -319,6 +492,23 @@
       });
   in
     lib.mapAttrs withPublication wheels;
+  # Import tests for the dependency closure: packages that ship in the registry
+  # because a shipped wheel pulls them in, which the worklist never names.
+  pythonClosureTests = let
+    py = nixpkgsByProfile.exnrefEhpic.python314;
+  in
+    import ./python-closure-tests.nix {
+      inherit lib;
+      python3 = py;
+      testLib = import ./python-test-lib.nix {
+        inherit pkgs lib;
+        python3 = py;
+        pythonWebc = wasmerLayer.wasmerPackages.python314.webc;
+        wasmer = wasmerRuntime;
+      };
+      wheelList = import ./overlay/python-packages/wheels.nix;
+    };
+
   isNoarch = e: e.noarch or false;
   publishOnceWheelNames =
     map (e: e.attr)
@@ -354,6 +544,16 @@
     wasmer = wasmerRuntime;
     packagesDir = ./overlay/packages;
     inherit pythonRegistry;
+    # Shipped CLIs run only a declared emulatedCheck, never an auto-detected
+    # one: they already carry curated suites or the liveness smoke, and their
+    # build layouts do not fit the generic runner. Libraries keep the
+    # auto-detection.
+    emulatedChecksFor = drv: let
+      spec = (wasixLib.wasixMetaOf drv).emulatedCheck or null;
+    in
+      if spec == null || spec == false
+      then {}
+      else {upstream = emulatedChecks.checkFor {inherit drv spec;};};
   };
   preferredProfilePackagesWithWebc = wasmerLayer.preferredProfilePackages;
   # Public package names and aliases; canonical-only consumers use the inventory.
@@ -381,11 +581,11 @@
     pythonWebc = preferredProfilePackagesWithWebc.python3.shim;
   };
 in {
-  inherit pkgs pkgsCross nixUpdate defaultProfileName wasixPkgNames;
+  inherit pkgs pkgsCross nixUpdate defaultProfileName wasixPkgNames wasixRun;
   inherit nativePackages packagesByProfile ciPackagesByProfile;
   inherit toolchain toolchainByProfile nixpkgsByProfile allWasmerPackages;
   preferredProfilePackages = preferredProfilePackagesWithWebc;
-  inherit shippedCommands wasmerPackages wasmerPackageInventory toolchainTestPkgs abiChecks;
+  inherit shippedCommands wasmerPackages wasmerPackageInventory toolchainTestPkgs abiChecks evalSanity;
   inherit libraryTestPkgs;
-  inherit pythonWheels pythonRegistry cargoRegistry;
+  inherit pythonWheels pythonRegistry cargoRegistry pythonClosureTests;
 }

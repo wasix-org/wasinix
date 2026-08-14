@@ -4,10 +4,13 @@
 {
   lib,
   toolchain,
+  referenceScanner,
+  snapshotZstd,
 }: {
   buildPackages,
   baseStdenv,
 }: let
+  inherit (import ../lib/check-output.nix {inherit lib referenceScanner snapshotZstd;}) checkOutputArgs;
   hp = baseStdenv.hostPlatform;
   exceptions = hp.wasmExceptions or null;
   pic = hp.wasmPic or false;
@@ -106,9 +109,11 @@
       preConfigureHooks+=(wasixDisableCxxModuleScan)
     '');
 in
-  # overrideCC-equivalent, since replaceCrossStdenv gives us no pkgsCross handle.
-  baseStdenv.override (_old: {
+  # Every declared suite gets a check output holding its test tree, allowing
+  # emulated-check.nix to run it without putting wasmer in the build closure.
+  buildPackages.stdenvAdapters.overrideMkDerivationArgs checkOutputArgs
+  (baseStdenv.override (_old: {
     cc = wasixCC;
     allowedRequisites = null;
     extraNativeBuildInputs = (_old.extraNativeBuildInputs or []) ++ [noCxxModuleScanHook];
-  })
+  }))

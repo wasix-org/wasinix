@@ -62,6 +62,7 @@
       ./patches/wasmer-forward-term-on-tty.patch
       # /dev/fd/<n> is the caller's fd n, which bash needs for <(...); see WASIX-TODO.md
       ./patches/wasmer-dev-fd.patch
+      ./patches/wasmer-epoll-stale-handler-deadlock.patch
     ];
     wasmerRuntime = wasmer.packages.${system}.wasmer.overrideAttrs (old: {
       patches = (old.patches or []) ++ wasmerPatches;
@@ -422,12 +423,16 @@
           wasinix-cargo-publish = wasinixCargoPublishCheck;
           wasinix-wasmer-serve = wasinixWasmerServeCheck;
           wasinix-serve-all = wasinixServeAllCheck;
+          eval-sanity = wasix.evalSanity;
         }
         (collectTests wasix.toolchainTestPkgs)
       ];
       packages = mergeDisjoint "checksBySet.packages" [
         (collectTests (removeAttrs wasix.wasmerPackageInventory ["rust"]))
         (lib.optionalAttrs (wasix.wasmerPackageInventory ? rust) {rust-webc = wasix.wasmerPackageInventory.rust.tests;})
+        (lib.concatMapAttrs
+          (profile: packages: collectTestsPrefixed "lib-${profile}-" packages)
+          wasix.packagesByProfile)
         (collectTests {cargo-registry = wasix.cargoRegistry;})
         (lib.mapAttrs' (p: lib.nameValuePair "abi-${p}") wasix.abiChecks)
         # non-shipped library packages carrying a tests/ dir
@@ -437,6 +442,7 @@
         # pythonWheels is nested by version; collect as wheel-py314-<attr>.
         (lib.concatMapAttrs (pv: wheelSet: collectTestsPrefixed "wheel-${pv}-" wheelSet) wasix.pythonWheels)
         (collectTests {python-registry = wasix.pythonRegistry;})
+        (lib.mapAttrs' (name: lib.nameValuePair "pyclosure-${name}") wasix.pythonClosureTests)
       ];
     };
     flakeChecks = mergeDisjoint "checks" ([{treefmt = treefmtCheck;}] ++ builtins.attrValues checksBySet);
@@ -482,6 +488,7 @@
         pythonWheels = wasix.pythonWheels;
         # all shipped wheels + transitive deps as a static PEP 503 index
         pythonRegistry = wasix.pythonRegistry;
+        pythonClosureTests = wasix.pythonClosureTests;
         # the crate patch tree minted as publishable +wasix.N fork builds
         cargoRegistry = wasix.cargoRegistry;
       };
@@ -559,41 +566,51 @@
         inherit lib mkWasix;
         pkgNames = wasix.wasixPkgNames;
       };
-      ciGroups = {
-        toolchain = {
-          jobs = toolchainJobs;
-          spotOwners = spotLib.toolchainNames;
-        };
-        cc = {
-          jobs =
-            lib.filter
-            (name:
-              !(lib.hasPrefix "toolchain.cargo-wasix" name)
-              && !(lib.hasPrefix "toolchain.rust-toolchain" name)
-              && name != "toolchain.runtime")
-            toolchainJobs;
-          spotOwners = ["stdenv"];
-        };
-        rust = {
-          jobs =
-            lib.filter
-            (name:
-              lib.hasPrefix "toolchain.cargo-wasix" name
-              || lib.hasPrefix "toolchain.rust-toolchain" name)
-            toolchainJobs;
-          spotOwners = ["rustPlatform"];
-        };
-        haskell = {
-          jobs =
-            lib.filter
-            (name:
-              (lib.hasPrefix "packagesByProfile." name
-                || lib.hasPrefix "wasmerPackages." name)
-              && lib.hasInfix "pandoc" name)
-            ciJobNames;
-          spotOwners = ["haskellPackages"];
-        };
-      };
+      testJobs = lib.filter (lib.hasPrefix "checks.") ciJobNames;
+      testJobsBySubject = lib.groupBy (name: ciJobInfo.${name}.subject) testJobs;
+      testGroups = lib.mapAttrs' (subject: jobs:
+        lib.nameValuePair "tests-${subject}" {
+          inherit jobs;
+          spotOwners = [];
+        })
+      testJobsBySubject;
+      ciGroups =
+        {
+          toolchain = {
+            jobs = toolchainJobs;
+            spotOwners = spotLib.toolchainNames;
+          };
+          cc = {
+            jobs =
+              lib.filter
+              (name:
+                !(lib.hasPrefix "toolchain.cargo-wasix" name)
+                && !(lib.hasPrefix "toolchain.rust-toolchain" name)
+                && name != "toolchain.runtime")
+              toolchainJobs;
+            spotOwners = ["stdenv"];
+          };
+          rust = {
+            jobs =
+              lib.filter
+              (name:
+                lib.hasPrefix "toolchain.cargo-wasix" name
+                || lib.hasPrefix "toolchain.rust-toolchain" name)
+              toolchainJobs;
+            spotOwners = ["rustPlatform"];
+          };
+          haskell = {
+            jobs =
+              lib.filter
+              (name:
+                (lib.hasPrefix "packagesByProfile." name
+                  || lib.hasPrefix "wasmerPackages." name)
+                && lib.hasInfix "pandoc" name)
+              ciJobNames;
+            spotOwners = ["haskellPackages"];
+          };
+        }
+        // testGroups;
       spotJobInfo =
         lib.concatMapAttrs
         (profile: packages:
@@ -679,6 +696,7 @@
         spotWith = spotLib.spotWith;
         pkgsCross.wasix = wasix.pkgsCross;
         allWasmerPackages = wasix.allWasmerPackages;
+        inherit (wasix) wasixRun;
 
         inherit ciSets ciGroups ciJobInfo ciSelectorCatalog;
         # The flat job map the docs teach as `.#ci`.
