@@ -3,6 +3,7 @@
 # PATH", so we keep that (no baked /nix/store path -> the wheel stays
 # relocatable for pip); a consumer provides jq (the webc mounts the jq command,
 # a pip user installs it). Import does not spawn jq, so it works standalone.
+# No suite: the released sdist ships no tests.
 {
   pyfinal,
   nix-update-script,

@@ -28,5 +28,9 @@ helpers.libTweaks {
     AWS_LC_SYS_CFLAGS = "-DOPENSSL_NO_TTY";
   };
   maturinBuildFlags = ["--features" "pyo3/extension-module"];
+  # No suite: the tests open real network connections, which block forever in
+  # the no-route sandbox; signals cannot interrupt blocked reads
+  # (WASIX-TODO.md).
+  passthru.wasix.installCheck = false;
 }
 pyprev.primp

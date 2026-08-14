@@ -31,5 +31,8 @@ helpers.libTweaks {
       --replace-fail 'pyo3::ffi::_PyLong_AsByteArray(' 'wasix_pylong_as_byte_array(' \
       --replace-fail '0, // is_signed' '0, /* is_signed */ 1,'
   '';
+  # both import pydantic, whose pydantic_core extension does not load in the
+  # guest; the import error at collection aborts the entire run
+  disabledTestPaths = ["tests/test_pydantic.py" "tests/test_types.py"];
 }
 pyprev.ormsgpack

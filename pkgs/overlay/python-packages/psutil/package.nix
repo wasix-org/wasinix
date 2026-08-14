@@ -6,11 +6,13 @@
 # the same edits cut against that layout.
 {
   pyprev,
-  helpers,
   lib,
+  helpers,
   ...
 }:
 helpers.libTweaks {
+  # The suite loops on a TypeError because the guest has no /proc.
+  passthru.wasix.installCheck = false;
   patches =
     if lib.versionOlder pyprev.psutil.version "7"
     then [./patches/psutil-presplit-wasix.patch]

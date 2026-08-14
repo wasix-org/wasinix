@@ -9,10 +9,13 @@
   lib,
   ...
 }:
-helpers.libTweaks (lib.optionalAttrs ((pyprev.charset-normalizer.passthru.wasix.historySpec or null) != null) {
-  postPatch = _: ''
-    sed -i 's/^MYPYC_SPEC = .*/MYPYC_SPEC = "mypy"/' _mypyc_hook/backend.py
-    sed -i 's/^requires = \["setuptools[^]]*\]/requires = ["setuptools"]/' pyproject.toml
-  '';
-})
+helpers.libTweaks (
+  lib.optionalAttrs ((pyprev.charset-normalizer.passthru.wasix.historySpec or null) != null) {
+    postPatch = _: ''
+      sed -i 's/^MYPYC_SPEC = .*/MYPYC_SPEC = "mypy"/' _mypyc_hook/backend.py
+      sed -i 's/^requires = \["setuptools[^]]*\]/requires = ["setuptools"]/' pyproject.toml
+    '';
+  }
+  // {pytestFlags = ["--import-mode=importlib"];}
+)
 pyprev.charset-normalizer
