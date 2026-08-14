@@ -12,6 +12,7 @@ wasix-llvm.passthru.llvm.flang-unwrapped.overrideAttrs (old: {
       ./flang-wasm32-target.patch
       ./flang-wasm32-runtime-abi.patch
       ./flang-wasm32-main.patch
+      ./flang-wasm32-common-linkage.patch
     ];
   doCheck = false;
 })
