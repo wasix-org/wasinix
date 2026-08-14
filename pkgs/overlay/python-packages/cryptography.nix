@@ -10,6 +10,7 @@
 # the dylib so every openssl reference resolves inside.
 {
   pyprev,
+  pyfinal,
   final,
   helpers,
   ...
@@ -46,6 +47,9 @@ in
         ];
       };
       maturinBuildFlags = ["--features" "pyo3/extension-module"];
+      # cryptography-vectors does not cross-evaluate. The package-specific
+      # OpenSSL checks and import smoke cover the extension.
+      passthru.wasix.installCheck = false;
     }
     // lib.optionalAttrs isHistory {patches = _: [];}
     // lib.optionalAttrs splitCargoRoot {cargoRoot = "src/rust";})
