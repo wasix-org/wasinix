@@ -15,5 +15,8 @@ helpers.libTweaks {
   propagatedBuildInputs =
     lib.optionals (lib.versionOlder pyprev.snowflake-connector-python.version "4")
     [pyfinal.boto3 pyfinal.cffi];
+  # The upstream suite requires credentials, network services, and optional
+  # storage backends. The wheel still receives its import check.
+  passthru.wasix.installCheck = false;
 }
 pyprev.snowflake-connector-python

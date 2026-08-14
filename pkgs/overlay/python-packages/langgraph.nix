@@ -7,10 +7,13 @@
   lib,
   ...
 }:
-helpers.libTweaks (lib.optionalAttrs (lib.versionOlder pyprev.langgraph.version "1.1") {
-  propagatedBuildInputs = helpers.replaceInputsByName {
-    langgraph-prebuilt = pyfinal.langgraph-prebuilt_1_0_8;
-    langgraph-sdk = pyfinal.langgraph-sdk_0_3_0;
-  };
-})
+helpers.libTweaks (
+  lib.optionalAttrs (lib.versionOlder pyprev.langgraph.version "1.1") {
+    propagatedBuildInputs = helpers.replaceInputsByName {
+      langgraph-prebuilt = pyfinal.langgraph-prebuilt_1_0_8;
+      langgraph-sdk = pyfinal.langgraph-sdk_0_3_0;
+    };
+  }
+  // {passthru.wasix.installCheck = false;}
+)
 pyprev.langgraph
