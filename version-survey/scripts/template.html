@@ -1,0 +1,840 @@
+<title>Which historical Python package versions are worth building</title>
+<style>
+:root {
+  color-scheme: light;
+  --ground:  #f1f4f2;
+  --surface: #fbfcfb;
+  --sunk:    #e8ece9;
+  --ink:     #131a18;
+  --ink-2:   #55605c;
+  --ink-3:   #7c8783;
+  --rule:    #d3dbd7;
+  --rule-2:  #bcc6c1;
+  --seq-1:   #a9d2c6;
+  --seq-2:   #2f8d72;
+  --seq-3:   #0f3f34;
+  --keep:    #2f8d72;
+  --break:   #8a4bb8;
+  --shadow:  0 1px 2px rgba(15, 40, 33, .06), 0 8px 24px -16px rgba(15, 40, 33, .3);
+
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground:  #101413;
+    --surface: #191e1c;
+    --sunk:    #141917;
+    --ink:     #e7ede9;
+    --ink-2:   #a0aba6;
+    --ink-3:   #78837f;
+    --rule:    #29322e;
+    --rule-2:  #3a453f;
+    --seq-1:   #1f5f50;
+    --seq-2:   #3f9d81;
+    --seq-3:   #9ad5c3;
+    --keep:    #3f9d81;
+    --break:   #c07fd4;
+    --shadow:  0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -16px rgba(0, 0, 0, .8);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground:  #101413;
+  --surface: #191e1c;
+  --sunk:    #141917;
+  --ink:     #e7ede9;
+  --ink-2:   #a0aba6;
+  --ink-3:   #78837f;
+  --rule:    #29322e;
+  --rule-2:  #3a453f;
+  --seq-1:   #1f5f50;
+  --seq-2:   #3f9d81;
+  --seq-3:   #9ad5c3;
+  --keep:    #3f9d81;
+  --break:   #c07fd4;
+  --shadow:  0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -16px rgba(0, 0, 0, .8);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 24px 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.col { max-width: 66ch; }
+
+/* ---------------------------------------------------------------- header */
+header.top {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--ground) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--rule);
+}
+header.top .inner {
+  max-width: 1120px; margin: 0 auto; padding: 10px 24px;
+  display: flex; align-items: baseline; gap: 20px; flex-wrap: wrap;
+}
+header.top .mark {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+header.top nav { display: flex; gap: 14px; margin-left: auto; }
+header.top a {
+  font-family: var(--mono); font-size: 12px; color: var(--ink-2);
+  text-decoration: none; border-bottom: 1px solid transparent; padding-bottom: 2px;
+}
+header.top a:hover, header.top a:focus-visible { color: var(--ink); border-bottom-color: var(--seq-2); }
+
+/* ---------------------------------------------------------------- hero */
+.hero { padding: 72px 0 40px; display: flex; flex-direction: column; gap: 20px; }
+.eyebrow {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(30px, 5vw, 46px);
+  line-height: 1.1; letter-spacing: -.02em; font-weight: 600;
+  margin: 0; text-wrap: balance; max-width: 22ch;
+}
+.dek { font-size: 18px; color: var(--ink-2); max-width: 62ch; margin: 0; }
+
+.figure-lead {
+  margin: 24px 0 0; padding: 24px;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 3px;
+  box-shadow: var(--shadow);
+}
+
+/* ---------------------------------------------------------------- sections */
+section { padding: 56px 0 0; display: flex; flex-direction: column; gap: 18px; }
+.part-rule {
+  display: flex; align-items: center; gap: 14px;
+  border-top: 2px solid var(--ink); padding-top: 10px; margin-top: 24px;
+}
+.part-tag {
+  font-family: var(--mono); font-size: 13px; font-weight: 600;
+  background: var(--ink); color: var(--ground);
+  padding: 1px 8px; border-radius: 2px;
+}
+.part-rule h2 {
+  font-family: var(--mono); font-size: 20px; font-weight: 600;
+  margin: 0; letter-spacing: -.01em;
+}
+h3 {
+  font-family: var(--mono); font-size: 15px; font-weight: 600;
+  margin: 20px 0 0; color: var(--ink);
+}
+p { margin: 0; max-width: 66ch; }
+p + p { margin-top: 4px; }
+strong { font-weight: 620; }
+code, .v {
+  font-family: var(--mono); font-size: .875em;
+  background: var(--sunk); border: 1px solid var(--rule);
+  padding: 0 4px; border-radius: 2px;
+}
+a.ref { color: var(--ink); text-decoration-color: var(--rule-2); text-underline-offset: 3px; }
+
+/* ---------------------------------------------------------------- stats */
+.stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1px; background: var(--rule);
+  border: 1px solid var(--rule); border-radius: 3px; overflow: hidden;
+}
+.stat { background: var(--surface); padding: 16px 18px; display: flex; flex-direction: column; gap: 3px; }
+.stat .n {
+  font-family: var(--mono); font-size: 30px; line-height: 1.05; font-weight: 600;
+  font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+}
+.stat .l { font-size: 13px; color: var(--ink-2); line-height: 1.35; }
+.stat .s { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+
+/* ---------------------------------------------------------------- charts */
+figure { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+figcaption { font-size: 13px; color: var(--ink-2); max-width: 66ch; }
+.chart-title {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.chart { width: 100%; overflow-x: auto; }
+svg { display: block; }
+svg text { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.swatch { width: 11px; height: 11px; border-radius: 2px; flex: none; }
+
+.tip {
+  position: fixed; z-index: 60; pointer-events: none; opacity: 0;
+  transition: opacity .1s;
+  background: var(--surface); border: 1px solid var(--rule-2); border-radius: 3px;
+  box-shadow: var(--shadow); padding: 7px 10px;
+  font-family: var(--mono); font-size: 12px; line-height: 1.45; color: var(--ink);
+  max-width: 280px;
+}
+.tip b { font-weight: 600; }
+.tip .dim { color: var(--ink-2); }
+
+/* ---------------------------------------------------------------- tables */
+.tablewrap {
+  overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px;
+  background: var(--surface); box-shadow: var(--shadow);
+}
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 7px 12px; white-space: nowrap; border-bottom: 1px solid var(--rule); }
+th {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-3); font-weight: 500; position: sticky; top: 0; background: var(--surface);
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--sunk); }
+td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+td.pkg { font-family: var(--mono); font-weight: 550; }
+td.ver { font-family: var(--mono); color: var(--ink-2); }
+.pill {
+  font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 10px;
+  border: 1px solid currentColor; white-space: nowrap;
+}
+.pill.native { color: var(--break); }
+.pill.pure { color: var(--ink-3); }
+details.more { margin-top: -4px; }
+details.more > summary {
+  font-family: var(--mono); font-size: 12px; color: var(--ink-2);
+  cursor: pointer; padding: 4px 0; list-style-position: inside;
+}
+details.more > summary:hover { color: var(--ink); }
+
+.note {
+  border-left: 2px solid var(--rule-2); padding: 2px 0 2px 16px;
+  font-size: 14px; color: var(--ink-2); max-width: 64ch;
+}
+footer {
+  margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 12px; color: var(--ink-3);
+  display: flex; flex-direction: column; gap: 6px;
+}
+:focus-visible { outline: 2px solid var(--seq-2); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (max-width: 640px) {
+  .hero { padding: 44px 0 28px; }
+  .stat .n { font-size: 25px; }
+}
+</style>
+
+<header class="top">
+  <div class="inner">
+    <span class="mark">wasinix / version survey</span>
+    <nav>
+      <a href="#a">a · what's installed</a>
+      <a href="#b">b · semver</a>
+      <a href="#c">c · build or alias</a>
+      <a href="#method">method</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="hero col">
+    <div class="eyebrow" id="window"></div>
+    <h1>Two fifths of PyPI's install traffic is not the newest release</h1>
+    <p class="dek">Most of that is people running behind, not people who need an old version.
+      Telling the two apart decides how much history a WASIX package registry has to actually
+      build.</p>
+  </div>
+
+  <div class="figure-lead">
+    <figure>
+      <div class="chart-title">Where install traffic sits, relative to each project's newest release</div>
+      <div class="chart" id="c-split"></div>
+      <figcaption id="cap-split"></figcaption>
+    </figure>
+  </div>
+
+  <section class="col">
+    <div class="stats" id="hero-stats"></div>
+  </section>
+
+  <!-- ------------------------------------------------------------ part a -->
+  <section id="a">
+    <div class="part-rule">
+      <span class="part-tag">a</span>
+      <h2>Which non-latest versions are in use</h2>
+    </div>
+    <p class="col">Version demand is far more concentrated than the raw count of releases
+      suggests. The median project has published hundreds of versions; four of them cover
+      90% of what anyone installs.</p>
+
+    <figure>
+      <div class="chart-title">Installs served, by how many versions per project you carry</div>
+      <div class="chart" id="c-cover"></div>
+      <figcaption id="cap-cover"></figcaption>
+    </figure>
+
+    <p class="col" id="p-age"></p>
+
+    <h3 class="col">Projects with a genuinely live older major line</h3>
+    <p class="col" id="p-major"></p>
+    <div class="tablewrap"><table id="t-major"></table></div>
+  </section>
+
+  <!-- ------------------------------------------------------------ part b -->
+  <section id="b">
+    <div class="part-rule">
+      <span class="part-tag">b</span>
+      <h2>Who keeps the semver promise</h2>
+    </div>
+    <p class="col">The version number is a claim. To check it, every in-use version was
+      diffed against its project's current latest: both wheels AST-parsed, exported names
+      compared. A name that disappears is proof the newer release cannot quietly stand in
+      for the older one.</p>
+
+    <figure>
+      <div class="chart-title">Share of diffs that removed public API, by the boundary crossed</div>
+      <div class="chart" id="c-break"></div>
+      <div class="legend" id="l-break"></div>
+      <figcaption id="cap-break"></figcaption>
+    </figure>
+
+    <p class="col" id="p-break"></p>
+
+    <h3 class="col">Numbering schemes</h3>
+    <p class="col" id="p-scheme"></p>
+    <div class="tablewrap"><table id="t-scheme"></table></div>
+
+    <h3 class="col">Worst breakage at a minor or patch boundary</h3>
+    <p class="col">Names these projects dropped from their top-level namespace without
+      bumping a major.</p>
+    <div class="tablewrap"><table id="t-honesty"></table></div>
+
+    <h3 class="col">What the ecosystem itself believes</h3>
+    <p class="col" id="p-caps"></p>
+    <div class="tablewrap"><table id="t-caps"></table></div>
+  </section>
+
+  <!-- ------------------------------------------------------------ part c -->
+  <section id="c">
+    <div class="part-rule">
+      <span class="part-tag">c</span>
+      <h2>Build it, or point it at something newer</h2>
+    </div>
+    <p class="col" id="p-verdict"></p>
+
+    <figure>
+      <div class="chart-title">Historical install traffic, by whether the latest release can substitute</div>
+      <div class="chart" id="c-verdict"></div>
+      <div class="legend" id="l-verdict"></div>
+    </figure>
+
+    <h3 class="col">What each policy costs</h3>
+    <p class="col" id="p-policy-cost"></p>
+    <div class="tablewrap"><table id="t-policy"></table></div>
+
+    <h3 class="col">Build these</h3>
+    <p class="col">Ranked by install volume. A version lands here when the latest release drops
+      a name from its top-level namespace, removes or narrows enough elsewhere to clear the
+      tolerance, or ships no Python API to compare. <span class="v">pinned</span> counts
+      published projects whose own metadata forbids the latest release and resolves to exactly
+      this version. No amount of aliasing talks that demand away.</p>
+    <div class="tablewrap"><table id="t-build"></table></div>
+
+    <h3 class="col">Point these at the latest</h3>
+    <p class="col">The highest-volume historical versions the current release can stand in
+      for: nothing dropped from the top-level namespace, and any deeper removal below the
+      tolerance.</p>
+    <div class="tablewrap"><table id="t-alias"></table></div>
+
+    <h3 class="col">The policy this suggests</h3>
+    <div class="note" id="p-policy"></div>
+  </section>
+
+  <section id="method">
+    <div class="part-rule">
+      <span class="part-tag">·</span>
+      <h2>Method</h2>
+    </div>
+    <div class="col" id="p-method"></div>
+  </section>
+
+  <footer>
+    <span id="foot-window"></span>
+    <span>Sources: ClickHouse public <span class="v">pypi</span> dataset (resolver traffic only, mirrors excluded); PyPI simple index; wheel contents parsed with <span class="v">ast</span>.</span>
+    <span>Companion to the wasinix top-10k native-dependency survey.</span>
+  </footer>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<script>
+const D = /*__DATA__*/null;
+const A = D.A, B = D.B, C = D.C;
+
+const pc = (x, d = 1) => (x == null ? "n/a" : (x * 100).toFixed(d) + "%");
+const big = n => n >= 1e9 ? (n / 1e9).toFixed(1) + "B" : n >= 1e6 ? Math.round(n / 1e6) + "M" : n.toLocaleString();
+const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
+
+/* ---------------------------------------------------------------- tooltip */
+const tip = document.getElementById("tip");
+function bindTip(node, html) {
+  node.addEventListener("pointerenter", e => { tip.innerHTML = html; tip.style.opacity = 1; move(e); });
+  node.addEventListener("pointermove", move);
+  node.addEventListener("pointerleave", () => { tip.style.opacity = 0; });
+  function move(e) {
+    const r = tip.getBoundingClientRect();
+    let x = e.clientX + 14, y = e.clientY + 16;
+    if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 14;
+    if (y + r.height > innerHeight - 8) y = e.clientY - r.height - 16;
+    tip.style.left = x + "px"; tip.style.top = y + "px";
+  }
+}
+const SVG = "http://www.w3.org/2000/svg";
+const mk = (t, a) => { const e = document.createElementNS(SVG, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+
+function legend(id, items) {
+  const box = document.getElementById(id);
+  items.forEach(([color, label]) => {
+    const s = el("span");
+    const sw = el("i", "swatch"); sw.style.background = color;
+    s.append(sw, document.createTextNode(label));
+    box.append(s);
+  });
+}
+
+/* ---------------------------------------------------------------- header text */
+const win = A.window[0] + " → " + A.window[1];
+document.getElementById("window").textContent =
+  "PyPI · top " + A.n_projects + " projects · " + big(A.downloads) + " installs · " + win;
+document.getElementById("foot-window").textContent =
+  "Survey window " + win + " (30 days). Top " + A.n_projects + " projects by resolver traffic, " +
+  big(A.downloads) + " downloads.";
+
+/* ---------------------------------------------------------------- lead chart */
+{
+  const parts = [
+    ["var(--seq-3)", "the latest release", A.latest_share],
+    ["var(--seq-2)", "older, same major line", A.same_major_share - A.latest_share],
+    ["var(--seq-1)", "an older major line", 1 - A.same_major_share],
+  ];
+  const W = 1000, H = 96, y = 18, h = 46, GAP = 2;
+  const svg = mk("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", height: H, role: "img",
+                          "aria-label": "Stacked bar of install traffic by distance from the latest release" });
+  let x = 0;
+  parts.forEach(([c, label, v], i) => {
+    const w = v * W - (i < parts.length - 1 ? GAP : 0);
+    const r = mk("rect", { x, y, width: Math.max(w, 1), height: h, fill: c, rx: 3 });
+    bindTip(r, `<b>${label}</b><br><span class="dim">${pc(v)} of installs · ${big(v * A.downloads)}</span>`);
+    svg.append(r);
+    const t = mk("text", { x: x + 10, y: y + 28, "font-size": 15, "font-weight": 600,
+                           fill: i === 0 ? "var(--ground)" : (i === 1 ? "var(--ground)" : "var(--seq-3)") });
+    t.textContent = pc(v, 0);
+    if (v > 0.06) svg.append(t);
+    const lab = mk("text", { x: x, y: y + h + 20, "font-size": 12, fill: "var(--ink-2)" });
+    lab.textContent = label;
+    svg.append(lab);
+    x += v * W;
+  });
+  document.getElementById("c-split").append(svg);
+  document.getElementById("cap-split").textContent =
+    "Resolver traffic only, scored against the project's latest release at the end of the " +
+    "window. Scored instead against whatever was newest on the day of each install, " +
+    pc(A.timely_latest_share) + " are current and " + pc(A.timely_same_major_share) +
+    " are inside the then-current major line. " +
+    pc(A.nonlatest_within_major) + " of the non-latest share is a " +
+    "release inside the current major line, which is a lag problem. The remaining " +
+    pc(A.nonlatest_older_major) + " sits on an older major, where a compatibility break is likely.";
+}
+
+/* ---------------------------------------------------------------- hero stats */
+{
+  const S = [
+    [pc(1 - A.timely_latest_share), "of installs were not the newest release available that day",
+     "vs " + pc(1 - A.latest_share) + " against a fixed latest"],
+    [A.installed_age_q.p50 + "d", "median age of the release actually installed", "p90 " + A.installed_age_q.p90 + "d"],
+    [pc(A.coverage_curve.find(r => r.k === 5).share), "of installs covered by 5 versions per project", "top-1: " + pc(A.coverage_curve[0].share)],
+    [pc(B.dep_excl_latest), "of dependency requirements forbid the current latest", pc(B.dep_excl_by_cap) + " by deliberate cap"],
+  ];
+  const box = document.getElementById("hero-stats");
+  S.forEach(([n, l, s]) => {
+    const d = el("div", "stat");
+    d.append(el("div", "n", n), el("div", "l", l));
+    if (s) d.append(el("div", "s", s));
+    box.append(d);
+  });
+}
+
+/* ---------------------------------------------------------------- coverage curve */
+{
+  const pts = A.coverage_curve;
+  const W = 1000, H = 300, m = { t: 16, r: 24, b: 42, l: 52 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const xs = k => m.l + (Math.log(k) / Math.log(25)) * iw;
+  const ys = v => m.t + ih - v * ih;
+  const svg = mk("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", height: H, role: "img",
+                          "aria-label": "Share of installs served as more versions per project are carried" });
+  [0, 0.25, 0.5, 0.75, 1.0].forEach(v => {
+    svg.append(mk("line", { x1: m.l, x2: W - m.r, y1: ys(v), y2: ys(v),
+                            stroke: v === 0 ? "var(--rule-2)" : "var(--rule)", "stroke-width": 1 }));
+    const t = mk("text", { x: m.l - 10, y: ys(v) + 4, "font-size": 11, fill: "var(--ink-3)", "text-anchor": "end" });
+    t.textContent = (v * 100).toFixed(0) + "%";
+    svg.append(t);
+  });
+  const d = pts.map((p, i) => (i ? "L" : "M") + xs(p.k) + " " + ys(p.share)).join(" ");
+  svg.append(mk("path", { d: d + ` L ${xs(25)} ${ys(0)} L ${xs(1)} ${ys(0)} Z`, fill: "var(--seq-2)", opacity: .12 }));
+  svg.append(mk("path", { d, fill: "none", stroke: "var(--seq-2)", "stroke-width": 2, "stroke-linejoin": "round" }));
+  pts.forEach((p, i) => {
+    const last = i === pts.length - 1;
+    const c = mk("circle", { cx: xs(p.k), cy: ys(p.share), r: last ? 6 : 4.5,
+                             fill: last ? "var(--seq-3)" : "var(--surface)",
+                             stroke: last ? "var(--surface)" : "var(--seq-2)", "stroke-width": 2 });
+    bindTip(c, `<b>${p.k} version${p.k > 1 ? "s" : ""} per project</b><br><span class="dim">${pc(p.share)} of installs served</span>`);
+    svg.append(c);
+    const t = mk("text", { x: xs(p.k), y: H - m.b + 18, "font-size": 11, fill: "var(--ink-3)", "text-anchor": "middle" });
+    t.textContent = p.k;
+    svg.append(t);
+  });
+  [1, 5, 25].forEach(k => {
+    const p = pts.find(q => q.k === k);
+    const t = mk("text", { x: xs(k) + (k === 25 ? -6 : 8), y: ys(p.share) - 12, "font-size": 12,
+                           "font-weight": 600, fill: "var(--ink)", "text-anchor": k === 25 ? "end" : "start" });
+    t.textContent = pc(p.share, 0);
+    svg.append(t);
+  });
+  const xl = mk("text", { x: m.l + iw / 2, y: H - 6, "font-size": 11, fill: "var(--ink-3)", "text-anchor": "middle" });
+  xl.textContent = "versions carried per project (log scale)";
+  svg.append(xl);
+  document.getElementById("c-cover").append(svg);
+  document.getElementById("cap-cover").textContent =
+    "Versions needed to cover 90% of one project's installs: median " + A.n90_q.p50 +
+    ", p75 " + A.n90_q.p75 + ", p90 " + A.n90_q.p90 + ".";
+}
+
+/* ---------------------------------------------------------------- age paragraph */
+{
+  const b = A.age_buckets, t = b.lt6m + b["6m_2y"] + b.gt2y;
+  document.getElementById("p-age").innerHTML =
+    "Age tells lag from need. Of the historical traffic on versions holding at least 2% of " +
+    "their project, <strong>" + pc(b.lt6m / t) + "</strong> is on a release under six months old, " +
+    pc(b["6m_2y"] / t) + " on one between six months and two years, and " +
+    "<strong>" + pc(b.gt2y / t) + "</strong> on something over two years old. And it is not an " +
+    "old-interpreter artefact: installs of older releases come from Python 3.12 or newer " +
+    pc(A.python_modern_old) + " of the time, against " + pc(A.python_modern_latest) +
+    " for installs of the latest.";
+}
+
+/* ---------------------------------------------------------------- live majors */
+{
+  document.getElementById("p-major").innerHTML =
+    "<strong>" + A.live_major_lines.length + " of " + A.n_projects + " projects</strong> send at " +
+    "least 10% of their installs to a major other than the current one (on at least 100M " +
+    "installs). These are the packages that genuinely need more than one build.";
+  const rows = A.live_major_lines;
+  const t = document.getElementById("t-major");
+  t.innerHTML = "<thead><tr><th>project</th><th>latest</th><th class='num'>off current major</th>" +
+                "<th>build</th><th>traffic by major</th></tr></thead>";
+  const tb = el("tbody");
+  rows.slice(0, 24).forEach(r => {
+    const tr = el("tr");
+    tr.append(el("td", "pkg", r.project), el("td", "ver", r.latest));
+    const c = el("td", "num"); c.textContent = pc(r.off_major, 0); tr.append(c);
+    const b = el("td");
+    b.append(el("span", "pill " + (r.native ? "native" : "pure"), r.native ? "native" : "pure"));
+    tr.append(b);
+    tr.append(el("td", "ver", Object.entries(r.majors).slice(0, 4).map(([k, v]) => k + ": " + pc(v, 0)).join("  ")));
+    tb.append(tr);
+  });
+  t.append(tb);
+}
+
+/* ---------------------------------------------------------------- breakage chart */
+{
+  const order = ["patch", "minor", "major"];
+  const rows = order.filter(k => B.boundaries[k]).map(k => ({ k, ...B.boundaries[k] }));
+  const W = 1000, H = 290, m = { t: 16, r: 24, b: 52, l: 52 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const band = iw / rows.length;
+  const svg = mk("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", height: H, role: "img",
+                          "aria-label": "Share of version diffs that removed public API, by boundary" });
+  [0, .25, .5, .75, 1].forEach(v => {
+    svg.append(mk("line", { x1: m.l, x2: W - m.r, y1: m.t + ih - v * ih, y2: m.t + ih - v * ih,
+                            stroke: v === 0 ? "var(--rule-2)" : "var(--rule)", "stroke-width": 1 }));
+    const t = mk("text", { x: m.l - 10, y: m.t + ih - v * ih + 4, "font-size": 11, fill: "var(--ink-3)", "text-anchor": "end" });
+    t.textContent = (v * 100).toFixed(0) + "%";
+    svg.append(t);
+  });
+  rows.forEach((r, i) => {
+    const series = [
+      ["var(--break)", "any public name removed or narrowed", r.broke / r.n],
+      ["var(--keep)", "top-level namespace broken", r.root_broke / r.n],
+    ];
+    const bw = Math.min(96, band / 2.6);
+    series.forEach(([c, label, v], j) => {
+      const x = m.l + band * i + band / 2 - bw - 3 + j * (bw + 6);
+      const h = Math.max(v * ih, v > 0 ? 2 : 0);
+      const rect = mk("rect", { x, y: m.t + ih - h, width: bw, height: h, fill: c, rx: 4 });
+      bindTip(rect, `<b>${r.k} boundary</b><br><span class="dim">${label}<br>${pc(v)} of ${r.n} diffs</span>`);
+      svg.append(rect);
+      const t = mk("text", { x: x + bw / 2, y: m.t + ih - h - 8, "font-size": 12, "font-weight": 600,
+                             fill: "var(--ink)", "text-anchor": "middle" });
+      t.textContent = pc(v, 0);
+      svg.append(t);
+    });
+    const lab = mk("text", { x: m.l + band * i + band / 2, y: H - m.b + 22, "font-size": 13,
+                             fill: "var(--ink)", "text-anchor": "middle" });
+    lab.textContent = r.k;
+    svg.append(lab);
+    const sub = mk("text", { x: m.l + band * i + band / 2, y: H - m.b + 38, "font-size": 11,
+                             fill: "var(--ink-3)", "text-anchor": "middle" });
+    sub.textContent = r.n + " diffs";
+    svg.append(sub);
+  });
+  document.getElementById("c-break").append(svg);
+  legend("l-break", [["var(--break)", "any public name removed or narrowed"],
+                     ["var(--keep)", "name dropped from the top-level namespace"]]);
+  document.getElementById("cap-break").textContent =
+    "Each in-use version above 2% share, diffed against its project's current latest.";
+
+  const mn = B.boundaries.minor, mj = B.boundaries.major, pt = B.boundaries.patch;
+  document.getElementById("p-break").innerHTML =
+    "The major number does carry signal: crossing one drops a top-level name <strong>" +
+    pc(mj.root_broke / mj.n, 0) + "</strong> of the time, against <strong>" +
+    pc(mn.root_broke / mn.n, 0) + "</strong> for a minor and <strong>" +
+    pc(pt.root_broke / pt.n, 0) + "</strong> for a patch. But one minor bump in " +
+    Math.round(mn.n / Math.max(mn.root_broke, 1)) + " still breaks the top-level namespace, " +
+    "so \"same major\" is a useful prior, not a substitution guarantee.";
+}
+
+/* ---------------------------------------------------------------- schemes */
+{
+  const order = Object.entries(B.schemes).sort((a, b) => b[1].traffic - a[1].traffic);
+  document.getElementById("p-scheme").innerHTML =
+    "Semver-shaped numbering dominates, but " + B.never_bumped_major + " of " + B.semver_shaped_n +
+    " semver-shaped projects have never bumped a major at all. For those, an unchanged major " +
+    "number cannot mean \"nothing broke\". It means the project does not use the field. " +
+    "Median major bumps per year across the survey: " + B.major_bumps_per_year_q.p50.toFixed(2) + ".";
+  const t = document.getElementById("t-scheme");
+  t.innerHTML = "<thead><tr><th>scheme</th><th class='num'>projects</th><th class='num'>share of traffic</th>" +
+                "<th class='num'>on latest</th><th class='num'>within latest major</th>" +
+                "<th class='num'>dependents capping</th></tr></thead>";
+  const tb = el("tbody");
+  order.forEach(([k, v]) => {
+    const tr = el("tr");
+    tr.append(el("td", "pkg", k));
+    [[v.n, 0], [v.traffic_share, 1], [v.latest, 1], [v.in_major, 1], [v.capped, 1]].forEach(([x, isPct], i) => {
+      const c = el("td", "num");
+      c.textContent = i === 0 ? x : pc(x, 0);
+      tr.append(c);
+    });
+    tb.append(tr);
+  });
+  t.append(tb);
+}
+
+/* ---------------------------------------------------------------- honesty */
+{
+  const rows = B.honesty.filter(r => r.worst > 0).slice(0, 20);
+  const t = document.getElementById("t-honesty");
+  t.innerHTML = "<thead><tr><th>project</th><th>latest</th><th class='num'>minor/patch diffs</th>" +
+                "<th class='num'>with removals</th><th>names dropped</th></tr></thead>";
+  const tb = el("tbody");
+  rows.forEach(r => {
+    const tr = el("tr");
+    tr.append(el("td", "pkg", r.project), el("td", "ver", r.latest));
+    const a = el("td", "num", String(r.n)), b = el("td", "num", String(r.bad));
+    tr.append(a, b, el("td", "ver", r.examples.slice(0, 4).join(", ")));
+    tb.append(tr);
+  });
+  t.append(tb);
+  const clean = B.honesty.filter(r => r.worst === 0).length;
+  document.querySelector("#t-honesty").closest(".tablewrap").insertAdjacentHTML(
+    "afterend", '<p class="col" style="font-size:14px;color:var(--ink-2)">' + clean + " of " +
+    B.honesty.length + " projects with a measurable minor or patch diff dropped nothing from " +
+    "their top-level namespace.</p>");
+}
+
+/* ---------------------------------------------------------------- caps */
+{
+  document.getElementById("p-caps").innerHTML =
+    "Across " + B.dep_total.toLocaleString() + " dependency requirements taken from the latest " +
+    "release of every PyPI project published since 2024, <strong>" + pc(B.dep_capped) +
+    "</strong> carry an upper bound and <strong>" + pc(B.dep_excl_latest) + "</strong> would " +
+    "refuse the dependency's current latest release, of which " + pc(B.dep_excl_by_cap) +
+    " comes from a deliberate range cap and " + pc(B.dep_excl_by_pin) + " from a stale exact pin. " +
+    "Where the caps cluster, a resolver in the wild keeps landing on an older line no matter " +
+    "what the registry offers.";
+  const t = document.getElementById("t-caps");
+  t.innerHTML = "<thead><tr><th>project</th><th class='num'>dependents</th><th class='num'>capped</th>" +
+                "<th class='num'>cap excludes latest</th><th>they land on</th></tr></thead>";
+  const tb = el("tbody");
+  B.top_capped.slice(0, 16).forEach(r => {
+    const tr = el("tr");
+    tr.append(el("td", "pkg", r.project));
+    tr.append(el("td", "num", r.dependents.toLocaleString()));
+    tr.append(el("td", "num", pc(r.pct_capped, 0)));
+    tr.append(el("td", "num", pc(r.pct_excludes_latest_by_cap, 0)));
+    tr.append(el("td", "ver", Object.keys(r.resolves_to).slice(0, 3).join(", ")));
+    tb.append(tr);
+  });
+  t.append(tb);
+}
+
+/* ---------------------------------------------------------------- verdicts */
+{
+  const v = C.verdicts;
+  const tot = Object.values(v).reduce((s, x) => s + x.downloads, 0);
+  const spec = [
+    ["safe", "var(--keep)", "the latest can substitute"],
+    ["probably-safe", "var(--seq-1)", "only sub-namespace removals"],
+    ["breaking", "var(--break)", "public API removed"],
+    ["unknown", "var(--rule-2)", "compiled-only wheel"],
+    ["unmeasured", "var(--sunk)", "outside the diff set"],
+  ].filter(([k]) => v[k]);
+  const W = 1000, H = 92, y = 14, h = 46, GAP = 2;
+  const svg = mk("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", height: H, role: "img",
+                          "aria-label": "Historical install traffic by substitution verdict" });
+  let x = 0;
+  spec.forEach(([k, c, desc], i) => {
+    const frac = v[k].downloads / tot, w = frac * W - (i < spec.length - 1 ? GAP : 0);
+    const r = mk("rect", { x, y, width: Math.max(w, 1), height: h, fill: c, rx: 3,
+                           stroke: k === "unmeasured" ? "var(--rule-2)" : "none", "stroke-width": 1 });
+    bindTip(r, `<b>${k}</b>: ${desc}<br><span class="dim">${v[k].n} versions · ${pc(frac)} of historical traffic</span>`);
+    svg.append(r);
+    if (frac > 0.07) {
+      const t = mk("text", { x: x + 10, y: y + 28, "font-size": 15, "font-weight": 600,
+                             fill: k === "probably-safe" || k === "unmeasured" ? "var(--ink)" : "var(--ground)" });
+      t.textContent = pc(frac, 0);
+      svg.append(t);
+    }
+    const lab = mk("text", { x, y: y + h + 20, "font-size": 12, fill: "var(--ink-2)" });
+    lab.textContent = k;
+    if (frac > 0.05) svg.append(lab);
+    x += frac * W;
+  });
+  document.getElementById("c-verdict").append(svg);
+  legend("l-verdict", spec.map(([k, c, d]) => [c, k + ": " + d]));
+
+  document.getElementById("p-verdict").innerHTML =
+    "<strong>" + C.n_pairs.toLocaleString() + " (project, version) pairs</strong> hold at least " +
+    "2% of their project's traffic without being its latest release; together they are " +
+    pc(C.rec_share_all) + " of every install in the survey. Splitting them by whether the " +
+    "current latest could be served instead: " +
+    "<strong>" + pc((v.safe.downloads + (v["probably-safe"] ? v["probably-safe"].downloads : 0)) / tot) +
+    "</strong> of that traffic is substitutable outright, " +
+    "<strong>" + pc(v.breaking.downloads / tot) + "</strong> is not. Of the traffic that is not, " +
+    pc(C.breaking_native_share) + " sits on versions that ship native code, which are the " +
+    "expensive ones to build for WASIX.";
+}
+
+/* ---------------------------------------------------------------- policy cost */
+{
+  const t = document.getElementById("t-policy");
+  t.innerHTML = "<thead><tr><th>policy</th><th class='num'>builds</th>" +
+                "<th class='num'>installs served</th><th>needs substitution</th></tr></thead>";
+  const tb = el("tbody");
+  C.policies.forEach(p => {
+    const tr = el("tr");
+    tr.append(el("td", "", p.name));
+    tr.append(el("td", "num", p.builds.toLocaleString()));
+    tr.append(el("td", "num", pc(p.served, 1)));
+    tr.append(el("td", "ver", p.exact ? "no, exact version match" : "yes, within the line"));
+    tb.append(tr);
+  });
+  t.append(tb);
+  document.getElementById("p-policy-cost").innerHTML =
+    "The head-of-line policies only reach those numbers if serving a newer release from the " +
+    "same line is acceptable. Measured against the diff, that assumption fails for <strong>" +
+    pc(C.within_line_break_pairs) + "</strong> of same-major pairs, carrying " +
+    pc(C.within_line_break_traffic) + " of same-major traffic. Small, but not zero, and " +
+    "concentrated in the projects named above.";
+}
+
+/* ---------------------------------------------------------------- build / alias tables */
+function verTable(id, rows, cols) {
+  const t = document.getElementById(id);
+  t.innerHTML = "<thead><tr>" + cols.map(c => `<th class="${c[2] || ''}">${c[0]}</th>`).join("") + "</tr></thead>";
+  const tb = el("tbody");
+  rows.forEach(r => {
+    const tr = el("tr");
+    cols.forEach(c => {
+      const td = el("td", (c[2] || "") + (c[3] || ""));
+      const val = c[1](r);
+      if (val instanceof Node) td.append(val); else td.textContent = val;
+      tr.append(td);
+    });
+    tb.append(tr);
+  });
+  t.append(tb);
+}
+const age = r => r.age_days ? (r.age_days / 365).toFixed(1) + "y" : "?";
+verTable("t-build", D.build, [
+  ["project", r => r.project, "", " pkg"],
+  ["version", r => r.version, "", " ver"],
+  ["latest", r => r.latest, "", " ver"],
+  ["share", r => pc(r.share, 0), "num"],
+  ["age", r => age(r), "num"],
+  ["build", r => { const s = el("span", "pill " + (r.native ? "native" : "pure"), r.native ? "native" : "pure"); return s; }],
+  ["boundary", r => r.boundary || "?", ""],
+  ["dropped from root", r => r.removed_root != null ? String(r.removed_root) : "?", "num"],
+  ["names removed", r => r.removed != null ? String(r.removed) : "?", "num"],
+  ["sigs narrowed", r => r.narrowed != null ? String(r.narrowed) : "?", "num"],
+  ["pinned", r => String(r.pinned_dependents), "num"],
+]);
+verTable("t-alias", D.alias, [
+  ["project", r => r.project, "", " pkg"],
+  ["version", r => r.version, "", " ver"],
+  ["latest", r => r.latest, "", " ver"],
+  ["share", r => pc(r.share, 0), "num"],
+  ["boundary", r => r.boundary || "?", ""],
+  ["names removed", r => r.removed != null ? String(r.removed) : "?", "num"],
+  ["verdict", r => r.verdict, ""],
+]);
+
+/* ---------------------------------------------------------------- policy + method */
+document.getElementById("p-policy").innerHTML = `
+<p>Carry the head of every major line that holds real traffic, not a long tail of point
+releases. Five versions per project already serve ${pc(A.coverage_curve.find(r => r.k === 5).share, 0)}
+of installs, and the ${A.live_major_lines.length} projects with a live older major are where
+the second and third builds actually earn their keep.</p>
+<p style="margin-top:10px">Resolve everything else forward to the newest release in the same
+line, except where a diff shows a removal or where dependents pin the exact version. Those
+two exceptions are the whole reason this survey exists: they are the demand that aliasing
+cannot absorb.</p>
+<p style="margin-top:10px">Spend build effort by cost, not by volume. Pure-Python history is
+nearly free, so be generous with it. Native history is not: ${pc(C.breaking_native_share, 0)} of the
+non-substitutable traffic needs a compiled build, and old native releases are the ones whose
+build systems fight a modern toolchain hardest.</p>`;
+
+document.getElementById("p-method").innerHTML = `
+<p style="max-width:66ch">Downloads come from the ClickHouse public <span class="v">pypi</span>
+dataset, restricted to real resolvers (pip, uv, poetry, pdm, pex, Bazel) so bandersnatch
+mirrors, which fetch every version equally, do not inflate the historical tail. PyPI
+download counts are still dominated by CI, so "in use" means "something automated installs it
+repeatedly", not "a person chose it".</p>
+<p style="max-width:66ch;margin-top:10px">The API diff downloads both wheels, AST-parses every
+public module and compares exported names: module-level functions, classes, public methods and
+attributes, constants, <span class="v">__all__</span> entries and relative re-exports. Absolute
+imports are ignored (<span class="v">from typing import Tuple</span> is machinery, not API), as
+is anything under a <span class="v">_</span>-prefixed module path. Dynamic
+<span class="v">__getattr__</span> re-exports and module renames still produce false positives,
+so the breakage rate is an upper bound; names dropped from the top-level namespace are the
+high-precision signal and drive the verdicts.</p>
+<p style="max-width:66ch;margin-top:10px">The diff covers the top 600 projects and, within each,
+versions holding at least 2% of that project's traffic. Everything outside that set is reported
+as <span class="v">unmeasured</span> rather than assumed safe. Wheels over 40 MB are skipped.</p>
+<p style="max-width:66ch;margin-top:10px">One trap worth recording: the public ClickHouse
+endpoint ships <span class="v">max_rows_to_read=1e10</span> with
+<span class="v">read_overflow_mode=break</span>, so large scans return partial, run-to-run
+inconsistent results with no error at all. The same single-day sum varied by 15% between runs
+until those limits were lifted.</p>`;
+</script>

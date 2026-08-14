@@ -6,6 +6,8 @@ native ones are built from, and how native packages get pulled into dependency
 closures.
 
 Motivation: sizing the native-code problem for WASIX Python packaging (wasinix).
+Companion to the historical-version survey in `../version-survey/`, which asks
+which non-latest versions of these packages are actually installed.
 
 ## Headline results
 
