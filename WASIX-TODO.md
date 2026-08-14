@@ -513,6 +513,26 @@ current toolchain before relying on it.
 
 ## Toolchain
 
+### flang folds constants at one rounding mode 🟡
+
+- wasm exposes neither directed rounding nor floating-point exception flags, so
+  its `fenv.h` defines only `FE_TONEAREST`. `flang/lib/Evaluate/host.cpp` sets
+  the host rounding mode and reads the exception flags while folding constants.
+- Workaround: `wasm32-fenv.patch` maps the directed modes onto round-to-nearest
+  and reads the flags as clear, so folding under `ROUND='UP'` and friends
+  silently uses the wrong mode rather than failing.
+- Fix: honour the requested mode in software, or diagnose the unsupported ones
+  the way flang already does for `TiesAwayFromZero`.
+
+### flang assumes a 64-bit host 🟡
+
+- `flang/CMakeLists.txt` refuses any target whose pointers are 32 bits, and
+  `lib/Evaluate/constant.cpp` narrows 64-bit subscripts into `size_t`.
+- Workaround: `wasm32-pointer-width.patch` exempts wasm from the refusal and the
+  package downgrades `c++11-narrowing`; a wasm32 address space cannot hold an
+  object whose subscript needs the discarded bits.
+- Fix: upstream flang should size its subscript types off the target.
+
 ### wasix-libc exports `sigaltstack` but hides its API 🟡
 
 - LLVM's CMake symbol check finds `sigaltstack`, but wasix-libc guards the

@@ -1,0 +1,37 @@
+--- a/lib/Evaluate/host.cpp
++++ b/lib/Evaluate/host.cpp
+@@ -11,6 +11,34 @@
+ #include "flang/Common/idioms.h"
+ #include "llvm/Support/Errno.h"
+ #include <cfenv>
++
++// wasm exposes neither directed rounding nor floating-point exception flags, so
++// its fenv.h defines only FE_TONEAREST. Fold at the one mode the host has and
++// read the exception flags as clear.
++#ifndef FE_TOWARDZERO
++#define FE_TOWARDZERO FE_TONEAREST
++#endif
++#ifndef FE_UPWARD
++#define FE_UPWARD FE_TONEAREST
++#endif
++#ifndef FE_DOWNWARD
++#define FE_DOWNWARD FE_TONEAREST
++#endif
++#ifndef FE_INVALID
++#define FE_INVALID 0
++#endif
++#ifndef FE_DIVBYZERO
++#define FE_DIVBYZERO 0
++#endif
++#ifndef FE_OVERFLOW
++#define FE_OVERFLOW 0
++#endif
++#ifndef FE_UNDERFLOW
++#define FE_UNDERFLOW 0
++#endif
++#ifndef FE_INEXACT
++#define FE_INEXACT 0
++#endif
+ #if __x86_64__
+ #include <xmmintrin.h>
+ #endif

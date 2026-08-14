@@ -6,6 +6,7 @@
   prev,
   helpers,
   toolchain,
+  nixpkgs,
   ...
 }: let
   libllvm = final.llvm.passthru.wasix.libllvm;
@@ -42,6 +43,10 @@
     version = toolchain.llvm.llvm.version;
     release_version = toolchain.llvmVersion;
     monorepoSrc = toolchain.llvmMonorepoSrc;
+    # nativeBuildInputs wants a build-host compiler, but this set's buildPackages
+    # still resolves clang to the cross wrapper, so cmake probes with a driver
+    # whose resource root holds no builtins archive for this target.
+    clang = nixpkgs.legacyPackages.${final.stdenv.buildPlatform.system}.clang;
     inherit libllvm libclang mlir;
   };
 in
@@ -49,12 +54,16 @@ in
     patches = [
       ./wasm32-target.patch
       ./wasm32-main.patch
+      ./wasm32-pointer-width.patch
+      ./wasm32-fenv.patch
     ];
     passthru.wasix = {
       shipped = true;
       updateNotes = [
         {message = "drop wasm32-target.patch once upstream Flang has a WebAssembly target ABI";}
         {message = "drop wasm32-main.patch once upstream Flang emits WASI's two-argument main entry";}
+        {message = "drop wasm32-pointer-width.patch once upstream Flang stops equating a 32-bit pointer with an unsupported CPU";}
+        {message = "drop wasm32-fenv.patch once wasm exposes directed rounding and exception flags, or upstream Flang guards its fenv use";}
         {message = "drop external-mlir-tblgen.patch once standalone MLIR preserves a supplied native tablegen when cross compiling";}
         {message = "recheck standalone WASIX Flang linking when the profile-specific runtime can be selected inside a webc";}
       ];
@@ -78,6 +87,10 @@ in
     };
 
     cmakeFlags = ["-DUNIX=ON"];
+    # flang stores subscripts as 64-bit and narrows them into size_t, which the
+    # compiler rejects where size_t is 32 bits. A wasm32 address space cannot
+    # hold an object whose subscript needs the discarded bits.
+    env.NIX_CFLAGS_COMPILE = "-Wno-error=c++11-narrowing";
     nativeBuildInputs = [final.disableWasmOptInConfigureHook];
     ninjaFlags = ["flang"];
     installPhase = _old: ''
