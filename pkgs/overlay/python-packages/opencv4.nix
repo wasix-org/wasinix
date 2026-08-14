@@ -14,6 +14,10 @@
   pyInc = py.crossIncludeDir;
 in
   helpers.libTweaks {
+    # nixpkgs enables pytest without shipping tests in this wheel. The
+    # package-specific cv2 operations check supplies runtime coverage.
+    passthru.wasix.installCheck = false;
+
     # nixpkgs adds the cross set's pip/wheel/setuptools, which cannot run here.
     nativeBuildInputs = helpers.python.buildHostPypaTools buildPy;
 

@@ -42,6 +42,9 @@
     });
 in
   helpers.libTweaks {
+    # nixpkgs enables pytest without shipping tests in the installed wheel.
+    # The package-specific inference check below provides runtime coverage.
+    passthru.wasix.installCheck = false;
     # pythonRuntimeDepsCheckHook imports `packaging` on the build host.
     dontCheckRuntimeDeps = true;
     buildInputs = dropByName;
