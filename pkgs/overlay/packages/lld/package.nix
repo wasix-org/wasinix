@@ -7,11 +7,12 @@
   toolchain,
   ...
 }: let
+  wasixLlvm = final.wasix-llvm.passthru;
   libllvm = final.llvm.passthru.wasix.libllvm;
   base = prev.llvmPackages.lld.override {
-    version = toolchain.llvm.llvm.version;
-    release_version = toolchain.llvmVersion;
-    monorepoSrc = toolchain.llvmMonorepoSrc;
+    version = wasixLlvm.version;
+    release_version = wasixLlvm.llvmVersion;
+    monorepoSrc = wasixLlvm.monorepoSrc;
     inherit libllvm;
   };
 in

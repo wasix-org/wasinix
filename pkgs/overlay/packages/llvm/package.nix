@@ -8,10 +8,11 @@
   toolchain,
   ...
 }: let
+  wasixLlvm = final.wasix-llvm.passthru;
   base = prev.llvm.override {
-    version = toolchain.llvm.llvm.version;
-    release_version = toolchain.llvmVersion;
-    monorepoSrc = toolchain.llvmMonorepoSrc;
+    version = wasixLlvm.version;
+    release_version = wasixLlvm.llvmVersion;
+    monorepoSrc = wasixLlvm.monorepoSrc;
     enablePFM = false;
     enablePolly = false;
     enableTerminfo = false;

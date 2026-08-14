@@ -5,14 +5,8 @@
   ghcWasm,
 }: let
   haskell = import ./haskell {inherit pkgs ghcWasm;};
-  inherit
-    (import ./llvm.nix {inherit pkgs;})
-    llvm
-    llvmTree
-    llvmVersion
-    monorepoSrc
-    version
-    ;
+  inherit (pkgs.wasix-llvm.passthru) llvm llvmVersion monorepoSrc version;
+  llvmTree = pkgs.wasix-llvm;
   llvmMonorepoSrc = monorepoSrc;
   flang = pkgs.wasix-flang;
   flangCross = import ./flang-cross.nix {inherit (pkgs) lib;};
@@ -65,15 +59,7 @@
   };
   binaryen = pkgs.binaryen;
   wasixcc = pkgs.wasixcc;
-  cargoWasix = pkgs.callPackage ./rust/cargo-wasix.nix {
-    inherit
-      wasixRustToolchain
-      wasixcc
-      wasixLlvm
-      binaryen
-      wasixSysroot
-      ;
-  };
+  cargoWasix = pkgs.cargo-wasix;
 in {
   # The wasix rustPlatform is assembled in pkgs/default.nix, where the pkgsCross
   # it needs is in scope.

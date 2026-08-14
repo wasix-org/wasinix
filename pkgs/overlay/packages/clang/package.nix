@@ -9,11 +9,12 @@
   preferredProfilePackages,
   ...
 }: let
-  major = prev.lib.versions.major toolchain.llvmVersion;
-  monorepoSrc = toolchain.llvmMonorepoSrc;
+  wasixLlvm = final.wasix-llvm.passthru;
+  major = prev.lib.versions.major wasixLlvm.llvmVersion;
+  monorepoSrc = wasixLlvm.monorepoSrc;
   base = prev.llvmPackages.clang-unwrapped.override {
-    version = toolchain.llvm.llvm.version;
-    release_version = toolchain.llvmVersion;
+    version = wasixLlvm.version;
+    release_version = wasixLlvm.llvmVersion;
     inherit monorepoSrc;
     libllvm = final.llvm.passthru.wasix.libllvm;
     enableClangToolsExtra = false;

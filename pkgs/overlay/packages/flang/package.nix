@@ -9,6 +9,7 @@
   nixpkgs,
   ...
 }: let
+  wasixLlvm = final.wasix-llvm.passthru;
   libllvm = final.llvm.passthru.wasix.libllvm;
   libclang = final.clang;
   # MLIR runs mlir-linalg-ods-yaml-gen during its own build, so a cross build
@@ -33,16 +34,16 @@
       ];
     }
     (prev.llvmPackages.mlir.override {
-      version = toolchain.llvm.llvm.version;
-      release_version = toolchain.llvmVersion;
-      monorepoSrc = toolchain.llvmMonorepoSrc;
+      version = wasixLlvm.version;
+      release_version = wasixLlvm.llvmVersion;
+      monorepoSrc = wasixLlvm.monorepoSrc;
       inherit libllvm;
       devExtraCmakeFlags = ["-DUNIX=ON"];
     });
   base = prev.llvmPackages.flang-unwrapped.override {
-    version = toolchain.llvm.llvm.version;
-    release_version = toolchain.llvmVersion;
-    monorepoSrc = toolchain.llvmMonorepoSrc;
+    version = wasixLlvm.version;
+    release_version = wasixLlvm.llvmVersion;
+    monorepoSrc = wasixLlvm.monorepoSrc;
     # nativeBuildInputs wants a build-host compiler, but this set's buildPackages
     # still resolves clang to the cross wrapper, so cmake probes with a driver
     # whose resource root holds no builtins archive for this target.
