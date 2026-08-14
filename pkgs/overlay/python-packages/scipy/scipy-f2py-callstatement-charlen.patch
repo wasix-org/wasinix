@@ -1,0 +1,104 @@
+SciPy's .pyf templates contain explicit callstatement/callprotoargument
+pairs.  f2py treats those as complete C snippets, so its normal CHARACTER
+handling cannot append the Fortran ABI's hidden lengths.  Add missing lengths
+while SciPy expands the templates: each char* in the explicit prototype
+represents a CHARACTER*1 LAPACK/BLAS flag and therefore needs one trailing
+length argument with value 1.  Some callback templates already carry F_INT
+lengths and are left unchanged.  This covers all explicit f2py calls instead
+of maintaining a routine-by-routine list.
+
+--- a/tools/generate_f2pymod.py
++++ b/tools/generate_f2pymod.py
+@@ -257,3 +257,85 @@
++def append_f77_char_lengths(code):
++    """Complete explicit f2py calls for flang's CHARACTER ABI."""
++    call_marker = '(*f2py_func)('
++    cursor = 0
++
++    while True:
++        statement = code.find('callstatement', cursor)
++        if statement == -1:
++            break
++        next_statement = code.find('callstatement', statement + 1)
++        call = code.find(call_marker, statement)
++        proto = code.find('callprotoargument', statement)
++        if call == -1 or (next_statement != -1 and call > next_statement):
++            cursor = statement + 1
++            continue
++        if proto == -1 or (next_statement != -1 and proto > next_statement):
++            raise RuntimeError('callstatement has no callprotoargument')
++
++        proto_end = code.find('\n', proto)
++        if proto_end == -1:
++            proto_end = len(code)
++        while code[proto:proto_end].rstrip().endswith('&'):
++            next_end = code.find('\n', proto_end + 1)
++            if next_end == -1:
++                proto_end = len(code)
++                break
++            proto_end = next_end
++        char_count = code[proto:proto_end].count('char*')
++        if not char_count:
++            cursor = proto_end
++            continue
++        proto_args = code[proto:proto_end].replace('&', '').replace('\n', '').split(',')
++        existing_count = 0
++        for argument in reversed(proto_args):
++            if argument.strip() in {'F_INT', 'size_t'}:
++                existing_count += 1
++            else:
++                break
++        missing_count = char_count - existing_count
++        if missing_count <= 0:
++            cursor = proto_end
++            continue
++
++        opening = call + len(call_marker) - 1
++        depth = 0
++        quote = None
++        escaped = False
++        closing = None
++        for position in range(opening, len(code)):
++            character = code[position]
++            if quote is not None:
++                if escaped:
++                    escaped = False
++                elif character == '\\':
++                    escaped = True
++                elif character == quote:
++                    quote = None
++                continue
++            if character in {'"', "'"}:
++                quote = character
++            elif character == '(':
++                depth += 1
++            elif character == ')':
++                depth -= 1
++                if depth == 0:
++                    closing = position
++                    break
++        if closing is None:
++            raise RuntimeError('cannot find end of explicit f2py call')
++
++        lengths = ', '.join(['1'] * missing_count)
++        call_lengths = ', ' + lengths
++        code = code[:closing] + call_lengths + code[closing:]
++        proto_end += len(call_lengths)
++
++        proto_lengths = ',' + ','.join(['size_t'] * missing_count)
++        code = code[:proto_end] + proto_lengths + code[proto_end:]
++        cursor = proto_end + len(proto_lengths)
++
++    return code
++
++
+ def main():
+     parser = argparse.ArgumentParser()
+     parser.add_argument("infile", type=str,
+@@ -277,5 +359,6 @@ def main():
+     # Write out the .pyf/.f file
+     if args.infile.endswith(('.pyf.src', '.f.src')):
+         code = process_file(args.infile)
++        code = append_f77_char_lengths(code)
+         fname_pyf = os.path.join(args.outdir,
+                                 os.path.splitext(os.path.split(args.infile)[1])[0])
