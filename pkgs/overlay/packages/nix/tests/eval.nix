@@ -16,6 +16,7 @@
   #    build has no getifaddrs and always assumes it is online.
   normalizeLog = pkgs.writeShellScript "normalize-nix-log" ''
     ${pkgs.gnused}/bin/sed -e 's/\r//g' -e 's/\x1b\[[0-9;]*[A-Za-z]//g' \
+      -e "s|copying '[^']*' to the store||" \
       | ${pkgs.gnugrep}/bin/grep -v "you don't have Internet access" || true
   '';
 
