@@ -11,7 +11,7 @@ helpers.libTweaks {
   patches = [./wasix.patch];
   postPatch = ''
     substituteInPlace Cargo.toml \
-      --replace-fail 'shadow-rs = "1.4.0"' 'shadow-rs = { version = "1.4.0", default-features = false, features = ["build"] }'
+      --replace-fail 'shadow-rs = "2.0.0"' 'shadow-rs = { version = "2.0.0", default-features = false, features = ["build"] }'
   '';
   passthru.wasix = {
     shipped = true;
