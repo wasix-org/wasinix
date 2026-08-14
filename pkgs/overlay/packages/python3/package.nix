@@ -140,6 +140,11 @@
               then ./patches/multiprocessing-posix-spawn-wasi-314.patch
               else ./patches/multiprocessing-posix-spawn-wasi.patch
             )
+            (
+              if lib.versionAtLeast pyVer "3.14"
+              then ./patches/operator-methodcaller-clear-314.patch
+              else ./patches/operator-methodcaller-clear-313.patch
+            )
             # wasm call_indirect traps on the arity-mismatched METH_NOARGS casts common in
             # third-party extensions; the trampoline dispatches via wasix call_dynamic.
             ./patches/wasix-call-trampoline.patch

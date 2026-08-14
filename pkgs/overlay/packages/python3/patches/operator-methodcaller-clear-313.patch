@@ -1,0 +1,14 @@
+diff --git a/Modules/_operator.c b/Modules/_operator.c
+index 7f35d8b..3de923a 100644
+--- a/Modules/_operator.c
++++ b/Modules/_operator.c
+@@ -1691 +1691 @@ methodcaller_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+-static void
++static int
+@@ -1701,2 +1701,3 @@ methodcaller_clear(methodcallerobject *mc)
+     }
++    return 0;
+ }
+@@ -1709 +1710 @@ methodcaller_dealloc(methodcallerobject *mc)
+-    methodcaller_clear(mc);
++    (void)methodcaller_clear(mc);

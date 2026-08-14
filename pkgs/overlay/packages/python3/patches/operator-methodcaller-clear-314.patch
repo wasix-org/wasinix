@@ -1,0 +1,11 @@
+diff --git a/Modules/_operator.c b/Modules/_operator.c
+index 020b627..2ef0ee1 100644
+--- a/Modules/_operator.c
++++ b/Modules/_operator.c
+@@ -1743 +1743 @@ methodcaller_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+-static void
++static int
+@@ -1752 +1752,2 @@ methodcaller_clear(PyObject *op)
+-}
++    return 0;
++}
