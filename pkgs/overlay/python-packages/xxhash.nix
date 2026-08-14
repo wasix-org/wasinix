@@ -9,5 +9,9 @@
 }:
 helpers.libTweaks {
   env.NIX_CFLAGS_COMPILE = "-DXXH_HAS_INCLUDE(h)=0";
+  preCheck = ''
+    mv xxhash xxhash.source
+  '';
+  pytestFlags = ["--import-mode=importlib"];
 }
 pyprev.xxhash

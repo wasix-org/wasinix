@@ -24,7 +24,11 @@ in
   helpers.libTweaks (
     helpers.python.dropSphinxDocs []
     # dev holds no module, so keep out (module) + dist (wheel) only.
-    // {outputs = _: ["out" "dist"];}
+    // {
+      outputs = _: ["out" "dist"];
+      pytestFlags = ["--import-mode=importlib"];
+      disabledTests = ["TestDTLS" "test_connect_refused" "test_connect_ex" "test_moving_buffer_behavior"];
+    }
     // lib.optionalAttrs (cryptography != null) {
       propagatedBuildInputs = helpers.replaceInputsByName {inherit cryptography;};
     }

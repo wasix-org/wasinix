@@ -9,4 +9,10 @@
   lib,
   ...
 }:
-helpers.libTweaks {postPatch = lib.const "";} pyprev.pycryptodome
+helpers.libTweaks {
+  # the wheel-shipped SelfTest suite in tests/upstream.nix replaces the derived
+  # source-tree check (the source Crypto/ has no compiled modules)
+  passthru.wasix.installCheck = false;
+  postPatch = lib.const "";
+}
+pyprev.pycryptodome
