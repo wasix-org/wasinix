@@ -122,7 +122,13 @@ in {
     pyfinal,
     final,
     ...
-  }:
+  }: let
+    updater = final.buildPackages.writeShellApplication {
+      name = "update-tree-sitter-grammars";
+      runtimeInputs = [final.buildPackages.curl final.buildPackages.jq final.buildPackages.nix];
+      text = builtins.readFile ./update.sh;
+    };
+  in
     builtins.listToAttrs (map (lang: let
       spec = grammars.${lang};
     in {
@@ -149,6 +155,8 @@ in {
         build-system = [pyfinal.setuptools];
 
         pythonImportsCheck = ["tree_sitter_${lang}"];
+
+        passthru.updateScript = ["${updater}/bin/update-tree-sitter-grammars" lang];
       };
     }) (builtins.attrNames grammars));
 }
