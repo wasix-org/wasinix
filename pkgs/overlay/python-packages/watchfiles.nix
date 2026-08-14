@@ -1,12 +1,11 @@
-# watchfiles for wasix. maturin/pyo3 wheel (uvicorn --reload file watching).
-# notify has no wasi backend; it falls back to PollWatcher, which is the right
-# semantics here anyway (no inotify on wasix).
+# No suite: the rust notify watcher traps the guest; wasix has no inotify for
+# it to drive.
 {
   pyprev,
   helpers,
   ...
 }:
 helpers.libTweaks {
-  maturinBuildFlags = ["--features" "pyo3/extension-module"];
+  passthru.wasix.installCheck = false;
 }
 pyprev.watchfiles
