@@ -1,8 +1,7 @@
-# libddwaf for wasix: DataDog's WAF engine, dlopened (ctypes) from inside the
-# ddtrace wheel when appsec is enabled, so it ships as a shared lib. Version
-# tracks ddtrace's LIBDDWAF_VERSION (setup.py). C/C++ deps are vendored
-# in-tree; rapidjson is the one ExternalProject download the library target
-# needs, fed from the store (gtest/yaml-cpp hang off test targets, off here).
+# libddwaf for wasix. ddtrace dlopens the shared library when appsec is enabled;
+# the static archive remains available to other consumers. Version tracks
+# ddtrace's LIBDDWAF_VERSION. Dependencies are vendored, with rapidjson's
+# ExternalProject source supplied from the store.
 {
   final,
   helpers,
@@ -39,7 +38,7 @@ in
     nativeBuildInputs = [final.buildPackages.cmake];
 
     cmakeFlags = [
-      "-DLIBDDWAF_BUILD_STATIC=OFF"
+      "-DLIBDDWAF_BUILD_STATIC=ON"
       "-DLIBDDWAF_TESTING=OFF"
     ];
 
