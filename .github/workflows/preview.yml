@@ -211,7 +211,7 @@ jobs:
             if [ -n "$INDEX_URL" ]; then
               # the prod index the overlay complements lives on wasmer.io
               # (publish-index.yml), not on the preview registry
-              prod=$(nix shell .#wasmer-bin -c wasmer app get wasmer/python-registry \
+              prod=$(nix shell .#wasmer -c wasmer app get wasmer/python-registry \
                 --registry wasmer.io --format json | jq -r '.url // empty' || true)
               echo
               echo "Wheel overlay [index]($INDEX_URL), preferred over the published wheels by version:"

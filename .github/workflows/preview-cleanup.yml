@@ -51,6 +51,6 @@ jobs:
 
       - name: Delete app
         run: |
-          nix shell .#wasmer-bin --accept-flake-config -c wasmer app delete \
+          nix shell .#wasmer --accept-flake-config -c wasmer app delete \
             "wasmer/python-registry-pr${PR}" --registry "$WASMER_REGISTRY" --non-interactive \
             || echo "no preview app to delete"
