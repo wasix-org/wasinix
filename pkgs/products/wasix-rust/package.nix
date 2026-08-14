@@ -34,12 +34,10 @@
   which,
   file,
   # From-source wasix LLVM (clang/lld) + the EH and EH+PIC libc sysroots.
-  wasixLlvm,
+  pkgs,
+  wasix-llvm,
   wasixcc,
-  wasixSysrootEh,
-  wasixSysrootEhpic,
-  # The central WASIX crate-edit pipeline, shared with set/rust-platform.nix.
-  patchVendor,
+  wasix-sysroot,
   # Also build std for wasm32-wasmer-wasi-dl (the dynamic-linking / PIC target),
   # needed for PIC `.so` Rust artifacts (e.g. pyo3 python extensions).
   withDynamicLinking ? true,
@@ -48,6 +46,23 @@
   hostedOnWasix ? false,
 }: let
   inherit (lib) optionals optionalString;
+  wasixLlvm = wasix-llvm;
+  inherit (wasix-sysroot.passthru.variants) eh ehpic;
+  wasixSysrootEh = eh.sysroot;
+  wasixSysrootEhpic = ehpic.sysroot;
+  # The central WASIX crate-edit pipeline, shared with set/rust-platform.nix.
+  crateEdits =
+    import ../../lib/crate-edits.nix {
+      inherit pkgs;
+      pins = builtins.fromJSON (builtins.readFile ../../cargo-registry/crates.json);
+    }
+    ../../lib/wasix-crate-patches;
+  vendorPatches = import ../../lib/patch-rust-vendor.nix {
+    inherit lib;
+    hostPkgs = pkgs;
+    inherit crateEdits;
+  };
+  patchVendor = vendorPatches.patchInPlaceWhere (e: lib.hasPrefix "source-registry-" e.rel);
   version = "2026-08-06.1+rust-1.97";
 
   buildTriple = "x86_64-unknown-linux-gnu";
@@ -129,7 +144,7 @@
   # $WASI_SDK_PATH/bin/<target>-clang[++]. Delegate those names to wasixcc so
   # profile-specific TLS, exception, sysroot, and linker flags stay canonical.
   wasiSdk = let
-    env = import ../env.nix {inherit lib;};
+    env = import ../../toolchain/env.nix {inherit lib;};
     mkClang = triple: pic: let
       profileEnv = env.exportsOf (
         env.profileEnv {

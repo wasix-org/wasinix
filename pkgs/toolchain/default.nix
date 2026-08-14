@@ -59,13 +59,7 @@
   wasixLlvm = llvmTree;
   wasixSysroot = sysroot;
 
-  wasixRustToolchain = pkgs.callPackage ./rust/toolchain.nix {
-    # The two wasix std targets use the EH and EH+PIC sysroots, as build-wasix.sh does.
-    inherit wasixLlvm wasixcc;
-    wasixSysrootEh = variants.eh.sysroot;
-    wasixSysrootEhpic = variants.ehpic.sysroot;
-    patchVendor = vendorPatches.patchInPlaceWhere (e: pkgs.lib.hasPrefix "source-registry-" e.rel);
-  };
+  wasixRustToolchain = pkgs.wasix-rust;
   wasixHostedRustToolchain = wasixRustToolchain.override {
     hostedOnWasix = true;
   };
