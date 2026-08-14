@@ -1,5 +1,10 @@
 # Working in this repo as an agent
 
+Before your first edit, read `docs/style.md` and `docs/building.md` in full,
+plus the row below covering whatever you are about to touch. This file is an
+index and does not repeat what it links to. Skipping one of those docs does not
+exempt you from what it says.
+
 `AGENTS.md` contains only guidance specific to agents and not owned by one
 topic. Put guidance that applies to humans and agents in the relevant general
 doc:
