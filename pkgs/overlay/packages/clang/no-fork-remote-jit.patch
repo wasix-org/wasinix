@@ -1,0 +1,14 @@
+--- a/lib/Interpreter/RemoteJITUtils.cpp
++++ b/lib/Interpreter/RemoteJITUtils.cpp
+@@ -92,8 +92,9 @@
+ Expected<std::unique_ptr<SimpleRemoteEPC>>
+ launchExecutor(StringRef ExecutablePath, bool UseSharedMemory,
+                llvm::StringRef SlabAllocateSizeString) {
+-#ifndef LLVM_ON_UNIX
+-  // FIXME: Add support for Windows.
++#if !defined(LLVM_ON_UNIX) || defined(__wasm__)
++  // FIXME: Add support for Windows. wasm has no fork(), so the child process
++  // this launches cannot be created.
+   return make_error<StringError>("-" + ExecutablePath +
+                                      " not supported on non-unix platforms",
+                                  inconvertibleErrorCode());
