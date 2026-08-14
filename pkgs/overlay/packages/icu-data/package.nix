@@ -29,6 +29,9 @@ in {
         passthru.wasix.retention = "none";
         passthru.wasmer = {
           commands = [];
+          # data-only webc: no command to run, so no liveness smoke; the data
+          # is exercised by tests/smoke.nix.
+          smokeArgs = [];
           fs."/share/icu/${icu.version}" = "${data}/share/icu/${icu.version}";
         };
       };

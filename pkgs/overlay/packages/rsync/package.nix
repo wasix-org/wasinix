@@ -16,6 +16,12 @@ helpers.libTweaks {
   # on its own, so apply the pass here too (see git/findutils).
   env.WASIXCC_WASM_OPT_FLAGS = "--asyncify:-O2";
 
+  # Makefile's check target directly runs ./tls (built just above it) as a
+  # rule step rather than through automake's TESTS= variable, so the generic
+  # check-output prebuild's TESTS= override doesn't stop it from being
+  # exec'd at build time, where no wasmer is present.
+  wasixCheckPrebuild = ":";
+
   # No ACLs or xattrs under WASI; configure would otherwise probe and misdetect.
   configureFlags = [
     "--disable-acl-support"

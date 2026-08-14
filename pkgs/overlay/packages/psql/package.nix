@@ -1,3 +1,5 @@
+# psql is the postgres source tree built for the frontend only: the libpq base
+# builds libpq (submake-libpq), then we build and install just src/bin/psql.
 {
   final,
   helpers,

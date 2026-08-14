@@ -8,6 +8,16 @@
   ...
 }:
 helpers.libTweaks {
+  # no emulated check: patch 0011 makes uv_spawn return UV_ENOSYS under
+  # __wasi__ on every profile (fork itself is undeclared only under Wasm-EH,
+  # not on off; WASIX-TODO.md); the library doesn't otherwise need fork().
+  doCheck = false;
+  # doCheck above composes after check-output.nix's wrapper reads
+  # old.doCheck, so it's invisible there and a check output still gets
+  # built. wasixCheckPrebuild skips the prebuild directly instead: without
+  # it, `make check TESTS=` still builds test-fs-copyfile.c, which includes
+  # the Windows-only direct.h unconditionally and fails to compile.
+  wasixCheckPrebuild = ":";
   patches = [
     ./patches/libuv-0001-add-wasix-to-autotools.patch
     ./patches/libuv-0002-Disable-slave-tty-detection-with-wasix.patch

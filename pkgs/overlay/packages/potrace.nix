@@ -5,6 +5,9 @@
   ...
 }:
 helpers.libTweaks {
+  # no emulated check: the test programs bundle getopt, which collides with
+  # wasix-libc's at link.
+  doCheck = false;
   outputs = _: ["out" "dev"];
   buildPhase = _: ''
     runHook preBuild

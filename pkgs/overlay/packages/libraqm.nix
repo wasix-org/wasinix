@@ -8,7 +8,7 @@
   ...
 }:
 helpers.libTweaks {
-  mesonFlags = ["-Dtests=false"];
   doCheck = false;
+  mesonFlags = ["-Dtests=false"];
 }
 prev.libraqm
