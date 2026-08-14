@@ -128,21 +128,22 @@ diff --git a/src/tools/cargo/Cargo.toml b/src/tools/cargo/Cargo.toml
 index 20b7f4e6c81..6fbb823507f 100644
 --- a/src/tools/cargo/Cargo.toml
 +++ b/src/tools/cargo/Cargo.toml
-@@ -46,12 +46,12 @@ core-foundation = { version = "0.10.1", features = ["mac_os_10_7_support"] }
- crates-io = { version = "0.40.18", path = "crates/crates-io" }
+@@ -45,13 +45,13 @@
+ core-foundation = { version = "0.10.1", features = ["mac_os_10_7_support"] }
+ crates-io = { version = "0.41.0", path = "crates/crates-io" }
  criterion = { version = "0.8.2", features = ["html_reports"] }
 -curl = "0.4.49"
 +curl = { version = "0.4.49", features = ["static-ssl"] }
- curl-sys = "0.4.87"
+ curl-sys = "0.4.88"
  filetime = "0.2.27"
  flate2 = { version = "1.1.9", default-features = false, features = ["zlib-rs"] }
- futures = { version = "0.3.32", default-features = false, features = ["std", "executor"]}
+ futures = { version = "0.3.32", default-features = false, features = ["std", "executor", "async-await"]}
  futures-timer = "3.0.3"
 -git2 = "0.20.4"
 +git2 = { version = "0.20.4", default-features = false }
  git2-curl = "0.21.0"
  # When updating this, also see if `gix-transport` further down needs updating or some auth-related tests will fail.
- gix = { version = "0.81.0", default-features = false, features = ["sha1", "progress-tree", "parallel", "dirwalk", "status"] }
+ gix = { version = "0.83.0", default-features = false, features = ["sha1", "progress-tree", "parallel", "dirwalk", "status"] }
 diff --git a/src/tools/cargo/crates/cargo-util/Cargo.toml b/src/tools/cargo/crates/cargo-util/Cargo.toml
 index 8c781569239..15f69493ea2 100644
 --- a/src/tools/cargo/crates/cargo-util/Cargo.toml
