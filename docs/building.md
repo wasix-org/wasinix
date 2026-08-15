@@ -46,7 +46,8 @@ the required full-build follow-up.
 scripts/ci-build-remote.sh                     # signed, cache-pushing CI set; offloads eval too
 
 nix-fast-build --flake .#legacyPackages.x86_64-linux.ci --skip-cached \
-  --no-link --option accept-flake-config true \
+  --no-link --eval-workers 4 --eval-max-memory-size 8192 \
+  --option accept-flake-config true \
   --store "$(scripts/remote-builder.sh store)"
 ```
 
@@ -86,19 +87,19 @@ but not worth firing off in a loop.
 
 nix-eval-jobs is the one to watch. It fans out `--workers` evaluators, each with
 its own heap allowance (`--max-memory-size`, 4 GiB per worker by default), so
-the ceiling is workers times that allowance. One worker per core over the full
-`ci` set puts that in the tens of gigabytes, enough to swap or OOM a desktop.
-Size workers against free RAM rather than core count, and lower the allowance
-with them:
+the ceiling is workers times that allowance. The `ci` set needs more than that
+default; reaching it restarts the worker and discards its evaluator state. Size
+workers against free RAM rather than core count:
 
 ```sh
-nix-eval-jobs --flake .#legacyPackages.x86_64-linux.ci --workers 4 --max-memory-size 2048
-EVAL_WORKERS=4 scripts/ci-build.sh
+nix-eval-jobs --flake .#legacyPackages.x86_64-linux.ci --workers 4 --max-memory-size 8192
+EVAL_WORKERS=4 EVAL_MAX_MEMORY_SIZE=8192 scripts/ci-build.sh
 ```
 
-`scripts/ci-build.sh` reads `EVAL_WORKERS` (default `$(nproc)`) and passes it to
-both nix-eval-jobs and nix-fast-build. `ci-build-remote.sh` pins it to 8 for a
-separate reason: on a shared builder the workers contend on the one nix-daemon.
+`scripts/ci-build.sh` reads `EVAL_WORKERS` (default 4) and
+`EVAL_MAX_MEMORY_SIZE` (default 8192 MiB), and passes both to nix-eval-jobs and
+nix-fast-build. `ci-build-remote.sh` pins the worker count to 8 for a separate
+reason: on a shared builder the workers contend on the one nix-daemon.
 
 ## Build one thing
 

@@ -35,12 +35,22 @@ fi
 # local, with nothing to tell them apart); they are pushed after the build.
 # JOBS_FILE reuses the eval from the rebuild-diff step (scripts/eval-diff.py)
 # instead of evaling a second time.
-# Eval parallelism. One worker per core is right on a dedicated runner, but
-# every worker registers drvs through the one nix-daemon: on a shared builder
-# the bottleneck is daemon/SQLite contention, not CPU, so callers there set a
-# small EVAL_WORKERS (ci-build-remote.sh).
-EVAL_WORKERS="${EVAL_WORKERS:-$(nproc)}"
+# Eval parallelism. Every worker registers drvs through the one nix-daemon, so
+# on a shared builder the bottleneck is daemon/SQLite contention, not CPU. Each
+# also needs enough heap to retain the complete CI set: reaching the allowance
+# restarts the worker and discards its evaluator state.
+EVAL_WORKERS="${EVAL_WORKERS:-4}"
+EVAL_MAX_MEMORY_SIZE="${EVAL_MAX_MEMORY_SIZE:-8192}"
+if ! [[ $EVAL_WORKERS =~ ^[1-9][0-9]*$ ]]; then
+  echo "EVAL_WORKERS must be a positive integer" >&2
+  exit 1
+fi
+if ! [[ $EVAL_MAX_MEMORY_SIZE =~ ^[1-9][0-9]*$ ]]; then
+  echo "EVAL_MAX_MEMORY_SIZE must be a positive integer" >&2
+  exit 1
+fi
 MAX_JOBS="${MAX_JOBS:-$(nproc)}"
+echo "Eval concurrency: $EVAL_WORKERS workers x $EVAL_MAX_MEMORY_SIZE MiB"
 
 PUSH_DRVS=""
 if [ -n "${NIX_SIGNING_KEY:-}" ]; then
@@ -51,6 +61,7 @@ if [ -n "${NIX_SIGNING_KEY:-}" ]; then
       nix-eval-jobs \
         --flake "$CI_ATTR" \
         --workers "$EVAL_WORKERS" \
+        --max-memory-size "$EVAL_MAX_MEMORY_SIZE" \
         --option accept-flake-config true 2>/dev/null |
         jq -r '.drvPath' | sort -u
     )
@@ -77,6 +88,7 @@ nix-fast-build \
   --no-link \
   --max-jobs "$MAX_JOBS" \
   --eval-workers "$EVAL_WORKERS" \
+  --eval-max-memory-size "$EVAL_MAX_MEMORY_SIZE" \
   --result-file "$RESULT_FILE" \
   --result-format junit \
   --option accept-flake-config true \

@@ -61,7 +61,16 @@ def eval_workers():
     override = os.environ.get("EVAL_WORKERS")
     if override:
         return int(override)
-    return min(os.cpu_count() or 1, 8)
+    return 4
+
+
+def eval_max_memory_size():
+    # The ci set outgrows nix-eval-jobs' 4 GiB per-worker allowance; reaching it
+    # restarts the worker and discards its evaluator state.
+    override = os.environ.get("EVAL_MAX_MEMORY_SIZE")
+    if override:
+        return int(override)
+    return 8192
 
 
 def progress_ticker(jobs_path, activity, stop, every=30):
@@ -94,10 +103,12 @@ def eval_jobs(flake, jobs_path):
         "--flake",
         flake,
         # Workers parallelize instantiation, but each one holds a full nixpkgs
-        # evaluation and they register drvs through a single daemon, so cores
-        # stop paying off well before a 16-core runner has 16 of them.
+        # evaluation and they register drvs through a single daemon, so a small
+        # fixed count beats scaling with cores.
         "--workers",
         str(eval_workers()),
+        "--max-memory-size",
+        str(eval_max_memory_size()),
         # meta rides along for ci-report.py: meta.position anchors failure
         # annotations at the package definition
         "--meta",

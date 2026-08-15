@@ -73,6 +73,8 @@ jobs:
       - name: Rebuild diff
         continue-on-error: true
         env:
+          EVAL_WORKERS: "4"
+          EVAL_MAX_MEMORY_SIZE: "8192"
           BASE_REF:
             ${{ github.event.pull_request.base.ref ||
             github.event.merge_group.base_ref }}
@@ -129,6 +131,8 @@ jobs:
         run: nix run .#scripts.ci-build
         # empty on fork PRs → build runs without uploading
         env:
+          EVAL_WORKERS: "4"
+          EVAL_MAX_MEMORY_SIZE: "8192"
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
           NIX_SIGNING_KEY: ${{ secrets.NIX_SIGNING_KEY }}

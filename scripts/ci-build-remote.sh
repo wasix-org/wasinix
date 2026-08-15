@@ -109,6 +109,7 @@ echo "Source at $src; building remotely..."
 # The builder shares one nix-daemon, and a wide job fan-out on a large C++ tree
 # drives it into the OOM killer; both are overridable for a smaller machine.
 : "${EVAL_WORKERS:=8}"
+: "${EVAL_MAX_MEMORY_SIZE:=8192}"
 : "${MAX_JOBS:=32}"
 status=0
 # .#scripts.ci-build provides nix-fast-build/nix-eval-jobs (pinned) and is
@@ -116,7 +117,7 @@ status=0
 # shellcheck disable=SC2087 # client-side expansion is the point, see above
 ssh "${ssh_opts[@]}" "$remote" 'bash -l -s' <<REMOTE || status=$?
 set -uo pipefail
-export CI_ATTR="path:$src#$attr" RESULT_FILE="$remote_result" EVAL_WORKERS=${EVAL_WORKERS} MAX_JOBS=${MAX_JOBS}
+export CI_ATTR="path:$src#$attr" RESULT_FILE="$remote_result" EVAL_WORKERS=${EVAL_WORKERS} EVAL_MAX_MEMORY_SIZE=${EVAL_MAX_MEMORY_SIZE} MAX_JOBS=${MAX_JOBS}
 $runner nix run --accept-flake-config "path:$src#scripts.ci-build"
 REMOTE
 
