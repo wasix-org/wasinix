@@ -77,10 +77,10 @@
     perVersion;
 
   # name -> served upstream versions (current + history; same across py versions); read by
-  # scripts/update.py to prune rels.json.
+  # the update driver to prune rels.json.
   wheelVersions = lib.mapAttrs (_: ds: lib.unique (map (d: d.version) ds)) (lib.groupBy (d: d.name) wheelDists);
   # rels.json keys no served wheel carries: left behind by an upstream bump, or a dropped
-  # history entry. scripts/update.py drops them (regen hook on nixpkgs), this note covers bumps
+  # history entry. The update driver drops them (regen hook on nixpkgs), this note covers bumps
   # made by hand. Only this registry's key prefix; webc keys get the same note per package.
   staleRels = lib.concatMap (
     key: let
@@ -113,7 +113,7 @@ in
         tests = mkTestGroup "python-registry" tests;
         inherit wheelVersions wheels;
         wasix.updateNotes = lib.optional (staleRels != []) {
-          message = "rels.json has stale keys (${lib.concatStringsSep ", " staleRels}); nix run .#scripts.update -- --only nixpkgs drops them";
+          message = "rels.json has stale keys (${lib.concatStringsSep ", " staleRels}); nix run .#update -- nixpkgs drops them";
           when = _: _: true;
         };
       };

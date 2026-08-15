@@ -105,7 +105,7 @@
     # file is too late, since reading the rebuilt vendor's attributes forces the
     # broken one. A monolithic fetchCargoVendor vendor is a
     # runCommand over one re-pointable vendorStaging FOD; nothing derives its
-    # hash, so the entry carries it (scripts/history.py TOFUs it).
+    # hash, so the entry carries it (the history tool TOFUs it).
     rustVendor = old:
       if old.cargoDeps ? wasixRebuildVendor
       then
@@ -116,7 +116,7 @@
           // (spec.vendorLayout or {}))
       else
         lib.throwIf (!(spec ? cargoHash))
-        "load-packages: ${drv.pname or drv.name} ${version} vendors rust deps; its history entry needs a cargoHash (nix run .#scripts.history -- add <attr>==${version} re-derives it)"
+        "load-packages: ${drv.pname or drv.name} ${version} vendors rust deps; its history entry needs a cargoHash (nix run .#history -- add <attr>==${version} re-derives it)"
         (lib.throwIf (!(old.cargoDeps ? vendorStaging))
           "load-packages: ${drv.pname or drv.name} ${version}: cargoDeps has no vendorStaging, so nixpkgs' vendor mechanism moved; the history rebase needs updating"
           (old.cargoDeps.overrideAttrs (o: {

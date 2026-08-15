@@ -35,7 +35,7 @@ stdenvNoCC.mkDerivation {
 
     export HOME="$TMPDIR"
     export WASMER_DIR="$TMPDIR/.wasmer"
-    out_text="$(${wasmer}/bin/wasmer run hello.wasm)"
+    out_text="$(${wasmer}/bin/wasmer run --quiet hello.wasm)"
     echo "program output: $out_text"
     case "$out_text" in
       *"Hello from Fortran on WASIX"*"15"*) echo "ran OK under wasmer" ;;

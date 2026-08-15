@@ -37,7 +37,9 @@ rewriters/<name>.nix     reusable source rewriters
 
 Ranges use semver comparators, comma-separated AND terms, and one OR branch per
 list element. A resolved version outside both `edited` and `stock` fails. A
-crate needing only floor patches can use `{ edited = [ ">=1.0.3" ]; }`.
+crate needing only floor patches can use `{ edited = [ ">=1.0.3" ]; }`. Without
+`notMinted`, a crate must be listed in `cargo-registry/crates.json`;
+`checks.cargo-registry` fails when the patch tree and registry disagree.
 
 ## Rewriters
 

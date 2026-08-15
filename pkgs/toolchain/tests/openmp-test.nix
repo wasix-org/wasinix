@@ -57,7 +57,7 @@ in
         then ''
           export HOME="$TMPDIR"
           export WASMER_DIR="$TMPDIR/.wasmer"
-          out_text="$(${wasmer}/bin/wasmer run --env OMP_NUM_THREADS=4 omp.wasm)"
+          out_text="$(${wasmer}/bin/wasmer run --quiet --env OMP_NUM_THREADS=4 omp.wasm)"
           echo "program output: $out_text"
           case "$out_text" in
             *"openmp sum=500500"*) echo "ran OK under wasmer" ;;

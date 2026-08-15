@@ -26,7 +26,7 @@
 
   wheelList = import ./overlay/python-packages/wheels.nix;
   # Older releases also served (registry history), keyed by worklist attr then version;
-  # JSON so scripts/history.py and update.py can edit it (schema: see wheels.nix header).
+  # JSON so the history and update tools can edit it (schema: see wheels.nix header).
   historyTable = builtins.fromJSON (builtins.readFile ./overlay/python-packages/history.json);
   unknownHistory = lib.filter (n: !(lib.elem n (map (e: e.attr) wheelList))) (lib.attrNames historyTable);
   # A noarch entry builds once on the default python, so its history versions
@@ -89,7 +89,7 @@
       # stdin from /dev/null: a guest that touches a socket makes wasmer prompt for
       # the networking capability, and the prompt blocks until the 600s timeout kills
       # it, losing python's buffered stdout (ddtrace imports such a socket).
-      if timeout 600 wasmer run \
+      if timeout 600 wasmer run --quiet \
         --volume "$site":/site \
         --mapdir /home:"$HOME" \
         --env HOME=/home \

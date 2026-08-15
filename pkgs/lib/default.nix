@@ -1,5 +1,5 @@
 # Helpers for wasix package files, and the optional passthru.wasix declaration:
-# supportedProfiles, preferredProfile, ciProfiles, shipped, broken, retention,
+# supportedProfiles, preferredProfile, ciProfiles, ciTags, shipped, broken, retention,
 # retentionHook, updateNotes (docs/packaging.md, docs/updating.md).
 # applyWasixMeta below is the only writer of meta.badPlatforms/meta.broken.
 {lib}: let
@@ -61,6 +61,44 @@ in rec {
   };
 
   wasixMetaOf = drv: (drv.passthru or {}).wasix or {};
+
+  # Capabilities a CI request must enable before scheduling this derivation.
+  # Keep the vocabulary open; validation only makes the wire representation
+  # unambiguous and safe to use in command-line interfaces.
+  ciTagsOf = drv: let
+    tags = (wasixMetaOf drv).ciTags or [];
+    invalid =
+      builtins.filter (
+        tag: !(builtins.isString tag) || builtins.match "[a-z0-9]+(-[a-z0-9]+)*" tag == null
+      )
+      tags;
+  in
+    lib.throwIf (!builtins.isList tags)
+    "${drv.pname or drv.name}: ciTags must be a list"
+    (lib.throwIf (invalid != [])
+      "${drv.pname or drv.name}: invalid ciTags; use lowercase kebab-case names"
+      (lib.unique tags));
+
+  # Human-facing CI metadata. Published artifacts override the derivation's
+  # upstream version with their registry version and release.
+  ciInfoOf = drv: let
+    publication = (wasixMetaOf drv).publication or {};
+    testExpectation = (wasixMetaOf drv).testExpectation or null;
+    changelog = builtins.tryEval (drv.meta.changelog or null);
+    version = publication.version or drv.version or null;
+    rel = publication.rel or null;
+    info =
+      lib.optionalAttrs (builtins.isString version) {inherit version;}
+      // lib.optionalAttrs (builtins.isInt rel) {inherit rel;}
+      // lib.optionalAttrs (changelog.success && builtins.isString changelog.value) {
+        changelog = changelog.value;
+      }
+      // lib.optionalAttrs (builtins.isAttrs testExpectation) {inherit testExpectation;};
+    forced = builtins.tryEval (builtins.deepSeq info info);
+  in
+    if forced.success
+    then forced.value
+    else {};
 
   # meta.position ("file:line") as a mkDerivation `pos` argument, so generated
   # drvs inherit their subject's position and `nix edit` lands somewhere useful.

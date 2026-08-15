@@ -82,12 +82,15 @@
         removeAttrs (o.passthru or {}) ["tests"]
         // {
           # git -> "git" webc, but history.json keys by overlay attr, so
-          # scripts/{history,update}.py need this to map a webc back to its entry.
+          # `history` and `update` need this to map a webc back to its entry.
           inherit overlayName;
           inherit pkg;
           webc = pkg.webc;
           # run-by-name wrapper; forcing it never forces .tests
           shim = pkg.webc.shim;
+          wasix =
+            ((o.passthru or {}).wasix or {})
+            // {inherit (pkg.passthru.wasix) publication;};
         }
         // (lib.optionalAttrs (group != null) {tests = group;});
     });

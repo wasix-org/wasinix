@@ -59,6 +59,19 @@
   defaultTimeout = 300;
   defaultWasixTimeout = 600;
 
+  testExpectation = expectFail: broken:
+    if broken != null
+    then {
+      outcome = "broken";
+      reason = broken;
+    }
+    else if expectFail != null
+    then {
+      outcome = "xfail";
+      reason = expectFail;
+    }
+    else null;
+
   # Decide a test's verdict from two optional, composable markers:
   #   expectFail = reason: negative test, the check is EXPECTED to fail
   #                (pass/fail inverted).
@@ -193,6 +206,7 @@ in rec {
   in
     pkgs.runCommand "script-run-${name}" ({
         nativeBuildInputs = [wasmer] ++ nativePkgs ++ wasixPkgs;
+        passthru.wasix.testExpectation = testExpectation expectFail broken;
       }
       # WASMER_RUST_BACKTRACE=full (with --impure) surfaces a wasmer panic
       # backtrace in $out. Set on the host process, not the forwarded guest env.
@@ -215,7 +229,7 @@ in rec {
       for _v in ${forwardEnvNames}; do
         _val=\$(${pkgs.coreutils}/bin/printenv "\$_v" 2>/dev/null) && env_flags="\$env_flags --env \$_v=\$_val"
       done
-      export WASMER_FLAGS="--volume \$HOME:\$HOME --volume \$WASIX_TEST_ROOT:\$WASIX_TEST_ROOT --cwd \$(${pkgs.coreutils}/bin/pwd)\$env_flags ${extraFlags}"
+      export WASMER_FLAGS="--quiet --volume \$HOME:\$HOME --volume \$WASIX_TEST_ROOT:\$WASIX_TEST_ROOT --cwd \$(${pkgs.coreutils}/bin/pwd)\$env_flags ${extraFlags}"
       exec "$original_bin" "\$@"
       SHIMEOF
                 ${pkgs.coreutils}/bin/chmod +x "$shim_dir/$bin_name"
@@ -305,7 +319,9 @@ in rec {
       failHard = ''${pkgs.diffutils}/bin/diff ${nat} ${was} >&2; exit 1'';
     };
   in
-    pkgs.runCommand "wasix-compare-${name}" {} ''
+    pkgs.runCommand "wasix-compare-${name}" {
+      passthru.wasix.testExpectation = testExpectation expectFail broken;
+    } ''
       if ${pkgs.diffutils}/bin/diff -q ${nat} ${was} >/dev/null 2>&1; then
         ${verdict.onCheckPass}
       else

@@ -33,14 +33,20 @@
   # the wasmer package and its webc point back at the package definition
   packagePos = posOf package;
   w = package.passthru.wasmer or {};
+  ciTags = (package.passthru.wasix or {}).ciTags or [];
+  ciWasix = {inherit publication;} // lib.optionalAttrs (ciTags != []) {inherit ciTags;};
 
   ident = import ./ident.nix {inherit lib;};
   inherit (ident) rels webcIdent;
 
   inherit (webcIdent package) name owner version baseVersion rel;
+  publication = {
+    version = baseVersion;
+    inherit rel;
+  };
 
   # rels.json keys no served version carries: left behind by an upstream bump;
-  # scripts/update.py drops them (regen hook on nixpkgs), this note covers
+  # the update driver drops them (regen hook on nixpkgs), this note covers
   # bumps made by hand.
   staleRels = lib.filter (v:
     !(lib.elem v (
@@ -193,6 +199,7 @@ in
     passAsFile = ["readme"];
     passthru = {
       id = {inherit owner name version baseVersion;};
+      wasix = ciWasix;
       # depTree is the closure as one --include-webc tree, null when there are no
       # dependencies; a consumer assembling its own offline tree needs it, since
       # a package's own webc carries no dependency.
@@ -202,10 +209,14 @@ in
       # vs the pkg .shim below which drives the wasmer.toml source dir.
       webc = let
         built = pkgs.runCommand "webc-${owner}-${name}-${version}" ({
-            passthru.wasix.updateNotes = lib.optional (staleRels != []) {
-              message = "rels.json has stale keys (${lib.concatMapStringsSep ", " (v: "wasmerPackages.${name} ${v}") staleRels}); nix run .#scripts.update -- --only nixpkgs drops them";
-              when = _: _: true;
-            };
+            passthru.wasix =
+              ciWasix
+              // {
+                updateNotes = lib.optional (staleRels != []) {
+                  message = "rels.json has stale keys (${lib.concatMapStringsSep ", " (v: "wasmerPackages.${name} ${v}") staleRels}); nix run .#update -- nixpkgs drops them";
+                  when = _: _: true;
+                };
+              };
           }
           // pkgs.lib.optionalAttrs (packagePos != null) {pos = packagePos;}) ''
           d="$out/${owner}/${name}"

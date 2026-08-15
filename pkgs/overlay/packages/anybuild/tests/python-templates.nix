@@ -81,7 +81,7 @@
     #!/bin/sh
     if [ "\$1" = run ]; then
       shift
-      exec ${testLib.wasmer}/bin/wasmer run --offline --include-webc ${runtimeWebcs interpreter} "\$@"
+      exec ${testLib.wasmer}/bin/wasmer run --quiet --offline --include-webc ${runtimeWebcs interpreter} "\$@"
     fi
     exec ${testLib.wasmer}/bin/wasmer "\$@"
     EOF

@@ -21,6 +21,7 @@
             ++ [
               ./nix-update-read-write-eval.patch
               ./nix-update-prefer-tag-over-rev.patch
+              ./nix-update-revision.patch
             ];
         });
         # wasm-opt aborts on `!endMap.contains(span.end)` reading a `-g` module
@@ -281,13 +282,31 @@
   # Shipped Python wheels (overlay/python-packages/wheels.nix). cpython needs PIC
   # (ctypes/dl) and the exnref EH encoding wasmer accepts, so the wheels are one set
   # anchored at exnrefEhpic. noarch builds once, everything else per interpreter.
-  mkPythonWheels = pyKey: pyAttr: select:
-    import ./python-wheels.nix {
+  publicationRels = builtins.fromJSON (builtins.readFile ../rels.json);
+  mkPythonWheels = pyKey: pyAttr: select: let
+    wheels = import ./python-wheels.nix {
       inherit pkgs lib mkTestGroup select pyKey;
       python3 = nixpkgsByProfile.exnrefEhpic.${pyAttr};
       wasmer = wasmerRuntime;
       pythonWebc = wasmerLayer.wasmerPackages.${pyAttr}.webc;
     };
+    withPublication = _: drv:
+      drv.overrideAttrs (o: {
+        passthru =
+          (o.passthru or {})
+          // {
+            wasix =
+              ((o.passthru or {}).wasix or {})
+              // {
+                publication = {
+                  inherit (drv) version;
+                  rel = (publicationRels."pythonRegistry.wheels.${drv.pname or drv.name}" or {}).${drv.version} or 1;
+                };
+              };
+          };
+      });
+  in
+    lib.mapAttrs withPublication wheels;
   isNoarch = e: e.noarch or false;
   publishOnceWheelNames =
     map (e: e.attr)
