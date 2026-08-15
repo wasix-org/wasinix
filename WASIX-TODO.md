@@ -176,6 +176,24 @@ current toolchain before relying on it.
   links, and use the host's rename operation. Includes unit tests for path
   rebasing. Upstreamable to Wasmer.
 
+### `fd_filestat_get` reports a size a rename left stale 🟢
+
+- `fd_filestat_get` returns the cached inode stat without consulting the host,
+  and `path_rename` sets the target's cached size from the source inode's cached
+  size rather than the host file. A path whose file is replaced by a smaller one
+  therefore keeps the larger size for the life of the process, while
+  `path_filestat_get` on the same path is correct.
+- Symptom: `read_exact` sized from `File::metadata()` fails with `UnexpectedEof`
+  on a file the process itself wrote. rustfs sizes its `xl.meta` read that way,
+  so deleting an object whose metadata a multipart completion had rewritten
+  smaller returned `Io error: Unexpected error` and left the object in place; a
+  `cp` upload writes `xl.meta` once and is unaffected, and a restarted server
+  deletes the same bytes fine.
+- Fix (`patches/wasmer-fd-filestat-stale-size.patch`): take the size from the
+  open handle, whose `size()` stats the host file, as `fd_sync` already does.
+  Checked against wasmer 7.2.1; the whole `checks.rustfs` suite passes with it.
+  Upstreamable to Wasmer.
+
 ### `fd_readdir` cookies skip entries after directory mutation 🟡
 
 - Wasmer rebuilt and sorted the live directory listing on every `fd_readdir`
