@@ -431,7 +431,7 @@
         (lib.optionalAttrs (wasix.wasmerPackageInventory ? rust) {rust-webc = wasix.wasmerPackageInventory.rust.tests;})
         (lib.concatMapAttrs
           (profile: packages: collectTestsPrefixed "lib-${profile}-" packages)
-          wasix.packagesByProfile)
+          wasix.ciPackagesByProfile)
         (collectTests {cargo-registry = wasix.cargoRegistry;})
         (lib.mapAttrs' (p: lib.nameValuePair "abi-${p}") wasix.abiChecks)
         # non-shipped library packages carrying a tests/ dir

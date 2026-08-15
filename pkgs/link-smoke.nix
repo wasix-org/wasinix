@@ -1,6 +1,6 @@
 # Link smoke test, the floor for a library with no upstream suite: link all
-# of a library's objects into a wasm program (--whole-archive) and run it,
-# catching undefined symbols that only surface at link or instantiation.
+# objects, or a declared consumer for a header-only library, and run it.
+# This catches undefined symbols that surface only at link or instantiation.
 # Build-once / run-many like the real checks; never counted as a suite.
 {
   lib,
@@ -67,58 +67,71 @@
       # pkg-config blocks the whole link. The mode used is logged so a
       # weakened check stays visible.
       buildPhase = ''
-        cat > main.c <<'MAIN'
-        int main(void) { return 0; }
-        MAIN
+        ${
+          if spec ? source
+          then ''
+            cat > main.cpp <<'MAIN'
+            ${spec.source}
+            MAIN
+            mkdir -p out
+            "$CXX" main.cpp ${spec.extraLinkFlags or ""} -o "out/${name}.wasm"
+            echo "linked ${name} [source/$(basename "$CXX")]"
+          ''
+          else ''
+            cat > main.c <<'MAIN'
+            int main(void) { return 0; }
+            MAIN
 
-        archives=$(${
-          if spec ? archives
-          then spec.archives
-          else ''find -L ${lib.getLib drv} ${lib.getDev drv} -name '*.a' 2>/dev/null | xargs -r -n1 realpath | sort -u''
-        })
-        [ -n "$archives" ] || { echo "no static archives found for ${name}"; exit 1; }
+            archives=$(${
+              if spec ? archives
+              then spec.archives
+              else ''find -L ${lib.getLib drv} ${lib.getDev drv} -name '*.a' 2>/dev/null | xargs -r -n1 realpath | sort -u''
+            })
+            [ -n "$archives" ] || { echo "no static archives found for ${name}"; exit 1; }
 
-        deps=""
-        mods=${
-          if spec ? pkgConfig
-          then lib.escapeShellArg spec.pkgConfig
-          else ''"$(find -L ${lib.getDev drv} ${lib.getLib drv} -name '*.pc' 2>/dev/null | xargs -r -n1 basename | sed 's/\.pc$//' | sort -u | tr '\n' ' ')"''
-        }
-        for m in $mods; do
-          if pkg-config --exists "$m" 2>/dev/null; then
-            deps="$deps $(pkg-config --libs --static "$m")"
-          fi
-        done
-
-        mkdir -p out
-        n=0
-        for a in $archives; do
-          base=$(basename "$a" .a)
-          siblings=""
-          for s in $archives; do [ "$s" = "$a" ] || siblings="$siblings $s"; done
-          linked=""
-          for mode in whole plain; do
-            case "$mode" in
-              whole) aflags="-Wl,--whole-archive $a -Wl,--no-whole-archive" ;;
-              plain) aflags="$a" ;;
-            esac
-            for drv_cc in "$CC" "$CXX"; do
-              if $drv_cc main.c $aflags $siblings $deps ${spec.extraLinkFlags or ""} -o "out/$base.wasm" 2>"$base.err"; then
-                linked="$mode/$(basename "$drv_cc")"
-                break 2
+            deps=""
+            mods=${
+              if spec ? pkgConfig
+              then lib.escapeShellArg spec.pkgConfig
+              else ''"$(find -L ${lib.getDev drv} ${lib.getLib drv} -name '*.pc' 2>/dev/null | xargs -r -n1 basename | sed 's/\.pc$//' | sort -u | tr '\n' ' ')"''
+            }
+            for m in $mods; do
+              if pkg-config --exists "$m" 2>/dev/null; then
+                deps="$deps $(pkg-config --libs --static "$m")"
               fi
             done
-          done
-          if [ -n "$linked" ]; then
-            echo "linked $base [$linked]"
-            n=$((n + 1))
-          else
-            echo "FAILED to link $base" >&2
-            cat "$base.err" >&2
-            exit 1
-          fi
-        done
-        echo "linked $n module(s)"
+
+            mkdir -p out
+            n=0
+            for a in $archives; do
+              base=$(basename "$a" .a)
+              siblings=""
+              for s in $archives; do [ "$s" = "$a" ] || siblings="$siblings $s"; done
+              linked=""
+              for mode in whole plain; do
+                case "$mode" in
+                  whole) aflags="-Wl,--whole-archive $a -Wl,--no-whole-archive" ;;
+                  plain) aflags="$a" ;;
+                esac
+                for drv_cc in "$CC" "$CXX"; do
+                  if $drv_cc main.c $aflags $siblings $deps ${spec.extraLinkFlags or ""} -o "out/$base.wasm" 2>"$base.err"; then
+                    linked="$mode/$(basename "$drv_cc")"
+                    break 2
+                  fi
+                done
+              done
+              if [ -n "$linked" ]; then
+                echo "linked $base [$linked]"
+                n=$((n + 1))
+              else
+                echo "FAILED to link $base" >&2
+                cat "$base.err" >&2
+                exit 1
+              fi
+            done
+            echo "linked $n module(s)"
+          ''
+        }
       '';
       installPhase = ''
         mkdir -p "$out"
@@ -139,7 +152,7 @@
       '');
 in {
   # Opt out with passthru.wasix.smokeTest = false; tune with
-  # passthru.wasix.smokeTest = {pkgConfig; archives; extraLinkFlags; broken;}.
+  # passthru.wasix.smokeTest = {source; pkgConfig; archives; extraLinkFlags; broken;}.
   enabledFor = drv: ((helpers.wasixMetaOf drv).smokeTest or {}) != false;
 
   linkFor = profilePkgs: drv: let

@@ -10,6 +10,15 @@ helpers.libTweaks {
     "-DRAPIDJSON_BUILD_TESTS=OFF"
     "-DRAPIDJSON_BUILD_DOC=OFF"
   ];
+  passthru.wasix.smokeTest.source = ''
+    #include <rapidjson/document.h>
+
+    int main() {
+      rapidjson::Document document;
+      document.Parse("{\"wasix\":true}");
+      return document.HasParseError();
+    }
+  '';
   buildInputs = helpers.dropInputsByName ["gtest"];
   doCheck = false;
 }
