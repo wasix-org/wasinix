@@ -1,0 +1,12 @@
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -63,6 +63,9 @@
+     } else if #[cfg(target_os = "windows")] {
+         mod windows;
+         use crate::windows as sys;
++    } else if #[cfg(target_os = "wasi")] {
++        mod wasi;
++        use crate::wasi as sys;
+     } else {
+         compile_error!("Unsupported target OS! Create an issue: https://github.com/djc/hostname/issues/new");
+     }
