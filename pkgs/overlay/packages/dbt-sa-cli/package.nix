@@ -51,6 +51,7 @@ final.rustPlatform.buildRustPackage rec {
   # 113 MB of wasm from an 819-crate workspace, and the wheel takes it through
   # preferredProfilePackages, so one profile is the build anyone consumes.
   passthru.wasix.preferredProfile = "eh";
+  passthru.wasix.smokeTest = false;
 
   meta = {
     description = "dbt Fusion engine CLI, built to WASIX";

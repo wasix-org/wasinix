@@ -206,10 +206,9 @@ the package build closure. Executable wasm test programs are exposed through
 host-side wrappers so build systems can invoke them by filename.
 
 C and C++ packages use their nixpkgs `checkPhase`. Python wheels use the native
-nixpkgs `doInstallCheck` declaration and run the corresponding pytest, unittest,
-or install check hook. Override that choice with `passthru.wasix.installCheck`;
-configure the run with `passthru.wasix.emulatedCheck` (`timeout`, `expectFail`,
-or `broken`).
+nixpkgs custom `installCheckPhase` or check hook. Override that choice with
+`passthru.wasix.installCheck`; configure the run with
+`passthru.wasix.emulatedCheck` (`timeout`, `expectFail`, or `broken`).
 
 These checks appear as `passthru.tests.upstream`. Handwritten package tests
 remain appropriate for focused behavior and for suites that cannot use the

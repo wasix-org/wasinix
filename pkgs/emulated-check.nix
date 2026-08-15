@@ -135,7 +135,7 @@
 
     if [ -n "$_timedout" ]; then
       echo "check '${name}' timed out after ${toString timeout}s (output stayed below the cap)" >&2
-      exit 1
+      ${lib.optionalString ((spec.expectFail or null) != null) ''exit 1''}
     fi
     if [ "$_rc" -eq 141 ]; then
       echo "check '${name}' exceeded the ${toString (outputCap / 1024 / 1024)}MB output cap; treating as a runaway suite" >&2

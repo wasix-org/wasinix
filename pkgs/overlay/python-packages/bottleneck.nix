@@ -8,5 +8,6 @@
 }:
 helpers.libTweaks {
   nativeBuildInputs = [wasixPython.pythonOnBuildForHost.pkgs.numpy];
+  passthru.wasix.emulatedCheck.broken = "input-modification tests trap on integer division by zero";
 }
 pyprev.bottleneck
