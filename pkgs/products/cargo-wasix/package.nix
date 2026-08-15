@@ -6,6 +6,7 @@
   lib,
   stdenvNoCC,
   makeWrapper,
+  nix-update-script,
   rustup,
   cargo-wasix-unwrapped,
   wasix-rust,
@@ -67,6 +68,18 @@ in
       # The recipe is products/cargo-wasix, which carries the version,
       # the src and the updateScript; this wrapper only adds the toolchain env.
       unwrapped = cargoWasixUnwrapped;
+      # nix-update needs version + src on the drv it evals: the wrapper has
+      # neither, so point it at the unwrapped package
+      updateScript = {
+        command = nix-update-script {extraArgs = ["--flake"];};
+        attrPath = "toolchain.cargo-wasix.unwrapped";
+        accepts = ["release" "revision"];
+        source = {
+          kind = "github";
+          owner = "wasix-org";
+          repo = "cargo-wasix";
+        };
+      };
     };
 
     meta = {

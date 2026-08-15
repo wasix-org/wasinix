@@ -21,7 +21,15 @@ in
     passthru = {
       wasix.shipped = true;
       # upstream cuts no releases, so track its default branch
-      updateScript = nix-update-script {extraArgs = ["--flake" "--version=branch"];};
+      updateScript = {
+        command = nix-update-script {extraArgs = ["--flake" "--version=branch"];};
+        accepts = ["revision"];
+        source = {
+          kind = "github";
+          owner = "Zaechus";
+          repo = "crabsay";
+        };
+      };
       # 0-unstable-YYYY-MM-DD: the date is the whole version, so put it in the
       # patch. 0.0.x leaves room for a real 0.1.0 to sort above the snapshots.
       # Prefer 0.0.0-unstable.YYYY.M.D once wasmer resolves prerelease-only

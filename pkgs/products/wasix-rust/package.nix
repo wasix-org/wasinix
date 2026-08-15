@@ -380,9 +380,17 @@ in
       # its hash (cargoDeps.vendorStaging) without scheduling the full toolchain.
       cargoDeps = cargoVendorDir;
 
-      # Bumps, then re-derives the stage0 bootstrap pin from the new tag (the
-      # nix-update command is passed through as its argv).
-      updateScript = ["pkgs/toolchain/rust/update.py"] ++ nix-update-script {extraArgs = ["--flake"];};
+      # Bumps, then re-derives the stage0 bootstrap pin from the new source's
+      # src/stage0 (the nix-update command is passed through as its argv).
+      updateScript = {
+        command = ["pkgs/products/wasix-rust/update.sh"] ++ nix-update-script {extraArgs = ["--flake"];};
+        accepts = ["release" "revision"];
+        source = {
+          kind = "github";
+          owner = "wasix-org";
+          repo = "rust";
+        };
+      };
       wasix.updateNotes = optionals hostedOnWasix [
         {message = "wasix-host-tools.patch enables the WASIX host target, supplies Cargo's WASIX process/path branches, and disables SSH until target OpenSSL exists; recheck on the next tag bump";}
         {message = "wasix-process-fds.patch implements WASIX child pipe descriptor conversions in std; recheck on the next tag bump";}

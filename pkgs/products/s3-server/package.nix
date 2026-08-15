@@ -18,8 +18,16 @@ rustPlatform.buildRustPackage (finalAttrs: {
   buildFeatures = ["binary"];
   cargoHash = "sha256-iq6FnobEju7DIHacvoFPTTJDhCKMY3R4NE/QQKWiW9I=";
 
-  passthru.updateScript = nix-update-script {
-    extraArgs = ["--flake" "--version-regex" "^([0-9.]+)$"];
+  passthru.updateScript = {
+    command = nix-update-script {
+      extraArgs = ["--flake" "--version-regex" "^([0-9.]+)$"];
+    };
+    accepts = ["release" "revision"];
+    source = {
+      kind = "github";
+      owner = "wasix-org";
+      repo = "s3-server";
+    };
   };
 
   meta = {

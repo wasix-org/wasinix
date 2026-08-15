@@ -45,10 +45,16 @@ rustPlatform.buildRustPackage (finalAttrs: {
     updateScript = {
       command = nix-update-script {extraArgs = ["--flake"];};
       attrPath = "nativePackages.anybuild";
+      accepts = ["release" "revision"];
+      source = {
+        kind = "github";
+        owner = "wasmerio";
+        repo = "anybuild";
+      };
     };
     # The template tests pin PyPI from this source's examples/, so a bump has to
     # re-resolve them. The script no-ops unless the recorded version moved.
-    wasix.retentionHook = ["scripts/anybuild-mirror.py"];
+    wasix.retentionHook = ["pkgs/products/anybuild/update-mirror.py"];
   };
 
   meta = {

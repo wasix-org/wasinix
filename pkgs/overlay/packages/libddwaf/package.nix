@@ -46,7 +46,7 @@ in
     # a dylib: PIC profiles only, like zbar.
     # Derived pin, deliberately no updateScript: the version must equal the
     # LIBDDWAF_VERSION ddtrace's setup.py expects, since ddtrace bundles this
-    # .so. ddtrace's update.py re-derives it, so bumping it here on its own
+    # .so. ddtrace's updater re-derives it, so bumping it here on its own
     # would only desync the pair until the next ddtrace bump.
     passthru.wasix.supportedProfiles = helpers.profiles.pic;
   })

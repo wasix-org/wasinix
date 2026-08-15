@@ -95,6 +95,12 @@
                   ];
                 };
                 attrPath = "toolchain.llvm.clang.pin";
+                accepts = ["release" "revision"];
+                source = {
+                  kind = "github";
+                  owner = "wasix-org";
+                  repo = "llvm-project";
+                };
               };
               wasix.updateNotes = [
                 {

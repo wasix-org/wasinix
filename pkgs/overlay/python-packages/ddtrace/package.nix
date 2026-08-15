@@ -158,7 +158,15 @@ in
 
     # bumps, then re-derives libddwaf from the new setup.py's LIBDDWAF_VERSION
     # (the nix-update command is passed through as its argv)
-    passthru.updateScript =
-      ["pkgs/overlay/python-packages/ddtrace/update.py"]
-      ++ nix-update-script {extraArgs = ["--flake"];};
+    passthru.updateScript = {
+      command =
+        ["pkgs/overlay/python-packages/ddtrace/update.sh"]
+        ++ nix-update-script {extraArgs = ["--flake"];};
+      accepts = ["release" "revision"];
+      source = {
+        kind = "github";
+        owner = "DataDog";
+        repo = "dd-trace-py";
+      };
+    };
   }

@@ -22,12 +22,18 @@
 
   updateScript = buildPackages.writeShellApplication {
     name = "wasix-cargo-registry-update";
-    runtimeInputs = [
-      (buildPackages.python3.withPackages (ps: [ps.tomlkit]))
+    # python3 for derive-lock.py, which rewrites upstream's lockfile; the rest
+    # of the script is shell.
+    runtimeInputs = with buildPackages; [
+      (python3.withPackages (ps: [ps.tomlkit]))
+      curl
+      jq
+      gnused
+      git
     ];
     text = ''
       pkg=$(git rev-parse --show-toplevel)/pkgs/products/cargo-registry
-      PYTHONDONTWRITEBYTECODE=1 python3 "$pkg/update.py" "$@"
+      PYTHONDONTWRITEBYTECODE=1 bash "$pkg/update.sh" "$@"
     '';
   };
   updateArgs = nix-update-script {extraArgs = ["--flake"];};
@@ -40,8 +46,15 @@ in
     cargoHash = "sha256-VIB9xziuRrtbJefUOqlHGePw2HfcjD9r84bPq6UdwZ4=";
 
     passthru.updateScript = {
+      name = "cargo-registry";
       command = ["${updateScript}/bin/wasix-cargo-registry-update"] ++ updateArgs;
       commandDrvPaths = [updateScript] ++ map (_: null) updateArgs;
+      accepts = ["revision"];
+      source = {
+        kind = "github";
+        owner = "wasix-org";
+        repo = "cargo-registry";
+      };
     };
 
     meta = {

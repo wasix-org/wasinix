@@ -4,8 +4,7 @@
 icu's passthru.wasix.retentionHook: nixpkgs adds and drops icu majors over time
 (icu69 was removed, icu78 arrived), and the icu/icu-data families plus the
 default-alias major must track exactly what nixpkgs exposes, or `prev.icuNN`
-throws. Run after a pin bump by scripts/update.py, once the generic history and
-prune steps have settled.
+throws. The update driver runs this after history retention and rel pruning.
 """
 
 import json

@@ -20,6 +20,24 @@
     manifest.crates;
   probeEntry = entryFor probe.crate probe.upstream;
 in {
+  # crates.json and the patch tree name the same crates. A mintable crate with
+  # no pins resolves to upstream stock with its edits missing, which nothing
+  # else reports: the mint just skips it.
+  pins = let
+    problems =
+      map (c: "${c}: edited, but crates.json pins nothing for it") manifest.unpinned
+      ++ map (c: "${c}: pinned in crates.json, but nothing mints it") manifest.stray;
+  in
+    pkgs.runCommand "cargo-registry-test-pins" {} (
+      if problems == []
+      then "touch $out"
+      else ''
+        ${lib.concatMapStringsSep "\n" (p: "echo ${lib.escapeShellArg p} >&2") problems}
+        echo 'resync with: nix run .#registry -- pins' >&2
+        exit 1
+      ''
+    );
+
   # Every entry has a well-formed tarball rooted at <name>-<version>, and its
   # wasixVersion matches the packaged [package].version (the index is built from
   # it, so a mismatch publishes the wrong number).

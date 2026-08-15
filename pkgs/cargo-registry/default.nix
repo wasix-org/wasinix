@@ -1,6 +1,6 @@
 # The WASIX overlay cargo registry's payload: one <version>+wasix.N.crate per
 # version in crates.json (upstream .crate, the crate's edits applied, version
-# restamped, repacked). scripts/crate-pins fills crates.json from each crate's
+# restamped, repacked). `registry pins` fills crates.json from each crate's
 # `versions` constraint; output is inert data. See
 # ../lib/wasix-crate-patches/README.md.
 #
@@ -17,9 +17,16 @@
 
   pins = builtins.fromJSON (builtins.readFile ./crates.json);
 
-  # Crates we publish: those with edits not marked notMinted. crate-pins pins only
+  # Crates we publish: those with edits not marked notMinted. `registry pins` pins only
   # these, so crates.json is exactly the mintable set.
   mintable = lib.filter (c: !(crateEdits.notMinted ? ${c})) crateEdits.crates;
+
+  # crates.json is generated from pinConstraints, so it names exactly the
+  # mintable crates. Falling behind leaves a crate's edits out of the payload
+  # and consumers resolve upstream stock; running ahead pins versions nothing
+  # mints. checks.cargo-registry fails on either.
+  unpinned = lib.filter (c: (pins.${c} or {}) == {}) mintable;
+  stray = lib.filter (c: !(lib.elem c mintable)) (lib.attrNames pins);
 
   # One (crate, version) per crates.json entry.
   builds =
@@ -88,7 +95,10 @@
 
       passthru = {
         inherit crate version wasixVersion crateFile rel;
-        wasix.supportedProfiles = [];
+        wasix = {
+          supportedProfiles = [];
+          publication = {inherit version rel;};
+        };
       };
 
       meta = {
@@ -113,6 +123,8 @@
     # Crates edited but not published (git-sourced, or a vendor-only rewrite), and
     # why, so their absence from the registry is recorded rather than silent.
     excluded = lib.mapAttrsToList (crate: reason: {inherit crate reason;}) crateEdits.notMinted;
+    # The same absence by accident, rather than by declaration.
+    inherit unpinned stray;
   };
 
   registry = pkgs.linkFarm "wasix-cargo-registry" (
@@ -133,14 +145,14 @@
     ]
   );
 
-  # crate -> served upstream versions, read by scripts/update.py and bump-rel.py
+  # crate -> served upstream versions, read by the update driver and bump-rel
   # via .#relVersions.
   crateVersions =
     lib.mapAttrs (_: ds: lib.unique (map (d: d.passthru.version) ds))
     (lib.groupBy (d: d.passthru.crate) minted);
 
   # rels.json keys under this prefix that no minted crate carries, left by an
-  # upstream bump. scripts/update.py drops them; this surfaces hand bumps.
+  # upstream bump. The update driver drops them; this surfaces hand bumps.
   staleRels = lib.concatMap (
     key: let
       name = lib.removePrefix relPrefix key;
@@ -160,7 +172,7 @@ in
       (o.passthru or {})
       // {
         inherit manifest crateVersions;
-        # crate -> `versions` constraint for the crates crate-pins should pin
+        # crate -> `versions` constraint for the crates `registry pins` should pin
         # (mintable only). Lazy, so forcing it doesn't force `minted`.
         pinConstraints =
           lib.filterAttrs (c: _: !(crateEdits.notMinted ? ${c})) crateEdits.edited;
@@ -170,7 +182,7 @@ in
           (lib.groupBy (d: d.passthru.crate) minted);
         tests = mkTestGroup "cargo-registry" tests;
         wasix.updateNotes = lib.optional (staleRels != []) {
-          message = "rels.json has stale keys (${lib.concatStringsSep ", " staleRels}); nix run .#scripts.update -- --only nixpkgs drops them";
+          message = "rels.json has stale keys (${lib.concatStringsSep ", " staleRels}); nix run .#update -- nixpkgs drops them";
           when = _: _: true;
         };
       };

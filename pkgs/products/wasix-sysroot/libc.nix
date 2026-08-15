@@ -53,7 +53,7 @@
     ];
 
   # witx specs for the header generators: submodule pins absent from archive
-  # downloads, synced by scripts/update.py. A stale pin fails the build with
+  # downloads, synced by the sysroot update script. A stale pin fails the build with
   # undeclared __wasi_* functions.
   wasiWitx = fetchFromGitHub {
     owner = "WebAssembly";
@@ -84,8 +84,14 @@ in
 
     passthru.updateScript = {
       name = "wasix-libc"; # the attr tail is `libc`
-      # Wraps nix-update (passed through as argv) to re-derive the witx pins at the new tag.
-      command = ["pkgs/toolchain/sysroot/update.py"] ++ nix-update-script {extraArgs = ["--flake"];};
+      # Wraps nix-update (passed through as argv) to re-derive the witx pins from the new source.
+      command = ["pkgs/products/wasix-sysroot/update.sh"] ++ nix-update-script {extraArgs = ["--flake"];};
+      accepts = ["release" "revision"];
+      source = {
+        kind = "github";
+        owner = "wasix-org";
+        repo = "wasix-libc";
+      };
     };
 
     nativeBuildInputs = [

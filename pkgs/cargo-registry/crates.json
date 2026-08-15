@@ -1,6 +1,39 @@
 {
+  "async-io": {
+    "2.6.0": "sha256-HVSEIFWz8kvkqWqSym5OMi57XZX0BLNoy2pJtO1XdH4="
+  },
   "async-rs": {
     "0.8.11": "sha256-VT+YvUuEyhz+vlpF/hd4uHXgqJhZLZzgVwlEDmkAVL0="
+  },
+  "async-std": {
+    "1.0.0": "sha256-gruB+xgbAwmyGsqiUr0umHUp3fIIlY6f7yXF7H6zFcM=",
+    "1.0.1": "sha256-Wk/bFEg6rI5yAS3nQJE5ov8BGAiDwgu2hrd3HoH4nIw=",
+    "1.1.0": "sha256-FhroxiW6UAiAmcUYEz+MVCpthGcN2+WnJ/44rTNqGx4=",
+    "1.10.0": "sha256-WUoT+VziGklxluCv0j3m+senA8AQCVs2pzkjciPSlAQ=",
+    "1.11.0": "sha256-G8qpNi4hfY8p9KJ2jokRwHA4+b9i4HLfylEs6XdraDs=",
+    "1.12.0": "sha256-9uVsqW0L4kOolKUPSU7efxAMrVpbOgyV8U134NYi5gk=",
+    "1.13.0": "sha256-vevBjeWxmiVKPTZ3STgbjtMxi3ID3oklJ9g6FJdpfAE=",
+    "1.13.1": "sha256-UmBaAoPjHxJJJaS2le+l+r6Y1qS764nESqkoCNJzmJA=",
+    "1.13.2": "sha256-6UFOwds5j1ThiG/tM7s30rw+KERDsr8amYUlaAMJ+gE=",
+    "1.2.0": "sha256-iGgI/XIIzBPWT55aipE8aV9BLCiqPl0NhPLTNTh3tpU=",
+    "1.3.0": "sha256-zRcRZwe1lFzCnwFeLcoy3fwvl0020lum7UZ0iJCVor0=",
+    "1.4.0": "sha256-7XBB3BdZzu+z1awC0KLUbsGbSC+qwXK53gqwUGbnSM0=",
+    "1.5.0": "sha256-DXkKb5+TCZyOolqxDuSJWfCXTkqNRXBk+Zm1KCATMto=",
+    "1.6.0": "sha256-ajQVN3vMLZkav7a+o//PA7R0sgcmhq/DKXww0G57NDc=",
+    "1.6.1": "sha256-x59wAftVYDprUSTLmD8EV4FM3kOFyJMYvSFl3af2EB8=",
+    "1.6.2": "sha256-fAeOIOKRsb8FL+GauKZGbjPYffGPqdsagIwHSb6k5Oo=",
+    "1.6.3": "sha256-xr0hGQmsintMSmtcXTrBlXRRhsL9DjsR6Qga/URq3JE=",
+    "1.6.4": "sha256-LyvOXOsHvRxW/BPYL1WcdsrVDx6xsSAddkoVD5YXZYU=",
+    "1.6.5": "sha256-XCd/bsVHvwkvH4IQ18vHMJzirYlK7yVXgSX3jR027Sk=",
+    "1.7.0": "sha256-Ye4I3xslWqYPIjtUcFTQLRNEjAcEa+1KQzDbfAiDGAY=",
+    "1.8.0": "sha256-pP8c6MTAEedfhq+4uBUQm1sDjFiMNk4unjuQck6I+Hs=",
+    "1.9.0": "sha256-ApCampWs9Vq0C2ZNy34s3Q3Mg4h31C+WWb0xuL2eowE="
+  },
+  "async-tar": {
+    "0.5.1": "sha256-oz6otAqrpuJn9vK4Gfes1P4vZG01QqdA1SNFlgnfWQo="
+  },
+  "atomic-wait": {
+    "1.1.0": "sha256-oJ3/AiepKj8fO7ce0BLffWuE5A0zEFJC1x9DT9USvD0="
   },
   "boring-sys2": {
     "4.15.13": "sha256-AtjG0cVqg6mQgFCANrit0ujZmxrBxxMH+jq5I1b2KoI="
@@ -13,21 +46,69 @@
   "crc-fast": {
     "1.10.0": "sha256-ipb45fNzDY3MfcVFBa7FDgM2Tm8wDLAkhzT2hW/yegw="
   },
+  "crossterm": {
+    "0.28.1": "sha256-dJrv9nEReykrZrGbh8Q2myXFTv2NFCoDgN1fOyx1rOU=",
+    "0.29.0": "sha256-HKbibO2immmHeIUzaTHros+dbDbYs+c0yC/9j1NsGvQ="
+  },
+  "curl": {
+    "0.4.49": "sha256-QgomLLHOSwtUdH5a0DVwF0NocVdgU2RLcPt0GzcHb7U=",
+    "0.4.50": "sha256-h1ZmRYxj1Z/Swq6SUS7D2gN3zpbwS1WRtMeseHLBL+c="
+  },
+  "curl-sys": {
+    "0.4.87+curl-8.19.0": "sha256-4WMKh5XTzrdrwMGXN6pGFngqkYGg2B0XwacJzRj5U2Q=",
+    "0.4.88+curl-8.20.0": "sha256-BY1nC7huX+ehvimhsqvLDl5Sn8P14VjoWXpFHARL4ys=",
+    "0.4.89+curl-8.20.0": "sha256-6Q/PIgSkTbYAz6wz045xzgyBPPsDH7Fam736wVJRytA=",
+    "0.4.90+curl-8.21.0": "sha256-ySpo1xwX2+/OZCeQbiSZ76vYC66W7X56qvpstnRsy4w="
+  },
   "deadpool-postgres": {
     "0.14.1": "sha256-Wd4cstbjHDsPy/CBspLw+e6OHLJ3fbCRju+a1fI5uoc="
   },
   "esaxx-rs": {
     "0.1.10": "sha256-fCxZBEeuGWghPVpuOTdMpjRzCCSsx0nusoQyNW2wR+o="
   },
+  "filetime": {
+    "0.2.27": "sha256-cEpxZ33EARpaH3Eg7plIjbsNEB4zCiUa7JghNbFrPFo=",
+    "0.2.28": "sha256-W1gwYeOL4nPlywfLGDf9AtkeLjh9+ZNy9I2uesc0NBU=",
+    "0.2.29": "sha256-fK3B693Odl1mvgVp+p4T6BcOpcI8/yLAojAIOezdLPc="
+  },
   "getrandom": {
     "0.2.15": "sha256-yF+XocrIvVEsHFmy+PWcdvzF77R0N37O1M4FnSf5n7E=",
     "0.2.7": "sha256-MX756m9kFcgpay0b7BuYPQ+FO8Dra4obMo4+64bRakc=",
+    "0.3.1": "sha256-Pcx1Ns/DcErXdRMBoMICgkgDaLf4/vJ69KsJVpC1tu4=",
+    "0.3.2": "sha256-EdozZ4qdxaD4fhyPOPYfNTVlk9Sc3pIM4UcCjHbjSlY=",
     "0.3.3": "sha256-6TSJHnU1B4BipW26B1d8uVgRv6tsgRIH6vxyt7ePVkE=",
     "0.3.4": "sha256-cFgw4woE4NyheMo3kiTnmP5N2N598UbcEgknPPFIOHY=",
     "0.4.0": "sha256-aKW4KFEfyQYP+10SX6yFZoyKiRMtWGB72Y/OqOsdoVU=",
     "0.4.1": "sha256-hUiODX5wi1h1oUKHSwmNdWelriwFNABgzP2/fcpwh9o=",
     "0.4.2": "sha256-sdmICWF7BGxEd/kxhqU83XhMn1gsoDVdTUc6So4DhX4=",
     "0.4.3": "sha256-mrq7A2TXUKj7Bq72bae8Os3IFmrYvr3a8JssWKNiYNA="
+  },
+  "git2": {
+    "0.20.4": "sha256-6+xUvBnEijEyzBtfazqiprvFzkihHXKGsIwo4/jtOD8=",
+    "0.21.0": "sha256-UmrOl7GYIfp/9iG9xjQ2G0V5L75ZR+nsomdSbSnk7GA="
+  },
+  "gix-fs": {
+    "0.15.0": "sha256-XYIM7og600lkqFcSiySQSV6Lf0yVX3Ph3HbjZ5vkTTU=",
+    "0.19.2": "sha256-vnEHyK5CO5HkP/5DLx6fHMBcJYF7zJLvfJSpgE+FhKM=",
+    "0.20.0": "sha256-oe5Ycomr43RKib86SPXEW0/gOmte7hUAgXW1J5Fo3cE=",
+    "0.21.0": "sha256-VgYS9OMAHr45G4EqynB+HM5SzSsr8JIfTL3YkWAhPhg="
+  },
+  "gix-index": {
+    "0.40.1": "sha256-ZALE4MVgt//6Q6/yoqoVHRXpvTFwNR0xsJbuobKxEn4=",
+    "0.49.0": "sha256-Yl2xDbM8l4Sn8SAL2ML10jsPquBxk4PqvwTC9MYmUBg=",
+    "0.50.0": "sha256-w0NEXnOvF4d0Yn9rRJxeKZwlFVFzQ2VAqwGnD5r1nzo=",
+    "0.51.0": "sha256-i1BdJSZ6P+oElEHNsHUDce84lx6tGhMc4yAdi+Jm/dI=",
+    "0.52.0": "sha256-WNEzpHs4TN0ydZciUuuZDKcuVVt3y7mhp11ZJ71N3rs=",
+    "0.53.0": "sha256-RISBHLpCI80Bmx8f5XrngvvRH+hndFW/YZ+nGGXUzDc=",
+    "0.54.0": "sha256-4E+JX/X8710Dhq8Gj/pnY+M9ugc0K9ShBh770v2NvKA="
+  },
+  "gix-pack": {
+    "0.68.0": "sha256-I8Ap6cfxN3AhUnOFjL+GzJp+6hBptn6oSgO3h/PFZBk=",
+    "0.69.0": "sha256-MF4MsvMjJxRjDGRbQ0/6Y2fvYe+51m8IeRSPRH08Ck8=",
+    "0.70.0": "sha256-bBbPHkAzr38+DLrYgJ8APaHOB19Julhib5yNce+glCo=",
+    "0.71.0": "sha256-T7vjNhAx8g2RcC4BJFBvd96P0YB+ASG0sUecIevRQh8=",
+    "0.72.0": "sha256-DPMfcn3EhVDpy/qETEvuK7s6Zw6tcg2p1Qb5yPzyVMw=",
+    "0.73.0": "sha256-7qvJSaVZ0QR9qQLCrMrzSqF1SMZWGVJW1bgZJrz9AoU="
   },
   "google-cloud-auth": {
     "1.14.0": "sha256-mqIFP9ACvWjfjwv6RtROgPIPjnNqMOM1+eY6qRkGTmk=",
@@ -56,6 +137,10 @@
     "0.14.27": "sha256-ulQhz5LhWVcXi2i+51ZkVYdlCIOGjvrAfqxOqOd1rRQ=",
     "0.14.28": "sha256-F1ub2xqaRI7PUU+uC7c9Tc7R9fJX71dTJ+UfkAJ6EJc="
   },
+  "jobserver": {
+    "0.1.34": "sha256-hn3Ncc2TnjcMWblcGfyxw95w5w0pCkSpmoGRDLVkDPM=",
+    "0.1.35": "sha256-30MfDjjhKAvTJTF0QB/39wR3EJqtijKiA5lg3a+W3ow="
+  },
   "libc": {
     "0.2.147": "sha256-MUObPBzo8ONiKa7tPPL1iUmytQLhhgEnP6B3UN6aKrg=",
     "0.2.151": "sha256-PUMGT8UJai5PdpmBTJuROx/qHvx4OfF26JEKbWJsFDk=",
@@ -79,6 +164,29 @@
     "0.2.187": "sha256-xjIN6YPKXuZDkWgHHHwd5nAf9C0Bd0CfxYDECwcn1ik=",
     "0.2.188": "sha256-vFvv2ASNJYuk50mzOqMrI1awCnc62sSrkkyT7AvZk9w=",
     "0.2.189": "sha256-TLESFesuVqNo1AbVDs0LK9vFHcLLAEXgTa7VoPN4VU8="
+  },
+  "libgit2-sys": {
+    "0.18.3+1.9.2": "sha256-bm8VAz+j3sZwAErn9icpITvj1dzRlg8MBRl+Twuur6k=",
+    "0.18.4+1.9.3": "sha256-T6MJ5FOtve9CQ08oUSmbB6fItM/7WVFfmlAknh4QBWs=",
+    "0.18.5+1.9.4": "sha256-BVWhd6W4uB5hwwadtw/iVg8DMF9SCsPoYwcyLBezKho=",
+    "0.18.6+1.9.5": "sha256-xXr0X7MjSnN0jbhVr2JSzvPDwv2R8hu1vsXkTPfZB5c=",
+    "0.18.7+1.9.6": "sha256-tY5Eb2AEnN7YdKpsvClTqmL/73upDpiKB4DaRomCNhs="
+  },
+  "libloading": {
+    "0.8.9": "sha256-k+IeADkesVCp5QghPoi+LxYVhfJF95DKrrz1PVGXqCc=",
+    "0.9.0": "sha256-7h8DnC0SFCo1wd6rN52avCCwj7A3lVYxHH01gAptJZI="
+  },
+  "lua-src": {
+    "547.0.0": "sha256-qZqvB20AneMRu40uM5eomBCDKP9xDNd/TLSKlTX5KWo=",
+    "547.1.0": "sha256-2WbJkZVSVObL9Up12ArN1LqGVrm7GUhGndN00EezGPM=",
+    "548.0.0": "sha256-oo/Pm0sBnY9z2kk9Zj9pEARB5wvmS2uokE1EqZYpR1g=",
+    "548.1.0": "sha256-f4+TodPMaaLMzcLspAVxuJ3Yh0qZpKW/ubmOqa6Cbro=",
+    "548.1.1": "sha256-kREbWbRLrezVNs67nfmijaz77+sTtItY8BuiBsUwkqQ=",
+    "548.1.2": "sha256-M0iIFF7xpcLeqszHunexD0ECTRxisBTugo2yK1MAGPE=",
+    "550.0.0": "sha256-W1+AMbPhr3unL3O0faGiAH5HZt9j71QQHlMW2Ibkay8=",
+    "550.1.0": "sha256-v99IVqDBJpha6w47QW0NY71VCpWFGMKVtNi2j0BglyU=",
+    "550.1.1": "sha256-RmVDck5RePuM9QT1WkrrEHasVHC6PXnte8yy43wuKeQ=",
+    "551.0.0": "sha256-1QgyshrTWUE340z2zV77YFYD8aGFauOYVqjaufLgBRI="
   },
   "mio": {
     "0.8.1": "sha256-eXI3wywDWVCOWlK64MJ73ppnInEFSgKv/F4XGK+/SHk=",
@@ -106,8 +214,34 @@
   "netif": {
     "0.1.6": "sha256-/92VXS+sU1d+8aLne4khYMrcFWjAyYLMPl7wzgSo70U="
   },
+  "open": {
+    "5.4.0": "sha256-qQYTdiMvkVgJTKPXddjOkEcod0Woy36qfXY5bXTivsg=",
+    "5.4.1": "sha256-y4CpzMzJm9LaSkKn7AWMGBJSKFNS3r4hqZFWqTnRhvI="
+  },
+  "openssl-src": {
+    "300.4.1+3.4.0": "sha256-ny/TzdrVBlBEQFhSxE0KBHWhBldYcUYuKXdh8g1P13c=",
+    "300.5.4+3.5.4": "sha256-3ln44Tpuiuhl6IxVFAR1gOuRsrkzei+WBYZ/Q5KvCzw=",
+    "300.5.5+3.5.5": "sha256-2PAvF+I8r0xyAgwEKSIqNK38h1ER9HYJLdirGWpNXyw=",
+    "300.6.0+3.6.2": "sha256-oQf9yjJ/vSW0ahFPT072vAePdd9Q/1Y4kKOXApAXAAk=",
+    "300.6.1+3.6.3": "sha256-cqSpegMki2bK7lPf307Dwt+EKFMhnr3uEG3gQXhIR5w=",
+    "400.0.0+4.0.1": "sha256-25ChntNZPUaBF+533bFsxcDvWz6HHX052dwhnkyrsyw="
+  },
+  "opentelemetry-http": {
+    "0.27.0": "sha256-oeAUOa/0utk8Ujo2pj+g919k6t1ESZ2oHbshtlQcUT8=",
+    "0.28.0": "sha256-DJGBma+3s35+DsrCLPie8rNWCnMQpK7P4HXs9GLkzu4=",
+    "0.29.0": "sha256-dAFWHN27VV7qetpdw5tPVsDS6z6f/L1vfx8jpPU3L/w=",
+    "0.30.0": "sha256-pzGNAsqZjRGQPr4BCfnZ0g3YXfKgdLS9l/o+IoUI5B8=",
+    "0.31.0": "sha256-RinDm+qMsM+2vbkwaDFnMpkRqwTtSHrcEyDpFucPt+o=",
+    "0.32.0": "sha256-MM9ENmDXpMz6tV26Xg0FBeEyuMZkFEpTu5MXGqfV+E4="
+  },
   "parking_lot_core": {
+    "0.8.6": "sha256-E37AAyGpSQkOAgYQNzSeUC249yQHYpRR3YLEnN7YNvk=",
+    "0.9.10": "sha256-nE6c65pQfYytlv/dv6lku9dFsKWez0Zo+YJA56F9wm0=",
+    "0.9.11": "sha256-6eu3B7vcE2wBUtbEFoTyqBBJOlMCejRNrFMveG/q53k=",
     "0.9.12": "sha256-EoLH+cNcdZnNTXHLU6St1b4fUYXyMfaWIEdHGivqv2g="
+  },
+  "polling": {
+    "3.11.0": "sha256-h5Enh0rSKWAydk8hnKi1p1ZdxlGwUjn5DxQxFKMz3FI="
   },
   "pyo3-async-runtimes": {
     "0.26.0": "sha256-3ekKGld3dEORGLuL4OmtqiA8uNtuiNybIFB4aJs7vnU=",
@@ -152,9 +286,16 @@
     "0.13.4": "sha256-rEmkWmZVlVEOEX+ID7xdlvrcgi37el15PvvtoUkh7Cc="
   },
   "reqwest-middleware": {
+    "0.4.2": "sha256-JOG1nfPUBESDJoUiYzNaoS0KkBLvisTM4idoyOOUuhc=",
     "0.5.0": "sha256-ozADVtCwrJYfEDCRh+wAdYMJk/uyzu9x6CoYtykIq0s=",
     "0.5.1": "sha256-+b11J8pFqBiiGnAW1cDeZCfZnuAwyyTQiiJCZPAFp04=",
     "0.5.2": "sha256-TXj/qV6W6JFYAzMYsC/QmVkPqakOGHKl8kY558LFKL8="
+  },
+  "reqwest-retry": {
+    "0.7.0": "sha256-O5J24ln1cSsOskd8bSRwiiuVPHsksgou4bUtM9cl1ec=",
+    "0.8.0": "sha256-iEdybu77yhIP4u0po/ADtzulXK3BLXd1VZDSsittH30=",
+    "0.9.0": "sha256-God4gQOAo49cjcqtQQnKHJygiQuPStif2sb5fNJh74c=",
+    "0.9.1": "sha256-LK73blPYVWZ8UZnQt+Ky4MDJE2W3dc3YmDX0EWxQBBI="
   },
   "ring": {
     "0.17.7": "sha256-AreW9nMHouASFWlUOQDp6vt1jC3/ZTwxLS6/q/qxaf0="
@@ -230,6 +371,7 @@
     "0.7.18": "sha256-GvG5XVkXenLJp1HWHcfkjhkENbzfN/UHm417UjuiC4M="
   },
   "tonic": {
+    "0.13.1": "sha256-Gl3lMsZxRPwTfArvV5/PAI3dKZiFAmlQ4EAnrbYqig8=",
     "0.14.2": "sha256-Pk1d/bHOjX140gPYb/tQAZ6IKt5ii1erDvh9VYwziXg=",
     "0.14.3": "sha256-IG/yDAZgLN3lxT9Z1EYiMJvnCjDTF1UwTjVsHXKxRKY=",
     "0.14.4": "sha256-Wv+G9knF460l9Zi5wirtm1mv38B+k+n+C0RjUnsoZFM=",

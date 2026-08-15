@@ -5,6 +5,7 @@
   lib,
   stdenvNoCC,
   makeWrapper,
+  nix-update-script,
   wasixcc-unwrapped,
   wasix-llvm,
   binaryen,
@@ -42,6 +43,16 @@ in
       # The recipe is products/wasixcc, which carries the version, the
       # src and the updateScript; this wrapper only adds the toolchain locations.
       unwrapped = wasixccUnwrapped;
+      updateScript = {
+        command = nix-update-script {extraArgs = ["--flake"];};
+        attrPath = "toolchain.wasixcc.unwrapped";
+        accepts = ["release" "revision"];
+        source = {
+          kind = "github";
+          owner = "wasix-org";
+          repo = "wasixcc";
+        };
+      };
       wasix.updateNotes = [
         {message = "check whether wasixcc-relocatable-link-passthrough.patch landed upstream";}
         {message = "regenerate wasixcc.Cargo.lock: delete upstream's Cargo.lock and .cargo/config.toml, then `cargo generate-lockfile`; drop the override once upstream keeps the WASIX registry out of the default build";}
