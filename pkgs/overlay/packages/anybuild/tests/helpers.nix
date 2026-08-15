@@ -58,6 +58,9 @@ in {
     export ANYBUILD_PYTHON_INDEX_URL=${mirrorUrl}
     export ANYBUILD_PYTHON_EXTRA_INDEX_URL=${overlayUrl}
     export UV_DEFAULT_INDEX=${mirrorUrl}
+    # The overlay serves a package the mirror pins to an older release, and the
+    # default strategy takes every version from whichever index answers first.
+    export UV_INDEX_STRATEGY=unsafe-best-match
     # Only the interpreter on PATH. Probing for managed installations reads an
     # ELF interpreter from /bin/sh and friends, which the sandbox has not got.
     # The same variable the pyproject install branch sets, so they agree.
