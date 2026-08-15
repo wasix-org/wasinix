@@ -23,6 +23,13 @@
               ./nix-update-prefer-tag-over-rev.patch
             ];
         });
+        # wasm-opt aborts on `!endMap.contains(span.end)` reading a `-g` module
+        # whose legacy-EH try needs a wrapper block: the wrapper takes the end
+        # location, the original keeps the start, and two spans end at 0.
+        # Backport of binaryen#8944.
+        binaryen = prev.binaryen.overrideAttrs (old: {
+          patches = (old.patches or []) ++ [./binaryen-irbuilder-wrapper-block-spans.patch];
+        });
       })
       (products.overlay {})
     ];
