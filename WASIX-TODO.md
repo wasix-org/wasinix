@@ -450,20 +450,24 @@ current toolchain before relying on it.
 - WASIX supports threads and multiple processes through `thread_spawn`,
   `proc_fork`, and `proc_spawn*`, but the Wasmer WASIX ABI has no operation for
   coordinating POSIX record locks between them.
+- FFmpeg 9.0's shared-cache protocol calls `flock`, which is declared in
+  `sys/file.h` but absent from `libc.a`, so FFmpeg fails to link with
+  `undefined symbol: flock` (verified against wasix-libc v2026-06-25.1).
 - The vendored wasix-libc patch exposes `F_GETLK`/`F_SETLK`/`F_SETLKW`, the lock
   types, and `struct flock` so feature-detected consumers compile. The
   operations return `ENOSYS`; reporting success would falsely claim exclusion
   and risk cross-process corruption.
 - Workaround: h5py's runtime test sets `HDF5_USE_FILE_LOCKING=FALSE`; DuckDB
-  skips its lock calls on WASI in `duckdb-wasi-no-file-lock.patch`.
+  skips its lock calls on WASI in `duckdb-wasi-no-file-lock.patch`; FFmpeg links
+  an `ENOSYS` stub from `ffmpeg/package.nix`.
 - Blocks the `fs2` crate, whose whole API is locking, and any crate reaching the
   filesystem through it. tantivy takes its index lock via `fs2::FileExt`, so the
   overlay registry cannot serve it from a floor patch: a port has to replace the
   mmap directory backend, as the wasix-org 0.18 source does, rather than widen a
   cfg gate.
-- Upstream fix: add record-lock operations and shared per-file lock state to
-  Wasmer's WASIX filesystem ABI, then implement the fcntl commands in wasix-libc
-  and remove the package workarounds.
+- Fix: the in-progress implementation adds shared per-file lock state to
+  Wasmer's WASIX filesystem ABI, then implements `flock` and the `fcntl` lock
+  commands in wasix-libc and removes the package workarounds.
 
 ### `dladdr` missing from wasix's dyld 🟡
 

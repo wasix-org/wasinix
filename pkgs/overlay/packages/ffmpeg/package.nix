@@ -55,6 +55,19 @@ in
         # WASIX has pthreads but is classified separately from Unix.
         "--enable-pthreads"
       ];
+      preConfigure = ''
+        cat > wasix-flock.c <<'EOF'
+        #include <errno.h>
+        int flock(int fd, int operation) {
+          (void)fd;
+          (void)operation;
+          errno = ENOSYS;
+          return -1;
+        }
+        EOF
+        $CC -c wasix-flock.c -o wasix-flock.o
+        export NIX_LDFLAGS="''${NIX_LDFLAGS-} $PWD/wasix-flock.o"
+      '';
       postInstall = ''
         mv "$bin/bin/ffprobe" "$bin/bin/ffprobe.wasm"
       '';
