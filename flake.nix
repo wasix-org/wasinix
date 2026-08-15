@@ -46,6 +46,10 @@
       ./patches/wasmer-path-rename-hardlink.patch
       # fd_readdir cookies must remain valid while callers delete entries.
       ./patches/wasmer-fd-readdir-stable-cookie.patch
+      # fd_filestat_get served a cached size that a rename left too large, so a
+      # read_exact sized from it hit UnexpectedEof; rustfs failed to delete an
+      # object whose metadata it had rewritten smaller.
+      ./patches/wasmer-fd-filestat-stale-size.patch
       # isatty must be false for redirected stdio; see WASIX-TODO.md
       ./patches/wasmer-isatty-non-tty-unknown.patch
       # terminal programs need TERM; see WASIX-TODO.md
