@@ -194,19 +194,69 @@
       if historyVersion == null
       then e.variants or allVariants
       else historyTable.${e.attr}.${historyVersion}.variants or ["py313" "py314"];
-    # Read doInstallCheck from the native package because querying the cross
-    # finalAttrs package would recurse.
+    # Read declarations from the native package because cross finalAttrs recurse.
     nativeWheel = pkgs.python3Packages.${e.attr} or null;
+    # Map native Python check inputs back into this interpreter's cross package
+    # set.
+    guestFromNative = inputs:
+      lib.filter (d: d != null) (map (
+          d: let
+            candidate = builtins.tryEval (
+              let
+                inputName = d.pname or (lib.getName d);
+                attr =
+                  {
+                    "pytest-check-hook" = "pytestCheckHook";
+                    "unittest-check-hook" = "unittestCheckHook";
+                  }.${
+                    inputName
+                  }
+                  or inputName;
+              in
+                if builtins.hasAttr attr python3.pkgs
+                then python3.pkgs.${attr}
+                else null
+            );
+          in
+            if candidate.success
+            then candidate.value
+            else null
+        )
+        (lib.filter (d: d != null) inputs));
+    nativeDeclared =
+      if nativeWheel == null
+      then []
+      else
+        (nativeWheel.overrideAttrs (old: {
+          passthru =
+            (old.passthru or {})
+            // {
+              wasixOriginalCheckInputs =
+                (old.nativeCheckInputs or [])
+                ++ (old.nativeInstallCheckInputs or []);
+            };
+        })).wasixOriginalCheckInputs;
+    explicitCheckInputs = wheel.wasixDeclaredCheckInputs or null;
+    selectedCheckInputs =
+      if explicitCheckInputs != null
+      then explicitCheckInputs
+      else guestFromNative nativeDeclared;
+    selectedBuildSystem =
+      if nativeWheel == null
+      then []
+      else guestFromNative (nativeWheel."build-system" or []);
+    hasCustomInstallCheck =
+      nativeWheel
+      != null
+      && (nativeWheel.drvAttrs.installCheckPhase or null) != null;
+    hasCheckHook = lib.any (d: lib.hasInfix "check-hook" (lib.getName d)) selectedCheckInputs;
     # passthru.wasix.installCheck overrides per package; true is the only way
     # to run a suite nixpkgs does not run.
     declaredHere = ((wheel.passthru or {}).wasix or {}).installCheck or null;
     wantsInstallCheck =
       if declaredHere != null
       then declaredHere
-      else
-        nativeWheel
-        != null
-        && ((builtins.tryEval ((nativeWheel.drvAttrs or {}).doInstallCheck or false)).value or false) == true;
+      else hasCustomInstallCheck || hasCheckHook;
     # Input to the emulated check only, never the shipped artifact: the extra
     # output changes the derivation, splitting the package from the copy
     # dependents resolve, which the registry rejects as conflicting wheels.
@@ -232,8 +282,6 @@
           drv = withCheck;
           # timeout / expectFail / broken, same declaration the C side uses
           spec = ((wheel.passthru or {}).wasix or {}).emulatedCheck or {};
-          # pytestCheckHook's own phase, run verbatim: it assembles pytestFlags,
-          # disabledTests and disabledTestPaths itself.
           phase = "pythonCheckPhase";
           # The runner, every check input, and the TRANSITIVE closure of both:
           # PYTHONPATH does no propagation, so a plugin's own dependencies must
@@ -242,58 +290,12 @@
             # drops deps whose closure cannot even evaluate on wasi; a suite
             # that truly needs one fails visibly
             evalOk = d: d != null && (builtins.tryEval (builtins.seq d.outPath true)).success;
-            # Map native Python check inputs back into this interpreter's cross
-            # package set.
-            guestFromNative = inputs:
-              lib.filter (d: d != null) (map (
-                  d: let
-                    candidate = builtins.tryEval (
-                      let
-                        attr = d.pname or (lib.getName d);
-                      in
-                        if builtins.hasAttr attr python3.pkgs
-                        then python3.pkgs.${attr}
-                        else null
-                    );
-                  in
-                    if candidate.success
-                    then candidate.value
-                    else null
-                )
-                inputs);
-            # Python's derivation machinery folds nativeCheckInputs into
-            # nativeBuildInputs. overrideAttrs still sees the package author's
-            # original fields, which keeps build tools out of the guest list.
-            nativeDeclared =
-              if nativeWheel == null
-              then []
-              else
-                (nativeWheel.overrideAttrs (old: {
-                  passthru =
-                    (old.passthru or {})
-                    // {
-                      wasixOriginalCheckInputs =
-                        (old.nativeCheckInputs or [])
-                        ++ (old.nativeInstallCheckInputs or []);
-                    };
-                })).wasixOriginalCheckInputs;
             # the guest can import python modules and the builder shell can
             # source hooks; a native tool is neither and only forces a pointless
             # cross build
             guestUsable = d: d ? pythonModule || lib.hasInfix "check-hook" (lib.getName d);
-            # An explicit WASIX list replaces nixpkgs' optional test matrix.
-            # Absence means to recover and remap the native declaration.
-            explicit = wheel.wasixDeclaredCheckInputs or null;
-            selected =
-              if explicit != null
-              then explicit
-              else guestFromNative nativeDeclared;
             declared =
-              [
-                python3.pkgs.pytest
-                python3.pkgs.pytestCheckHook
-              ]
-              ++ lib.filter (d: evalOk d && guestUsable d) selected;
+              lib.filter (d: evalOk d && guestUsable d) (selectedCheckInputs ++ selectedBuildSystem);
           in
             lib.filter evalOk (declared ++ python3.pkgs.requiredPythonModules declared);
           name = "wheel-${name}";

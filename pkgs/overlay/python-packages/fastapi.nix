@@ -3,6 +3,7 @@
 {
   pyprev,
   pyfinal,
+  wasixPython,
   helpers,
   lib,
   ...
@@ -18,6 +19,9 @@ helpers.libTweaks (
       "test_frontend_respects_root_path"
       "test_required_list_alias_by_name"
     ];
+  }
+  // lib.optionalAttrs (lib.versionOlder wasixPython.pythonVersion "3.14") {
+    passthru.wasix.emulatedCheck.broken = "the runtime exits while running test_frontend";
   }
 )
 pyprev.fastapi
