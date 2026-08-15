@@ -376,42 +376,24 @@
     then drv
     else withTest "${name}-${profile}" "link" (linkSmoke.linkFor nixpkgsByProfile.${profile} drv) drv;
 
-  # A package whose evaluation throws produces no CI jobs at all, which reads
-  # exactly like "no suite"; no runtime guard can see that. Names come from the
-  # overlay loader, independent of whether the packages evaluate.
-  evalSanity = let
-    broken = lib.concatMap (
-      profile:
-        lib.concatMap (
+  # Static names let nix-eval-jobs queue each package before its drvPath is
+  # forced. Unsupported profiles and broken packages must not force drvPath.
+  evalSanity =
+    lib.mapAttrs (
+      profile: _:
+        lib.genAttrs wasixPkgNames (
           name: let
-            r = builtins.tryEval (
-              let
-                d = nixpkgsByProfile.${profile}.${name};
-              in
-                # meta.broken makes nixpkgs assert on drvPath by design, and a
-                # profile the package does not claim is not a failure either.
-                if wasixLib.supportedIn profile d && !(d.meta.broken or false)
-                then builtins.seq d.drvPath "ok"
-                else "skipped"
-            );
+            d = nixpkgsByProfile.${profile}.${name};
+            check = pkgs.runCommand "wasix-eval-sanity-${profile}-${name}" {} ''
+              touch "$out"
+            '';
           in
-            lib.optional (!r.success) "${profile}.${name}"
+            if wasixLib.supportedIn profile d && !(d.meta.broken or false)
+            then builtins.seq d.drvPath check
+            else check
         )
-        wasixPkgNames
-    ) (lib.attrNames profilesCfg.profiles);
-  in
-    pkgs.runCommand "wasix-eval-sanity" {} ''
-      ${
-        if broken == []
-        then ''echo "all ${toString (builtins.length wasixPkgNames)} packages evaluate on every profile"''
-        else ''
-          echo "these packages fail to EVALUATE, so they produce no CI jobs at all:" >&2
-          ${lib.concatMapStringsSep "\n" (b: ''echo "  ${b}" >&2'') broken}
-          exit 1
-        ''
-      }
-      touch "$out"
-    '';
+    )
+    profilesCfg.profiles;
 
   # ── package matrices for CI / consumers ──────────────────────────────────────
   # Complete public view: every package under every supported profile.
