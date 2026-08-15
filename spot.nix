@@ -4,7 +4,6 @@
 # patch fix this package?"), not for shipping: the output mixes objects built by
 # two toolchains, so a green spot build is evidence, not proof.
 #
-#   scripts/spot.sh exnrefEh.zlib
 #   nix build -f spot.nix spliced --impure --arg targets '["exnrefEh.zlib"]' \
 #     --argstr base "$(git rev-parse HEAD)"
 #
@@ -16,9 +15,7 @@
   base,
   # One or more dotted attr paths into nixpkgsByProfile, e.g. ["exnrefEh.zlib"].
   targets,
-  # Attrs to build from the working tree; everything else comes from base. See
-  # pkgs/spot.nix, which owns the grammar and the default. null means "unset", so
-  # that default applies, keeping the default in one place.
+  # null defers to the splice's own default (pkgs/spot.nix, the single source).
   keep ? null,
   system ? "x86_64-linux",
   root ? toString ./.,
