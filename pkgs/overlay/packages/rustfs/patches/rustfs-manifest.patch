@@ -7,9 +7,9 @@
 -aws-config = { version = "1.10.1" }
 +aws-config = { version = "1.10.1", default-features = false, features = ["rt-tokio", "behavior-version-latest"] }
  aws-credential-types = { version = "1.3.0" }
- aws-sdk-s3 = { default-features = false, version = "1.140.0" }
- aws-sdk-sts = { default-features = false, version = "1.110.0" }
-@@ -326,7 +326,7 @@
+ aws-sdk-kms = { default-features = false, version = "1.114.0" }
+ aws-sdk-s3 = { default-features = false, version = "1.141.0" }
+@@ -328,7 +328,7 @@
  dial9-tokio-telemetry = "0.3"
  opentelemetry = { version = "0.32.0" }
  opentelemetry-appender-tracing = { version = "0.32.0" }
@@ -20,8 +20,8 @@
  opentelemetry-semantic-conventions = { version = "0.32.1" }
 --- a/crates/ecstore/Cargo.toml
 +++ b/crates/ecstore/Cargo.toml
-@@ -107,7 +107,7 @@
- hyper-rustls = { workspace = true, default-features = false, features = ["native-tokio", "http1", "tls12", "logging", "http2", "aws-lc-rs"] }
+@@ -193,7 +193,7 @@
+ hostname.workspace = true
  rustls = { workspace = true, default-features = false, features = ["aws-lc-rs", "logging", "tls12", "prefer-post-quantum", "std"] }
  rustls-pki-types.workspace = true
 -tokio = { workspace = true, features = ["io-util", "sync", "signal", "fs", "rt-multi-thread"] }
@@ -31,7 +31,7 @@
  tower = { workspace = true, features = ["timeout"] }
 --- a/rustfs/Cargo.toml
 +++ b/rustfs/Cargo.toml
-@@ -121,7 +121,7 @@
+@@ -254,7 +254,7 @@
  http-body-util.workspace = true
  reqwest = { workspace = true, features = ["json", "stream"] }
  socket2 = { workspace = true, features = ["all"] }
@@ -40,7 +40,7 @@
  tokio-rustls = { workspace = true, default-features = false, features = ["logging", "tls12", "aws-lc-rs"] }
  aws-sdk-s3 = { workspace = true, default-features = false, features = ["sigv4a", "default-https-client", "rt-tokio"] }
  tokio-stream.workspace = true
-@@ -191,13 +191,14 @@
+@@ -326,13 +326,14 @@
  tracing-opentelemetry = { workspace = true }
  # Data structures
  hashbrown = { workspace = true, features = ["serde", "rayon"] }
@@ -52,7 +52,7 @@
  
 -[target.'cfg(not(target_os = "windows"))'.dependencies]
 +[target.'cfg(all(not(target_os = "windows"), not(target_family = "wasm")))'.dependencies]
- libmimalloc-sys = { version = "0.1.49", features = ["extended"] }
+ libmimalloc-sys.workspace = true
 +mimalloc = { workspace = true }
  
  [dev-dependencies]

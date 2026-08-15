@@ -49,7 +49,10 @@
          return false;
 --- a/crates/ecstore/src/disk/os.rs
 +++ b/crates/ecstore/src/disk/os.rs
-@@ -762 +762,34 @@
+@@ -760,7 +760,40 @@
+         Ok(handles)
+     }
+ 
 -    #[cfg(all(not(unix), not(windows)))]
 +    #[cfg(target_os = "wasi")]
 +    {
@@ -85,16 +88,25 @@
 +    }
 +
 +    #[cfg(all(not(unix), not(windows), not(target_os = "wasi")))]
-@@ -887,0 +888,6 @@
+     {
+         let _ = relative;
+         Err(io::Error::new(
+@@ -886,6 +919,12 @@
+     if matches!(err.raw_os_error(), Some(libc::ENOTEMPTY) | Some(libc::EEXIST)) {
+         return true;
+     }
 +    // wasix std does not categorize WASI ENOTEMPTY (55) as
 +    // DirectoryNotEmpty, so recognize its raw errno as well.
 +    #[cfg(target_os = "wasi")]
 +    if err.raw_os_error() == Some(55) {
 +        return true;
 +    }
+     false
+ }
+ 
 --- a/crates/ecstore/src/layout/endpoints.rs
 +++ b/crates/ecstore/src/layout/endpoints.rs
-@@ -1252,7 +1252,7 @@
+@@ -1631,7 +1631,7 @@
          };
          let canonical_path = canonical.to_string_lossy().into_owned();
          diagnostic.canonical_path = Some(canonical_path.clone());
@@ -105,7 +117,7 @@
          }
 --- a/crates/ecstore/src/store/init.rs
 +++ b/crates/ecstore/src/store/init.rs
-@@ -338,8 +338,12 @@
+@@ -344,8 +344,12 @@
                          retry_delay_secs = interval,
                          "Retrying storage format load"
                      );
@@ -199,14 +211,20 @@
 +}
 --- a/rustfs/src/admin/console.rs
 +++ b/rustfs/src/admin/console.rs
-@@ -587 +587 @@
+@@ -584,7 +584,7 @@
+             Duration::from_secs(auth_timeout),
+         ))
+         // Add request body limit (10MB for console uploads)
 -        .layer(RequestBodyLimitLayer::new(5 * 1024 * 1024 * 1024));
 +        .layer(RequestBodyLimitLayer::new(5usize.saturating_mul(1024 * 1024 * 1024)));
+ 
+     // Per-client console rate limiting, sharing the S3 API limiter core
+     // (`server::rate_limit`). Added last so it is the outermost layer and
 --- a/rustfs/src/allocator_reclaim.rs
 +++ b/rustfs/src/allocator_reclaim.rs
-@@ -111,12 +111,12 @@
- }
+@@ -169,12 +169,12 @@
  
+ /// Return the allocator backend name used by reclaim and memory metrics.
  pub fn allocator_backend() -> &'static str {
 -    #[cfg(not(target_os = "windows"))]
 +    #[cfg(all(not(target_os = "windows"), not(target_family = "wasm")))]
@@ -219,7 +237,7 @@
      {
          "mimalloc-windows"
      }
-@@ -294,7 +294,7 @@
+@@ -368,7 +368,7 @@
      )
  }
  
@@ -228,7 +246,7 @@
  #[allow(unsafe_code)]
  fn collect_allocator_memory(force: bool) -> Result<(), String> {
      // SAFETY: `mi_collect` is provided by the active global allocator backend
-@@ -306,7 +306,7 @@
+@@ -380,7 +380,7 @@
      Ok(())
  }
  
@@ -239,26 +257,27 @@
  }
 --- a/rustfs/src/main.rs
 +++ b/rustfs/src/main.rs
-@@ -12,6 +12,7 @@
- // See the License for the specific language governing permissions and
- // limitations under the License.
+@@ -49,7 +49,7 @@
+ #[global_allocator]
+ static GLOBAL: hotpath::CountingAllocator<MiMallocAllocator> = hotpath::CountingAllocator::with(MiMallocAllocator);
  
-+#[cfg(not(target_family = "wasm"))]
+-#[cfg(not(all(feature = "hotpath", feature = "hotpath-alloc")))]
++#[cfg(all(not(target_family = "wasm"), not(all(feature = "hotpath", feature = "hotpath-alloc"))))]
  #[global_allocator]
  static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
  
 --- a/rustfs/src/memory_observability.rs
 +++ b/rustfs/src/memory_observability.rs
-@@ -20,7 +20,7 @@
+@@ -19,7 +19,7 @@
+ use serde::Serialize;
  #[cfg(any(test, not(target_os = "windows")))]
  use serde_json::Value;
- use std::collections::HashMap;
 -#[cfg(not(target_os = "windows"))]
 +#[cfg(all(not(target_os = "windows"), not(target_family = "wasm")))]
  use std::ffi::CStr;
  use std::path::Path;
  use std::sync::{Arc, Mutex, OnceLock};
-@@ -279,7 +279,7 @@
+@@ -312,7 +312,7 @@
      }
  }
  
@@ -267,7 +286,7 @@
  #[allow(unsafe_code)]
  fn read_allocator_memory_snapshot() -> Option<AllocatorMemorySnapshot> {
      // SAFETY: `mi_stats_get_json` returns a null-terminated JSON buffer owned by
-@@ -302,7 +302,7 @@
+@@ -334,7 +334,7 @@
      })
  }
  
@@ -278,7 +297,7 @@
  }
 --- a/rustfs/src/server/http.rs
 +++ b/rustfs/src/server/http.rs
-@@ -434,6 +434,15 @@
+@@ -438,6 +438,15 @@
  
      // The listening address and port are obtained from the parameters
      let listener = {
@@ -294,7 +313,7 @@
          let mut server_addr = server_addr;
  
          // Try to create a socket for the address family; if that fails, fallback to IPv4.
-@@ -590,6 +599,7 @@
+@@ -594,6 +603,7 @@
              socket.listen(backlog)?;
          }
          TcpListener::from_std(socket.into())?
