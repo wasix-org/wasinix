@@ -41,7 +41,7 @@
     rootImports =
       if rootEntry ? pyImport
       then lib.splitString ", " rootEntry.pyImport
-      else root.pythonImportsCheck or [lib.replaceStrings ["-"] ["_"] rootEntry.attr];
+      else root.pythonImportsCheck or [(lib.replaceStrings ["-"] ["_"] rootEntry.attr)];
   in
     runPython {
       name = "closure-import-${name}";
