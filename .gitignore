@@ -4,4 +4,6 @@ __pycache__/
 *.pyc
 nix-fast-build-result.xml
 nix-fast-build-result.json
+.ci-run/
 .remote-builder
+tools/wasinix/target/

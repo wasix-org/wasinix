@@ -1,0 +1,31 @@
+default = "ec2"
+
+[remotes.ec2]
+description = "24/7 online box; prefer this remote when a lease is free"
+host = "nixremote@example"
+key = "~/.ssh/nixremote_ed25519"
+# Pin the host's ssh key (a known_hosts public-key line); without it the
+# first connection trusts whatever key the host presents.
+# host_key = "ssh-ed25519 AAAA..."
+daemon_key = "/root/.ssh/nixremote_ed25519"
+system = "x86_64-linux"
+max_jobs = "32"
+features = ["big-parallel", "benchmark"]
+capabilities = ["builder", "store", "host"]
+route = "host"
+capacity = 1
+max_load = 64
+eval_workers = 4
+eval_memory = 8192
+substituters = ["https://nix-cache.wasix.org"]
+trusted_public_keys = ["wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI="]
+
+[remotes.nixbuild]
+description = "nixbuild.net instance; billed by usage and dynamically scaling"
+host = "account@nixbuild.net"
+key = "~/.ssh/nixbuild"
+capabilities = ["store"]
+route = "store"
+capacity = 2
+eval_workers = 2
+eval_memory = 8192
