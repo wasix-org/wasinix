@@ -87,6 +87,8 @@ in
     postPatch =
       ''
         sed -i "/^py3.extension_module('_test_internal',$/,/^)$/d" scipy/special/meson.build
+      ''
+      + lib.optionalString (!isHistory) ''
         substituteInPlace scipy/conftest.py \
           --replace-fail 'and sys.platform != "cygwin":' 'and sys.platform not in {"cygwin", "wasix"}:'
       ''

@@ -65,12 +65,6 @@
         pass
 
     try:
-        _pa = os.environ.get("PYTEST_ADDOPTS", "")
-        os.environ["PYTEST_ADDOPTS"] = (_pa + " -o cache_dir=/home/tmp/pytest-cache").strip()
-    except Exception:
-        pass
-
-    try:
         import threading
         if not hasattr(threading, "get_native_id"):
             threading.get_native_id = threading.get_ident
@@ -190,6 +184,10 @@ in {
           export PYTHONUNBUFFERED=1
           export CI=true
           export enableParallelChecking=false
+          case " ''${pytestFlags:-} ''${pytestFlagsArray[*]-} ''${PYTEST_ADDOPTS:-} " in
+            *no:cacheprovider*) ;;
+            *) export PYTEST_ADDOPTS="''${PYTEST_ADDOPTS:+$PYTEST_ADDOPTS }-o cache_dir=/home/tmp/pytest-cache" ;;
+          esac
           ${
             if phase == "pythonCheckPhase"
             then "export doInstallCheck=1"
