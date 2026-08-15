@@ -40,6 +40,9 @@
     "0.5.11": "sha256-B3Z8pPp06PC9/hEhOcoMFHiaf75SAsQvAfz55UcrylE=",
     "0.5.12": "sha256-ed/JQv6ib7oi2HXY5G/Zsvy+In6jzv1Cmt8Eq4GahTc="
   },
+  "hostname": {
+    "0.4.2": "sha256-M5NDQddiJtJ2Y4MBACkqV4JHErYARIIHbDz9QfbqKzI="
+  },
   "hyper": {
     "0.14.18": "sha256-kp8vuoyQK5Ebv6rzRLJNYz1jxfLc7pdGpFM+gwT9XRs=",
     "0.14.19": "sha256-9B/FaM1EHeHEasqR0JAYT67R5/gMPDYcMQsHBoK3r9k=",
@@ -186,6 +189,7 @@
     "0.9.1": "sha256-tzgOsQis9Pr6G4JZ/81BT4+CTNcy5EtRhTb9HlK0ud0="
   },
   "target-lexicon": {
+    "0.12.14": "sha256-/zdpSfCWgdq5Le4Y+GpcqBcJRB+Gjwp9QbZTaWya9l0=",
     "0.12.15": "sha256-ZBj4O5509lnyaJPOU87k41Ds5E+7XUtFwZ8sgJZO75Y=",
     "0.12.16": "sha256-/sauCyXmQ9UsvaJscuqF69b0jHNOlO1KtNjd1utn28A=",
     "0.13.0": "sha256-UeElgFgVsU7z83IldwVe/bS0+L1sUS1XUHAtocytaaU=",
