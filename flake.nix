@@ -423,7 +423,6 @@
           wasinix-cargo-publish = wasinixCargoPublishCheck;
           wasinix-wasmer-serve = wasinixWasmerServeCheck;
           wasinix-serve-all = wasinixServeAllCheck;
-          eval-sanity = wasix.evalSanity;
         }
         (collectTests wasix.toolchainTestPkgs)
       ];
@@ -445,7 +444,17 @@
         (lib.mapAttrs' (name: lib.nameValuePair "pyclosure-${name}") wasix.pythonClosureTests)
       ];
     };
-    flakeChecks = mergeDisjoint "checks" ([{treefmt = treefmtCheck;}] ++ builtins.attrValues checksBySet);
+    regularFlakeChecks = mergeDisjoint "checks" ([{treefmt = treefmtCheck;}] ++ builtins.attrValues checksBySet);
+    evalSanityChecks =
+      lib.concatMapAttrs (
+        profile: packages:
+          lib.mapAttrs' (
+            name: check: lib.nameValuePair "eval-sanity-${profile}-${name}" check
+          )
+          packages
+      )
+      wasix.evalSanity;
+    flakeChecks = regularFlakeChecks // evalSanityChecks;
   in {
     formatter.${system} = treefmtEval.config.build.wrapper;
 
@@ -538,6 +547,7 @@
           # of compiling the crate and its tests from source.
           (flattenDrvs "" {inherit wasinix;})
           (flattenDrvs "checks" checksBySet.core)
+          (lib.mapAttrs' (name: check: lib.nameValuePair "checks.${name}" check) evalSanityChecks)
         ];
         packages = [
           # The package-declared coverage, not every profile a package supports.
