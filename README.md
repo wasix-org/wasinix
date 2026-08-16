@@ -23,11 +23,11 @@ nix build .#legacyPackages.x86_64-linux.pythonWheels.py314.numpy    # a wheel
 nix build .#legacyPackages.x86_64-linux.pythonRegistry              # static wheel index
 nix build .#legacyPackages.x86_64-linux.allWasmerPackages                   # all webcs
 
-nix run .#scripts.update                  # bump the source pins
+nix run .#wasinix -- update --all         # bump the source pins
 ```
 
 CI builds every package as its own job (`.#legacyPackages.<system>.ci`, driven
-by `scripts/ci-build.sh`). A job's dotted name is its build path.
+by the `wasinix` CLI in `tools/wasinix`). A job's dotted name is its build path.
 
 ## Structure
 

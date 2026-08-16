@@ -1,0 +1,88 @@
+# CI and the orchestrator
+
+The `wasinix` binary (`tools/wasinix`) is the one tool: it builds, diffs,
+bisects, updates pins, serves the registries, and runs CI. The GitHub workflows
+are thin adapters that call it. This page is the map; each command's `--help` is
+the reference.
+
+## The command tree
+
+Verbs act on the tree, nouns have lifecycles:
+
+- `build <selectors>` builds CI sets, groups, or job addresses.
+- `spot <targets>` rebuilds attrs over a cached base (`docs/spot.md`).
+- `diff <case> --vs <case>` compares two complete build or spot cases; the first
+  is the baseline.
+- `bisect <target> --good --bad -- <predicate>` finds the dependency commit that
+  first breaks a build or spot predicate.
+- `update` and `versions` maintain pins and the served-version tables
+  (`docs/updating.md`).
+- `run` owns durable runs: `start`, `list`, `status`, `logs`, `report`,
+  `failures`, `watch`, `wait`, `cancel`.
+- `remote` inspects the configured builders: `list`, `status`, `doctor`,
+  `field`, `init`.
+- `cargo`, `wasmer`, and `python` are the three registries, each with
+  `serve`/`publish`/`preview` (`docs/registry.md`, `docs/rust.md`).
+- `ci` is the adapter surface the workflows call: `run`, `prepare`, `exec`,
+  `publish`, `origin`, `command`, `remote`, `observe`. Hidden from the top-level
+  help; not for interactive use.
+
+Every expensive verb takes `--on local | <remote> | <remote>:<route>`; the
+document-producing commands (`run list|status|report|failures`, `update list`,
+`remote list`, `cargo publish`, the build verbs) take `--json`;
+`-v`/`-q`/`--color` are global.
+
+## What a run produces
+
+A run is one directory. `prepare` resolves the request into it (materialized
+cases, `request.json`, `preparation.json`); `exec` walks the plan, and each task
+leaves a typed fragment. The report is folded from the fragments by
+`ci/report.rs` and nowhere else, so the terminal verdict, `run failures`, the
+markdown comment, and the check summary describe the same facts.
+
+Progress is an append-only `events.jsonl`; the snapshot is derived from it, not
+maintained beside it. Every progress view (the terminal ladder, `run watch`,
+`run logs --follow`, a remote observer) replays that one stream.
+
+The verdict has three values. A green run passes; a red run has a failed
+required gate; a diff whose baseline could not evaluate concludes **neutral**,
+never red, because a failure the base shares is the status quo, not a regression
+the change introduced.
+
+## Durable and remote runs
+
+`run start -- <command>` detaches a supervisor that is the only writer of
+`run.json`, so no observer can clobber a recorded exit. The run survives the
+terminal; a supervisor that dies without recording an exit reads as `lost`.
+Cancel writes a marker file; the supervisor terminates the payload's process
+group (KILL after a grace period).
+
+`--on <remote>:host` ships the checkout and supervises the run on the builder,
+which runs it as its own durable run; the local side tails the remote
+`events.jsonl` and fetches the finished run. Losing the observer never loses the
+run, and `ci observe` re-attaches. The launch prints a `<remote>:<run>` handle,
+which `run cancel` accepts. The remote supervisor holds one of the builder's
+`capacity` slots for the run's whole life, so concurrent launches from different
+machines cannot overcommit the host.
+
+## GitHub
+
+`build.yml` runs one CI run per event and publishes through `ci publish`: the
+sticky "Wasinix CI" comment and check run on same-repo events, the step summary
+as the overflow home. While the run executes, `ci publish --watch` tails the
+same event stream and republishes the comment and check at most every five
+minutes; the finished surfaces still come only from the post-run publish.
+`test-report.yml` re-publishes fork PRs in base context (the PR's read-only
+token cannot post in-job); a fork's report is its own code's claim, so it
+publishes `--untrusted` and concludes neutral.
+
+`ci-command.yml` handles `/wasinix <command>` on a pull request: `ci origin`
+authorizes it (the shared grammar, a live write-permission check, PR state),
+`ci command` runs it, and the reply is keyed to the commenting comment. Every
+malformed or unauthorized command gets a reply.
+
+Untrusted text (build logs, junit messages, PR comment bodies) passes exactly
+one sanitizer at the render edge: fences sized past the payload, HTML and cell
+escaping that neutralizes line breaks and backslashes. A managed surface is one
+marked comment, upserted by an author-checked first-match lookup, so a marker
+planted in someone else's comment is never adopted.

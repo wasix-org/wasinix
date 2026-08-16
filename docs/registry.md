@@ -4,10 +4,24 @@ Getting a built package out to consumers: webcs on the wasmer registry, wheels
 on the Python index, the older versions we keep rebuildable, and PR previews.
 Authoring the package itself is `docs/packaging.md`.
 
+Each registry is a CLI noun with the same verbs:
+`wasinix cargo|wasmer|python serve` runs one locally, `publish` pushes what is
+missing, `preview` deploys an ephemeral copy; `wasinix python count-natives`
+counts wheels shipping compiled extensions. `wasinix serve` stands all three up
+at once and tears them down together; `--mint`, `--index`, `--server`, and
+`--webc` reuse prebuilt artifacts instead of building fresh.
+
+`wasinix wasmer serve` yields a directory, not a URL: the wasmer CLI has no
+local-HTTP registry mode (`--registry` always resolves a remote GraphQL
+endpoint), so the cell materializes the selected packages and their dependency
+closures as one merged `--offline --include-webc` tree, which is wasmer's native
+offline consumption; `--exec` runs a command with `WASMER_FLAGS` pointing at it.
+Merging refuses two sources that disagree about the bytes of the same webc path.
+
 ## Publishing webcs
 
 ```sh
-nix run .#scripts.publish-webc -- --registry wasmer.io [name...]
+wasinix wasmer publish --registry wasmer.io [name...]
 ```
 
 Builds the named webcs (none = all shipped) and publishes those the registry
@@ -28,8 +42,32 @@ does not already have. `--dry-run` previews.
   published bytes, then compares registry hashes (`wasmer publish` can exit 0
   without tagging, `WASIX-TODO.md`).
 
-The `publish-webc` workflow runs the same script, manual dispatch only, with the
-`WASMER_TOKEN` secret.
+The `publish-webc` workflow runs the same command, manual dispatch only, with
+the `WASMER_TOKEN` secret.
+
+## Publishing crates
+
+```sh
+wasinix cargo publish [--registry <url>] [--mint <built>] [--dry-run] [name[@version]...]
+```
+
+Publishes the minted crates the deployed overlay registry
+(cargo-registry.wasix.org) lacks, using the mint's own `publish-crate.py` wire
+implementation, and reports one plan row per crate (`--json` for the document).
+Idempotent by checksum against the live sparse index: an absent version
+publishes, identical bytes skip, and different bytes fail naming the
+`wasinix versions bump cargoRegistry.crates.<name>@<version>` that mints a fresh
+publishable version. A live publish needs `WASIX_CARGO_TOKEN` (a token whose
+sha256 is in the deployed server's hash list); dry runs never read it. The
+`publish-crates` workflow runs the same command, manual dispatch only.
+
+`wasinix cargo preview` deploys the mint (or, with `--base`, only the crates
+whose minted bytes changed) as a static sparse index on an ephemeral Edge app,
+the same lifecycle as the wheel preview; `wasinix preview` includes it and the
+PR comment names the registry spelling to resolve against it. A static index
+cannot pass entries through to crates.io, so it is consumed as a separate
+registry rather than a crates-io replacement; that is enough for reviewing
+individual crates.
 
 ## Registry history
 
@@ -58,11 +96,12 @@ Keys differ per set, and webcs are normalised:
 Webc attrs use full MAJOR.MINOR.PATCH while `history.json` keeps the upstream
 version as written. For example, jq `"1.6"` becomes `jq-1.6.0`.
 
-Maintain the tables with `nix run .#scripts.history`. Use
-`add <attr>==<version>`, `--per-major`, or `--per-minor`; `--set wheel|cli`
-disambiguates shared names. Pin updates retain outgoing major versions by
-default. `passthru.wasix.retention = "minor"` keeps each minor, while `"none"`
-opts out. Keep only versions consumers are likely to pin.
+Maintain the tables with `wasinix versions add` / `versions import`. Use
+`add <name>@<version>`, `--per-major`, or `--per-minor`; an address prefix
+(`pythonWheels.<name>` / `wasmerPackages.<name>`) disambiguates shared names.
+Pin updates retain outgoing major versions by default.
+`passthru.wasix.retention = "minor"` keeps each minor, while `"none"` opts out.
+Keep only versions consumers are likely to pin.
 
 A `{names, packages}` family is only for a package nixpkgs itself carries at
 multiple versions, not for minting historical ones. Its version list should
@@ -92,13 +131,13 @@ Every wheel is published as `<version>+wasix.<rel>`, a PEP 440 local version.
 `wasmerPackages.<name>` for webcs) then version, default 1. It is shared across
 python versions, since the cp tag already keeps filenames distinct.
 
-Bump it to republish a changed build, with `nix run .#scripts.bump-rel` or the
-manual `bump-rel.yml` workflow, which takes a list of packages and opens a PR.
-An upstream version bump resets it by key miss, as `nix run .#scripts.update`
-drops the stale key. For a deliberate whole-registry rebuild:
+Bump it to republish a changed build, with `wasinix versions bump` or the manual
+`bump-rel.yml` workflow, which takes a list of packages and opens a PR. An
+upstream version bump resets it by key miss, as `wasinix update` drops the stale
+key. For a deliberate whole-registry rebuild:
 
 ```sh
-nix run .#scripts.bump-rel -- --all-versions 'pythonRegistry.wheels.*'
+wasinix versions bump --all-versions 'pythonRegistry.wheels.*'
 ```
 
 That flag also bumps every served history version, so it stays explicit.
@@ -130,8 +169,8 @@ Rebuild it with `nix build github:wasix-org/wasinix/<wasinix_rev>#<attr>`.
 
 Label a same-repo PR `preview`. After its Build goes green, so the CI cache
 serves every artifact (labeling an already-green PR triggers immediately),
-`preview.yml` diffs it against its base at the drvPath level
-(`scripts/preview-diff.py`) and publishes what changed.
+`preview.yml` diffs it against its base at the drvPath level and publishes what
+changed, all through `wasinix preview`.
 
 Webcs go to the dev registry as `<version>-pr<N>.g<sha7>` prereleases: distinct
 versions per iteration, hidden from `latest`, not deletable, so they accumulate

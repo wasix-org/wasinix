@@ -31,10 +31,9 @@ are documented in
 `cargo-registry.wasix.org` publishes edited crates as `<upstream>+wasix.N`,
 allowing plain cargo projects to select them by version.
 
-- `nix run .#scripts.crate-pins` updates the resolved versions and hashes.
+- `wasinix update cargo-registry` re-resolves the crate versions and hashes.
 - `.#cargoRegistry` builds the registry contents.
 - `.#checks.x86_64-linux.cargo-registry` checks the mint and resolution.
-- `nix run .#scripts.cargo-registry-serve` serves a fresh local registry under
-  Wasmer.
+- `wasinix cargo serve` serves a fresh local registry under Wasmer.
 
 The server package is `wasmerPackages.wasix-cargo-registry`.

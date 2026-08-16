@@ -5,106 +5,81 @@ goes to CI.
 
 ## Where builds run
 
-The toolchain and the full `.ci` sweep are expensive: local builds at that scale
+The toolchain and the full CI sweep are expensive: local builds at that scale
 drive the machine into swap, and a stray system-default builder (a paid
 `nixbuild.net`) costs real money. Expensive builds go to a remote builder you
 control.
 
-`--builders ""` is not remote. It suppresses the configured default and then
-builds locally, which is the easiest failure mode to walk into.
-
-The builder is machine-specific, so it lives in a gitignored `.remote-builder`
-(copy `.remote-builder.example`). `scripts/remote-builder.sh` turns it into
-ready-made flags; never hardcode a host or key. Being gitignored it is missing
-in fresh worktrees, so copy it over from another one.
+The `--on` axis chooses where every expensive verb runs: `--on local` here,
+`--on <remote>` on a configured builder, or `--on <remote>:<route>` to pick the
+route (`builder`, `store`, or `host`). Absent, it uses the configured default
+remote. `wasinix remote list` shows what is configured; `wasinix remote doctor`
+verifies one. Remotes live in `remotes.toml` (`$XDG_CONFIG_HOME/wasinix/`),
+never in the flake; `wasinix remote init` writes a commented template.
 
 ```sh
-scripts/remote-builder.sh check     # configured and reachable?
-
-nix build <targets> --max-jobs 0 \
-  --builders "$(scripts/remote-builder.sh builders)" --builders-use-substitutes
+wasinix remote list
+wasinix remote doctor --ifd     # connectivity, store, and an IFD round trip
+wasinix build all --on ec2      # the whole set on the ec2 builder
 ```
 
-`--max-jobs 0` is required, else nix still schedules jobs onto local slots or
-the system default.
-
-## Iterate with Spot first
+## Iterate with spot first
 
 For a toolchain or low-level dependency change, start with
-`scripts/spot.sh <profile>.<attr>`. Spot rebuilds only the targets you name and
-the working-tree inputs you choose, while taking the rest from a cached base.
-This can turn a world-rebuilding change into a short compile-and-link check.
+`wasinix spot <profile>.<attr>`. Spot rebuilds only the targets you name and the
+working-tree inputs you choose, taking the rest from a cached base. This can
+turn a world-rebuilding change into a short compile-and-link check.
 
-Use `--dry-run` to see the cost before building. A green Spot build is useful
-iteration evidence, not final verification, because its output mixes the base
-and working-tree toolchains. See `docs/spot.md` for choosing the rebuild cut and
-the required full-build follow-up.
+`--plan` resolves the splice and reports the build counts before building. A
+green spot build is iteration evidence, not final verification, because its
+output mixes the base and working-tree toolchains. See `docs/spot.md` for
+choosing the rebuild cut and the required full-build follow-up.
 
-## The cache and the full sweep
+## The full sweep
 
-```sh
-scripts/ci-build-remote.sh                     # signed, cache-pushing CI set; offloads eval too
+`wasinix build all --on <remote> --push-cache` builds the whole CI set and, with
+a signing key present, pushes completed work to the cache the GitHub builders
+consume. Running it before CI warms the PR build. Store paths are
+input-addressed, so every keyed run pushes what it builds; `--trusted-ref <ref>`
+matters only for the rev-keyed baseline publish, which refuses a tree that is
+not a committed, unmodified ancestor of a trusted ref.
 
-nix-fast-build --flake .#legacyPackages.x86_64-linux.ci --skip-cached \
-  --no-link --eval-workers 4 --eval-max-memory-size 8192 \
-  --option accept-flake-config true \
-  --store "$(scripts/remote-builder.sh store)"
-```
-
-This is the same build set as CI (`scripts/ci-build.sh`).
-
-`ci-build-remote.sh` pushes completed work by default, through `ci-build.sh`, to
-the same cache the GitHub CI builders consume. Running it before CI therefore
-warms the PR build: cached targets are skipped and only build once. Uploading
-requires the cache signing and storage credentials supplied through Doppler;
-without access to those keys, use `--no-push` and let CI populate the cache.
-
-`--skip-cached` is what makes it survivable. It drops any job already in the
-binary cache, so those cost neither a build nor a download, where a plain
-`nix build` of the same target would substitute the whole closure into the local
-store. On a warm cache the sweep is an eval plus whatever the change genuinely
-rebuilds.
-
-That only holds while the change avoids mass rebuilds, and those are easy to
-trigger: anything under `pkgs/toolchain/` (except `llvm.nix`) rebuilds
-everything, as does a pin bump.
+`--skip-cached` is applied for you by the underlying nix-fast-build: a job
+already in the cache costs neither a build nor a download. On a warm cache the
+sweep is an eval plus whatever the change genuinely rebuilds. That only holds
+while the change avoids mass rebuilds, which are easy to trigger: anything under
+`pkgs/toolchain/` (except `llvm.nix`) rebuilds everything, as does a pin bump.
 
 ## Let CI build it
 
 `build.yml` runs on every pull request and builds the whole package set, each
-package as its own job. So opening a PR is a legitimate way to build something
-you cannot build locally, and often the cheapest one.
+package as its own job. Opening a PR is a legitimate way to build something you
+cannot build locally, and often the cheapest one.
 
-Results come back as a "Per-package status" check run and a sticky comment on
-the PR, upserted in place by `scripts/post-report.js`, so the report stays at
-one comment across pushes. Read that rather than rebuilding to find out what
-broke.
+Results come back as one "Wasinix CI" check run and a sticky comment on the PR,
+upserted in place across pushes. Read that rather than rebuilding to find out
+what broke. On the PR you can also run `/wasinix build <selectors>` in a
+comment; the same command grammar the terminal uses parses there, behind a
+write-permission check.
 
 ## Eval is cheaper than building, not free
 
-`nix fmt` costs nothing and a single `nix eval` is moderate, both fine locally
-but not worth firing off in a loop.
-
-nix-eval-jobs is the one to watch. It fans out `--workers` evaluators, each with
-its own heap allowance (`--max-memory-size`, 4 GiB per worker by default), so
-the ceiling is workers times that allowance. The `ci` set needs more than that
-default; reaching it restarts the worker and discards its evaluator state. Size
-workers against free RAM rather than core count:
+`nix fmt` costs nothing and a single `nix eval` is moderate. nix-eval-jobs is
+the one to watch: it fans out `--workers` evaluators, each with its own heap
+allowance (`--max-memory-size`, 4 GiB per worker by default), so the ceiling is
+workers times that allowance. The CI set needs more than the default; reaching
+it restarts the worker and discards its state, which reads as a slow eval that
+never finishes. Size workers against free RAM, not core count, and set the
+budget through the environment the CLI reads:
 
 ```sh
-nix-eval-jobs --flake .#legacyPackages.x86_64-linux.ci --workers 4 --max-memory-size 8192
-EVAL_WORKERS=4 EVAL_MAX_MEMORY_SIZE=8192 scripts/ci-build.sh
+WASINIX_EVAL_WORKERS=4 WASINIX_EVAL_MEMORY=8192 wasinix build all --on local
 ```
-
-`scripts/ci-build.sh` reads `EVAL_WORKERS` (default 4) and
-`EVAL_MAX_MEMORY_SIZE` (default 8192 MiB), and passes both to nix-eval-jobs and
-nix-fast-build. `ci-build-remote.sh` pins the worker count to 8 for a separate
-reason: on a shared builder the workers contend on the one nix-daemon.
 
 ## Build one thing
 
-A CI job name is a build path. These are example targets; the final command
-lists the complete set:
+A CI job name is a build path. These are example targets; the last command lists
+the complete set:
 
 ```sh
 nix build .#packagesByProfile.exnrefEh.zlib
@@ -114,21 +89,21 @@ nix build .#pythonWheels.py314.numpy
 nix eval .#legacyPackages.x86_64-linux.ci --apply builtins.attrNames
 ```
 
-For example, toolchain suites are available at `.#toolchain.wasixcc.tests`,
-`.#toolchain.sysroot.tests`, and `.#checks.x86_64-linux.rust`. Use
-`nix flake show` for the current check set.
+`wasinix build <selectors>` runs the same job through the orchestrator, which
+also warms inputs, evaluates, and folds a report; a bare `nix build` is fine for
+one target.
 
 ## Before you commit
 
 - New files must be tracked. Nix reads the working tree, so uncommitted edits to
-  tracked files are picked up as they are, but an untracked file does not exist
-  as far as the flake is concerned. `git add -N <file>` is enough: it registers
-  the path without staging its contents.
+  tracked files are picked up, but an untracked file does not exist as far as
+  the flake is concerned. `git add -N <file>` registers the path without staging
+  its contents.
 - `nix fmt`. CI rejects unformatted files, and prettier covers markdown as well
   as Nix.
 - For a behaviour-preserving refactor, diff the derivations. Semantic
-  equivalence is the bar, not identical drv paths, and meta or passthru changes
-  do not move them at all.
+  equivalence is the bar, not identical drv paths; meta or passthru changes do
+  not move them at all.
 
   ```sh
   nix eval .#legacyPackages.x86_64-linux.ci \
@@ -141,10 +116,11 @@ For example, toolchain suites are available at `.#toolchain.wasixcc.tests`,
 
 ## Diagnosing a failure
 
-Read the log, do not rebuild to see the error again.
+Read the log, do not rebuild to see the error again. `wasinix run failures <id>`
+lists a run's failures with the archived-log path for each;
+`wasinix run logs <id>` prints the run log. For a bare drv:
 
 ```sh
-ssh "$(scripts/remote-builder.sh host)"
 nix log <drv>
 ```
 
@@ -152,56 +128,45 @@ A failed CI job is read from the CI report. nixbuild.net returns a cached
 failure link rather than a log; use the EC2 builder or
 `--option reuse-build-failures false` instead of falling back to a local build.
 
-When you do start a long build, print the logs and tee them to a file, so a
-failure is diagnosable without waiting for the whole build.
-
 ## For agents
 
 The rest of this page assumes a person at a terminal. Three things work
 differently without one.
 
-**Ask where to build before you build, once, and remember the answer.** This
-page gives the general policy, but the right route depends on hardware you
-cannot see: how much they want built, and whether that goes to a local machine,
-a remote builder, one of several, or a PR so CI does it. Ask, then save the
-answer to memory so later sessions do not ask again or guess wrong. Re-ask only
-when the answer stops fitting, such as a builder that is no longer reachable.
+**Ask where to build before you build, once, and remember the answer.** The
+right route depends on hardware you cannot see: how much they want built, and
+whether that goes to a local machine, a remote builder, one of several, or a PR
+so CI does it. Ask, then save the answer to memory. Re-ask only when it stops
+fitting, such as a builder that is no longer reachable.
 
-**A long build cannot live inside a single tool call.** It will outlast the
-call's timeout, and a truncated or interleaved transcript is not a log. Start it
-detached, tee the full output to a stable path, and say where that path is so
-the user can `tail -f` it:
+**A long build cannot live inside a single tool call**, and it must not be a raw
+`... &`. Start it as a durable run and inspect the run record, which is
+authoritative; do not infer state from `ps` or a tool-call timeout.
 
 ```sh
-nix build <targets> --max-jobs 0 \
-  --builders "$(scripts/remote-builder.sh builders)" --builders-use-substitutes \
-  -L > /tmp/wasinix-<what>.log 2>&1 &
+id=$(wasinix run start -- build all --on ec2 --push-cache --trusted-ref main)
+wasinix run status "$id" --json     # state + progress snapshot
+wasinix run watch "$id"             # narrate the event stream
+wasinix run wait "$id" --timeout 60 # bounded observation; the run keeps going
 ```
 
-The path must be directly accessible from the user's terminal and survive the
-agent session. Use `/tmp/wasinix-<what>.log` or a named path in the workspace,
-not a harness scratchpad, session directory, or private temporary tree.
+`run start` detaches a supervisor; the run survives your terminal, `run watch`
+and `run logs --follow` replay the same event stream, and joining mid-run shows
+the completed phases' receipts first. A run whose supervisor died without
+recording an exit reads as `lost`, a state like any other, not a hang.
 
-Then poll the log rather than restarting the build. If you lose the handle, read
-the log to find out where it got to; never relaunch on the assumption it died.
-Watch for stalls too: judge progress by new output, and report "no output for N
-minutes on <phase>" instead of waiting silently or calling it finished.
+To offload the whole thing to a builder host, `--on <remote>:host` ships the
+checkout and supervises the run on the host; `wasinix ci observe` re-attaches to
+it, and losing the observer never loses the run.
 
-**A cached-failure link is a browser page.** nixbuild.net returns a link instead
-of a log, `nix log --store ssh://...` cannot retrieve it, and WebFetch gets
-nothing because the page loads its log by JS. The link nix prints already
-carries a read token, and the log itself is plain HTTP at `/builds/<id>/log`:
-
-```sh
-curl -s "https://nixbuild.net/builds/<id>/log?t=<token>" | python3 -c "
-import sys,re,html
-s = re.sub(r'<(style|script)\b.*?</\1>', '', sys.stdin.read(), flags=re.S|re.I)
-print(html.unescape(re.sub(r'<[^>]+>', '\n', s)))"
-```
-
-Strip `<style>`/`<script>` first or the page CSS lands in the output looking
-like log text. This is for diagnosing without an edit in hand; a drv that
-changed since the failure just builds normally.
+**Local cargo builds of the crate need the host toolchain.** The dev shell
+exports the wasix cross toolchain as `CC`/`CXX`/`AR`, so a cargo dependency's
+host build script compiles wasm objects and the host link fails with "archive
+member ... neither ET_REL nor LLVM bitcode". Build the `tools/wasinix` crate
+with `CC_x86_64_unknown_linux_gnu=cc AR_x86_64_unknown_linux_gnu=ar` set (nix
+builds are unaffected). If the ring objects were already poisoned,
+`rm -rf target/debug/build/ring-* target/debug/deps/libring-*` before
+rebuilding.
 
 Cap `--workers` deliberately. You cannot feel the machine swapping, but the user
 can.

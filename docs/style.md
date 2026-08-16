@@ -77,7 +77,7 @@ Two nixpkgs summary idioms carry real meaning; use them literally:
 Do not use conventional-commits prefixes. `feat:` and `fix:` name a kind of
 change rather than a component, which is the opposite of what the scope is for.
 
-Pin bumps are generated: `scripts/update.py --commit` lands one commit per
+Pin bumps are generated: `wasinix update --all --commit` lands one commit per
 target, already in `<name>: <old> -> <new>` form, plus a separate commit for
 each repo-wide step a bump implies (history retention, rels pruning, a package's
 retention hook). Let it write those rather than hand-rolling a variant.

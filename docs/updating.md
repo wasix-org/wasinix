@@ -1,10 +1,17 @@
 # Updating pins
 
 ```sh
-nix run .#scripts.update                    # everything
-nix run .#scripts.update -- --list          # targets + current pins
-nix run .#scripts.update -- --only llvm wasix-libc
+wasinix update --all                        # everything
+wasinix update list                         # targets + current pins
+wasinix update llvm wasix-libc              # named targets
+wasinix update wasix-libc@2026-08-01.1      # a specific release
+wasinix update wasmer@rev:<40-hex>          # a specific revision
+wasinix update --all --pr                   # commit, push, open the PRs
 ```
+
+`TARGET@VERSION` and `TARGET@rev:SHA` are the whole request grammar, shared with
+`build --with`. A target that does not accept the mode you asked for says so;
+`cargo-registry` re-resolves the crate pins.
 
 How a pin bumps is declared next to it (`passthru.updateScript`, the standard
 nixpkgs convention); its constraints and quirks are comments in the same file. A
@@ -12,21 +19,40 @@ derived pin is recalculated by the package's `updateScript`, so the bump is
 declared once. For example, `pkgs/toolchain/rust/update.py` recalculates the
 bootstrap and vendor inputs after moving the Rust source pin.
 
-`scripts/update.py` is only the driver: flake-input targets, per-target
-isolation, the repo-wide steps a bump implies, and the summary. Those are
-registry-history retention (keep the outgoing version rebuildable when a bump
-crosses a major, or per `passthru.wasix.retention`: `minor` for
-latest-per-minor, `none` to opt out), the rels.json prune (drop keys nothing
-serves), and finally the `passthru.wasix.retentionHook`s, which re-sync listings
-derived from pins. Hooks that would repeat expensive work on unrelated bumps
-must gate themselves.
+`wasinix update` is only the driver: flake-input targets, per-target isolation,
+the repo-wide steps a bump implies, and one ChangeSet describing everything that
+moved. Every mutation renders from that ChangeSet: the terminal receipt, the
+commit messages (`<target>: update to <version>`), and the PR body, so a PR and
+its CI comment agree by construction. The repo-wide steps are registry-history
+retention (keep the outgoing version rebuildable when a bump crosses a major, or
+per `passthru.wasix.retention`: `minor` for latest-per-minor, `none` to opt
+out), the rels.json prune (drop keys nothing serves), and finally the
+`passthru.wasix.retentionHook`s, which re-sync listings derived from pins. Hooks
+that would repeat expensive work on unrelated bumps must gate themselves.
 
 These steps run in order for every target because each can move a served
 version. Retention fetches and hashes the outgoing release, so a bump may do
 network work beyond the pins themselves; see
 [Registry history](registry.md#registry-history). The `update.yml` workflow runs
-weekly with one PR per moved target; a manual dispatch with `only` bundles
-targets into one PR.
+weekly, one PR per moved target (`auto/update-<target>`), each opened by
+`wasinix update <target> --pr`; a manual dispatch with `only` selects targets.
+
+Update PRs the bot opens are managed: the PR body records the recipe that
+generated the branch and the head the bot last wrote (a
+`<!-- wasinix:changeset ... -->` marker). Commenting `/wasinix update` on a
+managed PR replays its recipe; `/wasinix update <targets>` or
+`/wasinix versions bump <specs|--changed>` runs as spelled on any same-repo PR.
+Pushing your own commits pauses automated refreshes, and the bot replies with
+the intervening commits instead of replacing them; `/wasinix regenerate --force`
+discards the branch and rebuilds it from the recipe. The mutation runs in a job
+with no push credential (the PR tree's own update scripts execute there); a
+second job re-verifies the bundle and pushes with a lease. `ci-command.yml`
+carries the split; the `UPDATE_PR_TOKEN` secret makes pushed heads trigger CI.
+
+The served-version tables are maintained under the `versions` noun:
+`versions add <package>@<version>` (or `--per-major`/`--per-minor` in bulk)
+backfills registry history, `versions import <lockfile>` pins what a lockfile
+declares, and `versions bump <package>` bumps a publication release counter.
 
 Things to check on a bump are declared as `passthru.wasix.updateNotes`
 (`pkgs/lib/default.nix`) and surface in the PR body. Toolchain and nixpkgs bumps

@@ -11,11 +11,19 @@ green spot build is evidence that a change compiles and links, not proof that it
 is correct. Verify at the root, on the full build, before keeping a change.
 
 ```sh
-scripts/spot.sh exnrefEh.zlib                        # toolchain experiment, no flags
-scripts/spot.sh --dry-run exnrefEh.zlib              # what would it cost?
-scripts/spot.sh --keep zlib exnrefEh.curl            # test a zlib edit through curl
-scripts/spot.sh --local exnrefEh.zlib exnrefEh.git   # several targets, one splice, built here
+wasinix spot packagesByProfile.exnrefEh.zlib             # toolchain experiment
+wasinix spot packagesByProfile.exnrefEh.zlib --plan      # what would it cost?
+wasinix spot packagesByProfile.exnrefEh.curl \
+  --from-source packagesByProfile.zlib                   # test a zlib edit through curl
+wasinix spot packagesByProfile.exnrefEh.zlib --on local  # build here, not on a remote
 ```
+
+Targets and `--from-source` are CI selectors resolved through the selector
+catalog, and `--on` is the placement axis every expensive verb takes. With no
+`--from-source`, spot takes the toolchain from your working tree and everything
+else from base; `--target-only` narrows that to just the named targets. A
+lower-level dev interface, `nix build -f spot.nix`, takes the resolved `keep`
+list of package and toolchain names directly.
 
 A target is a dotted path into `nixpkgsByProfile`, written `<profile>.<attr>`
 such as `exnrefEh.zlib`. There is nothing to author: edit whatever files you
@@ -27,42 +35,40 @@ comes out identical to base.
 
 ## The model
 
-Everything comes from base. `--keep` names the attrs to take from your working
+Everything comes from base. The keep set names the attrs taken from your working
 tree instead, and the targets are always kept. That is the whole idea: pick what
 rebuilds, and the rest is the cache.
 
 A kept attr is built from your edited definition, but its inputs (its linked
-dependencies and its toolchain) still resolve to base, apart from any input you
-also keep. So `--keep zlib` with target `curl` rebuilds curl and your zlib
-against an otherwise base world.
+dependencies and its toolchain) still resolve to base, apart from any input also
+kept. So keeping `zlib` with target `curl` rebuilds curl and your zlib against
+an otherwise base world.
 
-## Choosing the cut with --keep
+## Choosing the cut with --from-source
 
-`--keep` is a small set expression. Its terms:
+`--from-source` names CI selectors whose spot owners join the keep set
+(repeatable):
 
-| term                      | meaning                                              |
-| ------------------------- | ---------------------------------------------------- |
-| `cc`, `rust`, `haskell`   | one toolchain: stdenv, rustPlatform, haskellPackages |
-| `toolchain`               | all three toolchains, and the default                |
-| `all`                     | every attr                                           |
-| `none`                    | nothing extra, so only the targets                   |
-| a package name, e.g. zlib | that package                                         |
-| `-term`                   | remove `term` from what you named before it          |
+| selector                                          | keeps                                                       |
+| ------------------------------------------------- | ----------------------------------------------------------- |
+| `toolchain`                                       | all three toolchains: stdenv, rustPlatform, haskellPackages |
+| `cc`                                              | stdenv only                                                 |
+| `rust`                                            | rustPlatform only                                           |
+| `haskell`                                         | haskellPackages only                                        |
+| a package selector, e.g. `packagesByProfile.zlib` | that package                                                |
 
-You build up from what you add. A removal only pares down a base you named, so
-`all,-rust` and `toolchain,-rust` are valid but `-rust` on its own is an error.
-The default is `toolchain`, so a plain toolchain experiment needs no flags.
+The default is `toolchain`, so a plain toolchain experiment needs no flags;
+`--target-only` keeps nothing beyond the targets themselves, isolating a package
+edit from any toolchain difference on your branch.
 
 - `exnrefEh.zlib` with no flag keeps the toolchains, so a wasixcc, sysroot,
   rustc, or ghc edit reaches the target with nothing to configure.
-- `--keep toolchain,zlib exnrefEh.curl` keeps the toolchains and a zlib edit,
-  the "edit a common dependency, test one package" case.
-- `--keep zlib exnrefEh.curl` keeps only zlib, so the toolchains come from base
-  too; this isolates the zlib edit from any toolchain difference on your branch.
-- `--keep toolchain,-rust exnrefEh.ripgrep` keeps the C and Haskell toolchains
-  but takes rust from base, so ripgrep builds against the base rust toolchain.
+- `--from-source packagesByProfile.zlib exnrefEh.curl` keeps a zlib edit, the
+  "edit a common dependency, test one package" case.
+- `--from-source rust exnrefEh.ripgrep` keeps only the rust toolchain, so a
+  rustc change is tested against the base C world.
 
-An unknown name, or a keep of only removals, is an error, not a silent no-op.
+An unknown selector is an error, not a silent no-op.
 
 ## --base and cost
 
@@ -74,8 +80,8 @@ A dry run prints two build counts. A count is how many derivations that side
 would have to compile; cached ones download instead and do not count.
 
 ```text
-spot: base rev   0 to build   (want 0; nonzero = --base not cached)
-spot: this run   8 to build
+spot base rev: 0 to build (want 0; nonzero = --base not cached)
+spot this run: 8 to build
 ```
 
 `this run` is the experiment's cost: the targets rebuilt from your tree, plus
@@ -95,12 +101,14 @@ others on the working tree rather than from base. Building `zlib` and `curl`
 together links curl against your `zlib`; building `curl` alone links it against
 base `zlib`.
 
-## --local
+## Placement
 
-The build runs on the remote builder by default, because a toolchain experiment
-rebuilds the compiler wrappers and pulls a large base closure. `--local` runs on
-this machine instead, for when no remote builder is configured or the target is
-cheap.
+The build runs on the configured remote by default (`--on <remote>` or
+`--on <remote>:store` picks one explicitly), because a toolchain experiment
+rebuilds the compiler wrappers and pulls a large base closure. `--on local` runs
+on this machine instead, for when no remote builder is configured or the target
+is cheap. A host-routed placement refuses `--plan`, since the probe would price
+a different world than the host builds.
 
 ## How the pin is built
 

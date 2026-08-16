@@ -62,7 +62,8 @@ The main legacy trees are `toolchain`, `packagesByProfile`, `nativePackages`,
 
 `legacyPackages.<system>.ci` flattens the build trees to dotted job names.
 Unsupported and broken packages are filtered before becoming jobs.
-`scripts/ci-build.sh` builds and uploads them incrementally.
+`wasinix build` evaluates and builds them through nix-fast-build, and CI runs
+the same verb.
 
 CA derivations are not used because caches cannot reliably distribute or
 authenticate realisations
@@ -75,3 +76,36 @@ authenticate realisations
 - `passthru.wasmer`: webc configuration
 - `passthru.tests`: standard nixpkgs tests
 - `passthru.pkg` and `passthru.webc`: built Wasmer package outputs
+
+## One place per concern in the orchestrator
+
+Cross-cutting behavior in `tools/wasinix` goes through one module or type per
+concern, and the rule is: a call the shared implementation cannot express is a
+bug in that implementation. Extend it; never hand-roll the same thing at the
+call site. Each of these ships with its own enforcement (rustc visibility where
+possible, a source-scanning test in `src/tests/mod.rs` otherwise), so bypassing
+one is a compile error or a test failure, not a review comment.
+
+- `support/env.rs`: the process environment, named accessors only.
+- `support/nix.rs::Invocation`: every nix invocation; construction classifies
+  the installable, `.route()` applies placement, `.probe(reason)` is the named
+  exception for callers that parse failure output. The cache identity constants
+  live here, emitted by `wasinix ci nix-config` and copied (test-verified) into
+  the `setup-nix` action.
+- `support/git.rs` and `nix/builder.rs`: git with the repository named on every
+  call; ssh/scp with named deadlines; `Builder::store()` the one ssh-ng
+  renderer.
+- `support/atoms.rs`: `RunState`/`TaskStatus` render and exit one way;
+  `runs::record_started`/`record_finished` pair run.json with its event.
+- `ci/exec.rs::finish_task`: the one fragment write and the one PhaseFinished
+  emission.
+- `github/sanitize.rs::Markdown`: text reaches a GitHub surface only through the
+  constructor for the context it lands in; `Markdown::constant` takes `'static`,
+  so runtime text cannot skip sanitizing. `Registry::upsert` owns the comment
+  budget; `github/client.rs` restricts post/patch to the github module.
+- `cli/request.rs::drive`: the one prepare-execute-finish path, with
+  `cache_policy` as the one cache decision and `ui::emit(JsonArg)` as the one
+  machine-output exit. `Effects{Apply,DryRun}` gates every outward writer at the
+  write itself.
+- `cli/update.rs::MutationMode` + `conclude`: every tree mutation's flags and
+  exit; `update/managed.rs` is the managed-PR record.

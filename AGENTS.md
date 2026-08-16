@@ -9,19 +9,20 @@ exempt you from what it says.
 topic. Put guidance that applies to humans and agents in the relevant general
 doc:
 
-| Read                   | For                                                 |
-| ---------------------- | --------------------------------------------------- |
-| `CONTRIBUTING.md`      | contribution and PR expectations                    |
-| `docs/architecture.md` | how the layers fit together and flake outputs       |
-| `docs/c.md`            | C/C++ toolchain, profiles, and cross stdenv         |
-| `docs/packaging.md`    | adding a package, tweaks, deps, patches, tests      |
-| `docs/registry.md`     | publishing, version history, rels, PR previews      |
-| `docs/rust.md`         | rust builds, crate patches, the cargo registry      |
-| `docs/python.md`       | CPython, package overlays, and wheels               |
-| `docs/building.md`     | where builds run, building one thing, checking work |
-| `docs/style.md`        | comments, naming, commits, fail loud, root cause    |
-| `docs/updating.md`     | the pin updater and `updateNotes`                   |
-| `docs/spot.md`         | experimenting without rebuilding the world          |
+| Read                   | For                                                               |
+| ---------------------- | ----------------------------------------------------------------- |
+| `CONTRIBUTING.md`      | contribution and PR expectations                                  |
+| `docs/architecture.md` | how the layers fit together, flake outputs, one place per concern |
+| `docs/c.md`            | C/C++ toolchain, profiles, and cross stdenv                       |
+| `docs/packaging.md`    | adding a package, tweaks, deps, patches, tests                    |
+| `docs/registry.md`     | publishing, version history, rels, PR previews                    |
+| `docs/rust.md`         | rust builds, crate patches, the cargo registry                    |
+| `docs/python.md`       | CPython, package overlays, and wheels                             |
+| `docs/building.md`     | where builds run, building one thing, checking work               |
+| `docs/ci.md`           | the orchestrator, its command tree, and the run model             |
+| `docs/style.md`        | comments, naming, commits, fail loud, root cause                  |
+| `docs/updating.md`     | the pin updater and `updateNotes`                                 |
+| `docs/spot.md`         | experimenting without rebuilding the world                        |
 
 Do not restate those rules here. Add a `## For agents` section to the owning doc
 only when the agent workflow genuinely differs from the human workflow.
@@ -36,6 +37,27 @@ Before implementing a new mechanism, state the design in one or two sentences
 and get agreement. Prioritise a single source of truth and the smallest diff
 that slots into existing machinery. Work already done is not an argument for
 keeping a shape: if the design is wrong, say so rather than defending it.
+
+## Structure before instances
+
+Code generation feels no friction: a human typing the same boilerplate a fifth
+time notices and builds the abstraction; an agent generates a fifth copy at zero
+cost and calls each one done. The pressure that normally forces structure has to
+be replaced by rule:
+
+- Before writing arm N of anything, name the rule it is an instance of. If the
+  nearest example is arm N-1, the shared implementation is missing; build or
+  extend it first (`docs/architecture.md` lists the existing ones).
+- A call the shared implementation cannot express is a bug in that
+  implementation, never a license to hand-roll at the call site.
+- A cross-cutting rule lands with its enforcement in the same change: visibility
+  or types where possible, a source-scanning test otherwise. A rule stated only
+  in prose is unfinished.
+- Strings that couple components (workflow outputs, artifact names, app names,
+  path segments) get one constant and a test that pins the coupling; a drifted
+  copy must fail loudly, not skip silently.
+- "Done" is judged per rule, not per arm: green call sites with an unenforced
+  rule between them are not done.
 
 ## The three that get violated most
 
@@ -100,6 +122,23 @@ one reviewer-visible idea, fold in its later corrections, and leave an
 internally consistent tree that is useful to bisect. Preserve authorship and the
 final tree exactly, then verify both against the pre-rewrite range. Do not push
 it.
+
+## Commit messages
+
+The format rules live in `docs/style.md`; what agents get wrong is scale. A
+message is written once and read many times: in `log --oneline`, in blame, in
+bisect, in review. Write for that reader, not to document the effort.
+
+- The subject alone should carry the change; most commits need no body.
+- A body holds what the diff cannot show: the constraint, the why, the behavior
+  change a reviewer would otherwise miss. Never a tour of the diff.
+- If the body wants sections or more than a handful of sentences, the commit is
+  describing too much: split it, or cut the narration.
+- Plain words. The reader sees one message, not the conversation that produced
+  it, so invented vocabulary and session context mean nothing there.
+- The sequence is read too. Before review, fold fixes and iteration into the
+  commits they correct (see "Cleaning commit history"): a reviewer should see
+  each idea land once, in final form, not the work log that produced it.
 
 ## Before you report done
 
