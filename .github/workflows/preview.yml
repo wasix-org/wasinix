@@ -111,21 +111,6 @@ jobs:
           token-staging: ${{ secrets.WASMER_TOKEN_STAGING }}
           token-dev: ${{ secrets.WASMER_TOKEN_DEV }}
 
-      # claims the comment before the long part, so the PR shows the preview
-      # is coming (and, on failure, that it was attempted)
-      - name: Comment (in progress)
-        if: steps.ctx.outputs.proceed == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          {
-            echo "### PR preview"
-            echo
-            echo "Building for \`${HEAD_SHA:0:7}\`... ([run]($run_url))"
-          } >comment.md
-          bash scripts/pr-upsert-comment.sh "$PR" comment.md
-
       - name: Checkout base
         if: steps.ctx.outputs.proceed == 'true'
         uses: actions/checkout@v4
@@ -133,106 +118,47 @@ jobs:
           ref: ${{ env.BASE_REF }}
           path: base
 
-      - name: Install Nix
+      - name: Set up Nix
         if: steps.ctx.outputs.proceed == 'true'
-        uses: cachix/install-nix-action@v31.9.1
-        with:
-          extra_nix_config: |
-            extra-substituters = https://nix-cache.wasix.org
-            extra-trusted-public-keys = wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI=
-            trusted-users = root runner
+        uses: ./.github/actions/setup-nix
 
-      - name: Cache flake inputs
+      # the g prefix keeps the sha segment alphanumeric: an all-digit sha
+      # with a leading zero is invalid semver (the registry rejects it)
+      - name: Preview tag
         if: steps.ctx.outputs.proceed == 'true'
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
-        with:
-          path: ~/.cache/nix
-          key: nix-flake-inputs-${{ hashFiles('flake.lock') }}
-          restore-keys: nix-flake-inputs-
+        run: echo "TAG=pr${PR}.g${HEAD_SHA:0:7}" >>"$GITHUB_ENV"
 
-      - name: Diff against base
-        if: steps.ctx.outputs.proceed == 'true'
-        run: |
-          # the g prefix keeps the sha segment alphanumeric: an all-digit sha
-          # with a leading zero is invalid semver (the registry rejects it)
-          echo "TAG=pr${PR}.g${HEAD_SHA:0:7}" >>"$GITHUB_ENV"
-          nix run .#scripts.preview-diff --option accept-flake-config true -- base | tee diff.json
-          rm -rf base
-
-      - name: Publish preview webcs
-        if: steps.ctx.outputs.proceed == 'true'
-        run: |
-          names=$(jq -r '.webcs[].attr' diff.json)
-          if [ -z "$names" ]; then
-            echo "no webcs changed"
-            exit 0
-          fi
-          # shellcheck disable=SC2086
-          nix run .#scripts.publish-webc --option accept-flake-config true -- \
-            --registry "$WASMER_REGISTRY" --rev "$HEAD_SHA" --preview "$TAG" $names
-
-      - name: Deploy preview index
-        if: steps.ctx.outputs.proceed == 'true'
-        id: index
-        run: |
-          if [ "$(jq '.wheels | length' diff.json)" = 0 ]; then
-            echo "no wheels changed"
-            exit 0
-          fi
-          jq '.wheels' diff.json >dists.json
-          # attrs carry quoted version segments (anthropic."0.109.1"^dist);
-          # xargs would strip the quotes, so build an argv array instead
-          mapfile -t attrs < <(jq -r '.wheels[].attr' diff.json \
-            | sed 's|^|.#legacyPackages.x86_64-linux.|')
-          nix build --accept-flake-config --no-link "${attrs[@]}"
-          python3 pkgs/python-registry/make-index.py dists.json site --version-suffix "$TAG"
-          # capture the deploy exit separately: `url=$(... | tail -1)` under
-          # bash without pipefail would mask a failed deploy behind tail
-          nix run .#scripts.preview-index-deploy --option accept-flake-config true -- \
-            site "python-registry-pr${PR}" >deploy.out
-          url=$(tail -1 deploy.out)
-          echo "url=$url" >>"$GITHUB_OUTPUT"
-
-      - name: Comment
+      # claims the comment before the long part, so the PR shows the preview
+      # is coming (and, on failure, that it was attempted)
+      - name: Comment (in progress)
         if: steps.ctx.outputs.proceed == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
-          INDEX_URL: ${{ steps.index.outputs.url }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          {
-            echo "### PR preview (\`$TAG\`)"
-            if [ "$(jq '.webcs | length' diff.json)" != 0 ]; then
-              echo
-              echo "Webcs on \`$WASMER_REGISTRY\` (failures listed in the workflow log):"
-              jq -r --arg t "$TAG" --arg r "$WASMER_REGISTRY" \
-                '.webcs[] | "- `wasmer run \(.owner)/\(.name)@\(.version)-\($t) --registry \($r)`"' \
-                diff.json
-            fi
-            if [ -n "$INDEX_URL" ]; then
-              # the prod index the overlay complements lives on wasmer.io
-              # (publish-index.yml), not on the preview registry
-              prod=$(nix shell .#wasmer -c wasmer app get wasmer/python-registry \
-                --registry wasmer.io --format json | jq -r '.url // empty' || true)
-              echo
-              echo "Wheel overlay [index]($INDEX_URL), preferred over the published wheels by version:"
-              echo '```'
-              echo "pip install --index-url $INDEX_URL/simple --extra-index-url ${prod:-<prod index>}/simple <pkg>"
-              echo '```'
-            fi
-            echo
-            echo "[workflow run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
-          } >comment.md
-          bash scripts/pr-upsert-comment.sh "$PR" comment.md
+          nix run .#wasinix --option accept-flake-config true -- \
+            preview "$TAG" --status building \
+            --pull-request "$PR" --rev "$HEAD_SHA" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 
+      - name: Publish preview
+        if: steps.ctx.outputs.proceed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          nix run .#wasinix --option accept-flake-config true -- \
+            preview "$TAG" --base base \
+            --registry "$WASMER_REGISTRY" --rev "$HEAD_SHA" \
+            --pull-request "$PR" --comment \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+      # the CLI posts its own failure state; this covers a job that died
+      # before or outside it
       - name: Comment (failed)
         if: failure() && steps.ctx.outputs.proceed == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          {
-            echo "### PR preview"
-            echo
-            echo "Failed for \`${HEAD_SHA:0:7}\`. ([run]($run_url))"
-          } >comment.md
-          bash scripts/pr-upsert-comment.sh "$PR" comment.md
+          nix run .#wasinix --option accept-flake-config true -- \
+            preview "$TAG" --status failed \
+            --pull-request "$PR" --rev "$HEAD_SHA" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" || true

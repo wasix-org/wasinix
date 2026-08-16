@@ -1,0 +1,63 @@
+{
+  "complete": false,
+  "kind": "report",
+  "request": {
+    "action": "build",
+    "caseId": "case",
+    "selectors": [
+      {
+        "kind": "set",
+        "name": "core"
+      }
+    ],
+    "source": {
+      "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "workingTree": false
+    }
+  },
+  "schema": 1,
+  "startedAt": 1755000000,
+  "tasks": [
+    {
+      "case": "case",
+      "enabled": true,
+      "gate": true,
+      "headline": "ok",
+      "kind": "validation",
+      "label": "case: Formatting",
+      "status": "success",
+      "taskId": "case.treefmt"
+    },
+    {
+      "case": "case",
+      "enabled": true,
+      "gate": true,
+      "headline": "ok",
+      "kind": "eval",
+      "label": "case: Evaluation inputs",
+      "status": "success",
+      "taskId": "case.eval-inputs"
+    },
+    {
+      "case": "case",
+      "enabled": true,
+      "gate": true,
+      "headline": "",
+      "kind": "eval",
+      "label": "case: Evaluation",
+      "status": "pending",
+      "taskId": "case.eval"
+    },
+    {
+      "case": "case",
+      "enabled": true,
+      "gate": true,
+      "headline": "",
+      "kind": "build",
+      "label": "case: Core",
+      "status": "pending",
+      "taskId": "case.core"
+    }
+  ],
+  "title": "CI in progress"
+}

@@ -1,0 +1,124 @@
+{
+  "complete": true,
+  "conclusion": "neutral",
+  "kind": "report",
+  "request": {
+    "action": "diff",
+    "baseline": "baseline",
+    "cases": [
+      {
+        "action": "build",
+        "caseId": "baseline",
+        "selectors": [
+          {
+            "kind": "set",
+            "name": "core"
+          }
+        ],
+        "source": {
+          "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "workingTree": false
+        }
+      },
+      {
+        "action": "build",
+        "caseId": "candidate-1",
+        "selectors": [
+          {
+            "kind": "set",
+            "name": "core"
+          }
+        ],
+        "source": {
+          "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "workingTree": false
+        }
+      }
+    ],
+    "contentDiff": false
+  },
+  "schema": 1,
+  "tasks": [
+    {
+      "case": "candidate-1",
+      "enabled": true,
+      "gate": true,
+      "headline": "x",
+      "kind": "validation",
+      "label": "candidate-1: Formatting",
+      "status": "success",
+      "taskId": "candidate-1.treefmt"
+    },
+    {
+      "case": "baseline",
+      "enabled": true,
+      "gate": false,
+      "headline": "x",
+      "kind": "eval",
+      "label": "baseline: Evaluation inputs",
+      "status": "failure",
+      "taskId": "baseline.eval-inputs"
+    },
+    {
+      "case": "baseline",
+      "enabled": true,
+      "gate": false,
+      "headline": "x",
+      "kind": "eval",
+      "label": "baseline: Evaluation",
+      "status": "failure",
+      "taskId": "baseline.eval"
+    },
+    {
+      "case": "candidate-1",
+      "enabled": true,
+      "gate": false,
+      "headline": "x",
+      "kind": "eval",
+      "label": "candidate-1: Evaluation inputs",
+      "status": "success",
+      "taskId": "candidate-1.eval-inputs"
+    },
+    {
+      "case": "candidate-1",
+      "enabled": true,
+      "gate": false,
+      "headline": "x",
+      "kind": "eval",
+      "label": "candidate-1: Evaluation",
+      "status": "success",
+      "taskId": "candidate-1.eval"
+    },
+    {
+      "case": "baseline",
+      "enabled": true,
+      "gate": false,
+      "headline": "",
+      "kind": "build",
+      "label": "baseline: Core",
+      "status": "cancelled",
+      "taskId": "baseline.core"
+    },
+    {
+      "case": "candidate-1",
+      "enabled": true,
+      "gate": false,
+      "headline": "x",
+      "kind": "build",
+      "label": "candidate-1: Core",
+      "status": "success",
+      "taskId": "candidate-1.core"
+    },
+    {
+      "case": "candidate-1",
+      "enabled": true,
+      "gate": true,
+      "headline": "",
+      "kind": "comparison",
+      "label": "Compare candidate-1",
+      "status": "cancelled",
+      "taskId": "compare.candidate-1"
+    }
+  ],
+  "title": "CI could not compare: the base did not evaluate"
+}

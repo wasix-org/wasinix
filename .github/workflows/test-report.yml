@@ -24,28 +24,47 @@ jobs:
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.head_repository.full_name != github.repository
     steps:
-      # for scripts/post-report.js (default-branch code, not the PR's)
+      # for the wasinix binary (default-branch code, not the PR's)
       - name: Checkout
         uses: actions/checkout@v4
 
-      # a run cancelled early may lack either artifact; post-report.js renders
-      # whatever is present
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
+
+      # a run cancelled early may lack the artifact; the report then has
+      # nothing to say and the step below is skipped
+      - name: Download run
+        id: download
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         continue-on-error: true
         with:
-          name: rebuild-diff
+          name: ci-run
+          path: run-dir
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        continue-on-error: true
-        with:
-          name: build-report
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ github.token }}
-
-      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          script: |
-            const post = require('${{ github.workspace }}/scripts/post-report.js');
-            await post({github, context, core});
+      # The PR identity comes from the trusted workflow_run event, never from
+      # the artifact the PR's code produced. The report itself is untrusted:
+      # a fork PR wrote it, so `--untrusted` makes the check neutral and marks
+      # the surfaces advisory. The PR is resolved by commit, then constrained
+      # to the fork's own open PR (same head repo and sha) so a fork sharing a
+      # victim's head sha cannot drive the bot onto the victim's PR.
+      - name: Post report
+        if: steps.download.outcome == 'success'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          pull_request=$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/pulls" \
+            --jq "[.[] | select(.state == \"open\" and .head.sha == \"$HEAD_SHA\" and .head.repo.full_name == \"$HEAD_REPO\")][0].number // empty")
+          comment=()
+          if [ -n "$pull_request" ]; then comment=(--comment --pull-request "$pull_request"); fi
+          nix run .#wasinix -- ci publish --run-dir run-dir \
+            --sha "$HEAD_SHA" \
+            --run-url "$RUN_URL" \
+            --untrusted \
+            --check "${comment[@]}" \
+            --step-summary "$GITHUB_STEP_SUMMARY"

@@ -142,6 +142,50 @@ in {
       touch "$out"
     '';
 
+  # The static sparse index the preview cell deploys: generate it from the
+  # real mint, serve it over loopback, and have real cargo resolve and
+  # compile the probe through sparse+http. One consume proves the dl
+  # template, the +-in-filename URLs, the prefix layout, and the entry shape.
+  sparse =
+    pkgs.runCommandCC "cargo-registry-test-sparse" {
+      nativeBuildInputs = [pkgs.cargo pkgs.rustc pkgs.python3 pkgs.curl pkgs.writableTmpDirAsHomeHook];
+    } ''
+      port=8737
+      base="http://127.0.0.1:$port"
+      python3 "${registry}/make-sparse-index.py" "${registry}" site --base-url "$base" \
+        --only "${probe.crate}@${probeEntry.wasixVersion}"
+      python3 -m http.server --directory site "$port" &
+      server=$!
+      trap 'kill "$server" 2>/dev/null || true' EXIT
+      for _ in $(seq 1 150); do
+        curl -fsS "$base/config.json" >/dev/null 2>&1 && break
+        sleep 0.2
+      done
+      curl -fsS "$base/config.json" >/dev/null
+
+      mkdir -p app/src app/.cargo
+      cat > app/Cargo.toml <<'EOF'
+      [package]
+      name = "consume"
+      version = "0.0.0"
+      edition = "2021"
+      [dependencies]
+      ${probe.crate} = {version = "${lib.versions.majorMinor probe.upstream}", registry = "wasix-preview"}
+      EOF
+      cat > app/.cargo/config.toml <<EOF
+      [registries.wasix-preview]
+      index = "sparse+$base/"
+      EOF
+      echo 'fn main() {}' > app/src/main.rs
+      ( cd app && CARGO_HOME="$PWD/../cargo-home" cargo build --quiet )
+
+      got=$(sed -n '/name = "${probe.crate}"/,/^$/p' app/Cargo.lock | sed -n 's/^version = "\(.*\)"/\1/p')
+      [ "$got" = "${probeEntry.wasixVersion}" ] \
+        || { echo "sparse index resolved ${probe.crate} $got, expected ${probeEntry.wasixVersion}" >&2; exit 1; }
+      echo "ok: sparse+http served ${probe.crate} $got and cargo compiled it"
+      touch "$out"
+    '';
+
   # A shadow limit and a build for the same crate+version would contradict:
   # the limit says stock works there, the build says it does not.
   shadowLimits = pkgs.runCommand "cargo-registry-test-shadow-limits" {} (

@@ -1,0 +1,60 @@
+name: Publish crates
+
+# The deployed overlay cargo registry serves what was explicitly published,
+# so nothing triggers this automatically: dispatch it by hand with the crates
+# to publish. Publishing is idempotent by checksum; a served version with
+# different bytes fails and names the rel bump that resolves it.
+on:
+  workflow_dispatch:
+    inputs:
+      crates:
+        description:
+          Space-separated crate names, optionally @<version> (empty = whole
+          mint)
+        required: false
+        default: ""
+      registry:
+        description: The deployed registry's base URL
+        required: false
+        default: https://cargo-registry.wasix.org
+      dry-run:
+        description: Only print what would be published
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: publish-crates
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish minted crates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Publish
+        env:
+          CRATES: ${{ inputs.crates }}
+          REGISTRY: ${{ inputs.registry }}
+          DRY_RUN: ${{ inputs.dry-run }}
+          WASIX_CARGO_TOKEN: ${{ secrets.WASIX_CARGO_TOKEN }}
+        run: |
+          if [ -z "$WASIX_CARGO_TOKEN" ] && [ "$DRY_RUN" != "true" ]; then
+            echo "WASIX_CARGO_TOKEN secret is not set" >&2
+            exit 1
+          fi
+          args=()
+          [ "$DRY_RUN" = "true" ] && args+=(--dry-run)
+          # shellcheck disable=SC2086
+          nix run .#wasinix -- cargo publish \
+            --registry "$REGISTRY" "${args[@]}" $CRATES

@@ -1,0 +1,69 @@
+{
+  "complete": true,
+  "conclusion": "success",
+  "finishedAt": 1755003600,
+  "kind": "report",
+  "request": {
+    "action": "build",
+    "caseId": "case",
+    "selectors": [
+      {
+        "kind": "set",
+        "name": "core"
+      }
+    ],
+    "source": {
+      "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "workingTree": false
+    }
+  },
+  "schema": 1,
+  "startedAt": 1755000000,
+  "tasks": [
+    {
+      "case": "case",
+      "elapsedSeconds": 12.0,
+      "enabled": true,
+      "gate": true,
+      "headline": "ok",
+      "kind": "validation",
+      "label": "case: Formatting",
+      "status": "success",
+      "taskId": "case.treefmt"
+    },
+    {
+      "case": "case",
+      "elapsedSeconds": 12.0,
+      "enabled": true,
+      "gate": true,
+      "headline": "ok",
+      "kind": "eval",
+      "label": "case: Evaluation inputs",
+      "status": "success",
+      "taskId": "case.eval-inputs"
+    },
+    {
+      "case": "case",
+      "elapsedSeconds": 12.0,
+      "enabled": true,
+      "gate": true,
+      "headline": "ok",
+      "kind": "eval",
+      "label": "case: Evaluation",
+      "status": "success",
+      "taskId": "case.eval"
+    },
+    {
+      "case": "case",
+      "elapsedSeconds": 12.0,
+      "enabled": true,
+      "gate": true,
+      "headline": "ok",
+      "kind": "build",
+      "label": "case: Core",
+      "status": "success",
+      "taskId": "case.core"
+    }
+  ],
+  "title": "CI passed"
+}

@@ -37,20 +37,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31.9.1
-        with:
-          extra_nix_config: |
-            extra-substituters = https://nix-cache.wasix.org
-            extra-trusted-public-keys = wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI=
-            trusted-users = root runner
-
-      - name: Cache flake inputs
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
-        with:
-          path: ~/.cache/nix
-          key: nix-flake-inputs-${{ hashFiles('flake.lock') }}
-          restore-keys: nix-flake-inputs-
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
 
       - name: Select wasmer registry
         uses: ./.github/actions/wasmer-registry
@@ -72,6 +60,6 @@ jobs:
           args=()
           [ "$DRY_RUN" = "true" ] && args+=(--dry-run)
           # shellcheck disable=SC2086
-          nix run .#scripts.publish-webc --option accept-flake-config true -- \
+          nix run .#wasinix -- wasmer publish \
             --registry "$WASMER_REGISTRY" --rev "$GITHUB_SHA" \
             "${args[@]}" $PACKAGES

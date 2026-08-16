@@ -1,14 +1,11 @@
 name: Update package pins
 
-# Bump the repo's own source pins (not the prev.X nixpkgs passthroughs),
-# scheduled and on demand. One PR per moved target (auto/update-<target>): a
-# broken bump never blocks the others, each PR carries its own CI verdict, and
-# update-notes land on the bump that fired them. Branches regenerate from
-# fresh main every run, so flake.lock overlap between open PRs heals on the
-# next run. Dispatch inputs: `only` selects targets, `batch` bundles the run
-# into one combined PR (auto/update-pins) for bumps that must land together.
-# A red run on a PR with a bumped pin means the pin's derived-file regen
-# failed and that PR is incomplete.
+# Bump the repo's own source pins, scheduled and on demand. One PR per moved
+# target (auto/update-<target>): a broken bump never blocks the others, each
+# PR carries its own CI verdict, and update notes land on the bump that fired
+# them. `wasinix update --pr` commits each bump, pushes the branch, and opens
+# or updates the PR with the ChangeSet body. Dispatch input `only` selects
+# targets; blank means every target, one PR each.
 on:
   schedule:
     - cron: "0 6 * * 1" # Mondays 06:00 UTC
@@ -18,12 +15,6 @@ on:
         description: "Space-separated targets to update (blank = all)"
         required: false
         default: ""
-      batch:
-        description:
-          "One combined PR (auto/update-pins) instead of one per target"
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -40,40 +31,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31.9.1
-        with:
-          install_url: https://releases.nixos.org/nix/nix-2.35.1/install
-          extra_nix_config: |
-            extra-substituters = https://nix-cache.wasix.org
-            extra-trusted-public-keys = wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI=
-            trusted-users = root runner
-
-      - name: Cache flake inputs
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
-        with:
-          path: ~/.cache/nix
-          key: nix-flake-inputs-${{ hashFiles('flake.lock') }}
-          restore-keys: nix-flake-inputs-
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
 
       - name: List targets
         id: list
         shell: bash
         env:
           ONLY: ${{ github.event.inputs.only }}
-          BATCH: ${{ github.event.inputs.batch }}
         run: |
-          # update.py validates target names inside the update job
-          if [ "$BATCH" = "true" ]; then
-            matrix=$(jq -cn --arg t "$ONLY" '[{name: "pins", targets: $t}]')
-          elif [ -n "$ONLY" ]; then
-            matrix=$(jq -cn --arg t "$ONLY" '$t | split(" ") | map(select(. != "")) | unique | map({name: ., targets: .})')
+          if [ -n "$ONLY" ]; then
+            matrix=$(jq -cn --arg t "$ONLY" '$t | split(" ") | map(select(. != "")) | unique | map({name: .})')
             if [ "$matrix" = "[]" ]; then
               echo "no targets parsed from only='$ONLY'" >&2
               exit 1
             fi
           else
-            matrix=$(nix run .#scripts.update -- --list-json | jq -c 'map({name: ., targets: .})')
+            matrix=$(nix run .#wasinix -- update list --json | jq -c '.targets | map({name: .})')
           fi
           echo "matrix=$matrix" >>"$GITHUB_OUTPUT"
 
@@ -89,85 +63,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31.9.1
         with:
-          install_url: https://releases.nixos.org/nix/nix-2.35.1/install
-          extra_nix_config: |
-            extra-substituters = https://nix-cache.wasix.org
-            extra-trusted-public-keys = wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI=
-            trusted-users = root runner
+          fetch-depth: 0
 
-      - name: Cache flake inputs
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
-        with:
-          path: ~/.cache/nix
-          key: nix-flake-inputs-${{ hashFiles('flake.lock') }}
-          restore-keys: nix-flake-inputs-
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
 
-      - name: Run updater
-        id: run
+      # Commit each bump, push auto/update-<target>, and open or update its
+      # PR from the ChangeSet. A failed target does not abort the run: the
+      # binary isolates each and exits non-zero, which fails the job after
+      # the partial PR is opened. UPDATE_PR_TOKEN is a PAT/app token so the
+      # PR's CI cascades; without it, the default token opens a PR that needs
+      # a manual re-run.
+      - name: Update and open PR
         shell: bash
         env:
-          TARGETS: ${{ matrix.job.targets }}
+          # events from the default token don't cascade CI
+          GITHUB_TOKEN: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
+          TARGET: ${{ matrix.job.name }}
         run: |
-          # batch with blank `only` means everything: no --only at all
-          args=()
-          if [ -n "$TARGETS" ]; then
-            read -ra targets <<<"$TARGETS"
-            args=(--only "${targets[@]}")
-          fi
-          # A failed target must not abort the PR for the ones that bumped: capture
-          # the exit code (the script already isolates targets) and re-raise it at
-          # the end of the job, after the partial PR is opened.
-          # Summary outside the checkout so create-pull-request doesn't commit it.
-          summary="$RUNNER_TEMP/update-summary.md"
-          # --commit lands one commit per bumped target, so the PR reads as a
-          # list of bumps rather than one squash. It runs nix fmt before each,
-          # so there is no separate format step.
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          set +e
-          nix run .#scripts.update -- "${args[@]}" --summary-out "$summary" --commit
-          code=$?
-          set -e
-          {
-            echo "exit_code=$code"
-            echo 'summary<<EOF'
-            cat "$summary" 2>/dev/null || echo "(the updater crashed before writing a summary)"
-            echo EOF
-          } >>"$GITHUB_OUTPUT"
-
-      # UPDATE_PR_TOKEN: events from the default GITHUB_TOKEN don't cascade,
-      # so a PR created with it never triggers CI (someone has to press
-      # re-run). Set the secret to a fine-grained PAT (or GitHub App token)
-      # with contents + pull-requests write on this repo and CI runs on the
-      # PR like on any other; without it, today's manual-re-run behavior.
-      - name: Open PR
-        uses: peter-evans/create-pull-request@v7
-        with:
-          token: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
-          branch: auto/update-${{ matrix.job.name }}
-          title:
-            "${{ matrix.job.name == 'pins' && 'pins: automated source-pin bump'
-            || format('pins: bump {0}', matrix.job.name) }}"
-          # Fallback only: the updater has already committed each bump. This
-          # labels anything it somehow left in the tree.
-          commit-message:
-            "${{ matrix.job.name == 'pins' && 'pins: bump repo source pins
-            (automated)' || format('pins: bump {0} (automated)',
-            matrix.job.name) }}"
-          body: |
-            Automated source-pin bump.
-
-            ${{ steps.run.outputs.summary }}
-          delete-branch: true
-
-      # Re-raise any target failure so the run is red, after the partial PR opens.
-      - name: Surface updater failures
-        if: steps.run.outputs.exit_code != '0'
-        shell: bash
-        run: |
-          echo "::error::updater reported failed target(s); see the PR body / log"
-          exit 1
+          nix run .#wasinix -- update "$TARGET" --pr --base "$GITHUB_REF_NAME"

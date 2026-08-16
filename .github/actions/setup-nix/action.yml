@@ -1,0 +1,31 @@
+name: Setup Nix
+description:
+  Install Nix with the wasinix cache configured and restore the flake-inputs
+  cache. The nix config block is a verified copy of `wasinix ci nix-config` (the
+  binary cannot run before Nix exists); a crate test fails when the two drift.
+runs:
+  using: composite
+  steps:
+    - name: Install Nix
+      uses: cachix/install-nix-action@v31.9.1
+      with:
+        extra_nix_config: |
+          extra-substituters = https://nix-cache.wasix.org
+          extra-trusted-public-keys = wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI=
+          trusted-users = root runner
+
+    - name: Cache flake inputs
+      uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+      with:
+        # The fetcher-cache sqlite stays out: it pins a final narHash per
+        # git rev whose store path does not exist on a fresh VM, and nix
+        # then fails the eval when re-materializing computes a different
+        # hash (workdir and rev fetches of a tree with a submodule gitlink
+        # disagree).
+        path: |
+          ~/.cache/nix
+          !~/.cache/nix/fetcher-cache-v*.sqlite*
+        # a saved cache is immutable (no re-save on an existing key), so
+        # the key version bumps whenever the cached shape changes
+        key: nix-flake-inputs-v2-${{ hashFiles('flake.lock') }}
+        restore-keys: nix-flake-inputs-v2-

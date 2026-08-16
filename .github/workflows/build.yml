@@ -29,23 +29,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31.9.1
         with:
-          extra_nix_config: |
-            extra-substituters = https://nix-cache.wasix.org
-            extra-trusted-public-keys = wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI=
-            trusted-users = root runner
+          # the diff baseline is the PR's base commit, which a shallow
+          # checkout does not have
+          fetch-depth: 0
 
-      # Persist nix's flake-input fetch cache (~2 min/run of cloning wasmer +
-      # its transitive inputs). Keyed on flake.lock so it invalidates when inputs move.
-      - name: Cache flake inputs
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
-        with:
-          path: ~/.cache/nix
-          key: nix-flake-inputs-${{ hashFiles('flake.lock') }}
-          restore-keys: nix-flake-inputs-
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
 
       # The fetch cache above only avoids re-downloading tarballs; the unpacked
       # ...-source store paths still substitute from the cache bucket every run
@@ -65,120 +55,94 @@ jobs:
         continue-on-error: true
         run: nix copy --all --no-check-sigs --from 'file:///tmp/input-store'
 
-      # eval once (attr -> drvPath), diff against the base branch's published
-      # map to surface what this change rebuilds; ci-build.sh reuses the raw
-      # eval. Informational: a missing base map skips the diff, an eval
-      # failure becomes report content, and a script bug must not eat the
-      # build or the report (the build step fails the job on real breakage)
-      - name: Rebuild diff
-        continue-on-error: true
+      # One CI run: a PR or merge-group event compares the change against its
+      # base (reusing the base's published baseline instead of rebuilding it);
+      # a push to main builds everything. The run directory carries the whole
+      # result; everything after this step only publishes it.
+      - name: CI run
+        id: run
+        shell: bash
         env:
-          EVAL_WORKERS: "4"
-          EVAL_MAX_MEMORY_SIZE: "8192"
-          BASE_REF:
-            ${{ github.event.pull_request.base.ref ||
-            github.event.merge_group.base_ref }}
-        run: nix run .#scripts.rebuild-diff
+          WASINIX_EVAL_WORKERS: "4"
+          WASINIX_EVAL_MEMORY: "8192"
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          NIX_SIGNING_KEY: ${{ secrets.NIX_SIGNING_KEY }}
+          BASE_SHA:
+            ${{ github.event.pull_request.base.sha ||
+            github.event.merge_group.base_sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+          # fork PRs hold a read-only token; their report comes from
+          # test-report.yml after the run
+          CAN_WRITE:
+            ${{ github.event_name != 'pull_request' ||
+            github.event.pull_request.head.repo.full_name == github.repository
+            }}
+        run: |
+          # CI builds commits, never local edits: a dirty checkout here means
+          # an earlier step mutated the tree, and building it would publish
+          # artifacts no commit explains.
+          git diff --quiet && git diff --cached --quiet || {
+            echo "the checkout is dirty; CI only builds committed trees" >&2
+            git status --short >&2
+            exit 1
+          }
+          # Every credentialed run pushes as it builds: store paths are
+          # input-addressed, so cached artifacts serve reuse and cannot
+          # mislead. Fork PRs carry no key and build without uploading.
+          # Trust (--trusted-ref) gates only the rev-keyed baseline publish.
+          push_cache=()
+          if [ -n "$NIX_SIGNING_KEY" ]; then push_cache=(--push-cache); fi
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            echo "dir=run-dir" >> "$GITHUB_OUTPUT"
+            nix run .#wasinix -- build all --on local --run-dir run-dir \
+              "${push_cache[@]}" --trusted-ref "$GITHUB_SHA"
+          else
+            # The run is durable so ci publish --watch can keep the check run
+            # and PR comment fresh while it executes; the authoritative final
+            # report is still Post report below. run start executes its
+            # payload verbatim, so the payload names the binary itself.
+            # Only the baseline (main's commit) is trusted; the candidate is not.
+            bin="$(nix build .#wasinix --no-link --print-out-paths)/bin/wasinix"
+            id=$("$bin" run start -- "$bin" -v diff --content-diff \
+              --run-dir '{run-dir}' \
+              "${push_cache[@]}" --trusted-ref "$BASE_SHA" \
+              build all --at "$BASE_SHA" --on local \
+              --vs build all --on local)
+            dir=$("$bin" run status "$id" --json | jq -r .runDir)
+            echo "dir=$dir" >> "$GITHUB_OUTPUT"
+            if [ "$CAN_WRITE" = true ]; then
+              comment=()
+              if [ -n "$PULL_REQUEST" ]; then comment=(--comment --pull-request "$PULL_REQUEST"); fi
+              "$bin" ci publish --run-dir "$dir" --watch \
+                --sha "$HEAD_SHA" \
+                --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+                --check "${comment[@]}" \
+                || echo "progress publishing stopped"
+            else
+              "$bin" run watch "$id" || true
+            fi
+            "$bin" run wait "$id"
+          fi
 
-      # after the eval (which realizes every input) but before the build, so a
-      # build failure or timeout can't lose the post-job cache save
+      # after the run (whose eval realizes every input) so a build failure or
+      # timeout can't lose the post-job cache save
       - name: Archive flake input closure
-        if: steps.input-closure.outputs.cache-hit != 'true'
+        if: always() && steps.input-closure.outputs.cache-hit != 'true'
         continue-on-error: true
         run: nix flake archive --to 'file:///tmp/input-store?compression=zstd'
 
       # consumed by test-report.yml (workflow_run, so fork PRs get the check
-      # run and sticky comment too); uploaded before the build so a timeout
-      # still leaves the eval side of the report
-      - name: Upload rebuild diff
+      # run and sticky comment too) and kept for debugging
+      - name: Upload run
+        if: always() && steps.run.conclusion != 'skipped'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: rebuild-diff
-          path: |
-            rebuild-diff.md
-            diff-summary.json
-
-      # the rebuild count predicts how long the build below will take, so put
-      # it on the PR now: check run in_progress + comment, updated in place by
-      # the final Post report. Fork PRs (read-only token) only get the final
-      # report, via test-report.yml.
-      - name: Post eval report
-        if:
-          ${{ github.event_name != 'pull_request' ||
-          github.event.pull_request.head.repo.full_name == github.repository }}
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          PRELIMINARY: "1"
-        with:
-          script: |
-            const post = require('${{ github.workspace }}/scripts/post-report.js');
-            await post({github, context, core});
-
-      # publish the eval map so future PRs can diff against this commit
-      - name: Publish eval map
-        if: github.event_name == 'push'
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-        run: nix run .#scripts.publish-eval-map
-
-      # per-package build + JUnit report; uploads to cache as it builds when
-      # credentials are present (forks build keyless), so timeouts don't lose work
-      - name: Build packages
-        id: build
-        shell: bash
-        run: nix run .#scripts.ci-build
-        # empty on fork PRs → build runs without uploading
-        env:
-          EVAL_WORKERS: "4"
-          EVAL_MAX_MEMORY_SIZE: "8192"
-          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
-          NIX_SIGNING_KEY: ${{ secrets.NIX_SIGNING_KEY }}
-          JOBS_FILE: eval-jobs.jsonl
-
-      # of the rebuilt outputs, which actually changed content vs base?
-      # narinfo comparison mostly; only self-referential paths download
-      - name: Content diff
-        if: ${{ always() && steps.build.conclusion != 'skipped' }}
-        continue-on-error: true
-        shell: bash
-        run: |
-          nix run .#scripts.content-diff -- \
-            --base-map base-map.json \
-            --head-map eval-map.json \
-            --junit nix-fast-build-result.xml \
-            --md-out content-diff.md \
-            --summary-out content-summary.json
-          cat content-diff.md >>"$GITHUB_STEP_SUMMARY"
-
-      # one-line status + per-failure details from the JUnit; test-report.yml
-      # turns this into the check run title and the sticky comment
-      - name: Render report
-        if: ${{ always() && steps.build.conclusion != 'skipped' }}
-        shell: bash
-        run: |
-          nix run .#scripts.ci-report -- \
-            --junit nix-fast-build-result.xml \
-            --jobs eval-jobs.jsonl \
-            --diff-summary diff-summary.json \
-            --content-summary content-summary.json \
-            --notes update-notes.json \
-            --md-out build-report.md \
-            --json-out report.json
-          cat build-report.md >>"$GITHUB_STEP_SUMMARY"
-
-      - name: Upload report
-        if: ${{ always() && steps.build.conclusion != 'skipped' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: build-report
-          path: |
-            build-report.md
-            report.json
-            content-diff.md
-            nix-fast-build-result.xml
+          name: ci-run
+          path: ${{ steps.run.outputs.dir }}
           if-no-files-found: error
 
       # post the check run + sticky comment directly: bot-created PRs (the
@@ -186,13 +150,38 @@ jobs:
       # Fork PRs have a read-only token here; test-report.yml covers them.
       - name: Post report
         if:
-          ${{ always() && steps.build.conclusion != 'skipped' &&
+          ${{ always() && steps.run.conclusion != 'skipped' &&
           (github.event_name != 'pull_request' ||
           github.event.pull_request.head.repo.full_name == github.repository) }}
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        shell: bash
         env:
-          BUILD_OUTCOME: ${{ steps.build.outcome }}
-        with:
-          script: |
-            const post = require('${{ github.workspace }}/scripts/post-report.js');
-            await post({github, context, core});
+          GITHUB_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+          RUN_DIR: ${{ steps.run.outputs.dir }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          comment=()
+          if [ -n "$PULL_REQUEST" ]; then comment=(--comment --pull-request "$PULL_REQUEST"); fi
+          # failure logs need S3 credentials, which fork PRs do not get
+          logs=()
+          if [ -n "$AWS_ACCESS_KEY_ID" ]; then logs=(--failure-logs); fi
+          nix run .#wasinix -- ci publish --run-dir "$RUN_DIR" \
+            --sha "$HEAD_SHA" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --check "${comment[@]}" "${logs[@]}" \
+            --step-summary "$GITHUB_STEP_SUMMARY"
+
+      # publish the eval map so future PRs can diff against this commit
+      - name: Publish baseline
+        if:
+          always() && github.event_name == 'push' && steps.run.conclusion !=
+          'skipped'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          RUN_DIR: ${{ steps.run.outputs.dir }}
+        run: nix run .#wasinix -- ci publish --run-dir "$RUN_DIR" --baseline

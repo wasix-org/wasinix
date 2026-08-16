@@ -142,6 +142,10 @@
         name = "publish-crate.py";
         path = ./publish-crate.py;
       }
+      {
+        name = "make-sparse-index.py";
+        path = ./make-sparse-index.py;
+      }
     ]
   );
 

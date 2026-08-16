@@ -183,7 +183,7 @@
         # correct with the entry's own hash.
         rebuild = {cargoHash ? null, ...} @ overrides:
           lib.throwIf (cargoHash == null)
-          "wasixRebuildVendor: a fetchCargoVendor package needs a cargoHash in its history entry (nix run .#scripts.history -- add <attr>==<version> derives it)"
+          "wasixRebuildVendor: a fetchCargoVendor package needs a cargoHash in its history entry (wasinix versions add <attr>@<version> derives it)"
           (final.fetchCargoVendor (args // builtins.removeAttrs overrides ["cargoHash"] // {hash = cargoHash;}));
       in
         attach (patchInPlace (vendorPlatform.fetchCargoVendor args)) rebuild

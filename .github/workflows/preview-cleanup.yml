@@ -34,23 +34,13 @@ jobs:
           token-staging: ${{ secrets.WASMER_TOKEN_STAGING }}
           token-dev: ${{ secrets.WASMER_TOKEN_DEV }}
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31.9.1
-        with:
-          extra_nix_config: |
-            extra-substituters = https://nix-cache.wasix.org
-            extra-trusted-public-keys = wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI=
-            trusted-users = root runner
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
 
-      - name: Cache flake inputs
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
-        with:
-          path: ~/.cache/nix
-          key: nix-flake-inputs-${{ hashFiles('flake.lock') }}
-          restore-keys: nix-flake-inputs-
-
-      - name: Delete app
+      - name: Delete apps
         run: |
-          nix shell .#wasmer --accept-flake-config -c wasmer app delete \
-            "wasmer/python-registry-pr${PR}" --registry "$WASMER_REGISTRY" --non-interactive \
-            || echo "no preview app to delete"
+          for app in python-registry cargo-registry; do
+            nix shell .#wasmer --accept-flake-config -c wasmer app delete \
+              "wasmer/$app-pr${PR}" --registry "$WASMER_REGISTRY" --non-interactive \
+              || echo "no $app preview app to delete"
+          done

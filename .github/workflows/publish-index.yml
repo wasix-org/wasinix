@@ -49,20 +49,8 @@ jobs:
           token-staging: ${{ secrets.WASMER_TOKEN_STAGING }}
           token-dev: ${{ secrets.WASMER_TOKEN_DEV }}
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31.9.1
-        with:
-          extra_nix_config: |
-            extra-substituters = https://nix-cache.wasix.org
-            extra-trusted-public-keys = wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI=
-            trusted-users = root runner
-
-      - name: Cache flake inputs
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
-        with:
-          path: ~/.cache/nix
-          key: nix-flake-inputs-${{ hashFiles('flake.lock') }}
-          restore-keys: nix-flake-inputs-
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
 
       - name: Build index
         id: build-index
@@ -73,8 +61,8 @@ jobs:
       - name: Publish wheels to the index volume
         if: env.WASMER_TOKEN != ''
         run: |
-          nix run .#scripts.publish-index -- \
-            --registry "$(readlink -f registry-result)" \
+          nix run .#wasinix -- python publish \
+            "$(readlink -f registry-result)" \
             --rev "${{ github.event.workflow_run.head_sha }}"
 
       # the Pages site must exist with build_type=workflow; creating it needs

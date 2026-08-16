@@ -1,18 +1,20 @@
-name: Bump publication rel
+name: Bump publication release
 
-# Manual only: bump the publication release (+wasix.N) of the given wheels or
-# webcs so the next publish republishes them under new versions (e.g. after a
-# toolchain fix rebuilds them at the same upstream version). Opens a PR;
-# merging it to main runs the normal build + publish.
+# Bump the +wasix.N publication release of shipped wheels or webcs when the
+# same upstream version needs republishing. `versions bump` writes rels.json;
+# `--changed-from` selects versions whose publication derivations moved.
 on:
   workflow_dispatch:
     inputs:
-      packages:
+      specs:
         description:
-          Packages to bump (rels.json attr paths, unambiguous names, or fnmatch
-          globs; prefix --all-versions to include every served history version)
-        required: true
-        type: string
+          "Packages to bump (blank with changed-from selects moved ones)"
+        required: false
+        default: ""
+      changed_from:
+        description: "Bump versions changed from this ref"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -20,57 +22,33 @@ permissions:
 
 jobs:
   bump:
-    name: Bump rels and open PR
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31.9.1
         with:
-          extra_nix_config: |
-            extra-substituters = https://nix-cache.wasix.org
-            extra-trusted-public-keys = wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI=
-            trusted-users = root runner
+          fetch-depth: 0
 
-      - name: Cache flake inputs
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
-        with:
-          path: ~/.cache/nix
-          key: nix-flake-inputs-${{ hashFiles('flake.lock') }}
-          restore-keys: nix-flake-inputs-
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
 
-      - name: Bump rels
-        id: bump
+      # --pr commits as the bot, pushes auto/bump-rel, and opens or updates
+      # the PR from the ChangeSet. UPDATE_PR_TOKEN is a PAT/app token so the
+      # PR's CI cascades; without it, the default token opens a PR that needs
+      # a manual re-run.
+      - name: Bump rels and open PR
+        shell: bash
         env:
-          PACKAGES: ${{ inputs.packages }}
+          GITHUB_TOKEN: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
+          SPECS: ${{ github.event.inputs.specs }}
+          CHANGED_FROM: ${{ github.event.inputs.changed_from }}
         run: |
-          read -ra packages <<<"${PACKAGES//,/ }"
-          summary="$RUNNER_TEMP/bump-summary.md"
-          nix run .#scripts.bump-rel -- "${packages[@]}" >"$summary"
-          {
-            echo 'summary<<EOF'
-            cat "$summary"
-            echo EOF
-          } >>"$GITHUB_OUTPUT"
-
-      - name: Format
-        run: nix fmt
-
-      # UPDATE_PR_TOKEN (a PAT / App token): without it a PR opened by the
-      # default GITHUB_TOKEN does not trigger CI, matching update.yml.
-      - name: Open PR
-        uses: peter-evans/create-pull-request@v7
-        with:
-          token: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
-          branch: auto/bump-rel
-          title: "pkgs: bump publication release"
-          commit-message: "pkgs: bump publication release"
-          body: |
-            Manual publication-release (+wasix.N) bump. Merging to main
-            rebuilds and republishes these packages under new versions.
-
-            ${{ steps.bump.outputs.summary }}
-          delete-branch: true
+          args=()
+          if [ -n "$CHANGED_FROM" ]; then
+            args=(--changed-from "$CHANGED_FROM")
+          else
+            read -ra specs <<<"$SPECS"
+            args=("${specs[@]}")
+          fi
+          nix run .#wasinix -- versions bump "${args[@]}" --pr --base "$GITHUB_REF_NAME"

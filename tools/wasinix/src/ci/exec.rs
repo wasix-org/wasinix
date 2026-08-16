@@ -1,0 +1,1475 @@
+//! Execute a CI plan. Every phase reads and writes only the run directory and
+//! leaves a typed fragment behind, so a report can be folded from whatever
+//! finished; progress is recorded on the run's event stream, never printed
+//! into it.
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
+
+use serde_json::Value;
+
+use crate::ci::compare::{case_status, compare_case_results, selected_case, JobStatuses};
+use crate::ci::evalmap::EvalMap;
+use crate::ci::events::{Event, Tracker};
+use crate::ci::facts;
+use crate::ci::plan::{BuildTarget, Phase, Task, TaskKind};
+use crate::ci::prepare::{case_dir, fragments_dir, Loaded};
+use crate::ci::report::{Fragment, FragmentData, LogExcerpt};
+use crate::ci::types::{Build, CaseRef, Request, ResolvedRequest, RevSource, Spot};
+use crate::ci::workspace::{reproduced_worktree, PATCH_FILE};
+use crate::nix::evaljobs;
+use crate::nix::route::Route;
+use crate::support::atoms::{Bytes, DurationSecs, JobAddr, JobStatus, TaskStatus};
+use crate::support::error::{io, request_error, Error, Result};
+use crate::support::process::CommandStatus;
+use crate::support::schema;
+use crate::support::time::unix_secs;
+
+pub struct Context<'a> {
+    /// The orchestrator checkout. The worktrees hold the revision under test
+    /// and must never supply the code that builds it.
+    pub runner_root: &'a Path,
+    pub run_dir: &'a Path,
+    /// Whether builds may sign and push to the cache; the signing key still
+    /// has to be present and valid.
+    pub push_cache: bool,
+}
+
+impl Context<'_> {
+    fn fragments(&self) -> PathBuf {
+        fragments_dir(self.run_dir)
+    }
+
+    fn fragment_path(&self, task_id: &str) -> PathBuf {
+        self.fragments().join(format!("{task_id}.json"))
+    }
+}
+
+const EXCERPT_LINES: usize = 120;
+
+/// The tail of a log as fragment content. The full file stays in the run
+/// directory; the fragment carries what a report can show inline.
+fn excerpt(path: &Path) -> LogExcerpt {
+    let text = std::fs::read_to_string(path).unwrap_or_default();
+    let lines: Vec<&str> = text.lines().collect();
+    let start = lines.len().saturating_sub(EXCERPT_LINES);
+    LogExcerpt {
+        lines: lines[start..].iter().map(|line| line.to_string()).collect(),
+        truncated: start > 0,
+    }
+}
+
+fn excerpt_of(text: &str) -> LogExcerpt {
+    let lines: Vec<&str> = text.lines().collect();
+    let start = lines.len().saturating_sub(EXCERPT_LINES);
+    LogExcerpt {
+        lines: lines[start..].iter().map(|line| line.to_string()).collect(),
+        truncated: start > 0,
+    }
+}
+
+/// Run a command, teeing its output to a log file. Build logs are the
+/// evidence a failure report is made of, so they are kept even when the
+/// console is not.
+fn run_logged(cmd: &mut Command, log_path: &Path) -> Result<CommandStatus> {
+    use std::io::{BufRead, BufReader, Write};
+    use std::sync::{Arc, Mutex};
+    if let Some(parent) = log_path.parent() {
+        crate::support::fs::create_dir_all(parent)?;
+    }
+    let log = Arc::new(Mutex::new(
+        std::fs::File::create(log_path).map_err(|e| io(log_path, e))?,
+    ));
+    crate::support::tools::log(cmd);
+    let mut child =
+        crate::support::tools::spawn(cmd.stdout(Stdio::piped()).stderr(Stdio::piped()))?;
+    let stdout = child.stdout.take().expect("stdout was piped");
+    let stderr = child.stderr.take().expect("stderr was piped");
+    std::thread::scope(|scope| {
+        for stream in [
+            Box::new(stdout) as Box<dyn std::io::Read + Send>,
+            Box::new(stderr),
+        ] {
+            let log = Arc::clone(&log);
+            let echo =
+                crate::support::ui::verbosity() == crate::support::ui::Verbosity::Verbose;
+            scope.spawn(move || {
+                let mut reader = BufReader::new(stream);
+                let mut buffer = Vec::new();
+                // Bytes, not utf8 lines: one stray byte from a compiler must
+                // not end the tee and truncate the log a report renders from.
+                while matches!(reader.read_until(b'\n', &mut buffer), Ok(n) if n > 0) {
+                    if echo {
+                        crate::support::ui::raw(String::from_utf8_lossy(&buffer));
+                    }
+                    if let Ok(mut log) = log.lock() {
+                        let _ = log.write_all(&buffer);
+                    }
+                    buffer.clear();
+                }
+            });
+        }
+    });
+    Ok(CommandStatus::from_exit(
+        child.wait().map_err(|e| io(log_path, e))?,
+    ))
+}
+
+fn output_logged(cmd: &mut Command, log_path: &Path) -> Result<std::process::Output> {
+    if let Some(parent) = log_path.parent() {
+        crate::support::fs::create_dir_all(parent)?;
+    }
+    crate::support::tools::log(cmd);
+    let output = crate::support::tools::output(cmd)?;
+    crate::support::fs::write(log_path, &output.stderr)?;
+    Ok(output)
+}
+
+pub(crate) fn fixed_output_derivations(graph: &Value) -> Vec<String> {
+    let mut paths: Vec<String> = graph
+        .as_object()
+        .into_iter()
+        .flat_map(|entries| entries.iter())
+        .flat_map(|(path, drv)| {
+            drv["outputs"]
+                .as_object()
+                .into_iter()
+                .flat_map(|outputs| outputs.iter())
+                .filter(|(_, output)| output["hash"].as_str().is_some())
+                .map(move |(output, _)| format!("{path}^{output}"))
+        })
+        .collect();
+    paths.sort();
+    paths
+}
+
+fn directory_bytes(root: &Path) -> Result<u64> {
+    let mut total = 0;
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(path) = pending.pop() {
+        for entry in std::fs::read_dir(&path).map_err(|e| io(&path, e))? {
+            let entry = entry.map_err(|e| io(&path, e))?;
+            let file_type = entry.file_type().map_err(|e| io(&path, e))?;
+            if file_type.is_dir() {
+                pending.push(entry.path());
+            } else if file_type.is_file() {
+                total += entry.metadata().map_err(|e| io(&path, e))?.len();
+            }
+        }
+    }
+    Ok(total)
+}
+
+fn treefmt(worktree: &Path, case_id: &str, route: &Route, log: &Path) -> Result<Fragment> {
+    let _lease = route.acquire()?;
+    let mut cmd = crate::support::nix::Invocation::flake(
+        "build",
+        format!(".#checks.{}.treefmt", crate::support::nix::SYSTEM),
+    )
+    .args(["--no-link", "--print-build-logs"])
+    .workdir(worktree)
+    .route(route)?
+    .command()?;
+    let status = run_logged(&mut cmd, log)?;
+
+    let mut fragment = Fragment::new(
+        format!("{case_id}.treefmt"),
+        format!("{case_id}: Formatting"),
+        TaskKind::Validation,
+        if status.is_success() {
+            TaskStatus::Success
+        } else {
+            TaskStatus::Failure
+        },
+        if status.is_success() {
+            "formatting is clean"
+        } else {
+            "formatting changes required"
+        },
+    );
+    if !status.is_success() {
+        fragment = fragment.with_data(FragmentData::Log(excerpt(log)));
+    }
+    Ok(fragment)
+}
+
+/// Warm the evaluation's fixed-output inputs so the offline evaluation and
+/// the build behind it never fetch.
+fn eval_inputs(
+    ctx: &Context,
+    worktree: &Path,
+    case_id: &str,
+    route: &Route,
+) -> Result<Fragment> {
+    let _lease = route.acquire()?;
+    let logs =
+        crate::ci::prepare::logs_dir(&case_dir(ctx.run_dir, case_id)).join("eval-inputs");
+    let attr = format!(
+        ".#legacyPackages.{}.ciSets.all",
+        crate::support::nix::SYSTEM
+    );
+    let jobs_path = logs.join("jobs.jsonl");
+    let evaluate_log = logs.join("evaluate.log");
+    let mut failure: Option<(String, PathBuf)> = None;
+    let status = match evaljobs::run(&evaljobs::RunRequest {
+        workdir: worktree,
+        flake: &attr,
+        jobs_path: &jobs_path,
+        stderr_log: &evaluate_log,
+        offline: false,
+        // Warming inputs only needs the drv paths; a per-job cache query
+        // over thousands of jobs is the eval-inputs bottleneck and buys
+        // nothing here.
+        check_cache: false,
+        route,
+    })? {
+        Some(error) => {
+            failure = Some((error, evaluate_log.clone()));
+            CommandStatus::FAILURE
+        }
+        None => {
+            let jobs = evaljobs::parse_file(&crate::support::fs::read_to_string(&jobs_path)?)?;
+            let mut drvs: Vec<&str> = jobs
+                .iter()
+                .filter_map(|job| job.drv_path.as_deref())
+                .collect();
+            drvs.sort();
+            drvs.dedup();
+            let drv_file = logs.join("job-derivations.txt");
+            crate::support::fs::write(&drv_file, (drvs.join("\n") + "\n").as_bytes())?;
+
+            let mut show = crate::support::nix::Invocation::plain("derivation show")
+                .args(["--recursive", "--stdin"])
+                .stdin(&drv_file)
+                .workdir(worktree)
+                .route(route)?
+                .command()?;
+            let derivations_log = logs.join("derivations.log");
+            let shown = output_logged(&mut show, &derivations_log)?;
+            if !shown.status.success() {
+                failure = Some((
+                    "could not inspect evaluation inputs".to_string(),
+                    derivations_log,
+                ));
+                CommandStatus::from_exit(shown.status)
+            } else {
+                let graph: Value =
+                    serde_json::from_slice(&shown.stdout).map_err(|source| Error::Json {
+                        path: derivations_log.clone(),
+                        source,
+                    })?;
+                let fetches = fixed_output_derivations(&graph);
+                let fetch_file = logs.join("fixed-output-derivations.txt");
+                crate::support::fs::write(&fetch_file, (fetches.join("\n") + "\n").as_bytes())?;
+                if fetches.is_empty() {
+                    CommandStatus::SUCCESS
+                } else {
+                    let mut build = crate::support::nix::Invocation::plain("build")
+                        .args(["--no-link", "--stdin"])
+                        .accepts_flake_config()
+                        .stdin(&fetch_file)
+                        .workdir(worktree)
+                        .route(route)?
+                        .command()?;
+                    let fetch_log = logs.join("fetch.log");
+                    let status = run_logged(&mut build, &fetch_log)?;
+                    if !status.is_success() {
+                        failure =
+                            Some(("could not fetch evaluation inputs".to_string(), fetch_log));
+                    }
+                    status
+                }
+            }
+        }
+    };
+    let mut fragment = Fragment::new(
+        format!("{case_id}.eval-inputs"),
+        format!("{case_id}: Evaluation inputs"),
+        TaskKind::Eval,
+        if status.is_success() {
+            TaskStatus::Success
+        } else {
+            TaskStatus::Failure
+        },
+        failure
+            .as_ref()
+            .map(|(headline, _)| headline.as_str())
+            .unwrap_or("evaluation inputs are warm"),
+    );
+    if let Some((_, log)) = &failure {
+        fragment = fragment.with_data(FragmentData::Log(excerpt(log)));
+    }
+    Ok(fragment)
+}
+
+fn selector_catalog(
+    worktree: &Path,
+    route: &Route,
+) -> Result<crate::ci::evalmap::SelectorCatalog> {
+    let bytes = crate::support::nix::Invocation::flake(
+        "eval",
+        format!(
+            ".#legacyPackages.{}.ciSelectorCatalog",
+            crate::support::nix::SYSTEM
+        ),
+    )
+    .json()
+    .offline()
+    .workdir(worktree)
+    .timeout(route.limits()?.timeout)
+    .route(route)?
+    .checked_output("the CI selector catalog")?;
+    serde_json::from_slice(&bytes).map_err(|source| Error::Json {
+        path: "<ciSelectorCatalog>".into(),
+        source,
+    })
+}
+
+fn evaluate(
+    ctx: &Context,
+    worktree: &Path,
+    case: &Build<RevSource>,
+    route: &Route,
+) -> Result<Fragment> {
+    let _lease = route.acquire()?;
+    let case_id = case.case_id();
+    let maps = crate::ci::prepare::maps_dir(&case_dir(ctx.run_dir, case_id));
+    let attr = format!(
+        ".#legacyPackages.{}.ciSets.all",
+        crate::support::nix::SYSTEM
+    );
+    let eval_log = maps.join("eval.log");
+    if let Some(error) = evaljobs::run(&evaljobs::RunRequest {
+        workdir: worktree,
+        flake: &attr,
+        jobs_path: &crate::ci::prepare::eval_jobs_path(&case_dir(ctx.run_dir, case_id)),
+        stderr_log: &eval_log,
+        offline: true,
+        // Offline, so a cache-status query cannot reach a substituter; the
+        // build's --skip-cached decides what to rebuild instead.
+        check_cache: false,
+        route,
+    })? {
+        // No map is written: a broken evaluation must never become a base
+        // for someone else to diff against.
+        return Ok(Fragment::new(
+            format!("{case_id}.eval"),
+            format!("{case_id}: Evaluation"),
+            TaskKind::Eval,
+            TaskStatus::Failure,
+            "could not evaluate CI jobs",
+        )
+        .with_data(FragmentData::Log(excerpt_of(&error))));
+    }
+
+    let jobs = evaljobs::parse_file(&crate::support::fs::read_to_string(
+        &crate::ci::prepare::eval_jobs_path(&case_dir(ctx.run_dir, case_id)),
+    )?)?;
+    let mut mapping = EvalMap::from_jobs(case.source.rev.clone(), &jobs);
+    let catalog = selector_catalog(worktree, route)?;
+    mapping.info = catalog.info;
+    mapping.sets = catalog.sets;
+    mapping.groups = catalog.groups;
+    schema::write(&crate::ci::prepare::eval_map_path(&case_dir(ctx.run_dir, case_id)), &mapping)?;
+
+    let omitted_by_tags: BTreeMap<String, usize> = mapping
+        .omitted_by_tags(&case.enabled_tags)
+        .into_iter()
+        .map(|(tag, jobs)| (tag, jobs.len()))
+        .collect();
+    let headline = if mapping.errors.is_empty() {
+        format!("{} jobs", mapping.jobs.len())
+    } else {
+        format!(
+            "{} jobs, {} eval errors",
+            mapping.jobs.len(),
+            mapping.errors.len()
+        )
+    };
+    Ok(Fragment::new(
+        format!("{case_id}.eval"),
+        format!("{case_id}: Evaluation"),
+        TaskKind::Eval,
+        TaskStatus::Success,
+        headline,
+    )
+    .with_data(FragmentData::Eval(crate::ci::report::EvalSummary {
+        job_count: mapping.jobs.len(),
+        omitted_by_tags,
+        base_rev: None,
+    })))
+}
+
+/// Resolve a spot case's splice and print its build counts without building:
+/// the answer to "how much of this run is my change vs an uncached base".
+pub fn spot_probe(ctx: &Context, case: &Spot<RevSource>) -> Result<()> {
+    let case_id = case.case_id.as_deref().unwrap_or("case");
+    let route = Route::from_on(ctx.runner_root, case.on.as_deref())?;
+    let patch = case_dir(ctx.run_dir, case_id)
+        .join("prepared")
+        .join(PATCH_FILE);
+    let worktree = reproduced_worktree(ctx.runner_root, &case.source, &patch)?;
+    let mapping = {
+        let _lease = route.acquire()?;
+        selector_catalog(worktree.path(), &route)?.into_map()
+    };
+    crate::nix::spot::build(
+        ctx.runner_root,
+        worktree.path(),
+        &crate::nix::spot::Options {
+            targets: mapping.resolve_spot_targets(&case.targets)?,
+            base: case
+                .base
+                .clone()
+                .unwrap_or_else(|| case.source.rev.full().to_string()),
+            source_owners: mapping.resolve_spot_sources(&case.from_source)?,
+            dry_run: true,
+            nix_args: Vec::new(),
+        },
+        &route,
+    )?;
+    Ok(())
+}
+
+/// Run a spot case and lay its outcome out like a built case, so a diff can
+/// compare it over the shared target coverage.
+fn spot(
+    ctx: &Context,
+    worktree: &Path,
+    case_id: &str,
+    case: &Spot<RevSource>,
+    route: &Route,
+) -> Result<Fragment> {
+    let mapping = {
+        let _lease = route.acquire()?;
+        selector_catalog(worktree, route)?.into_map()
+    };
+    let targets = mapping.resolve_spot_targets(&case.targets)?;
+    let source_owners = mapping.resolve_spot_sources(&case.from_source)?;
+    let result = crate::nix::spot::build(
+        ctx.runner_root,
+        worktree,
+        &crate::nix::spot::Options {
+            targets,
+            base: case
+                .base
+                .clone()
+                .unwrap_or_else(|| case.source.rev.full().to_string()),
+            source_owners,
+            dry_run: false,
+            nix_args: Vec::new(),
+        },
+        route,
+    )?;
+
+    let paths = case_dir(ctx.run_dir, case_id);
+    let jobs: BTreeMap<JobAddr, String> = result
+        .targets
+        .iter()
+        .map(|target| {
+            (
+                JobAddr(format!("packagesByProfile.{}", target.target)),
+                target.spliced_drv_path.clone(),
+            )
+        })
+        .collect();
+    let job_status = if result.status.is_success() {
+        JobStatus::Success
+    } else {
+        JobStatus::Failure
+    };
+    schema::write(
+        &crate::ci::prepare::status_path(&paths),
+        &JobStatuses {
+            statuses: jobs.keys().map(|job| (job.clone(), job_status)).collect(),
+        },
+    )?;
+    schema::write(
+        &crate::ci::prepare::eval_map_path(&paths),
+        &EvalMap {
+            rev: Some(case.source.rev.clone()),
+            jobs,
+            ..EvalMap::default()
+        },
+    )?;
+    Ok(Fragment::new(
+        format!("{case_id}.spot"),
+        format!("{case_id}: Spot"),
+        TaskKind::Spot,
+        if result.status.is_success() {
+            TaskStatus::Success
+        } else {
+            TaskStatus::Failure
+        },
+        if result.status.is_success() {
+            "spot build passed"
+        } else {
+            "spot build failed"
+        },
+    ))
+}
+
+struct BuildSpec {
+    task_id: String,
+    label: String,
+    kind: TaskKind,
+    case: String,
+    target: BuildTarget,
+    jobs: Vec<String>,
+    on: Option<String>,
+}
+
+/// One union job's outcome, keyed `case::name`. `None` status is a job the
+/// build never reported, which the junit projection records as incomplete.
+pub(crate) struct JobState {
+    pub(crate) drv: String,
+    pub(crate) status: Option<JobStatus>,
+    pub(crate) duration: Option<f64>,
+    pub(crate) error: Option<String>,
+}
+
+fn target_jobs(
+    case: &Build<RevSource>,
+    target: BuildTarget,
+    mapping: &EvalMap,
+) -> Result<Vec<String>> {
+    if target == BuildTarget::Jobs {
+        return mapping.resolve_enabled_jobs(&case.requested_jobs(), &case.enabled_tags);
+    }
+    Ok(mapping
+        .sets
+        .get(target.as_str())
+        .into_iter()
+        .flatten()
+        .filter(|job| mapping.tag_enabled(job, &case.enabled_tags))
+        .cloned()
+        .collect())
+}
+
+pub(crate) fn cached_jobs(path: &Path) -> Result<BTreeSet<String>> {
+    Ok(
+        evaljobs::parse_file(&crate::support::fs::read_to_string(path)?)?
+            .iter()
+            .filter(|job| job.cache_status.as_deref() == Some("cached"))
+            .map(evaljobs::EvalJob::name)
+            .collect(),
+    )
+}
+
+/// Apply one nix-fast-build stream result. A BUILD result marks every union
+/// job sharing the derivation; an EVAL result only marks failures, since a
+/// successful evaluation says nothing about the build. First report wins, so
+/// each job finishes on the event stream exactly once.
+pub(crate) fn record_result(
+    value: &Value,
+    jobs: &mut BTreeMap<String, JobState>,
+    tracker: &mut Tracker,
+) -> Result<()> {
+    let Some(kind) = value["type"].as_str() else {
+        return Ok(());
+    };
+    if !matches!(kind, "BUILD" | "EVAL") {
+        return Ok(());
+    }
+    // nix-eval-jobs quotes the dotted attr name
+    let Some(attr) = value["attr"].as_str().map(|attr| attr.trim_matches('"')) else {
+        return Ok(());
+    };
+    if !attr.contains("::") {
+        return Ok(());
+    }
+    let success = value["success"].as_bool().unwrap_or(false);
+    if kind == "EVAL" && success {
+        return Ok(());
+    }
+    let drv = jobs
+        .get(attr)
+        .map(|job| job.drv.clone())
+        .filter(|drv| !drv.is_empty());
+    let status = if success {
+        JobStatus::Success
+    } else {
+        JobStatus::Failure
+    };
+    let matched: Vec<String> = jobs
+        .iter()
+        .filter(|(key, job)| {
+            key.as_str() == attr || (kind == "BUILD" && drv.as_deref() == Some(job.drv.as_str()))
+        })
+        .filter(|(_, job)| job.status.is_none())
+        .map(|(key, _)| key.clone())
+        .collect();
+    for key in matched {
+        let job = jobs.get_mut(&key).expect("key was just collected");
+        job.status = Some(status);
+        job.duration = value["duration"].as_f64();
+        job.error =
+            (!success).then(|| value["error"].as_str().unwrap_or("build failed").to_string());
+        tracker.record(Event::JobFinished {
+            at: unix_secs(),
+            job: JobAddr(key),
+            status,
+            cached: false,
+            duration_seconds: value["duration"].as_f64().map(DurationSecs),
+            error: job.error.clone(),
+        })?;
+    }
+    Ok(())
+}
+
+/// A nix-fast-build stderr line announcing a build start; the attr is the
+/// union key, quoted like the eval attrs.
+pub(crate) fn building_attr(line: &str) -> Option<&str> {
+    line.strip_prefix("  building ")
+        .map(|attr| attr.trim().trim_matches('"'))
+        .filter(|attr| !attr.is_empty())
+}
+
+/// Keeps the event stream alive and honest during a long build: heartbeats at
+/// most every few minutes, and one warning when output goes quiet.
+struct Liveness {
+    stall_after: Duration,
+    last_activity: Instant,
+    last_heartbeat: Instant,
+    warned: bool,
+}
+
+impl Liveness {
+    fn new(stall_after: Duration) -> Liveness {
+        Liveness {
+            stall_after,
+            last_activity: Instant::now(),
+            last_heartbeat: Instant::now(),
+            warned: false,
+        }
+    }
+
+    fn activity(&mut self) {
+        self.last_activity = Instant::now();
+        self.warned = false;
+    }
+
+    fn heartbeat(
+        &mut self,
+        tracker: &mut Tracker,
+        building: &std::collections::BTreeSet<String>,
+    ) -> Result<()> {
+        // One heartbeat a minute: the renderer turns them into liveness
+        // lines through quiet stretches, and the comment watcher keeps its
+        // own, longer republish throttle.
+        if self.last_heartbeat.elapsed() >= Duration::from_secs(60) {
+            tracker.record(Event::Heartbeat { at: unix_secs() })?;
+            self.last_heartbeat = Instant::now();
+        }
+        if !self.warned && self.last_activity.elapsed() >= self.stall_after {
+            self.warned = true;
+            let names: Vec<&str> = building.iter().map(String::as_str).collect();
+            let waiting = if names.is_empty() {
+                String::new()
+            } else {
+                format!("; building: {}", crate::support::format::some(&names, 5))
+            };
+            tracker.record(Event::Warning {
+                at: unix_secs(),
+                message: format!(
+                    "no build output for {} seconds{waiting}",
+                    self.last_activity.elapsed().as_secs()
+                ),
+            })?;
+        }
+        Ok(())
+    }
+}
+
+fn notable_output(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    trimmed.starts_with("ERROR:")
+        || trimmed.starts_with("WARN:")
+        || trimmed.starts_with("error:")
+        || trimmed.starts_with("warning:")
+}
+
+/// Split the union junit back into one case-and-target file, backfilling
+/// selected jobs the build never reported so absence reads as failure, never
+/// as clean.
+pub(crate) fn project_junit(
+    source: &Path,
+    destination: &Path,
+    case_id: &str,
+    selected: &[String],
+    jobs: &BTreeMap<String, JobState>,
+) -> Result<()> {
+    let prefix = format!("{case_id}::");
+    let selected_set: BTreeSet<&str> = selected.iter().map(String::as_str).collect();
+    // Build cases only: nix-fast-build also emits Eval and Upload testcases
+    // per job, and a failed cache upload of a job that built fine must never
+    // read as a build failure of that job.
+    let mut cases: Vec<facts::junit::Case> =
+        facts::junit::parse_junits(&[source.to_path_buf()], false)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|mut case| {
+                if case.class != "Build" {
+                    return None;
+                }
+                let name = case.attr.strip_prefix(&prefix)?;
+                if !selected_set.contains(name) {
+                    return None;
+                }
+                case.attr = name.to_string();
+                Some(case)
+            })
+            .collect();
+    for name in selected {
+        if cases
+            .iter()
+            .any(|case| &case.attr == name && case.class == "Build")
+        {
+            continue;
+        }
+        let state = jobs.get(&format!("{case_id}::{name}"));
+        let success = state.is_some_and(|job| job.status == Some(JobStatus::Success));
+        let mut case = facts::junit::Case::new(name.clone(), "Build".to_string());
+        case.duration = state.and_then(|job| job.duration).unwrap_or_default();
+        if !success {
+            case.message = Some(
+                state
+                    .and_then(|job| job.error.clone())
+                    .unwrap_or_else(|| "build did not complete".to_string()),
+            );
+        }
+        cases.push(case);
+    }
+    cases.sort_by(|a, b| a.attr.cmp(&b.attr).then_with(|| a.class.cmp(&b.class)));
+    if let Some(parent) = destination.parent() {
+        crate::support::fs::create_dir_all(parent)?;
+    }
+    crate::support::fs::write(destination, facts::junit::write_junit(&cases).as_bytes())
+}
+
+fn load_map(paths: &Path) -> Result<EvalMap> {
+    schema::read(&crate::ci::prepare::eval_map_path(paths))
+}
+
+fn group_dir(on: Option<&str>) -> String {
+    on.unwrap_or("default").replace([':', '/'], "-")
+}
+
+fn find_build_case<'a>(
+    request: &'a ResolvedRequest,
+    case_id: &str,
+) -> Result<&'a Build<RevSource>> {
+    request
+        .cases()
+        .into_iter()
+        .find(|case| case.case_id() == case_id)
+        .and_then(|case| match case {
+            CaseRef::Build(build) => Some(build),
+            CaseRef::Spot(_) => None,
+        })
+        .ok_or_else(|| Error::Request(format!("unknown build case {case_id:?}")))
+}
+
+/// Run every planned build as one prefixed union per placement, so shared
+/// derivations between cases build once.
+fn run_build_tasks(
+    ctx: &Context,
+    request: &ResolvedRequest,
+    tasks: &[Task],
+    broken: &[String],
+    tracker: &mut Tracker,
+) -> Result<CommandStatus> {
+    let mut specs = Vec::new();
+    let mut maps: BTreeMap<String, EvalMap> = BTreeMap::new();
+    for task in tasks {
+        let Phase::Build { set } = task.phase else {
+            continue;
+        };
+        if broken.contains(&task.case) {
+            tracker.record(Event::PhaseStarted {
+                at: unix_secs(),
+                task_id: task.task_id.clone(),
+                label: task.label.clone(),
+                jobs: None,
+            })?;
+            finish_task(
+                ctx,
+                tracker,
+                Fragment::new(
+                    task.task_id.clone(),
+                    task.label.clone(),
+                    task.kind,
+                    TaskStatus::Skipped,
+                    "evaluation failed for this case",
+                ),
+                None,
+            )?;
+            continue;
+        }
+        let case = find_build_case(request, &task.case)?;
+        if !maps.contains_key(&task.case) {
+            maps.insert(task.case.clone(), load_map(&case_dir(ctx.run_dir, &task.case))?);
+        }
+        let mapping = &maps[&task.case];
+        specs.push(BuildSpec {
+            task_id: task.task_id.clone(),
+            label: task.label.clone(),
+            kind: task.kind,
+            case: task.case.clone(),
+            target: set,
+            jobs: target_jobs(case, set, mapping)?,
+            on: case.on.clone(),
+        });
+    }
+    if specs.is_empty() {
+        return Ok(CommandStatus::SUCCESS);
+    }
+
+    let mut jobs: BTreeMap<String, JobState> = BTreeMap::new();
+    for (case_id, mapping) in &maps {
+        let selected: BTreeSet<&String> = specs
+            .iter()
+            .filter(|spec| &spec.case == case_id)
+            .flat_map(|spec| spec.jobs.iter())
+            .collect();
+        let cached = cached_jobs(&case_dir(ctx.run_dir, case_id).join("maps/eval-jobs.jsonl"))?;
+        for name in selected {
+            let key = format!("{case_id}::{name}");
+            let cached = cached.contains(name);
+            jobs.insert(
+                key.clone(),
+                JobState {
+                    drv: mapping.jobs.get(name.as_str()).cloned().unwrap_or_default(),
+                    status: cached.then_some(JobStatus::Success),
+                    duration: None,
+                    error: None,
+                },
+            );
+            if cached {
+                tracker.record(Event::JobFinished {
+                    at: unix_secs(),
+                    job: JobAddr(key),
+                    status: JobStatus::Success,
+                    cached: true,
+                    duration_seconds: None,
+                    error: None,
+                })?;
+            }
+        }
+    }
+    for spec in &specs {
+        tracker.record(Event::PhaseStarted {
+            at: unix_secs(),
+            task_id: spec.task_id.clone(),
+            label: spec.label.clone(),
+            jobs: Some(spec.jobs.len()),
+        })?;
+    }
+
+    let mut groups: BTreeMap<Option<String>, Vec<String>> = BTreeMap::new();
+    for spec in &specs {
+        let cases = groups.entry(spec.on.clone()).or_default();
+        if !cases.contains(&spec.case) {
+            cases.push(spec.case.clone());
+        }
+    }
+    let hard_timeout = crate::support::env::build_timeout()?;
+    let stall_after = crate::support::env::stall_timeout()?
+        .unwrap_or(Duration::from_secs(300));
+    let cutoff = std::time::SystemTime::now();
+
+    let mut worst = CommandStatus::SUCCESS;
+    let mut results: BTreeMap<String, PathBuf> = BTreeMap::new();
+    let union_started = Instant::now();
+    for (on, cases) in groups {
+        let route = Route::from_on(ctx.runner_root, on.as_deref())?;
+        let _lease = route.acquire()?;
+        let limits = route.limits()?;
+        let mut worktrees = Vec::new();
+        let mut union_cases = Vec::new();
+        for case_id in cases {
+            let case = find_build_case(request, &case_id)?;
+            let patch = case_dir(ctx.run_dir, &case_id)
+                .join("prepared")
+                .join(PATCH_FILE);
+            let worktree = reproduced_worktree(ctx.runner_root, &case.source, &patch)?;
+            let selected: BTreeSet<String> = specs
+                .iter()
+                .filter(|spec| spec.case == case_id)
+                .flat_map(|spec| spec.jobs.iter().cloned())
+                .collect();
+            union_cases.push(crate::nix::buildset::UnionCase {
+                id: case_id.clone(),
+                worktree: worktree.path().to_path_buf(),
+                jobs_file: case_dir(ctx.run_dir, &case_id).join("maps/eval-jobs.jsonl"),
+                jobs: selected.into_iter().collect(),
+            });
+            worktrees.push(worktree);
+        }
+        let build_dir = ctx.run_dir.join("build").join(group_dir(on.as_deref()));
+        for case in &union_cases {
+            results.insert(case.id.clone(), build_dir.join("results.xml"));
+        }
+        let mut liveness = Liveness::new(stall_after);
+        let mut building: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        let status = crate::nix::buildset::build_union(
+            crate::nix::buildset::UnionRequest {
+                cases: union_cases,
+                work_dir: &build_dir,
+                result_file: build_dir.join("results.xml"),
+                route: &route,
+                eval_workers: limits.workers,
+                eval_memory: limits.memory,
+                // The build tail is a few long compiles; jobs default to
+                // the machine's parallelism, with WASINIX_MAX_JOBS as the
+                // override.
+                max_jobs: crate::nix::route::max_jobs(
+                    std::thread::available_parallelism()
+                        .map(|jobs| jobs.get())
+                        .unwrap_or(limits.workers),
+                )?,
+                hard_timeout,
+                push: ctx.push_cache,
+            },
+            &mut |event| match event {
+                crate::nix::buildset::StreamEvent::Result(value) => {
+                    liveness.activity();
+                    record_result(&value, &mut jobs, tracker)?;
+                    building.retain(|attr| {
+                        jobs.get(attr).is_none_or(|job| job.status.is_none())
+                    });
+                    Ok(())
+                }
+                crate::nix::buildset::StreamEvent::Activity => {
+                    liveness.activity();
+                    Ok(())
+                }
+                crate::nix::buildset::StreamEvent::Heartbeat => {
+                    liveness.heartbeat(tracker, &building)
+                }
+                crate::nix::buildset::StreamEvent::Output(line) => {
+                    if let Some(attr) = building_attr(&line) {
+                        if jobs.contains_key(attr) && building.insert(attr.to_string()) {
+                            tracker.record(Event::JobStarted {
+                                at: unix_secs(),
+                                job: JobAddr(attr.to_string()),
+                            })?;
+                        }
+                    } else if notable_output(&line) {
+                        crate::support::ui::note(line);
+                    }
+                    Ok(())
+                }
+            },
+        )?;
+        // The per-job facts are the verdict; the process exit is not, since
+        // nix-fast-build returns nonzero for a non-fatal cache-upload miss as
+        // well as for a real failure. But a nonzero exit with every selected
+        // job reporting success is a teardown anomaly worth recording.
+        if !status.is_success() {
+            tracker.record(Event::Warning {
+                at: unix_secs(),
+                message: format!(
+                    "the build process for {} exited nonzero; per-job results decide the verdict",
+                    group_dir(on.as_deref())
+                ),
+            })?;
+        }
+        drop(worktrees);
+    }
+
+    for spec in specs {
+        let paths = case_dir(ctx.run_dir, &spec.case);
+        let junit = crate::ci::prepare::junit_dir(&paths)
+            .join(format!("{}.xml", spec.target.as_str()));
+        let source = results
+            .get(&spec.case)
+            .ok_or_else(|| Error::Failure(format!("{}: no union results", spec.case)))?;
+        project_junit(source, &junit, &spec.case, &spec.jobs, &jobs)?;
+        let mapping = maps.get(&spec.case).expect("spec map was loaded");
+        let build_facts = facts::ingest(
+            &[junit],
+            Some(&crate::ci::prepare::eval_jobs_path(&paths)),
+            &mapping.info,
+            cutoff,
+            &crate::ci::prepare::logs_dir(&paths).join(spec.target.as_str()),
+        )?;
+        // The ingest classifies each failure: jobs that never ran because
+        // something below them failed first are blocked, not failing, so a
+        // task whose only losses are blocked concludes neutral and the red
+        // stays on the root's task.
+        let blocked = build_facts
+            .failures
+            .iter()
+            .filter(|failure| failure.cause == facts::FailureCause::Transitive)
+            .count();
+        let failed = spec
+            .jobs
+            .iter()
+            .filter(|name| {
+                jobs.get(&format!("{}::{name}", spec.case))
+                    .is_none_or(|job| job.status != Some(JobStatus::Success))
+            })
+            .count()
+            .saturating_sub(blocked);
+        let status = if failed > 0 {
+            TaskStatus::Failure
+        } else if blocked > 0 {
+            TaskStatus::Neutral
+        } else {
+            TaskStatus::Success
+        };
+        let headline = match (failed, blocked) {
+            (0, 0) => format!("{} jobs passed", spec.jobs.len()),
+            (0, _) => format!("{blocked} of {} jobs blocked", spec.jobs.len()),
+            (_, 0) => format!("{failed} of {} jobs failed", spec.jobs.len()),
+            _ => format!(
+                "{failed} of {} jobs failed · {blocked} blocked",
+                spec.jobs.len()
+            ),
+        };
+        worst = worst.max(finish_task(
+            ctx,
+            tracker,
+            Fragment::new(
+                spec.task_id.clone(),
+                spec.label.clone(),
+                spec.kind,
+                status,
+                headline,
+            )
+            .with_data(FragmentData::Build(build_facts)),
+            Some((union_started.elapsed(), 0)),
+        )?
+        .exit());
+    }
+    Ok(worst)
+}
+
+/// Jobs a case promised results for but did not deliver, which makes any
+/// comparison against it incomplete rather than clean.
+fn missing_case_results(
+    case: CaseRef<'_, RevSource>,
+    mapping: &EvalMap,
+    status: &crate::ci::evalmap::StatusMap,
+) -> Result<Vec<String>> {
+    let case_id = case.case_id();
+    let missing = match case {
+        CaseRef::Build(build) => crate::ci::baseline::missing_status(build, mapping, status)?,
+        CaseRef::Spot(_) => {
+            let delivered: BTreeSet<String> =
+                status.keys().map(|job| job.as_str().to_string()).collect();
+            selected_case(case, mapping)?
+                .difference(&delivered)
+                .cloned()
+                .collect()
+        }
+    };
+    Ok(missing
+        .into_iter()
+        .map(|name| format!("{case_id}:{name}"))
+        .collect())
+}
+
+fn compare(
+    ctx: &Context,
+    request: &ResolvedRequest,
+    candidate_id: &str,
+) -> Result<Fragment> {
+    let Request::Diff(diff) = request else {
+        return request_error("compare requires a diff request");
+    };
+    let baseline = diff
+        .cases
+        .iter()
+        .find(|case| case.case_id() == diff.baseline)
+        .ok_or_else(|| Error::Request("diff has no baseline case".into()))?;
+    let candidate = diff
+        .cases
+        .iter()
+        .find(|case| case.case_id() == candidate_id)
+        .ok_or_else(|| Error::Request(format!("unknown candidate {candidate_id:?}")))?;
+
+    let base_paths = case_dir(ctx.run_dir, baseline.case_id());
+    let head_paths = case_dir(ctx.run_dir, candidate_id);
+    let base_map = load_map(&base_paths)?;
+    let base_status = case_status(&base_paths);
+    let head_map = load_map(&head_paths)?;
+    let head_status = case_status(&head_paths);
+    let mut result = compare_case_results(
+        baseline.as_ref(),
+        &base_map,
+        &base_status,
+        candidate.as_ref(),
+        &head_map,
+        &head_status,
+    )?;
+    let mut missing = missing_case_results(baseline.as_ref(), &base_map, &base_status)?;
+    missing.extend(missing_case_results(
+        candidate.as_ref(),
+        &head_map,
+        &head_status,
+    )?);
+    result.case_failure = !missing.is_empty();
+    result.missing_results = missing;
+
+    let regressions = result.regression_count();
+    let headline = if regressions > 0 {
+        format!("{regressions} regressions")
+    } else {
+        format!("no regressions, {} fixes", result.fixes.len())
+    };
+    Ok(Fragment::new(
+        format!("compare.{candidate_id}"),
+        format!("Compare {candidate_id}"),
+        TaskKind::Comparison,
+        if regressions > 0 {
+            TaskStatus::Failure
+        } else {
+            TaskStatus::Success
+        },
+        headline,
+    )
+    .with_data(FragmentData::Comparison(Box::new(result))))
+}
+
+fn content(
+    ctx: &Context,
+    request: &ResolvedRequest,
+    candidate_id: &str,
+) -> Result<Fragment> {
+    let Request::Diff(diff) = request else {
+        return request_error("content requires a diff request");
+    };
+    if !diff.content_diff {
+        return request_error("content requires a content-enabled diff request");
+    }
+    let candidate = diff
+        .cases
+        .iter()
+        .find(|case| case.case_id() == candidate_id)
+        .and_then(|case| case.as_build())
+        .ok_or_else(|| Error::Request(format!("unknown candidate {candidate_id:?}")))?;
+    let head_paths = case_dir(ctx.run_dir, candidate_id);
+    let head_map = load_map(&head_paths)?;
+    let base_map = load_map(&case_dir(ctx.run_dir, &diff.baseline))?;
+    let mut junits: Vec<PathBuf> =
+        std::fs::read_dir(crate::ci::prepare::junit_dir(&head_paths))
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.extension().is_some_and(|ext| ext == "xml"))
+                .collect()
+        })
+        .unwrap_or_default();
+    junits.sort();
+    let allowed = crate::ci::compare::selected(candidate, &head_map)?;
+    let route = Route::from_on(ctx.runner_root, candidate.on.as_deref())?;
+    let summary = crate::ci::contentdiff::run(&crate::ci::contentdiff::Request {
+        base_map: &base_map,
+        head_map: &head_map,
+        junit: &junits,
+        allowed_jobs: Some(&allowed),
+        store: route.store().as_deref(),
+    });
+    let headline = if summary.pair_count() == 0 {
+        "nothing to compare".to_string()
+    } else {
+        format!(
+            "{}/{} outputs identical",
+            summary.identical.len(),
+            summary.pair_count()
+        )
+    };
+    Ok(Fragment::new(
+        format!("content-diff.{candidate_id}"),
+        format!("Content diff: {candidate_id}"),
+        TaskKind::Analysis,
+        TaskStatus::Success,
+        headline,
+    )
+    .with_data(FragmentData::Content(summary)))
+}
+
+/// Run one planned task. The match is exhaustive: a new phase cannot be added
+/// without deciding what runs it.
+fn run_phase(
+    ctx: &Context,
+    request: &ResolvedRequest,
+    case_id: &str,
+    phase: Phase,
+) -> Result<Fragment> {
+    match phase {
+        Phase::Compare => return compare(ctx, request, case_id),
+        Phase::Content => return content(ctx, request, case_id),
+        _ => {}
+    }
+
+    let case = request
+        .cases()
+        .into_iter()
+        .find(|case| case.case_id() == case_id)
+        .ok_or_else(|| Error::Request(format!("unknown case {case_id:?}")))?;
+    let route = Route::from_on(ctx.runner_root, case.placement())?;
+    let patch = case_dir(ctx.run_dir, case_id)
+        .join("prepared")
+        .join(PATCH_FILE);
+    let worktree = reproduced_worktree(ctx.runner_root, case.source(), &patch)?;
+    match (phase, case) {
+        (Phase::Treefmt, _) => {
+            let log = crate::ci::prepare::logs_dir(&case_dir(ctx.run_dir, case_id))
+                .join("treefmt")
+                .join("treefmt.log");
+            treefmt(worktree.path(), case_id, &route, &log)
+        }
+        (Phase::EvalInputs, CaseRef::Build(_)) => {
+            eval_inputs(ctx, worktree.path(), case_id, &route)
+        }
+        (Phase::EvalInputs, CaseRef::Spot(_)) => request_error("eval-inputs phase on a spot case"),
+        (Phase::Eval, CaseRef::Build(build)) => evaluate(ctx, worktree.path(), build, &route),
+        (Phase::Spot, CaseRef::Spot(spot_case)) => {
+            spot(ctx, worktree.path(), case_id, spot_case, &route)
+        }
+        (Phase::Spot, CaseRef::Build(_)) => request_error("spot phase on a build case"),
+        (Phase::Build { .. }, CaseRef::Build(_)) => {
+            request_error("build phases are executed as one union")
+        }
+        (Phase::Eval | Phase::Build { .. }, CaseRef::Spot(_)) => {
+            request_error("build phase on a spot case")
+        }
+        (Phase::Compare | Phase::Content, _) => unreachable!("handled above"),
+    }
+}
+
+pub(crate) fn blocked_by_case_failure(phase: Phase) -> bool {
+    !matches!(phase, Phase::Treefmt | Phase::Compare | Phase::Content)
+}
+
+/// A phase whose failure blocks the rest of its case. Builds run as one
+/// union, so there is no core-before-packages ordering to poison; only a
+/// failed evaluation leaves nothing comparable downstream.
+fn fatal(phase: Phase) -> bool {
+    matches!(phase, Phase::EvalInputs | Phase::Eval)
+}
+
+/// The one place a task ends: the fragment is written and its PhaseFinished
+/// emitted together, so no task can leave a result the ladder never closes
+/// or a closed phase with no result on disk.
+fn finish_task(
+    ctx: &Context,
+    tracker: &mut Tracker,
+    mut fragment: Fragment,
+    telemetry: Option<(Duration, u64)>,
+) -> Result<TaskStatus> {
+    if let Some((elapsed, artifact_bytes)) = telemetry {
+        fragment.elapsed_seconds = Some(DurationSecs(elapsed.as_secs_f64()));
+        fragment.artifact_bytes = Some(Bytes(artifact_bytes));
+    }
+    fragment.write(&ctx.fragment_path(&fragment.task_id))?;
+    tracker.record(Event::PhaseFinished {
+        at: unix_secs(),
+        task_id: fragment.task_id.clone(),
+        status: fragment.status,
+        headline: fragment.headline.clone(),
+    })?;
+    Ok(fragment.status)
+}
+
+/// Walk the plan in this process. `only` names the tasks to run, in plan
+/// order; empty means all of them, which is the only case that also folds the
+/// run's report.
+pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<CommandStatus> {
+    let request = &loaded.request;
+    let plan = loaded.plan();
+    crate::support::fs::create_dir_all(&ctx.fragments())?;
+    let unknown: Vec<&String> = only
+        .iter()
+        .filter(|id| !plan.tasks.iter().any(|task| &task.task_id == *id))
+        .collect();
+    if !unknown.is_empty() {
+        let named: Vec<&str> = unknown.iter().map(|id| id.as_str()).collect();
+        let known: Vec<&str> = plan.tasks.iter().map(|task| task.task_id.as_str()).collect();
+        return request_error(format!(
+            "unknown task(s) {}; this run plans {}",
+            named.join(", "),
+            known.join(", ")
+        ));
+    }
+    let mut tasks: Vec<Task> = plan
+        .tasks
+        .iter()
+        .filter(|task| only.is_empty() || only.contains(&task.task_id))
+        .cloned()
+        .collect();
+    tasks.sort_by_key(|task| task.order);
+
+    let mut tracker = Tracker::new(ctx.run_dir)?;
+    // A supervisor owns the run lifecycle events when there is one; a
+    // standalone execution records its own.
+    let standalone = !ctx.run_dir.join(crate::runs::RUN_FILE).exists();
+    if standalone {
+        crate::runs::record_started(ctx.run_dir)?;
+    }
+
+    let mut broken: Vec<String> = Vec::new();
+    let mut worst = CommandStatus::SUCCESS;
+    let mut builds_ran = false;
+    for task in &tasks {
+        if matches!(task.phase, Phase::Build { .. }) {
+            if builds_ran {
+                continue;
+            }
+            builds_ran = true;
+            let status = match run_build_tasks(ctx, request, &tasks, &broken, &mut tracker) {
+                Ok(status) => status,
+                Err(error) => {
+                    crate::support::ui::error(format!("build union: {error}"));
+                    // Every planned build task still ends through the gate,
+                    // so none is left with a started phase that never
+                    // finishes.
+                    for build in tasks
+                        .iter()
+                        .filter(|task| matches!(task.phase, Phase::Build { .. }))
+                    {
+                        if !ctx.fragment_path(&build.task_id).exists() {
+                            finish_task(
+                                ctx,
+                                &mut tracker,
+                                Fragment::new(
+                                    build.task_id.clone(),
+                                    build.label.clone(),
+                                    build.kind,
+                                    TaskStatus::Failure,
+                                    "build union failed",
+                                ),
+                                None,
+                            )?;
+                        }
+                    }
+                    CommandStatus::FAILURE
+                }
+            };
+            worst = worst.max(status);
+            continue;
+        }
+        if broken.contains(&task.case) && blocked_by_case_failure(task.phase) {
+            tracker.record(Event::PhaseStarted {
+                at: unix_secs(),
+                task_id: task.task_id.clone(),
+                label: task.label.clone(),
+                jobs: None,
+            })?;
+            finish_task(
+                ctx,
+                &mut tracker,
+                Fragment::new(
+                    task.task_id.clone(),
+                    task.label.clone(),
+                    task.kind,
+                    TaskStatus::Skipped,
+                    "an earlier task in this case failed",
+                ),
+                None,
+            )?;
+            continue;
+        }
+        // A comparison whose baseline never evaluated goes hungry rather
+        // than reporting: the fold reads its absent fragment as "could not
+        // compare" and concludes neutral, never red.
+        if matches!(task.phase, Phase::Compare | Phase::Content)
+            && loaded
+                .baseline_case()
+                .is_some_and(|baseline| broken.contains(&baseline))
+        {
+            continue;
+        }
+        tracker.record(Event::PhaseStarted {
+            at: unix_secs(),
+            task_id: task.task_id.clone(),
+            label: task.label.clone(),
+            jobs: None,
+        })?;
+        let started = Instant::now();
+        // Telemetry only: an unreadable directory must not strand the phase
+        // this loop just opened.
+        let bytes_before = directory_bytes(ctx.run_dir).unwrap_or(0);
+        let fragment = match run_phase(ctx, request, &task.case, task.phase) {
+            Ok(fragment) => fragment,
+            Err(error) => {
+                crate::support::ui::error(format!("{}: {error}", task.task_id));
+                Fragment::new(
+                    task.task_id.clone(),
+                    task.label.clone(),
+                    task.kind,
+                    TaskStatus::Failure,
+                    crate::support::error::brief(&error, 200),
+                )
+            }
+        };
+        let status = finish_task(
+            ctx,
+            &mut tracker,
+            fragment,
+            Some((
+                started.elapsed(),
+                directory_bytes(ctx.run_dir)
+                    .unwrap_or(bytes_before)
+                    .saturating_sub(bytes_before),
+            )),
+        )?;
+        worst = worst.max(status.exit());
+        if !status.exit().is_success() && fatal(task.phase) {
+            broken.push(task.case.clone());
+        }
+    }
+
+    let finish = |_tracker: &mut Tracker, status: CommandStatus| -> Result<()> {
+        if standalone {
+            crate::runs::record_finished(
+                ctx.run_dir,
+                if status.is_success() {
+                    crate::support::atoms::RunState::Complete
+                } else {
+                    crate::support::atoms::RunState::Failed
+                },
+                Some(status.code()),
+            )?;
+        }
+        Ok(())
+    };
+    if !only.is_empty() {
+        // A single task reports through its fragment; the report describes
+        // the whole run, and folding it here would describe one in progress.
+        let status = if worst.is_success() {
+            CommandStatus::SUCCESS
+        } else {
+            CommandStatus::FAILURE
+        };
+        finish(&mut tracker, status)?;
+        return Ok(status);
+    }
+
+    let fragments = crate::ci::report::fragments_under(&ctx.fragments())?;
+    let report = crate::ci::report::fold(
+        &plan,
+        &fragments,
+        crate::ci::report::FoldContext {
+            baseline_case: loaded.baseline_case(),
+            finished: true,
+            started_at: tracker.snapshot().started_at,
+            finished_at: Some(unix_secs()),
+            request: Some(request.clone()),
+        },
+    );
+    schema::write(&crate::ci::prepare::report_path(ctx.run_dir), &report)?;
+    let status = match report.conclusion {
+        Some(crate::ci::report::Conclusion::Success)
+        | Some(crate::ci::report::Conclusion::Neutral) => CommandStatus::SUCCESS,
+        _ => CommandStatus::FAILURE,
+    };
+    finish(&mut tracker, status)?;
+    Ok(status)
+}

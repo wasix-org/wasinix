@@ -1,0 +1,282 @@
+name: CI command
+
+# `/wasinix <command>` on a pull request. Authorization is the wasinix
+# binary's job (grammar, write permission, PR state); the workflow only
+# supplies the event, reacts, runs, and replies. Every failure gets a reply,
+# so a command is never silently ignored.
+#
+# Builds and mutations split by least privilege: the build and mutate jobs
+# carry no push credential (mutate runs the PR tree's own update scripts);
+# only mutate-publish holds contents:write, and it re-verifies the origin
+# and the bundle before pushing.
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+concurrency:
+  group: command-${{ github.repository_id }}-pr-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    # cheap pre-filter only; authorization decides for real
+    if: >-
+      github.event.issue.pull_request && contains(github.event.comment.body,
+      '/wasinix')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      kind: ${{ steps.authorize.outputs.kind }}
+      commentId: ${{ steps.authorize.outputs.commentId }}
+      pullRequest: ${{ steps.authorize.outputs.pullRequest }}
+      headSha: ${{ steps.authorize.outputs.headSha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Authorize
+        id: authorize
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          nix run .#wasinix -- ci origin \
+            --event "$GITHUB_EVENT_PATH" \
+            --allowed-owner "$GITHUB_REPOSITORY_OWNER" \
+            --github-output "$GITHUB_OUTPUT" \
+            --out origin-command.json 2>auth-error.txt
+          code=$?
+          cat auth-error.txt >&2
+          exit "$code"
+
+      - name: Share the failure detail
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: errors-authorize
+          path: "*-error.txt"
+          if-no-files-found: ignore
+
+      # the reaction comes after parsing, so a typo gets a reply, not an eye
+      - name: Acknowledge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -f content=eyes >/dev/null
+
+      - name: Share the authorized command
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: origin-command
+          path: origin-command.json
+
+  build:
+    needs: authorize
+    if: needs.authorize.outputs.kind == 'build'
+    runs-on: depot-ubuntu-24.04-16
+    timeout-minutes: 350
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # issue_comment checks out the default branch, not the PR head, and a
+      # fork's head commit is not in the base repo's refs. Fetch it so the
+      # command can materialize a worktree at the PR head sha.
+      - name: Fetch PR head
+        env:
+          PR: ${{ github.event.issue.number }}
+        run: git fetch --no-tags origin "refs/pull/$PR/head"
+
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Fetch the authorized command
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: origin-command
+
+      - name: Run command
+        id: run
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          WASINIX_EVAL_WORKERS: "4"
+          WASINIX_EVAL_MEMORY: "8192"
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          NIX_SIGNING_KEY: ${{ secrets.NIX_SIGNING_KEY }}
+        run: |
+          push_cache=()
+          if [ -n "$NIX_SIGNING_KEY" ]; then push_cache=(--push-cache); fi
+          nix run .#wasinix -- ci command \
+            --origin origin-command.json \
+            --run-dir run-dir \
+            "${push_cache[@]}" \
+            --trusted-ref origin/main 2> >(tee run-error.txt >&2)
+
+      - name: Post report
+        if: always() && steps.run.conclusion != 'skipped'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ needs.authorize.outputs.headSha }}
+          PULL_REQUEST: ${{ needs.authorize.outputs.pullRequest }}
+          COMMENT_ID: ${{ needs.authorize.outputs.commentId }}
+        run: |
+          nix run .#wasinix -- ci publish --run-dir run-dir \
+            --sha "$HEAD_SHA" \
+            --pull-request "$PULL_REQUEST" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --comment --reply-to "$COMMENT_ID" --check \
+            --step-summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Share the failure detail
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: errors-build
+          path: "*-error.txt"
+          if-no-files-found: ignore
+
+  # No push credential here: the PR tree's own update scripts execute in
+  # this job, and all they can reach is the bundle it leaves behind.
+  mutate:
+    needs: authorize
+    if: needs.authorize.outputs.kind == 'mutation'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch PR head
+        env:
+          PR: ${{ github.event.issue.number }}
+        run: git fetch --no-tags origin "refs/pull/$PR/head"
+
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Fetch the authorized command
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: origin-command
+
+      - name: Run mutation
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          nix run .#wasinix -- ci mutate \
+            --origin origin-command.json \
+            --out-dir mutation 2> >(tee run-error.txt >&2)
+
+      - name: Share the mutation bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mutation
+          path: mutation
+
+      - name: Share the failure detail
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: errors-mutate
+          path: "*-error.txt"
+          if-no-files-found: ignore
+
+  mutate-publish:
+    needs: mutate
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Fetch the mutation bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: mutation
+          path: mutation
+
+      # UPDATE_PR_TOKEN is a PAT/app token so the pushed head's CI cascades;
+      # with the default token the reply says CI needs a manual re-run.
+      - name: Publish mutation
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
+          WASINIX_UPDATE_PR_TOKEN_PRESENT: ${{ secrets.UPDATE_PR_TOKEN != '' }}
+        run: |
+          nix run .#wasinix -- ci mutate-publish --out-dir mutation \
+            2> >(tee run-error.txt >&2)
+
+      - name: Share the failure detail
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: errors-mutate-publish
+          path: "*-error.txt"
+          if-no-files-found: ignore
+
+  # a command must never fail silently: authorization and run errors reply
+  # to the comment that asked
+  reply-on-error:
+    needs: [authorize, build, mutate, mutate-publish]
+    if: failure()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Fetch failure detail
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: errors-*
+          merge-multiple: true
+
+      - name: Reply on error
+        id: reply
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          nix run .#wasinix -- ci reply \
+            --pull-request '${{ github.event.issue.number }}' \
+            --comment-id '${{ github.event.comment.id }}' \
+            --failure auth-error.txt --failure run-error.txt \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+      # last resort for a job that died before the binary could run; the body
+      # is constant, so no markdown is produced outside the crate
+      - name: Reply fallback
+        if: failure() && steps.reply.conclusion == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/issues/${{ github.event.issue.number }}/comments" \
+            -f body="❌ \`/wasinix\` command failed before it could report; see the [Actions run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)." >/dev/null

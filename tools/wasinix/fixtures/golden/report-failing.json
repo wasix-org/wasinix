@@ -1,0 +1,99 @@
+{
+  "annotations": [
+    {
+      "line": 12,
+      "message": "builder failed with exit code 1",
+      "path": "pkgs/overlay/packages/zlib.nix",
+      "title": "checks.zlib"
+    }
+  ],
+  "complete": true,
+  "conclusion": "failure",
+  "failures": {
+    "case.core": [
+      {
+        "cause": "direct",
+        "class": "Build",
+        "job": "checks.zlib",
+        "log": {
+          "archivedBytes": 20000,
+          "bytes": 20000,
+          "path": "00112233445566778899.log.gz",
+          "truncated": false
+        },
+        "message": "builder failed with exit code 1",
+        "position": "pkgs/overlay/packages/zlib.nix:12"
+      },
+      {
+        "cause": "transitive",
+        "class": "Build",
+        "job": "checks.curl",
+        "message": "build did not complete"
+      }
+    ]
+  },
+  "finishedAt": 1755003600,
+  "kind": "report",
+  "request": {
+    "action": "build",
+    "caseId": "case",
+    "selectors": [
+      {
+        "kind": "set",
+        "name": "core"
+      }
+    ],
+    "source": {
+      "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "workingTree": false
+    }
+  },
+  "schema": 1,
+  "startedAt": 1755000000,
+  "tasks": [
+    {
+      "case": "case",
+      "elapsedSeconds": 12.0,
+      "enabled": true,
+      "gate": true,
+      "headline": "ok",
+      "kind": "validation",
+      "label": "case: Formatting",
+      "status": "success",
+      "taskId": "case.treefmt"
+    },
+    {
+      "case": "case",
+      "elapsedSeconds": 12.0,
+      "enabled": true,
+      "gate": true,
+      "headline": "ok",
+      "kind": "eval",
+      "label": "case: Evaluation inputs",
+      "status": "success",
+      "taskId": "case.eval-inputs"
+    },
+    {
+      "case": "case",
+      "elapsedSeconds": 12.0,
+      "enabled": true,
+      "gate": true,
+      "headline": "ok",
+      "kind": "eval",
+      "label": "case: Evaluation",
+      "status": "success",
+      "taskId": "case.eval"
+    },
+    {
+      "case": "case",
+      "enabled": true,
+      "gate": true,
+      "headline": "1 failed · 39 built",
+      "kind": "build",
+      "label": "case: Core",
+      "status": "failure",
+      "taskId": "case.core"
+    }
+  ],
+  "title": "CI failed"
+}
