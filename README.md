@@ -54,3 +54,5 @@ them under Wasmer. Details: [`docs/architecture.md`](docs/architecture.md).
 | [`docs/spot.md`](docs/spot.md)                 | experimenting without rebuilding the world   |
 | [`AGENTS.md`](AGENTS.md)                       | extra rules for agents working here          |
 | [`WASIX-TODO.md`](WASIX-TODO.md)               | known WASIX/toolchain issues and workarounds |
+
+<!-- wasinix green-report validation, safe to delete -->
