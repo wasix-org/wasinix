@@ -1,0 +1,50 @@
+--- a/src/brotlicffi/_build.py
++++ b/src/brotlicffi/_build.py
+@@ -114,0 +115,2 @@
++    uint32_t BrotliDecoderVersion(void);
++
+--- a/test/conftest.py
++++ b/test/conftest.py
+@@ -10,3 +10,5 @@
+-simple_test_files = [
+-    os.path.join(TEST_DATA_DIR, p) for p in os.listdir(TEST_DATA_DIR)
+-]
++simple_test_files = (
++    [os.path.join(TEST_DATA_DIR, p) for p in os.listdir(TEST_DATA_DIR)]
++    if os.path.isdir(TEST_DATA_DIR)
++    else []
++)
+@@ -30 +32 @@
+-    return os.path.join(TEST_DATA_DIR, 'alice29.txt')
++    return __file__
+--- a/test/test_compatibility.py
++++ b/test/test_compatibility.py
+@@ -8,3 +8,2 @@
+-import re
+-from os.path import abspath, join, dirname
+ import brotlicffi
++from brotlicffi._brotlicffi import lib
+@@ -28,17 +27,7 @@
+-    version_h = join(
+-        dirname(dirname(abspath(__file__))), "libbrotli/c/common/version.h"
++    version = lib.BrotliDecoderVersion()
++    brotli_version = "{}.{}.{}.".format(
++        version >> 24,
++        (version >> 12) & 0xfff,
++        version & 0xfff,
+     )
+-    with open(version_h) as f:
+-        brotli_versions = dict(
+-            re.findall(
+-                r"#define BROTLI_VERSION_(MAJOR|MINOR|PATCH) ([0-9]+)",
+-                f.read()
+-            )
+-        )
+-        assert brotlicffi.__version__.startswith(
+-            "%s.%s.%s." % (
+-                brotli_versions["MAJOR"],
+-                brotli_versions["MINOR"],
+-                brotli_versions["PATCH"]
+-            )
+-        )
++    assert brotlicffi.__version__.startswith(brotli_version)

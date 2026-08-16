@@ -1,6 +1,3 @@
-# libsndfile for wasix, soundfile's cffi backend. alsa is off (no wasm audio device).
-# soundfile dlopens the library at import, but libtool won't make wasm dylibs, so the
-# .so is hand-linked with --export-all, publishing sf_* where cffi resolves them.
 {
   prev,
   helpers,
@@ -8,6 +5,7 @@
 }:
 helpers.libTweaks {
   configureFlags = ["--disable-alsa"];
+  patches = [./patches/xi-initial-write-length.patch];
   # libtool records some codec deps as `<dir>/libNAME.la` paths wasm-ld can't read.
   postBuild = ''
     deplibs=$(. src/.libs/libsndfile.la >/dev/null 2>&1; printf '%s' "$dependency_libs")

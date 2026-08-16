@@ -1,0 +1,15 @@
+--- a/libcst/codemod/_cli.py
++++ b/libcst/codemod/_cli.py
+@@ -55,0 +56,6 @@
++    if sys.platform == "wasix" and os.path.basename(formatter_args[0]) in (
++        "black",
++        "black.exe",
++    ):
++        formatter_args = [sys.executable, "-m", "black", *formatter_args[1:]]
++
+@@ -634 +640,4 @@
+-    elif getattr(sys, "_is_gil_enabled", lambda: True)():  # pyre-ignore[16]
++    elif (
++        sys.platform != "wasix"
++        and getattr(sys, "_is_gil_enabled", lambda: True)()  # pyre-ignore[16]
++    ):
