@@ -1,0 +1,42 @@
+--- a/src/serializers/type_serializers/function.rs
++++ b/src/serializers/type_serializers/function.rs
+@@ -1,0 +2,2 @@
++#[cfg(target_family = "wasm")]
++use std::cell::Cell;
+@@ -28,0 +31,30 @@
++#[cfg(target_family = "wasm")]
++thread_local! {
++    static FUNCTION_CALL_DEPTH: Cell<u8> = const { Cell::new(0) };
++}
++
++#[cfg(target_family = "wasm")]
++struct FunctionCallGuard;
++
++#[cfg(target_family = "wasm")]
++impl FunctionCallGuard {
++    fn new() -> PyResult<Self> {
++        FUNCTION_CALL_DEPTH.with(|depth| {
++            let current = depth.get();
++            if current >= crate::recursion_guard::RECURSION_GUARD_LIMIT {
++                Err(PyRecursionError::new_err("maximum recursion depth exceeded"))
++            } else {
++                depth.set(current + 1);
++                Ok(Self)
++            }
++        })
++    }
++}
++
++#[cfg(target_family = "wasm")]
++impl Drop for FunctionCallGuard {
++    fn drop(&mut self) {
++        FUNCTION_CALL_DEPTH.with(|depth| depth.set(depth.get() - 1));
++    }
++}
++
+@@ -149,0 +182,2 @@
++            #[cfg(target_family = "wasm")]
++            let _guard = FunctionCallGuard::new()?;
+@@ -385,0 +420,2 @@
++            #[cfg(target_family = "wasm")]
++            let _guard = FunctionCallGuard::new()?;

@@ -44,6 +44,12 @@ in
             # is IEEE binary128 → supply IEEE_QUAD_LE directly.
             substituteInPlace numpy/_core/meson.build \
               --replace-fail "meson.get_external_property('longdouble_format', 'UNKNOWN')" "meson.get_external_property('longdouble_format', 'IEEE_QUAD_LE')"
+
+            substituteInPlace numpy/_core/memmap.py \
+              --replace-fail "fid.seek(bytes - 1, 0)
+                    fid.write(b'\\0')
+                    fid.flush()" \
+                "os.ftruncate(fid.fileno(), bytes)"
           ''
           # npy_cpu.h < 2.4 only knows wasm under emscripten; clang targeting
           # wasm32-wasi defines __wasm__ (what upstream widened the guard to in 2.4).

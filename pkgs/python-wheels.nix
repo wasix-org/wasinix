@@ -287,17 +287,25 @@
           # PYTHONPATH does no propagation, so a plugin's own dependencies must
           # be named too or their imports fail in the guest.
           guestInputs = let
-            # drops deps whose closure cannot even evaluate on wasi; a suite
-            # that truly needs one fails visibly
             evalOk = d: d != null && (builtins.tryEval (builtins.seq d.outPath true)).success;
-            # the guest can import python modules and the builder shell can
-            # source hooks; a native tool is neither and only forces a pointless
-            # cross build
             guestUsable = d: d ? pythonModule || lib.hasInfix "check-hook" (lib.getName d);
             declared =
               lib.filter (d: evalOk d && guestUsable d) (selectedCheckInputs ++ selectedBuildSystem);
+            # Keep the declared input when its propagated closure cannot
+            # evaluate. The check then fails if it imports the missing module.
+            closureFor = d: let
+              attempted = builtins.tryEval (
+                let
+                  modules = python3.pkgs.requiredPythonModules [d];
+                in
+                  builtins.seq (builtins.length modules) modules
+              );
+            in
+              if attempted.success
+              then attempted.value
+              else [];
           in
-            lib.filter evalOk (declared ++ python3.pkgs.requiredPythonModules declared);
+            lib.unique (lib.filter evalOk (declared ++ lib.concatMap closureFor declared));
           name = "wheel-${name}";
         }
       else null;
