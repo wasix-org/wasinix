@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use std::io;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use std::os::wasi::io::RawFd;
 #[cfg(target_vendor = "wasmer")]
 use ::wasix as wasi;
 
@@ -58,6 +59,11 @@ pub(crate) fn new_socket(domain: libc::c_int, socket_type: libc::c_int) -> io::R
             proto
         ).map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
     };
+
+    // sock_open returns a blocking socket, unlike the FDFLAGS_NONBLOCK that
+    // sock_accept_v2 takes on the accept path. A blocking sock_recv holds the
+    // socket until wasmer's read timeout, stalling a concurrent send on it.
+    set_nonblocking(socket as RawFd, true)?;
 
     Ok(
         socket as libc::c_int
@@ -168,5 +174,28 @@ pub(crate) fn to_socket_addr(addr: &wasi::AddrPort) -> io::Result<SocketAddr> {
             }
             _ => Err(io::ErrorKind::InvalidInput.into()),
         }
+    }
+}
+
+/// Clear or set FDFLAGS_NONBLOCK on a descriptor. mio's sources must never
+/// block; sock_open and the pipe constructors do not take the flag, so every
+/// one of them passes through here.
+pub(crate) fn set_nonblocking(fd: RawFd, nonblocking: bool) -> io::Result<()> {
+    let fdstat = unsafe {
+        wasi::fd_fdstat_get(fd as wasi::Fd)
+            .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
+    };
+
+    let mut flags = fdstat.fs_flags;
+
+    if nonblocking {
+        flags |= wasi::FDFLAGS_NONBLOCK;
+    } else {
+        flags &= !wasi::FDFLAGS_NONBLOCK;
+    }
+
+    unsafe {
+        wasi::fd_fdstat_set_flags(fd as wasi::Fd, flags)
+            .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))
     }
 }

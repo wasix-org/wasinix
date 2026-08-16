@@ -28,11 +28,19 @@ pub(crate) fn bind(socket: &net::TcpListener, addr: SocketAddr) -> io::Result<()
 
 pub(crate) fn connect(socket: &net::TcpStream, addr: SocketAddr) -> io::Result<()> {
     let addr = socket_addr(&addr);
-    unsafe {
+    let res = unsafe {
         wasi::sock_connect(
             socket.as_raw_fd() as u32,
             &addr
-        ).map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))
+        )
+    };
+    match res {
+        // A connect on a non-blocking socket finishes asynchronously, which the
+        // caller then waits for by polling writability.
+        Err(errno) if errno.raw() as i32 != libc::EINPROGRESS => {
+            Err(io::Error::from_raw_os_error(errno.raw() as i32))
+        }
+        _ => Ok(()),
     }
 }
 

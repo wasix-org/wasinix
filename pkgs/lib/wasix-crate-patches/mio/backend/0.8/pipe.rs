@@ -9,6 +9,7 @@ use std::os::wasi::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 #[cfg(target_vendor = "wasmer")]
 use ::wasix as wasi;
 
+use super::net::set_nonblocking;
 use crate::io_source::IoSource;
 use crate::{event, Interest, Registry, Token};
 
@@ -206,25 +207,5 @@ impl AsRawFd for Receiver {
 impl IntoRawFd for Receiver {
     fn into_raw_fd(self) -> RawFd {
         self.inner.into_inner().into_raw_fd()
-    }
-}
-
-fn set_nonblocking(fd: RawFd, nonblocking: bool) -> io::Result<()> {
-    let fdstat = unsafe {
-        wasi::fd_fdstat_get(fd.as_raw_fd() as wasi::Fd)
-            .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
-    };
-
-    let mut flags = fdstat.fs_flags;
-
-    if nonblocking {
-        flags |= wasi::FDFLAGS_NONBLOCK;
-    } else {
-        flags &= !wasi::FDFLAGS_NONBLOCK;
-    }
-
-    unsafe {
-        wasi::fd_fdstat_set_flags(fd.as_raw_fd() as wasi::Fd, flags)
-            .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))
     }
 }
