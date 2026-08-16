@@ -3,8 +3,8 @@
 # so it is a substitution rather than eleven near-identical floors. 1.x builds
 # stock (verified on 1.6 and 1.9, which this tree builds against).
 {...}: {
-  edited = [">=0.14.18, <=0.14.28"];
-  stock = ["<0.14.18" ">0.14.28"];
+  edited = [">=0.14.18, <0.15.0"];
+  stock = ["<0.14.18" ">=1.0.0"];
   forVersion = {...}: {
     patches = [];
     patchPhase = ''
