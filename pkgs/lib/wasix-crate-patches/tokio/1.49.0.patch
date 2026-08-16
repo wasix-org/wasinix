@@ -996,8 +996,8 @@ index ea75e82..1dfe371 100644
      }
 +
 +    #[cfg(target_os = "wasi")]
-+    fn init() -> Self {
-+        Self { }
++    fn default() -> Self {
++        Self {}
 +    }
  }
  
