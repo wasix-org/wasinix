@@ -59,7 +59,9 @@ in
           ${final.buildPackages.coreutils}/bin/cp "$_source_font" "$NIX_BUILD_TOP/matplotlib/tests/"
         done
         export PYTHONPATH="$NIX_BUILD_TOP:$PYTHONPATH"
-        cd "$NIX_BUILD_TOP/matplotlib"
+        pytestFlagsArray+=("$NIX_BUILD_TOP/matplotlib/tests")
+        ${final.buildPackages.coreutils}/bin/mkdir "$NIX_BUILD_TOP/check"
+        cd "$NIX_BUILD_TOP/check"
       '';
     })
   (pyprev.matplotlib.override {
