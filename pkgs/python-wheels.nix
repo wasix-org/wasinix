@@ -285,7 +285,7 @@
         guestInputs = let
           evalOk = d: d != null && (builtins.tryEval (builtins.seq d.drvPath true)).success;
           guestUsable = d: d ? pythonModule || lib.hasInfix "check-hook" (lib.getName d);
-          declared = lib.filter (d: evalOk d && guestUsable d) selectedCheckInputs;
+          declared = lib.filter evalOk selectedCheckInputs;
           # Keep the declared input when its propagated closure cannot
           # evaluate. The check then fails if it imports the missing module.
           closureFor = d: let
@@ -300,7 +300,7 @@
             then attempted.value
             else [];
         in
-          lib.unique (lib.filter (d: evalOk d && guestUsable d) (declared ++ lib.concatMap closureFor declared));
+          lib.unique (declared ++ lib.filter (d: evalOk d && guestUsable d) (lib.concatMap closureFor (lib.filter guestUsable declared)));
         name = "wheel-${name}" + lib.optionalString (shard != null) "-upstream-${toString shard}-of-${toString shardCount}";
         postRestore = lib.optionalString (shard != null) ''
           export WASIX_CHECK_SHARD_COUNT=${toString shardCount}

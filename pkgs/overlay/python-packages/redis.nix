@@ -4,6 +4,7 @@
 {
   pyprev,
   pyfinal,
+  final,
   helpers,
   lib,
   ...
@@ -18,6 +19,7 @@ helpers.libTweaks {
     pyfinal.pybreaker
     pyfinal.opentelemetry-api
     pyfinal.opentelemetry-sdk
+    final.buildPackages.redisTestHook
   ];
   # Requires the fork multiprocessing context.
   disabledTestPaths = ["tests/test_multiprocessing.py"];
