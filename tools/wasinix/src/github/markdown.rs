@@ -300,12 +300,142 @@ fn details(report: &Report, fragments: &BTreeMap<String, Fragment>) -> Markdown 
                 ]);
             }
         }
+        body = body.push(comparison_lists(comparison));
     }
     Markdown::concat([
         Markdown::constant("<details><summary>Details</summary>\n\n"),
         body,
         Markdown::constant("\n</details>\n"),
     ])
+}
+
+const COMPARE_LIST_ROWS: usize = 250;
+
+/// One collapsible job list, each row naming the version the job serves.
+fn job_list(
+    title: &'static str,
+    jobs: &[crate::support::atoms::JobAddr],
+    identities: &BTreeMap<crate::support::atoms::JobAddr, String>,
+    open: bool,
+) -> Markdown {
+    if jobs.is_empty() {
+        return Markdown::constant("");
+    }
+    let mut body = Markdown::concat([
+        Markdown::constant("\n<details"),
+        Markdown::constant(if open { " open" } else { "" }),
+        Markdown::constant("><summary>"),
+        Markdown::constant(title),
+        Markdown::constant(" ("),
+        Markdown::text(&jobs.len().to_string()),
+        Markdown::constant(")</summary>\n\n"),
+    ]);
+    for job in jobs.iter().take(COMPARE_LIST_ROWS) {
+        body = Markdown::concat([
+            body,
+            Markdown::constant("- "),
+            Markdown::code(job.as_str()),
+            match identities.get(job) {
+                Some(identity) => {
+                    Markdown::concat([Markdown::constant(" at "), Markdown::text(identity)])
+                }
+                None => Markdown::constant(""),
+            },
+            Markdown::constant("\n"),
+        ]);
+    }
+    if jobs.len() > COMPARE_LIST_ROWS {
+        body = Markdown::concat([
+            body,
+            Markdown::constant("- ... and "),
+            Markdown::text(&(jobs.len() - COMPARE_LIST_ROWS).to_string()),
+            Markdown::constant(" more\n"),
+        ]);
+    }
+    body.push(Markdown::constant("\n</details>\n"))
+}
+
+/// The comparison's non-failure stories: what got fixed, rebuilt,
+/// re-versioned, added, or removed. Failures render in the report body, not
+/// here.
+fn comparison_lists(comparison: &Comparison) -> Markdown {
+    let mut body = Markdown::concat([
+        Markdown::constant("\n**Comparison** · "),
+        Markdown::text(&comparison.fixes.len().to_string()),
+        Markdown::constant(" fixed · "),
+        Markdown::text(&comparison.rebuilt.len().to_string()),
+        Markdown::constant(" rebuilt · "),
+        Markdown::text(&comparison.identity_transitions.len().to_string()),
+        Markdown::constant(" version/rel changes · "),
+        Markdown::text(&comparison.added.len().to_string()),
+        Markdown::constant(" added · "),
+        Markdown::text(&comparison.removed.len().to_string()),
+        Markdown::constant(" removed\n"),
+    ]);
+    body = body.push(job_list(
+        "Removed jobs that passed",
+        &comparison.dropped_successes,
+        &comparison.identities,
+        true,
+    ));
+    body = body.push(job_list(
+        "Fixed",
+        &comparison.fixes,
+        &comparison.identities,
+        false,
+    ));
+    if !comparison.identity_transitions.is_empty() {
+        let mut section = Markdown::concat([
+            Markdown::constant("\n<details><summary>Version or rel changed ("),
+            Markdown::text(&comparison.identity_transitions.len().to_string()),
+            Markdown::constant(")</summary>\n\n"),
+        ]);
+        for transition in comparison
+            .identity_transitions
+            .iter()
+            .take(COMPARE_LIST_ROWS)
+        {
+            section = Markdown::concat([
+                section,
+                Markdown::constant("- "),
+                Markdown::code(transition),
+                Markdown::constant("\n"),
+            ]);
+        }
+        body = body.push(section.push(Markdown::constant("\n</details>\n")));
+    }
+    // A toolchain change rebuilds nearly everything, so the list carries no
+    // signal at that size; the count does.
+    if comparison.selected_count > 0 && comparison.rebuilt.len() > comparison.selected_count / 2 {
+        body = Markdown::concat([
+            body,
+            Markdown::constant("\nRebuilt "),
+            Markdown::text(&comparison.rebuilt.len().to_string()),
+            Markdown::constant(" of "),
+            Markdown::text(&comparison.selected_count.to_string()),
+            Markdown::constant(" jobs (toolchain-wide).\n"),
+        ]);
+    } else {
+        body = body.push(job_list(
+            "Rebuilt",
+            &comparison.rebuilt,
+            &comparison.identities,
+            false,
+        ));
+    }
+    body = body.push(job_list(
+        "Added",
+        &comparison.added,
+        &comparison.identities,
+        false,
+    ));
+    body = body.push(job_list(
+        "Removed",
+        &comparison.removed,
+        &comparison.identities,
+        false,
+    ));
+    body
 }
 
 /// The report comment through its states: running, then one of the three

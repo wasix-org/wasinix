@@ -1924,6 +1924,7 @@ mod markdown {
         for (name, scenario) in [
             ("comment-green.md", scenarios::green()),
             ("comment-failing.md", scenarios::failing()),
+            ("comment-diff-green.md", scenarios::diff_green()),
             ("comment-infra-neutral.md", scenarios::infra_neutral()),
         ] {
             let (report, fragments) = scenario;
@@ -3952,6 +3953,73 @@ mod scenarios {
             FoldContext {
                 baseline_case: Some("baseline".into()),
                 finished: true,
+                request: Some(request),
+                ..FoldContext::default()
+            },
+        );
+        (report, fragments)
+    }
+
+    /// A green diff whose comparison carries every non-failure story: fixes,
+    /// rebuilds, version moves, added and removed jobs.
+    pub fn diff_green() -> (Report, Fragments) {
+        use crate::ci::compare::{Comparison, VersionUpdate};
+        let request = Request::Diff(Diff {
+            baseline: "baseline".into(),
+            content_diff: false,
+            cases: vec![
+                Case::Build(build("baseline")),
+                Case::Build(build("candidate-1")),
+            ],
+        });
+        let plan = plan_of(&request, Some("golden"), &[]);
+        let mut fragments = green_fragments(&plan);
+        let comparison = Comparison {
+            fixes: vec![JobAddr("checks.curl".into())],
+            rebuilt: vec![
+                JobAddr("checks.zlib".into()),
+                JobAddr("packagesByProfile.eh.zlib".into()),
+            ],
+            identity_transitions: vec!["packagesByProfile.eh.zlib: 1.3.1 -> 1.3.2".into()],
+            version_updates: vec![VersionUpdate {
+                subject: "zlib".into(),
+                before: "1.3.1".into(),
+                after: "1.3.2".into(),
+                changelogs: Vec::new(),
+                jobs: vec![JobAddr("packagesByProfile.eh.zlib".into())],
+            }],
+            added: vec![JobAddr("checks.brotli".into())],
+            removed: vec![JobAddr("checks.legacy-tool".into())],
+            identities: BTreeMap::from([
+                (JobAddr("checks.brotli".into()), "1.1.0".to_string()),
+                (JobAddr("checks.legacy-tool".into()), "0.9.1".to_string()),
+                (JobAddr("checks.zlib".into()), "1.3.2".to_string()),
+            ]),
+            selected_count: 40,
+            ..Comparison::default()
+        };
+        for task in &plan.tasks {
+            if task.kind == TaskKind::Comparison {
+                fragments.insert(
+                    task.task_id.clone(),
+                    Fragment::new(
+                        &task.task_id,
+                        &task.label,
+                        task.kind,
+                        TaskStatus::Success,
+                        "no regressions",
+                    )
+                    .with_data(FragmentData::Comparison(Box::new(comparison.clone()))),
+                );
+            }
+        }
+        let report = fold(
+            &plan,
+            &fragments,
+            FoldContext {
+                baseline_case: Some("baseline".into()),
+                started_at: Some(1_755_000_000),
+                finished_at: Some(1_755_003_600),
                 request: Some(request),
                 ..FoldContext::default()
             },
