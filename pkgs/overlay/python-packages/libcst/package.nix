@@ -1,9 +1,15 @@
 {
   pyprev,
+  pyfinal,
   helpers,
   ...
-}:
-helpers.libTweaks {
-  patches = [./patches/wasix-execution.patch];
-}
-pyprev.libcst
+}: let
+  formatCheckingUfmt = pyfinal.ufmt.overridePythonAttrs (old: {
+    dependencies = helpers.replaceInputsByName {black = pyfinal.black_26_3_1;} old.dependencies;
+  });
+in
+  helpers.libTweaks {
+    patches = [./patches/wasix-execution.patch];
+    passthru.wasixDeclaredCheckInputs = [pyfinal.hypothesmith pyfinal.pytestCheckHook formatCheckingUfmt];
+  }
+  pyprev.libcst
