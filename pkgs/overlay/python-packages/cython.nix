@@ -5,6 +5,7 @@
   ...
 }:
 helpers.libTweaks {
+  patches = [./patches/cython-wasix-builtin-compatibility.patch];
   passthru.wasixDeclaredCheckInputs = [pyfinal.numpy pyfinal.setuptools];
   passthru.wasix.emulatedCheck = {
     shards = 4;
