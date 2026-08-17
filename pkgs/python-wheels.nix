@@ -271,39 +271,60 @@
             disallowedReferences = (old.disallowedReferences or []) ++ (checks.disallowedReferences or []);
           });
       });
-    derivedUpstream =
-      if withCheck ? check
-      then
-        emulatedChecks.checkFor {
-          drv = withCheck;
-          # timeout / expectFail / broken, same declaration the C side uses
-          spec = ((wheel.passthru or {}).wasix or {}).emulatedCheck or {};
-          phase = "pythonCheckPhase";
-          # The runner, every check input, and the TRANSITIVE closure of both:
-          # PYTHONPATH does no propagation, so a plugin's own dependencies must
-          # be named too or their imports fail in the guest.
-          guestInputs = let
-            evalOk = d: d != null && (builtins.tryEval (builtins.seq d.drvPath true)).success;
-            guestUsable = d: d ? pythonModule || lib.hasInfix "check-hook" (lib.getName d);
-            declared = lib.filter (d: evalOk d && guestUsable d) selectedCheckInputs;
-            # Keep the declared input when its propagated closure cannot
-            # evaluate. The check then fails if it imports the missing module.
-            closureFor = d: let
-              attempted = builtins.tryEval (
-                let
-                  modules = python3.pkgs.requiredPythonModules [d];
-                in
-                  builtins.seq (builtins.length modules) modules
-              );
-            in
-              if attempted.success
-              then attempted.value
-              else [];
+    checkSpec = ((wheel.passthru or {}).wasix or {}).emulatedCheck or {};
+    shardCount = checkSpec.shards or 1;
+    mkDerivedUpstream = shard:
+      emulatedChecks.checkFor {
+        drv = withCheck;
+        # timeout / expectFail / broken, same declaration the C side uses
+        spec = removeAttrs checkSpec ["shards"];
+        phase = "pythonCheckPhase";
+        # The runner, every check input, and the TRANSITIVE closure of both:
+        # PYTHONPATH does no propagation, so a plugin's own dependencies must
+        # be named too or their imports fail in the guest.
+        guestInputs = let
+          evalOk = d: d != null && (builtins.tryEval (builtins.seq d.drvPath true)).success;
+          guestUsable = d: d ? pythonModule || lib.hasInfix "check-hook" (lib.getName d);
+          declared = lib.filter (d: evalOk d && guestUsable d) selectedCheckInputs;
+          # Keep the declared input when its propagated closure cannot
+          # evaluate. The check then fails if it imports the missing module.
+          closureFor = d: let
+            attempted = builtins.tryEval (
+              let
+                modules = python3.pkgs.requiredPythonModules [d];
+              in
+                builtins.seq (builtins.length modules) modules
+            );
           in
-            lib.unique (lib.filter (d: evalOk d && guestUsable d) (declared ++ lib.concatMap closureFor declared));
-          name = "wheel-${name}";
-        }
-      else null;
+            if attempted.success
+            then attempted.value
+            else [];
+        in
+          lib.unique (lib.filter (d: evalOk d && guestUsable d) (declared ++ lib.concatMap closureFor declared));
+        name = "wheel-${name}" + lib.optionalString (shard != null) "-upstream-${toString shard}-of-${toString shardCount}";
+        postRestore = lib.optionalString (shard != null) ''
+          export WASIX_CHECK_SHARD_COUNT=${toString shardCount}
+          export WASIX_CHECK_SHARD_NUM=${toString shard}
+        '';
+      };
+    derivedUpstream =
+      lib.throwIf (!(builtins.isInt shardCount && shardCount > 0))
+      "wheel-${name}: emulatedCheck.shards must be a positive integer"
+      (
+        if !(withCheck ? check)
+        then {}
+        else if shardCount == 1
+        then {upstream = mkDerivedUpstream null;}
+        else
+          # Split large suites into cacheable CI leaves that share the captured tree.
+          lib.listToAttrs (lib.genList (
+              shard:
+                lib.nameValuePair
+                "upstream-${toString shard}-of-${toString shardCount}"
+                (mkDerivedUpstream shard)
+            )
+            shardCount)
+      );
   in
     wheel.overrideAttrs (o: {
       passthru =
@@ -339,9 +360,7 @@
                   // lib.optionalAttrs (historyVersion != null) {version = versionTest name historyVersion wheel;}
                   // lib.optionalAttrs (name == e.attr && builtins.pathExists (pkgTestsDir e.attr)) (pkgTests e));
             }
-            // lib.optionalAttrs (name == e.attr && derivedUpstream != null) {
-              upstream = derivedUpstream;
-            });
+            // lib.optionalAttrs (name == e.attr) derivedUpstream);
         };
     });
 
