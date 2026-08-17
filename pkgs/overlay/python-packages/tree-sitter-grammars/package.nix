@@ -125,7 +125,7 @@ in {
   }: let
     updater = final.buildPackages.writeShellApplication {
       name = "update-tree-sitter-grammars";
-      runtimeInputs = [final.buildPackages.curl final.buildPackages.jq final.buildPackages.nix];
+      runtimeInputs = with final.buildPackages; [curl git gnused jq nix];
       text = builtins.readFile ./update.sh;
     };
   in

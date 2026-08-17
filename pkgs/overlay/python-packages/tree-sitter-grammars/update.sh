@@ -5,7 +5,9 @@
 set -euo pipefail
 
 lang="${1:?usage: update.sh <language>}"
-nix_file="$(dirname "$0")/package.nix"
+# The script runs inlined from the store, so the checkout's copy of the
+# grammar table is addressed through the repo, never through $0.
+nix_file="$(git rev-parse --show-toplevel)/pkgs/overlay/python-packages/tree-sitter-grammars/package.nix"
 
 block_field() {
   sed -n "/^    ${lang} = {\$/,/^    };\$/p" "$nix_file" |
