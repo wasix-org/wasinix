@@ -91,6 +91,16 @@
       "tag": "0.9.25"
     }
   },
+  "cffi": {
+    "1.17.1": {
+      "hash": "sha256-JGskZDFFfG7XlES5wB4HNwQRzSPSOOvKpl4EdhLCIxs=",
+      "note": "snowflake-connector-python 3.18.1 pins cffi<2.0.0",
+      "tag": "v1.17.1",
+      "variants": [
+        "py313"
+      ]
+    }
+  },
   "charset-normalizer": {
     "3.4.7": {
       "hash": "sha256-dOdJ4f98smCYdskp3BwtQG6aOyK+2a73+x580FKRWDk=",
