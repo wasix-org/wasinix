@@ -14,6 +14,21 @@ helpers.libTweaks (
     };
   }
   // {
+    passthru.wasixDeclaredCheckInputs =
+      [
+        pyfinal.a2wsgi
+        pyfinal.anyio
+        pyfinal.dirty-equals
+        pyfinal.flask
+        pyfinal.httpx2
+        pyfinal.inline-snapshot
+        pyfinal.pwdlib
+        pyfinal.pyjwt
+        pyfinal.pytestCheckHook
+        pyfinal.pytest-xdist
+        pyfinal.pytest-timeout
+      ]
+      ++ pyprev.fastapi.passthru.optional-dependencies.all;
     disabledTests = [
       "test_frontend_respects_root_path"
       "test_required_list_alias_by_name"
