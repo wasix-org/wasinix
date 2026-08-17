@@ -33,7 +33,7 @@
 
 </details>
 
-<sub>candidate-1: Formatting ✅ · Evaluation inputs ✅ · Evaluation ✅ · Core ✅ · Compare candidate-1 ✅<br>baseline: Evaluation inputs ✅ · Evaluation ✅ · Core ✅<br><a href="https://github.com/wasix-org/wasinix/actions/runs/1">full pipeline</a></sub>
+<sub>candidate-1: Formatting ✅ · Evaluation inputs ✅ · Evaluation ✅ · Core ✅<br>baseline: Evaluation inputs ✅ · Evaluation ✅ · Core ✅<br><a href="https://github.com/wasix-org/wasinix/actions/runs/1">full pipeline</a></sub>
 
 <details><summary>Details</summary>
 
@@ -88,7 +88,6 @@
 | candidate-1: Evaluation | ✅ | ok |
 | baseline: Core | ✅ | ok |
 | candidate-1: Core | ✅ | ok |
-| Compare candidate-1 | ✅ | no regressions |
 
 **Downstream version changes (1)**
 

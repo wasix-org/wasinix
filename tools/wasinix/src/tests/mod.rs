@@ -227,15 +227,20 @@ mod plan {
     }
 
     #[test]
-    fn diff_builds_are_advisory_and_the_comparison_gates() {
+    fn diff_builds_are_advisory_and_candidate_evals_gate() {
         let plan = plan_of(&core_diff(), None, &[]);
         let gate = |id: &str| plan.tasks.iter().find(|t| t.task_id == id).unwrap().gate;
         assert!(!gate("baseline.core"));
         assert!(!gate("candidate-1.core"));
-        assert!(gate("compare.candidate-1"));
+        // Without a candidate evaluation there is nothing to compare; a
+        // broken baseline concludes neutral instead, so it never gates.
+        assert!(gate("candidate-1.eval"));
+        assert!(!gate("baseline.eval"));
         assert!(gate("candidate-1.treefmt"));
         // The baseline is not the submitted tree, so it is never format-checked.
         assert!(!plan.tasks.iter().any(|task| task.task_id == "baseline.treefmt"));
+        // The comparison is a fold-time projection, never a task.
+        assert!(!plan.tasks.iter().any(|task| task.task_id.starts_with("compare.")));
     }
 
     #[test]
@@ -249,18 +254,13 @@ mod plan {
             ],
         });
         let plan = plan_of(&request, None, &[]);
+        // A failed spot build still lays out its map and statuses, so a
+        // failure both sides share stays the comparison's call.
         assert!(
             !plan
                 .tasks
                 .iter()
                 .find(|task| task.task_id == "candidate-1.spot")
-                .unwrap()
-                .gate
-        );
-        assert!(
-            plan.tasks
-                .iter()
-                .find(|task| task.task_id == "compare.candidate-1")
                 .unwrap()
                 .gate
         );
@@ -290,7 +290,6 @@ mod plan {
         assert!(!ids.contains(&"baseline.eval"));
         assert!(!ids.contains(&"baseline.core"));
         assert!(ids.contains(&"candidate-1.core"));
-        assert!(ids.contains(&"compare.candidate-1"));
     }
 
     #[test]
@@ -631,13 +630,13 @@ mod authorization {
 }
 
 mod compare {
-    use crate::ci::compare::{compare_case_results, Comparison};
+    use crate::ci::compare::{compare_loaded, BuildDiff, Comparison, EvalDiff};
     use crate::ci::evalmap::{EvalMap, JobInfo, StatusMap};
     use crate::ci::types::{Build, CaseRef, RevSource, Selector, SelectorKind, Spot};
     use crate::support::atoms::{JobAddr, JobStatus, Rev};
 
-    /// The tests exercise one-case comparisons; production drives
-    /// compare_case_results with CaseRefs directly.
+    /// The tests exercise one-candidate comparisons over loaded state, the
+    /// same core [`crate::ci::compare::project`] drives.
     fn compare_cases(
         base_case: &Build<RevSource>,
         base_map: &EvalMap,
@@ -645,15 +644,15 @@ mod compare {
         head_case: &Build<RevSource>,
         head_map: &EvalMap,
         head_status: &StatusMap,
-    ) -> crate::support::error::Result<Comparison> {
-        compare_case_results(
+    ) -> crate::support::error::Result<(EvalDiff, BuildDiff)> {
+        let (eval, builds) = compare_loaded(
             crate::ci::types::CaseRef::Build(base_case),
             base_map,
-            base_status,
             crate::ci::types::CaseRef::Build(head_case),
             head_map,
-            head_status,
-        )
+            Some((base_status, head_status)),
+        )?;
+        Ok((eval, builds.expect("statuses were given")))
     }
 
     fn source(fill: char) -> RevSource {
@@ -728,18 +727,18 @@ mod compare {
             ("packagesByProfile.exnrefEh.curl", JobStatus::Success),
         ]);
         let head_status = status(&[("packagesByProfile.exnrefEh.zlib", JobStatus::Failure)]);
-        let result = compare_case_results(
+        let (eval, builds) = compare_loaded(
             CaseRef::Build(&build),
             &mapping,
-            &base_status,
             CaseRef::Spot(&spot),
             &mapping,
-            &head_status,
+            Some((&base_status, &head_status)),
         )
         .unwrap();
-        assert_eq!(result.regressions, addrs(&["packagesByProfile.exnrefEh.zlib"]));
-        assert!(result.removed.is_empty());
-        assert_eq!(result.selected_count, 1);
+        let builds = builds.expect("statuses were given");
+        assert_eq!(builds.regressions, addrs(&["packagesByProfile.exnrefEh.zlib"]));
+        assert!(eval.removed.is_empty());
+        assert_eq!(eval.selected_count, 1);
     }
 
     #[test]
@@ -749,7 +748,7 @@ mod compare {
             ("fixed", "/nix/store/b.drv"),
             ("existing", "/nix/store/c.drv"),
         ];
-        let result = compare_cases(
+        let (_, builds) = compare_cases(
             &case(&["regressed", "fixed", "existing"]),
             &map(&names),
             &status(&[
@@ -766,14 +765,14 @@ mod compare {
             ]),
         )
         .unwrap();
-        assert_eq!(result.regressions, addrs(&["regressed"]));
-        assert_eq!(result.fixes, addrs(&["fixed"]));
-        assert_eq!(result.existing_failures, addrs(&["existing"]));
+        assert_eq!(builds.regressions, addrs(&["regressed"]));
+        assert_eq!(builds.fixes, addrs(&["fixed"]));
+        assert_eq!(builds.existing_failures, addrs(&["existing"]));
     }
 
     #[test]
     fn new_and_dropped_jobs_count_as_regressions() {
-        let result = compare_cases(
+        let (_, builds) = compare_cases(
             &case(&["kept", "dropped"]),
             &map(&[
                 ("kept", "/nix/store/a.drv"),
@@ -788,10 +787,10 @@ mod compare {
             &status(&[("kept", JobStatus::Success), ("fresh", JobStatus::Failure)]),
         )
         .unwrap();
-        assert!(result.regressions.is_empty());
-        assert_eq!(result.new_failures, addrs(&["fresh"]));
-        assert_eq!(result.dropped_successes, addrs(&["dropped"]));
-        assert_eq!(result.regression_count(), 2);
+        assert!(builds.regressions.is_empty());
+        assert_eq!(builds.new_failures, addrs(&["fresh"]));
+        assert_eq!(builds.dropped_successes, addrs(&["dropped"]));
+        assert_eq!(builds.regression_count(), 2);
     }
 
     #[test]
@@ -804,7 +803,7 @@ mod compare {
                 ..Default::default()
             },
         );
-        let result = compare_cases(
+        let (eval, _) = compare_cases(
             &case(&["job"]),
             &map(&[("job", "/nix/store/a.drv")]),
             &StatusMap::new(),
@@ -813,14 +812,14 @@ mod compare {
             &StatusMap::new(),
         )
         .unwrap();
-        assert!(result.rebuilt.is_empty());
+        assert!(eval.rebuilt.is_empty());
     }
 
     #[test]
     fn new_eval_errors_are_regressions() {
         let mut head = EvalMap::default();
         head.errors.insert(JobAddr("job".into()), "broken".into());
-        let result = compare_cases(
+        let (eval, builds) = compare_cases(
             &case(&["job"]),
             &map(&[("job", "/nix/store/a.drv")]),
             &StatusMap::new(),
@@ -829,8 +828,15 @@ mod compare {
             &StatusMap::new(),
         )
         .unwrap();
-        assert_eq!(result.new_eval_errors, addrs(&["job"]));
-        assert_eq!(result.regression_count(), 1);
+        assert_eq!(eval.new_eval_errors, addrs(&["job"]));
+        let comparison = Comparison {
+            candidate: "candidate-1".into(),
+            base_evaluated: true,
+            head_evaluated: true,
+            eval: Some(eval),
+            builds: Some(builds),
+        };
+        assert_eq!(comparison.regression_count(), 1);
     }
 
     #[test]
@@ -844,7 +850,7 @@ mod compare {
         base.info.insert(JobAddr("changed".into()), info("1.2.3", 1));
         let mut head = map(&[("changed", "/nix/store/a.drv")]);
         head.info.insert(JobAddr("changed".into()), info("1.2.3", 2));
-        let result = compare_cases(
+        let (eval, _) = compare_cases(
             &case(&["changed"]),
             &base,
             &StatusMap::new(),
@@ -853,9 +859,9 @@ mod compare {
             &StatusMap::new(),
         )
         .unwrap();
-        assert_eq!(result.identity_transitions, ["changed: 1.2.3 -> 1.2.3 r2"]);
-        assert!(result.version_updates.is_empty());
-        assert!(result.rebuilt.is_empty());
+        assert_eq!(eval.identity_transitions, ["changed: 1.2.3 -> 1.2.3 r2"]);
+        assert!(eval.version_updates.is_empty());
+        assert!(eval.rebuilt.is_empty());
     }
 
     #[test]
@@ -889,7 +895,7 @@ mod compare {
             info("1.3.1", Some("https://example.com/zlib-1.3.1")),
         );
 
-        let result = compare_cases(
+        let (eval, _) = compare_cases(
             &case(&jobs),
             &base,
             &StatusMap::new(),
@@ -899,8 +905,8 @@ mod compare {
         )
         .unwrap();
 
-        assert_eq!(result.version_updates.len(), 1);
-        let update = &result.version_updates[0];
+        assert_eq!(eval.version_updates.len(), 1);
+        let update = &eval.version_updates[0];
         assert_eq!(update.subject, "zlib");
         assert_eq!(update.before, "1.2.13");
         assert_eq!(update.after, "1.3.1");
@@ -931,7 +937,7 @@ mod compare {
         head.info
             .insert(JobAddr(jobs[1].into()), info("https://example.com/py"));
 
-        let result = compare_cases(
+        let (eval, _) = compare_cases(
             &case(&jobs),
             &base,
             &StatusMap::new(),
@@ -940,15 +946,15 @@ mod compare {
             &StatusMap::new(),
         )
         .unwrap();
-        assert_eq!(result.version_updates.len(), 2);
-        let all_changelogs: Vec<&str> = result
+        assert_eq!(eval.version_updates.len(), 2);
+        let all_changelogs: Vec<&str> = eval
             .version_updates
             .iter()
             .flat_map(|u| u.changelogs.iter().map(String::as_str))
             .collect();
         assert!(all_changelogs.contains(&"https://example.com/cpp"));
         assert!(all_changelogs.contains(&"https://example.com/py"));
-        for update in &result.version_updates {
+        for update in &eval.version_updates {
             assert_eq!(update.changelogs.len(), 1, "no unioned changelog rows");
         }
     }
@@ -956,6 +962,70 @@ mod compare {
     #[test]
     fn an_empty_comparison_reports_no_regressions() {
         assert_eq!(Comparison::default().regression_count(), 0);
+    }
+
+    /// The projection over a run directory grows with what is on disk: no
+    /// head map means no eval half, statuses on both sides bring the build
+    /// half, and a finished run computes it regardless so absence reads as
+    /// incompleteness instead of a clean pass.
+    #[test]
+    fn the_projection_tracks_what_the_run_dir_holds() {
+        use crate::ci::types::{Case, Diff, Request};
+        let scratch = crate::support::fs::Scratch::create("wasinix-test").unwrap();
+        let run_dir = scratch.path();
+        let request = Request::Diff(Diff {
+            baseline: "baseline".into(),
+            content_diff: false,
+            cases: vec![
+                Case::Build(Build {
+                    case_id: Some("baseline".into()),
+                    ..case(&["job"])
+                }),
+                Case::Build(Build {
+                    case_id: Some("candidate-1".into()),
+                    ..case(&["job"])
+                }),
+            ],
+        });
+        let write_map = |id: &str, drv: &str| {
+            let dir = crate::ci::prepare::case_dir(run_dir, id);
+            crate::support::fs::create_dir_all(&crate::ci::prepare::maps_dir(&dir)).unwrap();
+            crate::support::schema::write(
+                &crate::ci::prepare::eval_map_path(&dir),
+                &map(&[("job", drv)]),
+            )
+            .unwrap();
+        };
+        let write_status = |id: &str, value: JobStatus| {
+            let dir = crate::ci::prepare::case_dir(run_dir, id);
+            crate::support::schema::write(
+                &crate::ci::prepare::status_path(&dir),
+                &crate::ci::compare::JobStatuses {
+                    statuses: status(&[("job", value)]),
+                },
+            )
+            .unwrap();
+        };
+
+        write_map("baseline", "/nix/store/a.drv");
+        let early = crate::ci::compare::project(run_dir, &request, false).unwrap();
+        assert_eq!(early.len(), 1);
+        assert!(early[0].base_evaluated && !early[0].head_evaluated);
+        assert!(early[0].eval.is_none());
+
+        write_map("candidate-1", "/nix/store/b.drv");
+        let evaluated = crate::ci::compare::project(run_dir, &request, false).unwrap();
+        assert!(evaluated[0].eval.is_some(), "eval half appears with both maps");
+        assert!(evaluated[0].builds.is_none(), "no statuses yet");
+
+        write_status("baseline", JobStatus::Success);
+        write_status("candidate-1", JobStatus::Failure);
+        let built = crate::ci::compare::project(run_dir, &request, false).unwrap();
+        let builds = built[0].builds.as_ref().expect("statuses on both sides");
+        assert_eq!(builds.regressions, addrs(&["job"]));
+
+        let finished = crate::ci::compare::project(run_dir, &request, true).unwrap();
+        assert!(finished[0].builds.is_some());
     }
 }
 
@@ -1458,7 +1528,6 @@ mod exec {
             set: BuildTarget::Packages,
         }));
         assert!(!blocked_by_case_failure(Phase::Treefmt));
-        assert!(!blocked_by_case_failure(Phase::Compare));
         assert!(!blocked_by_case_failure(Phase::Content));
     }
 
@@ -1930,6 +1999,12 @@ mod markdown {
             let (report, fragments) = scenario;
             check_text(name, &comment(&report, &fragments, None, &links()).into_string());
         }
+        let (report, fragments) = scenarios::diff_in_progress();
+        assert_eq!(report.conclusion, None, "a mid-run diff stays open");
+        check_text(
+            "comment-diff-in-progress.md",
+            &comment(&report, &fragments, None, &links()).into_string(),
+        );
         let (report, fragments) = scenarios::in_progress();
         let snapshot = crate::ci::events::Snapshot {
             state: crate::support::atoms::RunState::Running,
@@ -3669,7 +3744,7 @@ mod fold {
         for task in &plan.tasks {
             let status = if task.case == "baseline" && task.kind == TaskKind::Eval {
                 TaskStatus::Failure
-            } else if task.case == "baseline" || task.kind == TaskKind::Comparison {
+            } else if task.case == "baseline" {
                 continue;
             } else {
                 TaskStatus::Success
@@ -3685,10 +3760,129 @@ mod fold {
             FoldContext {
                 baseline_case: Some("baseline".into()),
                 finished: true,
+                comparisons: vec![crate::ci::compare::Comparison {
+                    candidate: "candidate-1".into(),
+                    base_evaluated: false,
+                    head_evaluated: true,
+                    eval: None,
+                    builds: None,
+                }],
                 ..FoldContext::default()
             },
         );
         assert_eq!(report.conclusion, Some(Conclusion::Neutral), "{}", report.title);
+        assert!(report.title.contains("could not compare"), "{}", report.title);
+    }
+
+    fn all_green(plan: &crate::ci::plan::Plan) -> BTreeMap<String, Fragment> {
+        plan.tasks
+            .iter()
+            .map(|task| {
+                (
+                    task.task_id.clone(),
+                    fragment(&task.task_id, task.kind, TaskStatus::Success, "ok"),
+                )
+            })
+            .collect()
+    }
+
+    fn projected(
+        eval: Option<crate::ci::compare::EvalDiff>,
+        builds: Option<crate::ci::compare::BuildDiff>,
+    ) -> crate::ci::compare::Comparison {
+        crate::ci::compare::Comparison {
+            candidate: "candidate-1".into(),
+            base_evaluated: true,
+            head_evaluated: true,
+            eval,
+            builds,
+        }
+    }
+
+    #[test]
+    fn a_diff_stays_open_until_its_process_finishes() {
+        let plan = plan_of(&diff_request(), None, &[]);
+        // Every task reported green, builds included; only the eval half of
+        // the comparison exists. Gate accounting alone would conclude here.
+        let report = fold(
+            &plan,
+            &all_green(&plan),
+            FoldContext {
+                baseline_case: Some("baseline".into()),
+                finished: false,
+                comparisons: vec![projected(
+                    Some(crate::ci::compare::EvalDiff::default()),
+                    None,
+                )],
+                ..FoldContext::default()
+            },
+        );
+        assert_eq!(report.conclusion, None, "{}", report.title);
+        assert!(!report.complete);
+    }
+
+    #[test]
+    fn regressions_in_the_projection_conclude_failure() {
+        let plan = plan_of(&diff_request(), None, &[]);
+        let report = fold(
+            &plan,
+            &all_green(&plan),
+            FoldContext {
+                baseline_case: Some("baseline".into()),
+                finished: true,
+                comparisons: vec![projected(
+                    Some(crate::ci::compare::EvalDiff::default()),
+                    Some(crate::ci::compare::BuildDiff {
+                        regressions: vec![crate::support::atoms::JobAddr("checks.zlib".into())],
+                        ..crate::ci::compare::BuildDiff::default()
+                    }),
+                )],
+                ..FoldContext::default()
+            },
+        );
+        assert_eq!(report.conclusion, Some(Conclusion::Failure));
+        assert!(report.title.contains("1 regressions"), "{}", report.title);
+    }
+
+    #[test]
+    fn a_clean_finished_diff_concludes_success() {
+        let plan = plan_of(&diff_request(), None, &[]);
+        let report = fold(
+            &plan,
+            &all_green(&plan),
+            FoldContext {
+                baseline_case: Some("baseline".into()),
+                finished: true,
+                comparisons: vec![projected(
+                    Some(crate::ci::compare::EvalDiff::default()),
+                    Some(crate::ci::compare::BuildDiff::default()),
+                )],
+                ..FoldContext::default()
+            },
+        );
+        assert_eq!(report.conclusion, Some(Conclusion::Success), "{}", report.title);
+    }
+
+    #[test]
+    fn an_uncompared_candidate_with_an_evaluated_base_concludes_failure() {
+        let plan = plan_of(&diff_request(), None, &[]);
+        let report = fold(
+            &plan,
+            &all_green(&plan),
+            FoldContext {
+                baseline_case: Some("baseline".into()),
+                finished: true,
+                comparisons: vec![crate::ci::compare::Comparison {
+                    candidate: "candidate-1".into(),
+                    base_evaluated: true,
+                    head_evaluated: false,
+                    eval: None,
+                    builds: None,
+                }],
+                ..FoldContext::default()
+            },
+        );
+        assert_eq!(report.conclusion, Some(Conclusion::Failure), "{}", report.title);
         assert!(report.title.contains("could not compare"), "{}", report.title);
     }
 
@@ -3937,7 +4131,7 @@ mod scenarios {
         for task in &plan.tasks {
             let status = if task.case == "baseline" && task.kind == TaskKind::Eval {
                 TaskStatus::Failure
-            } else if task.case == "baseline" || task.kind == TaskKind::Comparison {
+            } else if task.case == "baseline" {
                 continue;
             } else {
                 TaskStatus::Success
@@ -3953,6 +4147,13 @@ mod scenarios {
             FoldContext {
                 baseline_case: Some("baseline".into()),
                 finished: true,
+                comparisons: vec![crate::ci::compare::Comparison {
+                    candidate: "candidate-1".into(),
+                    base_evaluated: false,
+                    head_evaluated: true,
+                    eval: None,
+                    builds: None,
+                }],
                 request: Some(request),
                 ..FoldContext::default()
             },
@@ -3963,7 +4164,7 @@ mod scenarios {
     /// A green diff whose comparison carries every non-failure story: fixes,
     /// rebuilds, version moves, added and removed jobs.
     pub fn diff_green() -> (Report, Fragments) {
-        use crate::ci::compare::{Comparison, VersionUpdate};
+        use crate::ci::compare::{BuildDiff, Comparison, EvalDiff, VersionUpdate};
         let request = Request::Diff(Diff {
             baseline: "baseline".into(),
             content_diff: false,
@@ -3973,53 +4174,100 @@ mod scenarios {
             ],
         });
         let plan = plan_of(&request, Some("golden"), &[]);
-        let mut fragments = green_fragments(&plan);
+        let fragments = green_fragments(&plan);
         let comparison = Comparison {
-            fixes: vec![JobAddr("checks.curl".into())],
-            rebuilt: vec![
-                JobAddr("checks.zlib".into()),
-                JobAddr("packagesByProfile.eh.zlib".into()),
-            ],
-            identity_transitions: vec!["packagesByProfile.eh.zlib: 1.3.1 -> 1.3.2".into()],
-            version_updates: vec![VersionUpdate {
-                subject: "zlib".into(),
-                before: "1.3.1".into(),
-                after: "1.3.2".into(),
-                changelogs: Vec::new(),
-                jobs: vec![JobAddr("packagesByProfile.eh.zlib".into())],
-            }],
-            added: vec![JobAddr("checks.brotli".into())],
-            removed: vec![JobAddr("checks.legacy-tool".into())],
-            identities: BTreeMap::from([
-                (JobAddr("checks.brotli".into()), "1.1.0".to_string()),
-                (JobAddr("checks.legacy-tool".into()), "0.9.1".to_string()),
-                (JobAddr("checks.zlib".into()), "1.3.2".to_string()),
-            ]),
-            selected_count: 40,
-            ..Comparison::default()
+            candidate: "candidate-1".into(),
+            base_evaluated: true,
+            head_evaluated: true,
+            eval: Some(EvalDiff {
+                rebuilt: vec![
+                    JobAddr("checks.zlib".into()),
+                    JobAddr("packagesByProfile.eh.zlib".into()),
+                ],
+                identity_transitions: vec!["packagesByProfile.eh.zlib: 1.3.1 -> 1.3.2".into()],
+                version_updates: vec![VersionUpdate {
+                    subject: "zlib".into(),
+                    before: "1.3.1".into(),
+                    after: "1.3.2".into(),
+                    changelogs: Vec::new(),
+                    jobs: vec![JobAddr("packagesByProfile.eh.zlib".into())],
+                }],
+                added: vec![JobAddr("checks.brotli".into())],
+                removed: vec![JobAddr("checks.legacy-tool".into())],
+                identities: BTreeMap::from([
+                    (JobAddr("checks.brotli".into()), "1.1.0".to_string()),
+                    (JobAddr("checks.legacy-tool".into()), "0.9.1".to_string()),
+                    (JobAddr("checks.zlib".into()), "1.3.2".to_string()),
+                ]),
+                selected_count: 40,
+                ..EvalDiff::default()
+            }),
+            builds: Some(BuildDiff {
+                fixes: vec![JobAddr("checks.curl".into())],
+                ..BuildDiff::default()
+            }),
         };
+        let report = fold(
+            &plan,
+            &fragments,
+            FoldContext {
+                baseline_case: Some("baseline".into()),
+                finished: true,
+                started_at: Some(1_755_000_000),
+                finished_at: Some(1_755_003_600),
+                comparisons: vec![comparison],
+                request: Some(request),
+            },
+        );
+        (report, fragments)
+    }
+
+    /// A diff mid-run: both evals landed, builds still going, so only the
+    /// eval half of the comparison exists. The comment must already tell the
+    /// added/removed/version story.
+    pub fn diff_in_progress() -> (Report, Fragments) {
+        use crate::ci::compare::{Comparison, EvalDiff};
+        let request = Request::Diff(Diff {
+            baseline: "baseline".into(),
+            content_diff: false,
+            cases: vec![
+                Case::Build(build("baseline")),
+                Case::Build(build("candidate-1")),
+            ],
+        });
+        let plan = plan_of(&request, Some("golden"), &[]);
+        let mut fragments = BTreeMap::new();
         for task in &plan.tasks {
-            if task.kind == TaskKind::Comparison {
+            if matches!(task.kind, TaskKind::Eval | TaskKind::Validation) {
                 fragments.insert(
                     task.task_id.clone(),
-                    Fragment::new(
-                        &task.task_id,
-                        &task.label,
-                        task.kind,
-                        TaskStatus::Success,
-                        "no regressions",
-                    )
-                    .with_data(FragmentData::Comparison(Box::new(comparison.clone()))),
+                    Fragment::new(&task.task_id, &task.label, task.kind, TaskStatus::Success, "ok"),
                 );
             }
         }
+        let comparison = Comparison {
+            candidate: "candidate-1".into(),
+            base_evaluated: true,
+            head_evaluated: true,
+            eval: Some(EvalDiff {
+                rebuilt: vec![JobAddr("checks.zlib".into())],
+                added: vec![JobAddr("checks.brotli".into())],
+                identities: BTreeMap::from([
+                    (JobAddr("checks.brotli".into()), "1.1.0".to_string()),
+                    (JobAddr("checks.zlib".into()), "1.3.2".to_string()),
+                ]),
+                selected_count: 40,
+                ..EvalDiff::default()
+            }),
+            builds: None,
+        };
         let report = fold(
             &plan,
             &fragments,
             FoldContext {
                 baseline_case: Some("baseline".into()),
                 started_at: Some(1_755_000_000),
-                finished_at: Some(1_755_003_600),
+                comparisons: vec![comparison],
                 request: Some(request),
                 ..FoldContext::default()
             },

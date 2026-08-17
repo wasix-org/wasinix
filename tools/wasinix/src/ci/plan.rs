@@ -57,7 +57,6 @@ pub enum Phase {
     Eval,
     Build { set: BuildTarget },
     Spot,
-    Compare,
     Content,
 }
 
@@ -68,7 +67,6 @@ pub enum TaskKind {
     Eval,
     Build,
     Spot,
-    Comparison,
     Analysis,
 }
 
@@ -186,7 +184,10 @@ pub fn plan_of<S>(request: &Request<S>, request_id: Option<&str>, reused: &[Stri
         order: 0,
     };
     // A diff is decided by its comparison, not by either side building clean:
-    // a failure both cases share is the status quo, not a regression.
+    // a failure both cases share is the status quo, not a regression. A
+    // candidate must still evaluate for a comparison to exist, so its
+    // evaluation gates; a broken baseline is the base's condition and
+    // concludes neutral, so nothing on the baseline gates.
     let gate_builds = !request.is_diff();
     let baseline = match request {
         Request::Diff(diff) => Some(diff.baseline.as_str()),
@@ -214,6 +215,8 @@ pub fn plan_of<S>(request: &Request<S>, request_id: Option<&str>, reused: &[Stri
             continue;
         }
         match case {
+            // A failed spot build still lays out its map and statuses, so a
+            // failure both sides share stays the comparison's call.
             CaseRef::Spot(_) => builder.push(
                 format!("{id}.spot"),
                 format!("{id}: Spot"),
@@ -222,7 +225,9 @@ pub fn plan_of<S>(request: &Request<S>, request_id: Option<&str>, reused: &[Stri
                 Phase::Spot,
                 gate_builds,
             ),
-            CaseRef::Build(build) => plan_evaluation(&mut builder, build, gate_builds),
+            CaseRef::Build(build) => {
+                plan_evaluation(&mut builder, build, gate_builds || baseline != Some(id))
+            }
         }
     }
 
@@ -238,14 +243,6 @@ pub fn plan_of<S>(request: &Request<S>, request_id: Option<&str>, reused: &[Stri
     if let Request::Diff(diff) = request {
         for case in diff.cases.iter().skip(1) {
             let id = case.case_id().to_string();
-            builder.push(
-                format!("compare.{id}"),
-                format!("Compare {id}"),
-                TaskKind::Comparison,
-                &id,
-                Phase::Compare,
-                true,
-            );
             if diff.content_diff {
                 builder.push(
                     format!("content-diff.{id}"),

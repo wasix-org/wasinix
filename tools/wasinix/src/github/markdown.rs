@@ -91,15 +91,6 @@ fn blocked_count(report: &Report) -> usize {
         .count()
 }
 
-fn comparison(fragments: &BTreeMap<String, Fragment>) -> Option<(&str, &Comparison)> {
-    fragments.values().find_map(|fragment| match &fragment.data {
-        Some(FragmentData::Comparison(comparison)) => {
-            Some((fragment.task_id.as_str(), comparison.as_ref()))
-        }
-        _ => None,
-    })
-}
-
 fn job_count(fragments: &BTreeMap<String, Fragment>) -> Option<usize> {
     fragments.values().find_map(|fragment| match &fragment.data {
         Some(FragmentData::Eval(summary)) => Some(summary.job_count),
@@ -244,7 +235,7 @@ fn footer(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Links
     )
 }
 
-fn details(report: &Report, fragments: &BTreeMap<String, Fragment>) -> Markdown {
+fn details(report: &Report) -> Markdown {
     let mut body = Markdown::new();
     if let Some(request) = &report.request {
         if let Ok(echo) = serde_json::to_string_pretty(request) {
@@ -271,34 +262,35 @@ fn details(report: &Report, fragments: &BTreeMap<String, Fragment>) -> Markdown 
             Markdown::constant(" |\n"),
         ]);
     }
-    if let Some((_, comparison)) = comparison(fragments) {
-        if !comparison.version_updates.is_empty() {
+    for updates in report.version_updates.values() {
+        if updates.is_empty() {
+            continue;
+        }
+        body = Markdown::concat([
+            body,
+            Markdown::constant("\n**Downstream version changes ("),
+            Markdown::text(&updates.len().to_string()),
+            Markdown::constant(")**\n\n"),
+        ]);
+        for update in updates.iter().take(20) {
             body = Markdown::concat([
                 body,
-                Markdown::constant("\n**Downstream version changes ("),
-                Markdown::text(&comparison.version_updates.len().to_string()),
-                Markdown::constant(")**\n\n"),
+                Markdown::constant("- **"),
+                Markdown::cell(&update.subject),
+                Markdown::constant("** "),
+                Markdown::cell(&update.before),
+                Markdown::constant(" → "),
+                Markdown::cell(&update.after),
+                Markdown::constant("\n"),
             ]);
-            for update in comparison.version_updates.iter().take(20) {
-                body = Markdown::concat([
-                    body,
-                    Markdown::constant("- **"),
-                    Markdown::cell(&update.subject),
-                    Markdown::constant("** "),
-                    Markdown::cell(&update.before),
-                    Markdown::constant(" → "),
-                    Markdown::cell(&update.after),
-                    Markdown::constant("\n"),
-                ]);
-            }
-            if comparison.version_updates.len() > 20 {
-                body = Markdown::concat([
-                    body,
-                    Markdown::constant("- ... and "),
-                    Markdown::text(&(comparison.version_updates.len() - 20).to_string()),
-                    Markdown::constant(" more\n"),
-                ]);
-            }
+        }
+        if updates.len() > 20 {
+            body = Markdown::concat([
+                body,
+                Markdown::constant("- ... and "),
+                Markdown::text(&(updates.len() - 20).to_string()),
+                Markdown::constant(" more\n"),
+            ]);
         }
     }
     Markdown::concat([
@@ -308,13 +300,17 @@ fn details(report: &Report, fragments: &BTreeMap<String, Fragment>) -> Markdown 
     ])
 }
 
-/// The comparison's summary and lists, in the comment body proper: what a
-/// diff changed is the comment's story, not a collapsed detail.
-fn comparison_block(fragments: &BTreeMap<String, Fragment>) -> Markdown {
-    match comparison(fragments) {
-        Some((_, comparison)) => comparison_lists(comparison).push(Markdown::constant("\n")),
-        None => Markdown::new(),
-    }
+/// The comparisons' summaries and lists, in the comment body proper: what a
+/// diff changed is the comment's story, not a collapsed detail. Each half
+/// renders as soon as the fold could derive it.
+fn comparison_block(report: &Report) -> Markdown {
+    Markdown::concat(
+        report
+            .comparisons
+            .iter()
+            .filter(|comparison| comparison.eval.is_some())
+            .map(|comparison| comparison_lists(comparison).push(Markdown::constant("\n"))),
+    )
 }
 
 const COMPARE_LIST_ROWS: usize = 250;
@@ -365,44 +361,58 @@ fn job_list(
 
 /// The comparison's non-failure stories: what got fixed, rebuilt,
 /// re-versioned, added, or removed. Failures render in the report body, not
-/// here.
+/// here. The eval half is always present (the caller filters); the build
+/// half renders once builds finished.
 fn comparison_lists(comparison: &Comparison) -> Markdown {
-    let mut body = Markdown::concat([
-        Markdown::constant("**Comparison** · "),
-        Markdown::text(&comparison.fixes.len().to_string()),
-        Markdown::constant(" fixed · "),
-        Markdown::text(&comparison.rebuilt.len().to_string()),
+    let Some(eval) = &comparison.eval else {
+        return Markdown::new();
+    };
+    let mut body = Markdown::constant("**Comparison** · ");
+    if let Some(builds) = &comparison.builds {
+        body = Markdown::concat([
+            body,
+            Markdown::text(&builds.fixes.len().to_string()),
+            Markdown::constant(" fixed · "),
+        ]);
+    }
+    body = Markdown::concat([
+        body,
+        Markdown::text(&eval.rebuilt.len().to_string()),
         Markdown::constant(" rebuilt · "),
-        Markdown::text(&comparison.identity_transitions.len().to_string()),
+        Markdown::text(&eval.identity_transitions.len().to_string()),
         Markdown::constant(" version/rel changes · "),
-        Markdown::text(&comparison.added.len().to_string()),
+        Markdown::text(&eval.added.len().to_string()),
         Markdown::constant(" added · "),
-        Markdown::text(&comparison.removed.len().to_string()),
-        Markdown::constant(" removed\n"),
+        Markdown::text(&eval.removed.len().to_string()),
+        Markdown::constant(" removed"),
+        Markdown::constant(if comparison.builds.is_none() {
+            " · builds pending\n"
+        } else {
+            "\n"
+        }),
     ]);
     body = body.push(job_list(
-        "Removed jobs that passed",
-        &comparison.dropped_successes,
-        &comparison.identities,
+        "New evaluation failures",
+        &eval.new_eval_errors,
+        &eval.identities,
         true,
     ));
-    body = body.push(job_list(
-        "Fixed",
-        &comparison.fixes,
-        &comparison.identities,
-        false,
-    ));
-    if !comparison.identity_transitions.is_empty() {
+    if let Some(builds) = &comparison.builds {
+        body = body.push(job_list(
+            "Removed jobs that passed",
+            &builds.dropped_successes,
+            &eval.identities,
+            true,
+        ));
+        body = body.push(job_list("Fixed", &builds.fixes, &eval.identities, false));
+    }
+    if !eval.identity_transitions.is_empty() {
         let mut section = Markdown::concat([
             Markdown::constant("\n<details><summary>Version or rel changed ("),
-            Markdown::text(&comparison.identity_transitions.len().to_string()),
+            Markdown::text(&eval.identity_transitions.len().to_string()),
             Markdown::constant(")</summary>\n\n"),
         ]);
-        for transition in comparison
-            .identity_transitions
-            .iter()
-            .take(COMPARE_LIST_ROWS)
-        {
+        for transition in eval.identity_transitions.iter().take(COMPARE_LIST_ROWS) {
             section = Markdown::concat([
                 section,
                 Markdown::constant("- "),
@@ -414,35 +424,20 @@ fn comparison_lists(comparison: &Comparison) -> Markdown {
     }
     // A toolchain change rebuilds nearly everything, so the list carries no
     // signal at that size; the count does.
-    if comparison.selected_count > 0 && comparison.rebuilt.len() > comparison.selected_count / 2 {
+    if eval.selected_count > 0 && eval.rebuilt.len() > eval.selected_count / 2 {
         body = Markdown::concat([
             body,
             Markdown::constant("\nRebuilt "),
-            Markdown::text(&comparison.rebuilt.len().to_string()),
+            Markdown::text(&eval.rebuilt.len().to_string()),
             Markdown::constant(" of "),
-            Markdown::text(&comparison.selected_count.to_string()),
+            Markdown::text(&eval.selected_count.to_string()),
             Markdown::constant(" jobs (toolchain-wide).\n"),
         ]);
     } else {
-        body = body.push(job_list(
-            "Rebuilt",
-            &comparison.rebuilt,
-            &comparison.identities,
-            false,
-        ));
+        body = body.push(job_list("Rebuilt", &eval.rebuilt, &eval.identities, false));
     }
-    body = body.push(job_list(
-        "Added",
-        &comparison.added,
-        &comparison.identities,
-        false,
-    ));
-    body = body.push(job_list(
-        "Removed",
-        &comparison.removed,
-        &comparison.identities,
-        false,
-    ));
+    body = body.push(job_list("Added", &eval.added, &eval.identities, false));
+    body = body.push(job_list("Removed", &eval.removed, &eval.identities, false));
     body
 }
 
@@ -472,10 +467,10 @@ fn green(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Links)
         jobs,
         links.heading_suffix(),
         Markdown::constant("\n\n"),
-        comparison_block(fragments),
+        comparison_block(report),
         footer(report, fragments, links),
         Markdown::constant("\n"),
-        details(report, fragments),
+        details(report),
     ])
 }
 
@@ -483,29 +478,41 @@ fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
     let all = failures(report);
     // In a diff, regressions are the story and shared failures are the
     // baseline's condition; in a build, every failure is new.
-    let (primary, preexisting, what) = match comparison(fragments) {
-        Some((_, comparison)) => {
-            let regressed: Vec<(&str, &Failure)> = all
-                .iter()
-                .filter(|(_, failure)| {
-                    comparison.regressions.contains(&failure.job)
-                        || comparison.new_failures.contains(&failure.job)
+    let builds: Vec<&crate::ci::compare::BuildDiff> = report
+        .comparisons
+        .iter()
+        .filter_map(|comparison| comparison.builds.as_ref())
+        .collect();
+    let (primary, preexisting, what) = if builds.is_empty() {
+        let count = all.len();
+        (all.clone(), Vec::new(), plural(count, "failure"))
+    } else {
+        let regressed: Vec<(&str, &Failure)> = all
+            .iter()
+            .filter(|(_, failure)| {
+                builds.iter().any(|diff| {
+                    diff.regressions.contains(&failure.job)
+                        || diff.new_failures.contains(&failure.job)
                 })
-                .cloned()
-                .collect();
-            let existing: Vec<(&str, &Failure)> = all
-                .iter()
-                .filter(|(_, failure)| comparison.existing_failures.contains(&failure.job))
-                .cloned()
-                .collect();
-            let count = comparison.regression_count();
-            let what = plural(count, "failure").push(Markdown::constant(" new"));
-            (regressed, existing, what)
-        }
-        None => {
-            let count = all.len();
-            (all.clone(), Vec::new(), plural(count, "failure"))
-        }
+            })
+            .cloned()
+            .collect();
+        let existing: Vec<(&str, &Failure)> = all
+            .iter()
+            .filter(|(_, failure)| {
+                builds
+                    .iter()
+                    .any(|diff| diff.existing_failures.contains(&failure.job))
+            })
+            .cloned()
+            .collect();
+        let count: usize = report
+            .comparisons
+            .iter()
+            .map(Comparison::regression_count)
+            .sum();
+        let what = plural(count, "failure").push(Markdown::constant(" new"));
+        (regressed, existing, what)
     };
     // Failed gates without failure atoms (treefmt, a timed-out eval) still
     // deserve an honest count; a report with no failed tasks at all (a
@@ -566,10 +573,10 @@ fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
     }
     Markdown::concat([
         text,
-        comparison_block(fragments),
+        comparison_block(report),
         footer(report, fragments, links),
         Markdown::constant("\n"),
-        details(report, fragments),
+        details(report),
     ])
 }
 
@@ -649,6 +656,7 @@ fn in_progress(report: &Report, snapshot: Option<&Snapshot>, links: &Links) -> M
     }
     Markdown::concat([
         text,
+        comparison_block(report),
         ladder(
             report.tasks.iter().filter(|task| task.enabled),
             trailing,

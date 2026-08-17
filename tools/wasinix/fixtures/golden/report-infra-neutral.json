@@ -1,4 +1,11 @@
 {
+  "comparisons": [
+    {
+      "baseEvaluated": false,
+      "candidate": "candidate-1",
+      "headEvaluated": true
+    }
+  ],
   "complete": true,
   "conclusion": "neutral",
   "kind": "report",
@@ -72,7 +79,7 @@
     {
       "case": "candidate-1",
       "enabled": true,
-      "gate": false,
+      "gate": true,
       "headline": "x",
       "kind": "eval",
       "label": "candidate-1: Evaluation inputs",
@@ -82,7 +89,7 @@
     {
       "case": "candidate-1",
       "enabled": true,
-      "gate": false,
+      "gate": true,
       "headline": "x",
       "kind": "eval",
       "label": "candidate-1: Evaluation",
@@ -108,16 +115,6 @@
       "label": "candidate-1: Core",
       "status": "success",
       "taskId": "candidate-1.core"
-    },
-    {
-      "case": "candidate-1",
-      "enabled": true,
-      "gate": true,
-      "headline": "",
-      "kind": "comparison",
-      "label": "Compare candidate-1",
-      "status": "cancelled",
-      "taskId": "compare.candidate-1"
     }
   ],
   "title": "CI could not compare: the base did not evaluate"

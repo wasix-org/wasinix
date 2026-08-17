@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-use crate::ci::compare::{case_status, compare_case_results, selected_case, JobStatuses};
+use crate::ci::compare::JobStatuses;
 use crate::ci::evalmap::EvalMap;
 use crate::ci::events::{Event, Tracker};
 use crate::ci::facts;
@@ -1038,93 +1038,6 @@ fn run_build_tasks(
     Ok(worst)
 }
 
-/// Jobs a case promised results for but did not deliver, which makes any
-/// comparison against it incomplete rather than clean.
-fn missing_case_results(
-    case: CaseRef<'_, RevSource>,
-    mapping: &EvalMap,
-    status: &crate::ci::evalmap::StatusMap,
-) -> Result<Vec<String>> {
-    let case_id = case.case_id();
-    let missing = match case {
-        CaseRef::Build(build) => crate::ci::baseline::missing_status(build, mapping, status)?,
-        CaseRef::Spot(_) => {
-            let delivered: BTreeSet<String> =
-                status.keys().map(|job| job.as_str().to_string()).collect();
-            selected_case(case, mapping)?
-                .difference(&delivered)
-                .cloned()
-                .collect()
-        }
-    };
-    Ok(missing
-        .into_iter()
-        .map(|name| format!("{case_id}:{name}"))
-        .collect())
-}
-
-fn compare(
-    ctx: &Context,
-    request: &ResolvedRequest,
-    candidate_id: &str,
-) -> Result<Fragment> {
-    let Request::Diff(diff) = request else {
-        return request_error("compare requires a diff request");
-    };
-    let baseline = diff
-        .cases
-        .iter()
-        .find(|case| case.case_id() == diff.baseline)
-        .ok_or_else(|| Error::Request("diff has no baseline case".into()))?;
-    let candidate = diff
-        .cases
-        .iter()
-        .find(|case| case.case_id() == candidate_id)
-        .ok_or_else(|| Error::Request(format!("unknown candidate {candidate_id:?}")))?;
-
-    let base_paths = case_dir(ctx.run_dir, baseline.case_id());
-    let head_paths = case_dir(ctx.run_dir, candidate_id);
-    let base_map = load_map(&base_paths)?;
-    let base_status = case_status(&base_paths);
-    let head_map = load_map(&head_paths)?;
-    let head_status = case_status(&head_paths);
-    let mut result = compare_case_results(
-        baseline.as_ref(),
-        &base_map,
-        &base_status,
-        candidate.as_ref(),
-        &head_map,
-        &head_status,
-    )?;
-    let mut missing = missing_case_results(baseline.as_ref(), &base_map, &base_status)?;
-    missing.extend(missing_case_results(
-        candidate.as_ref(),
-        &head_map,
-        &head_status,
-    )?);
-    result.case_failure = !missing.is_empty();
-    result.missing_results = missing;
-
-    let regressions = result.regression_count();
-    let headline = if regressions > 0 {
-        format!("{regressions} regressions")
-    } else {
-        format!("no regressions, {} fixes", result.fixes.len())
-    };
-    Ok(Fragment::new(
-        format!("compare.{candidate_id}"),
-        format!("Compare {candidate_id}"),
-        TaskKind::Comparison,
-        if regressions > 0 {
-            TaskStatus::Failure
-        } else {
-            TaskStatus::Success
-        },
-        headline,
-    )
-    .with_data(FragmentData::Comparison(Box::new(result))))
-}
-
 fn content(
     ctx: &Context,
     request: &ResolvedRequest,
@@ -1192,10 +1105,8 @@ fn run_phase(
     case_id: &str,
     phase: Phase,
 ) -> Result<Fragment> {
-    match phase {
-        Phase::Compare => return compare(ctx, request, case_id),
-        Phase::Content => return content(ctx, request, case_id),
-        _ => {}
+    if phase == Phase::Content {
+        return content(ctx, request, case_id);
     }
 
     let case = request
@@ -1230,12 +1141,12 @@ fn run_phase(
         (Phase::Eval | Phase::Build { .. }, CaseRef::Spot(_)) => {
             request_error("build phase on a spot case")
         }
-        (Phase::Compare | Phase::Content, _) => unreachable!("handled above"),
+        (Phase::Content, _) => unreachable!("handled above"),
     }
 }
 
 pub(crate) fn blocked_by_case_failure(phase: Phase) -> bool {
-    !matches!(phase, Phase::Treefmt | Phase::Compare | Phase::Content)
+    !matches!(phase, Phase::Treefmt | Phase::Content)
 }
 
 /// A phase whose failure blocks the rest of its case. Builds run as one
@@ -1366,10 +1277,10 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
             )?;
             continue;
         }
-        // A comparison whose baseline never evaluated goes hungry rather
-        // than reporting: the fold reads its absent fragment as "could not
-        // compare" and concludes neutral, never red.
-        if matches!(task.phase, Phase::Compare | Phase::Content)
+        // A content diff against a baseline that never evaluated has no base
+        // side to read; it stays unreported rather than failing as advisory
+        // noise for the base's condition.
+        if task.phase == Phase::Content
             && loaded
                 .baseline_case()
                 .is_some_and(|baseline| broken.contains(&baseline))
@@ -1452,6 +1363,7 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
             started_at: tracker.snapshot().started_at,
             finished_at: Some(unix_secs()),
             request: Some(request.clone()),
+            comparisons: crate::ci::compare::project(ctx.run_dir, request, true)?,
         },
     );
     schema::write(&crate::ci::prepare::report_path(ctx.run_dir), &report)?;

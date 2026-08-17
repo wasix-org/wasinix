@@ -99,6 +99,7 @@ pub(crate) fn load_running(
             started_at: snapshot.started_at,
             finished_at: None,
             request: Some(loaded.request.clone()),
+            comparisons: crate::ci::compare::project(run_dir, &loaded.request, false)?,
         },
     );
     Ok(Some(Rendered {

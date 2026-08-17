@@ -8,6 +8,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::ci::compare::{Comparison, VersionUpdate};
+
 use crate::ci::contentdiff::ContentSummary;
 use crate::ci::facts::{BuildFacts, Failure};
 use crate::ci::plan::{Plan, Task, TaskKind};
@@ -53,7 +54,6 @@ pub struct LogExcerpt {
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum FragmentData {
     Build(BuildFacts),
-    Comparison(Box<Comparison>),
     Eval(EvalSummary),
     Content(ContentSummary),
     Log(LogExcerpt),
@@ -207,6 +207,10 @@ pub struct Report {
     pub failures: BTreeMap<String, Vec<Failure>>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub version_updates: BTreeMap<String, Vec<VersionUpdate>>,
+    /// Per candidate, the projection of its case against the baseline; each
+    /// half fills in as its inputs land. Derived by the fold, never a task.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub comparisons: Vec<Comparison>,
     /// The request this run executed, echoed so a reader can tell what was
     /// selected without reconstructing it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -231,6 +235,9 @@ pub struct FoldContext {
     pub started_at: Option<u64>,
     pub finished_at: Option<u64>,
     pub request: Option<ResolvedRequest>,
+    /// The candidates' projections against the baseline, from
+    /// [`crate::ci::compare::project`]; empty for a plain build.
+    pub comparisons: Vec<Comparison>,
 }
 
 /// A check-run annotation anchored at the failing package's definition.
@@ -333,34 +340,52 @@ pub fn fold(
         .filter(|view| view.task.enabled && failed(view.status))
         .count();
 
-    // Failed gates whose case is the diff baseline (or that went hungry
-    // because the baseline never evaluated) are the base's condition, not the
-    // submitted change's: the run concludes neutral, never red.
-    let baseline_only = failed_gates > 0
-        && context.baseline_case.as_deref().is_some_and(|baseline| {
-            views
-                .iter()
-                .filter(|view| view.task.enabled && view.task.gate && failed(view.status))
-                .all(|view| {
-                    view.task.case == baseline
-                        || (view.task.kind == TaskKind::Comparison && view.fragment.is_none())
-                })
-        });
+    // The diff verdict comes from the projections: regressions fail the run
+    // the moment the build halves exist; a candidate with no comparison
+    // basis at finish is the base's condition (neutral) when the base never
+    // evaluated, and the candidate's failure otherwise.
+    let is_diff = context.baseline_case.is_some();
+    let regressions: usize = context
+        .comparisons
+        .iter()
+        .map(Comparison::regression_count)
+        .sum();
+    let no_base = context
+        .comparisons
+        .iter()
+        .any(|comparison| comparison.eval.is_none() && !comparison.base_evaluated);
+    let uncompared = context
+        .comparisons
+        .iter()
+        .any(|comparison| comparison.eval.is_none());
+    // A diff stays open until its process finishes: its builds do not gate,
+    // so gate accounting alone would conclude it while builds still run.
+    let diff_open = is_diff && !context.finished;
 
-    let (conclusion, title) = if failed_gates > 0 && baseline_only {
-        (
-            Some(Conclusion::Neutral),
-            "CI could not compare: the base did not evaluate".to_string(),
-        )
-    } else if failed_gates > 0 {
+    let (conclusion, title) = if failed_gates > 0 {
         (Some(Conclusion::Failure), "CI failed".to_string())
-    } else if pending_gates > 0 {
+    } else if regressions > 0 {
+        (
+            Some(Conclusion::Failure),
+            format!("CI found {regressions} regressions"),
+        )
+    } else if pending_gates > 0 || diff_open {
         let title = if active_failures > 0 {
             format!("CI running with {active_failures} failed")
         } else {
             "CI in progress".to_string()
         };
         (None, title)
+    } else if is_diff && no_base {
+        (
+            Some(Conclusion::Neutral),
+            "CI could not compare: the base did not evaluate".to_string(),
+        )
+    } else if is_diff && uncompared {
+        (
+            Some(Conclusion::Failure),
+            "CI could not compare a candidate".to_string(),
+        )
     } else if !plan.tasks.is_empty() || !fragments.is_empty() {
         let title = if advisory_failures > 0 {
             format!("CI passed with {advisory_failures} advisory failures")
@@ -375,7 +400,7 @@ pub fn fold(
         )
     };
 
-    let complete = failed_gates > 0 || pending_gates == 0;
+    let complete = conclusion.is_some();
 
     let annotations = views
         .iter()
@@ -415,14 +440,12 @@ pub fn fold(
             _ => None,
         })
         .collect();
-    let version_updates = views
+    let version_updates = context
+        .comparisons
         .iter()
-        .filter(|view| view.task.enabled)
-        .filter_map(|view| match view.fragment?.data.as_ref()? {
-            FragmentData::Comparison(comparison) if !comparison.version_updates.is_empty() => {
-                Some((view.task.task_id.clone(), comparison.version_updates.clone()))
-            }
-            _ => None,
+        .filter_map(|comparison| {
+            let updates = &comparison.eval.as_ref()?.version_updates;
+            (!updates.is_empty()).then(|| (comparison.candidate.clone(), updates.clone()))
         })
         .collect();
 
@@ -436,6 +459,7 @@ pub fn fold(
         tasks,
         failures,
         version_updates,
+        comparisons: context.comparisons,
         request: context.request,
     }
 }
@@ -462,6 +486,7 @@ pub fn from_run_state(run: &crate::runs::Run) -> Report {
         tasks: Vec::new(),
         failures: std::collections::BTreeMap::new(),
         version_updates: std::collections::BTreeMap::new(),
+        comparisons: Vec::new(),
         request: None,
     }
 }

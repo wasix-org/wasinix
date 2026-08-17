@@ -40,14 +40,21 @@ leaves a typed fragment. The report is folded from the fragments by
 `ci/report.rs` and nowhere else, so the terminal verdict, `run failures`, the
 markdown comment, and the check summary describe the same facts.
 
+Tasks do work and emit facts; anything computable from persisted facts is a
+projection the fold derives. The diff comparison is the example: no task
+computes it, `ci/compare.rs` projects it from the case directories each time the
+fold runs, so its eval half (added, removed, version moves, rebuilds) reaches
+the comment as soon as both evaluations exist and its build half (regressions,
+fixes) joins when results land.
+
 Progress is an append-only `events.jsonl`; the snapshot is derived from it, not
 maintained beside it. Every progress view (the terminal ladder, `run watch`,
 `run logs --follow`, a remote observer) replays that one stream.
 
 The verdict has three values. A green run passes; a red run has a failed
-required gate; a diff whose baseline could not evaluate concludes **neutral**,
-never red, because a failure the base shares is the status quo, not a regression
-the change introduced.
+required gate or a comparison with regressions; a diff whose baseline could not
+evaluate concludes **neutral**, never red, because a failure the base shares is
+the status quo, not a regression the change introduced.
 
 ## Durable and remote runs
 
