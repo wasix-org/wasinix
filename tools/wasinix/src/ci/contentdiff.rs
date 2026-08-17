@@ -68,11 +68,15 @@ fn basename(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
 
-/// Narinfo per store path, chunked and tolerant: one failing invocation must
-/// not lose the whole comparison.
+/// Narinfo per store path, chunked and tolerant: nix path-info fails the
+/// whole invocation when any queried path is absent, so a failed chunk
+/// bisects until each missing path costs only itself, never its chunkmates.
 fn path_infos(paths: &[String], store: Option<&str>) -> BTreeMap<String, Option<Value>> {
-    let mut infos = BTreeMap::new();
-    for chunk in paths.chunks(NARINFO_CHUNK) {
+    fn query(
+        chunk: &[String],
+        store: Option<&str>,
+        infos: &mut BTreeMap<String, Option<Value>>,
+    ) {
         let mut invocation = Invocation::plain("path-info")
             .json()
             .args(["--json-format", "2"])
@@ -80,7 +84,7 @@ fn path_infos(paths: &[String], store: Option<&str>) -> BTreeMap<String, Option<
         if let Some(store) = store {
             invocation = invocation.args(["--store", store]);
         }
-        match invocation.probe("one failing chunk must not lose the comparison") {
+        match invocation.probe("a missing path must not lose the comparison") {
             Ok(output) if output.status.is_success() => {
                 if let Ok(value) = serde_json::from_slice::<Value>(&output.stdout) {
                     for (key, info) in value["info"].as_object().into_iter().flatten() {
@@ -95,18 +99,27 @@ fn path_infos(paths: &[String], store: Option<&str>) -> BTreeMap<String, Option<
                     }
                 }
             }
+            _ if chunk.len() > 1 => {
+                let (left, right) = chunk.split_at(chunk.len() / 2);
+                query(left, store, infos);
+                query(right, store, infos);
+            }
             result => {
                 if let Ok(output) = result {
                     crate::support::ui::warning(format!(
-                        "path-info failed for a chunk: {}",
-                        output.stderr.trim().chars().take(200).collect::<String>()
+                        "path-info: {}: {}",
+                        basename(&chunk[0]),
+                        output.stderr.trim().lines().last().unwrap_or_default()
+                            .chars().take(160).collect::<String>()
                     ));
                 }
-                for path in chunk {
-                    infos.insert(basename(path).to_string(), None);
-                }
+                infos.insert(basename(&chunk[0]).to_string(), None);
             }
         }
+    }
+    let mut infos = BTreeMap::new();
+    for chunk in paths.chunks(NARINFO_CHUNK) {
+        query(chunk, store, &mut infos);
     }
     infos
 }

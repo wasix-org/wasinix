@@ -1078,13 +1078,20 @@ fn content(
         allowed_jobs: Some(&allowed),
         store: route.store().as_deref(),
     });
+    // Skipped pairs were not compared; counting them in the denominator
+    // would present "could not fetch a side" as "every output changed".
+    let compared = summary.identical.len() + summary.changed.len();
     let headline = if summary.pair_count() == 0 {
         "nothing to compare".to_string()
+    } else if compared == 0 {
+        format!("{} pairs skipped, none compared", summary.skipped.len())
+    } else if summary.skipped.is_empty() {
+        format!("{}/{compared} outputs identical", summary.identical.len())
     } else {
         format!(
-            "{}/{} outputs identical",
+            "{}/{compared} outputs identical · {} skipped",
             summary.identical.len(),
-            summary.pair_count()
+            summary.skipped.len()
         )
     };
     Ok(Fragment::new(
