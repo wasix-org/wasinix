@@ -281,6 +281,16 @@ fn load_legacy(repo: &Path) -> Result<Builder> {
     })
 }
 
+/// Configured remote names, for shell completion: silent on any problem,
+/// since a completer must never error a keystroke.
+pub fn remote_names() -> Vec<String> {
+    read_registry()
+        .ok()
+        .flatten()
+        .map(|registry| registry.remotes.keys().cloned().collect())
+        .unwrap_or_default()
+}
+
 pub fn load(repo: &Path, selected: Option<&str>) -> Result<Builder> {
     let selected = selected
         .map(str::to_string)

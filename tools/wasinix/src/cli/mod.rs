@@ -157,32 +157,40 @@ pub enum RunCommand {
     },
     /// Show a run's state and progress snapshot
     Status {
+        #[arg(add = clap_complete::ArgValueCandidates::new(run_id_candidates))]
         run_id: String,
         #[command(flatten)]
         json: ui::JsonArg,
     },
     /// Print a run's log tail, optionally following until it finishes
     Logs {
+        #[arg(add = clap_complete::ArgValueCandidates::new(run_id_candidates))]
         run_id: String,
         #[arg(long)]
         follow: bool,
     },
     /// Print the run's folded report
     Report {
+        #[arg(add = clap_complete::ArgValueCandidates::new(run_id_candidates))]
         run_id: String,
         #[command(flatten)]
         json: ui::JsonArg,
     },
     /// List the run's build failures with their causes
     Failures {
+        #[arg(add = clap_complete::ArgValueCandidates::new(run_id_candidates))]
         run_id: String,
         #[command(flatten)]
         json: ui::JsonArg,
     },
     /// Narrate the run's event stream until it finishes
-    Watch { run_id: String },
+    Watch {
+        #[arg(add = clap_complete::ArgValueCandidates::new(run_id_candidates))]
+        run_id: String,
+    },
     /// Wait until a run reaches a final state
     Wait {
+        #[arg(add = clap_complete::ArgValueCandidates::new(run_id_candidates))]
         run_id: String,
         /// Give up observing after this many seconds; the run itself keeps going
         #[arg(long)]
@@ -191,6 +199,7 @@ pub enum RunCommand {
     /// Ask a run's supervisor to terminate the payload's process group
     Cancel {
         /// A local run id, or `<remote>:<run>` for a run hosted on a builder
+        #[arg(add = clap_complete::ArgValueCandidates::new(run_id_candidates))]
         run_id: String,
     },
     #[command(hide = true)]
@@ -959,11 +968,29 @@ fn failure_tail(paths: &[PathBuf]) -> String {
     detail[start..].to_string()
 }
 
+/// Completion values for run ids: whatever the local registry holds.
+fn run_id_candidates() -> Vec<clap_complete::CompletionCandidate> {
+    crate::runs::run_ids()
+        .into_iter()
+        .map(clap_complete::CompletionCandidate::new)
+        .collect()
+}
+
 fn run(command: CommandTree) -> Result<CommandStatus> {
     match command {
         CommandTree::Completions { shell } => {
-            let mut command = <Cli as clap::CommandFactory>::command();
-            clap_complete::generate(shell, &mut command, "wasinix", &mut std::io::stdout());
+            // Registration only: values complete at runtime through the
+            // dynamic engine, so job names and run ids stay live.
+            let name = shell.to_string();
+            let shells = clap_complete::env::Shells::builtins();
+            let Some(completer) = shells.completer(&name) else {
+                return crate::support::error::request_error(format!(
+                    "no dynamic completion for {name}"
+                ));
+            };
+            completer
+                .write_registration("COMPLETE", "wasinix", "wasinix", "wasinix", &mut std::io::stdout())
+                .map_err(|e| crate::support::error::io(std::path::Path::new("<stdout>"), e))?;
             Ok(CommandStatus::SUCCESS)
         }
         CommandTree::Build(args) => request::run_build(&crate::support::git::repo_root()?, args),
@@ -993,6 +1020,9 @@ fn run(command: CommandTree) -> Result<CommandStatus> {
 }
 
 pub fn main() -> std::process::ExitCode {
+    // Dynamic shell completion: a request re-enters the binary with COMPLETE
+    // set and exits here; `completions <shell>` prints the registration.
+    clap_complete::CompleteEnv::with_factory(<Cli as clap::CommandFactory>::command).complete();
     let cli = Cli::parse();
     ui::set_verbosity(if cli.quiet {
         ui::Verbosity::Quiet

@@ -53,8 +53,20 @@ pub struct RequestArgs {
 pub struct PlacementArg {
     /// Where to run: local, a remote name, or <remote>:<route>; the
     /// configured default remote when absent
-    #[arg(long, value_name = "PLACEMENT")]
+    #[arg(
+        long,
+        value_name = "PLACEMENT",
+        add = clap_complete::ArgValueCandidates::new(placement_candidates)
+    )]
     pub on: Option<String>,
+}
+
+/// Completion values for --on: local plus the configured remotes.
+fn placement_candidates() -> Vec<clap_complete::CompletionCandidate> {
+    std::iter::once("local".to_string())
+        .chain(crate::nix::builder::remote_names())
+        .map(clap_complete::CompletionCandidate::new)
+        .collect()
 }
 
 #[derive(Debug, clap::Args)]

@@ -56,6 +56,24 @@ pub fn registry() -> Result<PathBuf> {
     Ok(crate::support::shell::home_dir()?.join(".local/state/wasinix/runs"))
 }
 
+/// Recorded run ids, newest first, for shell completion: silent on any
+/// problem, since a completer must never error a keystroke.
+pub fn run_ids() -> Vec<String> {
+    let Ok(registry) = registry() else {
+        return Vec::new();
+    };
+    let Ok(entries) = std::fs::read_dir(&registry) else {
+        return Vec::new();
+    };
+    let mut ids: Vec<String> = entries
+        .flatten()
+        .filter(|entry| entry.path().join(RUN_FILE).exists())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .collect();
+    ids.sort_by(|a, b| b.cmp(a));
+    ids
+}
+
 pub fn dir_of(run_id: &str) -> Result<PathBuf> {
     let dir = registry()?.join(run_id);
     if !dir.join(RUN_FILE).exists() {
