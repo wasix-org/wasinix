@@ -94,6 +94,8 @@ pub enum CommandKind {
     Build,
     /// The command rewrites the pull request's branch.
     Mutation,
+    /// The command only replies; no run, no report, no build machinery.
+    Help,
 }
 
 impl CommandKind {
@@ -101,6 +103,7 @@ impl CommandKind {
         match self {
             CommandKind::Build => "build",
             CommandKind::Mutation => "mutation",
+            CommandKind::Help => "help",
         }
     }
 }

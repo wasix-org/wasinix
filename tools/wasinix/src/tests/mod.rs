@@ -1927,6 +1927,17 @@ mod markdown {
                 .unwrap(),
             CommandKind::Build
         );
+        // Help replies and is done: routing it through the run machinery
+        // manufactures a report-less run every publisher chokes on.
+        assert_eq!(
+            crate::cli::untrusted::ClapClassifier.classify("help").unwrap(),
+            CommandKind::Help
+        );
+        // clap already prefixes its rendering; the wrapper must not.
+        let refusal = crate::cli::untrusted::parse("frobnicate --now")
+            .unwrap_err()
+            .to_string();
+        assert!(refusal.starts_with("unrecognized subcommand"), "{refusal}");
         // Adapter-owned mutation flags do not exist in this grammar.
         for refused in [
             "update wasmer --commit",
@@ -3357,7 +3368,7 @@ mod corpus {
         let read = |name: &str| {
             std::fs::read_to_string(root.join("workflows").join(name)).unwrap()
         };
-        let ci_command = read("ci-command.yml");
+        let ci_command = read("ci-command-run.yml");
         for kind in [
             crate::ci::origin::CommandKind::Build,
             crate::ci::origin::CommandKind::Mutation,
@@ -3367,14 +3378,22 @@ mod corpus {
                     "needs.authorize.outputs.kind == '{}'",
                     kind.as_str()
                 )),
-                "ci-command.yml dispatches no job for kind {}",
+                "ci-command-run.yml dispatches no job for kind {}",
                 kind.as_str()
             );
         }
+        // Help is handled inside authorize, not dispatched to a job.
+        assert!(
+            ci_command.contains(&format!(
+                "steps.authorize.outputs.kind == '{}'",
+                crate::ci::origin::CommandKind::Help.as_str()
+            )),
+            "ci-command-run.yml never replies to help"
+        );
         for output in ["kind=", "commentId=", "pullRequest=", "headSha="] {
             assert!(
                 ci_command.contains(&format!("steps.authorize.outputs.{}", output.trim_end_matches('='))),
-                "ci-command.yml does not consume authorize output {output}"
+                "ci-command-run.yml does not consume authorize output {output}"
             );
         }
         let cleanup = read("preview-cleanup.yml");
@@ -3465,6 +3484,7 @@ mod corpus {
                     let window = lines[index..(index + 3).min(lines.len())].join("\n");
                     if window.contains("/reactions")
                         || window.contains("failed before it could report")
+                        || window.contains("mutation commands only work on")
                     {
                         continue;
                     }

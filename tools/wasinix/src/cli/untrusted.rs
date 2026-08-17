@@ -211,8 +211,17 @@ pub fn parse(command: &str) -> Result<UntrustedCommand> {
     if words.len() > MAX_WORDS {
         return request_error(format!("command has more than {MAX_WORDS} words"));
     }
-    let parsed = UntrustedCli::try_parse_from(&words)
-        .map_err(|error| Error::Request(error.to_string()))?;
+    let parsed = UntrustedCli::try_parse_from(&words).map_err(|error| {
+        // clap renders its own "error: " prefix; the caller adds one too, so
+        // it comes off here or every refusal reads "error: error:".
+        let rendered = error.to_string();
+        Error::Request(
+            rendered
+                .strip_prefix("error: ")
+                .unwrap_or(&rendered)
+                .to_string(),
+        )
+    })?;
     Ok(match parsed {
         UntrustedCli::Help => UntrustedCommand::Help,
         UntrustedCli::Update(args) => UntrustedCommand::Mutation(MutationCommand::Update {
@@ -252,7 +261,8 @@ pub struct ClapClassifier;
 impl Classifier for ClapClassifier {
     fn classify(&self, command: &str) -> Result<CommandKind> {
         match parse(command)? {
-            UntrustedCommand::Request(_) | UntrustedCommand::Help => Ok(CommandKind::Build),
+            UntrustedCommand::Request(_) => Ok(CommandKind::Build),
+            UntrustedCommand::Help => Ok(CommandKind::Help),
             UntrustedCommand::Mutation(_) => Ok(CommandKind::Mutation),
         }
     }
