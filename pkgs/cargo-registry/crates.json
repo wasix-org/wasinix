@@ -89,9 +89,7 @@
   },
   "gix-fs": {
     "0.15.0": "sha256-XYIM7og600lkqFcSiySQSV6Lf0yVX3Ph3HbjZ5vkTTU=",
-    "0.19.2": "sha256-vnEHyK5CO5HkP/5DLx6fHMBcJYF7zJLvfJSpgE+FhKM=",
-    "0.20.0": "sha256-oe5Ycomr43RKib86SPXEW0/gOmte7hUAgXW1J5Fo3cE=",
-    "0.21.0": "sha256-VgYS9OMAHr45G4EqynB+HM5SzSsr8JIfTL3YkWAhPhg="
+    "0.19.2": "sha256-vnEHyK5CO5HkP/5DLx6fHMBcJYF7zJLvfJSpgE+FhKM="
   },
   "gix-index": {
     "0.40.1": "sha256-ZALE4MVgt//6Q6/yoqoVHRXpvTFwNR0xsJbuobKxEn4=",
