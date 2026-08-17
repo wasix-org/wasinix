@@ -4795,7 +4795,7 @@ mod table {
 
 
 mod buildset {
-    use crate::nix::buildset::{dry_run_to_build, realise_building_drv};
+    use crate::nix::buildset::{dry_run_plan, realise_building_drv};
     use crate::nix::evaljobs;
 
     #[test]
@@ -4813,16 +4813,21 @@ mod buildset {
     #[test]
     fn the_dry_run_plan_partitions_in_every_phrasing() {
         let plural = "these 2 derivations will be built:\n  /nix/store/a.drv\n  /nix/store/b.drv\nthese 3 paths will be fetched (1.0 MiB download, 2.0 MiB unpacked):\n  /nix/store/c\n  /nix/store/d\n  /nix/store/e\n";
-        let built = dry_run_to_build(plural).unwrap();
+        let plan = dry_run_plan(plural).unwrap();
         assert_eq!(
-            built.iter().collect::<Vec<_>>(),
+            plan.to_build.iter().collect::<Vec<_>>(),
             ["/nix/store/a.drv", "/nix/store/b.drv"]
         );
+        assert_eq!(
+            plan.fetched.iter().collect::<Vec<_>>(),
+            ["/nix/store/c", "/nix/store/d", "/nix/store/e"],
+            "the fetch set separates substitutable from locally valid"
+        );
         let singular = "this derivation will be built:\n  /nix/store/only.drv\n";
-        assert_eq!(dry_run_to_build(singular).unwrap().len(), 1);
-        assert!(dry_run_to_build("").unwrap().is_empty());
+        assert_eq!(dry_run_plan(singular).unwrap().to_build.len(), 1);
+        assert!(dry_run_plan("").unwrap().to_build.is_empty());
         // A phrasing the parser does not know must not read as fully cached.
-        assert!(dry_run_to_build("cannot price /nix/store/x.drv").is_err());
+        assert!(dry_run_plan("cannot price /nix/store/x.drv").is_err());
     }
 
     /// Real-nix integration: run with `cargo test -- --ignored` on a

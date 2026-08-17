@@ -192,12 +192,23 @@ struct JobSpec {
     outputs: Vec<String>,
 }
 
-/// The derivations a dry-run plan says must actually build. Everything else
-/// is already valid locally or substitutable, which the driver reports as
-/// cached without realising, so a warm run downloads nothing.
-pub(crate) fn dry_run_to_build(plan: &str) -> Result<BTreeSet<String>> {
+/// A dry-run plan, partitioned: the derivations that must actually build,
+/// and the paths that would be fetched from a substituter. A path in neither
+/// set is already valid locally.
+pub(crate) struct DryRunPlan {
+    pub(crate) to_build: BTreeSet<String>,
+    pub(crate) fetched: BTreeSet<String>,
+}
+
+/// Parse `nix-store --realise --dry-run` output. Everything outside the
+/// build section is either substitutable or already valid locally, which the
+/// driver reports as cached without realising, so a warm run downloads
+/// nothing.
+pub(crate) fn dry_run_plan(plan: &str) -> Result<DryRunPlan> {
     let mut to_build = BTreeSet::new();
+    let mut fetched = BTreeSet::new();
     let mut in_build_section = false;
+    let mut in_fetch_section = false;
     let mut recognized = false;
     for line in plan.lines() {
         let trimmed = line.trim();
@@ -205,6 +216,7 @@ pub(crate) fn dry_run_to_build(plan: &str) -> Result<BTreeSet<String>> {
             || (trimmed.starts_with("these ") && trimmed.contains("will be built"))
         {
             in_build_section = true;
+            in_fetch_section = false;
             recognized = true;
             continue;
         }
@@ -212,6 +224,7 @@ pub(crate) fn dry_run_to_build(plan: &str) -> Result<BTreeSet<String>> {
             || (trimmed.starts_with("these ") && trimmed.contains("will be fetched"))
         {
             in_build_section = false;
+            in_fetch_section = true;
             recognized = true;
             continue;
         }
@@ -219,9 +232,13 @@ pub(crate) fn dry_run_to_build(plan: &str) -> Result<BTreeSet<String>> {
             if in_build_section && trimmed.ends_with(".drv") {
                 to_build.insert(trimmed.to_string());
             }
+            if in_fetch_section {
+                fetched.insert(trimmed.to_string());
+            }
             continue;
         }
         in_build_section = false;
+        in_fetch_section = false;
     }
     // A phrasing this parser does not know must not read as "fully cached".
     if !recognized && plan.contains(".drv") {
@@ -230,7 +247,7 @@ pub(crate) fn dry_run_to_build(plan: &str) -> Result<BTreeSet<String>> {
             crate::support::error::tail(plan, 500)
         )));
     }
-    Ok(to_build)
+    Ok(DryRunPlan { to_build, fetched })
 }
 
 /// The derivation a realise progress line announces, e.g.
@@ -443,14 +460,26 @@ pub fn build_union(
         .operands(jobs.keys().cloned())
         .route(request.route)?
         .probe("the dry-run plan partitions cached from to-build")?;
-    let to_build = dry_run_to_build(&plan.stderr)?;
+    let plan = dry_run_plan(&plan.stderr)?;
+    let to_build = plan.to_build;
 
     let mut pending: BTreeSet<String> = BTreeSet::new();
+    // Outputs cached by local validity (a bootstrap build, a previous run's
+    // leftovers) are in neither the build nor the fetch set, and nothing has
+    // pushed them. They go to the uploader, which skips whatever the remote
+    // already has.
+    let mut local_only: Vec<String> = Vec::new();
     for (drv, spec) in &jobs {
         if to_build.contains(drv) {
             pending.insert(drv.clone());
             continue;
         }
+        local_only.extend(
+            spec.outputs
+                .iter()
+                .filter(|output| !plan.fetched.contains(*output))
+                .cloned(),
+        );
         for attr in &spec.attrs {
             emit(
                 serde_json::json!({
@@ -474,6 +503,10 @@ pub fn build_union(
     );
 
     let uploader = Uploader::start(key.as_ref().map(SigningKey::store));
+    if key.is_some() && !local_only.is_empty() {
+        crate::support::ui::fact("pushing locally built outputs", local_only.len());
+        uploader.push(local_only);
+    }
     let started = std::time::Instant::now();
     let mut build_started: BTreeMap<String, std::time::Instant> = BTreeMap::new();
     // Announced build-time dependencies, pushed as their outputs turn valid.
