@@ -1129,6 +1129,19 @@ mod route {
 
         // A slot whose recorded holder is dead is reclaimed, not respected.
         std::fs::write(root.join("0.json"), "{\"pid\": 4294967294, \"startedAt\": 1}").unwrap();
+        let reclaimed = crate::nix::builder::acquire_slots(&root, 1, "test host").unwrap();
+        drop(reclaimed);
+
+        // A live pid with the wrong start time is a recycled pid, so the
+        // slot is not held: liveness alone must not pin a slot forever.
+        std::fs::write(
+            root.join("0.json"),
+            format!(
+                "{{\"pid\": {}, \"startedAt\": 1, \"pidStarted\": 1}}",
+                std::process::id()
+            ),
+        )
+        .unwrap();
         crate::nix::builder::acquire_slots(&root, 1, "test host").unwrap();
     }
 

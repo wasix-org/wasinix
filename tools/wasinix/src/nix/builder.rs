@@ -484,6 +484,10 @@ impl Deadline {
 struct LeaseRecord {
     pid: u32,
     started_at: u64,
+    /// The holder's kernel start time (/proc/<pid>/stat), so a recycled pid
+    /// reads as a different process instead of holding the slot forever.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pid_started: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -506,6 +510,15 @@ fn process_alive(pid: u32) -> bool {
     Path::new("/proc").join(pid.to_string()).exists()
 }
 
+/// Kernel start time of a live process, in clock ticks since boot; None when
+/// the process is gone. The comm field may contain spaces, so fields count
+/// from after its closing parenthesis (starttime is the 22nd overall).
+fn process_start_ticks(pid: u32) -> Option<u64> {
+    let stat = std::fs::read_to_string(Path::new("/proc").join(pid.to_string()).join("stat")).ok()?;
+    let after_comm = stat.rsplit_once(')')?.1;
+    after_comm.split_whitespace().nth(19)?.parse().ok()
+}
+
 pub fn acquire(builder: &Builder) -> Result<Lease> {
     let root = runtime_dir()?.join("leases").join(&builder.name);
     acquire_slots(&root, builder.capacity, &format!("remote {:?}", builder.name))
@@ -526,6 +539,7 @@ pub fn acquire_slots(root: &Path, capacity: usize, what: &str) -> Result<Lease> 
                 let record = LeaseRecord {
                     pid: std::process::id(),
                     started_at: crate::support::time::unix_secs(),
+                    pid_started: process_start_ticks(std::process::id()),
                 };
                 let text = serde_json::to_string(&record).map_err(|source| Error::Json {
                     path: path.clone(),
@@ -541,6 +555,13 @@ pub fn acquire_slots(root: &Path, capacity: usize, what: &str) -> Result<Lease> 
                     .ok()
                     .and_then(|text| serde_json::from_str::<LeaseRecord>(&text).ok());
                 let stale = match holder {
+                    // A recorded start time pins the holder's identity; bare
+                    // liveness is the fallback for records predating it.
+                    Some(LeaseRecord {
+                        pid,
+                        pid_started: Some(started),
+                        ..
+                    }) => process_start_ticks(pid) != Some(started),
                     Some(record) => !process_alive(record.pid),
                     None => {
                         crate::support::ui::warning(format!(
