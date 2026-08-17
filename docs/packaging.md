@@ -192,6 +192,16 @@ import.
 To run tests against a locally built runtime instead of the pinned one:
 `WASMER_BIN=/path/to/wasmer nix build --impure .#checks.x86_64-linux.<name>`.
 
+## Update scripts
+
+A package that pins its own source (rather than overriding nixpkgs) declares its
+bump in `passthru.updateScript` (`docs/updating.md`). Verify the script end to
+end locally before shipping it: downgrade to an explicit older release
+(`wasinix update <target>@<version>`, or `@rev:<sha>` for revision targets),
+then update back to latest (`wasinix update <target>`), and check both edits
+land in the pin file. A script that has only ever answered "already up to date"
+has exercised none of its rewriting.
+
 ## Pitfalls
 
 - Nix only sees git-tracked files, so `git add -N` a new one before building
