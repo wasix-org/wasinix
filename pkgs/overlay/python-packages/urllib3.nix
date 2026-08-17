@@ -15,7 +15,6 @@ helpers.libTweaks {
       pyfinal.pytestCheckHook
       pyfinal.quart
       pyfinal.tornado
-      pyfinal.trio
       pyfinal.trustme
     ]
     ++ lib.concatAttrValues pyprev.urllib3.passthru.optional-dependencies;

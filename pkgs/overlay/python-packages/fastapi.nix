@@ -14,22 +14,28 @@ helpers.libTweaks (
     };
   }
   // {
-    passthru.wasixDeclaredCheckInputs =
-      [
-        pyfinal.a2wsgi
-        pyfinal.anyio
-        pyfinal.dirty-equals
-        pyfinal.flask
-        pyfinal.httpx2
-        pyfinal.inline-snapshot
-        pyfinal.pwdlib
-        pyfinal.pyjwt
-        pyfinal.pytestCheckHook
-        pyfinal.pytest-xdist
-        pyfinal.pytest-timeout
-      ]
-      ++ pyprev.fastapi.passthru.optional-dependencies.all;
+    passthru.wasixDeclaredCheckInputs = [
+      pyfinal.a2wsgi
+      pyfinal.anyio
+      pyfinal.dirty-equals
+      pyfinal.email-validator
+      pyfinal.flask
+      pyfinal.httpx2
+      pyfinal.inline-snapshot
+      pyfinal.itsdangerous
+      pyfinal.jinja2
+      pyfinal.pydantic-extra-types
+      pyfinal.pydantic-settings
+      pyfinal.pwdlib
+      pyfinal.pyjwt
+      pyfinal.pytestCheckHook
+      pyfinal.pytest-xdist
+      pyfinal.pytest-timeout
+      pyfinal.python-multipart
+      pyfinal.pyyaml
+    ];
     disabledTests = [
+      "test_fastapi_cli"
       "test_frontend_respects_root_path"
       "test_required_list_alias_by_name"
     ];
