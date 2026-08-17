@@ -8,7 +8,7 @@
 }:
 helpers.libTweaks {
   patches = [./patches/greenlet-wasm-switch.patch];
-  passthru.wasix.emulatedCheck.broken = "extension exceptions trap in _Unwind_RaiseException";
+  passthru.wasix.emulatedCheck.broken = "cross-thread context access traps in _Unwind_RaiseException";
   # the mod_* functions are 1-arg but bound METH_NOARGS, so wasm's typed function
   # tables trap at the call ("indirect call type mismatch")
   postPatch = ''
