@@ -100,13 +100,9 @@ pub struct DiffArgs {
     #[command(flatten)]
     pub mode: ModeArgs,
     /// The cases, as complete build or spot commands separated by --vs; the
-    /// first case is the baseline
-    #[arg(
-        required = true,
-        trailing_var_arg = true,
-        allow_hyphen_values = true,
-        value_name = "CASE"
-    )]
+    /// first case is the baseline. None means the pull-request shape:
+    /// `build all --at <merge-base with main> --vs build all`
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true, value_name = "CASE")]
     pub words: Vec<String>,
 }
 
@@ -750,7 +746,33 @@ pub(crate) fn run_spot(repo: &Path, args: super::SpotArgs) -> Result<CommandStat
     drive_terminal(repo, request, &args.mode)
 }
 
-pub(crate) fn run_diff(repo: &Path, args: super::DiffArgs) -> Result<CommandStatus> {
+/// The base a bare `diff` compares against: the merge base of HEAD and the
+/// first main ref that exists, mirroring what CI computes for a pull
+/// request.
+pub(crate) fn pr_base(repo: &Path) -> Result<String> {
+    for reference in ["upstream/main", "origin/main", "main"] {
+        if crate::support::git::resolve_rev(repo, reference).is_ok() {
+            return crate::support::git::git(repo, &["merge-base", reference, "HEAD"]);
+        }
+    }
+    request_error("no main ref to diff against (tried upstream/main, origin/main, main); name the cases explicitly")
+}
+
+pub(crate) fn run_diff(repo: &Path, mut args: super::DiffArgs) -> Result<CommandStatus> {
+    if args.words.is_empty() {
+        let base = pr_base(repo)?;
+        ui::fact(
+            "diff",
+            format!(
+                "build all --at {} --vs build all",
+                crate::support::format::short_rev(&base)
+            ),
+        );
+        args.words = ["build", "all", "--at", &base, "--vs", "build", "all"]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+    }
     if args.mode.inputs_only {
         return request_error("--inputs-only applies to build, not diff");
     }

@@ -2775,6 +2775,8 @@ mod corpus {
             "build all --inputs-only",
             "spot packagesByProfile.zlib --from-source rust --plan",
             "diff build all --at main --vs build all",
+            "diff",
+            "diff --content-diff",
             "run start -- wasinix ci run --request r.json",
             "run list --json",
             "run status 123 --json",
@@ -4760,6 +4762,17 @@ mod prepare {
             .iter()
             .any(|task| task.task_id == "case.core" && task.status == TaskStatus::Pending));
         assert_eq!(rendered.snapshot.unwrap().state, RunState::Running);
+    }
+
+    #[test]
+    fn a_bare_diff_bases_on_the_main_merge_base() {
+        let (_scratch, repo) = repo();
+        let base = git(&repo, &["rev-parse", "HEAD"]).unwrap();
+        git(&repo, &["checkout", "-q", "-b", "feature"]).unwrap();
+        std::fs::write(repo.join("file"), "two\n").unwrap();
+        git(&repo, &["add", "-A"]).unwrap();
+        git(&repo, &["commit", "-q", "-m", "feature"]).unwrap();
+        assert_eq!(crate::cli::request::pr_base(&repo).unwrap(), base);
     }
 
     #[test]
