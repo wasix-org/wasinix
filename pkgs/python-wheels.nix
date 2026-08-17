@@ -287,7 +287,7 @@
           # PYTHONPATH does no propagation, so a plugin's own dependencies must
           # be named too or their imports fail in the guest.
           guestInputs = let
-            evalOk = d: d != null && (builtins.tryEval (builtins.seq d.outPath true)).success;
+            evalOk = d: d != null && (builtins.tryEval (builtins.seq d.drvPath true)).success;
             guestUsable = d: d ? pythonModule || lib.hasInfix "check-hook" (lib.getName d);
             declared =
               lib.filter (d: evalOk d && guestUsable d) (selectedCheckInputs ++ selectedBuildSystem);
