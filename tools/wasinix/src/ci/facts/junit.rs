@@ -21,6 +21,8 @@ pub struct Case {
     pub transitive: bool,
     pub expectation: Option<TestExpectation>,
     pub is_test: bool,
+    pub test_name: Option<String>,
+    pub test_family: Option<String>,
     pub position: Option<String>,
 }
 
@@ -36,6 +38,8 @@ impl Case {
             transitive: false,
             expectation: None,
             is_test: false,
+            test_name: None,
+            test_family: None,
             position: None,
         }
     }

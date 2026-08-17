@@ -9,6 +9,8 @@ use std::time::Duration;
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::ci::events::{self, Event};
+use crate::ci::facts::{TestOutcome, TestResult};
+use crate::ci::report::Report;
 use crate::support::atoms::{JobStatus, TaskStatus};
 use crate::support::error::Result;
 use crate::support::format;
@@ -272,4 +274,68 @@ pub fn watch(run_dir: &Path) -> Result<()> {
     )?;
     renderer.finish();
     Ok(())
+}
+
+pub(crate) fn test_summary(label: &str, tests: &[&TestResult]) -> Option<String> {
+    if tests.is_empty() {
+        return None;
+    }
+    let outcomes = [
+        TestOutcome::Pass,
+        TestOutcome::Xfail,
+        TestOutcome::Broken,
+        TestOutcome::Fail,
+        TestOutcome::Xpass,
+        TestOutcome::Skipped,
+    ];
+    let mut parts = vec![format!("{} total", tests.len())];
+    for outcome in outcomes {
+        let count = tests.iter().filter(|test| test.outcome == outcome).count();
+        if count > 0 {
+            parts.push(format!("{count} {}", outcome.as_str()));
+        }
+    }
+    Some(format!("{label}: {}", crate::support::ui::counts(&parts)))
+}
+
+/// Render the stable, folded answer shared by direct builds and `run report`.
+pub fn finished_report(report: &Report) {
+    crate::support::ui::result(&report.title);
+    let tests: Vec<&TestResult> = report.tests.values().flatten().collect();
+    if let Some(line) = test_summary("tests", &tests) {
+        crate::support::ui::result(line);
+    }
+    let upstream: Vec<&TestResult> = tests
+        .iter()
+        .copied()
+        .filter(|test| test.test_name.as_deref() == Some("upstream"))
+        .collect();
+    if let Some(line) = test_summary("upstream", &upstream) {
+        crate::support::ui::result(line);
+    }
+    for (family, label) in [("library", "upstream libraries"), ("wheel", "upstream wheels")] {
+        let family_tests: Vec<&TestResult> = upstream
+            .iter()
+            .copied()
+            .filter(|test| test.test_family.as_deref() == Some(family))
+            .collect();
+        if let Some(line) = test_summary(label, &family_tests) {
+            crate::support::ui::result(line);
+        }
+    }
+    for task in &report.tasks {
+        if !task.enabled {
+            continue;
+        }
+        let took = task
+            .elapsed_seconds
+            .map(|elapsed| format!(" · took {elapsed}"))
+            .unwrap_or_default();
+        crate::support::ui::result(format!(
+            "  {} {}: {}{took}",
+            glyph(task.status),
+            task.task_id,
+            task.headline
+        ));
+    }
 }

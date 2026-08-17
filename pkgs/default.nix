@@ -307,10 +307,8 @@
       }))
     .wasixCheckPhaseName;
 
-  # Test producers compose only through the package-local namespace. `all`
-  # and `names` are regenerated after every addition so they always cover
-  # the current leaves.
-  testLeavesOf = drv: removeAttrs ((drv.passthru or {}).tests or {}) ["all" "names"];
+  # Test producers compose only through the package-local namespace.
+  testLeavesOf = drv: removeAttrs ((drv.passthru or {}).tests or {}) ["all" "passthru"];
   withTest = groupName: testName: test: drv:
     drv.overrideAttrs (old: {
       passthru =

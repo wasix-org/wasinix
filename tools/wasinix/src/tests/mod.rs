@@ -2830,8 +2830,32 @@ mod surfaces {
 
 mod render {
     use crate::ci::events::Event;
-    use crate::cli::render::LineRenderer;
-    use crate::support::atoms::{JobAddr, JobStatus, RunState, TaskStatus};
+    use crate::ci::facts::{TestOutcome, TestResult};
+    use crate::cli::render::{test_summary, LineRenderer};
+    use crate::support::atoms::{DurationSecs, JobAddr, JobStatus, RunState, TaskStatus};
+
+    #[test]
+    fn test_summaries_keep_expected_and_broken_outcomes_visible() {
+        let result = |name: &str, outcome| TestResult {
+            job: JobAddr(name.into()),
+            outcome,
+            test_name: Some("upstream".into()),
+            test_family: Some("wheel".into()),
+            reason: None,
+            duration_seconds: DurationSecs(1.0),
+            position: None,
+        };
+        let tests = [
+            result("checks.one", TestOutcome::Pass),
+            result("checks.two", TestOutcome::Xfail),
+            result("checks.three", TestOutcome::Broken),
+        ];
+        let refs: Vec<&TestResult> = tests.iter().collect();
+        assert_eq!(
+            test_summary("upstream wheels", &refs).as_deref(),
+            Some("upstream wheels: 3 total · 1 pass · 1 xfail · 1 broken")
+        );
+    }
 
     #[test]
     fn a_recorded_stream_narrates_with_elapsed_stamps() {
