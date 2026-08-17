@@ -1,18 +1,28 @@
 name: Bump publication release
 
 # Bump the +wasix.N publication release of shipped wheels or webcs when the
-# same upstream version needs republishing. `versions bump` writes rels.json;
-# `--changed-from` selects versions whose publication derivations moved.
+# same upstream version needs republishing. `versions bump` writes rels.json.
+# Inputs mirror the CLI's flags one to one: `specs` are the positional
+# packages; the rest render as the flag of the same name.
 on:
   workflow_dispatch:
     inputs:
       specs:
-        description:
-          "Packages to bump (blank with changed-from selects moved ones)"
+        description: "Packages to bump, optionally @<version>"
         required: false
         default: ""
-      changed_from:
-        description: "Bump versions changed from this ref"
+      changed-from:
+        description:
+          "--changed-from: bump versions whose publication changed from REF"
+        required: false
+        default: ""
+      all-versions:
+        description: "--all-versions: bump every version a package serves"
+        required: false
+        type: boolean
+        default: false
+      base:
+        description: "--base: the branch the PR targets (blank = this ref)"
         required: false
         default: ""
 
@@ -42,13 +52,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
           SPECS: ${{ github.event.inputs.specs }}
-          CHANGED_FROM: ${{ github.event.inputs.changed_from }}
+          CHANGED_FROM: ${{ github.event.inputs['changed-from'] }}
+          ALL_VERSIONS: ${{ github.event.inputs['all-versions'] }}
+          BASE: ${{ github.event.inputs.base }}
         run: |
           args=()
-          if [ -n "$CHANGED_FROM" ]; then
-            args=(--changed-from "$CHANGED_FROM")
-          else
-            read -ra specs <<<"$SPECS"
-            args=("${specs[@]}")
-          fi
-          nix run .#wasinix -- versions bump "${args[@]}" --pr --base "$GITHUB_REF_NAME"
+          read -ra specs <<<"$SPECS"
+          args+=("${specs[@]}")
+          [ -n "$CHANGED_FROM" ] && args+=(--changed-from "$CHANGED_FROM")
+          [ "$ALL_VERSIONS" = "true" ] && args+=(--all-versions)
+          nix run .#wasinix -- versions bump "${args[@]}" --pr --base "${BASE:-$GITHUB_REF_NAME}"

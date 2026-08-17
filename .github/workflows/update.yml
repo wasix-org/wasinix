@@ -4,15 +4,20 @@ name: Update package pins
 # target (auto/update-<target>): a broken bump never blocks the others, each
 # PR carries its own CI verdict, and update notes land on the bump that fired
 # them. `wasinix update --pr` commits each bump, pushes the branch, and opens
-# or updates the PR with the ChangeSet body. Dispatch input `only` selects
-# targets; blank means every target, one PR each.
+# or updates the PR with the ChangeSet body. Inputs mirror the CLI's flags:
+# `targets` are the positional targets (blank = every target, one PR each)
+# and `base` is --base.
 on:
   schedule:
     - cron: "0 6 * * 1" # Mondays 06:00 UTC
   workflow_dispatch:
     inputs:
-      only:
+      targets:
         description: "Space-separated targets to update (blank = all)"
+        required: false
+        default: ""
+      base:
+        description: "--base: the branch the PRs target (blank = this ref)"
         required: false
         default: ""
 
@@ -38,12 +43,12 @@ jobs:
         id: list
         shell: bash
         env:
-          ONLY: ${{ github.event.inputs.only }}
+          TARGETS: ${{ github.event.inputs.targets }}
         run: |
-          if [ -n "$ONLY" ]; then
-            matrix=$(jq -cn --arg t "$ONLY" '$t | split(" ") | map(select(. != "")) | unique | map({name: .})')
+          if [ -n "$TARGETS" ]; then
+            matrix=$(jq -cn --arg t "$TARGETS" '$t | split(" ") | map(select(. != "")) | unique | map({name: .})')
             if [ "$matrix" = "[]" ]; then
-              echo "no targets parsed from only='$ONLY'" >&2
+              echo "no targets parsed from targets='$TARGETS'" >&2
               exit 1
             fi
           else
@@ -81,5 +86,6 @@ jobs:
           # events from the default token don't cascade CI
           GITHUB_TOKEN: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
           TARGET: ${{ matrix.job.name }}
+          BASE: ${{ github.event.inputs.base }}
         run: |
-          nix run .#wasinix -- update "$TARGET" --pr --base "$GITHUB_REF_NAME"
+          nix run .#wasinix -- update "$TARGET" --pr --base "${BASE:-$GITHUB_REF_NAME}"
