@@ -31,8 +31,11 @@ fn resolve_source(repo: &Path, source: &RefSource) -> Result<RevSource> {
     })
 }
 
+/// The repository the checkout builds. Deliberately not $GITHUB_REPOSITORY:
+/// a workflow in another repo can drive this checkout, and its event repo is
+/// where replies go, not what is being built.
 pub fn current_repository(repo: &Path) -> String {
-    crate::github::surfaces::detected_repository(repo).unwrap_or_default()
+    crate::github::surfaces::origin_repository(repo).unwrap_or_default()
 }
 
 /// The pull request a `--from-pr` refers to.

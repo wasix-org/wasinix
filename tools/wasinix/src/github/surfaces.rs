@@ -67,6 +67,11 @@ pub fn detected_repository(repo: &std::path::Path) -> Option<String> {
     if let Ok(Some(value)) = crate::support::env::github_repository() {
         return Some(value.to_lowercase());
     }
+    origin_repository(repo)
+}
+
+/// The checkout's own GitHub repository, from its origin remote alone.
+pub fn origin_repository(repo: &std::path::Path) -> Option<String> {
     let remote = crate::support::git::git(repo, &["remote", "get-url", "origin"]).ok()?;
     GITHUB_REMOTE
         .captures(&remote)
