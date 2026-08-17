@@ -27,20 +27,26 @@ pub fn map_url_template() -> String {
 
 /// Fetch the map published for a git tree object id. The tree determines the
 /// evaluation, so the key verifies itself: no run can publish under a tree
-/// it did not build.
-pub fn fetch(tree: &str, url_template: &str) -> Option<EvalMap> {
+/// it did not build. A template without a scheme is read from the
+/// filesystem, which the tests use.
+pub fn fetch(tree: &str, url_template: &str, label: &str) -> Option<EvalMap> {
     let url = url_template.replace("{tree}", tree);
-    let value = match crate::support::http::get_json(&url) {
+    let value = if url.contains("://") {
+        crate::support::http::get_json(&url)
+    } else {
+        crate::support::json::read(Path::new(&url))
+    };
+    let value = match value {
         Ok(value) => value,
         Err(error) => {
-            crate::support::ui::fact("baseline reuse", format!("off ({error})"));
+            crate::support::ui::fact(label, format!("off ({error})"));
             return None;
         }
     };
     let published: EvalMap = match crate::support::schema::from_value(value, &url) {
         Ok(published) => published,
         Err(error) => {
-            crate::support::ui::fact("baseline reuse", format!("off ({error})"));
+            crate::support::ui::fact(label, format!("off ({error})"));
             return None;
         }
     };
@@ -49,7 +55,7 @@ pub fn fetch(tree: &str, url_template: &str) -> Option<EvalMap> {
     // jobs that happened to finish before cancellation.
     if published.status.is_none() || published.coverage.is_empty() {
         crate::support::ui::fact(
-            "baseline reuse",
+            label,
             "off (published map carries no status coverage)",
         );
         return None;
@@ -67,13 +73,6 @@ pub fn materialize(paths: &Path, published: &EvalMap) -> Result<()> {
     crate::support::schema::write(&crate::ci::prepare::eval_map_path(paths), &mapping)?;
     crate::support::schema::write(&crate::ci::prepare::status_path(paths), &statuses)?;
     Ok(())
-}
-
-/// Whether this case can stand in for a published one. Overrides and
-/// working-tree changes make the revision alone an incomplete description of
-/// what would be built.
-pub fn is_reusable(case: &Build<RevSource>) -> bool {
-    case.overrides.is_empty() && !case.source.working_tree
 }
 
 /// Evaluable jobs this request promises to build. Evaluation errors are kept
@@ -129,9 +128,13 @@ pub fn publish_from_run(
         ))?;
     let status = crate::ci::compare::case_status(&paths);
     if status.is_empty() {
-        return crate::support::error::request_error(
-            "no build statuses to publish; a baseline without coverage is unusable",
+        // A cancelled or eval-only case has nothing usable: a baseline
+        // without coverage would read as complete and never be.
+        crate::support::ui::fact(
+            "baseline",
+            format!("skipped ({case_id}: no build statuses)"),
         );
+        return Ok(());
     }
     let mut junits: Vec<std::path::PathBuf> = std::fs::read_dir(crate::ci::prepare::junit_dir(&paths))
         .map(|entries| {

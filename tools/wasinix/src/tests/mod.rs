@@ -5291,6 +5291,94 @@ mod prepare {
     }
 
     #[test]
+    fn a_case_with_a_published_tree_adopts_its_evaluation() {
+        use crate::ci::evalmap::EvalMap;
+        use crate::support::atoms::{JobAddr, JobStatus};
+        let (scratch, repo) = repo();
+        // The working tree, not a plain rev: reuse keys on the materialized
+        // tree, so a clean checkout matches what a commit's run published.
+        let request = Request::Build(Build::<RevSource> {
+            case_id: Some("case".into()),
+            source: RevSource {
+                rev: resolve_rev(&repo, "HEAD").unwrap(),
+                patch: None,
+                working_tree: true,
+            },
+            selectors: vec![Selector {
+                kind: SelectorKind::Set,
+                name: "core".into(),
+            }],
+            enabled_tags: Vec::new(),
+            overrides: Vec::new(),
+            from_pr: None,
+            on: None,
+        });
+        let tree = git(&repo, &["rev-parse", "HEAD^{tree}"]).unwrap();
+        let maps = scratch.path().join("maps");
+        crate::support::fs::create_dir_all(&maps).unwrap();
+        let published = EvalMap {
+            rev: Some(resolve_rev(&repo, "HEAD").unwrap()),
+            jobs: [(JobAddr("checks.zlib".into()), "/nix/store/z.drv".into())]
+                .into_iter()
+                .collect(),
+            sets: [("core".to_string(), vec!["checks.zlib".to_string()])]
+                .into_iter()
+                .collect(),
+            status: Some(
+                [(JobAddr("checks.zlib".into()), JobStatus::Success)]
+                    .into_iter()
+                    .collect(),
+            ),
+            coverage: vec![JobAddr("checks.zlib".into())],
+            ..EvalMap::default()
+        };
+        crate::support::schema::write(&maps.join(format!("{tree}.json")), &published).unwrap();
+
+        let run_dir = scratch.path().join("run");
+        let template = format!("{}/{{tree}}.json", maps.display());
+        let loaded =
+            crate::ci::prepare::prepare_all_with(&repo, &request, &run_dir, &template).unwrap();
+        assert_eq!(loaded.preparation.reused, ["case"]);
+        assert!(
+            !loaded
+                .plan()
+                .tasks
+                .iter()
+                .any(|task| task.task_id == "case.core" || task.task_id == "case.eval"),
+            "an adopted case plans no evaluation or builds"
+        );
+        let case = crate::ci::prepare::case_dir(&run_dir, "case");
+        assert!(crate::ci::prepare::eval_map_path(&case).exists());
+        assert!(crate::ci::prepare::status_path(&case).exists());
+
+        // A red map is not adopted for a case under test: a re-run retries
+        // instead of inheriting a flake forever.
+        let mut red = published.clone();
+        red.status = Some(
+            [(JobAddr("checks.zlib".into()), JobStatus::Failure)]
+                .into_iter()
+                .collect(),
+        );
+        crate::support::schema::write(&maps.join(format!("{tree}.json")), &red).unwrap();
+        let retry = scratch.path().join("run-retry");
+        let loaded =
+            crate::ci::prepare::prepare_all_with(&repo, &request, &retry, &template).unwrap();
+        assert!(loaded.preparation.reused.is_empty());
+
+        // A tree nobody published prepares the full plan.
+        std::fs::remove_file(maps.join(format!("{tree}.json"))).unwrap();
+        let cold = scratch.path().join("run-cold");
+        let loaded =
+            crate::ci::prepare::prepare_all_with(&repo, &request, &cold, &template).unwrap();
+        assert!(loaded.preparation.reused.is_empty());
+        assert!(loaded
+            .plan()
+            .tasks
+            .iter()
+            .any(|task| task.task_id == "case.core"));
+    }
+
+    #[test]
     fn a_running_run_loads_as_a_concluded_nothing_report() {
         use crate::ci::events::Event;
         use crate::support::atoms::{RunState, TaskStatus};

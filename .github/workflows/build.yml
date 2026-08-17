@@ -175,14 +175,21 @@ jobs:
             --check "${comment[@]}" "${logs[@]}" \
             --step-summary "$GITHUB_STEP_SUMMARY"
 
-      # publish the eval map so future PRs can diff against this commit
+      # Publish every built case's eval map, keyed by its materialized tree:
+      # future runs whose tree matches adopt it instead of re-evaluating and
+      # rebuilding. PR runs publish too, so a rebase-merge's main run and a
+      # re-push of an identical tree start warm. Fork PRs have no credentials
+      # and skip.
       - name: Publish baseline
-        if:
-          always() && github.event_name == 'push' && steps.run.conclusion !=
-          'skipped'
+        if: always() && steps.run.conclusion != 'skipped'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
           RUN_DIR: ${{ steps.run.outputs.dir }}
-        run: nix run .#wasinix -- ci publish --run-dir "$RUN_DIR" --baseline
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ]; then
+            echo "no credentials; skipping"
+            exit 0
+          fi
+          nix run .#wasinix -- ci publish --run-dir "$RUN_DIR" --baseline

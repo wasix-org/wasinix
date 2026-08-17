@@ -110,56 +110,64 @@ pub fn load(run_dir: &Path) -> Result<Loaded> {
     })
 }
 
-fn reuse_baseline(
-    repo: &Path,
-    request: &ResolvedRequest,
-    run_dir: &Path,
-    url: &str,
-) -> Result<Vec<String>> {
-    if crate::support::env::no_baseline_reuse()? {
-        return Ok(Vec::new());
-    }
-    let Request::Diff(diff) = request else {
-        return Ok(Vec::new());
-    };
-    let Some(case) = diff
-        .cases
-        .iter()
-        .find(|c| c.case_id() == diff.baseline)
-        .and_then(|case| case.as_build())
-    else {
-        return Ok(Vec::new());
-    };
-    if !crate::ci::baseline::is_reusable(case) {
-        return Ok(Vec::new());
-    }
-    // Baselines are keyed by the tree the eval describes, not the commit
-    // wrapping it, so any commit with an identical tree shares them.
-    let tree = crate::support::git::git(
-        repo,
-        &["rev-parse", &format!("{}^{{tree}}", case.source.rev.full())],
-    )?;
-    let Some(published) = crate::ci::baseline::fetch(&tree, url) else {
-        return Ok(Vec::new());
+/// Adopt a published evaluation for one case when its materialized tree has
+/// one. The tree is the honest key (patches and overrides produce their own),
+/// so any case qualifies; coverage still has to include the selection.
+fn reuse_case(
+    case: &crate::ci::types::Build<crate::ci::types::RevSource>,
+    tree: &str,
+    target: &Path,
+    template: &str,
+    baseline: bool,
+) -> Result<bool> {
+    let label = format!("evaluation reuse ({})", case.case_id());
+    let Some(published) = crate::ci::baseline::fetch(tree, template, &label) else {
+        return Ok(false);
     };
     if !crate::ci::baseline::covers(case, &published) {
-        crate::support::ui::fact(
-            "baseline reuse",
-            "off (published run does not cover this selection)",
-        );
-        return Ok(Vec::new());
+        crate::support::ui::fact(&label, "off (published run does not cover this selection)");
+        return Ok(false);
     }
-    let target = case_dir(run_dir, case.case_id());
-    if let Err(error) = crate::ci::baseline::materialize(&target, &published) {
+    // A baseline is the status quo, failures included. Anything else is
+    // being tested: adopting a red map would make one flaky failure stick to
+    // its tree forever, so a re-run gets to rebuild.
+    if !baseline
+        && published
+            .status
+            .iter()
+            .flatten()
+            .any(|(_, status)| *status != crate::support::atoms::JobStatus::Success)
+    {
+        crate::support::ui::fact(&label, "off (published run has failures; rebuilding)");
+        return Ok(false);
+    }
+    if let Err(error) = crate::ci::baseline::materialize(target, &published) {
         // A half-written case directory would read as a real result later.
-        let _ = std::fs::remove_dir_all(&target);
+        let _ = std::fs::remove_dir_all(maps_dir(target));
+        let _ = std::fs::remove_file(status_path(target));
         return Err(error);
     }
-    crate::support::ui::fact("baseline reuse", format!("on ({})", case.source.rev));
-    Ok(vec![case.case_id().to_string()])
+    crate::support::ui::fact(&label, format!("on (tree {tree})"));
+    Ok(true)
 }
 
 pub fn prepare_all(repo: &Path, request: &ResolvedRequest, run_dir: &Path) -> Result<Loaded> {
+    prepare_all_with(
+        repo,
+        request,
+        run_dir,
+        &crate::ci::baseline::map_url_template(),
+    )
+}
+
+/// [`prepare_all`] against an explicit map location; the tests point it at a
+/// directory of published maps.
+pub fn prepare_all_with(
+    repo: &Path,
+    request: &ResolvedRequest,
+    run_dir: &Path,
+    map_template: &str,
+) -> Result<Loaded> {
     if request_path(run_dir).exists()
         || cases_dir(run_dir).exists()
         || fragments_dir(run_dir).exists()
@@ -170,8 +178,8 @@ pub fn prepare_all(repo: &Path, request: &ResolvedRequest, run_dir: &Path) -> Re
         ));
     }
     crate::support::fs::create_dir_all(run_dir)?;
-    let reused = reuse_baseline(repo, request, run_dir, &crate::ci::baseline::map_url_template())?;
     let cases = request.cases();
+    let mut reused: Vec<String> = Vec::new();
 
     let request_value = crate::support::schema::to_value(request)?;
     let mut prepared_cases = Vec::new();
@@ -189,10 +197,27 @@ pub fn prepare_all(repo: &Path, request: &ResolvedRequest, run_dir: &Path) -> Re
             "materializing",
             format!("{case_id} at {}", case.source().rev.short()),
         );
-        write_materialization(repo, *case, &case_value, &prepared_dir)?;
+        let manifest = write_materialization(repo, *case, &case_value, &prepared_dir)?;
         prepared_cases.push(crate::support::json::read::<Value>(
             &prepared_dir.join("request.json"),
         )?);
+        if !crate::support::env::no_baseline_reuse()? {
+            if let crate::ci::types::CaseRef::Build(build) = case {
+                let baseline = match request {
+                    Request::Diff(diff) => diff.baseline == case_id,
+                    _ => false,
+                };
+                if reuse_case(
+                    build,
+                    &manifest.tree,
+                    &case_dir(run_dir, &case_id),
+                    map_template,
+                    baseline,
+                )? {
+                    reused.push(case_id);
+                }
+            }
+        }
     }
 
     let mut document = request_value;

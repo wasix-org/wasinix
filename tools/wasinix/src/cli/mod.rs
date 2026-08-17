@@ -278,12 +278,9 @@ pub enum CiCommand {
         /// Append the full projection to this file ($GITHUB_STEP_SUMMARY)
         #[arg(long)]
         step_summary: Option<PathBuf>,
-        /// Publish the case's eval map for future baseline reuse
+        /// Publish every built case's eval map for future reuse
         #[arg(long)]
         baseline: bool,
-        /// The case the baseline comes from
-        #[arg(long, default_value = "case")]
-        case: String,
         /// Publish the comment as a reply keyed to this command comment
         /// instead of the sticky report
         #[arg(long)]
@@ -685,7 +682,6 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             check,
             step_summary,
             baseline,
-            case,
             reply_to,
             untrusted,
             watch,
@@ -700,7 +696,20 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 )?;
             }
             if baseline {
-                crate::ci::baseline::publish_from_run(&run_dir, &case, effects)?;
+                // Every built case is worth publishing: keys are the
+                // materialized trees, so heads and bases alike serve later
+                // runs. A case adopted from a published map is already there.
+                let loaded = crate::ci::prepare::load(&run_dir)?;
+                for case in loaded.request.cases() {
+                    let id = case.case_id();
+                    if !matches!(case, crate::ci::types::CaseRef::Build(_)) {
+                        continue;
+                    }
+                    if loaded.preparation.reused.iter().any(|reused| reused == id) {
+                        continue;
+                    }
+                    crate::ci::baseline::publish_from_run(&run_dir, id, effects)?;
+                }
             }
             if !comment && !check && step_summary.is_none() {
                 return Ok(CommandStatus::SUCCESS);
