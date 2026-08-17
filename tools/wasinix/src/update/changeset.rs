@@ -87,9 +87,10 @@ impl ChangeSet {
     /// The commit message one entry lands as, in the repo's voice.
     pub fn commit_message(entry: &Entry) -> String {
         match entry.kind {
-            EntryKind::Bump => match &entry.to {
-                Some(to) => format!("{}: update to {to}", entry.subject),
-                None => format!("{}: update", entry.subject),
+            EntryKind::Bump => match (&entry.from, &entry.to) {
+                (Some(from), Some(to)) => format!("{}: {from} -> {to}", entry.subject),
+                (None, Some(to)) => format!("{}: update to {to}", entry.subject),
+                _ => format!("{}: update", entry.subject),
             },
             EntryKind::Retain => "pkgs: retain outgoing versions in registry history".into(),
             EntryKind::Rel => match (&entry.from, &entry.to) {
@@ -105,6 +106,27 @@ impl ChangeSet {
             EntryKind::Prune => "pkgs: prune rels keys nothing serves".into(),
             EntryKind::Hook => format!("{}: re-sync generated listing", entry.subject),
             EntryKind::Notable => format!("{}: note", entry.subject),
+        }
+    }
+
+    /// The PR title a mutation defaults to when its verb has no fixed one:
+    /// the sole bump's commit message, or the bumped targets.
+    pub fn title(&self) -> String {
+        let bumps: Vec<&Entry> = self
+            .entries
+            .iter()
+            .filter(|entry| entry.kind == EntryKind::Bump)
+            .collect();
+        match bumps.as_slice() {
+            [only] => ChangeSet::commit_message(only),
+            [] => "pins: automated update".to_string(),
+            many => format!(
+                "pins: bump {}",
+                many.iter()
+                    .map(|entry| entry.subject.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
         }
     }
 

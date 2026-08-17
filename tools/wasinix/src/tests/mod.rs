@@ -2444,6 +2444,14 @@ mod update {
         };
         assert_eq!(
             ChangeSet::commit_message(&bump),
+            "wasix-libc: 2026-07-03.1 -> 2026-08-01.1"
+        );
+        let sourceless = Entry {
+            from: None,
+            ..bump.clone()
+        };
+        assert_eq!(
+            ChangeSet::commit_message(&sourceless),
             "wasix-libc: update to 2026-08-01.1"
         );
         let changes = ChangeSet {
@@ -2455,6 +2463,11 @@ mod update {
             }],
             committed: false,
         };
+        assert_eq!(
+            changes.title(),
+            "wasix-libc: 2026-07-03.1 -> 2026-08-01.1",
+            "a lone bump titles its PR with the commit message"
+        );
         let receipt = changes.receipt();
         assert!(receipt[0].contains("2026-07-03.1 → 2026-08-01.1"), "{receipt:?}");
         assert!(receipt.last().unwrap().contains("1 updated · 1 failed · tree modified"));

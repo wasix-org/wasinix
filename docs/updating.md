@@ -34,13 +34,14 @@ that request applied.
 `wasinix update` is only the driver: flake-input targets, per-target isolation,
 the repo-wide steps a bump implies, and one ChangeSet describing everything that
 moved. Every mutation renders from that ChangeSet: the terminal receipt, the
-commit messages (`<target>: update to <version>`), and the PR body, so a PR and
-its CI comment agree by construction. The repo-wide steps are registry-history
-retention (keep the outgoing version rebuildable when a bump crosses a major, or
-per `passthru.wasix.retention`: `minor` for latest-per-minor, `none` to opt
-out), the rels.json prune (drop keys nothing serves), and finally the
-`passthru.wasix.retentionHook`s, which re-sync listings derived from pins. Hooks
-that would repeat expensive work on unrelated bumps must gate themselves.
+commit messages (`<target>: <old> -> <new>`), the PR title, and the PR body, so
+a PR and its CI comment agree by construction. The repo-wide steps are
+registry-history retention (keep the outgoing version rebuildable when a bump
+crosses a major, or per `passthru.wasix.retention`: `minor` for
+latest-per-minor, `none` to opt out), the rels.json prune (drop keys nothing
+serves), and finally the `passthru.wasix.retentionHook`s, which re-sync listings
+derived from pins. Hooks that would repeat expensive work on unrelated bumps
+must gate themselves.
 
 These steps run in order for every target because each can move a served
 version. Retention fetches and hashes the outgoing release, so a bump may do

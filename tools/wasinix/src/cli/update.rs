@@ -55,7 +55,7 @@ impl MutationMode {
 struct PrShape {
     /// The branch when --branch is absent; None makes --pr demand --branch.
     branch: Option<String>,
-    /// The PR title; None derives "pins: bump <branch>".
+    /// The PR title; None derives it from the ChangeSet.
     title: Option<String>,
 }
 
@@ -75,9 +75,7 @@ fn conclude(
                 "--pr needs a target or --branch to name the branch".into(),
             )
         })?;
-        let title = shape
-            .title
-            .unwrap_or_else(|| format!("pins: bump {branch}"));
+        let title = shape.title.unwrap_or_else(|| changes.title());
         let number = crate::github::mutation::open_pr(
             repo,
             changes,
