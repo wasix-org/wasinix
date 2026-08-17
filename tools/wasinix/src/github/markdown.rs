@@ -300,13 +300,21 @@ fn details(report: &Report, fragments: &BTreeMap<String, Fragment>) -> Markdown 
                 ]);
             }
         }
-        body = body.push(comparison_lists(comparison));
     }
     Markdown::concat([
         Markdown::constant("<details><summary>Details</summary>\n\n"),
         body,
         Markdown::constant("\n</details>\n"),
     ])
+}
+
+/// The comparison's summary and lists, in the comment body proper: what a
+/// diff changed is the comment's story, not a collapsed detail.
+fn comparison_block(fragments: &BTreeMap<String, Fragment>) -> Markdown {
+    match comparison(fragments) {
+        Some((_, comparison)) => comparison_lists(comparison).push(Markdown::constant("\n")),
+        None => Markdown::new(),
+    }
 }
 
 const COMPARE_LIST_ROWS: usize = 250;
@@ -360,7 +368,7 @@ fn job_list(
 /// here.
 fn comparison_lists(comparison: &Comparison) -> Markdown {
     let mut body = Markdown::concat([
-        Markdown::constant("\n**Comparison** · "),
+        Markdown::constant("**Comparison** · "),
         Markdown::text(&comparison.fixes.len().to_string()),
         Markdown::constant(" fixed · "),
         Markdown::text(&comparison.rebuilt.len().to_string()),
@@ -464,6 +472,7 @@ fn green(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Links)
         jobs,
         links.heading_suffix(),
         Markdown::constant("\n\n"),
+        comparison_block(fragments),
         footer(report, fragments, links),
         Markdown::constant("\n"),
         details(report, fragments),
@@ -557,6 +566,7 @@ fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
     }
     Markdown::concat([
         text,
+        comparison_block(fragments),
         footer(report, fragments, links),
         Markdown::constant("\n"),
         details(report, fragments),
