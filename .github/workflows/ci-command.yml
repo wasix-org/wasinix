@@ -130,13 +130,31 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
           NIX_SIGNING_KEY: ${{ secrets.NIX_SIGNING_KEY }}
+          HEAD_SHA: ${{ needs.authorize.outputs.headSha }}
+          PULL_REQUEST: ${{ needs.authorize.outputs.pullRequest }}
+          COMMENT_ID: ${{ needs.authorize.outputs.commentId }}
         run: |
+          exec 2> >(tee run-error.txt >&2)
           push_cache=()
           if [ -n "$NIX_SIGNING_KEY" ]; then push_cache=(--push-cache); fi
-          nix run .#wasinix -- ci command \
+          # Durable, so ci publish --watch keeps the reply and check fresh
+          # while it executes; the authoritative final report is Post report
+          # below. run start executes its payload verbatim, so the payload
+          # names the binary itself.
+          bin="$(nix build .#wasinix --no-link --print-out-paths)/bin/wasinix"
+          id=$("$bin" run start -- "$bin" ci command \
             --origin origin-command.json \
-            --run-dir run-dir \
-            "${push_cache[@]}" 2> >(tee run-error.txt >&2)
+            --run-dir '{run-dir}' \
+            "${push_cache[@]}")
+          dir=$("$bin" run status "$id" --json | jq -r .runDir)
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          "$bin" ci publish --run-dir "$dir" --watch \
+            --sha "$HEAD_SHA" \
+            --pull-request "$PULL_REQUEST" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --comment --reply-to "$COMMENT_ID" --check \
+            || echo "progress publishing stopped"
+          "$bin" run wait "$id"
 
       - name: Post report
         if: always() && steps.run.conclusion != 'skipped'
@@ -147,7 +165,7 @@ jobs:
           PULL_REQUEST: ${{ needs.authorize.outputs.pullRequest }}
           COMMENT_ID: ${{ needs.authorize.outputs.commentId }}
         run: |
-          nix run .#wasinix -- ci publish --run-dir run-dir \
+          nix run .#wasinix -- ci publish --run-dir "${{ steps.run.outputs.dir || 'run-dir' }}" \
             --sha "$HEAD_SHA" \
             --pull-request "$PULL_REQUEST" \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
