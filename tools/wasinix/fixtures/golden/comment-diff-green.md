@@ -37,7 +37,7 @@
 
 <details><summary>Details</summary>
 
-**Request**
+<details><summary>Request</summary>
 
 ```json
 {
@@ -76,6 +76,8 @@
   ]
 }
 ```
+
+</details>
 
 **Pipeline**
 

@@ -241,9 +241,9 @@ fn details(report: &Report) -> Markdown {
         if let Ok(echo) = serde_json::to_string_pretty(request) {
             body = Markdown::concat([
                 body,
-                Markdown::constant("**Request**\n\n"),
+                Markdown::constant("<details><summary>Request</summary>\n\n"),
                 Markdown::fenced(&echo, "json"),
-                Markdown::constant("\n"),
+                Markdown::constant("\n</details>\n\n"),
             ]);
         }
     }
