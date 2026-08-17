@@ -160,21 +160,35 @@ pub(crate) fn declared_target(repo: &Path, attr: &str, value: &Value) -> Result<
     })
 }
 
-/// One target per package, deduped across the per-profile attrs.
-pub fn discovered_targets(repo: &Path) -> Result<Vec<Target>> {
-    let declared = eval(&Flake::default(), "updateScripts", None)?;
-    // Ordered by attribute, deduped by name: the first attr declaring a name
-    // wins, and a package's position in the run follows where it was found.
+/// One target per pin. Declarations are ordered by attribute; the first attr
+/// declaring a name wins. A wrapper and its unwrapped package (or the same
+/// package under several profiles) declare the same script against the same
+/// file, which is one pin and one target, not one per spelling.
+pub(crate) fn dedupe(declared: Vec<Target>) -> Vec<Target> {
     let mut targets: Vec<Target> = Vec::new();
-    let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    for (attr, value) in declared.as_object().into_iter().flatten() {
-        let target = declared_target(repo, attr, value)?;
-        if !seen.insert(target.name.clone()) {
+    let mut names: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut pins: std::collections::BTreeSet<(String, Vec<String>)> =
+        std::collections::BTreeSet::new();
+    for target in declared {
+        if !target.file.is_empty() && !pins.insert((target.file.clone(), target.command.clone()))
+        {
+            continue;
+        }
+        if !names.insert(target.name.clone()) {
             continue;
         }
         targets.push(target);
     }
-    Ok(targets)
+    targets
+}
+
+pub fn discovered_targets(repo: &Path) -> Result<Vec<Target>> {
+    let declared = eval(&Flake::default(), "updateScripts", None)?;
+    let mut targets: Vec<Target> = Vec::new();
+    for (attr, value) in declared.as_object().into_iter().flatten() {
+        targets.push(declared_target(repo, attr, value)?);
+    }
+    Ok(dedupe(targets))
 }
 
 pub struct Hook {

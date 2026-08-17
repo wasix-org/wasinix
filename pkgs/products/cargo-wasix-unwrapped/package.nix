@@ -4,7 +4,6 @@
 {
   rustPlatform,
   fetchFromGitHub,
-  nix-update-script,
 }:
 rustPlatform.buildRustPackage (finalAttrs: {
   pname = "cargo-wasix";
@@ -24,6 +23,4 @@ rustPlatform.buildRustPackage (finalAttrs: {
   # contacts GitHub. Keep the remaining offline library unit tests.
   cargoTestFlags = ["--lib"];
   checkFlags = ["--skip" "toolchain::tests::test_download_toolchain"];
-
-  passthru.updateScript = nix-update-script {};
 })

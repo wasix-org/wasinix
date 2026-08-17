@@ -24,8 +24,12 @@ in {
       then nativeNixUpdateScript
       else final.nix-update-script;
   in
-    prev.lib.genAttrs names (name:
-      final.callPackage (dir + "/${name}/package.nix") {
-        inherit nix-update-script;
-      });
+    prev.lib.genAttrs names (name: let
+      path = dir + "/${name}/package.nix";
+    in
+      final.callPackage path (
+        prev.lib.optionalAttrs
+        (builtins.functionArgs (import path) ? nix-update-script)
+        {inherit nix-update-script;}
+      ));
 }

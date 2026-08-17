@@ -390,7 +390,11 @@ in
 
       # Bumps, then re-derives the stage0 bootstrap pin from the new source's
       # src/stage0 (the nix-update command is passed through as its argv).
+      # Named: the one pin surfaces under several attrs (nativePackages,
+      # per-profile, wasmerPackages), which must stay one target.
       updateScript = {
+        name = "wasix-rust";
+        attrPath = "nativePackages.wasix-rust";
         command = ["${updateWrapper}/bin/wasix-rust-update"] ++ nix-update-script {extraArgs = ["--flake"];};
         accepts = ["release" "revision"];
         source = {

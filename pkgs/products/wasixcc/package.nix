@@ -40,8 +40,8 @@ in
     '';
 
     passthru = {
-      # The recipe is products/wasixcc, which carries the version, the
-      # src and the updateScript; this wrapper only adds the toolchain locations.
+      # The recipe is products/wasixcc, which carries the version and the
+      # src; the wrapper adds the toolchain locations and declares the bump.
       unwrapped = wasixccUnwrapped;
       updateScript = {
         command = nix-update-script {extraArgs = ["--flake"];};

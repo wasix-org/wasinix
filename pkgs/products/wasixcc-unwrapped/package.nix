@@ -5,7 +5,6 @@
 {
   rustPlatform,
   fetchFromGitHub,
-  nix-update-script,
 }:
 rustPlatform.buildRustPackage (finalAttrs: {
   pname = "wasixcc-unwrapped";
@@ -43,6 +42,4 @@ rustPlatform.buildRustPackage (finalAttrs: {
     cp "$(find target -type f -path '*/release/wasixccenv' | head -n 1)" "$out/libexec/wasixccenv"
     runHook postInstall
   '';
-
-  passthru.updateScript = nix-update-script {};
 })

@@ -2595,6 +2595,32 @@ mod update {
     }
 
     #[test]
+    fn one_pin_is_one_target_however_many_attrs_declare_it() {
+        let target = |name: &str, file: &str, command: &[&str]| Target {
+            name: name.into(),
+            backend: Backend::UpdateScript,
+            input: String::new(),
+            attr: format!("legacyPackages.x.{name}"),
+            version: String::new(),
+            command: command.iter().map(|part| part.to_string()).collect(),
+            command_drv_paths: Vec::new(),
+            file: file.into(),
+            accepts: Vec::new(),
+            source: None,
+        };
+        let deduped = crate::update::targets::dedupe(vec![
+            // A wrapper and its unwrapped package: same file, same command.
+            target("cargo-wasix", "pkgs/cargo-wasix.nix", &["nix-update", "--flake"]),
+            target("cargo-wasix-unwrapped", "pkgs/cargo-wasix.nix", &["nix-update", "--flake"]),
+            // Grammars share a file but each command names its language.
+            target("tree-sitter-c", "pkgs/grammars.nix", &["update-grammars", "c"]),
+            target("tree-sitter-go", "pkgs/grammars.nix", &["update-grammars", "go"]),
+        ]);
+        let names: Vec<&str> = deduped.iter().map(|target| target.name.as_str()).collect();
+        assert_eq!(names, ["cargo-wasix", "tree-sitter-c", "tree-sitter-go"]);
+    }
+
+    #[test]
     fn declarations_parse_the_flakes_camel_case_keys() {
         let value = serde_json::json!({
             "name": "wasix-libc",
