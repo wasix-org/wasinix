@@ -49,9 +49,11 @@ in
           ${final.buildPackages.coreutils}/bin/mkdir -p "$NIX_BUILD_TOP/$(${final.buildPackages.coreutils}/bin/dirname "$_path")"
           ${final.buildPackages.coreutils}/bin/cp -r "$_source/lib/$_path" "$NIX_BUILD_TOP/$_path"
         done < <(${final.buildPackages.findutils}/bin/find "$_source/lib" -name baseline_images -printf '%P\n')
-        ${final.buildPackages.coreutils}/bin/cp \
-          "$_source"/lib/matplotlib/tests/{mpltest.ttf,cmr10.pfb,Courier10PitchBT-Bold.pfb} \
-          "$NIX_BUILD_TOP/matplotlib/tests/"
+        for _font in mpltest.ttf cmr10.pfb Courier10PitchBT-Bold.pfb; do
+          _source_font="$(${final.buildPackages.findutils}/bin/find "$_source/lib/matplotlib/tests" -name "$_font" -print -quit)"
+          [ -n "$_source_font" ] || exit 1
+          ${final.buildPackages.coreutils}/bin/cp "$_source_font" "$NIX_BUILD_TOP/matplotlib/tests/"
+        done
         export PYTHONPATH="$NIX_BUILD_TOP:$PYTHONPATH"
         cd "$NIX_BUILD_TOP"
       '';
