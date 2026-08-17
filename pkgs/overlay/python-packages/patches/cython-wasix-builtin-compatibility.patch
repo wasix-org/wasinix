@@ -1,0 +1,24 @@
+diff --git a/Cython/Compiler/Tests/TestBuiltin.py b/Cython/Compiler/Tests/TestBuiltin.py
+--- a/Cython/Compiler/Tests/TestBuiltin.py
++++ b/Cython/Compiler/Tests/TestBuiltin.py
+@@ -47,6 +47,11 @@ class TestBuiltinCompatibility(unittest.TestCase):
+-        # Read builtins from fresh Python process to prevent modifications by test dependencies.
+-        output = subprocess.run(
+-            [sys.executable, '-c', 'import builtins, json, sys; sys.stdout.write(json.dumps(dir(builtins)))'],
+-            capture_output=True,
+-            encoding='utf8',
+-        )
++        if sys.platform == 'wasix':
++            # The shebanged guest interpreter cannot be re-executed in WASIX.
++            runtime_builtin_names = dir(builtins)
++        else:
++            # Read builtins from fresh Python process to prevent modifications by test dependencies.
++            output = subprocess.run(
++                [sys.executable, '-c', 'import builtins, json, sys; sys.stdout.write(json.dumps(dir(builtins)))'],
++                capture_output=True,
++                encoding='utf8',
++            )
++            runtime_builtin_names = json.loads(output.stdout)
+@@ -54 +59 @@ class TestBuiltinCompatibility(unittest.TestCase):
+-            name for name in json.loads(output.stdout)
++            name for name in runtime_builtin_names
