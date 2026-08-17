@@ -10,31 +10,48 @@
   lib,
   helpers,
   ...
-}: let
-  qhullR =
-    helpers.libTweaks {
-      postInstall = ''
-        ln -sf libqhullstatic_r.a "$out/lib/libqhull_r.a"
-      '';
-    }
-    final.qhull;
+}:
+let
+  qhullR = helpers.libTweaks {
+    postInstall = ''
+      ln -sf libqhullstatic_r.a "$out/lib/libqhull_r.a"
+    '';
+  } final.qhull;
 in
-  helpers.libTweaks
-  (helpers.linkInputs (helpers.dropInputsByNameInfix ["ffmpeg"])
+helpers.libTweaks
+  (
+    helpers.linkInputs (helpers.dropInputsByNameInfix [ "ffmpeg" ])
     // {
-      patches = _: [];
-      mesonFlags = fs:
-        builtins.filter
-        (f: lib.versionAtLeast pyprev.matplotlib.version "3.11" || !lib.hasInfix "system-libraqm" f)
-        (
-          if fs == null
-          then []
-          else fs
-        );
+      patches = _: [ ];
+      mesonFlags =
+        fs:
+        builtins.filter (
+          f: lib.versionAtLeast pyprev.matplotlib.version "3.11" || !lib.hasInfix "system-libraqm" f
+        ) (if fs == null then [ ] else fs);
       postPatch = ''
         sed -i -E 's/^( *)([A-Za-z_]+)->get_(height|width)\(\)( \* 4)?,$/\1static_cast<py::ssize_t>(\2->get_\3()\4),/' \
           src/_backend_agg_wrapper.cpp
         grep -q 'static_cast<py::ssize_t>' src/_backend_agg_wrapper.cpp
+        substituteInPlace lib/matplotlib/tests/test_animation.py \
+          --replace-fail \
+            'elif sys.platform == "emscripten":' \
+            'elif sys.platform in {"emscripten", "wasix"}:'
+        substituteInPlace lib/matplotlib/tests/test_backends_interactive.py \
+          --replace-fail \
+            '(["tkinter"], {"MPLBACKEND": "tkagg"}),' \
+            '(["tkinter", "_tkinter"], {"MPLBACKEND": "tkagg"}),'
+        substituteInPlace lib/matplotlib/tests/test_pickle.py \
+          --replace-fail \
+            'def test_axeswidget_interactive():' \
+            $'def test_axeswidget_interactive():\n    pytest.importorskip("_tkinter")'
+        substituteInPlace lib/matplotlib/tests/test_mlab.py \
+          --replace-fail \
+            "sys.platform == 'emscripten'" \
+            "sys.platform in {'emscripten', 'wasix'}"
+        substituteInPlace lib/matplotlib/tests/test_ticker.py \
+          --replace-fail \
+            'def test_locale_comma():' \
+            $'@pytest.mark.xfail(sys.platform == "wasix", reason="wasix-libc localeconv is POSIX-only", strict=True)\ndef test_locale_comma():'
         substituteInPlace lib/matplotlib/testing/__init__.py \
           --replace-fail \
             'except (OSError, subprocess.CalledProcessError):' \
@@ -49,22 +66,18 @@ in
         [ -n "$_site" ] || exit 1
         ${final.buildPackages.coreutils}/bin/cp -r "$_site/matplotlib" "$NIX_BUILD_TOP/matplotlib"
         ${final.buildPackages.coreutils}/bin/chmod -R u+w "$NIX_BUILD_TOP/matplotlib"
-        while read -r _path; do
-          ${final.buildPackages.coreutils}/bin/mkdir -p "$NIX_BUILD_TOP/$(${final.buildPackages.coreutils}/bin/dirname "$_path")"
-          ${final.buildPackages.coreutils}/bin/cp -r "$_source/lib/$_path" "$NIX_BUILD_TOP/$_path"
-        done < <(${final.buildPackages.findutils}/bin/find "$_source/lib" -name baseline_images -printf '%P\n')
-        for _font in mpltest.ttf cmr10.pfb Courier10PitchBT-Bold.pfb; do
-          _source_font="$(${final.buildPackages.findutils}/bin/find "$_source/lib/matplotlib/tests" -name "$_font" -print -quit)"
-          [ -n "$_source_font" ] || exit 1
-          ${final.buildPackages.coreutils}/bin/cp "$_source_font" "$NIX_BUILD_TOP/matplotlib/tests/"
-        done
+        ${final.buildPackages.coreutils}/bin/cp -r \
+          "$_source/lib/matplotlib/tests/." "$NIX_BUILD_TOP/matplotlib/tests/"
         export PYTHONPATH="$NIX_BUILD_TOP:$PYTHONPATH"
         pytestFlagsArray+=("$NIX_BUILD_TOP/matplotlib/tests")
         ${final.buildPackages.coreutils}/bin/mkdir "$NIX_BUILD_TOP/check"
         cd "$NIX_BUILD_TOP/check"
       '';
-    })
-  (pyprev.matplotlib.override {
-    enableTk = false;
-    qhull = qhullR;
-  })
+    }
+  )
+  (
+    pyprev.matplotlib.override {
+      enableTk = false;
+      qhull = qhullR;
+    }
+  )
