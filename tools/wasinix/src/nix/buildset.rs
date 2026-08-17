@@ -101,24 +101,60 @@ impl Drop for SigningKey {
     }
 }
 
-fn needed_builds_for(path: &Path, wanted: &[String]) -> Result<Vec<String>> {
+fn needed_builds_for(path: &Path, wanted: &[String]) -> Result<BTreeSet<String>> {
     let text = crate::support::fs::read_to_string(path)?;
-    let mut needed = Vec::new();
+    let mut needed = BTreeSet::new();
     for job in crate::nix::evaljobs::parse_file(&text)? {
         if wanted.contains(&job.name()) {
             needed.extend(job.needed_builds);
         }
     }
-    needed.sort();
-    needed.dedup();
     Ok(needed)
 }
 
-/// Realise and push build-time dependencies an output push would miss.
-/// `--keep-going` so one broken dependency does not block the rest; push
-/// failures warn rather than fail: the cache is an accelerator, not a build
-/// product.
-fn push_build_deps(key: &SigningKey, drvs: &[String]) -> Result<()> {
+/// One derivation's output paths, for tracking a build-time dependency to
+/// completion.
+fn drv_outputs(drv: &str) -> Result<Vec<String>> {
+    let probe = crate::support::nix::Invocation::tool("nix-store")
+        .args(["--query", "--outputs"])
+        .operand(drv)
+        .probe("a dependency with unqueryable outputs is not tracked")?;
+    Ok(String::from_utf8_lossy(&probe.stdout)
+        .split_whitespace()
+        .map(str::to_string)
+        .collect())
+}
+
+/// Push the tracked build-time dependencies whose outputs became valid, so a
+/// cancel or timeout keeps the dependency builds already done.
+fn settle_deps(
+    dep_pending: &mut BTreeMap<String, Vec<String>>,
+    uploader: &Uploader,
+) -> Result<()> {
+    if dep_pending.is_empty() {
+        return Ok(());
+    }
+    let outputs: Vec<String> = dep_pending.values().flatten().cloned().collect();
+    let invalid = invalid_outputs(&outputs)?;
+    let finished: Vec<String> = dep_pending
+        .iter()
+        .filter(|(_, outputs)| outputs.iter().all(|out| !invalid.contains(out)))
+        .map(|(drv, _)| drv.clone())
+        .collect();
+    for drv in finished {
+        if let Some(outputs) = dep_pending.remove(&drv) {
+            uploader.push(outputs);
+        }
+    }
+    Ok(())
+}
+
+/// Realise and push build-time dependencies an output push would miss. The
+/// streamed pushes cover what built this run; this end-of-run pass is the
+/// completeness backstop for everything else the jobs need. `--keep-going`
+/// so one broken dependency does not block the rest; push failures warn
+/// rather than fail: the cache is an accelerator, not a build product.
+fn push_build_deps(key: &SigningKey, drvs: &BTreeSet<String>) -> Result<()> {
     if drvs.is_empty() {
         return Ok(());
     }
@@ -394,13 +430,11 @@ pub fn build_union(
     } else {
         None
     };
-    let mut needed = Vec::new();
+    let mut needed = BTreeSet::new();
     if key.is_some() {
         for case in &request.cases {
             needed.extend(needed_builds_for(&case.jobs_file, &case.jobs)?);
         }
-        needed.sort();
-        needed.dedup();
     }
 
     // Partition: what must build versus what the caches already carry.
@@ -442,6 +476,8 @@ pub fn build_union(
     let uploader = Uploader::start(key.as_ref().map(SigningKey::store));
     let started = std::time::Instant::now();
     let mut build_started: BTreeMap<String, std::time::Instant> = BTreeMap::new();
+    // Announced build-time dependencies, pushed as their outputs turn valid.
+    let mut dep_pending: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut timed_out = false;
 
     for attempt in 1..=BUILD_ATTEMPTS {
@@ -486,6 +522,15 @@ pub fn build_union(
                             for attr in spec.attrs.clone() {
                                 on_event(StreamEvent::Output(format!("  building \"{attr}\"")))?;
                             }
+                        } else if needed.contains(drv) && !dep_pending.contains_key(drv) {
+                            match drv_outputs(drv) {
+                                Ok(outputs) => {
+                                    dep_pending.insert(drv.to_string(), outputs);
+                                }
+                                Err(error) => crate::support::ui::warning(format!(
+                                    "not tracking dependency {drv}: {error}"
+                                )),
+                            }
                         }
                     } else {
                         on_event(StreamEvent::Output(line))?;
@@ -527,6 +572,7 @@ pub fn build_union(
                         }
                         uploader.push(jobs[&drv].outputs.clone());
                     }
+                    settle_deps(&mut dep_pending, &uploader)?;
                     if request
                         .hard_timeout
                         .is_some_and(|timeout| started.elapsed() >= timeout)
@@ -581,6 +627,7 @@ pub fn build_union(
             }
             uploader.push(jobs[&drv].outputs.clone());
         }
+        settle_deps(&mut dep_pending, &uploader)?;
         if !pending.is_empty() && attempt < BUILD_ATTEMPTS && !timed_out {
             crate::support::ui::note(format!(
                 "retrying {} unfinished builds (attempt {}/{BUILD_ATTEMPTS})",
