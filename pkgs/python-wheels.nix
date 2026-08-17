@@ -300,7 +300,7 @@
               then attempted.value
               else [];
           in
-            lib.unique (lib.filter evalOk (declared ++ lib.concatMap closureFor declared));
+            lib.unique (lib.filter (d: evalOk d && guestUsable d) (declared ++ lib.concatMap closureFor declared));
           name = "wheel-${name}";
         }
       else null;
