@@ -5,13 +5,12 @@
   ...
 }:
 helpers.libTweaks {
-  # bitarray.test reports failure in its return value rather than raising.
+  # The guest exits zero after bitarray.test(), so check unittest's summary.
   checkPhase = ''
     cd $out
-    export BITARRAY_CHECK_STATUS="$NIX_BUILD_TOP/bitarray-check-failed"
-    touch "$BITARRAY_CHECK_STATUS"
-    ${pyfinal.python.interpreter} -c 'import os; from pathlib import Path; import bitarray; bitarray.test().wasSuccessful() and Path(os.environ["BITARRAY_CHECK_STATUS"]).unlink()'
-    test ! -e "$BITARRAY_CHECK_STATUS"
+    _log="$NIX_BUILD_TOP/bitarray-test.log"
+    ${pyfinal.python.interpreter} -c 'import bitarray; bitarray.test()' 2>&1 | tee "$_log"
+    grep -qx OK "$_log" || exit 1
   '';
   passthru.wasix.emulatedCheck.broken = "WASIX reports bitarray objects as hashable";
 }

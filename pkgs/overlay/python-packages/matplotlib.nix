@@ -36,6 +36,20 @@ in
           src/_backend_agg_wrapper.cpp
         grep -q 'static_cast<py::ssize_t>' src/_backend_agg_wrapper.cpp
       '';
+      preCheck = _: ''
+        _source="$PWD"
+        _site=$(echo "$PYTHONPATH" | tr ':' '\n' | grep -m1 -- '-matplotlib-.*site-packages$')
+        cp -r "$_site/matplotlib" "$NIX_BUILD_TOP/matplotlib"
+        chmod -R u+w "$NIX_BUILD_TOP/matplotlib"
+        find "$_source/lib" -name baseline_images -printf '%P\n' | while read -r _path; do
+          cp -r "$_source/lib/$_path" "$NIX_BUILD_TOP/$_path"
+        done
+        cp \
+          "$_source"/lib/matplotlib/tests/{mpltest.ttf,cmr10.pfb,Courier10PitchBT-Bold.pfb} \
+          "$NIX_BUILD_TOP/matplotlib/tests/"
+        export PYTHONPATH="$NIX_BUILD_TOP:$PYTHONPATH"
+        cd "$NIX_BUILD_TOP"
+      '';
     })
   (pyprev.matplotlib.override {
     enableTk = false;
