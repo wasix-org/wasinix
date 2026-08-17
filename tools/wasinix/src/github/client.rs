@@ -68,12 +68,14 @@ impl Client {
         }
     }
 
-    /// GETs retry transient 5xx: reads are idempotent, and a platform blip
-    /// during a permission check must not read as a refusal.
-    pub fn get(&self, path: &str) -> Result<Value> {
+    /// Retry transient 5xx: a platform blip during a permission check must
+    /// not read as a refusal, and one during a comment update must not fail
+    /// a green run. GET and PATCH are idempotent; a retried POST can at
+    /// worst duplicate a comment the sticky upsert reconciles next round.
+    fn send_retrying(&self, method: &str, path: &str, body: Option<&Value>) -> Result<Value> {
         let mut delay = std::time::Duration::from_secs(2);
         for _ in 0..3 {
-            match self.send("GET", path, None) {
+            match self.send(method, path, body) {
                 Err(error) if error.to_string().contains(" with 50") => {
                     crate::support::ui::warning(format!("retrying: {error}"));
                     std::thread::sleep(delay);
@@ -82,15 +84,19 @@ impl Client {
                 result => return result,
             }
         }
-        self.send("GET", path, None)
+        self.send(method, path, body)
+    }
+
+    pub fn get(&self, path: &str) -> Result<Value> {
+        self.send_retrying("GET", path, None)
     }
 
     pub(in crate::github) fn post(&self, path: &str, body: &Value) -> Result<Value> {
-        self.send("POST", path, Some(body))
+        self.send_retrying("POST", path, Some(body))
     }
 
     pub(in crate::github) fn patch(&self, path: &str, body: &Value) -> Result<Value> {
-        self.send("PATCH", path, Some(body))
+        self.send_retrying("PATCH", path, Some(body))
     }
 
     /// Every page of a list endpoint, flattened. Callers apply their own
