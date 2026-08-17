@@ -38,13 +38,17 @@ in
       '';
       preCheck = _: ''
         _source="$PWD"
-        _site=$(echo "$PYTHONPATH" | tr ':' '\n' | grep -m1 -- '-matplotlib-.*site-packages$')
-        cp -r "$_site/matplotlib" "$NIX_BUILD_TOP/matplotlib"
-        chmod -R u+w "$NIX_BUILD_TOP/matplotlib"
-        find "$_source/lib" -name baseline_images -printf '%P\n' | while read -r _path; do
-          cp -r "$_source/lib/$_path" "$NIX_BUILD_TOP/$_path"
+        _site=
+        for _path in ''${PYTHONPATH//:/ }; do
+          case "$_path" in *-matplotlib-*/lib/python*/site-packages) _site="$_path"; break ;; esac
         done
-        cp \
+        [ -n "$_site" ] || exit 1
+        ${final.buildPackages.coreutils}/bin/cp -r "$_site/matplotlib" "$NIX_BUILD_TOP/matplotlib"
+        ${final.buildPackages.coreutils}/bin/chmod -R u+w "$NIX_BUILD_TOP/matplotlib"
+        while read -r _path; do
+          ${final.buildPackages.coreutils}/bin/cp -r "$_source/lib/$_path" "$NIX_BUILD_TOP/$_path"
+        done < <(${final.buildPackages.findutils}/bin/find "$_source/lib" -name baseline_images -printf '%P\n')
+        ${final.buildPackages.coreutils}/bin/cp \
           "$_source"/lib/matplotlib/tests/{mpltest.ttf,cmr10.pfb,Courier10PitchBT-Bold.pfb} \
           "$NIX_BUILD_TOP/matplotlib/tests/"
         export PYTHONPATH="$NIX_BUILD_TOP:$PYTHONPATH"
