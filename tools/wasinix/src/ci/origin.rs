@@ -176,6 +176,9 @@ pub fn verify(
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Command {
     pub command: String,
+    /// build or mutation; renamed on the wire because the document envelope
+    /// reserves the top-level "kind" key for the document type.
+    #[serde(rename = "commandKind")]
     pub kind: String,
     pub origin: Origin,
 }

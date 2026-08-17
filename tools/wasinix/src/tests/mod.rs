@@ -494,6 +494,26 @@ mod authorization {
         schema::to_value(&origin()).unwrap()
     }
 
+    /// The document envelope reserves the top-level "kind" and "schema"
+    /// keys; a document field serializing to either panics at write. The
+    /// authorize document is the one that collided in production.
+    #[test]
+    fn the_command_document_round_trips_through_its_envelope() {
+        let command = crate::ci::origin::Command {
+            command: "build checks.zlib".into(),
+            kind: "build".into(),
+            origin: origin(),
+        };
+        let value = schema::to_value(&command).unwrap();
+        assert_eq!(value["kind"], "ciCommand");
+        assert_eq!(value["commandKind"], "build");
+        let scratch = crate::support::fs::Scratch::create("wasinix-test").unwrap();
+        let path = scratch.path().join("command.json");
+        schema::write(&path, &command).unwrap();
+        let read: crate::ci::origin::Command = schema::read(&path).unwrap();
+        assert_eq!(read, command);
+    }
+
     #[test]
     fn shape_is_checked_before_anything_else() {
         assert!(validate(&origin_value(), Some("wasix-org")).is_ok());
