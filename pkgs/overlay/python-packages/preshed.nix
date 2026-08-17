@@ -1,5 +1,6 @@
 # preshed for wasix. Same host-include leak as cymem.nix.
 {
+  final,
   pyprev,
   helpers,
   ...
@@ -11,10 +12,14 @@ helpers.libTweaks {
   '';
   preCheck = ''
     _source_tests="$PWD/preshed/tests"
-    _site=$(echo "$PYTHONPATH" | tr ':' '\n' | grep -m1 -- '-preshed-.*site-packages$')
-    cp -r "$_site/preshed" "$NIX_BUILD_TOP/preshed"
-    chmod -R u+w "$NIX_BUILD_TOP/preshed"
-    cp -r "$_source_tests" "$NIX_BUILD_TOP/preshed/tests"
+    _site=
+    for _path in ''${PYTHONPATH//:/ }; do
+      case "$_path" in *-preshed-*/lib/python*/site-packages) _site="$_path"; break ;; esac
+    done
+    [ -n "$_site" ] || exit 1
+    ${final.buildPackages.coreutils}/bin/cp -r "$_site/preshed" "$NIX_BUILD_TOP/preshed"
+    ${final.buildPackages.coreutils}/bin/chmod -R u+w "$NIX_BUILD_TOP/preshed"
+    ${final.buildPackages.coreutils}/bin/cp -r "$_source_tests/." "$NIX_BUILD_TOP/preshed/tests/"
     export PYTHONPATH="$NIX_BUILD_TOP:$PYTHONPATH"
     pytestFlagsArray=("$NIX_BUILD_TOP/preshed/tests")
     cd "$NIX_BUILD_TOP"
