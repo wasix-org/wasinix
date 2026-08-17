@@ -12,6 +12,7 @@ Emits, per PEP 503 (+ PEP 629 version meta, PEP 658/714 metadata files):
   <out>/simple/<project>/index.html     file list with #sha256= anchors
   <out>/simple/<project>/<wheel>        the wheel itself (relative hrefs)
   <out>/simple/<project>/<wheel>.metadata   its core metadata, for resolvers
+  <out>/packages.json                   flat wheel list, for wasmer-compat
   <out>/native/simple/...               the same index over native projects only
 """
 
@@ -391,6 +392,18 @@ def project_page(project: str, files: list[tuple], href_prefix: str = "") -> str
 """
 
 
+def write_packages_json(dest: Path, served) -> None:
+    """Flat wheel list, one JSON object per line, read by wasmer-compat to decide
+    which projects the index covers. It drops any line it cannot parse, so an
+    entry that loses its `filename` key goes silently uncounted."""
+    dest.write_text(
+        "".join(
+            json.dumps({"filename": fname, "hash": f"sha256={digest}"}) + "\n"
+            for fname, digest in sorted(served)
+        )
+    )
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("dists", type=Path)
@@ -442,6 +455,7 @@ def main() -> None:
             f" `publishOnce` in wheels.nix:\n{listed}"
         )
 
+    served: list[tuple[str, str]] = []
     # project -> the rows its page was built from, reused by the native view
     pages: dict[str, list[tuple]] = {}
     for project, wheels in sorted(projects.items()):
@@ -454,6 +468,7 @@ def main() -> None:
             (pdir / f"{fname}.metadata").write_bytes(metadata)
             md_digest = hashlib.sha256(metadata).hexdigest()
             digest = hashlib.sha256(src.read_bytes()).hexdigest()
+            served.append((fname, digest))
             # rev/attr/published/source are publish-time facts (publish.py
             # fills them from the manifest); size is intrinsic, so shown here
             # already.
@@ -500,6 +515,7 @@ def main() -> None:
     (out / "provenance.json").write_text(
         json.dumps(provenance, indent=2, sort_keys=True) + "\n"
     )
+    write_packages_json(out / "packages.json", served)
     print(
         f"indexed {sum(map(len, projects.values()))} wheels across {len(projects)} projects"
         f" ({len(native)} of them native)"

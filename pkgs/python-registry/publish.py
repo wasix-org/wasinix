@@ -10,6 +10,7 @@ lockfiles keep resolving.
 
 Volume layout (= the web root served by the app):
   index.html, simple/...     as in the nix output
+  packages.json              flat list of everything published so far
   manifests/<wheel>.json     {project, sha256, metadata_sha256, requires_python,
                               size, published (UTC date, frozen at first publish),
                               + provenance: attr, drv_path, wasinix_rev}
@@ -174,6 +175,10 @@ def main():
         make_index.page("Simple index", root)
     )
     (staging / "index.html").write_text(make_index.landing(projects))
+    make_index.write_packages_json(
+        staging / "packages.json",
+        ((fname, m["sha256"]) for fname, m in manifests.items()),
+    )
 
     print(
         f"publishing {len(new)} new wheels "

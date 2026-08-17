@@ -126,6 +126,10 @@ A new `wheels.nix` entry lands in the registry automatically. Its test suite
 integrity and pip-installs representative packages, resolving their deps from
 the index too, then imports them under wasmer.
 
+Alongside `simple/`, the index root carries `packages.json`: one JSON object per
+line naming a published wheel, which is how `wasmerio/wasmer-compat` decides
+which projects the index covers.
+
 `native/simple/` is the same index over the projects that ship a platform-tagged
 wheel, which are the ones nothing else can supply. Point a resolver at that as
 its priority index and PyPI as the primary one:
