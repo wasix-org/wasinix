@@ -241,10 +241,6 @@
       if explicitCheckInputs != null
       then explicitCheckInputs
       else guestFromNative nativeDeclared;
-    selectedBuildSystem =
-      if nativeWheel == null
-      then []
-      else guestFromNative (nativeWheel."build-system" or []);
     hasCustomInstallCheck =
       nativeWheel
       != null
@@ -289,8 +285,7 @@
           guestInputs = let
             evalOk = d: d != null && (builtins.tryEval (builtins.seq d.drvPath true)).success;
             guestUsable = d: d ? pythonModule || lib.hasInfix "check-hook" (lib.getName d);
-            declared =
-              lib.filter (d: evalOk d && guestUsable d) (selectedCheckInputs ++ selectedBuildSystem);
+            declared = lib.filter (d: evalOk d && guestUsable d) selectedCheckInputs;
             # Keep the declared input when its propagated closure cannot
             # evaluate. The check then fails if it imports the missing module.
             closureFor = d: let
