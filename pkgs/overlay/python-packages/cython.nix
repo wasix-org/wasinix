@@ -13,7 +13,7 @@ in
       ++ lib.optionals (!isHistory) [./patches/cython-wasix-builtin-compatibility.patch];
     passthru.wasixDeclaredCheckInputs = [pyfinal.numpy pyfinal.setuptools];
     passthru.wasix.emulatedCheck = {
-      shards = 4;
+      shards = 8;
       timeout = 3600;
     };
     installCheckPhase = _: ''

@@ -80,6 +80,32 @@
 
   '';
 
+  pytestShardPlugin = pkgs.writeTextDir "wasix_pytest_shard.py" ''
+    import hashlib
+    import os
+
+    import pytest
+
+
+    def pytest_collection_modifyitems(config, items):
+        count = int(os.environ["WASIX_CHECK_SHARD_COUNT"])
+        shard = int(os.environ["WASIX_CHECK_SHARD_NUM"])
+        if count <= 0 or shard < 0 or shard >= count:
+            raise pytest.UsageError(
+                f"invalid WASIX pytest shard {shard} of {count}"
+            )
+
+        selected = []
+        deselected = []
+        for item in items:
+            digest = hashlib.sha256(item.nodeid.encode()).digest()
+            bucket = int.from_bytes(digest[:8], "big") % count
+            (selected if bucket == shard else deselected).append(item)
+
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = selected
+  '';
+
   # Cap on a check's output: a suite looping on one error can fill the
   # builder's disk. head -c SIGPIPEs the producer at the cap, and the check
   # fails.
@@ -186,6 +212,9 @@ in {
           export CI=true
           export enableParallelChecking=false
           ${postRestore}
+          if [ -n "''${WASIX_CHECK_SHARD_COUNT:-}" ]; then
+            export PYTEST_ADDOPTS="''${PYTEST_ADDOPTS:+$PYTEST_ADDOPTS }-p wasix_pytest_shard"
+          fi
           case " ''${pytestFlags:-} ''${pytestFlagsArray[*]-} ''${PYTEST_ADDOPTS:-} " in
             *no:cacheprovider*) ;;
             *) export PYTEST_ADDOPTS="''${PYTEST_ADDOPTS:+$PYTEST_ADDOPTS }-o cache_dir=/home/tmp/pytest-cache" ;;
@@ -223,7 +252,7 @@ in {
           for _sp in ${drv}/lib/python*/site-packages; do
             [ -d "$_sp" ] && PYTHONPATH="$_sp''${PYTHONPATH:+:$PYTHONPATH}"
           done
-          PYTHONPATH=${guestSiteCustomize}''${PYTHONPATH:+:$PYTHONPATH}
+          PYTHONPATH=${pytestShardPlugin}:${guestSiteCustomize}''${PYTHONPATH:+:$PYTHONPATH}
           export PYTHONPATH
           echo "guest PYTHONPATH=$PYTHONPATH"
         '';

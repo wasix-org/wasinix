@@ -28,7 +28,10 @@
 in
   helpers.libTweaks {
     # The full upstream suite collects roughly 96,000 cases under emulation.
-    passthru.wasix.emulatedCheck.timeout = 7200;
+    passthru.wasix.emulatedCheck = {
+      shards = 16;
+      timeout = 7200;
+    };
     passthru.wasix.updateNotes = [
       {message = "scipy: re-check the explicit f2py CHARACTER-length patch on bump.";}
     ];

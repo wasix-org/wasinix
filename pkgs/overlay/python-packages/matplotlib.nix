@@ -23,6 +23,7 @@ in
   (
     helpers.linkInputs (helpers.dropInputsByNameInfix ["ffmpeg"])
     // {
+      passthru.wasix.emulatedCheck.shards = 8;
       patches = _: [];
       mesonFlags = fs:
         builtins.filter (
