@@ -1,3 +1,0 @@
-[submodule "vendor/phpix"]
-	path = vendor/phpix
-	url = https://github.com/wasmerio/phpix
