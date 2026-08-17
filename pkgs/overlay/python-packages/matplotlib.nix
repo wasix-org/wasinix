@@ -10,24 +10,28 @@
   lib,
   helpers,
   ...
-}:
-let
-  qhullR = helpers.libTweaks {
-    postInstall = ''
-      ln -sf libqhullstatic_r.a "$out/lib/libqhull_r.a"
-    '';
-  } final.qhull;
+}: let
+  qhullR =
+    helpers.libTweaks {
+      postInstall = ''
+        ln -sf libqhullstatic_r.a "$out/lib/libqhull_r.a"
+      '';
+    }
+    final.qhull;
 in
-helpers.libTweaks
+  helpers.libTweaks
   (
-    helpers.linkInputs (helpers.dropInputsByNameInfix [ "ffmpeg" ])
+    helpers.linkInputs (helpers.dropInputsByNameInfix ["ffmpeg"])
     // {
-      patches = _: [ ];
-      mesonFlags =
-        fs:
+      patches = _: [];
+      mesonFlags = fs:
         builtins.filter (
           f: lib.versionAtLeast pyprev.matplotlib.version "3.11" || !lib.hasInfix "system-libraqm" f
-        ) (if fs == null then [ ] else fs);
+        ) (
+          if fs == null
+          then []
+          else fs
+        );
       postPatch = ''
         sed -i -E 's/^( *)([A-Za-z_]+)->get_(height|width)\(\)( \* 4)?,$/\1static_cast<py::ssize_t>(\2->get_\3()\4),/' \
           src/_backend_agg_wrapper.cpp
@@ -49,6 +53,9 @@ helpers.libTweaks
             "sys.platform == 'emscripten'" \
             "sys.platform in {'emscripten', 'wasix'}"
         substituteInPlace lib/matplotlib/tests/test_ticker.py \
+          --replace-fail \
+            'import re' \
+            $'import re\nimport sys' \
           --replace-fail \
             'def test_locale_comma():' \
             $'@pytest.mark.xfail(sys.platform == "wasix", reason="wasix-libc localeconv is POSIX-only", strict=True)\ndef test_locale_comma():'
