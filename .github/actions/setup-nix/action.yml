@@ -17,15 +17,14 @@ runs:
     - name: Cache flake inputs
       uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
       with:
-        # The fetcher-cache sqlite stays out: it pins a final narHash per
-        # git rev whose store path does not exist on a fresh VM, and nix
-        # then fails the eval when re-materializing computes a different
-        # hash (workdir and rev fetches of a tree with a submodule gitlink
-        # disagree).
-        path: |
-          ~/.cache/nix
-          !~/.cache/nix/fetcher-cache-v*.sqlite*
+        # The fetcher-cache sqlite is the index into the git and tarball
+        # caches; without it every input re-downloads and re-unpacks each
+        # run, the wasmer input slowest of all. It once pinned a divergent
+        # narHash for a tree carrying a submodule gitlink (vendor/phpix),
+        # which is gone from the tree; the key still pins the lock so a
+        # bumped input starts a fresh entry.
+        path: ~/.cache/nix
         # a saved cache is immutable (no re-save on an existing key), so
         # the key version bumps whenever the cached shape changes
-        key: nix-flake-inputs-v2-${{ hashFiles('flake.lock') }}
-        restore-keys: nix-flake-inputs-v2-
+        key: nix-flake-inputs-v3-${{ hashFiles('flake.lock') }}
+        restore-keys: nix-flake-inputs-v3-
