@@ -1,4 +1,4 @@
-//! Reading and writing the junit files nix-fast-build leaves behind.
+//! Reading and writing the build result junit files.
 
 use std::path::PathBuf;
 

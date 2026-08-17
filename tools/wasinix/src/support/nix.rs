@@ -116,7 +116,7 @@ impl Invocation {
     }
 
     /// A non-`nix` frontend sharing the flag conventions: nix-store,
-    /// nix-eval-jobs, nix-fast-build, nix-prefetch-url.
+    /// nix-eval-jobs, nix-prefetch-url.
     pub fn tool(program: &str) -> Invocation {
         Invocation::base(program, "", false)
     }

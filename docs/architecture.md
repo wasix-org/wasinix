@@ -62,8 +62,8 @@ The main legacy trees are `toolchain`, `packagesByProfile`, `nativePackages`,
 
 `legacyPackages.<system>.ci` flattens the build trees to dotted job names.
 Unsupported and broken packages are filtered before becoming jobs.
-`wasinix build` evaluates and builds them through nix-fast-build, and CI runs
-the same verb.
+`wasinix build` evaluates them once and builds from the evaluated derivations,
+and CI runs the same verb.
 
 CA derivations are not used because caches cannot reliably distribute or
 authenticate realisations

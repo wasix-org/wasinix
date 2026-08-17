@@ -558,7 +558,7 @@ pub(crate) fn cached_jobs(path: &Path) -> Result<BTreeSet<String>> {
     )
 }
 
-/// Apply one nix-fast-build stream result. A BUILD result marks every union
+/// Apply one build stream result. A BUILD result marks every union
 /// job sharing the derivation; an EVAL result only marks failures, since a
 /// successful evaluation says nothing about the build. First report wins, so
 /// each job finishes on the event stream exactly once.
@@ -611,7 +611,7 @@ pub(crate) fn record_result(
             at: unix_secs(),
             job: JobAddr(key),
             status,
-            cached: false,
+            cached: value["cached"].as_bool().unwrap_or(false),
             duration_seconds: value["duration"].as_f64().map(DurationSecs),
             error: job.error.clone(),
         })?;
@@ -619,7 +619,7 @@ pub(crate) fn record_result(
     Ok(())
 }
 
-/// A nix-fast-build stderr line announcing a build start; the attr is the
+/// A build stream line announcing a build start; the attr is the
 /// union key, quoted like the eval attrs.
 pub(crate) fn building_attr(line: &str) -> Option<&str> {
     line.strip_prefix("  building ")
@@ -703,9 +703,8 @@ pub(crate) fn project_junit(
 ) -> Result<()> {
     let prefix = format!("{case_id}::");
     let selected_set: BTreeSet<&str> = selected.iter().map(String::as_str).collect();
-    // Build cases only: nix-fast-build also emits Eval and Upload testcases
-    // per job, and a failed cache upload of a job that built fine must never
-    // read as a build failure of that job.
+    // Build cases only: eval errors are compared separately and must
+    // never read as build failures.
     let mut cases: Vec<facts::junit::Case> =
         facts::junit::parse_junits(&[source.to_path_buf()], false)
             .unwrap_or_default()
@@ -887,14 +886,11 @@ fn run_build_tasks(
         let route = Route::from_on(ctx.runner_root, on.as_deref())?;
         let _lease = route.acquire()?;
         let limits = route.limits()?;
-        let mut worktrees = Vec::new();
+        // The build consumes the evaluation's derivations directly; no
+        // worktree and no re-evaluation happen here.
         let mut union_cases = Vec::new();
         for case_id in cases {
-            let case = find_build_case(request, &case_id)?;
-            let patch = case_dir(ctx.run_dir, &case_id)
-                .join("prepared")
-                .join(PATCH_FILE);
-            let worktree = reproduced_worktree(ctx.runner_root, &case.source, &patch)?;
+            find_build_case(request, &case_id)?;
             let selected: BTreeSet<String> = specs
                 .iter()
                 .filter(|spec| spec.case == case_id)
@@ -902,11 +898,9 @@ fn run_build_tasks(
                 .collect();
             union_cases.push(crate::nix::buildset::UnionCase {
                 id: case_id.clone(),
-                worktree: worktree.path().to_path_buf(),
                 jobs_file: case_dir(ctx.run_dir, &case_id).join("maps/eval-jobs.jsonl"),
                 jobs: selected.into_iter().collect(),
             });
-            worktrees.push(worktree);
         }
         let build_dir = ctx.run_dir.join("build").join(group_dir(on.as_deref()));
         for case in &union_cases {
@@ -920,8 +914,6 @@ fn run_build_tasks(
                 work_dir: &build_dir,
                 result_file: build_dir.join("results.xml"),
                 route: &route,
-                eval_workers: limits.workers,
-                eval_memory: limits.memory,
                 // The build tail is a few long compiles; jobs default to
                 // the machine's parallelism, with WASINIX_MAX_JOBS as the
                 // override.
@@ -964,10 +956,9 @@ fn run_build_tasks(
                 }
             },
         )?;
-        // The per-job facts are the verdict; the process exit is not, since
-        // nix-fast-build returns nonzero for a non-fatal cache-upload miss as
-        // well as for a real failure. But a nonzero exit with every selected
-        // job reporting success is a teardown anomaly worth recording.
+        // The per-job facts are the verdict; a failing driver status with
+        // every selected job reporting success is a teardown anomaly worth
+        // recording.
         if !status.is_success() {
             tracker.record(Event::Warning {
                 at: unix_secs(),
@@ -977,7 +968,6 @@ fn run_build_tasks(
                 ),
             })?;
         }
-        drop(worktrees);
     }
 
     for spec in specs {

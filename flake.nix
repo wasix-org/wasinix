@@ -187,7 +187,6 @@
         coreutils
         git
         nix-eval-jobs
-        nix-fast-build
         nixVersions.latest
         openssh
         python3
@@ -849,7 +848,6 @@
         wasix.pkgs.pkg-config
         wasmerRuntime
 
-        nixpkgs.legacyPackages.${system}.nix-fast-build
         nixpkgs.legacyPackages.${system}.nix-eval-jobs
         nixpkgs.legacyPackages.${system}.nixVersions.latest
       ];

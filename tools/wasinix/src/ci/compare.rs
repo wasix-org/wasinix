@@ -81,7 +81,7 @@ pub fn case_status(paths: &Path) -> StatusMap {
     junit_status(&files)
 }
 
-/// Parse nix-fast-build's junit. A job is a failure if any run of it failed.
+/// Parse a build's junit. A job is a failure if any run of it failed.
 pub fn junit_status(paths: &[std::path::PathBuf]) -> StatusMap {
     use quick_xml::events::Event;
     let mut status = StatusMap::new();

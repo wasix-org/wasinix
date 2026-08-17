@@ -4397,9 +4397,7 @@ mod table {
 
 
 mod buildset {
-    use std::path::PathBuf;
-
-    use crate::nix::buildset::{union_expression, UnionCase};
+    use crate::nix::buildset::{dry_run_to_build, realise_building_drv};
     use crate::nix::evaljobs;
 
     #[test]
@@ -4415,18 +4413,123 @@ mod buildset {
     }
 
     #[test]
-    fn the_union_prefixes_each_cases_selected_jobs() {
-        let expression = union_expression(&[UnionCase {
-            id: "candidate-1".into(),
-            worktree: PathBuf::from("/work/tree"),
-            jobs_file: PathBuf::from("/unused"),
-            jobs: vec!["checks.zlib".into()],
-        }])
+    fn the_dry_run_plan_partitions_in_every_phrasing() {
+        let plural = "these 2 derivations will be built:\n  /nix/store/a.drv\n  /nix/store/b.drv\nthese 3 paths will be fetched (1.0 MiB download, 2.0 MiB unpacked):\n  /nix/store/c\n  /nix/store/d\n  /nix/store/e\n";
+        let built = dry_run_to_build(plural).unwrap();
+        assert_eq!(
+            built.iter().collect::<Vec<_>>(),
+            ["/nix/store/a.drv", "/nix/store/b.drv"]
+        );
+        let singular = "this derivation will be built:\n  /nix/store/only.drv\n";
+        assert_eq!(dry_run_to_build(singular).unwrap().len(), 1);
+        assert!(dry_run_to_build("").unwrap().is_empty());
+        // A phrasing the parser does not know must not read as fully cached.
+        assert!(dry_run_to_build("cannot price /nix/store/x.drv").is_err());
+    }
+
+    /// Real-nix integration: run with `cargo test -- --ignored` on a
+    /// machine with a nix daemon; the crate's sandboxed check has none.
+    #[test]
+    #[ignore = "needs a nix daemon"]
+    fn the_driver_builds_reports_and_marks_cached_on_rerun() {
+        use crate::nix::buildset::{build_union, StreamEvent, UnionCase, UnionRequest};
+        use crate::nix::route::{EvaluationLimits, Route};
+        let scratch = crate::support::fs::Scratch::create("wasinix-driver").unwrap();
+        let instantiate = |expr: &str| -> (String, String) {
+            let drv = crate::support::nix::Invocation::tool("nix-instantiate")
+                .args(["--expr", expr])
+                .checked_text("instantiate")
+                .unwrap();
+            let out = crate::support::nix::Invocation::tool("nix-store")
+                .args(["--query", "--outputs"])
+                .operand(drv.trim())
+                .checked_text("outputs")
+                .unwrap();
+            (drv.trim().to_string(), out.trim().to_string())
+        };
+        let nonce = std::process::id();
+        let (ok_drv, ok_out) = instantiate(&format!(
+            r#"derivation {{ name = "wasinix-driver-ok-{nonce}"; system = builtins.currentSystem; builder = "/bin/sh"; args = ["-c" "echo ok > $out"]; }}"#
+        ));
+        let (bad_drv, bad_out) = instantiate(&format!(
+            r#"derivation {{ name = "wasinix-driver-bad-{nonce}"; system = builtins.currentSystem; builder = "/bin/sh"; args = ["-c" "echo doom >&2; exit 1"]; }}"#
+        ));
+        let jobs_file = scratch.path().join("jobs.jsonl");
+        std::fs::write(
+            &jobs_file,
+            format!(
+                "{}
+{}
+",
+                serde_json::json!({"attrPath": ["ok"], "drvPath": ok_drv, "outputs": {"out": ok_out}}),
+                serde_json::json!({"attrPath": ["bad"], "drvPath": bad_drv, "outputs": {"out": bad_out}}),
+            ),
+        )
         .unwrap();
-        assert!(expression.contains("\"candidate-1\""), "{expression}");
-        assert!(expression.contains("path:/work/tree"), "{expression}");
-        assert!(expression.contains("ciSets.all"), "{expression}");
-        assert!(expression.contains("checks.zlib"), "{expression}");
+        let route = Route::Local(EvaluationLimits {
+            workers: 1,
+            memory: 2048,
+            timeout: std::time::Duration::from_secs(600),
+        });
+        let run = |dir: &str| {
+            let mut results = Vec::new();
+            let status = build_union(
+                UnionRequest {
+                    cases: vec![UnionCase {
+                        id: "case".into(),
+                        jobs_file: jobs_file.clone(),
+                        jobs: vec!["ok".into(), "bad".into()],
+                    }],
+                    work_dir: &scratch.path().join(dir),
+                    result_file: scratch.path().join(dir).join("results.xml"),
+                    route: &route,
+                    max_jobs: 2,
+                    hard_timeout: None,
+                    push: false,
+                },
+                &mut |event| {
+                    if let StreamEvent::Result(value) = event {
+                        results.push(value);
+                    }
+                    Ok(())
+                },
+            )
+            .unwrap();
+            (status, results)
+        };
+
+        let (status, results) = run("first");
+        assert!(!status.is_success());
+        let find = |results: &[serde_json::Value], attr: &str| -> serde_json::Value {
+            results
+                .iter()
+                .find(|value| value["attr"] == format!("case::{attr}"))
+                .unwrap()
+                .clone()
+        };
+        assert_eq!(find(&results, "ok")["success"], true);
+        let bad = find(&results, "bad");
+        assert_eq!(bad["success"], false);
+        assert!(bad["error"].as_str().unwrap().contains("doom"), "{bad}");
+        let junit = std::fs::read_to_string(scratch.path().join("first/results.xml")).unwrap();
+        assert!(junit.contains("case::ok"), "{junit}");
+
+        // The rerun finds the built output valid and reports it cached; the
+        // failure builds again and fails again.
+        let (status, results) = run("second");
+        assert!(!status.is_success());
+        assert_eq!(find(&results, "ok")["cached"], true);
+        assert_eq!(find(&results, "bad")["success"], false);
+    }
+
+    #[test]
+    fn realise_progress_lines_name_their_derivation() {
+        assert_eq!(
+            realise_building_drv("building '/nix/store/abc-zlib.drv'..."),
+            Some("/nix/store/abc-zlib.drv")
+        );
+        assert_eq!(realise_building_drv("copying path '/nix/store/x'"), None);
+        assert_eq!(realise_building_drv("building trees"), None);
     }
 }
 

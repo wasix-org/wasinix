@@ -1,9 +1,10 @@
-//! Build selected CI jobs with nix-fast-build, and push what it leaves
-//! behind. `--copy-to` uploads runtime closures only, so build-only
-//! dependencies are captured from the evaluation before the build and pushed
-//! after it; with no signing key there is no upload at all.
+//! Build selected CI jobs from the derivations the evaluation already
+//! instantiated: no re-evaluation, ever. A dry-run partitions the jobs into
+//! cached and to-build, one realise per attempt builds the rest, and
+//! finished outputs stream to the cache as they complete, so a timeout or
+//! cancel never loses built work.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -15,10 +16,8 @@ use serde_json::Value;
 use crate::support::error::{io, request_error, Result};
 use crate::support::process::CommandStatus;
 
-
 pub struct UnionCase {
     pub id: String,
-    pub worktree: PathBuf,
     pub jobs_file: PathBuf,
     pub jobs: Vec<String>,
 }
@@ -28,8 +27,6 @@ pub struct UnionRequest<'a> {
     pub work_dir: &'a Path,
     pub result_file: PathBuf,
     pub route: &'a crate::nix::route::Route,
-    pub eval_workers: usize,
-    pub eval_memory: usize,
     pub max_jobs: usize,
     pub hard_timeout: Option<Duration>,
     /// Whether to sign and push; the signing key still has to be present.
@@ -41,15 +38,6 @@ pub enum StreamEvent {
     Activity,
     Heartbeat,
     Output(String),
-}
-
-fn renderer_heartbeat(line: &str) -> bool {
-    let line = line.to_ascii_lowercase();
-    line.contains("heartbeat") || line.contains("still running")
-}
-
-fn terminal_renderer_error(line: &str) -> bool {
-    line.starts_with("ERROR:nix_fast_build:nix-eval-jobs exited with")
 }
 
 /// The key, written where nix can read it. A key that is not ours would sign
@@ -64,7 +52,8 @@ impl SigningKey {
             crate::support::ui::fact("cache upload", "off (no signing key)");
             return Ok(None);
         };
-        let path = crate::support::env::temp_dir().join(format!("wasinix-key-{}", std::process::id()));
+        let path =
+            crate::support::env::temp_dir().join(format!("wasinix-key-{}", std::process::id()));
         // Private from the first byte: the file never exists world-readable,
         // and a leftover path (or a planted symlink) fails the create.
         let mut options = std::fs::OpenOptions::new();
@@ -93,7 +82,11 @@ impl SigningKey {
     }
 
     fn store(&self) -> String {
-        format!("{}&secret-key={}", crate::support::nix::cache_push_store(), self.path.display())
+        format!(
+            "{}&secret-key={}",
+            crate::support::nix::cache_push_store(),
+            self.path.display()
+        )
     }
 }
 
@@ -121,40 +114,10 @@ fn needed_builds_for(path: &Path, wanted: &[String]) -> Result<Vec<String>> {
     Ok(needed)
 }
 
-pub(crate) fn union_expression(cases: &[UnionCase]) -> Result<String> {
-    let json = |value: &str| -> Result<String> {
-        serde_json::to_string(value).map_err(|source| crate::support::error::Error::Json {
-            path: "<union expression>".into(),
-            source,
-        })
-    };
-    let mut selected = Vec::new();
-    let system = json(crate::support::nix::SYSTEM)?;
-    for case in cases {
-        let prefix = json(&case.id)?;
-        let flake = json(&format!("path:{}", case.worktree.display()))?;
-        let names: BTreeMap<&str, Option<()>> =
-            case.jobs.iter().map(|name| (name.as_str(), None)).collect();
-        let names = json(&serde_json::to_string(&names).map_err(|source| {
-            crate::support::error::Error::Json {
-                path: "<union expression>".into(),
-                source,
-            }
-        })?)?;
-        selected.push(format!(
-            "(prefix {prefix} (builtins.intersectAttrs (builtins.fromJSON {names}) ((builtins.getFlake {flake}).legacyPackages.{system}.ciSets.all)))"
-        ));
-    }
-    Ok(format!(
-        "let prefix = p: jobs: builtins.listToAttrs (map (name: {{ name = p + \"::\" + name; value = jobs.${{name}}; }}) (builtins.attrNames jobs)); in {}\n",
-        selected.join(" // ")
-    ))
-}
-
-/// Realise and push what `--copy-to` misses. `--keep-going` so one broken
-/// dependency does not block the rest, and `nix copy` skips what the cache
-/// already has, so this is a no-op once warm. Push failures warn rather than
-/// fail: the cache is an accelerator, not a build product.
+/// Realise and push build-time dependencies an output push would miss.
+/// `--keep-going` so one broken dependency does not block the rest; push
+/// failures warn rather than fail: the cache is an accelerator, not a build
+/// product.
 fn push_build_deps(key: &SigningKey, drvs: &[String]) -> Result<()> {
     if drvs.is_empty() {
         return Ok(());
@@ -181,41 +144,175 @@ fn push_build_deps(key: &SigningKey, drvs: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// The nix-fast-build invocation `build_union` runs, kept separate so the
-/// flag set reads as one unit.
-fn fast_build(
-    result_file: &Path,
-    request: &UnionRequest<'_>,
-    key: Option<&SigningKey>,
-) -> Result<crate::support::nix::Invocation> {
-    let mut invocation = crate::support::nix::Invocation::tool("nix-fast-build")
-        .accepts_flake_config()
-        .arg("--skip-cached")
-        .args(["--retries", "3"])
-        .args(["--no-nom", "--no-link"])
-        .args(["--max-jobs", &request.max_jobs.to_string()])
-        .args(["--eval-workers", &request.eval_workers.to_string()])
-        .args([
-            "--eval-max-memory-size",
-            &request.eval_memory.to_string(),
-        ])
-        .args(["--result-file", &result_file.to_string_lossy()])
-        .args(["--result-format", "junit"])
-        .route(request.route)?;
-    if let Some(key) = key {
-        invocation = invocation.args(["--copy-to", &key.store()]);
-    }
-    Ok(invocation)
-}
-
 #[cfg(unix)]
 fn kill_group(child: &std::process::Child) {
     crate::support::process::signal_group(child.id(), 15);
 }
 
-/// Build every case's selected jobs as one prefixed union, streaming results
-/// to `on_event` as they arrive. The child gets its own process group, so a
-/// timeout or stream error takes its whole nix tree down with it.
+/// One selected derivation: which attrs share it (a union may select the
+/// same derivation under several names) and its output paths.
+struct JobSpec {
+    attrs: Vec<String>,
+    outputs: Vec<String>,
+}
+
+/// The derivations a dry-run plan says must actually build. Everything else
+/// is already valid locally or substitutable, which the driver reports as
+/// cached without realising, so a warm run downloads nothing.
+pub(crate) fn dry_run_to_build(plan: &str) -> Result<BTreeSet<String>> {
+    let mut to_build = BTreeSet::new();
+    let mut in_build_section = false;
+    let mut recognized = false;
+    for line in plan.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("this derivation will be built")
+            || (trimmed.starts_with("these ") && trimmed.contains("will be built"))
+        {
+            in_build_section = true;
+            recognized = true;
+            continue;
+        }
+        if trimmed.starts_with("this path will be fetched")
+            || (trimmed.starts_with("these ") && trimmed.contains("will be fetched"))
+        {
+            in_build_section = false;
+            recognized = true;
+            continue;
+        }
+        if trimmed.starts_with("/nix/store/") {
+            if in_build_section && trimmed.ends_with(".drv") {
+                to_build.insert(trimmed.to_string());
+            }
+            continue;
+        }
+        in_build_section = false;
+    }
+    // A phrasing this parser does not know must not read as "fully cached".
+    if !recognized && plan.contains(".drv") {
+        return Err(crate::support::error::Error::Failure(format!(
+            "unrecognized dry-run plan phrasing:\n{}",
+            crate::support::error::tail(plan, 500)
+        )));
+    }
+    Ok(to_build)
+}
+
+/// The derivation a realise progress line announces, e.g.
+/// `building '/nix/store/xxx-foo.drv'...`.
+pub(crate) fn realise_building_drv(line: &str) -> Option<&str> {
+    let rest = line.trim_start().strip_prefix("building '")?;
+    let (drv, _) = rest.split_once('\'')?;
+    drv.ends_with(".drv").then_some(drv)
+}
+
+/// The tail of a failed derivation's build log, for the report's error text.
+fn failure_excerpt(drv: &str) -> String {
+    let Ok(output) = crate::support::nix::Invocation::plain("log")
+        .local_only()
+        .operand(drv)
+        .probe("a missing log still reports the failure")
+    else {
+        return "build failed".to_string();
+    };
+    if !output.status.is_success() || output.stdout.is_empty() {
+        return "build failed".to_string();
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = text.lines().rev().take(20).collect();
+    lines.into_iter().rev().collect::<Vec<_>>().join("\n")
+}
+
+/// Output paths not yet valid in the local store, chunked to keep argv
+/// bounded.
+fn invalid_outputs(outputs: &[String]) -> Result<BTreeSet<String>> {
+    let mut invalid = BTreeSet::new();
+    for chunk in outputs.chunks(500) {
+        let probe = crate::support::nix::Invocation::tool("nix-store")
+            .args(["--check-validity", "--print-invalid"])
+            .operands(chunk.iter().cloned())
+            .probe("validity is the completion signal")?;
+        invalid.extend(
+            String::from_utf8_lossy(&probe.stdout)
+                .split_whitespace()
+                .map(str::to_string),
+        );
+    }
+    Ok(invalid)
+}
+
+/// Batches finished outputs to the signed push store from its own thread, so
+/// uploads overlap builds and a cancel keeps everything already copied.
+struct Uploader {
+    sender: Option<mpsc::Sender<Vec<String>>>,
+    handle: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Uploader {
+    fn start(store: Option<String>) -> Uploader {
+        let Some(store) = store else {
+            return Uploader {
+                sender: None,
+                handle: None,
+            };
+        };
+        let (sender, receiver) = mpsc::channel::<Vec<String>>();
+        let handle = std::thread::spawn(move || {
+            let mut batch: Vec<String> = Vec::new();
+            loop {
+                match receiver.recv_timeout(Duration::from_secs(5)) {
+                    Ok(paths) => {
+                        batch.extend(paths);
+                        if batch.len() < 32 {
+                            continue;
+                        }
+                    }
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        Self::flush(&store, &mut batch);
+                        return;
+                    }
+                }
+                Self::flush(&store, &mut batch);
+            }
+        });
+        Uploader {
+            sender: Some(sender),
+            handle: Some(handle),
+        }
+    }
+
+    fn flush(store: &str, batch: &mut Vec<String>) {
+        if batch.is_empty() {
+            return;
+        }
+        let copied = crate::support::nix::Invocation::plain("copy")
+            .args(["--to", store])
+            .operands(batch.drain(..))
+            .status();
+        if !matches!(copied, Ok(status) if status.is_success()) {
+            crate::support::ui::warning("cache push failed (non-fatal)");
+        }
+    }
+
+    fn push(&self, paths: Vec<String>) {
+        if let Some(sender) = &self.sender {
+            let _ = sender.send(paths);
+        }
+    }
+
+    fn finish(mut self) {
+        drop(self.sender.take());
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+const BUILD_ATTEMPTS: usize = 3;
+
+/// Build every case's selected jobs from their evaluated derivations,
+/// streaming results to `on_event` as they arrive. Each realise child gets
+/// its own process group, so a timeout takes its whole nix tree down.
 pub fn build_union(
     request: UnionRequest<'_>,
     on_event: &mut dyn FnMut(StreamEvent) -> Result<()>,
@@ -224,15 +321,74 @@ pub fn build_union(
     if let Some(parent) = request.result_file.parent() {
         crate::support::fs::create_dir_all(parent)?;
     }
-    // nix-fast-build runs with work_dir as its cwd, so a relative --file or
-    // --result-file resolves against that cwd and doubles. Hand it absolute
-    // paths; the parent still reaches the same files through its own paths.
     let work_dir =
         std::path::absolute(request.work_dir).map_err(|error| io(request.work_dir, error))?;
-    let result_file = std::path::absolute(&request.result_file)
-        .map_err(|error| io(&request.result_file, error))?;
-    let expression = work_dir.join("build-union.nix");
-    crate::support::fs::write(&expression, union_expression(&request.cases)?.as_bytes())?;
+    let log_path = work_dir.join("build-union.log");
+    let stream_path = work_dir.join("build-results.jsonl");
+    let mut log = std::fs::File::create(&log_path).map_err(|e| io(&log_path, e))?;
+    let mut stream = std::fs::File::create(&stream_path).map_err(|e| io(&stream_path, e))?;
+
+    // The evaluation's answer: every selected job's derivation and outputs.
+    let mut jobs: BTreeMap<String, JobSpec> = BTreeMap::new();
+    let mut missing: Vec<String> = Vec::new();
+    for case in &request.cases {
+        let text = crate::support::fs::read_to_string(&case.jobs_file)?;
+        let selected: BTreeSet<&str> = case.jobs.iter().map(String::as_str).collect();
+        for job in crate::nix::evaljobs::parse_file(&text)? {
+            let name = job.name();
+            if !selected.contains(name.as_str()) {
+                continue;
+            }
+            let attr = format!("{}::{name}", case.id);
+            match job.drv_path.clone().filter(|drv| !drv.is_empty()) {
+                Some(drv) => {
+                    let spec = jobs.entry(drv).or_insert_with(|| JobSpec {
+                        attrs: Vec::new(),
+                        outputs: job.outputs.values().cloned().collect(),
+                    });
+                    spec.attrs.push(attr);
+                }
+                None => missing.push(attr),
+            }
+        }
+    }
+
+    let mut cases: Vec<crate::ci::facts::junit::Case> = Vec::new();
+    let mut failures = 0usize;
+    fn emit(
+        value: Value,
+        stream: &mut std::fs::File,
+        stream_path: &Path,
+        cases: &mut Vec<crate::ci::facts::junit::Case>,
+        on_event: &mut dyn FnMut(StreamEvent) -> Result<()>,
+    ) -> Result<()> {
+        writeln!(stream, "{value}").map_err(|e| io(stream_path, e))?;
+        let mut case = crate::ci::facts::junit::Case::new(
+            value["attr"].as_str().unwrap_or_default().to_string(),
+            "Build".to_string(),
+        );
+        case.duration = value["duration"].as_f64().unwrap_or_default();
+        if !value["success"].as_bool().unwrap_or(false) {
+            case.message = Some(value["error"].as_str().unwrap_or("build failed").to_string());
+        }
+        cases.push(case);
+        on_event(StreamEvent::Result(value))
+    }
+
+    for attr in &missing {
+        failures += 1;
+        emit(
+            serde_json::json!({
+                "type": "BUILD", "attr": attr, "success": false,
+                "error": "the evaluation produced no derivation for this job",
+            }),
+            &mut stream,
+            &stream_path,
+            &mut cases,
+            on_event,
+        )?;
+    }
+
     let key = if request.push {
         SigningKey::take()?
     } else {
@@ -247,122 +403,227 @@ pub fn build_union(
         needed.dedup();
     }
 
-    let mut cmd = fast_build(&result_file, &request, key.as_ref())?
-        .args(["--file", &expression.to_string_lossy()])
-        .arg("--impure")
-        .arg("--stream-json-lines")
-        .workdir(&work_dir)
-        .command()?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
+    // Partition: what must build versus what the caches already carry.
+    let plan = crate::support::nix::Invocation::tool("nix-store")
+        .args(["--realise", "--dry-run"])
+        .operands(jobs.keys().cloned())
+        .route(request.route)?
+        .probe("the dry-run plan partitions cached from to-build")?;
+    let to_build = dry_run_to_build(&plan.stderr)?;
+
+    let mut pending: BTreeSet<String> = BTreeSet::new();
+    for (drv, spec) in &jobs {
+        if to_build.contains(drv) {
+            pending.insert(drv.clone());
+            continue;
+        }
+        for attr in &spec.attrs {
+            emit(
+                serde_json::json!({
+                    "type": "BUILD", "attr": attr, "success": true,
+                    "cached": true, "duration": 0.0,
+                }),
+                &mut stream,
+                &stream_path,
+                &mut cases,
+                on_event,
+            )?;
+        }
     }
-    crate::support::tools::log(&cmd);
-    let mut child =
-        crate::support::tools::spawn(cmd.stdout(Stdio::piped()).stderr(Stdio::piped()))?;
-    let stdout = child.stdout.take().expect("stdout was piped");
-    let stderr = child.stderr.take().expect("stderr was piped");
-    let log_path = work_dir.join("build-union.log");
-    let stream_path = work_dir.join("build-results.jsonl");
-    let (sender, receiver) = mpsc::channel();
-    let stdout_sender = sender.clone();
-    // Bytes, not utf8 lines: one stray byte from a compiler must not end the
-    // tee and truncate the log the failure report renders from.
-    let stdout_thread = std::thread::spawn(move || {
-        let mut reader = BufReader::new(stdout);
-        let mut buffer = Vec::new();
-        while matches!(reader.read_until(b'\n', &mut buffer), Ok(n) if n > 0) {
-            let line = String::from_utf8_lossy(&buffer).trim_end().to_string();
-            let _ = stdout_sender.send((true, line));
-            buffer.clear();
-        }
-    });
-    let stderr_thread = std::thread::spawn(move || {
-        let mut reader = BufReader::new(stderr);
-        let mut buffer = Vec::new();
-        while matches!(reader.read_until(b'\n', &mut buffer), Ok(n) if n > 0) {
-            let line = String::from_utf8_lossy(&buffer).trim_end().to_string();
-            let _ = sender.send((false, line));
-            buffer.clear();
-        }
-    });
-    let mut log = std::fs::File::create(&log_path).map_err(|e| io(&log_path, e))?;
-    let mut stream = std::fs::File::create(&stream_path).map_err(|e| io(&stream_path, e))?;
+    crate::support::ui::fact(
+        "build plan",
+        format!(
+            "{} to build · {} cached",
+            pending.len(),
+            jobs.len() - pending.len()
+        ),
+    );
+
+    let uploader = Uploader::start(key.as_ref().map(SigningKey::store));
     let started = std::time::Instant::now();
-    let mut stream_error = None;
-    let mut fail = |child: &mut std::process::Child,
-                    error: crate::support::error::Error|
-     -> Result<std::process::ExitStatus> {
-        stream_error = Some(error);
+    let mut build_started: BTreeMap<String, std::time::Instant> = BTreeMap::new();
+    let mut timed_out = false;
+
+    for attempt in 1..=BUILD_ATTEMPTS {
+        if pending.is_empty() || timed_out {
+            break;
+        }
+        let mut cmd = crate::support::nix::Invocation::tool("nix-store")
+            .args(["--realise", "--keep-going"])
+            .args(["--max-jobs", &request.max_jobs.to_string()])
+            .operands(pending.iter().cloned())
+            .route(request.route)?
+            .command()?;
         #[cfg(unix)]
-        kill_group(child);
-        child.wait().map_err(|e| io(&log_path, e))
-    };
-    let status = loop {
-        match receiver.recv_timeout(Duration::from_secs(10)) {
-            Ok((true, line)) => {
-                writeln!(stream, "{line}").map_err(|e| io(&stream_path, e))?;
-                let event = serde_json::from_str(&line)
-                    .map_err(|source| crate::support::error::Error::Json {
-                        path: stream_path.clone(),
-                        source,
-                    })
-                    .map(StreamEvent::Result)
-                    .and_then(&mut *on_event);
-                if let Err(error) = event {
-                    break fail(&mut child, error)?;
-                }
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
+        crate::support::tools::log(&cmd);
+        let mut child =
+            crate::support::tools::spawn(cmd.stdout(Stdio::null()).stderr(Stdio::piped()))?;
+        let stderr = child.stderr.take().expect("stderr was piped");
+        let (sender, receiver) = mpsc::channel();
+        let reader_thread = std::thread::spawn(move || {
+            let mut reader = BufReader::new(stderr);
+            let mut buffer = Vec::new();
+            while matches!(reader.read_until(b'\n', &mut buffer), Ok(n) if n > 0) {
+                let line = String::from_utf8_lossy(&buffer).trim_end().to_string();
+                let _ = sender.send(line);
+                buffer.clear();
             }
-            Ok((false, line)) => {
-                writeln!(log, "{line}").map_err(|e| io(&log_path, e))?;
-                if let Err(error) = on_event(StreamEvent::Output(line.clone())) {
-                    break fail(&mut child, error)?;
-                }
-                if terminal_renderer_error(&line) {
-                    if let Some(status) = child.try_wait().map_err(|e| io(&log_path, e))? {
-                        break status;
+        });
+
+        loop {
+            match receiver.recv_timeout(Duration::from_secs(5)) {
+                Ok(line) => {
+                    writeln!(log, "{line}").map_err(|e| io(&log_path, e))?;
+                    if let Some(drv) = realise_building_drv(&line) {
+                        if let Some(spec) = jobs.get(drv) {
+                            build_started
+                                .entry(drv.to_string())
+                                .or_insert_with(std::time::Instant::now);
+                            for attr in spec.attrs.clone() {
+                                on_event(StreamEvent::Output(format!("  building \"{attr}\"")))?;
+                            }
+                        }
+                    } else {
+                        on_event(StreamEvent::Output(line))?;
                     }
-                    #[cfg(unix)]
-                    kill_group(&child);
-                    break child.wait().map_err(|e| io(&log_path, e))?;
+                    on_event(StreamEvent::Activity)?;
                 }
-                if !renderer_heartbeat(&line) {
-                    if let Err(error) = on_event(StreamEvent::Activity) {
-                        break fail(&mut child, error)?;
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    on_event(StreamEvent::Heartbeat)?;
+                    let outputs: Vec<String> = pending
+                        .iter()
+                        .flat_map(|drv| jobs[drv].outputs.iter().cloned())
+                        .collect();
+                    let invalid = invalid_outputs(&outputs)?;
+                    let finished: Vec<String> = pending
+                        .iter()
+                        .filter(|drv| {
+                            jobs[drv.as_str()]
+                                .outputs
+                                .iter()
+                                .all(|out| !invalid.contains(out))
+                        })
+                        .cloned()
+                        .collect();
+                    for drv in finished {
+                        pending.remove(&drv);
+                        let duration =
+                            build_started.get(&drv).map(|at| at.elapsed().as_secs_f64());
+                        for attr in &jobs[&drv].attrs {
+                            emit(
+                                serde_json::json!({
+                                    "type": "BUILD", "attr": attr, "success": true,
+                                    "duration": duration,
+                                }),
+                                &mut stream,
+                                &stream_path,
+                                &mut cases,
+                                on_event,
+                            )?;
+                        }
+                        uploader.push(jobs[&drv].outputs.clone());
+                    }
+                    if request
+                        .hard_timeout
+                        .is_some_and(|timeout| started.elapsed() >= timeout)
+                    {
+                        timed_out = true;
+                        #[cfg(unix)]
+                        kill_group(&child);
+                        child.wait().map_err(|e| io(&log_path, e))?;
+                        break;
+                    }
+                    if child.try_wait().map_err(|e| io(&log_path, e))?.is_some() {
+                        break;
                     }
                 }
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                if let Err(error) = on_event(StreamEvent::Heartbeat) {
-                    break fail(&mut child, error)?;
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    child.wait().map_err(|e| io(&log_path, e))?;
+                    break;
                 }
-                if request
-                    .hard_timeout
-                    .is_some_and(|timeout| started.elapsed() >= timeout)
-                {
-                    #[cfg(unix)]
-                    kill_group(&child);
-                    break child.wait().map_err(|e| io(&log_path, e))?;
-                }
-                if let Some(status) = child.try_wait().map_err(|e| io(&log_path, e))? {
-                    break status;
-                }
-            }
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                break child.wait().map_err(|e| io(&log_path, e))?
             }
         }
-    };
-    drop(receiver);
-    let _ = stdout_thread.join();
-    let _ = stderr_thread.join();
-    if let Some(error) = stream_error {
-        return Err(error);
+        let _ = reader_thread.join();
+        // The post-exit sweep settles everything the poll missed.
+        let outputs: Vec<String> = pending
+            .iter()
+            .flat_map(|drv| jobs[drv].outputs.iter().cloned())
+            .collect();
+        let invalid = invalid_outputs(&outputs)?;
+        let finished: Vec<String> = pending
+            .iter()
+            .filter(|drv| {
+                jobs[drv.as_str()]
+                    .outputs
+                    .iter()
+                    .all(|out| !invalid.contains(out))
+            })
+            .cloned()
+            .collect();
+        for drv in finished {
+            pending.remove(&drv);
+            let duration = build_started.get(&drv).map(|at| at.elapsed().as_secs_f64());
+            for attr in &jobs[&drv].attrs {
+                emit(
+                    serde_json::json!({
+                        "type": "BUILD", "attr": attr, "success": true,
+                        "duration": duration,
+                    }),
+                    &mut stream,
+                    &stream_path,
+                    &mut cases,
+                    on_event,
+                )?;
+            }
+            uploader.push(jobs[&drv].outputs.clone());
+        }
+        if !pending.is_empty() && attempt < BUILD_ATTEMPTS && !timed_out {
+            crate::support::ui::note(format!(
+                "retrying {} unfinished builds (attempt {}/{BUILD_ATTEMPTS})",
+                pending.len(),
+                attempt + 1
+            ));
+        }
     }
-    let status = CommandStatus::from_exit(status);
+
+    // Whatever never became valid is a failure, with its log as the story.
+    for drv in std::mem::take(&mut pending) {
+        let error = if timed_out {
+            "the build timed out before this job finished".to_string()
+        } else {
+            failure_excerpt(&drv)
+        };
+        for attr in &jobs[&drv].attrs {
+            failures += 1;
+            emit(
+                serde_json::json!({
+                    "type": "BUILD", "attr": attr, "success": false,
+                    "error": error,
+                }),
+                &mut stream,
+                &stream_path,
+                &mut cases,
+                on_event,
+            )?;
+        }
+    }
+
+    uploader.finish();
+    cases.sort_by(|a, b| a.attr.cmp(&b.attr));
+    crate::support::fs::write(
+        &request.result_file,
+        crate::ci::facts::junit::write_junit(&cases).as_bytes(),
+    )?;
     if let Some(key) = &key {
         push_build_deps(key, &needed)?;
     }
-    Ok(status)
+    Ok(if failures == 0 {
+        CommandStatus::SUCCESS
+    } else {
+        CommandStatus::FAILURE
+    })
 }

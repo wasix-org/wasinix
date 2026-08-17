@@ -323,7 +323,7 @@ pub fn all(repo: &Path) -> Result<Vec<(Builder, bool)>> {
 }
 
 impl Builder {
-    /// For `nix-fast-build --store` and `nix copy --to`.
+    /// For store-routed builds and `nix copy --to`.
     pub fn store(&self) -> String {
         self.store_url
             .clone()
