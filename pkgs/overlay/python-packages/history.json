@@ -238,6 +238,19 @@
       "version": "1.74.0"
     }
   },
+  "jiter": {
+    "0.10.0": {
+      "hash": "sha256-7L0CWPVapcw86SQWXPN6eN35iscAEQYveUqLkGzfrbc=",
+      "note": "openai pins it; upstream commits no lock, so locks/0.10.0.lock carries the release's own. py313 alone: the pyo3 it pins predates 3.14, and the module builds but fails at init there",
+      "tag": "v0.10.0",
+      "variants": [
+        "py313"
+      ],
+      "vendorLayout": {
+        "lockInPackage": true
+      }
+    }
+  },
   "langchain": {
     "0.3.30": {
       "hash": "sha256-hFwR7tE14IRMcB6tukwkFfbAbXhlsIMsdvHMB6JULQE=",

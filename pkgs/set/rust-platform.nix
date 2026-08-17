@@ -166,15 +166,22 @@
         ({
           src,
           cargoRoot ? null,
+          # Upstreams that commit no lock have one supplied by the package file,
+          # which selects it per release; there is nothing in src to re-read.
+          lockInPackage ? false,
           ...
         }:
-          patchFarm (vendorPlatform.importCargoLock {
-            lockFileContents = builtins.readFile (
-              if cargoRoot == null
-              then "${src}/Cargo.lock"
-              else "${src}/${cargoRoot}/Cargo.lock"
-            );
-          }))
+          patchFarm (vendorPlatform.importCargoLock (
+            if lockInPackage
+            then args
+            else {
+              lockFileContents = builtins.readFile (
+                if cargoRoot == null
+                then "${src}/Cargo.lock"
+                else "${src}/${cargoRoot}/Cargo.lock"
+              );
+            }
+          )))
     );
     fetchCargoVendor = lib.makeOverridable (
       args: let
