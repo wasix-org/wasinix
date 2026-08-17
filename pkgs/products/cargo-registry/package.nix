@@ -48,7 +48,6 @@ in
     passthru.updateScript = {
       name = "cargo-registry";
       command = ["${updateScript}/bin/wasix-cargo-registry-update"] ++ updateArgs;
-      commandDrvPaths = [updateScript] ++ map (_: null) updateArgs;
       accepts = ["revision"];
       source = {
         kind = "github";

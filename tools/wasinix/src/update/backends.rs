@@ -29,6 +29,29 @@ fn resolve_command(repo: &Path, command: &[String]) -> Vec<String> {
     cmd
 }
 
+/// A collected command referencing store paths (a wrapper script, the
+/// nix-update argv it is handed) may not be realised here; the declaration
+/// carries the drv paths to build them from.
+pub(crate) fn realise_command(name: &str, cmd: &[String], drvs: &[String]) -> Result<()> {
+    if !cmd
+        .iter()
+        .any(|arg| arg.starts_with("/nix/store/") && !Path::new(arg).exists())
+    {
+        return Ok(());
+    }
+    if drvs.is_empty() {
+        return request_error(format!(
+            "{name}: command references unrealised store paths and the declaration \
+             carries no derivations to realise them"
+        ));
+    }
+    crate::support::nix::Invocation::tool("nix-store")
+        .args(["--realise"])
+        .operands(drvs.iter().cloned())
+        .checked_output("realising the update script")?;
+    Ok(())
+}
+
 pub(crate) fn run_capturing(
     repo: &Path,
     cmd: &[String],
@@ -156,18 +179,7 @@ fn run_update_script(
     {
         cmd = crate::update::request::nix_update_argv(&cmd, request)?;
     }
-    // A store-path command (nix-update-script) may not be realised here.
-    if cmd[0].starts_with("/nix/store/") && !Path::new(&cmd[0]).exists() {
-        let drv = target
-            .command_drv_paths
-            .first()
-            .cloned()
-            .unwrap_or_else(|| cmd[0].split('/').take(4).collect::<Vec<_>>().join("/"));
-        crate::support::nix::Invocation::tool("nix-store")
-            .args(["--realise"])
-            .operand(&drv)
-            .checked_output("realising the update script")?;
-    }
+    realise_command(&target.name, &cmd, &target.command_drv_paths)?;
     let mut env = vec![("UPDATE_NIX_ATTR_PATH".to_string(), target.attr.clone())];
     if !target.file.is_empty() {
         env.push(("UPDATE_NIX_SOURCE_FILE".to_string(), target.file.clone()));

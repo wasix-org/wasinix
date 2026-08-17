@@ -2460,6 +2460,33 @@ mod update {
         assert!(receipt.last().unwrap().contains("1 updated · 1 failed · tree modified"));
         let _ = BTreeMap::from([(1, 2)]);
     }
+
+    #[test]
+    fn declarations_parse_the_flakes_camel_case_keys() {
+        let value = serde_json::json!({
+            "name": "wasix-libc",
+            "version": "2026-07-30.1",
+            "attrPath": "toolchain.libc-unwrapped",
+            "position": "/nix/store/aaa-source/pkgs/products/wasix-sysroot/libc.nix:22",
+            "command": ["/nix/store/bbb-wasix-libc-update/bin/wasix-libc-update"],
+            "commandDrvPaths": ["/nix/store/ccc-wasix-libc-update.drv"],
+            "accepts": ["release"],
+        });
+        let target = crate::update::targets::declared_target(
+            std::path::Path::new("/repo"),
+            "toolchain.libc",
+            &value,
+        )
+        .unwrap();
+        assert_eq!(
+            target.command_drv_paths,
+            vec!["/nix/store/ccc-wasix-libc-update.drv".to_string()],
+            "commandDrvPaths must survive deserialization; an empty list makes \
+             every store-path command unrealisable in CI"
+        );
+        assert!(target.attr.ends_with("toolchain.libc-unwrapped"), "{}", target.attr);
+        assert_eq!(target.file, "pkgs/products/wasix-sysroot/libc.nix");
+    }
 }
 
 mod managed {

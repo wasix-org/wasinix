@@ -638,6 +638,16 @@
         info = ciJobInfo;
         sets = lib.mapAttrs (_: jobs: builtins.attrNames jobs) ciSetsDisjoint;
       };
+      # The derivations an updateScript or retentionHook command needs realised
+      # before it can run. A command element is usually a string with an
+      # interpolated store path, so the drv paths live in its string context,
+      # not in the value's type.
+      commandDrvsOf = lib.concatMap (
+        v:
+          if lib.isDerivation v
+          then [v.drvPath]
+          else builtins.attrNames (builtins.getContext (toString v))
+      );
     in
       buildable
       // {
@@ -758,22 +768,10 @@
               if commandValues == null
               then null
               else map toString commandValues;
-            # The derivations a command needs realized before it can run; plain
-            # strings (nix-update-script argv) carry no derivation, so the
-            # derived list keeps only real drv paths rather than null slots.
             commandDrvPaths =
               if commandValues == null
               then null
-              else if lib.isAttrs s && s ? commandDrvPaths
-              then
-                map (v:
-                  if lib.isDerivation v
-                  then v.drvPath
-                  else toString v)
-                (lib.toList s.commandDrvPaths)
-              else
-                lib.concatMap (v: lib.optional (lib.isDerivation v) v.drvPath)
-                commandValues;
+              else commandDrvsOf commandValues;
             # prev.X packages inherit nixpkgs' updateScripts, which must not
             # run against this repo; ours are the ones declared in this tree.
             # Registry-history attrs (numpy_2_1_3) re-import the package file, so
@@ -821,6 +819,10 @@
               if h == null
               then null
               else map toString (lib.toList h);
+            commandDrvPaths =
+              if h == null
+              then null
+              else commandDrvsOf (lib.toList h);
             pos = builtins.unsafeGetAttrPos "wasix" (drv.passthru or {});
             ours =
               command
@@ -830,7 +832,7 @@
               && lib.hasPrefix srcRoot pos.file;
             entry = builtins.tryEval (
               let
-                v = lib.optionalAttrs ours {${attr} = {inherit command;};};
+                v = lib.optionalAttrs ours {${attr} = {inherit command commandDrvPaths;};};
               in
                 builtins.deepSeq v v
             );

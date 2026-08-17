@@ -98,6 +98,7 @@ fn builtin_targets() -> Vec<Target> {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Declaration {
     #[serde(default)]
     name: Option<String>,
@@ -130,6 +131,35 @@ fn repo_relative(path: &str, repo: &Path) -> String {
         .unwrap_or_else(|_| path.to_string())
 }
 
+/// One collected declaration as a target; the flake emits camelCase keys.
+pub(crate) fn declared_target(repo: &Path, attr: &str, value: &Value) -> Result<Target> {
+    let declaration: Declaration =
+        crate::support::json::from_value(value.clone(), &format!("updateScripts.{attr}"))?;
+    let name = declaration
+        .name
+        .unwrap_or_else(|| attr.rsplit('.').next().unwrap_or(attr).to_string());
+    // attrPath names the declared target (an unwrapped package behind a
+    // wrapper), else the attr the declaration was found on.
+    let attr_path = declaration.attr_path.unwrap_or_else(|| attr.to_string());
+    Ok(Target {
+        name,
+        backend: Backend::UpdateScript,
+        input: String::new(),
+        attr: format!("legacyPackages.{SYSTEM}.{attr_path}"),
+        version: declaration.version.unwrap_or_default(),
+        command: declaration.command,
+        command_drv_paths: declaration.command_drv_paths,
+        file: declaration
+            .position
+            .as_deref()
+            .and_then(|pos| pos.rsplit_once(':').map(|(file, _)| file))
+            .map(|file| repo_relative(file, repo))
+            .unwrap_or_default(),
+        accepts: declaration.accepts,
+        source: declaration.source,
+    })
+}
+
 /// One target per package, deduped across the per-profile attrs.
 pub fn discovered_targets(repo: &Path) -> Result<Vec<Target>> {
     let declared = eval(&Flake::default(), "updateScripts", None)?;
@@ -138,55 +168,42 @@ pub fn discovered_targets(repo: &Path) -> Result<Vec<Target>> {
     let mut targets: Vec<Target> = Vec::new();
     let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for (attr, value) in declared.as_object().into_iter().flatten() {
-        let declaration: Declaration =
-            crate::support::json::from_value(value.clone(), &format!("updateScripts.{attr}"))?;
-        let name = declaration
-            .name
-            .clone()
-            .unwrap_or_else(|| attr.rsplit('.').next().unwrap_or(attr).to_string());
-        if !seen.insert(name.clone()) {
+        let target = declared_target(repo, attr, value)?;
+        if !seen.insert(target.name.clone()) {
             continue;
         }
-        // attrPath names the declared target (an unwrapped package behind a
-        // wrapper), else the attr the declaration was found on.
-        let attr_path = declaration.attr_path.clone().unwrap_or_else(|| attr.clone());
-        targets.push(Target {
-            name,
-            backend: Backend::UpdateScript,
-            input: String::new(),
-            attr: format!("legacyPackages.{SYSTEM}.{attr_path}"),
-            version: declaration.version.clone().unwrap_or_default(),
-            command: declaration.command,
-            command_drv_paths: declaration.command_drv_paths,
-            file: declaration
-                .position
-                .as_deref()
-                .and_then(|pos| pos.rsplit_once(':').map(|(file, _)| file))
-                .map(|file| repo_relative(file, repo))
-                .unwrap_or_default(),
-            accepts: declaration.accepts,
-            source: declaration.source,
-        });
+        targets.push(target);
     }
     Ok(targets)
 }
 
+pub struct Hook {
+    pub name: String,
+    pub command: Vec<String>,
+    pub command_drv_paths: Vec<String>,
+}
+
 /// Package-declared re-syncs, deduped by command across the profile attrs.
-pub fn discovered_hooks() -> Result<Vec<(String, Vec<String>)>> {
+pub fn discovered_hooks() -> Result<Vec<Hook>> {
     let declared = eval(&Flake::default(), "retentionHooks", None)?;
-    let mut hooks: BTreeMap<Vec<String>, String> = BTreeMap::new();
+    let mut hooks: BTreeMap<Vec<String>, (String, Vec<String>)> = BTreeMap::new();
     for (attr, value) in declared.as_object().into_iter().flatten() {
-        let command: Vec<String> = crate::support::json::from_value(
-            value["command"].clone(),
-            &format!("retentionHooks.{attr}"),
-        )?;
+        let context = format!("retentionHooks.{attr}");
+        let command: Vec<String> =
+            crate::support::json::from_value(value["command"].clone(), &context)?;
+        let drvs: Vec<String> =
+            crate::support::json::from_value(value["commandDrvPaths"].clone(), &context)?;
         hooks
             .entry(command)
-            .or_insert_with(|| attr.rsplit('.').next().unwrap_or(attr).to_string());
+            .or_insert_with(|| (attr.rsplit('.').next().unwrap_or(attr).to_string(), drvs));
     }
     Ok(hooks
         .into_iter()
-        .map(|(command, name)| (name, command))
+        .map(|(command, (name, command_drv_paths))| Hook {
+            name,
+            command,
+            command_drv_paths,
+        })
         .collect())
 }
 

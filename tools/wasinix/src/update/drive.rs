@@ -50,7 +50,9 @@ fn commit_step(
     Ok(())
 }
 
-fn run_retention_hook(repo: &Path, name: &str, command: &[String]) -> Result<Option<String>> {
+fn run_retention_hook(repo: &Path, hook: &targets::Hook) -> Result<Option<String>> {
+    let name = &hook.name;
+    let command = &hook.command;
     ui::fact("hook", name);
     let cmd: Vec<String> = if command[0].contains('/') && !command[0].starts_with('/') {
         let mut cmd = command.to_vec();
@@ -59,6 +61,7 @@ fn run_retention_hook(repo: &Path, name: &str, command: &[String]) -> Result<Opt
     } else {
         command.to_vec()
     };
+    backends::realise_command(name, &cmd, &hook.command_drv_paths)?;
     let (code, stdout, stderr) = backends::run_capturing(repo, &cmd, &[])?;
     ui::raw(&stderr);
     backends::echo(&stdout);
@@ -79,9 +82,10 @@ fn hook_stage(
     commit: bool,
     committer: Option<&crate::support::git::Identity<'_>>,
 ) -> Result<()> {
-    for (name, command) in targets::discovered_hooks()? {
+    for hook in targets::discovered_hooks()? {
+        let name = hook.name.clone();
         let before = repo_status(repo)?;
-        match run_retention_hook(repo, &name, &command) {
+        match run_retention_hook(repo, &hook) {
             Ok(outcome) => {
                 let after = repo_status(repo)?;
                 // Only a hook that changed something enters the ChangeSet:
