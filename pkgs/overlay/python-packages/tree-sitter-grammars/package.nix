@@ -47,8 +47,8 @@ let
       owner = "tree-sitter";
     };
     julia = {
-      version = "0.23.1";
-      hash = "sha256-jwtMgHYSa9/kcsqyEUBrxC+U955zFZHVQ4N4iogiIHY=";
+      version = "0.25.0";
+      hash = "sha256-Jk2jby7vWWSdnUU8s8zIIfyXFt7keWPJPyTyxPBrqBw=";
       owner = "tree-sitter";
     };
     kotlin = {
