@@ -19,5 +19,7 @@ helpers.libTweaks {
     pyfinal.opentelemetry-api
     pyfinal.opentelemetry-sdk
   ];
+  # Requires the fork multiprocessing context.
+  disabledTestPaths = ["tests/test_multiprocessing.py"];
 }
 pyprev.redis

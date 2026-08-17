@@ -35,6 +35,10 @@ in
         sed -i -E 's/^( *)([A-Za-z_]+)->get_(height|width)\(\)( \* 4)?,$/\1static_cast<py::ssize_t>(\2->get_\3()\4),/' \
           src/_backend_agg_wrapper.cpp
         grep -q 'static_cast<py::ssize_t>' src/_backend_agg_wrapper.cpp
+        substituteInPlace lib/matplotlib/testing/__init__.py \
+          --replace-fail \
+            'except (OSError, subprocess.CalledProcessError):' \
+            'except (OSError, subprocess.CalledProcessError, NotImplementedError):'
       '';
       preCheck = _: ''
         _source="$PWD"
@@ -55,7 +59,7 @@ in
           ${final.buildPackages.coreutils}/bin/cp "$_source_font" "$NIX_BUILD_TOP/matplotlib/tests/"
         done
         export PYTHONPATH="$NIX_BUILD_TOP:$PYTHONPATH"
-        cd "$NIX_BUILD_TOP"
+        cd "$NIX_BUILD_TOP/matplotlib"
       '';
     })
   (pyprev.matplotlib.override {
