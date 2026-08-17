@@ -10,7 +10,7 @@ helpers.libTweaks {
       --replace-fail 'include_dirs = [get_path("include")]' 'include_dirs = []'
   '';
   preCheck = ''
-    pytestFlagsArray+=("$PWD/preshed/tests")
+    pytestFlagsArray+=("--import-mode=importlib" "$PWD/preshed/tests")
     cd $out
   '';
 }
