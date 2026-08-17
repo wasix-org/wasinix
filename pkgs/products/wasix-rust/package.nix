@@ -13,6 +13,7 @@
 {
   lib,
   stdenv,
+  buildPackages,
   fetchFromGitHub,
   fetchurl,
   runCommand,
@@ -47,6 +48,13 @@
 }: let
   inherit (lib) optionals optionalString;
   wasixLlvm = wasix-llvm;
+  updateWrapper = buildPackages.writeShellApplication {
+    name = "wasix-rust-update";
+    runtimeInputs = with buildPackages; [curl git gnugrep gnused jq];
+    text = ''
+      exec bash "$(git rev-parse --show-toplevel)/pkgs/products/wasix-rust/update.sh" "$@"
+    '';
+  };
   inherit (wasix-sysroot.passthru.variants) eh ehpic;
   wasixSysrootEh = eh.sysroot;
   wasixSysrootEhpic = ehpic.sysroot;
@@ -383,7 +391,7 @@ in
       # Bumps, then re-derives the stage0 bootstrap pin from the new source's
       # src/stage0 (the nix-update command is passed through as its argv).
       updateScript = {
-        command = ["pkgs/products/wasix-rust/update.sh"] ++ nix-update-script {extraArgs = ["--flake"];};
+        command = ["${updateWrapper}/bin/wasix-rust-update"] ++ nix-update-script {extraArgs = ["--flake"];};
         accepts = ["release" "revision"];
         source = {
           kind = "github";

@@ -1,6 +1,7 @@
 {
   lib,
   stdenv,
+  buildPackages,
   bash,
   rustPlatform,
   fetchFromGitHub,
@@ -54,7 +55,15 @@ rustPlatform.buildRustPackage (finalAttrs: {
     };
     # The template tests pin PyPI from this source's examples/, so a bump has to
     # re-resolve them. The script no-ops unless the recorded version moved.
-    wasix.retentionHook = ["pkgs/products/anybuild/update-mirror.py"];
+    wasix.retentionHook = [
+      "${buildPackages.writeShellApplication {
+        name = "anybuild-update-mirror";
+        runtimeInputs = with buildPackages; [git python3 uv];
+        text = ''
+          exec python3 "$(git rev-parse --show-toplevel)/pkgs/products/anybuild/update-mirror.py" "$@"
+        '';
+      }}/bin/anybuild-update-mirror"
+    ];
   };
 
   meta = {

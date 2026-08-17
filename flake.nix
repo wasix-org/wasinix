@@ -193,7 +193,11 @@
         rclone
         wasmerRuntime
       ];
-      text = "exec ${lib.getExe wasinixUnwrapped} \"$@\"";
+      # Update scripts re-enter `wasinix`, so the launcher's own bin dir joins
+      # the PATH it hands them.
+      text = ''
+        PATH="''${0%/*}:$PATH" exec ${lib.getExe wasinixUnwrapped} "$@"
+      '';
     };
     wasinix = wasix.pkgs.symlinkJoin {
       name = "wasinix";

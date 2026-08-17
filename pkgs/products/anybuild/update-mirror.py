@@ -1,5 +1,4 @@
-#!/usr/bin/env nix-shell
-#! nix-shell -i python3 -p python3 uv git
+#!/usr/bin/env python3
 """Regenerate the PyPI pin set the hermetic anybuild template tests build against.
 
     pkgs/products/anybuild/update-mirror.py --force

@@ -23,6 +23,13 @@
     set(PYTHON_MODULE_EXTENSION ".so")
     set(PYBIND11_USE_CROSSCOMPILING ON CACHE BOOL "" FORCE)
   '';
+  updateWrapper = final.buildPackages.writeShellApplication {
+    name = "ddtrace-update";
+    runtimeInputs = with final.buildPackages; [curl git gnugrep gnused jq];
+    text = ''
+      exec bash "$(git rev-parse --show-toplevel)/pkgs/overlay/python-packages/ddtrace/update.sh" "$@"
+    '';
+  };
 in
   pyfinal.buildPythonPackage rec {
     pname = "ddtrace";
@@ -160,7 +167,7 @@ in
     # (the nix-update command is passed through as its argv)
     passthru.updateScript = {
       command =
-        ["pkgs/overlay/python-packages/ddtrace/update.sh"]
+        ["${updateWrapper}/bin/ddtrace-update"]
         ++ nix-update-script {extraArgs = ["--flake"];};
       accepts = ["release" "revision"];
       source = {

@@ -16,8 +16,20 @@ wasinix update --all --pr                   # commit, push, open the PRs
 How a pin bumps is declared next to it (`passthru.updateScript`, the standard
 nixpkgs convention); its constraints and quirks are comments in the same file. A
 derived pin is recalculated by the package's `updateScript`, so the bump is
-declared once. For example, `pkgs/toolchain/rust/update.py` recalculates the
-bootstrap and vendor inputs after moving the Rust source pin.
+declared once. For example, `pkgs/products/wasix-rust/update.sh` recalculates
+the stage0 bootstrap pin after moving the Rust source pin.
+
+A script's tools come from its own declaration, not an ambient environment: the
+command is a `writeShellApplication` wrapper naming its `runtimeInputs` and
+re-entering the checkout's script (`pkgs/products/cargo-registry/package.nix` is
+the model). The declaration must interpolate the wrapper
+(`"${wrapper}/bin/..."`): the interpolation puts the wrapper's drv path in the
+string context the flake collects, and the driver realises those derivations on
+demand. The one ambient tool is `wasinix` itself, on the script's PATH so it
+talks back to the driver that invoked it: `wasinix update request` prints the
+driver's release/revision request (`--expect NAME` guards the target), and
+`wasinix update nix-update -- <argv>` runs a declared nix-update command with
+that request applied.
 
 `wasinix update` is only the driver: flake-input targets, per-target isolation,
 the repo-wide steps a bump implies, and one ChangeSet describing everything that

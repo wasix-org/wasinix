@@ -3,6 +3,7 @@
 {
   lib,
   stdenv,
+  buildPackages,
   fetchFromGitHub,
   rustPlatform,
   nix-update-script,
@@ -25,6 +26,14 @@
     repo = "wasix-libc";
     tag = "v${version}";
     hash = "sha256-UGBHCYuUlNE6fAAUJnPxIgfJ7ujiUKGUrWU+BFKQfsQ=";
+  };
+
+  updateWrapper = buildPackages.writeShellApplication {
+    name = "wasix-libc-update";
+    runtimeInputs = with buildPackages; [curl git gnused jq];
+    text = ''
+      exec bash "$(git rev-parse --show-toplevel)/pkgs/products/wasix-sysroot/update.sh" "$@"
+    '';
   };
 
   # PIC is orthogonal to EH; `exnref` only matters when `eh`.
@@ -85,7 +94,7 @@ in
     passthru.updateScript = {
       name = "wasix-libc"; # the attr tail is `libc`
       # Wraps nix-update (passed through as argv) to re-derive the witx pins from the new source.
-      command = ["pkgs/products/wasix-sysroot/update.sh"] ++ nix-update-script {extraArgs = ["--flake"];};
+      command = ["${updateWrapper}/bin/wasix-libc-update"] ++ nix-update-script {extraArgs = ["--flake"];};
       accepts = ["release" "revision"];
       source = {
         kind = "github";
