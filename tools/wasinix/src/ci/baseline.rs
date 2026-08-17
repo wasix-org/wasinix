@@ -19,11 +19,17 @@ use crate::support::error::Result;
 /// The template the production reuse path fetches; tests substitute a local
 /// server's.
 pub fn map_url_template() -> String {
-    format!("{}/eval-maps/{{rev}}.json", crate::support::nix::CACHE_SUBSTITUTER)
+    format!(
+        "{}/eval-maps/{{tree}}.json",
+        crate::support::nix::CACHE_SUBSTITUTER
+    )
 }
 
-pub fn fetch(rev: &str, url_template: &str) -> Option<EvalMap> {
-    let url = url_template.replace("{rev}", rev);
+/// Fetch the map published for a git tree object id. The tree determines the
+/// evaluation, so the key verifies itself: no run can publish under a tree
+/// it did not build.
+pub fn fetch(tree: &str, url_template: &str) -> Option<EvalMap> {
+    let url = url_template.replace("{tree}", tree);
     let value = match crate::support::http::get_json(&url) {
         Ok(value) => value,
         Err(error) => {
@@ -108,18 +114,12 @@ pub fn publish_from_run(
     case_id: &str,
     effects: crate::support::effects::Effects,
 ) -> Result<()> {
-    // A baseline is keyed by revision, so it must come from exactly that
-    // committed tree: an untrusted run (dirty, overridden, or off-ref)
-    // publishing under its rev would poison every later diff against it.
-    let loaded = crate::ci::prepare::load(run_dir)?;
-    if !loaded.preparation.trusted {
-        return crate::support::error::request_error(
-            "baselines publish only from trusted runs: the tree must be a \
-             committed, unmodified ancestor of a --trusted-ref with no \
-             overrides",
-        );
-    }
     let paths = crate::ci::prepare::case_dir(run_dir, case_id);
+    // The key is the materialized tree's object id, recorded at prepare
+    // time, so a patched or overridden run publishes under its own tree and
+    // can never claim a commit's.
+    let manifest: crate::ci::workspace::Materialization =
+        crate::support::schema::read(&paths.join("prepared/materialization.json"))?;
     let mapping: EvalMap = crate::support::schema::read(&crate::ci::prepare::eval_map_path(&paths))?;
     let rev = mapping
         .rev
@@ -154,7 +154,10 @@ pub fn publish_from_run(
     let file = scratch.path().join("eval-map.json");
     crate::support::schema::write(&file, &document)?;
     if effects.is_dry_run() {
-        crate::support::ui::fact("baseline", format!("skipped (dry run), rev {rev}"));
+        crate::support::ui::fact(
+            "baseline",
+            format!("skipped (dry run), tree {} of rev {rev}", manifest.tree),
+        );
         return Ok(());
     }
     let mut cmd = std::process::Command::new("aws");
@@ -163,11 +166,14 @@ pub fn publish_from_run(
         .arg(format!(
             "s3://{}/eval-maps/{}.json",
             crate::support::nix::CACHE_BUCKET,
-            rev.full()
+            manifest.tree
         ))
         .args(["--endpoint-url", crate::support::nix::CACHE_ENDPOINT]);
     crate::support::tools::checked_output(&mut cmd, "publishing the baseline map")?;
-    crate::support::ui::fact("baseline published", rev);
+    crate::support::ui::fact(
+        "baseline published",
+        format!("tree {} of rev {rev}", manifest.tree),
+    );
     Ok(())
 }
 

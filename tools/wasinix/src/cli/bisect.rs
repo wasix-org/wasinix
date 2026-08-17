@@ -97,7 +97,6 @@ pub fn run_bisect(repo: &Path, args: BisectArgs) -> Result<CommandStatus> {
                     origin: None,
                 },
                 run_dir: candidate_dir.to_path_buf(),
-                trusted_refs: &[],
                 cache: super::request::CacheIntent::Off,
                 only: super::request::TaskFilter::All,
                 follow: false,

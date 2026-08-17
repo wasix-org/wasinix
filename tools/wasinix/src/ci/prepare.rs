@@ -8,10 +8,9 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 use crate::ci::plan::{plan_of, Plan};
-use crate::ci::types::{Override, Preparation, Request, ResolvedRequest, RevSource};
+use crate::ci::types::{Preparation, Request, ResolvedRequest};
 use crate::ci::workspace::write_materialization;
 use crate::support::error::{request_error, Result};
-use crate::support::git;
 
 // The run directory's layout, stated here rather than by each module that
 // reaches into it.
@@ -71,26 +70,6 @@ pub fn preparation_path(run_dir: &Path) -> PathBuf {
 /// Whether a case builds code already contained in an authoritative ref. An
 /// empty ref list denies trust, which is what a cross-repository command
 /// should pass; a git failure is an error, since trust gates cache signing.
-pub(crate) fn case_trusted(
-    repo: &Path,
-    source: &RevSource,
-    overrides: &[Override],
-    trusted_refs: &[String],
-) -> Result<bool> {
-    // An override injects a pin that is not part of any authoritative ref, so
-    // the built tree is not reproducible from one and must not be signed, even
-    // when the case's nominal source revision is itself trusted.
-    if !overrides.is_empty() {
-        return Ok(false);
-    }
-    for reference in trusted_refs {
-        if git::is_ancestor(repo, source.rev.full(), reference)? {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
 /// The run's state as `prepare` left it.
 pub struct Loaded {
     pub request: ResolvedRequest,
@@ -131,7 +110,12 @@ pub fn load(run_dir: &Path) -> Result<Loaded> {
     })
 }
 
-fn reuse_baseline(request: &ResolvedRequest, run_dir: &Path, url: &str) -> Result<Vec<String>> {
+fn reuse_baseline(
+    repo: &Path,
+    request: &ResolvedRequest,
+    run_dir: &Path,
+    url: &str,
+) -> Result<Vec<String>> {
     if crate::support::env::no_baseline_reuse()? {
         return Ok(Vec::new());
     }
@@ -149,7 +133,13 @@ fn reuse_baseline(request: &ResolvedRequest, run_dir: &Path, url: &str) -> Resul
     if !crate::ci::baseline::is_reusable(case) {
         return Ok(Vec::new());
     }
-    let Some(published) = crate::ci::baseline::fetch(case.source.rev.full(), url) else {
+    // Baselines are keyed by the tree the eval describes, not the commit
+    // wrapping it, so any commit with an identical tree shares them.
+    let tree = crate::support::git::git(
+        repo,
+        &["rev-parse", &format!("{}^{{tree}}", case.source.rev.full())],
+    )?;
+    let Some(published) = crate::ci::baseline::fetch(&tree, url) else {
         return Ok(Vec::new());
     };
     if !crate::ci::baseline::covers(case, &published) {
@@ -169,12 +159,7 @@ fn reuse_baseline(request: &ResolvedRequest, run_dir: &Path, url: &str) -> Resul
     Ok(vec![case.case_id().to_string()])
 }
 
-pub fn prepare_all(
-    repo: &Path,
-    request: &ResolvedRequest,
-    run_dir: &Path,
-    trusted_refs: &[String],
-) -> Result<Loaded> {
+pub fn prepare_all(repo: &Path, request: &ResolvedRequest, run_dir: &Path) -> Result<Loaded> {
     if request_path(run_dir).exists()
         || cases_dir(run_dir).exists()
         || fragments_dir(run_dir).exists()
@@ -185,12 +170,8 @@ pub fn prepare_all(
         ));
     }
     crate::support::fs::create_dir_all(run_dir)?;
-    let reused = reuse_baseline(request, run_dir, &crate::ci::baseline::map_url_template())?;
+    let reused = reuse_baseline(repo, request, run_dir, &crate::ci::baseline::map_url_template())?;
     let cases = request.cases();
-    let mut trusted = true;
-    for case in &cases {
-        trusted &= case_trusted(repo, case.source(), case.overrides(), trusted_refs)?;
-    }
 
     let request_value = crate::support::schema::to_value(request)?;
     let mut prepared_cases = Vec::new();
@@ -209,13 +190,6 @@ pub fn prepare_all(
             format!("{case_id} at {}", case.source().rev.short()),
         );
         write_materialization(repo, *case, &case_value, &prepared_dir)?;
-        // Trust ends at what a trusted ref contains: a working-tree diff on
-        // top of a trusted rev is uncommitted content and must not sign.
-        let patch = prepared_dir.join(crate::ci::workspace::PATCH_FILE);
-        trusted &= std::fs::metadata(&patch)
-            .map_err(|error| crate::support::error::io(&patch, error))?
-            .len()
-            == 0;
         prepared_cases.push(crate::support::json::read::<Value>(
             &prepared_dir.join("request.json"),
         )?);
@@ -231,7 +205,7 @@ pub fn prepare_all(
         }
     }
     crate::support::json::write(&request_path(run_dir), &document)?;
-    let preparation = Preparation { trusted, reused };
+    let preparation = Preparation { reused };
     crate::support::schema::write(&preparation_path(run_dir), &preparation)?;
 
     load(run_dir)

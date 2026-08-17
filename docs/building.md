@@ -40,9 +40,9 @@ choosing the rebuild cut and the required full-build follow-up.
 `wasinix build all --on <remote> --push-cache` builds the whole CI set and, with
 a signing key present, pushes completed work to the cache the GitHub builders
 consume. Running it before CI warms the PR build. Store paths are
-input-addressed, so every keyed run pushes what it builds; `--trusted-ref <ref>`
-matters only for the rev-keyed baseline publish, which refuses a tree that is
-not a committed, unmodified ancestor of a trusted ref.
+input-addressed and baselines are keyed by the materialized git tree, so every
+keyed run pushes what it builds and no run can publish under a key it did not
+produce.
 
 `--skip-cached` is applied for you by the underlying nix-fast-build: a job
 already in the cache costs neither a build nor a download. On a warm cache the
@@ -144,7 +144,7 @@ fitting, such as a builder that is no longer reachable.
 authoritative; do not infer state from `ps` or a tool-call timeout.
 
 ```sh
-id=$(wasinix run start -- build all --on ec2 --push-cache --trusted-ref main)
+id=$(wasinix run start -- build all --on ec2 --push-cache)
 wasinix run status "$id" --json     # state + progress snapshot
 wasinix run watch "$id"             # narrate the event stream
 wasinix run wait "$id" --timeout 60 # bounded observation; the run keeps going

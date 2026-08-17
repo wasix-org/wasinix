@@ -84,13 +84,9 @@ pub struct ModeArgs {
     #[arg(long, value_name = "FILE")]
     pub junit_out: Option<PathBuf>,
     /// Push results and their build-time closure to the cache; requires
-    /// NIX_SIGNING_KEY and a trusted run
+    /// NIX_SIGNING_KEY
     #[arg(long)]
     pub push_cache: bool,
-    /// A ref whose history marks the build as trusted for cache signing; a
-    /// case not contained in it never signs, even with --push-cache
-    #[arg(long = "trusted-ref")]
-    pub trusted_refs: Vec<String>,
     /// Stop after warming evaluation inputs
     #[arg(long)]
     pub inputs_only: bool,
@@ -380,7 +376,7 @@ fn plan(repo: &Path, resolved: &ResolvedRequest, mode: &ModeArgs) -> Result<Comm
         // The probe reproduces the prepared case, whose source carries the
         // recorded materialization-patch hash; the pre-prepare request does
         // not, and a dirty tree would trip the reproduction guard.
-        let loaded = crate::ci::prepare::prepare_all(repo, resolved, &run_dir, &[])?;
+        let loaded = crate::ci::prepare::prepare_all(repo, resolved, &run_dir)?;
         if let Request::Spot(spot) = &loaded.request {
             crate::ci::exec::spot_probe(
                 &crate::ci::exec::Context {
@@ -480,7 +476,6 @@ pub(crate) fn run_on_host(
     mut request: ResolvedRequest,
     run_dir: &Path,
     cache: CacheIntent,
-    trusted_refs: &[String],
 ) -> Result<CommandStatus> {
     // The host builds on itself; the placement axis was consumed by
     // choosing it.
@@ -491,10 +486,6 @@ pub(crate) fn run_on_host(
     let mut payload_tail = Vec::new();
     if matches!(cache, CacheIntent::Push) {
         payload_tail.push("--push-cache".to_string());
-    }
-    for reference in trusted_refs {
-        payload_tail.push("--trusted-ref".to_string());
-        payload_tail.push(reference.clone());
     }
     let mut renderer = crate::cli::render::LineRenderer::new();
     let status = crate::runs::remote::run(crate::runs::remote::Request {
@@ -583,7 +574,6 @@ pub(crate) struct Drive<'a> {
     pub repo: &'a Path,
     pub source: Source<'a>,
     pub run_dir: PathBuf,
-    pub trusted_refs: &'a [String],
     pub cache: CacheIntent,
     pub only: TaskFilter,
     /// Render live progress on the terminal while the run executes.
@@ -603,21 +593,11 @@ pub(crate) fn drive(drive: Drive<'_>) -> Result<CommandStatus> {
             };
             let resolved = normalize::normalize(request, &context)?;
             case_facts(&resolved);
-            crate::ci::prepare::prepare_all(
-                drive.repo,
-                &resolved,
-                &drive.run_dir,
-                drive.trusted_refs,
-            )?
+            crate::ci::prepare::prepare_all(drive.repo, &resolved, &drive.run_dir)?
         }
         Source::Resolved(resolved) => {
             case_facts(resolved);
-            crate::ci::prepare::prepare_all(
-                drive.repo,
-                resolved,
-                &drive.run_dir,
-                drive.trusted_refs,
-            )?
+            crate::ci::prepare::prepare_all(drive.repo, resolved, &drive.run_dir)?
         }
         Source::Prepared => crate::ci::prepare::load(&drive.run_dir)?,
     };
@@ -700,7 +680,6 @@ fn drive_terminal(repo: &Path, request: ParsedRequest, mode: &ModeArgs) -> Resul
             resolved,
             &run_dir,
             cache,
-            &mode.trusted_refs,
         )?;
         if let Some(out) = &mode.junit_out {
             export_junit(&run_dir, out)?;
@@ -712,7 +691,6 @@ fn drive_terminal(repo: &Path, request: ParsedRequest, mode: &ModeArgs) -> Resul
         repo,
         source: Source::Resolved(resolved),
         run_dir: run_directory(&mode.run_dir)?,
-        trusted_refs: &mode.trusted_refs,
         cache,
         only: if mode.inputs_only {
             TaskFilter::InputsOnly

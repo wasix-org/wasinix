@@ -213,8 +213,6 @@ pub enum CiCommand {
         request: PathBuf,
         #[arg(long)]
         run_dir: PathBuf,
-        #[arg(long = "trusted-ref")]
-        trusted_refs: Vec<String>,
         /// Push trusted results to the shared cache; requires NIX_SIGNING_KEY
         #[arg(long)]
         push_cache: bool,
@@ -248,9 +246,6 @@ pub enum CiCommand {
         request: PathBuf,
         #[arg(long)]
         run_dir: PathBuf,
-        /// Refs whose history marks a case as trusted for cache signing
-        #[arg(long = "trusted-ref")]
-        trusted_refs: Vec<String>,
     },
     /// Execute a prepared run's plan
     Exec {
@@ -332,8 +327,6 @@ pub enum CiCommand {
         origin: PathBuf,
         #[arg(long)]
         run_dir: PathBuf,
-        #[arg(long = "trusted-ref")]
-        trusted_refs: Vec<String>,
         /// Push trusted results to the shared cache; requires NIX_SIGNING_KEY
         #[arg(long)]
         push_cache: bool,
@@ -604,7 +597,6 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
         CiCommand::Run {
             request,
             run_dir,
-            trusted_refs,
             push_cache,
         } => {
             let resolved: crate::ci::types::ResolvedRequest = schema::read(&request)?;
@@ -612,7 +604,6 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 repo: &repo,
                 source: request::Source::Resolved(resolved),
                 run_dir,
-                trusted_refs: &trusted_refs,
                 cache: cache_intent(push_cache),
                 only: request::TaskFilter::All,
                 follow: false,
@@ -639,7 +630,6 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 request,
                 &run_dir,
                 request::CacheIntent::Off,
-                &[],
             )
         }
         CiCommand::Observe {
@@ -661,10 +651,9 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
         CiCommand::Prepare {
             request,
             run_dir,
-            trusted_refs,
         } => {
             let request: crate::ci::types::ResolvedRequest = schema::read(&request)?;
-            crate::ci::prepare::prepare_all(&repo, &request, &run_dir, &trusted_refs)?;
+            crate::ci::prepare::prepare_all(&repo, &request, &run_dir)?;
             Ok(CommandStatus::SUCCESS)
         }
         CiCommand::Exec {
@@ -681,7 +670,6 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 repo: &repo,
                 source: request::Source::Prepared,
                 run_dir,
-                trusted_refs: &[],
                 cache: cache_intent(push_cache),
                 only,
                 follow: false,
@@ -843,7 +831,6 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
         CiCommand::Command {
             origin,
             run_dir,
-            trusted_refs,
             push_cache,
         } => {
             let command: crate::ci::origin::Command = schema::read(&origin)?;
@@ -898,7 +885,6 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                     origin: Some(&command.origin),
                 },
                 run_dir,
-                trusted_refs: &trusted_refs,
                 cache: cache_intent(push_cache),
                 only: request::TaskFilter::All,
                 follow: false,

@@ -124,8 +124,7 @@ jobs:
           nix run .#wasinix -- ci command \
             --origin origin-command.json \
             --run-dir run-dir \
-            "${push_cache[@]}" \
-            --trusted-ref origin/main 2> >(tee run-error.txt >&2)
+            "${push_cache[@]}" 2> >(tee run-error.txt >&2)
 
       - name: Post report
         if: always() && steps.run.conclusion != 'skipped'

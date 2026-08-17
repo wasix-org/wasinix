@@ -2789,7 +2789,7 @@ mod corpus {
             "remote doctor --ifd",
             "remote field store",
             "remote init",
-            "ci run --request r.json --run-dir d --trusted-ref main",
+            "ci run --request r.json --run-dir d",
             "ci prepare --request r.json --run-dir d",
             "ci exec --run-dir d --task case.eval",
             "ci command --origin o.json --run-dir d --push-cache",
@@ -2799,7 +2799,7 @@ mod corpus {
             "ci remote --request r.json --run-dir d --on ec2",
             "ci observe --remote-run-dir /x --run-dir d",
             "ci publish --run-dir d --sha aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --untrusted --check",
-            "build all --push-cache --trusted-ref origin/main",
+            "build all --push-cache",
             "update wasix-libc",
             "update wasix-libc@2026-08-01.1 wasmer@rev:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "update --all --commit",
@@ -2833,6 +2833,7 @@ mod corpus {
             parses(command);
         }
         for retired in [
+            "build all --trusted-ref main",
             "fetch-inputs all",
             "builder store",
             "registry serve",
@@ -4678,7 +4679,7 @@ mod prepare {
     }
 
     #[test]
-    fn a_prepared_run_loads_back_with_its_trust_and_plan() {
+    fn a_prepared_run_loads_back_with_its_tree_and_plan() {
         let (scratch, repo) = repo();
         let request = Request::Build(Build::<RevSource> {
             case_id: Some("case".into()),
@@ -4697,25 +4698,25 @@ mod prepare {
             on: None,
         });
         let run_dir = scratch.path().join("run");
-        let prepared = prepare_all(&repo, &request, &run_dir, &["main".into()]).unwrap();
-        assert!(prepared.preparation.trusted);
+        let prepared = prepare_all(&repo, &request, &run_dir).unwrap();
         assert!(prepared.plan().tasks.iter().any(|t| t.task_id == "case.core"));
 
         let loaded = load(&run_dir).unwrap();
-        assert!(loaded.preparation.trusted);
         assert_eq!(loaded.plan().tasks.len(), prepared.plan().tasks.len());
         // The recorded case carries its materialization digest.
         let value: serde_json::Value =
             crate::support::json::read(&request_path(&run_dir)).unwrap();
         assert!(value["source"]["patch"].is_string());
+        // A clean case's recorded tree is the commit's own tree, so any
+        // commit with identical content shares its published baseline.
+        let manifest: crate::ci::workspace::Materialization = crate::support::schema::read(
+            &run_dir.join("cases/case/prepared/materialization.json"),
+        )
+        .unwrap();
+        assert_eq!(manifest.tree, git(&repo, &["rev-parse", "HEAD^{tree}"]).unwrap());
 
         // A second prepare into the same directory refuses.
-        assert!(prepare_all(&repo, &request, &run_dir, &[]).is_err());
-
-        // An untrusted ref list denies trust rather than guessing.
-        let other = scratch.path().join("run2");
-        let prepared = prepare_all(&repo, &request, &other, &[]).unwrap();
-        assert!(!prepared.preparation.trusted);
+        assert!(prepare_all(&repo, &request, &run_dir).is_err());
     }
 
     #[test]
@@ -4746,7 +4747,7 @@ mod prepare {
             .unwrap()
             .is_none());
 
-        prepare_all(&repo, &request, &run_dir, &["main".into()]).unwrap();
+        prepare_all(&repo, &request, &run_dir).unwrap();
         let events = [Event::RunStarted { at: 1, pid: 7 }];
         let rendered = crate::github::publish::load_running(&run_dir, &events)
             .unwrap()
@@ -4762,7 +4763,7 @@ mod prepare {
     }
 
     #[test]
-    fn a_dirty_working_tree_denies_trust_even_on_a_trusted_rev() {
+    fn a_dirty_working_tree_materializes_under_its_own_tree_id() {
         let (scratch, repo) = repo();
         std::fs::write(repo.join("file"), "two\n").unwrap();
         let request = Request::Build(Build::<RevSource> {
@@ -4782,28 +4783,14 @@ mod prepare {
             on: None,
         });
         let run_dir = scratch.path().join("run");
-        let prepared = prepare_all(&repo, &request, &run_dir, &["main".into()]).unwrap();
-        assert!(!prepared.preparation.trusted);
-    }
-
-    #[test]
-    fn an_override_denies_trust_even_on_a_trusted_source() {
-        use crate::ci::prepare::case_trusted;
-        use crate::ci::types::{Override, OverrideKind};
-        let (_scratch, repo) = repo();
-        let source = RevSource {
-            rev: resolve_rev(&repo, "HEAD").unwrap(),
-            patch: None,
-            working_tree: false,
-        };
-        assert!(case_trusted(&repo, &source, &[], &["main".into()]).unwrap());
-        let over = [Override {
-            target: "somepkg".into(),
-            kind: OverrideKind::Revision,
-            value: "0".repeat(40),
-            repository: None,
-            origin: None,
-        }];
-        assert!(!case_trusted(&repo, &source, &over, &["main".into()]).unwrap());
+        prepare_all(&repo, &request, &run_dir).unwrap();
+        let manifest: crate::ci::workspace::Materialization = crate::support::schema::read(
+            &run_dir.join("cases/case/prepared/materialization.json"),
+        )
+        .unwrap();
+        // The uncommitted edit is part of the materialized tree, so the
+        // recorded key differs from the commit's and a baseline published
+        // under it can never be mistaken for the commit's.
+        assert_ne!(manifest.tree, git(&repo, &["rev-parse", "HEAD^{tree}"]).unwrap());
     }
 }

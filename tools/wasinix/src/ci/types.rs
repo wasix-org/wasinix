@@ -395,8 +395,6 @@ impl<S> Build<S> {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Preparation {
-    /// Whether every case revision is contained in an authoritative ref.
-    pub trusted: bool,
     /// Cases whose results were adopted from a published run, so the plan owes
     /// them no evaluation or builds.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

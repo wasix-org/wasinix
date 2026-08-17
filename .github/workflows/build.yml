@@ -91,15 +91,16 @@ jobs:
             exit 1
           }
           # Every credentialed run pushes as it builds: store paths are
-          # input-addressed, so cached artifacts serve reuse and cannot
-          # mislead. Fork PRs carry no key and build without uploading.
-          # Trust (--trusted-ref) gates only the rev-keyed baseline publish.
+          # input-addressed and baselines are keyed by the materialized git
+          # tree, so both kinds of artifact verify their own key and reuse is
+          # the only effect. Fork PRs carry no key and build without
+          # uploading.
           push_cache=()
           if [ -n "$NIX_SIGNING_KEY" ]; then push_cache=(--push-cache); fi
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             echo "dir=run-dir" >> "$GITHUB_OUTPUT"
             nix run .#wasinix -- build all --on local --run-dir run-dir \
-              "${push_cache[@]}" --trusted-ref "$GITHUB_SHA"
+              "${push_cache[@]}"
           else
             # The run is durable so ci publish --watch can keep the check run
             # and PR comment fresh while it executes; the authoritative final
@@ -109,7 +110,7 @@ jobs:
             bin="$(nix build .#wasinix --no-link --print-out-paths)/bin/wasinix"
             id=$("$bin" run start -- "$bin" -v diff --content-diff \
               --run-dir '{run-dir}' \
-              "${push_cache[@]}" --trusted-ref "$BASE_SHA" \
+              "${push_cache[@]}" \
               build all --at "$BASE_SHA" --on local \
               --vs build all --on local)
             dir=$("$bin" run status "$id" --json | jq -r .runDir)

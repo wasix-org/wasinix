@@ -140,6 +140,9 @@ impl Drop for Worktree {
 pub struct Materialization {
     pub request_id: String,
     pub source_rev: crate::support::atoms::Rev,
+    /// The git tree object id of the materialized tree; baselines publish
+    /// under it.
+    pub tree: String,
     pub patch: String,
     pub patch_hash: String,
 }
@@ -170,6 +173,11 @@ pub fn write_materialization(
     materialize_overrides(worktree.path(), case.overrides())?;
     let patch = git_raw(worktree.path(), &["diff", "--binary", source.rev.full()])?;
     crate::support::fs::write(&out_dir.join(PATCH_FILE), patch.as_bytes())?;
+    // The tree object id of what was actually materialized. It keys the
+    // published baseline: patched and overridden trees get their own honest
+    // key, so no gate has to keep them away from a commit's.
+    git(worktree.path(), &["add", "-A"])?;
+    let tree = git(worktree.path(), &["write-tree"])?;
 
     let patch_hash = digest(&patch);
     let mut materialized = case_value.clone();
@@ -180,6 +188,7 @@ pub fn write_materialization(
     let manifest = Materialization {
         request_id,
         source_rev: source.rev.clone(),
+        tree,
         patch: PATCH_FILE.to_string(),
         patch_hash,
     };
