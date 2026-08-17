@@ -36,6 +36,18 @@ jobs:
       pullRequest: ${{ steps.authorize.outputs.pullRequest }}
       headSha: ${{ steps.authorize.outputs.headSha }}
     steps:
+      # Heard, seconds after posting: authorization needs the binary and can
+      # take minutes when its closure is cold. Advisory, so failures pass.
+      - name: Acknowledge
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          gh api --silent \
+            "repos/$GITHUB_REPOSITORY/issues/comments/$COMMENT_ID/reactions" \
+            -f content=eyes || true
+
       - name: Checkout
         uses: actions/checkout@v4
 
