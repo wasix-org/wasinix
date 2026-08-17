@@ -23,48 +23,51 @@
 
   # cc-rs (a dependency's build.rs compiling a vendored C library, e.g. ring's
   # BoringSSL) resolves the compiler from CC_<target>, defaulting to the nix cc
-  # wrapper, which rejects the `-dl` rustc target triple and the PIC-without-EH
-  # combination cc-rs derives from cargo's relocation-model. Point it at wasixcc
-  # instead, with the same profile the `-dl` std is built at (toolchain.nix:
-  # mkClang "wasm32-wasmer-wasi-dl" wasixSysrootEhpic "-fPIC" == the ehpic
-  # profile); the shared exnref hook translates the linked .so afterwards, so
-  # the C objects match the rust ones. Sourced from the profile table, not
-  # hand-typed; WASIXCC_* comes from toolchain/env.nix, never hand-written.
+  # wrapper, which is stock wasi for the base target and rejects the `-dl`
+  # target's PIC-without-EH combination. Point both targets at wasixcc with the
+  # profiles their Rust standard libraries use. The shared exnref hook translates
+  # linked .so files afterwards, so the C objects match the Rust ones.
   env = import ../toolchain/env.nix {inherit lib;};
-  dlProfile = (import ../profiles.nix).profiles.ehpic;
-  depCcEnv = env.exportsOf (env.profileEnv {
-    inherit (dlProfile) wasmExceptions;
-    pic = dlProfile.wasmPic or false;
-  });
+  profiles = (import ../profiles.nix).profiles;
   # cc-rs unconditionally passes -fno-exceptions (and -fno-rtti for C++); wasixcc
   # rejects those with PIC, which needs wasm EH (same reason crc32c.nix seds them
   # out of its cmake build). Drop them so WASIXCC_WASM_EXCEPTIONS stands.
-  mkDepCc = binName: tool:
-    pkgsCross.buildPackages.writeShellScriptBin binName ''
-      ${depCcEnv}
-      args=()
-      for a in "$@"; do
-        case "$a" in
-          -fno-exceptions | -fno-rtti) ;;
-          *) args+=("$a") ;;
-        esac
-      done
-      exec ${wasixcc}/bin/${tool} "''${args[@]}"
-    '';
-  depCc = pkgsCross.buildPackages.symlinkJoin {
-    name = "wasix-dep-cc";
-    paths = [
-      (mkDepCc "cc" "wasixcc")
-      (mkDepCc "c++" "wasix++")
-    ];
-  };
+  mkDepCc = name: profile: let
+    depCcEnv = env.exportsOf (env.profileEnv {
+      inherit (profile) wasmExceptions;
+      pic = profile.wasmPic or false;
+    });
+    mkBin = binName: tool:
+      pkgsCross.buildPackages.writeShellScriptBin binName ''
+        ${depCcEnv}
+        args=()
+        for a in "$@"; do
+          case "$a" in
+            -fno-exceptions | -fno-rtti) ;;
+            *) args+=("$a") ;;
+          esac
+        done
+        exec ${wasixcc}/bin/${tool} "''${args[@]}"
+      '';
+  in
+    pkgsCross.buildPackages.symlinkJoin {
+      inherit name;
+      paths = [
+        (mkBin "cc" "wasixcc")
+        (mkBin "c++" "wasix++")
+      ];
+    };
+  depCc = mkDepCc "wasix-dep-cc" profiles.eh;
+  depCcDl = mkDepCc "wasix-dep-cc-dl" profiles.ehpic;
   # cc-rs also reads the dash triple with dashes replaced by underscores, the
   # only form bash can export.
   wasixDepCcHook =
     pkgsCross.makeSetupHook {name = "wasix-dep-cc-hook";}
     (pkgsCross.buildPackages.writeText "wasix-dep-cc-hook.sh" ''
-      export CC_wasm32_wasmer_wasi_dl=${depCc}/bin/cc
-      export CXX_wasm32_wasmer_wasi_dl=${depCc}/bin/c++
+      export CC_wasm32_wasmer_wasi=${depCc}/bin/cc
+      export CXX_wasm32_wasmer_wasi=${depCc}/bin/c++
+      export CC_wasm32_wasmer_wasi_dl=${depCcDl}/bin/cc
+      export CXX_wasm32_wasmer_wasi_dl=${depCcDl}/bin/c++
     '');
 
   # `cargo build` goes through cargo-wasix, everything else (metadata, etc.)
