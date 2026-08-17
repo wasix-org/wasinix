@@ -562,6 +562,17 @@
       "vendorLayout": {
         "sourceRoot": "source"
       }
+    },
+    "2.41.5": {
+      "cargoHash": "sha256-Kvc0a34C6oGc9oS/iaPaazoVUWn5ABUgrmPa/YocV+Y=",
+      "hash": "sha256-oIYHLSep8tWOXEaUybXG8Gv9WBoPGQ1Aj7QyqYksvMw=",
+      "note": "the version pydantic 2.12.4 pins exactly; predates the move into the pydantic monorepo",
+      "owner": "pydantic",
+      "repo": "pydantic-core",
+      "tag": "v2.41.5",
+      "vendorLayout": {
+        "sourceRoot": "source"
+      }
     }
   },
   "pydantic-graph": {
