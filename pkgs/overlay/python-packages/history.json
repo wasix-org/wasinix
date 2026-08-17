@@ -734,6 +734,13 @@
     }
   },
   "rpds-py": {
+    "0.26.0": {
+      "cargoHash": "sha256-OVmwRRrF4MbElWgCWxLVSSgmgY480CmpHboo90NC3CU=",
+      "hash": "sha256-INrlioWbCQbwaFZC5ZEFbx54fzqLOcjodJpF3H0mvbA=",
+      "note": "openai-agents pins it through jsonschema; herman's lockfile",
+      "pname": "rpds_py",
+      "version": "0.26.0"
+    },
     "0.30.0": {
       "cargoHash": "sha256-2m2DW1rknZR+UztgUcRaQk4gY19eXmT089U2YlV16d8=",
       "hash": "sha256-3Y/3z5ABSvDA94fuo0eU6/ZBUkLuHW+pHqunJcxEHoQ=",
