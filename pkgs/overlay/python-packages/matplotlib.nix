@@ -36,10 +36,12 @@ in
         sed -i -E 's/^( *)([A-Za-z_]+)->get_(height|width)\(\)( \* 4)?,$/\1static_cast<py::ssize_t>(\2->get_\3()\4),/' \
           src/_backend_agg_wrapper.cpp
         grep -q 'static_cast<py::ssize_t>' src/_backend_agg_wrapper.cpp
-        substituteInPlace lib/matplotlib/tests/test_animation.py \
-          --replace-fail \
-            'elif sys.platform == "emscripten":' \
-            'elif sys.platform in {"emscripten", "wasix"}:'
+        ${lib.optionalString (lib.versionAtLeast pyprev.matplotlib.version "3.11") ''
+          substituteInPlace lib/matplotlib/tests/test_animation.py \
+            --replace-fail \
+              'elif sys.platform == "emscripten":' \
+              'elif sys.platform in {"emscripten", "wasix"}:'
+        ''}
         substituteInPlace lib/matplotlib/tests/test_backends_interactive.py \
           --replace-fail \
             '(["tkinter"], {"MPLBACKEND": "tkagg"}),' \
@@ -48,10 +50,12 @@ in
           --replace-fail \
             'def test_axeswidget_interactive():' \
             $'def test_axeswidget_interactive():\n    pytest.importorskip("_tkinter")'
-        substituteInPlace lib/matplotlib/tests/test_mlab.py \
-          --replace-fail \
-            "sys.platform == 'emscripten'" \
-            "sys.platform in {'emscripten', 'wasix'}"
+        ${lib.optionalString (lib.versionAtLeast pyprev.matplotlib.version "3.11") ''
+          substituteInPlace lib/matplotlib/tests/test_mlab.py \
+            --replace-fail \
+              "sys.platform == 'emscripten'" \
+              "sys.platform in {'emscripten', 'wasix'}"
+        ''}
         substituteInPlace lib/matplotlib/tests/test_ticker.py \
           --replace-fail \
             'import re' \
