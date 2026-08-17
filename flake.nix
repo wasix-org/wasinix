@@ -841,6 +841,7 @@
 
     devShells.${system}.default = wasix.pkgs.mkShell {
       packages = [
+        wasinix
         toolchain.wasixcc
         toolchain.cargoWasix
         wasix.nixpkgsByProfile.${wasix.defaultProfileName}.ncurses
