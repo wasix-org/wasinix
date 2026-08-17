@@ -12,7 +12,7 @@
           then testName
           else "${prefix}-${testName}";
       in
-        if testName == "all"
+        if builtins.elem testName ["all" "passthru"]
         then throw "test group '${name}' declares the reserved test name '${key}'"
         else if lib.isDerivation value
         then {${key} = value;}
@@ -26,6 +26,9 @@
     (lib.concatMap
       (test: ((test.passthru or {}).wasix or {}).ciTags or [])
       (builtins.attrValues leaves));
+  groupMeta =
+    {testCases = leaves;}
+    // lib.optionalAttrs (ciTags != []) {inherit ciTags;};
   firstPos = let
     names = builtins.attrNames leaves;
   in
@@ -38,13 +41,15 @@
       // {
         __structuredAttrs = true;
         wasixTestDependencies = builtins.attrValues leaves;
-        passthru.wasix =
-          {testCases = leaves;}
-          // lib.optionalAttrs (ciTags != []) {inherit ciTags;};
+        passthru.wasix = groupMeta;
       }
     ) ''
       ${lib.concatMapStringsSep "\n" (n: "test -e ${leaves.${n}}") (builtins.attrNames leaves)}
       touch $out
     '';
 in
-  all // tests // {inherit all;}
+  tests
+  // {
+    inherit all;
+    passthru.wasix = groupMeta;
+  }

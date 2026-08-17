@@ -29,6 +29,8 @@ pub struct Job {
     pub position: Option<String>,
     pub expectation: Option<crate::ci::evalmap::TestExpectation>,
     pub is_test: bool,
+    pub test_name: Option<String>,
+    pub test_family: Option<String>,
 }
 
 /// The nix-eval-jobs JSON-lines index for a task's jobs.
@@ -68,6 +70,10 @@ pub fn load_jobs(
                 is_test: info
                     .get(name.as_str())
                     .is_some_and(|job| job.role.as_deref() == Some("check")),
+                test_name: info.get(name.as_str()).and_then(|job| job.test_name.clone()),
+                test_family: info
+                    .get(name.as_str())
+                    .and_then(|job| job.test_family.clone()),
             },
         );
     }
@@ -139,6 +145,10 @@ pub fn classify(
             .get(&case.attr)
             .and_then(|job| job.expectation.clone());
         case.is_test = index.get(&case.attr).is_some_and(|job| job.is_test);
+        case.test_name = index.get(&case.attr).and_then(|job| job.test_name.clone());
+        case.test_family = index
+            .get(&case.attr)
+            .and_then(|job| job.test_family.clone());
         case.position = index.get(&case.attr).and_then(|job| job.position.clone());
         let entry = counts.entry(case.class.clone()).or_insert((0, 0));
         entry.0 += 1;

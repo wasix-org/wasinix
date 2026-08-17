@@ -845,22 +845,7 @@ fn run_command(command: RunCommand) -> Result<CommandStatus> {
             let path = crate::ci::prepare::report_path(&run_dir);
             let report: crate::ci::report::Report = schema::read(&path)?;
             ui::emit(&json, &report, |report| {
-                ui::result(&report.title);
-                for task in &report.tasks {
-                    if !task.enabled {
-                        continue;
-                    }
-                    let took = task
-                        .elapsed_seconds
-                        .map(|elapsed| format!(" · took {elapsed}"))
-                        .unwrap_or_default();
-                    ui::result(format!(
-                        "  {} {}: {}{took}",
-                        render::glyph(task.status),
-                        task.task_id,
-                        task.headline
-                    ));
-                }
+                render::finished_report(report);
             })?;
             Ok(CommandStatus::SUCCESS)
         }

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::ci::compare::{Comparison, VersionUpdate};
 
 use crate::ci::contentdiff::ContentSummary;
-use crate::ci::facts::{BuildFacts, Failure};
+use crate::ci::facts::{BuildFacts, Failure, TestResult};
 use crate::ci::plan::{Plan, Task, TaskKind};
 use crate::ci::types::ResolvedRequest;
 use crate::support::atoms::{Bytes, DurationSecs, Rev, TaskStatus};
@@ -208,6 +208,9 @@ pub struct Report {
     /// Per build task, the Failure atoms it produced.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub failures: BTreeMap<String, Vec<Failure>>,
+    /// Per build task, the package tests it ran and their declared outcomes.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub tests: BTreeMap<String, Vec<TestResult>>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub version_updates: BTreeMap<String, Vec<VersionUpdate>>,
     /// Per candidate, the projection of its case against the baseline; each
@@ -458,6 +461,16 @@ pub fn fold(
             _ => None,
         })
         .collect();
+    let tests = views
+        .iter()
+        .filter(|view| view.task.enabled)
+        .filter_map(|view| match view.fragment?.data.as_ref()? {
+            FragmentData::Build(facts) if !facts.tests.is_empty() => {
+                Some((view.task.task_id.clone(), facts.tests.clone()))
+            }
+            _ => None,
+        })
+        .collect();
     let version_updates = context
         .comparisons
         .iter()
@@ -476,6 +489,7 @@ pub fn fold(
         annotations,
         tasks,
         failures,
+        tests,
         version_updates,
         comparisons: context.comparisons,
         request: context.request,
@@ -600,6 +614,7 @@ pub fn from_run_state(run: &crate::runs::Run, log_tail: Option<&str>) -> Report 
         annotations: Vec::new(),
         tasks,
         failures: std::collections::BTreeMap::new(),
+        tests: std::collections::BTreeMap::new(),
         version_updates: std::collections::BTreeMap::new(),
         comparisons: Vec::new(),
         request: None,

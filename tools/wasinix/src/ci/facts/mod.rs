@@ -79,7 +79,16 @@ pub enum TestOutcome {
 }
 
 impl TestOutcome {
-
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TestOutcome::Pass => "pass",
+            TestOutcome::Xfail => "xfail",
+            TestOutcome::Broken => "broken",
+            TestOutcome::Fail => "fail",
+            TestOutcome::Xpass => "xpass",
+            TestOutcome::Skipped => "skipped",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -87,6 +96,10 @@ impl TestOutcome {
 pub struct TestResult {
     pub job: JobAddr,
     pub outcome: TestOutcome,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test_family: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
     pub duration_seconds: DurationSecs,
@@ -205,6 +218,8 @@ fn test_results(cases: &[junit::Case]) -> Vec<TestResult> {
         .map(|case| TestResult {
             job: JobAddr(case.attr.clone()),
             outcome: junit::test_outcome(case),
+            test_name: case.test_name.clone(),
+            test_family: case.test_family.clone(),
             reason: case.expectation.as_ref().map(|value| value.reason.clone()),
             duration_seconds: DurationSecs(case.duration),
             position: case.position.clone(),

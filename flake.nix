@@ -135,22 +135,26 @@
               };
           };
       };
-    collectTestsPrefixed = prefix:
+    collectTestsPrefixedInto = prefix: initial:
       lib.foldlAttrs (
         acc: name: pkg: let
-          fallback = {"${prefix}${name}" = testWithOwner name "tests" pkg.tests;};
+          tests = pkg.tests;
+          fallback = {"${prefix}${name}" = pkg;};
+          single = {"${prefix}${name}" = testWithOwner name "tests" tests;};
           testAttrs = let
-            cases = (pkg.tests.passthru.wasix or {}).testCases or null;
+            declaredCases = (tests.passthru.wasix or {}).testCases or null;
           in
-            if cases == null
-            then fallback
-            else
+            if declaredCases != null
+            then
               lib.mapAttrs'
               (caseName: drv:
                 lib.nameValuePair
                 "${prefix}${name}-${caseName}"
                 (testWithOwner name caseName drv))
-              cases;
+              declaredCases
+            else if lib.isDerivation tests
+            then single
+            else fallback;
           entry = builtins.tryEval (lib.optionalAttrs (pkg ? tests) testAttrs);
         in
           acc
@@ -159,7 +163,9 @@
             then entry.value
             else fallback
           )
-      ) {};
+      )
+      initial;
+    collectTestsPrefixed = prefix: collectTestsPrefixedInto prefix {};
     collectTests = collectTestsPrefixed "";
     mergeDisjoint = context: sets: let
       names = lib.concatMap builtins.attrNames sets;
@@ -415,6 +421,20 @@
         '
         touch "$out"
       '';
+    packageChecks = let
+      wasmerChecks = collectTests (removeAttrs wasix.wasmerPackageInventory ["rust"]);
+      rustChecks =
+        wasmerChecks
+        // lib.optionalAttrs (wasix.wasmerPackageInventory ? rust) {rust-webc = wasix.wasmerPackageInventory.rust.tests.all;};
+      libraryChecks =
+        lib.foldlAttrs
+        (acc: profile: packages: collectTestsPrefixedInto "lib-${profile}-" acc packages)
+        rustChecks
+        wasix.ciPackagesByProfile;
+      registryChecks = collectTestsPrefixedInto "" libraryChecks {cargo-registry = wasix.cargoRegistry;};
+      abiChecks = registryChecks // lib.mapAttrs' (p: lib.nameValuePair "abi-${p}") wasix.abiChecks;
+    in
+      collectTestsPrefixedInto "" abiChecks wasix.libraryTestPkgs;
     checksBySet = {
       core = mergeDisjoint "checksBySet.core" [
         {
@@ -426,17 +446,7 @@
         }
         (collectTests wasix.toolchainTestPkgs)
       ];
-      packages = mergeDisjoint "checksBySet.packages" [
-        (collectTests (removeAttrs wasix.wasmerPackageInventory ["rust"]))
-        (lib.optionalAttrs (wasix.wasmerPackageInventory ? rust) {rust-webc = wasix.wasmerPackageInventory.rust.tests;})
-        (lib.concatMapAttrs
-          (profile: packages: collectTestsPrefixed "lib-${profile}-" packages)
-          wasix.ciPackagesByProfile)
-        (collectTests {cargo-registry = wasix.cargoRegistry;})
-        (lib.mapAttrs' (p: lib.nameValuePair "abi-${p}") wasix.abiChecks)
-        # non-shipped library packages carrying a tests/ dir
-        (collectTests wasix.libraryTestPkgs)
-      ];
+      packages = packageChecks;
       python = mergeDisjoint "checksBySet.python" [
         # pythonWheels is nested by version; collect as wheel-py314-<attr>.
         (lib.concatMapAttrs (pv: wheelSet: collectTestsPrefixed "wheel-${pv}-" wheelSet) wasix.pythonWheels)
@@ -576,51 +586,48 @@
         inherit lib mkWasix;
         pkgNames = wasix.wasixPkgNames;
       };
-      testJobs = lib.filter (lib.hasPrefix "checks.") ciJobNames;
-      testJobsBySubject = lib.groupBy (name: ciJobInfo.${name}.subject) testJobs;
-      testGroups = lib.mapAttrs' (subject: jobs:
-        lib.nameValuePair "tests-${subject}" {
-          inherit jobs;
+      ciGroups = {
+        toolchain = {
+          jobs = toolchainJobs;
+          spotOwners = spotLib.toolchainNames;
+        };
+        cc = {
+          jobs =
+            lib.filter
+            (name:
+              !(lib.hasPrefix "toolchain.cargo-wasix" name)
+              && !(lib.hasPrefix "toolchain.rust-toolchain" name)
+              && name != "toolchain.runtime")
+            toolchainJobs;
+          spotOwners = ["stdenv"];
+        };
+        rust = {
+          jobs =
+            lib.filter
+            (name:
+              lib.hasPrefix "toolchain.cargo-wasix" name
+              || lib.hasPrefix "toolchain.rust-toolchain" name)
+            toolchainJobs;
+          spotOwners = ["rustPlatform"];
+        };
+        haskell = {
+          jobs =
+            lib.filter
+            (name:
+              (lib.hasPrefix "packagesByProfile." name
+                || lib.hasPrefix "wasmerPackages." name)
+              && lib.hasInfix "pandoc" name)
+            ciJobNames;
+          spotOwners = ["haskellPackages"];
+        };
+        emulated = {
+          jobs =
+            lib.filter
+            (name: lib.hasPrefix "checks." name && lib.hasSuffix "-upstream" name)
+            ciJobNames;
           spotOwners = [];
-        })
-      testJobsBySubject;
-      ciGroups =
-        {
-          toolchain = {
-            jobs = toolchainJobs;
-            spotOwners = spotLib.toolchainNames;
-          };
-          cc = {
-            jobs =
-              lib.filter
-              (name:
-                !(lib.hasPrefix "toolchain.cargo-wasix" name)
-                && !(lib.hasPrefix "toolchain.rust-toolchain" name)
-                && name != "toolchain.runtime")
-              toolchainJobs;
-            spotOwners = ["stdenv"];
-          };
-          rust = {
-            jobs =
-              lib.filter
-              (name:
-                lib.hasPrefix "toolchain.cargo-wasix" name
-                || lib.hasPrefix "toolchain.rust-toolchain" name)
-              toolchainJobs;
-            spotOwners = ["rustPlatform"];
-          };
-          haskell = {
-            jobs =
-              lib.filter
-              (name:
-                (lib.hasPrefix "packagesByProfile." name
-                  || lib.hasPrefix "wasmerPackages." name)
-                && lib.hasInfix "pandoc" name)
-              ciJobNames;
-            spotOwners = ["haskellPackages"];
-          };
-        }
-        // testGroups;
+        };
+      };
       spotJobInfo =
         lib.concatMapAttrs
         (profile: packages:
@@ -667,6 +674,12 @@
           displayName = subject;
           inherit subject;
           testName = wasixMeta.ciTestName or null;
+          testFamily =
+            if lib.hasPrefix "checks.wheel-" name
+            then "wheel"
+            else if lib.hasPrefix "checks.lib-" name
+            then "library"
+            else null;
           inherit variant artifactKind;
           aliases = wasmerJobAliases.${name} or [];
           tags = wasixLib.ciTagsOf drv;
