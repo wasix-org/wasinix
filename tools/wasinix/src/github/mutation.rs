@@ -299,6 +299,11 @@ pub(crate) fn resolve(
 /// leave a bundle plus the context the publish job re-verifies. Runs with no
 /// push credential; the PR tree's own update scripts execute here.
 pub fn mutate(repo: &Path, origin_doc: &Path, out_dir: &Path) -> Result<()> {
+    // The bundle is written by a `git -C <worktree>` invocation, which
+    // resolves a relative out-dir inside the worktree instead of the
+    // caller's directory.
+    let out_dir = &std::path::absolute(out_dir)
+        .map_err(|error| crate::support::error::io(out_dir, error))?;
     let command: crate::ci::origin::Command = crate::support::schema::read(origin_doc)?;
     let api = crate::ci::origin::Rest {
         token: crate::github::client::token(),
