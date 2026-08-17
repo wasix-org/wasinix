@@ -1,0 +1,274 @@
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -443,5 +443,6 @@ dependencies = [
+  "indicatif",
+  "lazy_static",
++ "libc",
+  "notify",
+  "regex",
+  "reqwest",
+--- a/client/Cargo.toml
++++ b/client/Cargo.toml
+@@ -37,3 +37,6 @@ features = [
+   "rt-multi-thread",
+   "sync",
+ ]
++
++[target.'cfg(target_os = "wasi")'.dependencies]
++libc = "0.2"
+--- a/client/src/main.rs
++++ b/client/src/main.rs
+@@ -20,6 +20,8 @@ mod nix_config;
+ mod nix_netrc;
+ mod push;
+ mod version;
++#[cfg(target_os = "wasi")]
++mod wasi;
+ 
+ use anyhow::Result;
+ 
+--- /dev/null
++++ b/client/src/wasi.rs
+@@ -0,0 +1,79 @@
++use std::env;
++use std::ffi::CString;
++use std::fs::{self, File};
++use std::io;
++use std::os::fd::FromRawFd;
++use std::os::unix::ffi::OsStrExt;
++use std::path::{Path, PathBuf};
++
++pub struct BaseDirectories {
++    config_home: Option<PathBuf>,
++    prefix: PathBuf,
++}
++
++impl BaseDirectories {
++    pub fn with_prefix<P: AsRef<Path>>(prefix: P) -> Self {
++        let config_home = env::var_os("XDG_CONFIG_HOME")
++            .map(PathBuf::from)
++            .filter(|path| path.is_absolute())
++            .or_else(|| {
++                env::var_os("HOME")
++                    .map(PathBuf::from)
++                    .map(|home| home.join(".config"))
++            });
++
++        Self {
++            config_home,
++            prefix: prefix.as_ref().to_owned(),
++        }
++    }
++
++    pub fn place_config_file<P: AsRef<Path>>(&self, path: P) -> io::Result<PathBuf> {
++        let config_home = self.config_home.as_ref().ok_or_else(|| {
++            io::Error::new(
++                io::ErrorKind::NotFound,
++                "neither XDG_CONFIG_HOME nor HOME is set",
++            )
++        })?;
++        let path = config_home.join(&self.prefix).join(path);
++        if let Some(parent) = path.parent() {
++            fs::create_dir_all(parent)?;
++        }
++        Ok(path)
++    }
++}
++
++fn c_path(path: &Path) -> io::Result<CString> {
++    CString::new(path.as_os_str().as_bytes())
++        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "path contains a NUL byte"))
++}
++
++#[allow(unsafe_code)]
++pub fn set_private_permissions(path: &Path, mode: u32) -> io::Result<()> {
++    let path = c_path(path)?;
++    // SAFETY: `path` is NUL-terminated and remains live for the call.
++    if unsafe { libc::chmod(path.as_ptr(), mode as libc::mode_t) } == -1 {
++        Err(io::Error::last_os_error())
++    } else {
++        Ok(())
++    }
++}
++
++#[allow(unsafe_code)]
++pub fn open_private_file(path: &Path, mode: u32) -> io::Result<File> {
++    let path = c_path(path)?;
++    // SAFETY: `path` is NUL-terminated and the variadic mode matches `O_CREAT`.
++    let fd = unsafe {
++        libc::open(
++            path.as_ptr(),
++            libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC,
++            mode as libc::mode_t,
++        )
++    };
++    if fd == -1 {
++        return Err(io::Error::last_os_error());
++    }
++
++    // SAFETY: `open` returned a new descriptor, transferred to `File` exactly once.
++    Ok(unsafe { File::from_raw_fd(fd) })
++}
+--- a/client/src/config.rs
++++ b/client/src/config.rs
+@@ -5,15 +5,21 @@
+ //! experience (e.g., `attic login`).
+ 
+ use std::collections::HashMap;
+-use std::fs::{self, OpenOptions, Permissions, read_to_string};
++use std::fs::{self, read_to_string};
++#[cfg(not(target_os = "wasi"))]
++use std::fs::{OpenOptions, Permissions};
+ use std::io::Write;
+ use std::ops::{Deref, DerefMut};
++#[cfg(not(target_os = "wasi"))]
+ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+ use std::path::PathBuf;
+ 
++#[cfg(target_os = "wasi")]
++use crate::wasi::BaseDirectories;
+ use anyhow::{Context, Result, anyhow};
+ use serde::{Deserialize, Serialize};
++#[cfg(not(target_os = "wasi"))]
+ use xdg::BaseDirectories;
+ 
+ use crate::cache::{CacheName, CacheRef, ServerName};
+ 
+@@ -117,10 +123,16 @@ impl Config {
+             // This isn't atomic, so some other process might chmod it
+             // to something else before we write. We don't handle this case.
+             if path.exists() {
++                #[cfg(not(target_os = "wasi"))]
++                {
+-                let permissions = Permissions::from_mode(FILE_MODE);
+-                fs::set_permissions(path, permissions)?;
++                    let permissions = Permissions::from_mode(FILE_MODE);
++                    fs::set_permissions(path, permissions)?;
++                }
++                #[cfg(target_os = "wasi")]
++                crate::wasi::set_private_permissions(path, FILE_MODE)?;
+             }
+ 
++            #[cfg(not(target_os = "wasi"))]
+             let mut file = OpenOptions::new()
+                 .create(true)
+                 .write(true)
+@@ -129,6 +141,8 @@ impl Config {
+                 .mode(FILE_MODE)
+                 .open(path)?;
+ 
++            #[cfg(target_os = "wasi")]
++            let mut file = crate::wasi::open_private_file(path, FILE_MODE)?;
+             file.write_all(serialized.as_bytes())?;
+ 
+             tracing::debug!("Saved modified configuration to {:?}", path);
+--- a/client/src/nix_config.rs
++++ b/client/src/nix_config.rs
+@@ -6,9 +6,12 @@ use std::path::PathBuf;
+ 
++#[cfg(target_os = "wasi")]
++use crate::wasi::BaseDirectories;
+ use anyhow::{Result, anyhow};
+ use lazy_static::lazy_static;
+ use regex::Regex;
+ use tokio::fs;
++#[cfg(not(target_os = "wasi"))]
+ use xdg::BaseDirectories;
+ 
+ lazy_static! {
+     static ref COMMENT_LINE: Regex = {
+--- a/client/src/nix_netrc.rs
++++ b/client/src/nix_netrc.rs
+@@ -8,14 +8,21 @@
+ 
+ use std::collections::HashMap;
+ use std::fmt;
++#[cfg(not(target_os = "wasi"))]
+ use std::fs::Permissions;
++#[cfg(not(target_os = "wasi"))]
+ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ 
++#[cfg(target_os = "wasi")]
++use crate::wasi::BaseDirectories;
+ use anyhow::{Result, anyhow};
+-use tokio::fs::{self, OpenOptions};
++use tokio::fs;
++#[cfg(not(target_os = "wasi"))]
++use tokio::fs::OpenOptions;
+ use tokio::io::AsyncWriteExt;
++#[cfg(not(target_os = "wasi"))]
+ use xdg::BaseDirectories;
+ 
+ /// The permission the configuration file should have.
+ const FILE_MODE: u32 = 0o600;
+@@ -73,10 +80,16 @@ impl NixNetrc {
+             // This isn't atomic, so some other process might chmod it
+             // to something else before we write. We don't handle this case.
+             if path.exists() {
++                #[cfg(not(target_os = "wasi"))]
++                {
+-                let permissions = Permissions::from_mode(FILE_MODE);
+-                fs::set_permissions(path, permissions).await?;
++                    let permissions = Permissions::from_mode(FILE_MODE);
++                    fs::set_permissions(path, permissions).await?;
++                }
++                #[cfg(target_os = "wasi")]
++                crate::wasi::set_private_permissions(path, FILE_MODE)?;
+             }
+ 
++            #[cfg(not(target_os = "wasi"))]
+             let mut file = OpenOptions::new()
+                 .create(true)
+                 .truncate(true)
+@@ -87,6 +100,10 @@ impl NixNetrc {
+                 .open(path)
+                 .await?;
+ 
++            #[cfg(target_os = "wasi")]
++            let mut file =
++                tokio::fs::File::from_std(crate::wasi::open_private_file(path, FILE_MODE)?);
++
+             file.write_all(content.as_bytes()).await?;
+             Ok(())
+         } else {
+--- a/client/src/push.rs
++++ b/client/src/push.rs
+@@ -385,15 +385,31 @@ impl Session {
+ 
+     /// Queues multiple store paths to be pushed.
+     pub fn queue_many(&self, store_paths: Vec<StorePath>) -> Result<()> {
++        #[cfg(not(target_os = "wasi"))]
++        {
+-        self.sender
+-            .send_blocking(SessionQueueCommand::Paths(store_paths))
+-            .map_err(|e| anyhow!(e))
++            self.sender
++                .send_blocking(SessionQueueCommand::Paths(store_paths))
++                .map_err(|e| anyhow!(e))
++        }
++        #[cfg(target_os = "wasi")]
++        {
++            futures::executor::block_on(self.sender.send(SessionQueueCommand::Paths(store_paths)))
++                .map_err(|e| anyhow!(e))
++        }
+     }
+ 
+     /// Flushes the worker queue.
+     pub fn flush(&self) -> Result<()> {
++        #[cfg(not(target_os = "wasi"))]
++        {
+-        self.sender
+-            .send_blocking(SessionQueueCommand::Flush)
+-            .map_err(|e| anyhow!(e))
++            self.sender
++                .send_blocking(SessionQueueCommand::Flush)
++                .map_err(|e| anyhow!(e))
++        }
++        #[cfg(target_os = "wasi")]
++        {
++            futures::executor::block_on(self.sender.send(SessionQueueCommand::Flush))
++                .map_err(|e| anyhow!(e))
++        }
+     }
+ }

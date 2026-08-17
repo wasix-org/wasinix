@@ -1,0 +1,33 @@
+--- a/attic/src/nix_store/mod.rs
++++ b/attic/src/nix_store/mod.rs
+@@ -49,5 +49,5 @@ mod store;
+ use std::ffi::OsStr;
+ use std::fmt;
+-#[cfg(target_family = "unix")]
++#[cfg(any(target_family = "unix", target_os = "wasi"))]
+ use std::os::unix::ffi::OsStrExt;
+ use std::path::{Path, PathBuf};
+@@ -186,6 +186,6 @@ impl StorePath {
+     }
+     /// Gets the hash portion of the store path.
+-    #[cfg(target_family = "unix")]
++    #[cfg(any(target_family = "unix", target_os = "wasi"))]
+     pub fn to_hash(&self) -> StorePathHash {
+         // Safety: We have already validated the format of the base name,
+         // including the hash part. The name is guaranteed valid UTF-8.
+@@ -199,6 +199,6 @@ impl StorePath {
+     }
+     /// Returns the human-readable name.
+-    #[cfg(target_family = "unix")]
++    #[cfg(any(target_family = "unix", target_os = "wasi"))]
+     pub fn name(&self) -> String {
+         // Safety: Already checked
+         #[allow(unsafe_code)]
+@@ -214,6 +214,6 @@ impl StorePath {
+     }
+     #[cfg_attr(not(feature = "nix_store"), allow(dead_code))]
+-    #[cfg(target_family = "unix")]
++    #[cfg(any(target_family = "unix", target_os = "wasi"))]
+     fn as_base_name_bytes(&self) -> &[u8] {
+         self.base_name.as_os_str().as_bytes()
+     }
