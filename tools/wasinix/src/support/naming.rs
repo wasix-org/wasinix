@@ -132,9 +132,11 @@ struct Entry {
 }
 
 impl Entry {
-    /// The addresses that name this entry: the path, the path without its
-    /// variant segment, and every suffix of both that still reaches the leaf.
-    fn forms(&self) -> Vec<Vec<&str>> {
+    /// The structural addresses that name this entry: the path, the path
+    /// without its variant segment, and every suffix of both that still
+    /// reaches the leaf. Aliases are matched separately, since an alias hit
+    /// outranks a suffix hit when a name is claimed by both.
+    fn path_forms(&self) -> Vec<Vec<&str>> {
         fn suffixes<'a>(path: &[&'a str], forms: &mut Vec<Vec<&'a str>>) {
             for start in 0..path.len() {
                 forms.push(path[start..].to_vec());
@@ -148,7 +150,6 @@ impl Entry {
             without.remove(axis);
             suffixes(&without, &mut forms);
         }
-        forms.extend(self.aliases.iter().map(|alias| vec![alias.as_str()]));
         forms
     }
 
@@ -213,27 +214,37 @@ impl Domain {
         self
     }
 
-    fn matches(&self, spec: &Spec) -> Vec<&Entry> {
+    /// Every entry a spec names, with whether it was named by its declared
+    /// alias rather than a structural address.
+    fn matches(&self, spec: &Spec) -> Vec<(&Entry, bool)> {
         let glob = spec.is_glob();
         // A flattened CI job name joins its segments with dots and loses which
         // dots were separators, so the joined form is always accepted too.
         let flat = spec.segments.join(".");
+        let segment_matches = |segment: &str, wanted: &str| {
+            if glob {
+                matches_glob(wanted, segment)
+            } else {
+                segment == wanted
+            }
+        };
         self.entries
             .iter()
-            .filter(|entry| {
-                if !glob && entry.path.join(".") == flat {
-                    return true;
-                }
-                entry.forms().into_iter().any(|form| {
-                    form.len() == spec.segments.len()
-                        && form.iter().zip(&spec.segments).all(|(segment, wanted)| {
-                            if glob {
-                                matches_glob(wanted, segment)
-                            } else {
-                                segment == wanted
-                            }
-                        })
-                })
+            .filter_map(|entry| {
+                let by_alias = spec.segments.len() == 1
+                    && entry
+                        .aliases
+                        .iter()
+                        .any(|alias| segment_matches(alias, &spec.segments[0]));
+                let by_path = (!glob && entry.path.join(".") == flat)
+                    || entry.path_forms().into_iter().any(|form| {
+                        form.len() == spec.segments.len()
+                            && form
+                                .iter()
+                                .zip(&spec.segments)
+                                .all(|(segment, wanted)| segment_matches(segment, wanted))
+                    });
+                (by_alias || by_path).then_some((entry, by_alias))
             })
             .collect()
     }
@@ -280,7 +291,7 @@ impl Domain {
     /// two different things is an error that prints both, so the fix is always
     /// to copy one back.
     pub fn resolve(&self, spec: &Spec) -> Result<Vec<Resolved>> {
-        let hits = self.matches(spec);
+        let mut hits = self.matches(spec);
         if hits.is_empty() {
             let nearest = self.nearest(spec);
             let suggestion = if nearest.is_empty() {
@@ -295,10 +306,27 @@ impl Domain {
             ));
         }
         if !spec.is_glob() {
-            let mut identities: BTreeMap<String, &Entry> = BTreeMap::new();
-            for entry in &hits {
-                identities.entry(entry.identity()).or_insert(entry);
+            let identities = |hits: &[(&Entry, bool)]| {
+                let mut seen: BTreeMap<String, ()> = BTreeMap::new();
+                for (entry, _) in hits {
+                    seen.entry(entry.identity()).or_insert(());
+                }
+                seen
+            };
+            // A declared name outranks another entry's structural suffix:
+            // naming a thing by what it is called must not go ambiguous
+            // because someone else's address happens to end the same way.
+            if identities(&hits).len() > 1 {
+                let by_alias: Vec<(&Entry, bool)> = hits
+                    .iter()
+                    .copied()
+                    .filter(|(_, by_alias)| *by_alias)
+                    .collect();
+                if identities(&by_alias).len() == 1 {
+                    hits = by_alias;
+                }
             }
+            let identities = identities(&hits);
             if identities.len() > 1 {
                 let options: Vec<String> = identities.keys().cloned().collect();
                 return request_error(format!(
@@ -309,7 +337,7 @@ impl Domain {
             }
         }
         let mut resolved: Vec<Resolved> = Vec::new();
-        for entry in hits {
+        for (entry, _) in hits {
             if resolved.iter().any(|done| done.key == entry.key) {
                 continue;
             }

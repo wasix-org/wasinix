@@ -40,6 +40,20 @@ mod naming {
             Some(1),
             Vec::new(),
         );
+        // The crate-pins/server shape: one target's declared name is the
+        // trailing segment of another's address.
+        domain.add_path(
+            vec!["cargoRegistry".into(), "crates".into()],
+            "crate-pins",
+            None,
+            vec!["cargo-registry".into()],
+        );
+        domain.add_path(
+            vec!["nativePackages".into(), "cargo-registry".into()],
+            "registry-server",
+            None,
+            vec!["cargo-registry-server".into()],
+        );
         domain
     }
 
@@ -48,6 +62,16 @@ mod naming {
             .into_iter()
             .map(|hit| hit.key)
             .collect())
+    }
+
+    #[test]
+    fn a_declared_name_outranks_a_structural_suffix() {
+        assert_eq!(resolve("cargo-registry").unwrap(), ["crate-pins"]);
+        assert_eq!(resolve("cargo-registry-server").unwrap(), ["registry-server"]);
+        assert_eq!(
+            resolve("nativePackages.cargo-registry").unwrap(),
+            ["registry-server"]
+        );
     }
 
     #[test]
