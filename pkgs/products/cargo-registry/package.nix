@@ -45,8 +45,9 @@ in
 
     cargoHash = "sha256-VIB9xziuRrtbJefUOqlHGePw2HfcjD9r84bPq6UdwZ4=";
 
+    # "cargo-registry" is the crate-pin set; this target bumps the server.
     passthru.updateScript = {
-      name = "cargo-registry";
+      name = "cargo-registry-server";
       command = ["${updateScript}/bin/wasix-cargo-registry-update"] ++ updateArgs;
       accepts = ["revision"];
       source = {

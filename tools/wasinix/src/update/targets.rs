@@ -238,6 +238,18 @@ pub fn all_targets(repo: &Path) -> Result<Vec<Target>> {
         }
         targets.push(target);
     }
+    // Discovery dedupes within itself, but a declared name can still collide
+    // with a builtin; two targets answering to one name would race the same
+    // update branch.
+    let mut names = std::collections::BTreeSet::new();
+    for target in &targets {
+        if !names.insert(&target.name) {
+            return crate::support::error::request_error(format!(
+                "two update targets are named {}; give one declaration a distinct name",
+                target.name
+            ));
+        }
+    }
     Ok(targets)
 }
 
