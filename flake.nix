@@ -516,6 +516,10 @@
       ciSetParts = {
         core = [
           (flattenDrvs "toolchain" buildable.toolchain)
+          # The orchestrator itself: as a job its closure reaches the cache,
+          # so workflow steps running `nix run .#wasinix` substitute instead
+          # of compiling the crate and its tests from source.
+          (flattenDrvs "" {inherit wasinix;})
           (flattenDrvs "checks" checksBySet.core)
         ];
         packages = [
