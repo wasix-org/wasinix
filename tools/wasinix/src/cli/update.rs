@@ -102,11 +102,16 @@ fn conclude(
 #[derive(clap::Args)]
 pub struct UpdateArgs {
     /// Targets (TARGET, TARGET@VERSION, TARGET@rev:SHA); `list` shows them,
-    /// `hooks` runs only the re-sync hooks
+    /// `hooks` runs only the re-sync hooks. For package update scripts:
+    /// `request` prints the driver's request, `nix-update -- <argv>` runs a
+    /// declared nix-update command with the request applied
     pub targets: Vec<String>,
     /// Update every target
     #[arg(long, conflicts_with = "targets")]
     pub all: bool,
+    /// With `request`: fail unless the request targets this name
+    #[arg(long, value_name = "NAME")]
+    pub expect: Option<String>,
     #[command(flatten)]
     pub mode: MutationMode,
 }
@@ -169,7 +174,27 @@ pub enum VersionsCommand {
 
 pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
     let repo = crate::support::git::repo_root()?;
+    if args.expect.is_some() && args.targets.first().map(String::as_str) != Some("request") {
+        return request_error("--expect only applies to `update request`");
+    }
     match args.targets.first().map(String::as_str) {
+        Some("request") if args.targets.len() == 1 => {
+            let request = crate::update::request::current(args.expect.as_deref())?;
+            ui::output(match request {
+                Some(request) => serde_json::to_string(&request).map_err(|source| {
+                    crate::support::error::Error::Json {
+                        path: format!("<{}>", crate::update::REQUEST_ENV).into(),
+                        source,
+                    }
+                })?,
+                None => "{}".to_string(),
+            });
+            Ok(CommandStatus::SUCCESS)
+        }
+        Some("nix-update") => {
+            let code = crate::update::backends::run_nix_update(&repo, &args.targets[1..])?;
+            Ok(CommandStatus::from_code(code.clamp(0, 255) as u8))
+        }
         Some("list") if args.targets.len() == 1 => {
             let targets = targets::all_targets(&repo)?;
             #[derive(serde::Serialize, serde::Deserialize)]

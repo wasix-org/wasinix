@@ -79,6 +79,11 @@ pub fn update_pr_token_present() -> Result<Option<bool>> {
     Ok(optional("WASINIX_UPDATE_PR_TOKEN_PRESENT")?.map(|value| value == "true"))
 }
 
+/// The update driver's request to the package script it invoked, as JSON.
+pub fn update_request() -> Result<Option<String>> {
+    optional(crate::update::REQUEST_ENV)
+}
+
 pub fn github_repository() -> Result<Option<String>> {
     optional("GITHUB_REPOSITORY")
 }

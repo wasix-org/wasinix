@@ -2487,6 +2487,28 @@ mod update {
         assert!(target.attr.ends_with("toolchain.libc-unwrapped"), "{}", target.attr);
         assert_eq!(target.file, "pkgs/products/wasix-sysroot/libc.nix");
     }
+
+    #[test]
+    fn script_requests_are_validated_before_a_script_sees_them() {
+        use crate::update::request::parse;
+        let release = r#"{"schema":1,"mode":"release","target":"wasix-libc","value":"1.2"}"#;
+        assert_eq!(parse(release, None).unwrap().value, "1.2");
+        assert_eq!(parse(release, Some("wasix-libc")).unwrap().target, "wasix-libc");
+        assert!(parse(release, Some("other")).is_err(), "--expect mismatch refuses");
+        assert!(parse("{not json", None).is_err());
+        assert!(
+            parse(r#"{"schema":2,"mode":"release","target":"x","value":"1"}"#, None).is_err(),
+            "unknown schema refuses"
+        );
+        assert!(
+            parse(r#"{"schema":1,"mode":"release","target":"x","value":""}"#, None).is_err(),
+            "a release request needs a value"
+        );
+        assert!(
+            parse(r#"{"schema":1,"mode":"revision","target":"x","value":"abc"}"#, None).is_err(),
+            "a revision request needs a source"
+        );
+    }
 }
 
 mod managed {

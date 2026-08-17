@@ -220,6 +220,23 @@ fn run_update_script(
     Ok(outcome_from(&stdout))
 }
 
+/// Run a declared nix-update command with the driver's request applied,
+/// streaming its output. Update scripts handed the nix-update argv re-enter
+/// the driver through `wasinix update nix-update -- <argv>` so the request
+/// contract lives here, not in each script.
+pub fn run_nix_update(repo: &Path, argv: &[String]) -> Result<i32> {
+    if argv.is_empty() {
+        return request_error("no nix-update command passed");
+    }
+    let request = crate::update::request::current(None)?;
+    let argv = crate::update::request::nix_update_argv(argv, request.as_ref())?;
+    let mut command = Command::new(&argv[0]);
+    command.args(&argv[1..]).current_dir(repo);
+    crate::support::tools::log(&command);
+    let status = crate::support::tools::status(&mut command)?;
+    Ok(status.code().unwrap_or(1))
+}
+
 fn flake_input_rev(repo: &Path, input: &str) -> Result<String> {
     let lock: Value = crate::support::json::read(&repo.join("flake.lock"))?;
     let locked = &lock["nodes"][input]["locked"];

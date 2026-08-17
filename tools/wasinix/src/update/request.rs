@@ -8,7 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::support::error::Result;
+use crate::support::error::{request_error, Result};
 
 pub const REQUEST_ENV: &str = "WASINIX_UPDATE_REQUEST";
 
@@ -31,6 +31,50 @@ pub struct Request {
     /// Where a revision came from, so the script can fetch it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<serde_json::Value>,
+}
+
+/// The driver's request, if this run has one. Absent means an ordinary
+/// "bump to whatever is newest" update.
+pub fn current(expected_target: Option<&str>) -> Result<Option<Request>> {
+    match crate::support::env::update_request()? {
+        Some(raw) => parse(&raw, expected_target).map(Some),
+        None => Ok(None),
+    }
+}
+
+/// Split from `current` so the shape rules are testable without the
+/// environment, which is process-global.
+pub fn parse(raw: &str, expected_target: Option<&str>) -> Result<Request> {
+    let request: Request = serde_json::from_str(raw).map_err(|error| {
+        crate::support::error::Error::Request(format!("invalid {REQUEST_ENV}: {error}"))
+    })?;
+    if request.schema != 1 {
+        return request_error(format!("unsupported {REQUEST_ENV} value"));
+    }
+    if request.target.is_empty() {
+        return request_error(format!("{REQUEST_ENV} has no target"));
+    }
+    if let Some(expected) = expected_target {
+        if request.target != expected {
+            return request_error(format!(
+                "{REQUEST_ENV} targets {:?}, expected {expected:?}",
+                request.target
+            ));
+        }
+    }
+    match request.mode {
+        Mode::Release if request.value.is_empty() => {
+            request_error(format!(
+                "{REQUEST_ENV} release request has no value"
+            ))
+        }
+        Mode::Revision if request.source.is_none() => {
+            request_error(format!(
+                "{REQUEST_ENV} revision request has no source"
+            ))
+        }
+        _ => Ok(request),
+    }
 }
 
 /// Apply an explicit request to the argv the package declared.
