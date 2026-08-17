@@ -148,6 +148,18 @@
     inherit (wasixLib) posOf;
   };
   toolchainTestPkgs = {
+    tinygo = pkgs.wasix-tinygo.overrideAttrs (o: {
+      passthru =
+        (o.passthru or {})
+        // {
+          tests = mkTestGroup "tinygo" {
+            hello = pkgs.callPackage ./toolchain/tests/tinygo-test.nix {
+              tinygo = pkgs.wasix-tinygo;
+              wasmer = wasmerRuntime;
+            };
+          };
+        };
+    });
     sysroot = toolchain.sysroot.overrideAttrs (o: {
       passthru = (o.passthru or {}) // {tests = mkTestGroup "sysroot" toolchain.tests;};
     });

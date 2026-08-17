@@ -54,6 +54,7 @@
   wasixSysroot = sysroot;
 
   wasixRustToolchain = pkgs.wasix-rust;
+  wasixTinyGo = pkgs.wasix-tinygo;
   wasixHostedRustToolchain = wasixRustToolchain.override {
     hostedOnWasix = true;
   };
@@ -67,6 +68,7 @@ in {
     wasixLlvm
     wasixSysroot
     wasixRustToolchain
+    wasixTinyGo
     wasixHostedRustToolchain
     binaryen
     wasixcc

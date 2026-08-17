@@ -1,0 +1,22 @@
+{
+  pkgs,
+  wasmerPkgs,
+  testLib,
+  ...
+}: let
+  cmp = name: mode: extra:
+    testLib.mkScriptComparison ({
+        inherit name;
+        nativePkgs = [pkgs.unfurl];
+        wasixPkgs = [wasmerPkgs.unfurl];
+        script = "printf '%s\\n' 'https://sub.example.com/path?id=1&name=sam' | unfurl ${mode}";
+      }
+      // extra);
+in {
+  domains = cmp "unfurl-domains" "domains" {};
+  keys = cmp "unfurl-keys" "keys" {
+    normalize = pkgs.writeShellScript "normalize-unfurl-keys" ''
+      ${pkgs.coreutils}/bin/sort
+    '';
+  };
+}

@@ -1,0 +1,91 @@
+diff --git a/compiler/llvmutil/llvm.go b/compiler/llvmutil/llvm.go
+--- a/compiler/llvmutil/llvm.go
++++ b/compiler/llvmutil/llvm.go
+@@ -220,0 +221,19 @@
++// NoCaptureAttrName returns the LLVM attribute for a pointer that cannot escape.
++func NoCaptureAttrName() string {
++	if Version() >= 21 {
++		return "captures"
++	}
++	return "nocapture"
++}
++
++// IsNoCapture reports whether attr prohibits pointer capture.
++func IsNoCapture(attr llvm.Attribute) bool {
++	if attr.IsNil() {
++		return false
++	}
++	if Version() >= 21 {
++		return attr.GetEnumValue() == 0
++	}
++	return true
++}
++
+diff --git a/cgo/libclang_config_llvm20.go b/cgo/libclang_config_llvm20.go
+--- a/cgo/libclang_config_llvm20.go
++++ b/cgo/libclang_config_llvm20.go
+@@ -1,1 +1,1 @@
+-//go:build !byollvm && !llvm15 && !llvm16 && !llvm17 && !llvm18 && !llvm19
++//go:build !byollvm && !llvm15 && !llvm16 && !llvm17 && !llvm18 && !llvm19 && !llvm21
+diff --git a/cgo/libclang_config_llvm21.go b/cgo/libclang_config_llvm21.go
+new file mode 100644
+--- /dev/null
++++ b/cgo/libclang_config_llvm21.go
+@@ -0,0 +1,15 @@
++//go:build !byollvm && llvm21
++
++package cgo
++
++/*
++#cgo linux        CFLAGS:  -I/usr/include/llvm-21 -I/usr/include/llvm-c-21 -I/usr/lib/llvm-21/include -I/usr/lib64/llvm21/include
++#cgo darwin,amd64 CFLAGS:  -I/usr/local/opt/llvm@21/include
++#cgo darwin,arm64 CFLAGS:  -I/opt/homebrew/opt/llvm@21/include
++#cgo freebsd      CFLAGS:  -I/usr/local/llvm21/include
++#cgo linux        LDFLAGS: -L/usr/lib/llvm-21/lib -lclang
++#cgo darwin,amd64 LDFLAGS: -L/usr/local/opt/llvm@21/lib -lclang
++#cgo darwin,arm64 LDFLAGS: -L/opt/homebrew/opt/llvm@21/lib -lclang
++#cgo freebsd      LDFLAGS: -L/usr/local/llvm21/lib -lclang
++*/
++import "C"
+diff --git a/compiler/symbol.go b/compiler/symbol.go
+--- a/compiler/symbol.go
++++ b/compiler/symbol.go
+@@ -142,1 +142,1 @@
+-			nocapture := c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0)
++			nocapture := c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0)
+@@ -161,1 +161,1 @@
+-		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
++		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+@@ -163,1 +163,1 @@
+-		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
++		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+@@ -185,1 +185,1 @@
+-		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
++		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+@@ -188,1 +188,1 @@
+-		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
++		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+@@ -191,1 +191,1 @@
+-		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
++		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+@@ -197,1 +197,1 @@
+-		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
++		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+@@ -232,1 +232,1 @@
+-		nocaptureKind := llvm.AttributeKindID("nocapture")
++		nocaptureKind := llvm.AttributeKindID(llvmutil.NoCaptureAttrName())
+diff --git a/transform/util.go b/transform/util.go
+--- a/transform/util.go
++++ b/transform/util.go
+@@ -6,0 +7,1 @@
++	"github.com/tinygo-org/tinygo/compiler/llvmutil"
+@@ -19,1 +20,5 @@
+-	kindID := llvm.AttributeKindID(kind)
++	isNoCapture := kind == "nocapture"
++	if isNoCapture {
++		kind = llvmutil.NoCaptureAttrName()
++	}
++	kindID := llvm.AttributeKindID(kind)
+@@ -27,1 +32,1 @@
+-		if attr.IsNil() {
++		if attr.IsNil() || isNoCapture && !llvmutil.IsNoCapture(attr) {

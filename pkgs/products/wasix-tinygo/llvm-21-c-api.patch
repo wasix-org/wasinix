@@ -1,0 +1,42 @@
+diff --git a/vendor/tinygo.org/x/go-llvm/ir.go b/vendor/tinygo.org/x/go-llvm/ir.go
+--- a/vendor/tinygo.org/x/go-llvm/ir.go
++++ b/vendor/tinygo.org/x/go-llvm/ir.go
+@@ -79,1 +78,0 @@
+-	LandingPadClause    C.LLVMLandingPadClauseTy
+@@ -348,9 +346,0 @@
+-//-------------------------------------------------------------------------
+-// llvm.LandingPadClause
+-//-------------------------------------------------------------------------
+-
+-const (
+-	LandingPadCatch  LandingPadClause = C.LLVMLandingPadCatch
+-	LandingPadFilter LandingPadClause = C.LLVMLandingPadFilter
+-)
+-
+@@ -931,3 +920,0 @@
+-func ConstMul(lhs, rhs Value) (v Value)    { v.C = C.LLVMConstMul(lhs.C, rhs.C); return }
+-func ConstNSWMul(lhs, rhs Value) (v Value) { v.C = C.LLVMConstNSWMul(lhs.C, rhs.C); return }
+-func ConstNUWMul(lhs, rhs Value) (v Value) { v.C = C.LLVMConstNUWMul(lhs.C, rhs.C); return }
+diff --git a/vendor/tinygo.org/x/go-llvm/llvm_config_linux_llvm20.go b/vendor/tinygo.org/x/go-llvm/llvm_config_linux_llvm20.go
+--- a/vendor/tinygo.org/x/go-llvm/llvm_config_linux_llvm20.go
++++ b/vendor/tinygo.org/x/go-llvm/llvm_config_linux_llvm20.go
+@@ -1,1 +1,1 @@
+-//go:build !byollvm && linux && !llvm14 && !llvm15 && !llvm16 && !llvm17 && !llvm18 && !llvm19
++//go:build !byollvm && linux && !llvm14 && !llvm15 && !llvm16 && !llvm17 && !llvm18 && !llvm19 && !llvm21
+diff --git a/vendor/tinygo.org/x/go-llvm/llvm_config_linux_llvm21.go b/vendor/tinygo.org/x/go-llvm/llvm_config_linux_llvm21.go
+new file mode 100644
+--- /dev/null
++++ b/vendor/tinygo.org/x/go-llvm/llvm_config_linux_llvm21.go
+@@ -0,0 +1,12 @@
++//go:build !byollvm && linux && llvm21
++
++package llvm
++
++// #cgo CPPFLAGS: -I/usr/include/llvm-21 -I/usr/include/llvm-c-21 -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS
++// #cgo CXXFLAGS: -std=c++17
++// #cgo LDFLAGS: -L/usr/lib/llvm-21/lib -lLLVM-21
++import "C"
++
++type run_build_sh int
++
++//go:generate sh ./build.sh

@@ -120,6 +120,13 @@
   # unsupported (not broken, since it is intentional).
   rustSupport = lib.optionalAttrs isWasixHost {rustPlatform = wasixRustPlatform;};
 
+  goSupport = lib.optionalAttrs isWasixHost {
+    buildGoModule = final.callPackage ../set/tinygo-platform.nix {
+      buildGoModule = prev.buildGoModule;
+      tinygo = toolchain.wasixTinyGo;
+    };
+  };
+
   packages =
     if !isWasixHost
     then {}
@@ -160,6 +167,7 @@
 in
   packages
   // rustSupport
+  // goSupport
   // wrapperFix
   // lib.optionalAttrs isWasixHost {
     inherit haskellPackages;

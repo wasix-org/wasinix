@@ -457,7 +457,7 @@
         # drivers live under `.#toolchainByProfile.<profile>`.
         toolchain = {
           # These carry their test suites as passthru.tests.
-          inherit (wasix.toolchainTestPkgs) sysroot wasixcc;
+          inherit (wasix.toolchainTestPkgs) sysroot tinygo wasixcc;
 
           cargo-wasix = toolchain.cargoWasix;
           rust-toolchain = toolchain.wasixRustToolchain;
