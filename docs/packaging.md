@@ -208,12 +208,16 @@ host-side wrappers so build systems can invoke them by filename.
 C and C++ packages use their nixpkgs `checkPhase`. Python wheels use the native
 nixpkgs custom `installCheckPhase` or check hook. Override that choice with
 `passthru.wasix.installCheck`; configure the run with
-`passthru.wasix.emulatedCheck` (`timeout`, `expectFail`, or `broken`).
+`passthru.wasix.emulatedCheck` (`timeout`, `expectFail`, or `broken`). Large
+Python suites can set `shards = N`; pytest checks partition collected node IDs
+deterministically, while custom phases consume `WASIX_CHECK_SHARD_COUNT` and
+`WASIX_CHECK_SHARD_NUM` themselves.
 
-These checks appear as `passthru.tests.upstream`. Handwritten package tests
-remain appropriate for focused behavior and for suites that cannot use the
-installed package tree. `pkgs/python-closure-tests.nix` separately imports the
-dependency closure of every shipped wheel.
+Unsharded checks appear as `passthru.tests.upstream`; sharded checks use
+`upstream-<number>-of-<count>`. Handwritten package tests remain appropriate for
+focused behavior and for suites that cannot use the installed package tree.
+`pkgs/python-closure-tests.nix` separately imports the dependency closure of
+every shipped wheel.
 
 ## Update scripts
 

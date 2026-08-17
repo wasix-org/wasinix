@@ -12,6 +12,7 @@
 helpers.libTweaks {
   propagatedBuildInputs =
     lib.optionals (lib.versionOlder pyprev.redis.version "6") [pyfinal.pyjwt];
+  redisTestPort = 0;
   passthru.wasixDeclaredCheckInputs = [
     pyfinal.numpy
     pyfinal.pytest-asyncio

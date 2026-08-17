@@ -18,7 +18,10 @@
 in
   helpers.libTweaks {
     # The full estimator matrix takes roughly 35 minutes under emulation.
-    passthru.wasix.emulatedCheck.timeout = 3600;
+    passthru.wasix.emulatedCheck = {
+      shards = 8;
+      timeout = 3600;
+    };
     # joblib otherwise asks psutil for PID 1's affinity while configuring the
     # suite; WASIX has no process table or multiprocessing implementation.
     env.LOKY_MAX_CPU_COUNT = "1";
