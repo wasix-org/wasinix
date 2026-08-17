@@ -46,6 +46,7 @@ in
         ${final.buildPackages.coreutils}/bin/cp -r "$_site/matplotlib" "$NIX_BUILD_TOP/matplotlib"
         ${final.buildPackages.coreutils}/bin/chmod -R u+w "$NIX_BUILD_TOP/matplotlib"
         while read -r _path; do
+          ${final.buildPackages.coreutils}/bin/mkdir -p "$NIX_BUILD_TOP/$(${final.buildPackages.coreutils}/bin/dirname "$_path")"
           ${final.buildPackages.coreutils}/bin/cp -r "$_source/lib/$_path" "$NIX_BUILD_TOP/$_path"
         done < <(${final.buildPackages.findutils}/bin/find "$_source/lib" -name baseline_images -printf '%P\n')
         ${final.buildPackages.coreutils}/bin/cp \
