@@ -166,6 +166,7 @@ in {
     # propagate build-platform ones, which a wasm interpreter cannot import.
     guestInputs ? [],
     name ? "${lib.getName drv}-check",
+    postRestore ? "",
   }:
     lib.throwIf (!(drv ? check))
     "${name}: the package has no `check` output, so it declares no suite (doCheck)"
@@ -184,6 +185,7 @@ in {
           export PYTHONUNBUFFERED=1
           export CI=true
           export enableParallelChecking=false
+          ${postRestore}
           case " ''${pytestFlags:-} ''${pytestFlagsArray[*]-} ''${PYTEST_ADDOPTS:-} " in
             *no:cacheprovider*) ;;
             *) export PYTEST_ADDOPTS="''${PYTEST_ADDOPTS:+$PYTEST_ADDOPTS }-o cache_dir=/home/tmp/pytest-cache" ;;
