@@ -5,7 +5,7 @@
   ...
 }: let
   formatCheckingUfmt = pyfinal.ufmt.overridePythonAttrs (old: {
-    dependencies = helpers.replaceInputsByName {black = pyfinal.black_26_3_1;} old.dependencies;
+    dependencies = helpers.replaceInputsByName {black = pyfinal.black_25_1_0;} old.dependencies;
   });
 in
   helpers.libTweaks {

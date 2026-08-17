@@ -11,5 +11,13 @@
 helpers.libTweaks {
   propagatedBuildInputs =
     lib.optionals (lib.versionOlder pyprev.redis.version "6") [pyfinal.pyjwt];
+  passthru.wasixDeclaredCheckInputs = [
+    pyfinal.numpy
+    pyfinal.pytest-asyncio
+    pyfinal.pytestCheckHook
+    pyfinal.pybreaker
+    pyfinal.opentelemetry-api
+    pyfinal.opentelemetry-sdk
+  ];
 }
 pyprev.redis
