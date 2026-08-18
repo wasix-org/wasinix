@@ -49,11 +49,12 @@
       version = drv.version;
       relKey = "${relPrefix}${name}";
       # the publishable form, produced by the wheel's own derivation
-      published = "${drv.published or (publishOf {inherit drv;})}";
+      publishedDrv = drv.published or (publishOf {inherit drv;});
+      published = "${publishedDrv}";
       # provenance nested by python version and upstream version, so pname collides neither
       # across py313/py314 nor with a served history version of itself:
       # `nix build github:wasix-org/wasinix/<rev>#${attr}` rebuilds it.
-      attr = ''pythonRegistry.wheels.${pv}.${name}."${version}"^dist'';
+      attr = ''pythonRegistry.published.${pv}.${name}."${version}"'';
       drvPath = builtins.unsafeDiscardStringContext drv.drvPath;
       source = sourceOf drv;
       inherit drv;
@@ -65,7 +66,18 @@
   perVersion = lib.mapAttrs servedOf pythonSets;
   wheelDists = lib.concatLists (lib.attrValues perVersion);
 
-  # Provenance build targets (pythonRegistry.wheels.py314.numpy."2.5.0").
+  # The published artifacts, addressable so the reproduce command on an index
+  # page names the bytes it describes (pythonRegistry.published.py314.numpy."2.5.0").
+  published =
+    lib.mapAttrs (
+      _: served:
+        lib.mapAttrs (_: ds: lib.listToAttrs (map (d: lib.nameValuePair d.version d.publishedDrv) ds))
+        (lib.groupBy (d: d.name) served)
+    )
+    perVersion;
+
+  # The source wheels behind them; the rel and changelog machinery reads these
+  # (flake.nix), so they stay the buildPythonPackage drvs.
   wheels =
     lib.mapAttrs (
       _: served:
@@ -109,7 +121,7 @@ in
       (o.passthru or {})
       // {
         tests = mkTestGroup "python-registry" tests;
-        inherit wheelVersions wheels;
+        inherit wheelVersions wheels published;
         wasix.updateNotes = lib.optional (staleRels != []) {
           message = "rels.json has stale keys (${lib.concatStringsSep ", " staleRels}); nix run .#update -- nixpkgs drops them";
           when = _: _: true;
