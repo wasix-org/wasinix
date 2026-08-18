@@ -13,6 +13,7 @@ helpers.libTweaks {
   propagatedBuildInputs =
     lib.optionals (lib.versionOlder pyprev.redis.version "6") [pyfinal.pyjwt];
   redisTestPort = 0;
+  passthru.wasix.emulatedCheck.broken = "the Redis test hook cannot start its server inside the emulated check";
   passthru.wasixDeclaredCheckInputs = [
     pyfinal.numpy
     pyfinal.pytest-asyncio

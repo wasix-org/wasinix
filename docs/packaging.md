@@ -208,10 +208,10 @@ host-side wrappers so build systems can invoke them by filename.
 C and C++ packages use their nixpkgs `checkPhase`. Python wheels use the native
 nixpkgs custom `installCheckPhase` or check hook. Override that choice with
 `passthru.wasix.installCheck`; configure the run with
-`passthru.wasix.emulatedCheck` (`timeout`, `expectFail`, `broken`, or
-`ciTags`). Large Python suites can set `shards = N`; pytest checks partition
-collected node IDs deterministically, while custom phases consume
-`WASIX_CHECK_SHARD_COUNT` and `WASIX_CHECK_SHARD_NUM` themselves.
+`passthru.wasix.emulatedCheck` (`timeout`, `expectFail`, `broken`, or `ciTags`).
+Large Python suites can set `shards = N`; pytest checks partition collected node
+IDs deterministically, while custom phases consume `WASIX_CHECK_SHARD_COUNT` and
+`WASIX_CHECK_SHARD_NUM` themselves.
 
 Unsharded checks appear as `passthru.tests.upstream`; sharded checks use
 `upstream-<number>-of-<count>`. Handwritten package tests remain appropriate for

@@ -33,6 +33,7 @@ helpers.libTweaks (
       pyfinal.pytest-timeout
       pyfinal.python-multipart
       pyfinal.pyyaml
+      pyfinal.typer
     ];
     disabledTests = [
       "test_fastapi_cli"
