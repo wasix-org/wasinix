@@ -8,15 +8,20 @@ helpers.wasmRename {wasmName = "psql";} (
     passthru.wasix = {
       shipped = true;
     };
-    # WASIX has no passwd database, so without this psql cannot default the user
-    # name from geteuid() and every invocation needs an explicit -U.
-    passthru.wasmer.fs."/etc" = final.writeTextDir "passwd" "postgres:x:0:0:PostgreSQL:/:/bin/sh\n";
+    passthru.wasmer = {
+      # wasmer places the command at /bin, and PATH is what find_my_exec searches
+      # to resolve the running program; without it psql cannot read a psqlrc.
+      env.PATH = "/bin";
+      # WASIX has no passwd database, so psql cannot default the user name from
+      # geteuid() and every invocation needs an explicit -U. SYSCONFDIR is /etc,
+      # so a psqlrc would land here too.
+      fs."/etc" = final.writeTextDir "passwd" "postgres:x:0:0:PostgreSQL:/:/bin/sh\n";
+    };
     pname = "psql";
     meta = {
       mainProgram = "psql";
       description = "PostgreSQL interactive terminal";
     };
-    patches = [./patches/0001-skip-system-psqlrc-lookup-on-wasi.patch];
     postBuild = ''
       make -C src/bin/psql
     '';
