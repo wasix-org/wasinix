@@ -129,6 +129,11 @@ every served wheel's `Requires-Dist` against the rest of the index, per
 interpreter the wheel installs on, since a resolver has no other source to fall
 back to.
 
+`python-registry-resolve-sweep` runs pip itself over every served project, which
+catches what a model of pip cannot: a dependency reached only through an extra,
+say. A project has to resolve on one interpreter, not all of them, since a
+release states its own supported range.
+
 Alongside `simple/`, the index root carries `packages.json`: one JSON object per
 line naming a published wheel, which is how `wasmerio/wasmer-compat` decides
 which projects the index covers.

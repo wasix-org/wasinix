@@ -22,7 +22,7 @@
   # rels.json only to report keys no served version claims.
   rels = builtins.fromJSON (builtins.readFile ../../rels.json);
   relPrefix = "pythonRegistry.wheels.";
-  inherit (import ../python-publish.nix {inherit pkgs lib;}) publishOf;
+  inherit (import ../python-publish.nix {inherit pkgs lib;}) publishOf interpreters;
 
   # Repo-relative "path:line" of the package definition, for the index's
   # publish-time source link. Only for positions in this repo: closure wheels
@@ -73,6 +73,17 @@
       closure);
 
   perVersion = lib.mapAttrs servedOf pythonSets;
+
+  # pname -> the interpreter versions a resolver can reach it on. A wheel set is
+  # built per interpreter, so carrying the project is what makes it visible
+  # there; a noarch wheel sits in one set alone and is swept on that one.
+  projectInterpreters = lib.foldl' (
+    acc: pv:
+      lib.foldl' (a: e:
+        a // {${e.name} = lib.unique ((a.${e.name} or []) ++ [interpreters.${pv}]);})
+      acc
+      perVersion.${pv}
+  ) {} (lib.attrNames perVersion);
   wheelDists = lib.concatLists (lib.attrValues perVersion);
 
   # The published artifacts, addressable so the reproduce command on an index
@@ -121,9 +132,13 @@
     '';
 
   # e2e/import tests run on the default python webc, installing from the merged index.
-  tests = import ./tests.nix {
-    inherit pkgs lib registry testLib pythonWebc python3;
-  };
+  tests =
+    import ./tests.nix {
+      inherit pkgs lib registry testLib pythonWebc python3;
+    }
+    // import ./resolve-sweep.nix {
+      inherit pkgs lib registry testLib projectInterpreters;
+    };
 in
   registry.overrideAttrs (o: {
     passthru =

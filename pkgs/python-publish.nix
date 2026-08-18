@@ -49,6 +49,9 @@
         "python-publish: variants ${toString variants} skip an interpreter, which no single Requires-Python bound can express"
         ">=${lib.head allowed},<${nextMinor (lib.last allowed)}";
 in {
+  # The registry sweeps per interpreter, so it needs the same mapping.
+  inherit interpreters;
+
   # `suffix` marks PR-preview wheels, whose longer local version sorts above the
   # published one when the preview index is used as an extra index.
   publishOf = {
