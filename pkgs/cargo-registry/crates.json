@@ -35,6 +35,12 @@
   "atomic-wait": {
     "1.1.0": "sha256-oJ3/AiepKj8fO7ce0BLffWuE5A0zEFJC1x9DT9USvD0="
   },
+  "aws-config": {
+    "1.10.0": "sha256-7Q+M5i9pK9t1eEStYm7V2yofRPZte54EA4dXr1hszYc=",
+    "1.10.1": "sha256-Lc8ie4dOwmDT426qQBRZ7McgyLPQM16nTmdIhpjB2gI=",
+    "1.8.18": "sha256-Gza3ZfmypLYC6X5AdiJdf828dsvJ68c5pjKYRoZ0fuw=",
+    "1.9.0": "sha256-5GhqOdHBtLSfO5qBg96U2vcINcHMqWtq/hS+6IGuOCs="
+  },
   "boring-sys2": {
     "4.15.13": "sha256-AtjG0cVqg6mQgFCANrit0ujZmxrBxxMH+jq5I1b2KoI="
   },
@@ -365,6 +371,9 @@
     "0.6.0": "sha256-MrP13tbtHr6nKn42yuhZNf/Nw2hZjTJBa1PR4Qp12jo=",
     "0.6.1": "sha256-3ra0LAGdpASsDSPmvt8k8UACJRkYjuHW5jjxbHA8D9g=",
     "0.6.2": "sha256-ufCwFcx3Lhn5T+2IM4RtLf5t1V2b7LQzgucLXupfKeA="
+  },
+  "sqlx": {
+    "0.9.0": "sha256-Y8ESx3LhMTVvp0CO2iREaW3giS5CNiaky4bHDyeQ+Vc="
   },
   "symlink": {
     "0.1.0": "sha256-KRuoQhxcK8dS1TKuuzVl2HOH/yb6fUP6ydO/e/Z0L5I="
