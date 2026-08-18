@@ -126,6 +126,22 @@ A new `wheels.nix` entry lands in the registry automatically. Its test suite
 integrity and pip-installs representative packages, resolving their deps from
 the index too, then imports them under wasmer.
 
+`native/simple/` is the same index over the projects that ship a platform-tagged
+wheel, which are the ones nothing else can supply. Point a resolver at that as
+its priority index and PyPI as the primary one:
+
+```sh
+uv pip compile pyproject.toml --universal \
+  --extra-index-url <index>/native/simple --index-url https://pypi.org/simple
+pip install -r requirements.txt --platform wasix_wasm32 --only-binary :all: --target site
+```
+
+uv binds a package to the first index that carries it, so listing the pure
+dependencies too would pin them to our versions and reject whatever version the
+consuming project asks for. The native view carries no wheels of its own; its
+pages link to the copies under `simple/`, which keeps serving the full closure
+for use as a standalone index.
+
 ## Rels
 
 Every wheel is published as `<version>+wasix.<rel>`, a PEP 440 local version.

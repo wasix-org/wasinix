@@ -12,6 +12,7 @@ Emits, per PEP 503 (+ PEP 629 version meta, PEP 658/714 metadata files):
   <out>/simple/<project>/index.html     file list with #sha256= anchors
   <out>/simple/<project>/<wheel>        the wheel itself (relative hrefs)
   <out>/simple/<project>/<wheel>.metadata   its core metadata, for resolvers
+  <out>/native/simple/...               the same index over native projects only
 """
 
 import argparse
@@ -162,6 +163,11 @@ def _wheel_attrs(md_digest: str, rp: str | None) -> str:
 def _parse_wheel(fname: str) -> tuple[str, str]:
     parts = fname[: -len(".whl")].split("-")
     return parts[1], parts[-3]  # version, python tag
+
+
+def is_native(fname: str) -> bool:
+    """Whether the wheel is built for a platform rather than being pure python."""
+    return fname[: -len(".whl")].rsplit("-", 1)[-1] != "any"
 
 
 def _ver_key(ver: str) -> tuple[int, ...]:
@@ -401,8 +407,11 @@ def page(title: str, anchors: list[str]) -> str:
 _REPO = "https://github.com/wasix-org/wasinix"
 
 
-def project_page(project: str, files: list[tuple]) -> str:
+def project_page(project: str, files: list[tuple], href_prefix: str = "") -> str:
     """Human-friendly file list for one project, grouped by version.
+
+    href_prefix points the anchors at another directory, so the native view
+    lists the wheels simple/ already holds rather than copying them.
 
     files: (filename, sha256, metadata_sha256, requires_python, wasinix_rev,
     attr, size, published, source). Resolvers read only the <a> href and data-*
@@ -420,7 +429,7 @@ def project_page(project: str, files: list[tuple]) -> str:
     rels = []
     for ver in sorted(by_ver, key=_ver_key, reverse=True):
         chips = "\n".join(
-            f'        <li><a href="{quote(fname)}#sha256={digest}"'
+            f'        <li><a href="{href_prefix}{quote(fname)}#sha256={digest}"'
             f'{_wheel_attrs(md_digest, rp)} title="{html.escape(fname, quote=True)}">'
             f"{html.escape(_py_label(py))}{_sz(size)}</a></li>"
             for fname, digest, md_digest, rp, py, size in sorted(by_ver[ver])
@@ -530,6 +539,8 @@ def main() -> None:
             f" `publishOnce` in wheels.nix:\n{listed}"
         )
 
+    # project -> the rows its page was built from, reused by the native view
+    pages: dict[str, list[tuple]] = {}
     for project, wheels in sorted(projects.items()):
         pdir = out / "simple" / project
         pdir.mkdir(parents=True)
@@ -557,15 +568,37 @@ def main() -> None:
                 )
             )
         (pdir / "index.html").write_text(project_page(project, files))
+        pages[project] = files
 
     root = [f'    <a href="{p}/">{p}</a><br/>' for p in sorted(projects)]
     (out / "simple" / "index.html").write_text(page("Simple index", root))
+
+    # A second PEP 503 view over the projects we are the only possible source
+    # for. Pointed at as the priority index, it binds a resolver to our versions
+    # for exactly those, leaving every pure dependency to PyPI at whatever
+    # version the consuming project asks for (docs/registry.md).
+    native = {
+        project: files
+        for project, files in pages.items()
+        if any(is_native(fname) for fname, *_ in files)
+    }
+    for project, files in sorted(native.items()):
+        ndir = out / "native" / "simple" / project
+        ndir.mkdir(parents=True)
+        (ndir / "index.html").write_text(
+            project_page(
+                project, files, href_prefix=f"../../../simple/{quote(project)}/"
+            )
+        )
+    nroot = [f'    <a href="{p}/">{p}</a><br/>' for p in sorted(native)]
+    (out / "native" / "simple" / "index.html").write_text(page("Simple index", nroot))
     (out / "index.html").write_text(landing(projects))
     (out / "provenance.json").write_text(
         json.dumps(provenance, indent=2, sort_keys=True) + "\n"
     )
     print(
         f"indexed {sum(map(len, projects.values()))} wheels across {len(projects)} projects"
+        f" ({len(native)} of them native)"
     )
 
 

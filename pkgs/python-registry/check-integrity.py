@@ -16,6 +16,7 @@ from urllib.parse import unquote
 # (plus a size span), so the filename comes from the href, not the link text.
 ANCHOR = re.compile(r'<a href="([^"#]+)#sha256=([0-9a-f]{64})"([^>]*)>')
 CORE_METADATA = re.compile(r'data-core-metadata="sha256=([0-9a-f]{64})"')
+PROJECT_LINK = re.compile(r'<a href="([^"]+)/">')
 
 
 def sha256_of(path: Path) -> str:
@@ -24,6 +25,48 @@ def sha256_of(path: Path) -> str:
 
 def fail(msg: str) -> None:
     sys.exit(f"registry integrity: {msg}")
+
+
+def anchors(page: str) -> dict[str, str]:
+    return {unquote(href): digest for href, digest, _ in ANCHOR.findall(page)}
+
+
+def check_native_view(root: Path, wheels: set[tuple[str, str]]) -> None:
+    """The native view must list exactly the projects with a platform-tagged
+    wheel, and reach the copies simple/ holds rather than carrying its own.
+
+    Being the priority index is what binds a resolver to our versions, so a pure
+    project listed here would block PyPI from supplying the version a consuming
+    project asks for."""
+    simple = root / "simple"
+    native_dir = root / "native" / "simple"
+    expected = {
+        project
+        for project, fname in wheels
+        if fname[: -len(".whl")].rsplit("-", 1)[-1] != "any"
+    }
+    listed = set(PROJECT_LINK.findall((native_dir / "index.html").read_text()))
+    on_disk = {d.name for d in native_dir.iterdir() if d.is_dir()}
+    if listed != on_disk:
+        fail(f"native root index vs project dirs differ: {sorted(listed ^ on_disk)}")
+    if listed != expected:
+        fail(
+            "native view lists the wrong projects; a pure one here blocks PyPI: "
+            f"{sorted(listed ^ expected)}"
+        )
+
+    for project in sorted(listed):
+        page = (native_dir / project / "index.html").read_text()
+        # the native anchors are relative to simple/, so compare by filename
+        anchored = {href.rsplit("/", 1)[-1]: d for href, d in anchors(page).items()}
+        served = anchors((simple / project / "index.html").read_text())
+        if anchored != served:
+            fail(
+                f"native/{project}: files differ from simple/: {sorted(set(anchored) ^ set(served))}"
+            )
+        for href in re.findall(r'<a href="([^"#]+)#sha256=', page):
+            if not (native_dir / project / unquote(href)).resolve().is_file():
+                fail(f"native/{project}: {href} does not resolve into simple/")
 
 
 def main() -> None:
@@ -36,6 +79,7 @@ def main() -> None:
         fail(f"root index vs project dirs differ: {sorted(listed ^ on_disk)}")
 
     total = 0
+    served: set[tuple[str, str]] = set()
     for pdir in sorted(simple.iterdir()):
         if not pdir.is_dir():
             continue
@@ -57,6 +101,7 @@ def main() -> None:
             if not metadata.is_file() or sha256_of(metadata) != core.group(1):
                 fail(f"{pdir.name}: metadata sidecar missing or mismatched for {fname}")
             anchored.add(fname)
+            served.add((pdir.name, fname))
             total += 1
         wheels_on_disk = {f.name for f in pdir.glob("*.whl")}
         if anchored != wheels_on_disk:
@@ -66,6 +111,7 @@ def main() -> None:
 
     if total == 0:
         fail("no wheels indexed at all")
+    check_native_view(Path(sys.argv[1]), served)
     print(f"registry OK: {len(on_disk)} projects, {total} wheels")
 
 
