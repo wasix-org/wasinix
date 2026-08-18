@@ -416,11 +416,7 @@ def main() -> None:
             prev = projects.setdefault(project, {}).setdefault(whl.name, whl)
             if prev is not whl:
                 if prev.read_bytes() != whl.read_bytes():
-                    # A py3-none-any tag asserts the artifact is interpreter
-                    # independent, so keep the first and let differing build
-                    # noise go.
-                    if not whl.name.endswith("-py3-none-any.whl"):
-                        conflicts.append((whl.name, entry["attr"]))
+                    conflicts.append((whl.name, entry["attr"]))
                 # `prev` is what the page serves, so its provenance is the one
                 # that reproduces these bytes.
                 continue
@@ -438,8 +434,11 @@ def main() -> None:
             f"  {name}  ({attr})" for name, attr in sorted(set(conflicts))
         )
         sys.exit(
-            "wheels of the same name differ between interpreters; mark each entry"
-            f" `publishOnce` in wheels.nix:\n{listed}"
+            "wheels of the same name differ between interpreters, so which one is"
+            " served would be arbitrary. Mark the package"
+            " `passthru.wasix.interpreterSpecific` to publish each build under its"
+            " own tag, or `publishOnce` in wheels.nix to serve one of them:\n"
+            f"{listed}"
         )
 
     # project -> the rows its page was built from, reused by the native view

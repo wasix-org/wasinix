@@ -11,6 +11,7 @@ bytes have a store path of their own.
 
 Usage: publish-wheel.py <dist dir> <out dir> --rel N
                         [--requires-python BOUND] [--version-suffix S]
+                        [--python-tag TAG]
 """
 
 import argparse
@@ -79,12 +80,21 @@ def set_requires_python(metadata: bytes, bound: str) -> bytes:
     sys.exit("METADATA has no header block")
 
 
+def set_wheel_tag(wheel: bytes, tag: str) -> bytes:
+    """Restate the WHEEL Tag: lines as the single tag the filename now carries."""
+    lines = [l for l in wheel.split(b"\n") if not l.lower().startswith(b"tag:")]
+    end = next(i for i, l in enumerate(lines) if not l.strip())
+    lines.insert(end, f"Tag: {tag}".encode())
+    return b"\n".join(lines)
+
+
 def rewrite_wheel(
     src: Path,
     dest_dir: Path,
     rel: int,
     suffix: str | None = None,
     requires_python: str | None = None,
+    python_tag: str | None = None,
 ) -> Path:
     """Copy the wheel with +wasix.<rel>[.<suffix>] appended to its version.
 
@@ -95,6 +105,13 @@ def rewrite_wheel(
     name, version, rest = src.name.split("-", 2)
     if "+" in version:
         sys.exit(f"{src.name}: already carries a local version")
+    if python_tag:
+        _, abi, platform = rest[: -len(".whl")].split("-")
+        if (abi, platform) != ("none", "any"):
+            sys.exit(
+                f"{src.name}: only a none-any wheel can be retagged, not {abi}-{platform}"
+            )
+        rest = f"{python_tag}-none-any.whl"
     new_version = f"{version}+wasix.{rel}" + (f".{suffix}" if suffix else "")
 
     with zipfile.ZipFile(src) as zin:
@@ -124,6 +141,7 @@ def rewrite_wheel(
         ]
 
     files = {n: data for n, _, data in entries}
+    rewritten = {f"{new_di}/METADATA"}
     files[f"{new_di}/METADATA"] = bump_metadata_version(
         files[f"{new_di}/METADATA"], version, new_version
     )
@@ -131,12 +149,17 @@ def rewrite_wheel(
         files[f"{new_di}/METADATA"] = set_requires_python(
             files[f"{new_di}/METADATA"], requires_python
         )
+    if python_tag:
+        files[f"{new_di}/WHEEL"] = set_wheel_tag(
+            files[f"{new_di}/WHEEL"], rest[: -len(".whl")]
+        )
+        rewritten.add(f"{new_di}/WHEEL")
 
-    # RECORD: renamed paths, plus the refreshed METADATA hash/size
+    # RECORD: renamed paths, plus refreshed hash/size for what was rewritten
     rows = list(csv.reader(io.StringIO(files[f"{new_di}/RECORD"].decode())))
     for row in rows:
         row[0] = rename(row[0])
-        if row[0] == f"{new_di}/METADATA":
+        if row[0] in rewritten:
             row[1] = record_hash(files[row[0]])
             row[2] = str(len(files[row[0]]))
     buf = io.StringIO(newline="")
@@ -160,6 +183,11 @@ def main() -> None:
     ap.add_argument("--rel", type=int, required=True)
     ap.add_argument("--requires-python")
     ap.add_argument(
+        "--python-tag",
+        help="retag a none-any wheel for one interpreter (cp313), so the two "
+        "builds of an interpreter-specific package get distinct filenames",
+    )
+    ap.add_argument(
         "--version-suffix",
         help="extra local-version segments (pr123.abc1234) for PR-preview wheels",
     )
@@ -171,7 +199,12 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=True)
     for whl in wheels:
         moved = rewrite_wheel(
-            whl, args.out, args.rel, args.version_suffix, args.requires_python
+            whl,
+            args.out,
+            args.rel,
+            args.version_suffix,
+            args.requires_python,
+            args.python_tag,
         )
         print(moved.name)
 

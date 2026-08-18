@@ -48,8 +48,17 @@
       name = drv.pname or drv.name;
       version = drv.version;
       relKey = "${relPrefix}${name}";
-      # the publishable form, produced by the wheel's own derivation
-      publishedDrv = drv.published or (publishOf {inherit drv;});
+      # the publishable form, produced by the wheel's own derivation. A package
+      # whose build follows the interpreter is published per set instead, under
+      # a tag naming it, since one none-any filename cannot hold both builds.
+      publishedDrv =
+        if drv.passthru.wasix.interpreterSpecific or false
+        then
+          publishOf {
+            inherit drv;
+            pythonTag = "cp${lib.removePrefix "py" pv}";
+          }
+        else drv.published or (publishOf {inherit drv;});
       published = "${publishedDrv}";
       # provenance nested by python version and upstream version, so pname collides neither
       # across py313/py314 nor with a served history version of itself:

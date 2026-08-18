@@ -57,6 +57,9 @@ in {
     # carrying it exists, so reading it back off `drv` would silently see none.
     variants ? (drv.passthru.wasix.variants or null),
     suffix ? null,
+    # cp313/cp314 for a package whose build follows the interpreter, so its two
+    # builds are published under names a resolver can tell apart.
+    pythonTag ? null,
   }: let
     name = drv.pname or drv.name;
     rel = (rels."pythonRegistry.wheels.${name}" or {}).${drv.version} or 1;
@@ -68,6 +71,7 @@ in {
       python3 ${./python-registry/publish-wheel.py} ${drv.dist} "$out" \
         --rel ${toString rel} \
         ${lib.optionalString (requiresPython != null) "--requires-python '${requiresPython}'"} \
+        ${lib.optionalString (pythonTag != null) "--python-tag ${pythonTag}"} \
         ${lib.optionalString (suffix != null) "--version-suffix '${suffix}'"}
     '';
 }

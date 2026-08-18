@@ -181,6 +181,14 @@ After a green build of main, `publish-index` uploads new filenames to the volume
 and deploys the fresh snapshot to GitHub Pages. The volume service is defined by
 `python-registry/app.yaml`.
 
+A wheel built by both interpreters is published once, under the one filename its
+`py3-none-any` tag earns it. Where the two builds differ, that name cannot hold
+both and the registry build fails naming the package. Mark it
+`passthru.wasix.interpreterSpecific` in its overlay entry and each build is
+published as `cp313-none-any` / `cp314-none-any` instead, which a resolver
+prefers over the generic tag, so an artifact already published under the generic
+name stops being selected without being withdrawn.
+
 Each `manifests/<wheel>.json` records `wasinix_rev`, `attr`, and `drv_path`.
 Rebuild it with `nix build github:wasix-org/wasinix/<wasinix_rev>#<attr>`.
 
