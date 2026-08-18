@@ -31,6 +31,7 @@ in
     passthru.wasix.emulatedCheck = {
       shards = 16;
       timeout = 7200;
+      ciTags = ["slow-tests"];
     };
     passthru.wasix.updateNotes = [
       {message = "scipy: re-check the explicit f2py CHARACTER-length patch on bump.";}
