@@ -17,9 +17,6 @@
   hostPkgs = pkgsCross.buildPackages;
   # Vendoring runs host-side metadata operations and must not pull in the WASIX toolchain.
   vendorPlatform = hostPkgs.rustPlatform;
-  # the toolchain's build-host rust triple; derive it so it can't drift.
-  hostTriple = hostPkgs.stdenv.hostPlatform.rust.rustcTarget;
-  rustLld = "${wasixRustToolchain}/lib/rustlib/${hostTriple}/bin/rust-lld";
 
   # cargoBuildFlags/cargoTestFlags accept either a list or a shell-word string
   # per the cargoBuildHook interface; normalize to a list before `++`.
@@ -33,11 +30,16 @@
   # cc-rs (a dependency's build.rs compiling a vendored C library, e.g. ring's
   # BoringSSL) resolves the compiler from CC_<target>, defaulting to the nix cc
   # wrapper, which is stock wasi for the base target and rejects the `-dl`
-  # target's PIC-without-EH combination. Point both targets at wasixcc with the
-  # profiles their Rust standard libraries use. The shared exnref hook translates
-  # linked .so files afterwards, so the C objects match the Rust ones.
+  # target's PIC-without-EH combination. Wrap wasixcc with the profiles their
+  # Rust standard libraries use. The shared exnref hook translates linked .so
+  # files afterwards, so the C objects match the Rust ones.
   env = import ../toolchain/env.nix {inherit lib;};
   profiles = (import ../profiles.nix).profiles;
+  depBintools = pkgsCross.stdenv.cc.bintools.override {
+    libc = null;
+    noLibc = true;
+    defaultHardeningFlags = [];
+  };
   # cc-rs unconditionally passes -fno-exceptions (and -fno-rtti for C++); wasixcc
   # rejects those with PIC, which needs wasm EH (same reason crc32c.nix seds them
   # out of its cmake build). Drop them so WASIXCC_WASM_EXCEPTIONS stands.
@@ -53,30 +55,60 @@
         for a in "$@"; do
           case "$a" in
             -fno-exceptions | -fno-rtti) ;;
+            @*)
+              responseFile="''${a#@}"
+              kept=()
+              while IFS= read -r line; do
+                case "$line" in
+                  -fno-exceptions | -fno-rtti) ;;
+                  *) kept+=("$line") ;;
+                esac
+              done < "$responseFile"
+              printf '%s\n' "''${kept[@]}" > "$responseFile"
+              args+=("$a")
+              ;;
             *) args+=("$a") ;;
           esac
         done
         exec ${lib.getExe' wasixcc tool} "''${args[@]}"
       '';
-  in
-    pkgsCross.buildPackages.symlinkJoin {
-      inherit name;
+    shim = pkgsCross.buildPackages.symlinkJoin {
+      name = "${name}-unwrapped";
       paths = [
-        (mkBin "cc" "wasixcc")
-        (mkBin "c++" "wasix++")
+        (mkBin "clang" "wasixcc")
+        (mkBin "clang++" "wasix++")
       ];
+      passthru.hardeningUnsupportedFlags = ["zerocallusedregs" "stackclashprotection"];
+      passthru.isClang = true;
+      passthru.isROCm = true;
+    };
+  in
+    pkgsCross.stdenv.cc.override {
+      inherit name;
+      cc = shim;
+      isClang = true;
+      libc = null;
+      noLibc = true;
+      bintools = depBintools;
+      libcxx = null;
+      extraBuildCommands = "";
+      nixSupport = {};
     };
   depCc = mkDepCc "wasix-dep-cc" profiles.eh;
   depCcDl = mkDepCc "wasix-dep-cc-dl" profiles.ehpic;
+  depCcPath = lib.getExe' depCc "${depCc.targetPrefix}cc";
+  depCxxPath = lib.getExe' depCc "${depCc.targetPrefix}c++";
+  depCcDlPath = lib.getExe' depCcDl "${depCcDl.targetPrefix}cc";
+  depCxxDlPath = lib.getExe' depCcDl "${depCcDl.targetPrefix}c++";
   # cc-rs also reads the dash triple with dashes replaced by underscores, the
   # only form bash can export.
   wasixDepCcHook =
     pkgsCross.makeSetupHook {name = "wasix-dep-cc-hook";}
     (pkgsCross.buildPackages.writeText "wasix-dep-cc-hook.sh" ''
-      export CC_wasm32_wasmer_wasi=${lib.getExe' depCc "cc"}
-      export CXX_wasm32_wasmer_wasi=${lib.getExe' depCc "c++"}
-      export CC_wasm32_wasmer_wasi_dl=${lib.getExe' depCcDl "cc"}
-      export CXX_wasm32_wasmer_wasi_dl=${lib.getExe' depCcDl "c++"}
+      export CC_wasm32_wasmer_wasi=${depCcPath}
+      export CXX_wasm32_wasmer_wasi=${depCxxPath}
+      export CC_wasm32_wasmer_wasi_dl=${depCcDlPath}
+      export CXX_wasm32_wasmer_wasi_dl=${depCxxDlPath}
     '');
 
   # `cargo build`/`cargo test` go through cargo-wasix, everything else
@@ -225,7 +257,7 @@ in
     # patching is at vendor time.
     inherit wasixDepCcHook wasixLockAmendHook;
 
-    # Re-template maturinBuildHook for the dl target + rust-lld (nixpkgs bakes in
+    # Re-template maturinBuildHook for the dl target + cc-wrapper (nixpkgs bakes in
     # wasm32-wasip1, which our toolchain has no std for). Uses nixpkgs' own hook
     # file, not a vendored copy, so it tracks upstream and breaks loudly on a rework.
     maturinBuildHook =
@@ -241,7 +273,7 @@ in
         ];
         substitutions = {
           rustcTargetSpec = "wasm32-wasmer-wasi-dl";
-          setEnv = "CARGO_TARGET_WASM32_WASMER_WASI_DL_LINKER=${rustLld}";
+          setEnv = "CARGO_TARGET_WASM32_WASMER_WASI_DL_LINKER=${depCcDlPath}";
         };
       }
       "${pkgsCross.path}/pkgs/build-support/rust/hooks/maturin-build-hook.sh";
@@ -263,19 +295,15 @@ in
 
         nativeBuildInputs = (prevArgs.nativeBuildInputs or []) ++ [wasixDepCcHook wasixLockAmendHook];
 
-        # setEnv points CARGO_TARGET_<wasm>_LINKER at the wasi clang, which can't
-        # take rustc's raw wasm-ld flags; override it with the toolchain's rust-lld
-        # (the spec's native flavor). Flows through cargoBuildHook to cargo-wasix.
-        # Nixpkgs still has a few simple shell-word strings (e.g. rustfs's
-        # cargoBuildFlags/cargoTestFlags) despite the hook's list interface;
-        # normalize before appending the WASIX linker argv.
+        # Use the same profile-aware cc-wrapper for Rust and vendored C/C++ so
+        # buildInput-derived flags reach every compiler and linker invocation.
         cargoBuildFlags =
-          ["--config" ''target.wasm32-wasmer-wasi.linker="${rustLld}"'']
+          ["--config" ''target.wasm32-wasmer-wasi.linker="${depCcPath}"'']
           ++ normalizeCargoFlags "cargoBuildFlags" (prevArgs.cargoBuildFlags or []);
 
-        # `cargo test` links its own binaries, so it needs the same override.
+        # `cargo test` links its own binaries, so it needs the same wrapper.
         cargoTestFlags =
-          ["--config" ''target.wasm32-wasmer-wasi.linker="${rustLld}"'']
+          ["--config" ''target.wasm32-wasmer-wasi.linker="${depCcPath}"'']
           ++ normalizeCargoFlags "cargoTestFlags" (prevArgs.cargoTestFlags or []);
 
         # Install each CLI cargo-wasix emitted (<name>.wasm; skip its .wasi/.rustc
