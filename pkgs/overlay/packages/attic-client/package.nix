@@ -13,19 +13,6 @@ helpers.libTweaks {
   env = {
     AWS_LC_SYS_NO_JITTER_ENTROPY = "1";
     AWS_LC_SYS_CFLAGS = "-DOPENSSL_NO_TTY";
-    CXXFLAGS = "-pthread -isystem ${final.boost.dev}/include -DBOOST_ALL_NO_LIB";
-    RUSTFLAGS = final.lib.concatStringsSep " " [
-      "-Ctarget-feature=+crt-static"
-      "-Cforce-frame-pointers=yes"
-      "-Lnative=${final.lib.getLib final.bzip2}/lib"
-      "-Lnative=${final.lib.getLib final.boost}/lib"
-      "-Lnative=${final.llhttp}/lib"
-      "-Lnative=${final.buildPackages.wasix-sysroot}/sysroot-eh/lib/wasm32-wasi"
-      "-Clink-arg=-lboost_url"
-      "-Clink-arg=-lboost_context"
-      "-Clink-arg=-lc++abi"
-      "-Clink-arg=-lunwind"
-    ];
   };
   patches = [
     ./wasi-os-str.patch
