@@ -36,8 +36,12 @@ fn recall_at(dir: &Path, kind: &str) -> Vec<String> {
 }
 
 /// Record a name set, atomically and silently: completion data must never
-/// fail the work that produced it.
+/// fail the work that produced it. Inert under test, where fixture
+/// evaluations would clobber the user's real catalog.
 pub fn record<'a>(kind: &str, names: impl IntoIterator<Item = &'a str>) {
+    if cfg!(test) {
+        return;
+    }
     let Some(dir) = dir() else { return };
     let names: Vec<&str> = names.into_iter().collect();
     record_at(&dir, kind, &names);
@@ -49,6 +53,14 @@ pub fn recall(kind: &str) -> Vec<String> {
         return Vec::new();
     };
     recall_at(&dir, kind)
+}
+
+/// How long ago a set was recorded, so a reader can state its staleness.
+pub fn age(kind: &str) -> Option<std::time::Duration> {
+    std::fs::metadata(dir()?.join(kind))
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|at| at.elapsed().ok())
 }
 
 #[cfg(test)]

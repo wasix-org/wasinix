@@ -81,15 +81,16 @@ WASINIX_EVAL_WORKERS=4 WASINIX_EVAL_MEMORY=8192 wasinix build all --on local
 
 ## Build one thing
 
-A CI job name is a build path. These are example targets; the last command lists
-the complete set:
+A CI job name is a build path. `wasinix jobs <pattern>` searches the addresses
+recorded by the last evaluation, with no evaluation of its own:
 
 ```sh
+wasinix jobs hydra              # every address with a hydra segment
+wasinix jobs 'checks.wheel*'    # segment globs, as in build selectors
+
 nix build .#packagesByProfile.exnrefEh.zlib
 nix build .#wasmerPackages.git.webc
 nix build .#pythonWheels.py314.numpy
-
-nix eval .#legacyPackages.x86_64-linux.ci --apply builtins.attrNames
 ```
 
 `wasinix build <selectors>` runs the same job through the orchestrator, which

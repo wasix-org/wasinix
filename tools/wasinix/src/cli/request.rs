@@ -71,7 +71,7 @@ pub struct PlacementArg {
 
 /// Completion values for selectors: sets, groups, and every job address,
 /// as of the last evaluation this machine ran or adopted.
-fn selector_candidates() -> Vec<clap_complete::CompletionCandidate> {
+pub(crate) fn selector_candidates() -> Vec<clap_complete::CompletionCandidate> {
     crate::support::completions::recall("selectors")
         .into_iter()
         .map(clap_complete::CompletionCandidate::new)

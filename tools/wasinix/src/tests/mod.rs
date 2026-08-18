@@ -1738,6 +1738,22 @@ mod cli {
     }
 
     #[test]
+    fn job_patterns_slide_and_mix_substring_with_glob() {
+        use crate::cli::job_pattern_matches;
+        let name = "pythonWheels.py313.hydra-core";
+        assert!(job_pattern_matches("hydra", name));
+        assert!(job_pattern_matches("hydra*", name));
+        assert!(job_pattern_matches("py313.hydra-core", name));
+        assert!(job_pattern_matches("pythonWheels.*.hydra-core", name));
+        assert!(job_pattern_matches(
+            "wheel*hydra*",
+            "checks.wheel-py313-hydra-core-import"
+        ));
+        assert!(!job_pattern_matches("hydra*core.py313", name));
+        assert!(!job_pattern_matches("a.b.c.d", name));
+    }
+
+    #[test]
     fn start_refuses_wait_and_follow_together() {
         assert!(Cli::try_parse_from([
             "wasinix", "run", "start", "--wait", "--follow", "--", "true"
@@ -2963,6 +2979,7 @@ mod corpus {
             "spot",
             "diff",
             "bisect",
+            "jobs",
             "run start",
             "run list",
             "run status",

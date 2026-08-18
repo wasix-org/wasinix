@@ -62,6 +62,16 @@ pub enum CommandTree {
     Diff(DiffArgs),
     /// Find the dependency commit that first breaks a predicate
     Bisect(bisect::BisectArgs),
+    /// Search the job addresses known from the last recorded evaluation
+    Jobs {
+        /// Dotted segments matched against any window of an address: a bare
+        /// segment by substring, a starred one as a glob (`*` never crosses
+        /// a dot), so `hydra` and `wheel*hydra*` both find their jobs
+        #[arg(add = clap_complete::ArgValueCandidates::new(request::selector_candidates))]
+        pattern: Option<String>,
+        #[command(flatten)]
+        json: ui::JsonArg,
+    },
     /// Start and inspect durable runs
     #[command(subcommand)]
     Run(RunCommand),
@@ -374,6 +384,72 @@ pub enum CiCommand {
         #[arg(long = "failure")]
         failures: Vec<PathBuf>,
     },
+}
+
+/// A pattern segment containing a glob character matches like a build
+/// selector; a bare one matches by substring, and the segments slide over
+/// the address, so `hydra` finds `pythonWheels.py313.hydra-core` without
+/// knowing the address shape.
+pub(crate) fn job_pattern_matches(pattern: &str, name: &str) -> bool {
+    let wanted: Vec<&str> = pattern.split('.').collect();
+    let parts: Vec<&str> = name.split('.').collect();
+    if wanted.len() > parts.len() {
+        return false;
+    }
+    parts.windows(wanted.len()).any(|window| {
+        window.iter().zip(&wanted).all(|(part, wanted)| {
+            if wanted.contains(['*', '?', '[']) {
+                crate::support::naming::matches_glob(wanted, part)
+            } else {
+                part.contains(wanted)
+            }
+        })
+    })
+}
+
+fn jobs_command(pattern: Option<String>, json: ui::JsonArg) -> Result<CommandStatus> {
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct JobCatalog {
+        names: Vec<String>,
+    }
+    impl schema::Document for JobCatalog {
+        const KIND: &'static str = "jobCatalog";
+        const SCHEMA: u32 = 1;
+    }
+    let all = crate::support::completions::recall("selectors");
+    if all.is_empty() {
+        return Err(crate::support::error::Error::Request(
+            "no evaluation has recorded the job catalog yet; any build, spot, or diff \
+             records it as its evaluation finishes"
+                .into(),
+        ));
+    }
+    if let Some(age) = crate::support::completions::age("selectors") {
+        ui::fact(
+            "catalog",
+            format!(
+                "{} names, recorded {} ago",
+                all.len(),
+                crate::support::format::duration(age.as_secs_f64())
+            ),
+        );
+    }
+    let names: Vec<String> = match &pattern {
+        Some(pattern) => all
+            .into_iter()
+            .filter(|name| job_pattern_matches(pattern, name))
+            .collect(),
+        None => all,
+    };
+    if names.is_empty() {
+        ui::note("no matches");
+    }
+    ui::emit(&json, &JobCatalog { names }, |catalog| {
+        for name in &catalog.names {
+            ui::result(name);
+        }
+    })?;
+    Ok(CommandStatus::SUCCESS)
 }
 
 /// The supervisor spawns the payload verbatim; catching an unspawnable one
@@ -1042,6 +1118,7 @@ fn run(command: CommandTree) -> Result<CommandStatus> {
         CommandTree::Spot(args) => request::run_spot(&crate::support::git::repo_root()?, args),
         CommandTree::Diff(args) => request::run_diff(&crate::support::git::repo_root()?, args),
         CommandTree::Bisect(args) => bisect::run_bisect(&crate::support::git::repo_root()?, args),
+        CommandTree::Jobs { pattern, json } => jobs_command(pattern, json),
         CommandTree::Run(command) => run_command(command),
         CommandTree::Cargo(command) => registries::run_cargo(command),
         CommandTree::Wasmer(command) => registries::run_wasmer(command),
