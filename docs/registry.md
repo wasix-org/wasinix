@@ -149,6 +149,14 @@ consuming project asks for. The native view carries no wheels of its own; its
 pages link to the copies under `simple/`, which keeps serving the full closure
 for use as a standalone index.
 
+Cross-installing for wasix from a host needs pip. `pip --platform wasix_wasm32`
+selects the tagged wheels, while uv's `--python-platform` is a closed enum with
+no wasix entry. uv does resolve the index in universal mode
+(`uv pip compile --universal`), which commits to no platform, and installs the
+pure-python wheels directly. anybuild's template suite
+(`pkgs/overlay/packages/anybuild/tests/python-templates.nix`) covers that path
+end to end, serving this index over loopback.
+
 ## Rels
 
 Every wheel is published as `<version>+wasix.<rel>`, a PEP 440 local version.
