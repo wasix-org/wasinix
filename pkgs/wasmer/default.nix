@@ -17,7 +17,8 @@
   # overlay/packages dir, used to locate each package's tests/.
   packagesDir,
   # the served wheel index, for tests that resolve against it. Forced only by a
-  # test, and it reads wasmerPackages.python.shim, which never forces .tests.
+  # test, and it reads preferredProfilePackages.python3.shim, which never forces
+  # .tests.
   pythonRegistry,
 }: let
   testLib = import ./test-lib.nix {inherit pkgs wasmer;};
@@ -37,7 +38,7 @@
         else {};
       scope = {
         inherit pkgs testLib helpers crossPkgs crossPkgsPic makeWasmerPackage pythonRegistry;
-        inherit preferredProfilePackages;
+        preferredProfilePackages = preferredProfilePackagesWithWebc;
         # Shims, for putting another package's commands on PATH. .shim drives the
         # packed .webc, .pkg.shim the source dir.
         wasmerPkgs = lib.mapAttrs (_: p: p.shim) wasmerPackages;
@@ -113,6 +114,13 @@
   servedByName =
     lib.mapAttrs (_: infos: lib.unique (map (i: i.id.baseVersion) infos))
     (lib.groupBy (i: i.id.name) shippedInfo);
+  shippedPackages =
+    lib.listToAttrs
+    (map (i:
+      lib.nameValuePair i.overlayName
+      (augment i.overlayName i.crossPkg servedByName.${i.id.name}))
+    shippedInfo);
+  preferredProfilePackagesWithWebc = preferredProfilePackages // shippedPackages;
   # Alias attrs (icu-data -> icu-data76) repeat a key with the same drv; only
   # distinct drvs sharing a key are an error.
   byKey = lib.groupBy (i: i.key) shippedInfo;
@@ -123,13 +131,7 @@
   wasmerPackages =
     lib.throwIf (conflicting != [])
     "wasmerPackages: duplicate webc keys (${lib.concatStringsSep ", " conflicting}); a second version of a name must set passthru.wasmer.history"
-    (lib.mapAttrs (
-        _: is: let
-          i = lib.head is;
-        in
-          augment i.overlayName i.crossPkg servedByName.${i.id.name}
-      )
-      byKey);
+    (lib.mapAttrs (_: is: shippedPackages.${(lib.head is).overlayName}) byKey);
 
   # One subtree per key: two versions of one webc share the inner pkg/<name> dir
   # name, so a flat merge would collide.
@@ -167,5 +169,6 @@
         })
     );
 in {
+  preferredProfilePackages = preferredProfilePackagesWithWebc;
   inherit wasmerPackages allWasmerPackages testLib libraryTestPkgs;
 }

@@ -1,5 +1,5 @@
-# CPython for wasix, following the wasix-org/cpython recipe. Shipped for 3.13 and 3.14,
-# each under its own webc name so both publish; `python3` aliases the default 3.14.
+# CPython for wasix, following the wasix-org/cpython recipe. Shipped for 3.13 and 3.14
+# as versions of python/python; `python3` aliases the current 3.14 derivation.
 # ehpic only: dl/ctypes need the PIC sysroot.
 {
   names = ["python3" "python313" "python314"];
@@ -13,6 +13,7 @@
     ...
   }: let
     lib = prev.lib;
+    current = prev.python314;
 
     mkWasixPython = base: let
       pyVer = base.pythonVersion;
@@ -263,6 +264,7 @@
             wasmer = {
               owner = "python";
               name = "python";
+              history = pyVer != current.pythonVersion;
               entrypoint = "python${pyVer}";
               # The atom is the module name, and a consumer's manifest refers to
               # an interpreter as <package>:python (anybuild's serve command
@@ -343,7 +345,7 @@
       py;
   in rec {
     python313 = mkWasixPython prev.python313;
-    python314 = mkWasixPython prev.python314;
+    python314 = mkWasixPython current;
     python3 = python314;
   };
 }

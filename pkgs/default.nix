@@ -288,7 +288,7 @@
       inherit pkgs lib mkTestGroup select pyKey;
       python3 = nixpkgsByProfile.exnrefEhpic.${pyAttr};
       wasmer = wasmerRuntime;
-      pythonWebc = wasmerLayer.wasmerPackages.${pyAttr}.webc;
+      pythonWebc = preferredProfilePackagesWithWebc.${pyAttr}.webc;
     };
     withPublication = _: drv:
       drv.overrideAttrs (o: {
@@ -343,6 +343,7 @@
     packagesDir = ./overlay/packages;
     inherit pythonRegistry;
   };
+  preferredProfilePackagesWithWebc = wasmerLayer.preferredProfilePackages;
   # keyed by program name, each carrying passthru.pkg / .webc / .tests
   inherit (wasmerLayer) wasmerPackages allWasmerPackages libraryTestPkgs;
 
@@ -365,12 +366,13 @@
     inherit (wasmerLayer) testLib;
     # default python interpreter + its webc, both from the top-level `python3`.
     python3 = nixpkgsByProfile.exnrefEhpic.python3;
-    pythonWebc = wasmerLayer.wasmerPackages.python.shim;
+    pythonWebc = preferredProfilePackagesWithWebc.python3.shim;
   };
 in {
   inherit pkgs pkgsCross nixUpdate defaultProfileName wasixPkgNames;
   inherit nativePackages packagesByProfile ciPackagesByProfile;
-  inherit toolchain toolchainByProfile nixpkgsByProfile preferredProfilePackages allWasmerPackages;
+  inherit toolchain toolchainByProfile nixpkgsByProfile allWasmerPackages;
+  preferredProfilePackages = preferredProfilePackagesWithWebc;
   inherit shippedCommands wasmerPackages toolchainTestPkgs abiChecks;
   inherit libraryTestPkgs;
   inherit pythonWheels pythonRegistry cargoRegistry;

@@ -176,11 +176,11 @@ nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
 derivations built with `pkgs/wasmer/test-lib.nix` (a `helpers.nix` is shared
 setup). They attach as `passthru.tests` and appear under
 `checks.<system>.<name>`. Besides `pkgs`/`testLib`/`wasmerPkgs`, test files can
-take `crossPkgs` (the default-profile cross set) and `makeWasmerPackage` to
-cross-build and package a consumer program. See icu-data's smoke test for an
-example. `mkScriptComparison` diffs against the native tool; `expectFail` marks
-a must-fail test; `broken "reason"` tolerates a known failure and fails loudly
-once it starts passing.
+take `preferredProfilePackages`, `crossPkgs` (the default-profile cross set),
+and `makeWasmerPackage` to cross-build and package a consumer program. See
+icu-data's smoke test for an example. `mkScriptComparison` diffs against the
+native tool; `expectFail` marks a must-fail test; `broken "reason"` tolerates a
+known failure and fails loudly once it starts passing.
 
 Every wheel also gets the guards in `pkgs/python-wheels.nix`: `import` runs the
 module on the shipped python, `self-contained` rejects a baked `/nix/store`

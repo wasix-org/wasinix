@@ -2,11 +2,11 @@
   pkgs,
   testLib,
   helpers,
-  wasmerPkgs,
+  preferredProfilePackages,
 }: let
   lib = pkgs.lib;
 in
-  helpers.forEachPython wasmerPkgs ({
+  helpers.forEachPython preferredProfilePackages ({
     python,
     pyVer,
     tag,

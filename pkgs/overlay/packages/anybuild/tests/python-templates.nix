@@ -13,6 +13,7 @@
 # runs on both, so the newer interpreter's wheels are still exercised end to end.
 {
   pkgs,
+  preferredProfilePackages,
   testLib,
   helpers,
   pythonRegistry,
@@ -37,15 +38,14 @@
   # extensions, so a successful request exercises loading them.
   servedTemplate = "python-pillow";
 
-  # {"3.13" = {host = pkgs.python313; webc = wasmerPackages.python313;}; ...}
   interpreters = {
     "3.13" = {
       host = pkgs.python313;
-      webc = wasmerPackages.python313;
+      webc = preferredProfilePackages.python313;
     };
     "3.14" = {
       host = pkgs.python314;
-      webc = wasmerPackages.python314;
+      webc = preferredProfilePackages.python314;
     };
   };
 

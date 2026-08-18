@@ -47,7 +47,10 @@ dependencies that may use another profile.
 
 `pkgs/wasmer/` turns shipped CLIs into webc packages. The default manifest uses
 `meta.mainProgram` and the package's `bin/*.wasm`; deviations belong in
-`passthru.wasmer`. Tests run under Wasmer through `pkgs/wasmer/test-lib.nix`.
+`passthru.wasmer`. Shipped entries in `preferredProfilePackages` also expose
+their `.pkg`, `.webc`, and `.shim`, plus `.tests` when present; `wasmerPackages`
+is the deduplicated publication inventory keyed by published name. Tests run
+under Wasmer through `pkgs/wasmer/test-lib.nix`.
 
 ## Flake outputs
 

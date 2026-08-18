@@ -2,9 +2,9 @@
   pkgs,
   testLib,
   helpers,
-  wasmerPkgs,
+  preferredProfilePackages,
 }:
-helpers.forEachPython wasmerPkgs ({
+helpers.forEachPython preferredProfilePackages ({
   python,
   pyVer,
   tag,

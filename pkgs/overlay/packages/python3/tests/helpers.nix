@@ -1,5 +1,5 @@
-# Discovery imports helpers.nix with only pkgs, so wasmerPkgs is passed per
-# call site.
+# Discovery imports helpers.nix with only pkgs, so preferredProfilePackages is
+# passed per call site.
 {pkgs}: let
   lib = pkgs.lib;
 in {
@@ -8,7 +8,7 @@ in {
   # The tags are static on purpose: deriving attr names from the shim's
   # .version forces the wasmer package set while its test groups are still
   # being assembled (infinite recursion); pyVer is safe in values only.
-  forEachPython = wasmerPkgs: f: let
+  forEachPython = preferredProfilePackages: f: let
     instantiate = {
       python,
       tag,
@@ -20,11 +20,11 @@ in {
       });
   in
     instantiate {
-      python = wasmerPkgs.python;
+      python = preferredProfilePackages.python3.shim;
       tag = "";
     }
     // instantiate {
-      python = wasmerPkgs.python313;
+      python = preferredProfilePackages.python313.shim;
       tag = "313";
     };
 }
