@@ -2034,6 +2034,27 @@ mod markdown {
     }
 
     #[test]
+    fn comment_commands_pin_every_case_to_the_runner() {
+        use crate::cli::untrusted::{parse, UntrustedCommand};
+        let parsed = parse("build checks.zlib --with wasixcc@0.4.3").unwrap();
+        let UntrustedCommand::Request(crate::ci::types::Request::Build(case)) = parsed else {
+            panic!("expected a build request");
+        };
+        assert_eq!(case.on.as_deref(), Some("local"));
+        let parsed = parse("diff build all --vs build all").unwrap();
+        let UntrustedCommand::Request(crate::ci::types::Request::Diff(diff)) = parsed else {
+            panic!("expected a diff request");
+        };
+        for case in &diff.cases {
+            let on = match case {
+                crate::ci::types::Case::Build(build) => build.on.as_deref(),
+                crate::ci::types::Case::Spot(spot) => spot.on.as_deref(),
+            };
+            assert_eq!(on, Some("local"));
+        }
+    }
+
+    #[test]
     fn mutation_comments_classify_as_mutations_and_parse_structurally() {
         use crate::cli::untrusted::{parse, MutationCommand, UntrustedCommand};
         let UntrustedCommand::Mutation(MutationCommand::Update { targets, all }) =

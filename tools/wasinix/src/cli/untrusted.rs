@@ -193,13 +193,15 @@ fn untrusted_case(words: &[String], case_id: String) -> Result<Case<RefSource>> 
     let parsed = UntrustedCase::try_parse_from(words)
         .map_err(|error| Error::Request(format!("diff case {case_id}: {error}")))?;
     Ok(match &parsed {
-        UntrustedCase::Build(case) => {
-            Case::Build(super::request::build_case(&case.request, None, Some(case_id))?)
-        }
+        UntrustedCase::Build(case) => Case::Build(super::request::build_case(
+            &case.request,
+            Some("local".to_string()),
+            Some(case_id),
+        )?),
         UntrustedCase::Spot(case) => Case::Spot(super::request::spot_case(
             &case.request,
             &case.spot,
-            None,
+            Some("local".to_string()),
             Some(case_id),
         )?),
     })
@@ -238,11 +240,14 @@ pub fn parse(command: &str) -> Result<UntrustedCommand> {
             changed,
         }),
         UntrustedCli::Regenerate(_) => UntrustedCommand::Mutation(MutationCommand::Regenerate),
+        // Comment commands execute on the workflow runner itself, and the
+        // untrusted grammar rightly cannot spell --on, so every case is
+        // pinned local; a runner has no builders.toml to default from.
         UntrustedCli::Build(args) => UntrustedCommand::Request(Request::Build(
-            super::request::build_case(&args.request, None, None)?,
+            super::request::build_case(&args.request, Some("local".to_string()), None)?,
         )),
         UntrustedCli::Spot(args) => UntrustedCommand::Request(Request::Spot(
-            super::request::spot_case(&args.request, &args.spot, None, None)?,
+            super::request::spot_case(&args.request, &args.spot, Some("local".to_string()), None)?,
         )),
         UntrustedCli::Diff(args) => {
             let mut cases = Vec::new();
