@@ -14,11 +14,10 @@
   }: let
     lib = prev.lib;
 
-    mkWasixPython = base: webcName: let
+    mkWasixPython = base: let
       pyVer = base.pythonVersion;
       py =
         helpers.libTweaks {
-          passthru.wasix.shipped = true;
           configureFlags = [
             "--enable-wasm-dynamic-linking"
             # nixpkgs presets ac_cv_x87_double_rounding=yes for every cross build, an
@@ -253,6 +252,7 @@
             );
 
           passthru = {
+            wasix.shipped = true;
             # dlfcn.h and dlopen/dlsym, needed by ctypes, ship only in the PIC sysroots.
             wasix.supportedProfiles = ["ehpic"];
             # PYO3_CROSS_LIB_DIR and setuptools-rust's pyLibDir, so a 3.13 wheel targets 3.13.
@@ -261,7 +261,8 @@
             # picks the build interpreter's 64-bit headers and pyport.h fatals on wasm32.
             crossIncludeDir = "${py}/include/${py.libPrefix}";
             wasmer = {
-              name = webcName;
+              owner = "python";
+              name = "python";
               entrypoint = "python${pyVer}";
               # The atom is the module name, and a consumer's manifest refers to
               # an interpreter as <package>:python (anybuild's serve command
@@ -340,11 +341,9 @@
         });
     in
       py;
-  in {
-    # No dot: a wasmer manifest rejects a dependency name carrying one, so
-    # `wasmer/python3.13` is a package nothing can depend on.
-    python313 = mkWasixPython prev.python313 "python313";
-    python314 = mkWasixPython prev.python314 "python314";
-    python3 = mkWasixPython prev.python314 "python";
+  in rec {
+    python313 = mkWasixPython prev.python313;
+    python314 = mkWasixPython prev.python314;
+    python3 = python314;
   };
 }
