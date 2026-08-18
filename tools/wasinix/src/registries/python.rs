@@ -416,30 +416,46 @@ pub fn preview_index(
     scratch: &Path,
     site: &Path,
 ) -> Result<()> {
-    let dists = scratch.join("dists.json");
-    crate::support::json::write(&dists, &Value::Array(wheels.to_vec()))?;
-    let mut build = crate::support::nix::Invocation::plain("build")
-        .accepts_flake_config()
-        .arg("--no-link")
-        .workdir(repo);
+    // Each wheel is published a second time under a longer local version. The
+    // suffix is an argument to the wheel's own publish derivation, so a preview
+    // wheel is made the same way a released one is.
+    let mut suffixed = Vec::with_capacity(wheels.len());
     for wheel in wheels {
         let attr = wheel["attr"].as_str().ok_or_else(|| {
             crate::support::error::Error::Request("a changed wheel has no attr".into())
         })?;
-        build = build.operand(format!(
-            ".#legacyPackages.{}.{attr}",
-            crate::support::nix::SYSTEM
-        ));
+        let base = attr.strip_suffix("^dist").unwrap_or(attr);
+        let expr = format!(
+            r#"(builtins.getFlake "path:{repo}").legacyPackages.{system}.{base}.publishedWith "{suffix}""#,
+            repo = repo.display(),
+            system = crate::support::nix::SYSTEM,
+        );
+        let built = crate::support::nix::Invocation::expr("build", expr)
+            .impure()
+            .arg("--no-link")
+            .arg("--print-out-paths")
+            .accepts_flake_config()
+            .workdir(repo)
+            .probe("a failing preview wheel build reports its own stderr")?;
+        if !built.status.is_success() {
+            return request_error("building a preview wheel failed");
+        }
+        let out = String::from_utf8_lossy(&built.stdout).trim().to_string();
+        if out.is_empty() {
+            return request_error("a preview wheel built to no output path");
+        }
+        let mut entry = wheel.clone();
+        entry["published"] = Value::String(out);
+        suffixed.push(entry);
     }
-    if !build.status()?.is_success() {
-        return request_error("building the changed wheels failed");
-    }
+
+    let dists = scratch.join("dists.json");
+    crate::support::json::write(&dists, &Value::Array(suffixed))?;
     let mut index = Command::new("python3");
     index
         .arg(repo.join("pkgs/python-registry/make-index.py"))
         .arg(&dists)
         .arg(site)
-        .args(["--version-suffix", suffix])
         .current_dir(repo);
     crate::support::tools::log(&index);
     if !crate::support::tools::status(&mut index)?.success() {

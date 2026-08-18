@@ -1,11 +1,11 @@
 """Generate a static PEP 503 "simple" package index from built wheels.
 
 Called by default.nix as: make-index.py <dists.json> <out>, where dists.json is
-[{"name", "version", "rel", "dist" = store path with the .whl}, ...].
+[{"name", "version", "published" = store path with the published .whl}, ...].
 
-Every wheel is republished as <version>+wasix.<rel> (PEP 440 local version,
-the publication release: same upstream version, our Nth build of it), keeping
-filename, dist-info dir, METADATA and RECORD consistent.
+The wheels arrive already carrying their publication release and interpreter
+bound; each is produced by its own derivation (publish-wheel.py), so this only
+indexes what it is given.
 
 Emits, per PEP 503 (+ PEP 629 version meta, PEP 658/714 metadata files):
   <out>/simple/index.html               project list
@@ -16,16 +16,11 @@ Emits, per PEP 503 (+ PEP 629 version meta, PEP 658/714 metadata files):
 """
 
 import argparse
-import base64
-import csv
 import hashlib
 import html
-import io
 import json
 import re
-import shutil
 import sys
-import tempfile
 import zipfile
 from pathlib import Path
 from urllib.parse import quote
@@ -54,95 +49,6 @@ def requires_python(metadata: bytes) -> str | None:
         if key.strip().lower() == "requires-python":
             return value.strip()
     return None
-
-
-def record_hash(data: bytes) -> str:
-    # RECORD hash spelling (PEP 376/427): urlsafe base64, no padding
-    return "sha256=" + base64.urlsafe_b64encode(
-        hashlib.sha256(data).digest()
-    ).decode().rstrip("=")
-
-
-def bump_metadata_version(metadata: bytes, version: str, new_version: str) -> bytes:
-    lines = metadata.split(b"\n")
-    for i, line in enumerate(lines):
-        if not line.strip():
-            break  # end of headers, no Version seen
-        key, _, value = line.partition(b":")
-        if key.strip().lower() == b"version":
-            if value.strip().decode() != version:
-                sys.exit(
-                    f"METADATA Version {value.strip().decode()!r} != filename version {version!r}"
-                )
-            lines[i] = f"Version: {new_version}".encode()
-            return b"\n".join(lines)
-    sys.exit("METADATA has no Version header")
-
-
-def rewrite_wheel(
-    src: Path, dest_dir: Path, rel: int, suffix: str | None = None
-) -> Path:
-    """Copy the wheel with +wasix.<rel>[.<suffix>] appended to its version.
-
-    The suffix (pr123.abc1234) marks PR-preview wheels: a longer local version
-    with an equal prefix sorts higher, so pip prefers them over the published
-    wheel when the preview index is used via --extra-index-url.
-    """
-    name, version, rest = src.name.split("-", 2)
-    if "+" in version:
-        sys.exit(f"{src.name}: already carries a local version")
-    new_version = f"{version}+wasix.{rel}" + (f".{suffix}" if suffix else "")
-
-    with zipfile.ZipFile(src) as zin:
-        dist_infos = {
-            n.split("/", 1)[0]
-            for n in zin.namelist()
-            if re.match(r"[^/]+\.dist-info/", n)
-        }
-        if len(dist_infos) != 1:
-            sys.exit(
-                f"{src.name}: expected exactly one *.dist-info dir, found {sorted(dist_infos)}"
-            )
-        old_di = dist_infos.pop()
-        if not old_di.endswith(f"-{version}.dist-info"):
-            sys.exit(
-                f"{src.name}: dist-info dir {old_di!r} does not match filename version {version!r}"
-            )
-        new_di = (
-            old_di.removesuffix(f"-{version}.dist-info") + f"-{new_version}.dist-info"
-        )
-        rename = lambda n: (
-            new_di + n.removeprefix(old_di) if n.startswith(f"{old_di}/") else n
-        )
-
-        entries = [
-            (rename(i.filename), i, zin.read(i.filename)) for i in zin.infolist()
-        ]
-
-    files = {n: data for n, _, data in entries}
-    files[f"{new_di}/METADATA"] = bump_metadata_version(
-        files[f"{new_di}/METADATA"], version, new_version
-    )
-
-    # RECORD: renamed paths, plus the refreshed METADATA hash/size
-    rows = list(csv.reader(io.StringIO(files[f"{new_di}/RECORD"].decode())))
-    for row in rows:
-        row[0] = rename(row[0])
-        if row[0] == f"{new_di}/METADATA":
-            row[1] = record_hash(files[row[0]])
-            row[2] = str(len(files[row[0]]))
-    buf = io.StringIO(newline="")
-    csv.writer(buf, lineterminator="\n").writerows(rows)
-    files[f"{new_di}/RECORD"] = buf.getvalue().encode()
-
-    dest = dest_dir / f"{name}-{new_version}-{rest}"
-    with zipfile.ZipFile(dest, "w") as zout:
-        for newname, info, _ in entries:
-            zi = zipfile.ZipInfo(newname, date_time=info.date_time)
-            zi.compress_type = info.compress_type
-            zi.external_attr = info.external_attr
-            zout.writestr(zi, files[newname])
-    return dest
 
 
 def _wheel_attrs(md_digest: str, rp: str | None) -> str:
@@ -489,15 +395,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("dists", type=Path)
     ap.add_argument("out", type=Path)
-    ap.add_argument(
-        "--version-suffix",
-        help="extra local-version segments (pr123.abc1234) for PR-preview indexes",
-    )
     args = ap.parse_args()
     dists = json.loads(args.dists.read_text())
     out = args.out
 
-    # normalized project name -> {wheel filename -> rewritten path}
+    # normalized project name -> {published filename -> its path}
     projects: dict[str, dict[str, Path]] = {}
     # published filename -> {name, attr, drv_path}, folded into each wheel's
     # manifest by publish.py (with the wasinix rev added there).
@@ -505,23 +407,19 @@ def main() -> None:
     # Collected rather than fatal on the first, so one run names every entry that
     # needs `publishOnce` instead of one per rebuild.
     conflicts: list[tuple[str, str]] = []
-    tmp = Path(tempfile.mkdtemp(prefix="wasix-wheels-"))
-    for i, entry in enumerate(dists):
-        wheels = sorted(Path(entry["dist"]).glob("*.whl"))
+    for entry in dists:
+        wheels = sorted(Path(entry["published"]).glob("*.whl"))
         if not wheels:
-            sys.exit(f"no .whl in dist output of '{entry['name']}': {entry['dist']}")
-        entry_dir = tmp / str(i)
-        entry_dir.mkdir()
+            sys.exit(f"no .whl published for '{entry['name']}': {entry['published']}")
         for whl in wheels:
-            moved = rewrite_wheel(whl, entry_dir, entry["rel"], args.version_suffix)
-            project = normalize(moved.name.split("-", 1)[0])
-            prev = projects.setdefault(project, {}).setdefault(moved.name, moved)
-            if prev != moved and prev.read_bytes() != moved.read_bytes():
+            project = normalize(whl.name.split("-", 1)[0])
+            prev = projects.setdefault(project, {}).setdefault(whl.name, whl)
+            if prev != whl and prev.read_bytes() != whl.read_bytes():
                 # A py3-none-any tag asserts the artifact is interpreter
                 # independent, so keep the first and let differing build noise go.
-                if not moved.name.endswith("-py3-none-any.whl"):
-                    conflicts.append((moved.name, entry["attr"]))
-            provenance[moved.name] = {
+                if not whl.name.endswith("-py3-none-any.whl"):
+                    conflicts.append((whl.name, entry["attr"]))
+            provenance[whl.name] = {
                 "name": entry["name"],
                 "rel_key": entry["relKey"],
                 "version": entry["version"],
@@ -546,7 +444,7 @@ def main() -> None:
         pdir.mkdir(parents=True)
         files = []
         for fname, src in sorted(wheels.items()):
-            shutil.copy(src, pdir / fname)
+            (pdir / fname).write_bytes(src.read_bytes())
             metadata = wheel_metadata(src)
             (pdir / f"{fname}.metadata").write_bytes(metadata)
             md_digest = hashlib.sha256(metadata).hexdigest()
@@ -592,6 +490,7 @@ def main() -> None:
         )
     nroot = [f'    <a href="{p}/">{p}</a><br/>' for p in sorted(native)]
     (out / "native" / "simple" / "index.html").write_text(page("Simple index", nroot))
+
     (out / "index.html").write_text(landing(projects))
     (out / "provenance.json").write_text(
         json.dumps(provenance, indent=2, sort_keys=True) + "\n"

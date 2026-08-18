@@ -18,13 +18,11 @@
   pythonWebc,
   mkTestGroup,
 }: let
-  # Publication release numbers (PEP 440 local version +wasix.N), from the global rels.json at the
-  # repo root: keyed by attr path (pythonRegistry.wheels.<pname>) then upstream version, so an
-  # upstream bump resets to 1 by key miss. Shared across python versions (same upstream version),
-  # the cp tag keeps filenames distinct. Bump when republishing a changed build; published
-  # filenames are immutable, so publish.py retains the original artifact on name reuse.
+  # The wheels carry their own release (pkgs/python-publish.nix); this reads
+  # rels.json only to report keys no served version claims.
   rels = builtins.fromJSON (builtins.readFile ../../rels.json);
   relPrefix = "pythonRegistry.wheels.";
+  inherit (import ../python-publish.nix {inherit pkgs lib;}) publishOf;
 
   # Repo-relative "path:line" of the package definition, for the index's
   # publish-time source link. Only for positions in this repo: closure wheels
@@ -50,8 +48,8 @@
       name = drv.pname or drv.name;
       version = drv.version;
       relKey = "${relPrefix}${name}";
-      rel = (rels."${relPrefix}${name}" or {}).${version} or 1;
-      dist = "${drv.dist}";
+      # the publishable form, produced by the wheel's own derivation
+      published = "${drv.published or (publishOf {inherit drv;})}";
       # provenance nested by python version and upstream version, so pname collides neither
       # across py313/py314 nor with a served history version of itself:
       # `nix build github:wasix-org/wasinix/<rev>#${attr}` rebuilds it.

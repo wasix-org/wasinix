@@ -246,16 +246,35 @@
   # unchanged). Inherited nixpkgs passthru.tests are dropped: they are x86 test
   # suites that would leak into `checks`. Per-package tests/ run only on the
   # primary (current) wheel (name == e.attr), not history versions.
+  inherit (import ./python-publish.nix {inherit pkgs lib;}) publishOf;
+
   mkWheel = name: e: wheel: let
     historyVersion =
       if name == e.attr
       then null
       else lib.removePrefix "${e.attr}-" name;
+    variants =
+      if historyVersion == null
+      then e.variants or allVariants
+      else historyTable.${e.attr}.${historyVersion}.variants or ["py313" "py314"];
   in
     wheel.overrideAttrs (o: {
       passthru =
         removeAttrs (o.passthru or {}) ["tests"]
         // {
+          # The interpreters this entry is built for, and the publishable form
+          # that states them. overrideAttrs only adds passthru, so the wheel
+          # publishOf reads is the same store path either way.
+          wasix = (o.passthru.wasix or {}) // {inherit variants;};
+          published = publishOf {
+            drv = wheel;
+            inherit variants;
+          };
+          publishedWith = suffix:
+            publishOf {
+              drv = wheel;
+              inherit variants suffix;
+            };
           # `skipTest` marks a wheel that cannot be imported on its own, so it
           # gates the tests that run one; the static guards read the artifact
           # and apply to every wheel.
