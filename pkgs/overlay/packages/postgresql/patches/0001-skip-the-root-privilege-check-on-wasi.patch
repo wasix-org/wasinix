@@ -1,5 +1,7 @@
 WASIX has no user database and no privilege separation: geteuid() is always 0,
 so every one of these guards rejects a run that has no way to be unprivileged.
+main.c wraps only the non-WIN32 body, since its #else branch is the Windows
+administrator check.
 
 --- a/src/backend/main/main.c
 +++ b/src/backend/main/main.c
@@ -21,56 +23,90 @@ so every one of these guards rejects a run that has no way to be unprivileged.
  	{
 --- a/src/bin/initdb/initdb.c
 +++ b/src/bin/initdb/initdb.c
-@@ -816,7 +816,7 @@
- {
+@@ -817,12 +817,14 @@
  	const char *username;
  
--#ifndef WIN32
-+#if !defined(WIN32) && !defined(__wasi__)
+ #ifndef WIN32
++#ifndef __wasi__
  	if (geteuid() == 0)			/* 0 is root's uid */
  	{
  		pg_log_error("cannot be run as root");
+ 		pg_log_error_hint("Please log in (using, e.g., \"su\") as the (unprivileged) user that will own the server process.");
+ 		exit(1);
+ 	}
++#endif							/* __wasi__ */
+ #endif
+ 
+ 	username = get_user_name_or_exit(progname);
 --- a/src/bin/pg_basebackup/pg_createsubscriber.c
 +++ b/src/bin/pg_basebackup/pg_createsubscriber.c
-@@ -2144,7 +2144,7 @@
- 	 * Don't allow it to be run as root. It uses pg_ctl which does not allow
+@@ -2145,6 +2145,7 @@
  	 * it either.
  	 */
--#ifndef WIN32
-+#if !defined(WIN32) && !defined(__wasi__)
+ #ifndef WIN32
++#ifndef __wasi__
  	if (geteuid() == 0)
  	{
  		pg_log_error("cannot be executed by \"root\"");
+@@ -2152,6 +2153,7 @@
+ 						  progname);
+ 		exit(1);
+ 	}
++#endif							/* __wasi__ */
+ #endif
+ 
+ 	get_restricted_token();
 --- a/src/bin/pg_ctl/pg_ctl.c
 +++ b/src/bin/pg_ctl/pg_ctl.c
-@@ -2253,7 +2253,7 @@
- 	/*
+@@ -2254,6 +2254,7 @@
  	 * Disallow running as root, to forestall any possible security holes.
  	 */
--#ifndef WIN32
-+#if !defined(WIN32) && !defined(__wasi__)
+ #ifndef WIN32
++#ifndef __wasi__
  	if (geteuid() == 0)
  	{
  		write_stderr(_("%s: cannot be run as root\n"
+@@ -2263,6 +2264,7 @@
+ 					 progname);
+ 		exit(1);
+ 	}
++#endif							/* __wasi__ */
+ #endif
+ 
+ 	env_wait = getenv("PGCTLTIMEOUT");
 --- a/src/bin/pg_resetwal/pg_resetwal.c
 +++ b/src/bin/pg_resetwal/pg_resetwal.c
-@@ -358,7 +358,7 @@
- 	 * -- any other user won't have sufficient permissions to modify files in
+@@ -359,6 +359,7 @@
  	 * the data directory.
  	 */
--#ifndef WIN32
-+#if !defined(WIN32) && !defined(__wasi__)
+ #ifndef WIN32
++#ifndef __wasi__
  	if (geteuid() == 0)
  	{
  		pg_log_error("cannot be executed by \"root\"");
+@@ -366,6 +367,7 @@
+ 						  progname);
+ 		exit(1);
+ 	}
++#endif							/* __wasi__ */
+ #endif
+ 
+ 	get_restricted_token();
 --- a/src/bin/pg_rewind/pg_rewind.c
 +++ b/src/bin/pg_rewind/pg_rewind.c
-@@ -276,7 +276,7 @@
- 	 * -- any other user won't have sufficient permissions to modify files in
+@@ -277,6 +277,7 @@
  	 * the data directory.
  	 */
--#ifndef WIN32
-+#if !defined(WIN32) && !defined(__wasi__)
+ #ifndef WIN32
++#ifndef __wasi__
  	if (geteuid() == 0)
  	{
  		pg_log_error("cannot be executed by \"root\"");
+@@ -284,6 +285,7 @@
+ 						  progname);
+ 		exit(1);
+ 	}
++#endif							/* __wasi__ */
+ #endif
+ 
+ 	get_restricted_token();
