@@ -1,3 +1,4 @@
+diff --git a/Cargo.toml b/Cargo.toml
 --- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -978,5 +978,6 @@
@@ -34,6 +35,18 @@
      any(
          feature = "fs",
          feature = "io-std",
+diff --git a/src/macros/cfg.rs b/src/macros/cfg.rs
+--- a/src/macros/cfg.rs
++++ b/src/macros/cfg.rs
+@@ -411,7 +411,7 @@ macro_rules! cfg_signal {
+             #[cfg(feature = "signal")]
+             #[cfg_attr(docsrs, doc(cfg(feature = "signal")))]
+             #[cfg(not(loom))]
+-            #[cfg(not(target_os = "wasi"))]
++            #[cfg(any(not(target_os = "wasi"), target_vendor = "wasmer"))]
+             $item
+         )*
+     }
 --- a/src/net/tcp/stream.rs
 +++ b/src/net/tcp/stream.rs
 @@ -1564,7 +1564,11 @@
@@ -109,3 +122,83 @@
          self.waker.wake().expect("failed to wake I/O driver");
      }
  
+diff --git a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -938,6 +938,6 @@ version = "0.2.168"
+ optional = true
+ 
+-[target."cfg(unix)".dependencies.signal-hook-registry]
++[target.'cfg(any(unix, target_vendor = "wasmer"))'.dependencies.signal-hook-registry]
+ version = "1.1.1"
+ optional = true
+ 
+diff --git a/src/macros/cfg.rs b/src/macros/cfg.rs
+--- a/src/macros/cfg.rs
++++ b/src/macros/cfg.rs
+@@ -445,6 +445,6 @@ macro_rules! cfg_signal_internal {
+ macro_rules! cfg_signal_internal_and_unix {
+     ($($item:item)*) => {
+-        #[cfg(unix)]
++        #[cfg(any(unix, target_vendor = "wasmer"))]
+         cfg_signal_internal! { $($item)* }
+     }
+ }
+@@ -453,7 +453,11 @@ macro_rules! cfg_not_signal_internal {
+     ($($item:item)*) => {
+         $(
+-            #[cfg(any(loom, not(unix), not(any(feature = "signal", all(unix, feature = "process")))))]
++            #[cfg(any(
++                loom,
++                not(any(unix, target_vendor = "wasmer")),
++                not(any(feature = "signal", all(any(unix, target_vendor = "wasmer"), feature = "process")))
++            ))]
+             $item
+         )*
+     }
+ }
+diff --git a/src/signal/ctrl_c.rs b/src/signal/ctrl_c.rs
+--- a/src/signal/ctrl_c.rs
++++ b/src/signal/ctrl_c.rs
+@@ -1,4 +1,4 @@
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ use super::unix::{self as os_impl};
+ #[cfg(windows)]
+ use super::windows::{self as os_impl};
+diff --git a/src/signal/mod.rs b/src/signal/mod.rs
+--- a/src/signal/mod.rs
++++ b/src/signal/mod.rs
+@@ -50,7 +50,7 @@ mod ctrl_c;
+ #[cfg(feature = "signal")]
+ pub use ctrl_c::ctrl_c;
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ pub(crate) mod registry;
+ 
+ pub mod unix;
+diff --git a/src/signal/registry.rs b/src/signal/registry.rs
+--- a/src/signal/registry.rs
++++ b/src/signal/registry.rs
+@@ -136,7 +136,7 @@ impl Registry {
+         self.registry.broadcast()
+     }
+ 
+-    #[cfg(unix)]
++    #[cfg(any(unix, target_vendor = "wasmer"))]
+     pub(crate) fn storage(&self) -> &OsStorage {
+         &self.registry.storage
+     }
+diff --git a/src/signal/unix.rs b/src/signal/unix.rs
+--- a/src/signal/unix.rs
++++ b/src/signal/unix.rs
+@@ -3,7 +3,7 @@
+ //! This module is only defined on Unix platforms and contains the primary
+ //! `Signal` type for receiving notifications of signals.
+ 
+-#![cfg(unix)]
++#![cfg(any(unix, target_vendor = "wasmer"))]
+ #![cfg_attr(docsrs, doc(cfg(all(unix, feature = "signal"))))]
+ 
+ use crate::runtime::scheduler;

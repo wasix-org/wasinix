@@ -84,6 +84,19 @@ index 347a793..a1a16dd 100644
      pub(crate) fn selector(&self) -> &sys::Selector {
          &self.selector
      }
+diff --git a/src/net/mod.rs b/src/net/mod.rs
+--- a/src/net/mod.rs
++++ b/src/net/mod.rs
+@@ -33,7 +33,7 @@ mod udp;
+ #[cfg(not(all(target_os = "wasi", target_env = "p1")))]
+ pub use self::udp::UdpSocket;
+ 
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod uds;
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ pub use self::uds::{UnixDatagram, UnixListener, UnixStream};
 diff --git a/src/sys/mod.rs b/src/sys/mod.rs
 index de8e079..0cff574 100644
 --- a/src/sys/mod.rs
