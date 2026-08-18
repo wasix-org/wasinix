@@ -826,9 +826,8 @@
         in
           lib.concatMapAttrs scriptOf ciSets.all;
 
-        # passthru.wasix.postUpdateHook: a command the update driver runs after
-        # updated pins and the release-only history steps. In-tree only; the
-        # driver dedupes repeats.
+        # passthru.wasix.postUpdateHook: a command the update driver runs when
+        # its package version moves. In-tree only; the driver dedupes repeats.
         postUpdateHooks = let
           srcRoot = toString self;
           hookOf = attr: drv: let
@@ -850,7 +849,12 @@
               && lib.hasPrefix srcRoot pos.file;
             entry = builtins.tryEval (
               let
-                v = lib.optionalAttrs ours {${attr} = {inherit command commandDrvPaths;};};
+                v = lib.optionalAttrs ours {
+                  ${attr} = {
+                    inherit command commandDrvPaths;
+                    version = toString drv.version;
+                  };
+                };
               in
                 builtins.deepSeq v v
             );

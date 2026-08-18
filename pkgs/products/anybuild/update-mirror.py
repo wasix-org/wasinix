@@ -20,9 +20,8 @@ suite covers. Everything else in the file is generated. Needs network; CI only
 reads the committed result.
 
 Also the anybuild package's postUpdateHook, so a bump re-resolves the pins
-against that release's examples/. The update driver runs every hook whenever
-any target moved, so this no-ops unless the recorded anybuild version changed;
---force re-resolves anyway.
+against that release's examples/. Manual runs no-op when the recorded version
+is current; --force re-resolves anyway.
 """
 
 import argparse
@@ -204,6 +203,12 @@ def select_files(project: str, version: str) -> list[dict]:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "versions",
+        nargs="*",
+        metavar="VERSION",
+        help="old and new package versions supplied by the update driver",
+    )
+    parser.add_argument(
         "--anybuild-src",
         help="anybuild checkout holding examples/ (default: build it from the flake)",
     )
@@ -213,6 +218,8 @@ def main():
         help="re-resolve even when the recorded anybuild version is current",
     )
     args = parser.parse_args()
+    if len(args.versions) not in (0, 2):
+        parser.error("expected either no versions or OLD_VERSION NEW_VERSION")
 
     if not LOCK.is_file():
         raise SystemExit(f"{LOCK} is missing; seed it with a `templates` list")

@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
-"""Update yq's WASIX vendor hash after its nixpkgs source moves."""
+"""Update yq's WASIX vendor hash after its package version moves."""
 
-import json
-import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-UPDATED_TARGETS_ENV = "WASINIX_UPDATED_TARGETS"
 FAKE_HASH = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 HASH_PATTERN = re.compile(r'(?m)^(\s*vendorHash = ")([^"]+)(";\s*)$')
 GOT_PATTERN = re.compile(r"\bgot:\s+(sha256-[A-Za-z0-9+/=]+)")
@@ -24,21 +21,6 @@ REPO = Path(
 PACKAGE = REPO / "pkgs/overlay/packages/yq-go/package.nix"
 
 
-def should_run():
-    encoded = os.environ.get(UPDATED_TARGETS_ENV)
-    if encoded is None:
-        return True
-    try:
-        targets = json.loads(encoded)
-    except json.JSONDecodeError as error:
-        raise SystemExit(f"{UPDATED_TARGETS_ENV} is not valid JSON: {error}") from error
-    if not isinstance(targets, list) or not all(
-        isinstance(target, str) for target in targets
-    ):
-        raise SystemExit(f"{UPDATED_TARGETS_ENV} must be a JSON list of strings")
-    return "nixpkgs" in targets
-
-
 def replace_hash(source, replacement):
     matches = list(HASH_PATTERN.finditer(source))
     if len(matches) != 1:
@@ -48,9 +30,8 @@ def replace_hash(source, replacement):
 
 
 def main():
-    if not should_run():
-        print("yq vendor hash unchanged (nixpkgs did not move)")
-        return
+    if len(sys.argv) not in (1, 3):
+        raise SystemExit("expected either no versions or OLD_VERSION NEW_VERSION")
 
     profile = subprocess.run(
         ["nix", "eval", ".#defaultProfileName", "--raw", "--accept-flake-config"],

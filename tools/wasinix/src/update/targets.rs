@@ -7,7 +7,7 @@ use std::path::Path;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::support::error::Result;
+use crate::support::error::{request_error, Result};
 use crate::support::naming::{self, Domain};
 use crate::support::nix::{eval, Flake, SYSTEM};
 
@@ -117,6 +117,22 @@ struct Declaration {
     source: Option<Value>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PostUpdateHook {
+    pub name: String,
+    pub command: Vec<String>,
+    pub command_drv_paths: Vec<String>,
+    pub version: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PostUpdateDeclaration {
+    command: Vec<String>,
+    command_drv_paths: Vec<String>,
+    version: String,
+}
+
 /// meta.position under a flake evaluation is inside the source store copy.
 fn repo_relative(path: &str, repo: &Path) -> String {
     if let Some(rest) = path
@@ -191,34 +207,31 @@ pub fn discovered_targets(repo: &Path) -> Result<Vec<Target>> {
     Ok(dedupe(targets))
 }
 
-pub struct Hook {
-    pub name: String,
-    pub command: Vec<String>,
-    pub command_drv_paths: Vec<String>,
-}
-
-/// Package-declared re-syncs, deduped by command across the profile attrs.
-pub fn discovered_post_update_hooks() -> Result<Vec<Hook>> {
+/// Package-declared post-update commands, deduped across the profile attrs.
+pub fn discovered_post_update_hooks() -> Result<Vec<PostUpdateHook>> {
     let declared = eval(&Flake::default(), "postUpdateHooks", None)?;
-    let mut hooks: BTreeMap<Vec<String>, (String, Vec<String>)> = BTreeMap::new();
+    let mut hooks: BTreeMap<String, PostUpdateHook> = BTreeMap::new();
     for (attr, value) in declared.as_object().into_iter().flatten() {
-        let context = format!("postUpdateHooks.{attr}");
-        let command: Vec<String> =
-            crate::support::json::from_value(value["command"].clone(), &context)?;
-        let drvs: Vec<String> =
-            crate::support::json::from_value(value["commandDrvPaths"].clone(), &context)?;
-        hooks
-            .entry(command)
-            .or_insert_with(|| (attr.rsplit('.').next().unwrap_or(attr).to_string(), drvs));
+        let declaration: PostUpdateDeclaration = crate::support::json::from_value(
+            value.clone(),
+            &format!("postUpdateHooks.{attr}"),
+        )?;
+        let name = attr.rsplit('.').next().unwrap_or(attr).to_string();
+        let hook = PostUpdateHook {
+            name: name.clone(),
+            command: declaration.command,
+            command_drv_paths: declaration.command_drv_paths,
+            version: declaration.version,
+        };
+        if let Some(previous) = hooks.insert(name.clone(), hook.clone()) {
+            if previous != hook {
+                return request_error(format!(
+                    "postUpdateHooks.{name} differs across package sets"
+                ));
+            }
+        }
     }
-    Ok(hooks
-        .into_iter()
-        .map(|(command, (name, command_drv_paths))| Hook {
-            name,
-            command,
-            command_drv_paths,
-        })
-        .collect())
+    Ok(hooks.into_values().collect())
 }
 
 pub fn all_targets(repo: &Path) -> Result<Vec<Target>> {

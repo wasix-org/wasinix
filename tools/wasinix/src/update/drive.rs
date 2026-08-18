@@ -11,15 +11,13 @@ use crate::support::ui;
 use crate::update::backends;
 use crate::update::changeset::{ChangeSet, Entry, EntryKind, FailedStep, Unchanged};
 use crate::update::retention::{self, Versions};
-use crate::update::targets::{self, Target};
+use crate::update::targets::{self, PostUpdateHook, Target};
 use crate::update::{select, Mode};
-
-const UPDATED_TARGETS_ENV: &str = "WASINIX_UPDATED_TARGETS";
 
 pub struct Options {
     /// Run the package-declared re-syncs and nothing else. They normally run
-    /// only when a target moved, which leaves no way to repair a derived
-    /// listing that drifted on its own.
+    /// only when their package version moves, which leaves no way to repair a
+    /// derived listing that drifted on its own.
     pub hooks_only: bool,
     pub all: bool,
     pub targets: Vec<String>,
@@ -52,23 +50,33 @@ fn commit_step(
     Ok(())
 }
 
-fn run_post_update_hook(
+fn post_update_command(
     repo: &Path,
-    hook: &targets::Hook,
-    env: &[(String, String)],
-) -> Result<Option<String>> {
-    let name = &hook.name;
-    let command = &hook.command;
-    ui::fact("hook", name);
-    let cmd: Vec<String> = if command[0].contains('/') && !command[0].starts_with('/') {
+    command: &[String],
+    versions: Option<(&str, &str)>,
+) -> Vec<String> {
+    let mut cmd = if command[0].contains('/') && !command[0].starts_with('/') {
         let mut cmd = command.to_vec();
         cmd[0] = repo.join(&cmd[0]).to_string_lossy().to_string();
         cmd
     } else {
         command.to_vec()
     };
-    backends::realise_command(name, &cmd, &hook.command_drv_paths)?;
-    let (code, stdout, stderr) = backends::run_capturing(repo, &cmd, env)?;
+    if let Some((prior, current)) = versions {
+        cmd.extend([prior.to_string(), current.to_string()]);
+    }
+    cmd
+}
+
+fn run_post_update_hook(
+    repo: &Path,
+    hook: &PostUpdateHook,
+    versions: Option<(&str, &str)>,
+) -> Result<Option<String>> {
+    ui::fact("hook", &hook.name);
+    let cmd = post_update_command(repo, &hook.command, versions);
+    backends::realise_command(&hook.name, &cmd, &hook.command_drv_paths)?;
+    let (code, stdout, stderr) = backends::run_capturing(repo, &cmd, &[])?;
     ui::raw(&stderr);
     backends::echo(&stdout);
     if code != 0 {
@@ -77,22 +85,26 @@ fn run_post_update_hook(
         } else {
             stderr.trim()
         };
-        return request_error(format!("{} exited {code}:\n{detail}", command[0]));
+        return request_error(format!("{} exited {code}:\n{detail}", hook.command[0]));
     }
     Ok(stdout.trim().lines().last().map(str::to_string))
 }
 
-fn post_update_env(updated_targets: Option<&[&Target]>) -> Vec<(String, String)> {
-    updated_targets.map_or_else(Vec::new, |targets| {
-        let names = targets
-            .iter()
-            .map(|target| serde_json::Value::String(target.name.clone()))
-            .collect();
-        vec![(
-            UPDATED_TARGETS_ENV.to_string(),
-            serde_json::Value::Array(names).to_string(),
-        )]
-    })
+fn changed_hooks(
+    prior: &[PostUpdateHook],
+    current: Vec<PostUpdateHook>,
+) -> Vec<(PostUpdateHook, String)> {
+    let prior_versions: std::collections::BTreeMap<&str, &str> = prior
+        .iter()
+        .map(|hook| (hook.name.as_str(), hook.version.as_str()))
+        .collect();
+    current
+        .into_iter()
+        .filter_map(|hook| {
+            let prior = prior_versions.get(hook.name.as_str())?;
+            (*prior != hook.version).then(|| (hook, (*prior).to_string()))
+        })
+        .collect()
 }
 
 fn hook_stage(
@@ -100,13 +112,14 @@ fn hook_stage(
     changes: &mut ChangeSet,
     commit: bool,
     committer: Option<&crate::support::git::Identity<'_>>,
-    updated_targets: Option<&[&Target]>,
+    hooks: Vec<(PostUpdateHook, Option<String>)>,
 ) -> Result<()> {
-    let env = post_update_env(updated_targets);
-    for hook in targets::discovered_post_update_hooks()? {
-        let name = hook.name.clone();
+    for (hook, prior) in hooks {
         let before = repo_status(repo)?;
-        match run_post_update_hook(repo, &hook, &env) {
+        let versions = prior
+            .as_deref()
+            .map(|prior| (prior, hook.version.as_str()));
+        match run_post_update_hook(repo, &hook, versions) {
             Ok(outcome) => {
                 let after = repo_status(repo)?;
                 // Only a hook that changed something enters the ChangeSet:
@@ -115,7 +128,7 @@ fn hook_stage(
                 if after != before {
                     let entry = Entry {
                         kind: EntryKind::Hook,
-                        subject: name.clone(),
+                        subject: hook.name.clone(),
                         from: None,
                         to: None,
                         detail: Some(outcome.unwrap_or_else(|| "re-synced".into())),
@@ -129,7 +142,7 @@ fn hook_stage(
                 }
             }
             Err(error) => changes.failures.push(FailedStep {
-                subject: format!("hook:{name}"),
+                subject: format!("hook:{}", hook.name),
                 message: crate::support::error::brief(&error, 200),
             }),
         }
@@ -143,7 +156,11 @@ fn run_hooks(
     committer: Option<&crate::support::git::Identity<'_>>,
 ) -> Result<ChangeSet> {
     let mut changes = ChangeSet::default();
-    hook_stage(repo, &mut changes, commit, committer, None)?;
+    let hooks = targets::discovered_post_update_hooks()?
+        .into_iter()
+        .map(|hook| (hook, None))
+        .collect();
+    hook_stage(repo, &mut changes, commit, committer, hooks)?;
     Ok(changes)
 }
 
@@ -175,6 +192,7 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
     if !options.all && options.targets.is_empty() {
         return request_error("update needs --all or at least one target");
     }
+    let prior_hooks = targets::discovered_post_update_hooks()?;
     let mut targets = targets::all_targets(repo)?;
     let domain = targets::domain(&targets);
     let (wanted, requests) = select::target_requests(&targets, &domain, &options.targets)?;
@@ -311,13 +329,11 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
 
     // Package-declared re-syncs last, after any release-only history work.
     if changes.changed() {
-        hook_stage(
-            repo,
-            &mut changes,
-            options.commit,
-            committer,
-            Some(&moved),
-        )?;
+        let hooks = changed_hooks(&prior_hooks, targets::discovered_post_update_hooks()?)
+            .into_iter()
+            .map(|(hook, prior)| (hook, Some(prior)))
+            .collect();
+        hook_stage(repo, &mut changes, options.commit, committer, hooks)?;
     }
 
     if release_work {
@@ -347,39 +363,40 @@ pub fn exit_of(changes: &ChangeSet) -> CommandStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::update::targets::Backend;
 
-    fn target(name: &str) -> Target {
-        Target {
+    fn hook(name: &str, command: &str, version: &str) -> PostUpdateHook {
+        PostUpdateHook {
             name: name.into(),
-            backend: Backend::FlakeInput,
-            input: name.into(),
-            attr: String::new(),
-            version: String::new(),
-            command: Vec::new(),
+            command: vec![command.into()],
             command_drv_paths: Vec::new(),
-            file: String::new(),
-            accepts: Vec::new(),
-            source: None,
+            version: version.into(),
         }
     }
 
     #[test]
-    fn automatic_hooks_receive_the_targets_that_moved() {
-        let nixpkgs = target("nixpkgs");
-        let wasmer = target("wasmer");
-        let env = post_update_env(Some(&[&nixpkgs, &wasmer]));
+    fn automatic_hooks_run_only_for_changed_package_versions() {
+        let prior = vec![hook("same", "same.py", "1"), hook("moved", "old.py", "1")];
+        let current = vec![hook("same", "same.py", "1"), hook("moved", "new.py", "2")];
         assert_eq!(
-            env,
-            vec![(
-                UPDATED_TARGETS_ENV.into(),
-                r#"["nixpkgs","wasmer"]"#.into()
-            )]
+            changed_hooks(&prior, current),
+            vec![(hook("moved", "new.py", "2"), "1".into())]
         );
     }
 
     #[test]
-    fn manual_hooks_receive_no_target_filter() {
-        assert!(post_update_env(None).is_empty());
+    fn hooks_without_a_prior_declaration_do_not_run_automatically() {
+        assert!(changed_hooks(&[], vec![hook("new", "new.py", "1")]).is_empty());
+    }
+
+    #[test]
+    fn automatic_hooks_receive_the_old_and_new_versions() {
+        assert_eq!(
+            post_update_command(
+                Path::new("/repo"),
+                &["hook".into(), "--flag".into()],
+                Some(("1", "2"))
+            ),
+            ["hook", "--flag", "1", "2"]
+        );
     }
 }
