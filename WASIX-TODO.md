@@ -469,6 +469,37 @@ current toolchain before relying on it.
   Wasmer's WASIX filesystem ABI, then implements `flock` and the `fcntl` lock
   commands in wasix-libc and removes the package workarounds.
 
+### `bind` on an AF_UNIX socket fails 🔴
+
+- Symptom: postgres logs
+  `could not bind Unix address "/pg/.s.PGSQL.5432": Success`, then
+  `FATAL: could not create any Unix-domain sockets` (verified against wasmer
+  7.2.1; the errno it reports is not even set).
+- Consequence: a server that offers a local socket alongside TCP has to be told
+  to skip it. postgres needs `-c unix_socket_directories=` before it will start,
+  and its client tools have to be given `-h <host>` rather than the default
+  local socket.
+- Fix: implement AF_UNIX `bind`/`connect` in wasmer's WASIX socket layer.
+
+### System V IPC is absent from wasix-libc 🟡
+
+- Symptom: `fatal error: 'sys/ipc.h' file not found`, then the same for
+  `sys/shm.h`. No sysroot ships `sys/ipc.h`, `sys/shm.h` or `sys/sem.h`, and
+  `libc.a` carries no `shmget`/`shmat`/`shmdt`/`shmctl` (verified against
+  wasix-libc v2026-07-30.1).
+- Consequence: postgres links its shared-memory segment against System V under
+  every non-Windows configure template, so the server does not compile at all.
+  Semaphores are unaffected: the linux template already prefers unnamed POSIX
+  ones, which wasix-libc defines.
+- Workaround: `postgresql/wasix-compat/shm.c` declares the API and backs
+  segments with process-local heap memory. A key this process did not create
+  reports ENOENT, which postgres reads as "no other server owns this data
+  directory"; that is only correct because `proc_fork` hands the child a copy of
+  the linear memory, so no segment could be shared across processes anyway.
+- Fix: shared memory objects in wasmer's WASIX ABI plus the libc wiring. That is
+  also the prerequisite for a multi-user postmaster, whose backends need one
+  buffer pool.
+
 ### `dladdr` missing from wasix's dyld 🟡
 
 - wasix provides `dlopen`/`dlsym`/`dlclose`/`dlerror`, but not `dladdr` (the

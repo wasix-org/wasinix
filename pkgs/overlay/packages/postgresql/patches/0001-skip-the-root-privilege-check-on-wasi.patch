@@ -1,0 +1,76 @@
+WASIX has no user database and no privilege separation: geteuid() is always 0,
+so every one of these guards rejects a run that has no way to be unprivileged.
+
+--- a/src/backend/main/main.c
++++ b/src/backend/main/main.c
+@@ -443,6 +443,7 @@
+ check_root(const char *progname)
+ {
+ #ifndef WIN32
++#ifndef __wasi__
+ 	if (geteuid() == 0)
+ 	{
+ 		write_stderr("\"root\" execution of the PostgreSQL server is not permitted.\n"
+@@ -466,6 +467,7 @@
+ 					 progname);
+ 		exit(1);
+ 	}
++#endif							/* __wasi__ */
+ #else							/* WIN32 */
+ 	if (pgwin32_is_admin())
+ 	{
+--- a/src/bin/initdb/initdb.c
++++ b/src/bin/initdb/initdb.c
+@@ -816,7 +816,7 @@
+ {
+ 	const char *username;
+ 
+-#ifndef WIN32
++#if !defined(WIN32) && !defined(__wasi__)
+ 	if (geteuid() == 0)			/* 0 is root's uid */
+ 	{
+ 		pg_log_error("cannot be run as root");
+--- a/src/bin/pg_basebackup/pg_createsubscriber.c
++++ b/src/bin/pg_basebackup/pg_createsubscriber.c
+@@ -2144,7 +2144,7 @@
+ 	 * Don't allow it to be run as root. It uses pg_ctl which does not allow
+ 	 * it either.
+ 	 */
+-#ifndef WIN32
++#if !defined(WIN32) && !defined(__wasi__)
+ 	if (geteuid() == 0)
+ 	{
+ 		pg_log_error("cannot be executed by \"root\"");
+--- a/src/bin/pg_ctl/pg_ctl.c
++++ b/src/bin/pg_ctl/pg_ctl.c
+@@ -2253,7 +2253,7 @@
+ 	/*
+ 	 * Disallow running as root, to forestall any possible security holes.
+ 	 */
+-#ifndef WIN32
++#if !defined(WIN32) && !defined(__wasi__)
+ 	if (geteuid() == 0)
+ 	{
+ 		write_stderr(_("%s: cannot be run as root\n"
+--- a/src/bin/pg_resetwal/pg_resetwal.c
++++ b/src/bin/pg_resetwal/pg_resetwal.c
+@@ -358,7 +358,7 @@
+ 	 * -- any other user won't have sufficient permissions to modify files in
+ 	 * the data directory.
+ 	 */
+-#ifndef WIN32
++#if !defined(WIN32) && !defined(__wasi__)
+ 	if (geteuid() == 0)
+ 	{
+ 		pg_log_error("cannot be executed by \"root\"");
+--- a/src/bin/pg_rewind/pg_rewind.c
++++ b/src/bin/pg_rewind/pg_rewind.c
+@@ -276,7 +276,7 @@
+ 	 * -- any other user won't have sufficient permissions to modify files in
+ 	 * the data directory.
+ 	 */
+-#ifndef WIN32
++#if !defined(WIN32) && !defined(__wasi__)
+ 	if (geteuid() == 0)
+ 	{
+ 		pg_log_error("cannot be executed by \"root\"");
