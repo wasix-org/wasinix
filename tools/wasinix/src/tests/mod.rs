@@ -1443,7 +1443,7 @@ mod events {
     #[test]
     fn a_torn_tail_line_waits_and_a_torn_middle_line_fails() {
         let scratch = Scratch::create("wasinix-test").unwrap();
-        append(scratch.path(), &Event::Heartbeat { at: 1 }).unwrap();
+        append(scratch.path(), &Event::Heartbeat { at: 1, detail: None }).unwrap();
         let path = scratch.path().join(FILE);
         let mut text = std::fs::read_to_string(&path).unwrap();
         text.push_str("{\"schema\":1,\"event\":\"heartbeat\"");
@@ -1485,7 +1485,7 @@ mod events {
     #[test]
     fn the_tail_ends_when_drained_and_the_run_is_over() {
         let scratch = Scratch::create("wasinix-test").unwrap();
-        append(scratch.path(), &Event::Heartbeat { at: 1 }).unwrap();
+        append(scratch.path(), &Event::Heartbeat { at: 1, detail: None }).unwrap();
         let mut seen = 0;
         crate::ci::events::tail(
             scratch.path(),
@@ -2605,8 +2605,16 @@ mod render {
         );
         // A heartbeat in a quiet stretch repeats the progress line.
         assert_eq!(
-            renderer.lines_for(&Event::Heartbeat { at: 460 }),
+            renderer.lines_for(&Event::Heartbeat { at: 460, detail: None }),
             ["[+6m 0s] 50/100 jobs · building checks.curl, checks.zlib"]
+        );
+        // With no job in flight the heartbeat says what the run is doing.
+        assert_eq!(
+            renderer.lines_for(&Event::Heartbeat {
+                at: 520,
+                detail: Some("dependencies: llvm, wasix-libc +2".into()),
+            }),
+            ["[+7m 0s] 50/100 jobs · building checks.curl, checks.zlib · dependencies: llvm, wasix-libc +2"]
         );
     }
 }

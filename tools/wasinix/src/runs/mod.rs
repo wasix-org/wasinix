@@ -371,7 +371,13 @@ fn supervise_payload(run_dir: &Path, command: &[String]) -> Result<()> {
             _ => {}
         }
         if last_heartbeat.elapsed() >= HEARTBEAT_EVERY {
-            events::append(run_dir, &Event::Heartbeat { at: unix_secs() })?;
+            events::append(
+                run_dir,
+                &Event::Heartbeat {
+                    at: unix_secs(),
+                    detail: None,
+                },
+            )?;
             last_heartbeat = std::time::Instant::now();
         }
         std::thread::sleep(Duration::from_millis(200));

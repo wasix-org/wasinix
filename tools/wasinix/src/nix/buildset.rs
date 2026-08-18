@@ -36,7 +36,9 @@ pub struct UnionRequest<'a> {
 pub enum StreamEvent {
     Result(Value),
     Activity,
-    Heartbeat,
+    /// The most recently announced dependency builds, so the ticker can say
+    /// what the run is doing when no job derivation is in flight.
+    Heartbeat { recent_deps: Vec<String> },
     Output(String),
 }
 
@@ -614,6 +616,7 @@ pub fn build_union(
         });
 
         let mut last_poll = std::time::Instant::now();
+        let mut recent_deps: std::collections::VecDeque<String> = Default::default();
         loop {
             match receiver.recv_timeout(Duration::from_secs(5)) {
                 Ok(line) => {
@@ -626,7 +629,23 @@ pub fn build_union(
                             for attr in spec.attrs.clone() {
                                 on_event(StreamEvent::Output(format!("  building \"{attr}\"")))?;
                             }
-                        } else if needed.contains(drv) && !dep_pending.contains_key(drv) {
+                        } else {
+                            // `/nix/store/<32-char hash>-name.drv`, name only.
+                            let name = drv
+                                .get(44..)
+                                .unwrap_or(drv)
+                                .trim_end_matches(".drv");
+                            if recent_deps.back().map(String::as_str) != Some(name) {
+                                recent_deps.push_back(name.to_string());
+                                if recent_deps.len() > 4 {
+                                    recent_deps.pop_front();
+                                }
+                            }
+                        }
+                        if !jobs.contains_key(drv)
+                            && needed.contains(drv)
+                            && !dep_pending.contains_key(drv)
+                        {
                             match drv_outputs(drv) {
                                 Ok(outputs) => {
                                     dep_pending.insert(drv.to_string(), outputs);
@@ -655,7 +674,9 @@ pub fn build_union(
                 continue;
             }
             last_poll = std::time::Instant::now();
-            on_event(StreamEvent::Heartbeat)?;
+            on_event(StreamEvent::Heartbeat {
+                recent_deps: recent_deps.iter().cloned().collect(),
+            })?;
             let outputs: Vec<String> = pending
                 .iter()
                 .flat_map(|drv| jobs[drv].outputs.iter().cloned())

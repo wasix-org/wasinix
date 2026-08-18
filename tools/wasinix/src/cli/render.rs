@@ -120,8 +120,15 @@ impl LineRenderer {
             Event::RunStarted { .. } => Vec::new(),
             // Once-a-minute liveness with fresh counts, in quiet stretches
             // and through chatty compiles alike.
-            Event::Heartbeat { at } => {
-                let progress = self.progress();
+            Event::Heartbeat { at, detail } => {
+                let mut progress = self.progress();
+                if let Some(detail) = detail {
+                    if progress.is_empty() {
+                        progress = detail.clone();
+                    } else {
+                        progress = format!("{progress} · {detail}");
+                    }
+                }
                 if self.bar.is_none() && !progress.is_empty() {
                     vec![format!("{} {}", self.stamp(*at), progress)]
                 } else {

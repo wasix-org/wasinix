@@ -57,7 +57,12 @@ pub enum Event {
     #[serde(rename_all = "camelCase")]
     Warning { at: u64, message: String },
     #[serde(rename_all = "camelCase")]
-    Heartbeat { at: u64 },
+    Heartbeat {
+        at: u64,
+        /// What the run is doing when no job is in flight, or nothing.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        detail: Option<String>,
+    },
     #[serde(rename_all = "camelCase")]
     RunFinished {
         at: u64,
@@ -76,7 +81,7 @@ impl Event {
             | Event::JobStarted { at, .. }
             | Event::JobFinished { at, .. }
             | Event::Warning { at, .. }
-            | Event::Heartbeat { at }
+            | Event::Heartbeat { at, .. }
             | Event::RunFinished { at, .. } => *at,
         }
     }

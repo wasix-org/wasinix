@@ -656,12 +656,24 @@ impl Liveness {
         &mut self,
         tracker: &mut Tracker,
         building: &std::collections::BTreeSet<String>,
+        recent_deps: &[String],
     ) -> Result<()> {
         // One heartbeat a minute: the renderer turns them into liveness
         // lines through quiet stretches, and the comment watcher keeps its
         // own, longer republish throttle.
         if self.last_heartbeat.elapsed() >= Duration::from_secs(60) {
-            tracker.record(Event::Heartbeat { at: unix_secs() })?;
+            // Only when no job derivation is in flight: the job names carry
+            // the story otherwise, and dependencies are detail.
+            let detail = (building.is_empty() && !recent_deps.is_empty()).then(|| {
+                format!(
+                    "dependencies: {}",
+                    crate::support::format::some(recent_deps, 3)
+                )
+            });
+            tracker.record(Event::Heartbeat {
+                at: unix_secs(),
+                detail,
+            })?;
             self.last_heartbeat = Instant::now();
         }
         if !self.warned && self.last_activity.elapsed() >= self.stall_after {
@@ -939,8 +951,8 @@ fn run_build_tasks(
                     liveness.activity();
                     Ok(())
                 }
-                crate::nix::buildset::StreamEvent::Heartbeat => {
-                    liveness.heartbeat(tracker, &building)
+                crate::nix::buildset::StreamEvent::Heartbeat { recent_deps } => {
+                    liveness.heartbeat(tracker, &building, &recent_deps)
                 }
                 crate::nix::buildset::StreamEvent::Output(line) => {
                     if let Some(attr) = building_attr(&line) {
