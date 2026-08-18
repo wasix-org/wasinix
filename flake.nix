@@ -173,7 +173,7 @@
       src = ./tools/wasinix;
       cargoLock.lockFile = ./tools/wasinix/Cargo.lock;
       doCheck = true;
-      nativeCheckInputs = [wasix.pkgs.gitMinimal];
+      nativeCheckInputs = with wasix.pkgs; [gitMinimal nixVersions.latest];
       meta.mainProgram = "wasinix";
     };
     # Every command is runnable from the same installed closure, so a remote
@@ -599,6 +599,15 @@
             })
           packages)
         wasix.ciPackagesByProfile;
+      wasmerJobAliases =
+        lib.concatMapAttrs (packageKey: package: let
+          aliases = package.passthru.wasmer.aliases or [];
+          addresses = map (alias: "wasmerPackages.${alias}") aliases;
+        in {
+          "wasmerPackages.${packageKey}" = addresses;
+          "wasmerPackages.${packageKey}.webc" = map (address: "${address}.webc") addresses;
+        })
+        wasix.wasmerPackageInventory;
       ciJobInfo = lib.mapAttrs (name: drv: let
         isCheck = lib.hasPrefix "checks." name;
         wasixMeta = drv.passthru.wasix or {};
@@ -626,6 +635,7 @@
           inherit subject;
           testName = wasixMeta.ciTestName or null;
           inherit variant artifactKind;
+          aliases = wasmerJobAliases.${name} or [];
           tags = wasixLib.ciTagsOf drv;
           role =
             if isCheck

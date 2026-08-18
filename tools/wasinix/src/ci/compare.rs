@@ -376,9 +376,16 @@ fn eval_diff(coverage: &Coverage, base_map: &EvalMap, head_map: &EvalMap) -> Eva
 fn build_diff(
     coverage: &Coverage,
     eval: &EvalDiff,
+    head_map: &EvalMap,
     base_status: &StatusMap,
     head_status: &StatusMap,
 ) -> BuildDiff {
+    let head_aliases: BTreeSet<&str> = coverage
+        .head
+        .iter()
+        .filter_map(|job| head_map.info.get(job.as_str()))
+        .flat_map(|info| info.aliases.iter().map(String::as_str))
+        .collect();
     let transitioned = |from: JobStatus, to: JobStatus| -> Vec<JobAddr> {
         coverage
             .both
@@ -401,7 +408,10 @@ fn build_diff(
         dropped_successes: eval
             .removed
             .iter()
-            .filter(|job| base_status.get(job.as_str()) == Some(&JobStatus::Success))
+            .filter(|job| {
+                !head_aliases.contains(job.as_str())
+                    && base_status.get(job.as_str()) == Some(&JobStatus::Success)
+            })
             .cloned()
             .collect(),
         fixes: transitioned(JobStatus::Failure, JobStatus::Success),
@@ -448,7 +458,9 @@ pub fn compare_loaded(
     let coverage = coverage(base_case, base_map, head_case, head_map)?;
     let eval = eval_diff(&coverage, base_map, head_map);
     let builds = statuses
-        .map(|(base_status, head_status)| build_diff(&coverage, &eval, base_status, head_status));
+        .map(|(base_status, head_status)| {
+            build_diff(&coverage, &eval, head_map, base_status, head_status)
+        });
     Ok((eval, builds))
 }
 

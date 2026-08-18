@@ -838,6 +838,61 @@ mod compare {
     }
 
     #[test]
+    fn an_alias_preserves_a_renamed_job_without_hiding_a_failed_replacement() {
+        let base = map(&[("wasmerPackages.python313", "/nix/store/old.drv")]);
+        let mut head = map(&[(
+            "wasmerPackages.python-3.13.15",
+            "/nix/store/new.drv",
+        )]);
+        head.info.insert(
+            JobAddr("wasmerPackages.python-3.13.15".into()),
+            JobInfo {
+                aliases: vec!["wasmerPackages.python313".into()],
+                ..Default::default()
+            },
+        );
+        let base_case = case(&["wasmerPackages.python313"]);
+        let head_case = case(&["wasmerPackages.python-3.13.15"]);
+        let base_status = status(&[("wasmerPackages.python313", JobStatus::Success)]);
+
+        let (eval, builds) = compare_cases(
+            &base_case,
+            &base,
+            &base_status,
+            &head_case,
+            &head,
+            &status(&[(
+                "wasmerPackages.python-3.13.15",
+                JobStatus::Success,
+            )]),
+        )
+        .unwrap();
+        assert_eq!(
+            eval.added,
+            addrs(&["wasmerPackages.python-3.13.15"])
+        );
+        assert_eq!(eval.removed, addrs(&["wasmerPackages.python313"]));
+        assert!(builds.dropped_successes.is_empty());
+
+        let (_, builds) = compare_cases(
+            &base_case,
+            &base,
+            &base_status,
+            &head_case,
+            &head,
+            &status(&[(
+                "wasmerPackages.python-3.13.15",
+                JobStatus::Failure,
+            )]),
+        )
+        .unwrap();
+        assert_eq!(
+            builds.new_failures,
+            addrs(&["wasmerPackages.python-3.13.15"])
+        );
+    }
+
+    #[test]
     fn a_non_signal_derivation_is_not_reported_as_rebuilt() {
         let mut head = map(&[("job", "/nix/store/moved.drv")]);
         head.info.insert(

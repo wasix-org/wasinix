@@ -46,6 +46,9 @@ pub struct JobInfo {
     pub rel: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
+    /// Previous or alternate job addresses that this job preserves.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<String>,
     /// Capabilities a CI request must enable before scheduling this job.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,

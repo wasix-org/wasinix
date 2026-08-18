@@ -376,6 +376,8 @@ mod tests {
         ]
         .concat();
         let value = Invocation::expr("eval", expression)
+            .option("experimental-features", "nix-command")
+            .args(["--store", "dummy://"])
             .json()
             .run_json("canonical webc filter")
             .unwrap();
