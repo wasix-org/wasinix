@@ -1738,6 +1738,14 @@ mod cli {
     }
 
     #[test]
+    fn start_refuses_wait_and_follow_together() {
+        assert!(Cli::try_parse_from([
+            "wasinix", "run", "start", "--wait", "--follow", "--", "true"
+        ])
+        .is_err());
+    }
+
+    #[test]
     fn a_bare_subcommand_payload_is_refused_with_the_verbatim_hint() {
         let error = crate::cli::payload_check("build", false).unwrap_err();
         let message = error.to_string();

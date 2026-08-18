@@ -144,8 +144,12 @@ pub enum RunCommand {
     /// Start a durable command and print its run id
     Start {
         /// Wait for the run to finish instead of returning the id immediately
-        #[arg(long)]
+        #[arg(long, conflicts_with = "follow")]
         wait: bool,
+        /// Narrate the run like `run watch`; interrupting the watcher
+        /// detaches, the run keeps going
+        #[arg(long)]
+        follow: bool,
         /// The command to run, executed verbatim, so a wasinix payload names
         /// the binary: `run start -- wasinix build all`. The payload receives
         /// --run-dir automatically.
@@ -393,10 +397,23 @@ pub(crate) fn payload_check(program: &str, on_path: bool) -> Result<()> {
 
 fn run_command(command: RunCommand) -> Result<CommandStatus> {
     match command {
-        RunCommand::Start { wait, command } => {
+        RunCommand::Start {
+            wait,
+            follow,
+            command,
+        } => {
             payload_check(&command[0], crate::support::env::on_path(&command[0]))?;
             let run_id = runs::start(&command)?;
+            // The durable handle first: an observer lost mid-watch still
+            // leaves the id on the terminal to rejoin with.
             ui::result(&run_id);
+            if follow {
+                let run_dir = runs::dir_of(&run_id)?;
+                render::watch(&run_dir)?;
+                runs::reap(&run_dir)?;
+                let run = runs::observed(&run_dir)?;
+                return Ok(run.state.exit(run.exit_code));
+            }
             if wait {
                 let run = runs::wait(&run_id, None)?;
                 return Ok(run.state.exit(run.exit_code));
