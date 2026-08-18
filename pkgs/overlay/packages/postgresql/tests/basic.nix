@@ -79,7 +79,7 @@ in {
     wasixPkgs = postgres;
     wasmerArgs = ["--net"];
     timeout = 1800;
-    expectFail = "the postmaster forks its background workers, and WASIX fork() reports ENOTSUP";
+    broken = "the postmaster forks its background workers, and WASIX fork() reports ENOTSUP";
     script = ''
       initdb -D db -U postgres --no-locale --encoding=UTF8 >/dev/null
 
