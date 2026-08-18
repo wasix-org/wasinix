@@ -1,0 +1,35 @@
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -85,6 +85,32 @@
+     OsString::from_vec(buffer)
+ }
+ 
++#[cfg(target_os = "wasi")]
++#[inline]
++fn gethostname_impl() -> OsString {
++    use std::ffi::{c_char, c_int};
++    use std::os::wasi::ffi::OsStringExt;
++    // The libc crate's wasi module has neither gethostname nor
++    // sysconf(_SC_HOST_NAME_MAX), so declare the call and cap at
++    // _POSIX_HOST_NAME_MAX.
++    const HOST_NAME_MAX: usize = 255;
++    extern "C" {
++        fn gethostname(name: *mut c_char, len: usize) -> c_int;
++    }
++    let mut buffer = vec![0u8; HOST_NAME_MAX + 1];
++    let returncode = unsafe { gethostname(buffer.as_mut_ptr() as *mut c_char, HOST_NAME_MAX) };
++    if returncode != 0 {
++        panic!(
++            "gethostname failed: {}
++    Please report an issue to <https://github.com/swsnr/gethostname.rs/issues>!",
++            std::io::Error::last_os_error()
++        );
++    }
++    let end = buffer.iter().position(|&b| b == 0).unwrap_or(buffer.len());
++    buffer.resize(end, 0);
++    OsString::from_vec(buffer)
++}
++
+ #[cfg(windows)]
+ #[inline]
+ fn gethostname_impl() -> OsString {

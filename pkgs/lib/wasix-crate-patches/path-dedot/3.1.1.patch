@@ -1,0 +1,10 @@
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -54,6 +54,7 @@
+ version = "0.1.5"
+ 
+ [features]
++default = ["use_unix_paths_on_wasm"]
+ lazy_static_cache = ["lazy_static"]
+ once_cell_cache = []
+ unsafe_cache = []

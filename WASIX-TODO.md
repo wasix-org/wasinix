@@ -460,6 +460,11 @@ current toolchain before relying on it.
 - Workaround: h5py's runtime test sets `HDF5_USE_FILE_LOCKING=FALSE`; DuckDB
   skips its lock calls on WASI in `duckdb-wasi-no-file-lock.patch`; FFmpeg links
   an `ENOSYS` stub from `ffmpeg/package.nix`.
+- SQLite in WAL mode arbitrates between connections with these locks and a
+  shared `mmap` of the `-shm` index, so two connections to one file race:
+  garage's ten-connection pool returns `SQLITE_IOERR` ("disk I/O error") once
+  more than one is in flight, which happens only under load. `garage-code.patch`
+  pins the pool to a single connection, serializing its metadata access.
 - Blocks the `fs2` crate, whose whole API is locking, and any crate reaching the
   filesystem through it. tantivy takes its index lock via `fs2::FileExt`, so the
   overlay registry cannot serve it from a floor patch: a port has to replace the
@@ -866,6 +871,43 @@ current toolchain before relying on it.
   server futures without installing the Unix signal-hook handlers.
 - Fix: upstream a WASI/WASIX platform arm; graceful shutdown can be added when
   the program has a portable signal source for WASIX.
+
+### the rust target's self-contained lib dir holds only `libc.a` 🟡
+
+- A build script emitting `cargo:rustc-link-lib=pthread`, as pkg-config's
+  `Libs.private` produces for any POSIX stub library, fails with
+  `rust-lld: error: unable to find library -lpthread`, even though the wasix
+  sysroot ships an empty `libpthread.a`. rustc searches only
+  `lib/rustlib/wasm32-wasmer-wasi/lib/self-contained`, which holds `libc.a`
+  alone, and it does not search a nix `buildInputs` entry's libdir either.
+- Consequence: hits any Rust package that links a C library through pkg-config
+  (verified on wasix-rust-toolchain 2026-08-06.1).
+- Workaround: `garage/package.nix` puts the profile sysroot's lib dir and zlib's
+  on `RUSTFLAGS` as `-L` entries.
+- Fix: install the sysroot's stub archives alongside `libc.a` in the rust
+  target's self-contained directory, or add the sysroot lib dir to the target
+  spec's link search.
+
+### `garage` reaches for Unix-only services with no other arm 🟡
+
+- Its API and web servers bind either a TCP socket or a
+  `tokio::net::UnixListener`, shutdown comes from `tokio::signal::unix`, free
+  space from `nix::sys::statvfs`, and the RPC public address is autodetected
+  with `pnet_datalink`. Each is selected by `cfg(unix)` alone, so a WASIX build
+  stops at `std::os::unix::fs::PermissionsExt` before it reaches them. The one
+  `cfg(unix)` field upstream does gate, `Secrets::allow_world_readable_secrets`,
+  is then read without a gate.
+- Consequence: unix-socket bind addresses, signal-driven shutdown, and the free
+  space a node reports to its peers are all unavailable in the wasm build, and
+  `rpc_public_addr` has to be configured rather than discovered. `db_engine`
+  must also be set to `sqlite`, the one engine that opens: `lmdb` is not
+  compiled in and `fjall` fails its own open with `EISDIR`.
+- Workaround: `garage-code.patch` supplies the missing arm at each site, and
+  `garage-manifest.patch` moves `nix` and `pnet_datalink` behind `cfg(unix)` so
+  neither is compiled for wasm.
+- Fix: a portable signal source and interface enumeration for WASIX (see
+  `getifaddrs`/`freeifaddrs` above), plus AF_UNIX in mio's WASIX backend.
+  Verified against wasmer 7.2.1 and garage 1.3.1.
 
 ### `polling` has no WASIX backend 🟡
 

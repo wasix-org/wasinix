@@ -1,0 +1,205 @@
+--- a/src/api/common/generic_server.rs
++++ b/src/api/common/generic_server.rs
+@@ -1,5 +1,7 @@
+ use std::convert::Infallible;
++#[cfg(unix)]
+ use std::fs::{self, Permissions};
++#[cfg(unix)]
+ use std::os::unix::fs::PermissionsExt;
+ use std::sync::Arc;
+ use std::time::Duration;
+@@ -16,7 +18,9 @@ use hyper::{HeaderMap, StatusCode};
+ use hyper_util::rt::TokioIo;
+ 
+ use tokio::io::{AsyncRead, AsyncWrite};
+-use tokio::net::{TcpListener, TcpStream, UnixListener, UnixStream};
++use tokio::net::{TcpListener, TcpStream};
++#[cfg(unix)]
++use tokio::net::{UnixListener, UnixStream};
+ use tokio::sync::watch;
+ use tokio::time::{sleep_until, Instant};
+ 
+@@ -122,6 +126,14 @@ impl<A: ApiHandler> ApiServer<A> {
+ 				let handler = move |request, socketaddr| self.clone().handler(request, socketaddr);
+ 				server_loop(server_name, listener, handler, must_exit).await
+ 			}
++			#[cfg(not(unix))]
++			UnixOrTCPSocketAddress::UnixSocket(_) => {
++				let _ = unix_bind_addr_mode;
++				Err(GarageError::Message(
++					"listening on a unix socket is not supported on this platform".into(),
++				))
++			}
++			#[cfg(unix)]
+ 			UnixOrTCPSocketAddress::UnixSocket(ref path) => {
+ 				if path.exists() {
+ 					fs::remove_file(path)?
+@@ -266,8 +278,10 @@ impl Accept for TcpListener {
+ 	}
+ }
+ 
++#[cfg(unix)]
+ pub struct UnixListenerOn(pub UnixListener, pub String);
+ 
++#[cfg(unix)]
+ impl Accept for UnixListenerOn {
+ 	type Stream = UnixStream;
+ 	async fn accept(&self) -> std::io::Result<(Self::Stream, String)> {
+--- a/src/block/manager.rs
++++ b/src/block/manager.rs
+@@ -805,11 +805,11 @@ impl BlockManagerLocked {
+ 			// Now, we do an fsync on the containing directory, to ensure that the rename
+ 			// is persisted properly. See:
+ 			// http://thedjbway.b0llix.net/qmail/syncdir.html
+-			let dir = fs::OpenOptions::new()
+-				.read(true)
+-				.mode(0)
+-				.open(directory)
+-				.await?;
++			let mut options = fs::OpenOptions::new();
++			options.read(true);
++			#[cfg(unix)]
++			options.mode(0);
++			let dir = options.open(directory).await?;
+ 			dir.sync_all().await?;
+ 			drop(dir);
+ 		}
+--- a/src/db/sqlite_adapter.rs
++++ b/src/db/sqlite_adapter.rs
+@@ -72,8 +72,14 @@ impl SqliteDb {
+ 			}
+ 			Ok(())
+ 		});
++		let builder = Pool::builder();
++		// WASIX implements no POSIX record locking and no shared mmap, so two
++		// pooled connections to one file cannot arbitrate WAL access and
++		// concurrent use fails with SQLITE_IOERR. Serialize onto one connection.
++		#[cfg(target_os = "wasi")]
++		let builder = builder.max_size(1);
+ 		let s = Self {
+-			db: Pool::builder().build(manager)?,
++			db: builder.build(manager)?,
+ 			trees: RwLock::new(vec![]),
+ 			write_lock: Mutex::new(()),
+ 		};
+--- a/src/garage/secrets.rs
++++ b/src/garage/secrets.rs
+@@ -52,9 +52,12 @@ pub struct Secrets {
+ /// from config or CLI param or env variable or read from a file specified in config or CLI
+ /// param or env variable)
+ pub fn fill_secrets(mut config: Config, secrets: Secrets) -> Result<Config, Error> {
++	#[cfg(unix)]
+ 	let allow_world_readable = secrets
+ 		.allow_world_readable_secrets
+ 		.unwrap_or(config.allow_world_readable_secrets);
++	#[cfg(not(unix))]
++	let allow_world_readable = config.allow_world_readable_secrets;
+ 
+ 	fill_secret(
+ 		&mut config.rpc_secret,
+--- a/src/garage/server.rs
++++ b/src/garage/server.rs
+@@ -204,6 +204,16 @@ fn watch_shutdown_signal() -> watch::Receiver<bool> {
+ 	watch_cancel
+ }
+ 
++#[cfg(all(not(unix), not(windows)))]
++fn watch_shutdown_signal() -> watch::Receiver<bool> {
++	let (send_cancel, watch_cancel) = watch::channel(false);
++	tokio::spawn(async move {
++		std::future::pending::<()>().await;
++		send_cancel.send(true).unwrap();
++	});
++	watch_cancel
++}
++
+ #[cfg(windows)]
+ fn watch_shutdown_signal() -> watch::Receiver<bool> {
+ 	use tokio::signal::windows::*;
+--- a/src/rpc/system.rs
++++ b/src/rpc/system.rs
+@@ -218,11 +218,14 @@ pub fn gen_node_key(metadata_dir: &Path) -> Result<NodeKey, Error> {
+ 		let (pubkey, key) = ed25519::gen_keypair();
+ 
+ 		{
+-			use std::os::unix::fs::PermissionsExt;
+ 			let mut f = std::fs::File::create(key_file.as_path())?;
+-			let mut perm = f.metadata()?.permissions();
+-			perm.set_mode(0o600);
+-			std::fs::set_permissions(key_file.as_path(), perm)?;
++			#[cfg(unix)]
++			{
++				use std::os::unix::fs::PermissionsExt;
++				let mut perm = f.metadata()?.permissions();
++				perm.set_mode(0o600);
++				std::fs::set_permissions(key_file.as_path(), perm)?;
++			}
+ 			f.write_all(&key[..])?;
+ 		}
+ 
+@@ -803,6 +806,13 @@ impl NodeStatus {
+ 		}
+ 	}
+ 
++	#[cfg(not(unix))]
++	fn update_disk_usage(&mut self, _meta_dir: &Path, _data_dir: &DataDirEnum) {
++		self.meta_disk_avail = None;
++		self.data_disk_avail = None;
++	}
++
++	#[cfg(unix)]
+ 	fn update_disk_usage(&mut self, meta_dir: &Path, data_dir: &DataDirEnum) {
+ 		use nix::sys::statvfs::statvfs;
+ 
+@@ -868,6 +878,12 @@ impl NodeStatus {
+ 
+ /// Obtain the list of currently available IP addresses on all non-loopback
+ /// interfaces, optionally filtering them to be inside a given IpNet.
++#[cfg(not(unix))]
++fn get_default_ip(_filter_ipnet: Option<ipnet::IpNet>) -> Option<IpAddr> {
++	None
++}
++
++#[cfg(unix)]
+ fn get_default_ip(filter_ipnet: Option<ipnet::IpNet>) -> Option<IpAddr> {
+ 	pnet_datalink::interfaces()
+ 		.into_iter()
+--- a/src/web/web_server.rs
++++ b/src/web/web_server.rs
+@@ -1,8 +1,12 @@
++#[cfg(unix)]
+ use std::fs::{self, Permissions};
++#[cfg(unix)]
+ use std::os::unix::prelude::PermissionsExt;
+ use std::sync::Arc;
+ 
+-use tokio::net::{TcpListener, UnixListener};
++use tokio::net::TcpListener;
++#[cfg(unix)]
++use tokio::net::UnixListener;
+ use tokio::sync::watch;
+ 
+ use hyper::{
+@@ -23,7 +27,9 @@ use crate::error::*;
+ use garage_api_common::cors::{
+ 	add_cors_headers, find_matching_cors_rule, handle_options_for_bucket,
+ };
+-use garage_api_common::generic_server::{server_loop, UnixListenerOn};
++use garage_api_common::generic_server::server_loop;
++#[cfg(unix)]
++use garage_api_common::generic_server::UnixListenerOn;
+ use garage_api_common::helpers::*;
+ use garage_api_s3::error::{
+ 	CommonErrorDerivative, Error as ApiError, OkOrBadRequest, OkOrInternalError,
+@@ -102,6 +108,11 @@ impl WebServer {
+ 					move |stream, socketaddr| self.clone().handle_request(stream, socketaddr);
+ 				server_loop(server_name, listener, handler, must_exit).await
+ 			}
++			#[cfg(not(unix))]
++			UnixOrTCPSocketAddress::UnixSocket(_) => Err(GarageError::Message(
++				"listening on a unix socket is not supported on this platform".into(),
++			)),
++			#[cfg(unix)]
+ 			UnixOrTCPSocketAddress::UnixSocket(ref path) => {
+ 				if path.exists() {
+ 					fs::remove_file(path)?
