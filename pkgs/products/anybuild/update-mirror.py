@@ -19,7 +19,7 @@ their URL and sha256, which the test's index fetches as plain fetchurls.
 suite covers. Everything else in the file is generated. Needs network; CI only
 reads the committed result.
 
-Also the anybuild package's retentionHook, so a bump re-resolves the pins
+Also the anybuild package's postUpdateHook, so a bump re-resolves the pins
 against that release's examples/. The update driver runs every hook whenever
 any target moved, so this no-ops unless the recorded anybuild version changed;
 --force re-resolves anyway.

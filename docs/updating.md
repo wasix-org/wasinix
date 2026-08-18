@@ -39,9 +39,11 @@ a PR and its CI comment agree by construction. The repo-wide steps are
 registry-history retention (keep the outgoing version rebuildable when a bump
 crosses a major, or per `passthru.wasix.retention`: `minor` for
 latest-per-minor, `none` to opt out), the rels.json prune (drop keys nothing
-serves), and finally the `passthru.wasix.retentionHook`s, which re-sync listings
-derived from pins. Hooks that would repeat expensive work on unrelated bumps
-must gate themselves.
+serves), and finally the
+`passthru.wasix.postUpdateHook`s, which re-sync state derived from pins. Hooks
+receive the names of targets that moved in `WASINIX_UPDATED_TARGETS` as a JSON
+list; `wasinix update hooks` omits it to request an unconditional repair. Hooks
+that would repeat expensive work on unrelated bumps must gate themselves.
 
 These steps run in order for every target because each can move a served
 version. Retention fetches and hashes the outgoing release, so a bump may do

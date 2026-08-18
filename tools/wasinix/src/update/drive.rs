@@ -14,6 +14,8 @@ use crate::update::retention::{self, Versions};
 use crate::update::targets::{self, Target};
 use crate::update::{select, Mode};
 
+const UPDATED_TARGETS_ENV: &str = "WASINIX_UPDATED_TARGETS";
+
 pub struct Options {
     /// Run the package-declared re-syncs and nothing else. They normally run
     /// only when a target moved, which leaves no way to repair a derived
@@ -50,7 +52,11 @@ fn commit_step(
     Ok(())
 }
 
-fn run_retention_hook(repo: &Path, hook: &targets::Hook) -> Result<Option<String>> {
+fn run_post_update_hook(
+    repo: &Path,
+    hook: &targets::Hook,
+    env: &[(String, String)],
+) -> Result<Option<String>> {
     let name = &hook.name;
     let command = &hook.command;
     ui::fact("hook", name);
@@ -62,7 +68,7 @@ fn run_retention_hook(repo: &Path, hook: &targets::Hook) -> Result<Option<String
         command.to_vec()
     };
     backends::realise_command(name, &cmd, &hook.command_drv_paths)?;
-    let (code, stdout, stderr) = backends::run_capturing(repo, &cmd, &[])?;
+    let (code, stdout, stderr) = backends::run_capturing(repo, &cmd, env)?;
     ui::raw(&stderr);
     backends::echo(&stdout);
     if code != 0 {
@@ -76,16 +82,31 @@ fn run_retention_hook(repo: &Path, hook: &targets::Hook) -> Result<Option<String
     Ok(stdout.trim().lines().last().map(str::to_string))
 }
 
+fn post_update_env(updated_targets: Option<&[&Target]>) -> Vec<(String, String)> {
+    updated_targets.map_or_else(Vec::new, |targets| {
+        let names = targets
+            .iter()
+            .map(|target| serde_json::Value::String(target.name.clone()))
+            .collect();
+        vec![(
+            UPDATED_TARGETS_ENV.to_string(),
+            serde_json::Value::Array(names).to_string(),
+        )]
+    })
+}
+
 fn hook_stage(
     repo: &Path,
     changes: &mut ChangeSet,
     commit: bool,
     committer: Option<&crate::support::git::Identity<'_>>,
+    updated_targets: Option<&[&Target]>,
 ) -> Result<()> {
-    for hook in targets::discovered_hooks()? {
+    let env = post_update_env(updated_targets);
+    for hook in targets::discovered_post_update_hooks()? {
         let name = hook.name.clone();
         let before = repo_status(repo)?;
-        match run_retention_hook(repo, &hook) {
+        match run_post_update_hook(repo, &hook, &env) {
             Ok(outcome) => {
                 let after = repo_status(repo)?;
                 // Only a hook that changed something enters the ChangeSet:
@@ -122,7 +143,7 @@ fn run_hooks(
     committer: Option<&crate::support::git::Identity<'_>>,
 ) -> Result<ChangeSet> {
     let mut changes = ChangeSet::default();
-    hook_stage(repo, &mut changes, commit, committer)?;
+    hook_stage(repo, &mut changes, commit, committer, None)?;
     Ok(changes)
 }
 
@@ -288,10 +309,15 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
         }
     }
 
-    // Package-declared re-syncs last: a hook regenerates a listing derived
-    // from the pins once history and the prune have settled.
-    if changes.changed() && release_work {
-        hook_stage(repo, &mut changes, options.commit, committer)?;
+    // Package-declared re-syncs last, after any release-only history work.
+    if changes.changed() {
+        hook_stage(
+            repo,
+            &mut changes,
+            options.commit,
+            committer,
+            Some(&moved),
+        )?;
     }
 
     if release_work {
@@ -315,5 +341,45 @@ pub fn exit_of(changes: &ChangeSet) -> CommandStatus {
         CommandStatus::SUCCESS
     } else {
         CommandStatus::FAILURE
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::update::targets::Backend;
+
+    fn target(name: &str) -> Target {
+        Target {
+            name: name.into(),
+            backend: Backend::FlakeInput,
+            input: name.into(),
+            attr: String::new(),
+            version: String::new(),
+            command: Vec::new(),
+            command_drv_paths: Vec::new(),
+            file: String::new(),
+            accepts: Vec::new(),
+            source: None,
+        }
+    }
+
+    #[test]
+    fn automatic_hooks_receive_the_targets_that_moved() {
+        let nixpkgs = target("nixpkgs");
+        let wasmer = target("wasmer");
+        let env = post_update_env(Some(&[&nixpkgs, &wasmer]));
+        assert_eq!(
+            env,
+            vec![(
+                UPDATED_TARGETS_ENV.into(),
+                r#"["nixpkgs","wasmer"]"#.into()
+            )]
+        );
+    }
+
+    #[test]
+    fn manual_hooks_receive_no_target_filter() {
+        assert!(post_update_env(None).is_empty());
     }
 }

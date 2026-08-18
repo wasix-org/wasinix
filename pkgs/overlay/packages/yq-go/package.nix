@@ -15,7 +15,10 @@ helpers.wasmRename {wasmName = "yq";} (
         pkg/yqlib/encoder_json.go \
         --replace-fail '"github.com/goccy/go-json"' '"encoding/json"'
     '';
-    passthru.wasix.shipped = true;
+    passthru.wasix = {
+      shipped = true;
+      postUpdateHook = ["pkgs/overlay/packages/yq-go/update-vendor-hash.py"];
+    };
   }
   prev.yq-go
 )

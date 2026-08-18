@@ -108,7 +108,7 @@ Keep only versions consumers are likely to pin.
 
 A `{names, packages}` family is only for a package nixpkgs itself carries at
 multiple versions, not for minting historical ones. Its version list should
-derive from nixpkgs. For example, icu uses a `retentionHook` to regenerate its
+derive from nixpkgs. For example, icu uses a `postUpdateHook` to regenerate its
 list after a pin bump.
 
 ## The Python wheel index

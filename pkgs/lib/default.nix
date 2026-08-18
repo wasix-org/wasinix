@@ -1,6 +1,6 @@
 # Helpers for wasix package files, and the optional passthru.wasix declaration:
 # supportedProfiles, preferredProfile, ciProfiles, ciTags, shipped, broken, retention,
-# retentionHook, updateNotes (docs/packaging.md, docs/updating.md).
+# postUpdateHook, updateNotes (docs/packaging.md, docs/updating.md).
 # applyWasixMeta below is the only writer of meta.badPlatforms/meta.broken.
 {lib}: let
   profilesCfg = import ../profiles.nix;

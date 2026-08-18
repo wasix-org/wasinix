@@ -826,12 +826,13 @@
         in
           lib.concatMapAttrs scriptOf ciSets.all;
 
-        # passthru.wasix.retentionHook: a command the update driver runs after the
-        # repo-wide history/prune steps. In-tree only; the driver dedupes repeats.
-        retentionHooks = let
+        # passthru.wasix.postUpdateHook: a command the update driver runs after
+        # updated pins and the release-only history steps. In-tree only; the
+        # driver dedupes repeats.
+        postUpdateHooks = let
           srcRoot = toString self;
           hookOf = attr: drv: let
-            h = (drv.passthru.wasix or {}).retentionHook or null;
+            h = (drv.passthru.wasix or {}).postUpdateHook or null;
             command =
               if h == null
               then null

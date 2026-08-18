@@ -80,7 +80,7 @@ change rather than a component, which is the opposite of what the scope is for.
 Pin bumps are generated: `wasinix update --all --commit` lands one commit per
 target, already in `<name>: <old> -> <new>` form, plus a separate commit for
 each repo-wide step a bump implies (history retention, rels pruning, a package's
-retention hook). Let it write those rather than hand-rolling a variant.
+post-update hook). Let it write those rather than hand-rolling a variant.
 
 A meaningful title is enough when the diff explains the change. Use a short body
 for rationale the diff cannot show, not to narrate what changed.

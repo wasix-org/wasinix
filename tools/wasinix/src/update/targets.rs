@@ -198,11 +198,11 @@ pub struct Hook {
 }
 
 /// Package-declared re-syncs, deduped by command across the profile attrs.
-pub fn discovered_hooks() -> Result<Vec<Hook>> {
-    let declared = eval(&Flake::default(), "retentionHooks", None)?;
+pub fn discovered_post_update_hooks() -> Result<Vec<Hook>> {
+    let declared = eval(&Flake::default(), "postUpdateHooks", None)?;
     let mut hooks: BTreeMap<Vec<String>, (String, Vec<String>)> = BTreeMap::new();
     for (attr, value) in declared.as_object().into_iter().flatten() {
-        let context = format!("retentionHooks.{attr}");
+        let context = format!("postUpdateHooks.{attr}");
         let command: Vec<String> =
             crate::support::json::from_value(value["command"].clone(), &context)?;
         let drvs: Vec<String> =
