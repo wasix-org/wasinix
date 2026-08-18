@@ -42,6 +42,9 @@
       # delegation masked the implied FD_DATASYNC/FD_SYNC off files under
       # mapped host dirs; rustfs object writes (fdatasync durability) 500'd.
       ./patches/wasmer-fd-sync-rights-durability.patch
+      # fd_sync/fd_datasync refused a directory fd with EISDIR, which every
+      # caller that fsyncs a directory after a rename hits (initdb).
+      ./patches/wasmer-fd-sync-directory.patch
       # Host hard links and their rename/unlink cache entries are broken.
       ./patches/wasmer-path-rename-hardlink.patch
       # fd_readdir cookies must remain valid while callers delete entries.
