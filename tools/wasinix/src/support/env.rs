@@ -187,6 +187,17 @@ pub fn current_exe() -> Result<PathBuf> {
     std::env::current_exe().map_err(|e| crate::support::error::io("wasinix", e))
 }
 
+/// Whether a spawn of this program word could succeed: a path is checked as
+/// given, a bare name must resolve on PATH.
+pub fn on_path(program: &str) -> bool {
+    if program.contains('/') {
+        return std::path::Path::new(program).exists();
+    }
+    std::env::var_os("PATH")
+        .map(|path| std::env::split_paths(&path).any(|dir| dir.join(program).is_file()))
+        .unwrap_or(false)
+}
+
 /// The subcommand as typed, for messages naming the app that would have
 /// carried a missing tool.
 pub fn arg1() -> Option<String> {

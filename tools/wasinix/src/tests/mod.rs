@@ -1738,6 +1738,20 @@ mod cli {
     }
 
     #[test]
+    fn a_bare_subcommand_payload_is_refused_with_the_verbatim_hint() {
+        let error = crate::cli::payload_check("build", false).unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("verbatim"));
+        assert!(message.contains("wasinix run start -- wasinix build"));
+        let other = crate::cli::payload_check("no-such-tool", false)
+            .unwrap_err()
+            .to_string();
+        assert!(other.contains("not on PATH"));
+        assert!(!other.contains("wasinix no-such-tool"));
+        assert!(crate::cli::payload_check("build", true).is_ok());
+    }
+
+    #[test]
     fn build_options_are_typed_and_assemble_a_request() {
         let CommandTree::Build(args) = parse(&[
             "build",

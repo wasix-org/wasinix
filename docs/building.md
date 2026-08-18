@@ -144,13 +144,14 @@ fitting, such as a builder that is no longer reachable.
 authoritative; do not infer state from `ps` or a tool-call timeout.
 
 ```sh
-id=$(wasinix run start -- build all --on ec2 --push-cache)
+id=$(wasinix run start -- wasinix build all --on ec2 --push-cache)
 wasinix run status "$id" --json     # state + progress snapshot
 wasinix run watch "$id"             # narrate the event stream
 wasinix run wait "$id" --timeout 60 # bounded observation; the run keeps going
 ```
 
-`run start` detaches a supervisor; the run survives your terminal, `run watch`
+`run start` executes its payload verbatim, so a wasinix payload names the
+binary. It detaches a supervisor; the run survives your terminal, `run watch`
 and `run logs --follow` replay the same event stream, and joining mid-run shows
 the completed phases' receipts first. A run whose supervisor died without
 recording an exit reads as `lost`, a state like any other, not a hang.

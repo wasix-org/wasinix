@@ -146,7 +146,9 @@ pub enum RunCommand {
         /// Wait for the run to finish instead of returning the id immediately
         #[arg(long)]
         wait: bool,
-        /// The command to run; it receives --run-dir automatically
+        /// The command to run, executed verbatim, so a wasinix payload names
+        /// the binary: `run start -- wasinix build all`. The payload receives
+        /// --run-dir automatically.
         #[arg(trailing_var_arg = true, required = true)]
         command: Vec<String>,
     },
@@ -367,9 +369,29 @@ pub enum CiCommand {
     },
 }
 
+/// The supervisor spawns the payload verbatim; catching an unspawnable one
+/// here fails in the caller's terminal instead of minting a dead run.
+pub(crate) fn payload_check(program: &str, on_path: bool) -> Result<()> {
+    if on_path {
+        return Ok(());
+    }
+    let own_command = <Cli as clap::CommandFactory>::command()
+        .get_subcommands()
+        .any(|sub| sub.get_name() == program);
+    if own_command {
+        return Err(crate::support::error::Error::Request(format!(
+            "run start executes its payload verbatim, and `{program}` is a wasinix command, not a binary; name the binary: `wasinix run start -- wasinix {program} ...`"
+        )));
+    }
+    Err(crate::support::error::Error::Request(format!(
+        "{program} is not on PATH; the payload is executed verbatim by the run's supervisor"
+    )))
+}
+
 fn run_command(command: RunCommand) -> Result<CommandStatus> {
     match command {
         RunCommand::Start { wait, command } => {
+            payload_check(&command[0], crate::support::env::on_path(&command[0]))?;
             let run_id = runs::start(&command)?;
             ui::result(&run_id);
             if wait {
