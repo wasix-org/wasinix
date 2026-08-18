@@ -16,10 +16,7 @@
     meta.broken = false;
     # wasm32-wasi matches no configure template; pick one explicitly.
     configureFlags = old: old ++ ["--with-template=linux"];
-    patches = [
-      ./patches/0001-skip-the-root-privilege-check-on-wasi.patch
-      ./patches/0002-tolerate-EISDIR-when-fsyncing-a-directory.patch
-    ];
+    patches = [./patches/0001-skip-the-root-privilege-check-on-wasi.patch];
     # git's wasix-compat shim: unistd.h declaring fork() + proc.c implementing it
     # via __wasi_proc_fork. postmaster.c needs the declaration to compile at all.
     postPatch = ''

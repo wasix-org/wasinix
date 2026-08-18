@@ -479,9 +479,6 @@ current toolchain before relying on it.
 - Fixed by `patches/wasmer-fd-sync-directory.patch`: both calls return success
   for a directory. Verified with a C probe doing `fsync(open(".", O_RDONLY))`,
   which reports `Is a directory` on stock 7.2.1 and succeeds with the patch.
-- The published webc still carries
-  `postgresql/patches/0002-tolerate-EISDIR-when-fsyncing-a-directory.patch`, so
-  it also runs on a stock wasmer.
 - Neither call is a kernel-level barrier yet: `host_fs`'s `poll_flush` forwards
   to tokio's buffer flush rather than `sync_all()`, so a file fsync is not one
   either. Making a directory fsync a real barrier needs a directory-sync
