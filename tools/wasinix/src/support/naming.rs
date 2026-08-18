@@ -218,8 +218,10 @@ impl Domain {
     /// alias rather than a structural address.
     fn matches(&self, spec: &Spec) -> Vec<(&Entry, bool)> {
         let glob = spec.is_glob();
-        // A flattened CI job name joins its segments with dots and loses which
-        // dots were separators, so the joined form is always accepted too.
+        // An unquoted spelling loses which dots were separators: a flattened
+        // CI job name, or a dotted leaf like `jq-1.6.0` typed bare at a
+        // shell. The joined form is accepted against every suffix form and
+        // alias, so naming a thing exactly never requires quoting.
         let flat = spec.segments.join(".");
         let segment_matches = |segment: &str, wanted: &str| {
             if glob {
@@ -231,19 +233,20 @@ impl Domain {
         self.entries
             .iter()
             .filter_map(|entry| {
-                let by_alias = spec.segments.len() == 1
+                let by_alias = (spec.segments.len() == 1
                     && entry
                         .aliases
                         .iter()
-                        .any(|alias| segment_matches(alias, &spec.segments[0]));
-                let by_path = (!glob && entry.path.join(".") == flat)
-                    || entry.path_forms().into_iter().any(|form| {
-                        form.len() == spec.segments.len()
+                        .any(|alias| segment_matches(alias, &spec.segments[0])))
+                    || (!glob && entry.aliases.iter().any(|alias| *alias == flat));
+                let by_path = entry.path_forms().into_iter().any(|form| {
+                    (!glob && form.join(".") == flat)
+                        || (form.len() == spec.segments.len()
                             && form
                                 .iter()
                                 .zip(&spec.segments)
-                                .all(|(segment, wanted)| segment_matches(segment, wanted))
-                    });
+                                .all(|(segment, wanted)| segment_matches(segment, wanted)))
+                });
                 (by_alias || by_path).then_some((entry, by_alias))
             })
             .collect()

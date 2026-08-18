@@ -181,6 +181,9 @@ mod naming {
             resolve(r#"wasmerPackages."python3.14""#).unwrap(),
             ["python3.14"]
         );
+        // The bare dotted leaf too: nobody quotes `jq-1.6.0` at a shell.
+        assert_eq!(resolve("python3.14").unwrap(), ["python3.14"]);
+        assert_eq!(resolve(r#""python3.14""#).unwrap(), ["python3.14"]);
     }
 
     #[test]
