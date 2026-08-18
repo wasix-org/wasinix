@@ -3,6 +3,9 @@
 Where builds run, how to build one thing, and how to check a change before it
 goes to CI.
 
+Every command here is the `wasinix` CLI: on PATH in a dev shell, and
+`nix run .#wasinix -- <args>` without one.
+
 ## Where builds run
 
 The toolchain and the full CI sweep are expensive: local builds at that scale
