@@ -98,14 +98,26 @@ fn job_count(fragments: &BTreeMap<String, Fragment>) -> Option<usize> {
     })
 }
 
+/// Each derivation counted once across every build task and case sharing
+/// it; older fragments without the drv map fall back to per-address sums.
 fn build_seconds(fragments: &BTreeMap<String, Fragment>) -> f64 {
-    fragments
-        .values()
-        .filter_map(|fragment| match &fragment.data {
-            Some(FragmentData::Build(facts)) => Some(facts.build_seconds.values().sum::<f64>()),
-            _ => None,
-        })
-        .sum()
+    let mut counted: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    let mut total = 0.0;
+    for fragment in fragments.values() {
+        let Some(FragmentData::Build(facts)) = &fragment.data else {
+            continue;
+        };
+        if facts.build_seconds_by_drv.is_empty() {
+            total += facts.build_seconds.values().sum::<f64>();
+            continue;
+        }
+        for (drv, seconds) in &facts.build_seconds_by_drv {
+            if counted.insert(drv) {
+                total += seconds;
+            }
+        }
+    }
+    total
 }
 
 fn failure_cause(failure: &Failure) -> Markdown {

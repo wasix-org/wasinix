@@ -101,11 +101,18 @@ pub struct BuildMetrics {
     /// useful for relative cost, not the elapsed duration of the CI task.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub build_seconds: BTreeMap<JobAddr, f64>,
+    /// The same wall times keyed by derivation, so a fold over many tasks
+    /// can count a build once however many job addresses and cases share
+    /// it. A case without a recorded derivation (an older junit) keys by
+    /// its address, degrading to the per-address count.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub build_seconds_by_drv: BTreeMap<String, f64>,
 }
 
 impl BuildMetrics {
     pub fn from_cases(cases: &[junit::Case]) -> BuildMetrics {
         let mut build_seconds: BTreeMap<JobAddr, f64> = BTreeMap::new();
+        let mut build_seconds_by_drv: BTreeMap<String, f64> = BTreeMap::new();
         for case in cases
             .iter()
             .filter(|case| case.class == "Build" && case.duration > 0.0)
@@ -113,11 +120,15 @@ impl BuildMetrics {
             *build_seconds
                 .entry(JobAddr(case.attr.clone()))
                 .or_default() += case.duration;
+            build_seconds_by_drv
+                .entry(case.drv.clone().unwrap_or_else(|| case.attr.clone()))
+                .or_insert(case.duration);
         }
-        BuildMetrics { build_seconds }
+        BuildMetrics {
+            build_seconds,
+            build_seconds_by_drv,
+        }
     }
-
-
 }
 
 pub fn metrics(paths: &[PathBuf]) -> BuildMetrics {
@@ -142,6 +153,8 @@ pub struct BuildFacts {
     pub counts: BTreeMap<String, (usize, usize)>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub build_seconds: BTreeMap<JobAddr, f64>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub build_seconds_by_drv: BTreeMap<String, f64>,
 }
 
 fn test_results(cases: &[junit::Case]) -> Vec<TestResult> {
@@ -215,11 +228,13 @@ pub fn ingest(
     let roots = logs::dependency_root_causes(&failed, &index, cutoff);
     let mut failures = failures_of(&failed, &roots);
     logs::archive(logs_dir, &failed, &roots, &index, &mut failures)?;
+    let metrics = BuildMetrics::from_cases(&cases);
     Ok(BuildFacts {
         complete: true,
         failures,
         tests: test_results(&cases),
         counts,
-        build_seconds: BuildMetrics::from_cases(&cases).build_seconds,
+        build_seconds: metrics.build_seconds,
+        build_seconds_by_drv: metrics.build_seconds_by_drv,
     })
 }

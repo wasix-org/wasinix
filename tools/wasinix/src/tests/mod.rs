@@ -4695,6 +4695,33 @@ mod facts {
     }
 
     #[test]
+    fn shared_derivations_count_once_in_the_deduped_totals() {
+        let mut a = junit::Case::new("head::packages.foo".into(), "Build".into());
+        a.duration = 10.0;
+        a.drv = Some("/nix/store/x-foo.drv".into());
+        let mut b = junit::Case::new("base::packages.foo".into(), "Build".into());
+        b.duration = 10.0;
+        b.drv = Some("/nix/store/x-foo.drv".into());
+        let mut legacy = junit::Case::new("checks.old".into(), "Build".into());
+        legacy.duration = 3.0;
+
+        let xml = junit::write_junit(&[a, b, legacy]);
+        let scratch = Scratch::create("wasinix-test").unwrap();
+        let path = scratch.path().join("t.xml");
+        std::fs::write(&path, &xml).unwrap();
+        let parsed = junit::parse_junits(&[path], false).unwrap();
+        assert_eq!(parsed[0].drv.as_deref(), Some("/nix/store/x-foo.drv"));
+        assert_eq!(parsed[2].drv, None);
+
+        let metrics = crate::ci::facts::BuildMetrics::from_cases(&parsed);
+        // Every address keeps its own duration; the drv map carries the
+        // shared build once.
+        assert_eq!(metrics.build_seconds.len(), 3);
+        assert_eq!(metrics.build_seconds_by_drv.len(), 2);
+        assert_eq!(metrics.build_seconds_by_drv.values().sum::<f64>(), 13.0);
+    }
+
+    #[test]
     fn a_backfilled_failure_round_trips_without_growing_a_log() {
         let mut written = junit::Case::new("job".into(), "Build".into());
         written.message = Some("build did not complete".into());

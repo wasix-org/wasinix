@@ -13,6 +13,9 @@ pub struct Case {
     pub attr: String,
     pub class: String,
     pub duration: f64,
+    /// The derivation behind the job, so aggregation can count a build once
+    /// however many job addresses share it.
+    pub drv: Option<String>,
     pub message: Option<String>,
     pub log: Option<String>,
     pub transitive: bool,
@@ -27,6 +30,7 @@ impl Case {
             attr,
             class,
             duration: 0.0,
+            drv: None,
             message: None,
             log: None,
             transitive: false,
@@ -84,6 +88,7 @@ pub fn parse_junits(paths: &[PathBuf], warn_missing: bool) -> Option<Vec<Case>> 
                                 .ok()
                                 .filter(|seconds| seconds.is_finite() && *seconds >= 0.0)
                                 .unwrap_or(0.0);
+                            case.drv = Some(attribute(b"drv")).filter(|drv| !drv.is_empty());
                             current = Some(case);
                         }
                         b"failure" => {
@@ -145,8 +150,13 @@ pub fn write_junit(cases: &[Case]) -> String {
     let failures = cases.iter().filter(|case| case.message.is_some()).count();
     let mut body = String::new();
     for case in cases {
+        let drv = case
+            .drv
+            .as_deref()
+            .map(|drv| format!(" drv=\"{}\"", xml(drv)))
+            .unwrap_or_default();
         body += &format!(
-            "<testcase classname=\"{}\" name=\"{}\" time=\"{}\">",
+            "<testcase classname=\"{}\" name=\"{}\" time=\"{}\"{drv}>",
             xml(&case.class),
             xml(&case.attr),
             case.duration

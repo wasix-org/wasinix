@@ -421,6 +421,7 @@ pub fn build_union(
             "Build".to_string(),
         );
         case.duration = value["duration"].as_f64().unwrap_or_default();
+        case.drv = value["drv"].as_str().map(str::to_string);
         if !value["success"].as_bool().unwrap_or(false) {
             case.message = Some(value["error"].as_str().unwrap_or("build failed").to_string());
         }
@@ -483,7 +484,7 @@ pub fn build_union(
         for attr in &spec.attrs {
             emit(
                 serde_json::json!({
-                    "type": "BUILD", "attr": attr, "success": true,
+                    "type": "BUILD", "attr": attr, "drv": drv, "success": true,
                     "cached": true, "duration": 0.0,
                 }),
                 &mut stream,
@@ -607,7 +608,7 @@ pub fn build_union(
                 for attr in &jobs[&drv].attrs {
                     emit(
                         serde_json::json!({
-                            "type": "BUILD", "attr": attr, "success": true,
+                            "type": "BUILD", "attr": attr, "drv": drv, "success": true,
                             "duration": duration,
                         }),
                         &mut stream,
@@ -656,7 +657,7 @@ pub fn build_union(
             for attr in &jobs[&drv].attrs {
                 emit(
                     serde_json::json!({
-                        "type": "BUILD", "attr": attr, "success": true,
+                        "type": "BUILD", "attr": attr, "drv": drv, "success": true,
                         "duration": duration,
                     }),
                     &mut stream,
@@ -688,7 +689,7 @@ pub fn build_union(
             failures += 1;
             emit(
                 serde_json::json!({
-                    "type": "BUILD", "attr": attr, "success": false,
+                    "type": "BUILD", "attr": attr, "drv": drv, "success": false,
                     "error": error,
                 }),
                 &mut stream,
