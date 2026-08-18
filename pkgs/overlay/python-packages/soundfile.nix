@@ -10,7 +10,9 @@
   ...
 }:
 helpers.libTweaks {
-  # setup.py derives the bundled libname from these; keep the runtime name below in step
+  # setup.py derives the bundled libname from these; keep the runtime name below in step.
+  # Only `linux` packages _soundfile_data at all, and it also picks the wheel's
+  # platform tag, which the postPatch below corrects.
   env = {
     PYSOUNDFILE_PLATFORM = "linux";
     PYSOUNDFILE_ARCHITECTURE = "wasm32";
@@ -23,6 +25,9 @@ helpers.libTweaks {
     substituteInPlace soundfile.py \
       --replace-fail "raise OSError('no packaged library for this platform')" \
                      "_packaged_libname = 'libsndfile_wasm32.so'"
+    substituteInPlace setup.py \
+      --replace-fail "oses = 'manylinux_2_28_{}'.format(pep600_architecture)" \
+                     "oses = 'wasix_wasm32'"
   '';
 }
 pyprev.soundfile
