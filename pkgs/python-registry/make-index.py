@@ -414,11 +414,16 @@ def main() -> None:
         for whl in wheels:
             project = normalize(whl.name.split("-", 1)[0])
             prev = projects.setdefault(project, {}).setdefault(whl.name, whl)
-            if prev != whl and prev.read_bytes() != whl.read_bytes():
-                # A py3-none-any tag asserts the artifact is interpreter
-                # independent, so keep the first and let differing build noise go.
-                if not whl.name.endswith("-py3-none-any.whl"):
-                    conflicts.append((whl.name, entry["attr"]))
+            if prev is not whl:
+                if prev.read_bytes() != whl.read_bytes():
+                    # A py3-none-any tag asserts the artifact is interpreter
+                    # independent, so keep the first and let differing build
+                    # noise go.
+                    if not whl.name.endswith("-py3-none-any.whl"):
+                        conflicts.append((whl.name, entry["attr"]))
+                # `prev` is what the page serves, so its provenance is the one
+                # that reproduces these bytes.
+                continue
             provenance[whl.name] = {
                 "name": entry["name"],
                 "rel_key": entry["relKey"],
