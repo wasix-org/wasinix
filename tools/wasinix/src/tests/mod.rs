@@ -2672,6 +2672,37 @@ mod update {
     }
 
     #[test]
+    fn the_completion_cache_round_trips_and_narrow_maps_do_not_shrink_it() {
+        let scratch = crate::support::fs::Scratch::create("wasinix-test").unwrap();
+        let names = crate::support::completions::round_trip_for_tests(
+            scratch.path(),
+            "selectors",
+            &["core", "checks.zlib"],
+        );
+        assert_eq!(names, ["core", "checks.zlib"]);
+
+        // A spot case's map has no set catalog and offers nothing to record.
+        let narrow = crate::ci::evalmap::EvalMap {
+            jobs: [(crate::support::atoms::JobAddr("packagesByProfile.zlib".into()), String::new())]
+                .into_iter()
+                .collect(),
+            ..Default::default()
+        };
+        assert!(narrow.selector_names().is_none());
+        let full = crate::ci::evalmap::EvalMap {
+            jobs: [(crate::support::atoms::JobAddr("checks.zlib".into()), String::new())]
+                .into_iter()
+                .collect(),
+            sets: [("core".to_string(), vec!["checks.zlib".to_string()])]
+                .into_iter()
+                .collect(),
+            ..Default::default()
+        };
+        let names = full.selector_names().unwrap();
+        assert_eq!(names, ["all", "core", "checks.zlib"]);
+    }
+
+    #[test]
     fn script_requests_are_validated_before_a_script_sees_them() {
         use crate::update::request::parse;
         let release = r#"{"schema":1,"mode":"release","target":"wasix-libc","value":"1.2"}"#;

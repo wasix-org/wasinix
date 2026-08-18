@@ -373,6 +373,7 @@ fn evaluate(
     mapping.sets = catalog.sets;
     mapping.groups = catalog.groups;
     schema::write(&crate::ci::prepare::eval_map_path(&case_dir(ctx.run_dir, case_id)), &mapping)?;
+    mapping.record_completions();
 
     let omitted_by_tags: BTreeMap<String, usize> = mapping
         .omitted_by_tags(&case.enabled_tags)

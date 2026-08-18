@@ -152,6 +152,30 @@ impl Document for EvalMap {
 }
 
 impl EvalMap {
+    /// Every name a selector completer should offer, or None for a map too
+    /// narrow to describe the world (a spot case carries only its own jobs
+    /// and must not shrink the recorded set).
+    pub fn selector_names(&self) -> Option<Vec<&str>> {
+        if self.sets.is_empty() {
+            return None;
+        }
+        Some(
+            std::iter::once("all")
+                .chain(self.sets.keys().map(String::as_str))
+                .chain(self.groups.keys().map(String::as_str))
+                .chain(self.jobs.keys().map(JobAddr::as_str))
+                .collect(),
+        )
+    }
+
+    /// Refresh the shell-completion cache from this map.
+    pub fn record_completions(&self) {
+        if let Some(names) = self.selector_names() {
+            crate::support::completions::record("selectors", names);
+        }
+    }
+
+
     /// The map an evaluation's job lines describe. Errors keep their first
     /// line; the full text stays in the evaluation log.
     pub fn from_jobs(rev: Rev, jobs: &[crate::nix::evaljobs::EvalJob]) -> EvalMap {

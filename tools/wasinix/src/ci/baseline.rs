@@ -72,6 +72,7 @@ pub fn materialize(paths: &Path, published: &EvalMap) -> Result<()> {
     mapping.coverage = Vec::new();
     crate::support::schema::write(&crate::ci::prepare::eval_map_path(paths), &mapping)?;
     crate::support::schema::write(&crate::ci::prepare::status_path(paths), &statuses)?;
+    mapping.record_completions();
     Ok(())
 }
 

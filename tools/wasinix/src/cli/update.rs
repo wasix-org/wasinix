@@ -103,6 +103,7 @@ pub struct UpdateArgs {
     /// `hooks` runs only the re-sync hooks. For package update scripts:
     /// `request` prints the driver's request, `nix-update -- <argv>` runs a
     /// declared nix-update command with the request applied
+    #[arg(add = clap_complete::ArgValueCandidates::new(target_candidates))]
     pub targets: Vec<String>,
     /// Update every target
     #[arg(long, conflicts_with = "targets")]
@@ -168,6 +169,17 @@ pub enum VersionsCommand {
         #[command(flatten)]
         mode: MutationMode,
     },
+}
+
+/// Completion values for update targets: the verbs, then the target names
+/// as of the last discovery this machine ran.
+fn target_candidates() -> Vec<clap_complete::CompletionCandidate> {
+    ["list", "hooks"]
+        .into_iter()
+        .map(str::to_string)
+        .chain(crate::support::completions::recall("update-targets"))
+        .map(clap_complete::CompletionCandidate::new)
+        .collect()
 }
 
 pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {

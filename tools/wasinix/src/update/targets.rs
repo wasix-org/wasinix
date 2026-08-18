@@ -264,6 +264,10 @@ pub fn all_targets(repo: &Path) -> Result<Vec<Target>> {
             ));
         }
     }
+    crate::support::completions::record(
+        "update-targets",
+        targets.iter().map(|target| target.name.as_str()),
+    );
     Ok(targets)
 }
 

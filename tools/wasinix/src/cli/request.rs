@@ -26,7 +26,11 @@ const DEFAULT_SPOT_SOURCES: [&str; 1] = ["toolchain"];
 #[derive(Debug, clap::Args)]
 pub struct RequestArgs {
     /// CI sets, named groups, or job addresses to select
-    #[arg(required = true, value_name = "SELECTOR")]
+    #[arg(
+        required = true,
+        value_name = "SELECTOR",
+        add = clap_complete::ArgValueCandidates::new(selector_candidates)
+    )]
     pub selectors: Vec<String>,
     /// Enable jobs requiring this CI tag (repeatable, comma-separated)
     #[arg(long = "enable-tag", value_name = "TAG", value_delimiter = ',')]
@@ -35,7 +39,11 @@ pub struct RequestArgs {
     #[arg(long, default_value = "HEAD")]
     pub at: String,
     /// Materialize TARGET from a version or rev:SHA (repeatable)
-    #[arg(long = "with", value_name = "TARGET@SOURCE")]
+    #[arg(
+        long = "with",
+        value_name = "TARGET@SOURCE",
+        add = clap_complete::ArgValueCandidates::new(override_candidates)
+    )]
     pub overrides: Vec<String>,
     /// Build a wasinix or dependency pull request; with no value, the
     /// current GitHub pull-request event
@@ -59,6 +67,24 @@ pub struct PlacementArg {
         add = clap_complete::ArgValueCandidates::new(placement_candidates)
     )]
     pub on: Option<String>,
+}
+
+/// Completion values for selectors: sets, groups, and every job address,
+/// as of the last evaluation this machine ran or adopted.
+fn selector_candidates() -> Vec<clap_complete::CompletionCandidate> {
+    crate::support::completions::recall("selectors")
+        .into_iter()
+        .map(clap_complete::CompletionCandidate::new)
+        .collect()
+}
+
+/// Completion values for --with: the update targets, each opened at the
+/// version separator.
+fn override_candidates() -> Vec<clap_complete::CompletionCandidate> {
+    crate::support::completions::recall("update-targets")
+        .into_iter()
+        .map(|name| clap_complete::CompletionCandidate::new(format!("{name}@")))
+        .collect()
 }
 
 /// Completion values for --on: local plus the configured remotes.
