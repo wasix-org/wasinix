@@ -66,8 +66,11 @@
 in {
   integrity = testLib.mkScriptRun {
     name = "registry-integrity";
-    packages = [pkgs.python3];
-    script = "python3 ${./check-integrity.py} ${registry}";
+    packages = [(pkgs.python3.withPackages (ps: [ps.packaging]))];
+    # python-wheel-deps.py carries the wasix marker environment the requirement
+    # walk evaluates against; it is a path argument because nix copies each
+    # script into the store on its own, losing the sibling relationship.
+    script = "python3 ${./check-integrity.py} ${registry} ${../python-wheel-deps.py}";
   };
 
   # pure wheel with a pure dep chain.

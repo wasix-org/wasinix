@@ -124,7 +124,10 @@ pip install --index-url file://$(readlink -f result)/simple <pkg>
 A new `wheels.nix` entry lands in the registry automatically. Its test suite
 (`checks.<system>.python-registry`) walks the index for hash and metadata
 integrity and pip-installs representative packages, resolving their deps from
-the index too, then imports them under wasmer.
+the index too, then imports them under wasmer. The integrity walk also resolves
+every served wheel's `Requires-Dist` against the rest of the index, per
+interpreter the wheel installs on, since a resolver has no other source to fall
+back to.
 
 Alongside `simple/`, the index root carries `packages.json`: one JSON object per
 line naming a published wheel, which is how `wasmerio/wasmer-compat` decides

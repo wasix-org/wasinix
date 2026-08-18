@@ -77,4 +77,5 @@ def main() -> None:
     print(f"OK {Path(dist).name}: {len(wheels)} wheel(s)")
 
 
-main()
+if __name__ == "__main__":
+    main()
