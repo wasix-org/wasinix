@@ -76,10 +76,14 @@ pub(crate) fn retention_add_spec(served: &Served) -> String {
 const WHEEL_APPLY: &str = "ws: builtins.mapAttrs (_: s: builtins.mapAttrs (name: w: \
     { version = w.version; history_spec = \"pythonWheels.${name}\"; \
     retention = w.passthru.wasix.retention or null; }) s) ws";
-const CLI_APPLY: &str = "ws: builtins.mapAttrs (name: p: { overlay = p.overlayName; \
-    history_spec = \"wasmerPackages.${name}\"; \
-    history = p.passthru.wasmer.history or false; version = p.version; \
-    retention = p.passthru.wasix.retention or null; }) ws";
+fn cli_apply() -> String {
+    crate::support::nix::canonical_webcs_apply(
+        "name: p: { overlay = p.overlayName; \
+         history_spec = \"wasmerPackages.${name}\"; \
+         history = p.passthru.wasmer.history or false; version = p.version; \
+         retention = p.passthru.wasix.retention or null; }",
+    )
+}
 
 /// Current served versions, excluding the history entries themselves.
 pub fn current_versions(repo: &Path) -> Result<Versions> {
@@ -119,7 +123,8 @@ pub fn current_versions(repo: &Path) -> Result<Versions> {
         }
     }
 
-    let clis = eval(&Flake::default(), "wasmerPackages", Some(CLI_APPLY))?;
+    let cli_apply = cli_apply();
+    let clis = eval(&Flake::default(), "wasmerPackages", Some(&cli_apply))?;
     for (_, info) in clis.as_object().into_iter().flatten() {
         if info["history"].as_bool().unwrap_or(false) {
             continue;

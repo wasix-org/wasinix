@@ -70,7 +70,7 @@
 
   # Forcing the package or its .pkg.shim never forces .tests, so tests referencing
   # other packages' shims do not cycle.
-  augment = overlayName: crossPkg: servedVersions: let
+  augment = overlayName: packageKey: crossPkg: servedVersions: let
     group = testGroupFor overlayName;
     pkg = makeWasmerPackage {
       package = crossPkg;
@@ -85,6 +85,7 @@
           # git -> "git" webc, but history.json keys by overlay attr, so
           # `history` and `update` need this to map a webc back to its entry.
           inherit overlayName;
+          wasmer = ((o.passthru or {}).wasmer or {}) // {inherit packageKey;};
           inherit pkg;
           webc = pkg.webc;
           # run-by-name wrapper; forcing it never forces .tests
@@ -118,7 +119,7 @@
     lib.listToAttrs
     (map (i:
       lib.nameValuePair i.overlayName
-      (augment i.overlayName i.crossPkg servedByName.${i.id.name}))
+      (augment i.overlayName i.key i.crossPkg servedByName.${i.id.name}))
     shippedInfo);
   preferredProfilePackagesWithWebc = preferredProfilePackages // shippedPackages;
   # Alias attrs (icu-data -> icu-data76) repeat a key with the same drv; only
@@ -128,10 +129,28 @@
   conflicting =
     lib.attrNames
     (lib.filterAttrs (_: is: lib.length is > 1 && distinctDrvs is > 1) byKey);
-  wasmerPackages =
+  wasmerPackageInventory =
     lib.throwIf (conflicting != [])
     "wasmerPackages: duplicate webc keys (${lib.concatStringsSep ", " conflicting}); a second version of a name must set passthru.wasmer.history"
     (lib.mapAttrs (_: is: shippedPackages.${(lib.head is).overlayName}) byKey);
+  aliasInfo = lib.concatLists (lib.mapAttrsToList (packageKey: is:
+    map (name: {
+      inherit name packageKey;
+      package = wasmerPackageInventory.${packageKey};
+    }) ((lib.head is).crossPkg.passthru.wasmer.aliases or []))
+  byKey);
+  byAlias = lib.groupBy (i: i.name) aliasInfo;
+  conflictingAliases = lib.attrNames (lib.filterAttrs (_: is:
+    lib.length (lib.unique (map (i: i.packageKey) is)) > 1)
+  byAlias);
+  shadowingAliases = lib.intersectLists (lib.attrNames wasmerPackageInventory) (lib.attrNames byAlias);
+  aliasPackages = lib.mapAttrs (_: is: (lib.head is).package) byAlias;
+  wasmerPackages =
+    lib.throwIf (shadowingAliases != [])
+    "wasmerPackages: aliases shadow canonical keys (${lib.concatStringsSep ", " shadowingAliases})"
+    (lib.throwIf (conflictingAliases != [])
+      "wasmerPackages: aliases resolve to multiple packages (${lib.concatStringsSep ", " conflictingAliases})"
+      (wasmerPackageInventory // aliasPackages));
 
   # One subtree per key: two versions of one webc share the inner pkg/<name> dir
   # name, so a flat merge would collide.
@@ -139,12 +158,12 @@
     set -euo pipefail
     mkdir -p "$out/pkg"
     ${lib.concatMapStringsSep "\n" (n: ''
-        if [ -d "${wasmerPackages.${n}.pkg}/pkg" ]; then
+        if [ -d "${wasmerPackageInventory.${n}.pkg}/pkg" ]; then
           mkdir -p "$out/pkg/${n}"
-          ${pkgs.coreutils}/bin/cp -R --no-preserve=mode,ownership "${wasmerPackages.${n}.pkg}/pkg/." "$out/pkg/${n}/"
+          ${pkgs.coreutils}/bin/cp -R --no-preserve=mode,ownership "${wasmerPackageInventory.${n}.pkg}/pkg/." "$out/pkg/${n}/"
         fi
       '')
-      (builtins.attrNames wasmerPackages)}
+      (builtins.attrNames wasmerPackageInventory)}
   '';
   # Non-shipped library packages use the same tests/ convention as shipped CLIs but
   # have no webc to hang .tests off, so the group attaches to the package itself.
@@ -170,5 +189,5 @@
     );
 in {
   preferredProfilePackages = preferredProfilePackagesWithWebc;
-  inherit wasmerPackages allWasmerPackages testLib libraryTestPkgs;
+  inherit wasmerPackages wasmerPackageInventory allWasmerPackages testLib libraryTestPkgs;
 }

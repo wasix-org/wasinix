@@ -420,8 +420,8 @@
         (collectTests wasix.toolchainTestPkgs)
       ];
       packages = mergeDisjoint "checksBySet.packages" [
-        (collectTests (removeAttrs wasix.wasmerPackages ["rust"]))
-        (lib.optionalAttrs (wasix.wasmerPackages ? rust) {rust-webc = wasix.wasmerPackages.rust.tests;})
+        (collectTests (removeAttrs wasix.wasmerPackageInventory ["rust"]))
+        (lib.optionalAttrs (wasix.wasmerPackageInventory ? rust) {rust-webc = wasix.wasmerPackageInventory.rust.tests;})
         (collectTests {cargo-registry = wasix.cargoRegistry;})
         (lib.mapAttrs' (p: lib.nameValuePair "abi-${p}") wasix.abiChecks)
         # non-shipped library packages carrying a tests/ dir
@@ -529,7 +529,7 @@
         packages = [
           # The package-declared coverage, not every profile a package supports.
           (flattenDrvs "packagesByProfile" wasix.ciPackagesByProfile)
-          (flattenDrvs "wasmerPackages" buildable.wasmerPackages)
+          (flattenDrvs "wasmerPackages" wasix.wasmerPackageInventory)
           (flattenDrvs "nativePackages" buildable.nativePackages)
           (flattenDrvs "" {inherit (buildable) cargoRegistry;})
           (flattenDrvs "checks" checksBySet.packages)
@@ -697,7 +697,7 @@
               lib.concatMap
               (perPython: lib.attrValues (perPython.${name} or {}))
               (lib.attrValues wasix.pythonRegistry.wheels);
-            webcs = lib.groupBy (p: p.pkg.id.name) (lib.attrValues wasix.wasmerPackages);
+            webcs = lib.groupBy (p: p.pkg.id.name) (lib.attrValues wasix.wasmerPackageInventory);
             relInfo =
               lib.mapAttrs' (name: versions:
                 lib.nameValuePair "pythonRegistry.wheels.${name}" {

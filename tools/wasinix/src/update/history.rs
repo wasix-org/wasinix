@@ -136,13 +136,15 @@ fn wheel_path(attr: &str) -> Result<String> {
 /// overlay attr (gitMinimal) while the package evaluates by webc name (git), so
 /// either resolves.
 fn cli_map() -> Result<BTreeMap<String, (String, String)>> {
+    let apply = crate::support::nix::canonical_webcs_apply(
+        "webc: p: { overlay = p.overlayName; \
+         aliases = p.passthru.wasmer.aliases or []; \
+         history = p.passthru.wasmer.history or false; }",
+    );
     let packages = eval(
         &Flake::default(),
         "wasmerPackages",
-        Some(
-            "ws: builtins.mapAttrs (webc: p: { overlay = p.overlayName; \
-             history = p.passthru.wasmer.history or false; }) ws",
-        ),
+        Some(&apply),
     )?;
     let mut map = BTreeMap::new();
     for (webc, info) in packages.as_object().into_iter().flatten() {
@@ -152,7 +154,12 @@ fn cli_map() -> Result<BTreeMap<String, (String, String)>> {
         let overlay = info["overlay"].as_str().unwrap_or_default().to_string();
         let entry = (overlay.clone(), webc.clone());
         map.insert(normalize(&overlay), entry.clone());
-        map.insert(normalize(webc), entry);
+        map.insert(normalize(webc), entry.clone());
+        for alias in info["aliases"].as_array().into_iter().flatten() {
+            if let Some(alias) = alias.as_str() {
+                map.insert(normalize(alias), entry.clone());
+            }
+        }
     }
     Ok(map)
 }

@@ -375,9 +375,12 @@ pub struct PlanDiff {
 
 /// attr is the wasmerPackages key (jq-1.6.0 for a history entry); owner and
 /// name are the identity it publishes under (wasmer/jq).
-const WEBC_DRVS: &str = "ws: builtins.mapAttrs (_: p: \
-    {drv = p.pkg.drvPath; owner = p.pkg.id.owner; name = p.pkg.id.name; \
-    version = p.pkg.id.baseVersion;}) ws";
+fn webc_drvs_apply() -> String {
+    crate::support::nix::canonical_webcs_apply(
+        "_: p: { drv = p.pkg.drvPath; owner = p.pkg.id.owner; \
+         name = p.pkg.id.name; version = p.pkg.id.baseVersion; }",
+    )
+}
 
 fn dists(flake: &Flake<'_>) -> Result<BTreeMap<String, Value>> {
     // distsJson is a JSON string, not a structure: it is written for
@@ -460,8 +463,9 @@ pub fn plan_diff(base_dir: &str) -> Result<PlanDiff> {
         .map(|(_, dist)| dist.clone())
         .collect();
 
-    let head_webcs = eval(&head, "wasmerPackages", Some(WEBC_DRVS))?;
-    let base_webcs = eval(&base, "wasmerPackages", Some(WEBC_DRVS))?;
+    let webc_apply = webc_drvs_apply();
+    let head_webcs = eval(&head, "wasmerPackages", Some(&webc_apply))?;
+    let base_webcs = eval(&base, "wasmerPackages", Some(&webc_apply))?;
     let webcs = head_webcs
         .as_object()
         .into_iter()

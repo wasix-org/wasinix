@@ -49,8 +49,9 @@ dependencies that may use another profile.
 `meta.mainProgram` and the package's `bin/*.wasm`; deviations belong in
 `passthru.wasmer`. Shipped entries in `preferredProfilePackages` also expose
 their `.pkg`, `.webc`, and `.shim`, plus `.tests` when present; `wasmerPackages`
-is the deduplicated publication inventory keyed by published name. Tests run
-under Wasmer through `pkgs/wasmer/test-lib.nix`.
+is the public package namespace and includes explicitly declared aliases. Its
+canonical entries alone drive publication, CI, and aggregate generation. Tests
+run under Wasmer through `pkgs/wasmer/test-lib.nix`.
 
 ## Flake outputs
 

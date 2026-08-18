@@ -65,20 +65,31 @@ fn run(cmd: &mut Command) -> Result<()> {
         .map_err(|error| Error::Request(error.to_string()))
 }
 
-/// The shipped webc names, each answering to its overlay attr as well.
+/// Canonical shipped webc names with every accepted alias.
 fn webc_domain() -> Result<Domain> {
+    let apply = crate::support::nix::canonical_webcs_apply(
+        "_: p: { overlay = p.overlayName; aliases = p.passthru.wasmer.aliases or []; }",
+    );
     let named = crate::support::nix::eval(
         &Flake::default(),
         "wasmerPackages",
-        Some("ws: builtins.mapAttrs (_: p: p.overlayName) ws"),
+        Some(&apply),
     )?;
     let mut domain = Domain::new(".#wasmerPackages");
-    for (webc, overlay) in named.as_object().into_iter().flatten() {
+    for (webc, info) in named.as_object().into_iter().flatten() {
+        let mut aliases = vec![info["overlay"].as_str().unwrap_or_default().to_string()];
+        aliases.extend(
+            info["aliases"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|alias| alias.as_str().map(str::to_string)),
+        );
         domain.add_path(
             vec!["wasmerPackages".into(), webc.clone()],
             webc,
             None,
-            vec![overlay.as_str().unwrap_or_default().to_string()],
+            aliases,
         );
     }
     Ok(domain)
@@ -866,11 +877,9 @@ pub fn materialize(options: ServeOptions) -> Result<PathBuf> {
     if !options.packages.is_empty() || build_all {
         // One eval answers both what exists and which packages carry a
         // dependency tree (depTree is null for the leaf packages).
-        let deps = crate::support::nix::eval(
-            &Flake::default(),
-            "wasmerPackages",
-            Some("ws: builtins.mapAttrs (_: p: p.pkg.depTree != null) ws"),
-        )?;
+        let apply = crate::support::nix::canonical_webcs_apply("_: p: p.pkg.depTree != null");
+        let deps =
+            crate::support::nix::eval(&Flake::default(), "wasmerPackages", Some(&apply))?;
         let names: Vec<String> = if build_all {
             deps.as_object()
                 .into_iter()

@@ -93,6 +93,9 @@ Keys differ per set, and webcs are normalised:
 - webcs: `wasmerPackages` and the run-by-name stubs use `<name>-<semver>`, so a
   test asks for `wasmerPkgs."jq-1.6.0"`.
 
+A package may declare stable `passthru.wasmer.aliases` for public Nix addresses.
+These resolve to the canonical entry but do not create another publication.
+
 Webc attrs use full MAJOR.MINOR.PATCH while `history.json` keeps the upstream
 version as written. For example, jq `"1.6"` becomes `jq-1.6.0`.
 

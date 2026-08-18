@@ -126,11 +126,16 @@ nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
    time.
 
 2. The webc manifest is generated; most packages need zero config. Deviations go
-   in `passthru.wasmer`: `name`, `version`, `commands` (aliases), `entrypoint`,
+   in `passthru.wasmer`: `name`, `version`, `aliases` (`wasmerPackages` attr
+   aliases), `commands` (manifest command aliases), `entrypoint`,
    `fs."<path>" = <store path>`, `commandEnv.<cmd>`, `autoSelfMount` (mount
    store paths found in the wasm), `selfMounts` (paths referenced from scripts,
    which autoSelfMount can't see). See git's package.nix for an example with
    several deviations.
+
+   `aliases` are explicit public addresses for the same package. They must not
+   collide with a canonical published-name key or resolve to different packages.
+   Publication, CI, and aggregate generation use only canonical entries.
 
    `commands` also names several commands on one module, which is how bash
    serves `sh` and coreutils serves a command per program without repeating the

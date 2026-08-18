@@ -344,8 +344,8 @@
     inherit pythonRegistry;
   };
   preferredProfilePackagesWithWebc = wasmerLayer.preferredProfilePackages;
-  # keyed by program name, each carrying passthru.pkg / .webc / .tests
-  inherit (wasmerLayer) wasmerPackages allWasmerPackages libraryTestPkgs;
+  # Public package names and aliases; canonical-only consumers use the inventory.
+  inherit (wasmerLayer) wasmerPackages wasmerPackageInventory allWasmerPackages libraryTestPkgs;
 
   # The shipped wheels plus their transitive deps as one static PEP 503 index over
   # both interpreters: a resolver picks the right file by its cp313/cp314 tag.
@@ -373,7 +373,7 @@ in {
   inherit nativePackages packagesByProfile ciPackagesByProfile;
   inherit toolchain toolchainByProfile nixpkgsByProfile allWasmerPackages;
   preferredProfilePackages = preferredProfilePackagesWithWebc;
-  inherit shippedCommands wasmerPackages toolchainTestPkgs abiChecks;
+  inherit shippedCommands wasmerPackages wasmerPackageInventory toolchainTestPkgs abiChecks;
   inherit libraryTestPkgs;
   inherit pythonWheels pythonRegistry cargoRegistry;
 }

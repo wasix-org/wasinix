@@ -16,6 +16,16 @@ use crate::support::process::CommandStatus;
 
 pub const SYSTEM: &str = "x86_64-linux";
 
+pub fn canonical_webcs_apply(map: &str) -> String {
+    // Revisions from before alias support have no packageKey and contain only
+    // canonical entries, which keeps cross-revision comparisons evaluable.
+    format!(
+        "ws: builtins.mapAttrs ({map}) \
+         (builtins.filterAttrs (name: p: !(p.passthru.wasmer ? packageKey) \
+         || name == p.passthru.wasmer.packageKey) ws)"
+    )
+}
+
 /// The shared binary cache, spelled once: rotating the key or moving the
 /// bucket is an edit here and nowhere else. The workflows read the same
 /// values through the nix-config emitter.

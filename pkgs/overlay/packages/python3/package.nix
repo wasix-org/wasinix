@@ -265,6 +265,10 @@
               owner = "python";
               name = "python";
               history = pyVer != current.pythonVersion;
+              aliases =
+                if pyVer == current.pythonVersion
+                then ["python3" "python314"]
+                else ["python313"];
               entrypoint = "python${pyVer}";
               # The atom is the module name, and a consumer's manifest refers to
               # an interpreter as <package>:python (anybuild's serve command
