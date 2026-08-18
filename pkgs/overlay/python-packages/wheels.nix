@@ -137,6 +137,9 @@
   {attr = "h11";}
   {attr = "httpcore";}
   {attr = "httpx";}
+  # httpx[http2]: an extra the closure does not follow, so serving httpx alone
+  # leaves anything asking for http2 unresolvable
+  {attr = "h2";}
   {attr = "anyio";}
   {attr = "starlette";}
   {attr = "fastapi";}
