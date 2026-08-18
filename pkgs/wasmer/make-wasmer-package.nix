@@ -8,6 +8,7 @@
 #   license     ? meta.license (spdxId/shortName)
 #   owner       ? "wasmer"
 #   commands    ? null  => one command per bin/*.wasm (auto-globbed at build)
+#   env         ? {}     => { ENV = "val"; } set on every command
 #   commandEnv  ? {}     => { <command> = { ENV = "val"; }; } merged onto a command
 #   dependencies ? [] => derivations, or { package = drv; version = requirement; }
 #   fs          ? {}     => mounts, e.g. { "/etc/ssl" = "${cacert}/etc/ssl"; }
@@ -72,7 +73,15 @@
       else l.spdxId or l.shortName or null);
   entrypoint = w.entrypoint or null;
   commands = w.commands or null;
+  packageEnv = w.env or {};
   commandEnv = w.commandEnv or {};
+  # wasmer.toml wants a JSON array of "KEY=value"; null when a command sets none.
+  envJson = e:
+    builtins.toJSON (
+      if e == {}
+      then null
+      else lib.mapAttrsToList (k: v: "${k}=${v}") e
+    );
   defaultRunner = w.defaultRunner or "https://webc.org/runner/wasi";
   # meta.position points into the store source copy; repo-relative "path:line"
   # for the publish-time source link
@@ -152,20 +161,17 @@
           runner = cmd.runner or defaultRunner;
           mainArgs = builtins.toJSON (cmd.mainArgs or null);
           atom = builtins.toJSON (cmd.atom or moduleName);
-          env = builtins.toJSON (
-            if cmd ? env
-            then lib.mapAttrsToList (k: v: "${k}=${v}") cmd.env
-            else null
-          );
+          env = envJson (packageEnv // (cmd.env or {}));
         in "${commandName}|${moduleName}|${wasmFile}|${outputFile}|${runner}|${mainArgs}|${atom}|${env}"
       )
       commands;
 
   # command name -> JSON array of "KEY=value", so auto-globbed commands can
-  # still carry env (e.g. git's SSL_CERT_FILE).
+  # still carry env (e.g. git's SSL_CERT_FILE). A command naming none inherits
+  # package_env.
   commandEnvDecl = lib.concatStringsSep "\n" (
     lib.mapAttrsToList (
-      cmd: env: "command_env[${lib.escapeShellArg cmd}]=${lib.escapeShellArg (builtins.toJSON (lib.mapAttrsToList (k: v: "${k}=${v}") env))}"
+      cmd: env: "command_env[${lib.escapeShellArg cmd}]=${lib.escapeShellArg (envJson (packageEnv // env))}"
     )
     commandEnv
   );
@@ -249,6 +255,7 @@ in
         mkdir -p "$bin_dir"
         declare -A module_seen
         declare -A command_env
+        package_env=${lib.escapeShellArg (envJson packageEnv)}
         ${commandEnvDecl}
 
         cat > "$pkg_dir/wasmer.toml" <<EOF
@@ -353,7 +360,7 @@ in
               output_file="$command_name.wasm"
 
               cp -f "$wasm_path" "$bin_dir/$output_file"
-              append_command "$command_name" "$module_name" "$output_file" "${defaultRunner}" "null" "\"$module_name\"" "''${command_env[$command_name]:-null}"
+              append_command "$command_name" "$module_name" "$output_file" "${defaultRunner}" "null" "\"$module_name\"" "''${command_env[$command_name]:-$package_env}"
             done < <(${pkgs.findutils}/bin/find "${package}/bin" -maxdepth 1 -type f -name '*.wasm' -print0)
           fi
 
