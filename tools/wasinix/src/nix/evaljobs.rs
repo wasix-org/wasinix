@@ -126,19 +126,26 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
             timeout.as_secs()
         )));
     }
-    // Workers print partial errors; the last complete block is the real one.
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    Ok(Some(error_excerpt(&String::from_utf8_lossy(
+        &output.stderr,
+    ))))
+}
+
+/// A nix trace ends with its root cause on an indented `error:` line; the
+/// unindented `error: worker error:` opener above it is only the trace
+/// preamble.
+pub fn error_excerpt(stderr: &str) -> String {
     let lines: Vec<&str> = stderr.lines().collect();
     let start = lines
         .iter()
-        .rposition(|line| line.starts_with("error:"))
+        .rposition(|line| line.trim_start().starts_with("error:"))
         .unwrap_or(lines.len().saturating_sub(30));
-    Ok(Some(
-        lines[start..]
-            .iter()
-            .take(60)
-            .cloned()
-            .collect::<Vec<_>>()
-            .join("\n"),
-    ))
+    lines[start..]
+        .iter()
+        .take(60)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim_start()
+        .to_string()
 }

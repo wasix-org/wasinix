@@ -122,6 +122,13 @@ fn failure_cause(failure: &Failure) -> Markdown {
     }
 }
 
+/// A task headline can carry a multi-line tool error; inline surfaces get
+/// its first line only, the full text stays in the task's log excerpt.
+fn headline_cell(text: &str) -> Markdown {
+    let first = text.lines().next().unwrap_or_default();
+    Markdown::cell(&first.chars().take(160).collect::<String>())
+}
+
 /// Numbers and other tool-computed text: nothing to sanitize, but it still
 /// enters as a typed value.
 fn plural(count: usize, noun: &str) -> Markdown {
@@ -258,7 +265,7 @@ fn details(report: &Report) -> Markdown {
             Markdown::constant(" | "),
             glyph(task.status),
             Markdown::constant(" | "),
-            Markdown::cell(&task.headline),
+            headline_cell(&task.headline),
             Markdown::constant(" |\n"),
         ]);
     }
@@ -546,7 +553,7 @@ fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
                     Markdown::constant("- "),
                     Markdown::cell(&task.label),
                     Markdown::constant(" · "),
-                    Markdown::cell(&task.headline),
+                    headline_cell(&task.headline),
                     Markdown::constant("\n"),
                 ]);
             }

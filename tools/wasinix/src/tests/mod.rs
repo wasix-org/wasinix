@@ -1537,7 +1537,7 @@ mod exec {
 
     use crate::ci::events::{read_all, Event, Tracker};
     use crate::ci::exec::{
-        blocked_by_case_failure, cached_jobs, fixed_output_derivations, project_junit,
+        blocked_by_case_failure, cached_jobs, fatal, fixed_output_derivations, project_junit,
         record_result, JobState,
     };
     use crate::ci::plan::{BuildTarget, Phase};
@@ -1579,13 +1579,19 @@ mod exec {
     }
 
     #[test]
-    fn case_failures_do_not_hide_analysis_results() {
+    fn only_fatal_failures_hide_analysis_results() {
         assert!(blocked_by_case_failure(Phase::Eval));
         assert!(blocked_by_case_failure(Phase::Build {
             set: BuildTarget::Packages,
         }));
+        // A content diff without its case's eval map can only error; a
+        // failed build is not fatal, so analysis still runs after one.
+        assert!(blocked_by_case_failure(Phase::Content));
         assert!(!blocked_by_case_failure(Phase::Treefmt));
-        assert!(!blocked_by_case_failure(Phase::Content));
+        assert!(fatal(Phase::Eval));
+        assert!(!fatal(Phase::Build {
+            set: BuildTarget::Packages,
+        }));
     }
 
     #[test]
@@ -4922,6 +4928,24 @@ mod buildset {
         assert_eq!(job.needed_builds, ["/nix/store/d.drv"]);
         assert_eq!(job.meta.position.as_deref(), Some("pkgs/z.nix:1"));
         assert!(evaljobs::parse_file("{ torn").is_err());
+    }
+
+    #[test]
+    fn the_eval_error_excerpt_starts_at_the_root_cause() {
+        let trace = "warning: unknown setting\n\
+            error: worker error: error:\n\
+            \x20      … while calling 'throwIf'\n\
+            \x20        163|     in\n\
+            \x20      error: attribute 'passthru.wasmer.name' already defined at pkgs/p.nix:24:13\n\
+            \x20      at pkgs/p.nix:268:15:";
+        let excerpt = evaljobs::error_excerpt(trace);
+        assert!(excerpt
+            .starts_with("error: attribute 'passthru.wasmer.name' already defined"));
+        assert!(!excerpt.contains("worker error"));
+        assert_eq!(
+            evaljobs::error_excerpt("plain failure\nwith no error line"),
+            "plain failure\nwith no error line"
+        );
     }
 
     #[test]

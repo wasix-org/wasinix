@@ -1154,13 +1154,13 @@ fn run_phase(
 }
 
 pub(crate) fn blocked_by_case_failure(phase: Phase) -> bool {
-    !matches!(phase, Phase::Treefmt | Phase::Content)
+    !matches!(phase, Phase::Treefmt)
 }
 
 /// A phase whose failure blocks the rest of its case. Builds run as one
 /// union, so there is no core-before-packages ordering to poison; only a
 /// failed evaluation leaves nothing comparable downstream.
-fn fatal(phase: Phase) -> bool {
+pub(crate) fn fatal(phase: Phase) -> bool {
     matches!(phase, Phase::EvalInputs | Phase::Eval)
 }
 
