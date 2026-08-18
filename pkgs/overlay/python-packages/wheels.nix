@@ -167,6 +167,7 @@
   {attr = "pytest-asyncio_0";}
   {attr = "rsa";}
   {attr = "textual";}
+  {attr = "hydra-core";}
 
   # ── C extensions with no external C library ────────────────────────────────────
   {attr = "cffi";} # overlay/python-packages/cffi.nix (libffi ffi_closure_alloc)
