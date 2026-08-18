@@ -9,7 +9,8 @@
     name = "wheel-pytest-numpy";
     inherit wheel;
     deps = [pythonPkgs.pytest pythonPkgs.hypothesis];
-    timeout = 3600;
+    timeout = 1200;
+    ciTags = ["slow-tests"];
     # Deselections are environment gaps, not numpy defects: test_cpu_features
     # spawns subprocesses with cwd (unsupported on wasix, subprocess-posix-spawn-wasi.patch);
     # test_exp_exceptions/test_exp2 assert FloatingPointError, which wasm never

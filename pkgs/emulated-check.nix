@@ -184,7 +184,7 @@ in {
   # `passthru.tests.upstream`; this layer knows nothing about synthetic checks.
   checkFor = {
     drv,
-    # timeout plus the expectFail/broken verdict; nothing derivable
+    # Runtime policy and CI tags; nothing here is derivable from the package.
     spec ? {},
     # "checkPhase" (C suites) or "pythonCheckPhase" (buildPythonPackage)
     phase ? "checkPhase",
@@ -199,6 +199,7 @@ in {
     pkgs.stdenvNoCC.mkDerivation {
       name = "${name}-${drv.version or "0"}";
       dontUnpack = true;
+      passthru.wasix = lib.optionalAttrs (spec ? ciTags) {inherit (spec) ciTags;};
       phases = ["wasixRestorePhase" "wasixCheckPhase" "wasixInstallPhase"];
       nativeBuildInputs = guestInputs ++ [wasixRun.stub pkgs.writableTmpDirAsHomeHook];
       wasixRestorePhase =

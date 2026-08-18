@@ -272,21 +272,32 @@ pub(crate) fn realise_building_drv(line: &str) -> Option<&str> {
     drv.ends_with(".drv").then_some(drv)
 }
 
-/// The tail of a failed derivation's build log, for the report's error text.
-fn failure_excerpt(drv: &str) -> String {
+pub(crate) fn failure_excerpt_from_log(log: &[u8]) -> Option<String> {
+    if log.is_empty() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(log);
+    if text.trim().is_empty() {
+        return None;
+    }
+    let lines: Vec<&str> = text.lines().rev().take(20).collect();
+    Some(lines.into_iter().rev().collect::<Vec<_>>().join("\n"))
+}
+
+/// A build log proves the derivation ran; no log leaves an infrastructure
+/// interruption eligible for retry.
+fn build_failure(drv: &str) -> Option<String> {
     let Ok(output) = crate::support::nix::Invocation::plain("log")
         .local_only()
         .operand(drv)
         .probe("a missing log still reports the failure")
     else {
-        return "build failed".to_string();
+        return None;
     };
-    if !output.status.is_success() || output.stdout.is_empty() {
-        return "build failed".to_string();
+    if !output.status.is_success() {
+        return None;
     }
-    let text = String::from_utf8_lossy(&output.stdout);
-    let lines: Vec<&str> = text.lines().rev().take(20).collect();
-    lines.into_iter().rev().collect::<Vec<_>>().join("\n")
+    failure_excerpt_from_log(&output.stdout)
 }
 
 /// Output paths not yet valid in the local store, chunked to keep argv
@@ -512,6 +523,32 @@ pub fn build_union(
         on_event(StreamEvent::Result(value))
     }
 
+    fn emit_failure(
+        drv: &str,
+        error: &str,
+        jobs: &BTreeMap<String, JobSpec>,
+        build_started: &BTreeMap<String, std::time::Instant>,
+        stream: &mut std::fs::File,
+        stream_path: &Path,
+        cases: &mut Vec<crate::ci::facts::junit::Case>,
+        on_event: &mut dyn FnMut(StreamEvent) -> Result<()>,
+    ) -> Result<usize> {
+        let duration = build_started.get(drv).map(|at| at.elapsed().as_secs_f64());
+        for attr in &jobs[drv].attrs {
+            emit(
+                serde_json::json!({
+                    "type": "BUILD", "attr": attr, "drv": drv, "success": false,
+                    "error": error, "duration": duration,
+                }),
+                stream,
+                stream_path,
+                cases,
+                on_event,
+            )?;
+        }
+        Ok(jobs[drv].attrs.len())
+    }
+
     for attr in &missing {
         failures += 1;
         emit(
@@ -608,6 +645,7 @@ pub fn build_union(
         if pending.is_empty() || timed_out {
             break;
         }
+        let mut attempt_started = BTreeSet::new();
         let mut cmd = crate::support::nix::Invocation::tool("nix-store")
             .args(["--realise", "--keep-going"])
             .args(["--max-jobs", &request.max_jobs.to_string()])
@@ -642,6 +680,7 @@ pub fn build_union(
                     writeln!(log, "{line}").map_err(|e| io(&log_path, e))?;
                     if let Some(drv) = realise_building_drv(&line) {
                         if let Some(spec) = jobs.get(drv) {
+                            attempt_started.insert(drv.to_string());
                             build_started
                                 .entry(drv.to_string())
                                 .or_insert_with(std::time::Instant::now);
@@ -778,9 +817,29 @@ pub fn build_union(
             uploader.push(jobs[&drv].outputs.clone());
         }
         settle_deps(&mut dep_pending, &uploader)?;
+        if !timed_out {
+            let built_failures: Vec<(String, String)> = pending
+                .iter()
+                .filter(|drv| attempt_started.contains(*drv))
+                .filter_map(|drv| build_failure(drv).map(|error| (drv.clone(), error)))
+                .collect();
+            for (drv, error) in built_failures {
+                pending.remove(&drv);
+                failures += emit_failure(
+                    &drv,
+                    &error,
+                    &jobs,
+                    &build_started,
+                    &mut stream,
+                    &stream_path,
+                    &mut cases,
+                    on_event,
+                )?;
+            }
+        }
         if !pending.is_empty() && attempt < BUILD_ATTEMPTS && !timed_out {
             crate::support::ui::note(format!(
-                "retrying {} unfinished builds (attempt {}/{BUILD_ATTEMPTS})",
+                "retrying {} builds without logs (attempt {}/{BUILD_ATTEMPTS})",
                 pending.len(),
                 attempt + 1
             ));
@@ -792,21 +851,18 @@ pub fn build_union(
         let error = if timed_out {
             "the build timed out before this job finished".to_string()
         } else {
-            failure_excerpt(&drv)
+            "build failed before producing a log".to_string()
         };
-        for attr in &jobs[&drv].attrs {
-            failures += 1;
-            emit(
-                serde_json::json!({
-                    "type": "BUILD", "attr": attr, "drv": drv, "success": false,
-                    "error": error,
-                }),
-                &mut stream,
-                &stream_path,
-                &mut cases,
-                on_event,
-            )?;
-        }
+        failures += emit_failure(
+            &drv,
+            &error,
+            &jobs,
+            &build_started,
+            &mut stream,
+            &stream_path,
+            &mut cases,
+            on_event,
+        )?;
     }
 
     uploader.finish();
