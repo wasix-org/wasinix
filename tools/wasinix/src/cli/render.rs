@@ -24,7 +24,8 @@ pub struct LineRenderer {
     total_jobs: usize,
     completed: usize,
     failed: usize,
-    building: std::collections::BTreeSet<String>,
+    /// Start order, so the named few are the longest-running builds.
+    building: Vec<String>,
 }
 
 fn glyph(status: TaskStatus) -> &'static str {
@@ -60,7 +61,7 @@ impl LineRenderer {
             total_jobs: 0,
             completed: 0,
             failed: 0,
-            building: std::collections::BTreeSet::new(),
+            building: Vec::new(),
         }
     }
 
@@ -113,9 +114,8 @@ impl LineRenderer {
         }
         match event {
             Event::RunStarted { .. } => Vec::new(),
-            // Five-minute liveness for otherwise quiet stretches: the union
-            // build's evaluation emits no job events, and a long compile can
-            // go just as silent.
+            // Once-a-minute liveness with fresh counts, in quiet stretches
+            // and through chatty compiles alike.
             Event::Heartbeat { at } => {
                 let progress = self.progress();
                 if self.bar.is_none() && !progress.is_empty() {
@@ -127,7 +127,9 @@ impl LineRenderer {
             // Starts feed the in-flight set the milestone lines and the bar
             // show; a line per start would drown the narration.
             Event::JobStarted { job, .. } => {
-                self.building.insert(job.to_string());
+                if !self.building.iter().any(|started| started == job.as_str()) {
+                    self.building.push(job.to_string());
+                }
                 Vec::new()
             }
             Event::PhaseStarted { at, label, jobs, .. } => {
@@ -157,7 +159,7 @@ impl LineRenderer {
                 ..
             } => {
                 self.completed += 1;
-                self.building.remove(job.as_str());
+                self.building.retain(|started| started != job.as_str());
                 if *status == JobStatus::Failure {
                     self.failed += 1;
                     let mut lines = vec![format!("{} ✗ {job}", self.stamp(*at))];

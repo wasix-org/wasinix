@@ -543,6 +543,7 @@ pub fn build_union(
             }
         });
 
+        let mut last_poll = std::time::Instant::now();
         loop {
             match receiver.recv_timeout(Duration::from_secs(5)) {
                 Ok(line) => {
@@ -570,60 +571,66 @@ pub fn build_union(
                     }
                     on_event(StreamEvent::Activity)?;
                 }
-                Err(mpsc::RecvTimeoutError::Timeout) => {
-                    on_event(StreamEvent::Heartbeat)?;
-                    let outputs: Vec<String> = pending
-                        .iter()
-                        .flat_map(|drv| jobs[drv].outputs.iter().cloned())
-                        .collect();
-                    let invalid = invalid_outputs(&outputs)?;
-                    let finished: Vec<String> = pending
-                        .iter()
-                        .filter(|drv| {
-                            jobs[drv.as_str()]
-                                .outputs
-                                .iter()
-                                .all(|out| !invalid.contains(out))
-                        })
-                        .cloned()
-                        .collect();
-                    for drv in finished {
-                        pending.remove(&drv);
-                        let duration =
-                            build_started.get(&drv).map(|at| at.elapsed().as_secs_f64());
-                        for attr in &jobs[&drv].attrs {
-                            emit(
-                                serde_json::json!({
-                                    "type": "BUILD", "attr": attr, "success": true,
-                                    "duration": duration,
-                                }),
-                                &mut stream,
-                                &stream_path,
-                                &mut cases,
-                                on_event,
-                            )?;
-                        }
-                        uploader.push(jobs[&drv].outputs.clone());
-                    }
-                    settle_deps(&mut dep_pending, &uploader)?;
-                    if request
-                        .hard_timeout
-                        .is_some_and(|timeout| started.elapsed() >= timeout)
-                    {
-                        timed_out = true;
-                        #[cfg(unix)]
-                        kill_group(&child);
-                        child.wait().map_err(|e| io(&log_path, e))?;
-                        break;
-                    }
-                    if child.try_wait().map_err(|e| io(&log_path, e))?.is_some() {
-                        break;
-                    }
-                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     child.wait().map_err(|e| io(&log_path, e))?;
                     break;
                 }
+            }
+            // On the wall clock, never on quiet gaps: a long compile streams
+            // its log continuously, and completions, liveness, the hard
+            // timeout, and child exit must not wait for stderr to fall
+            // silent.
+            if last_poll.elapsed() < Duration::from_secs(5) {
+                continue;
+            }
+            last_poll = std::time::Instant::now();
+            on_event(StreamEvent::Heartbeat)?;
+            let outputs: Vec<String> = pending
+                .iter()
+                .flat_map(|drv| jobs[drv].outputs.iter().cloned())
+                .collect();
+            let invalid = invalid_outputs(&outputs)?;
+            let finished: Vec<String> = pending
+                .iter()
+                .filter(|drv| {
+                    jobs[drv.as_str()]
+                        .outputs
+                        .iter()
+                        .all(|out| !invalid.contains(out))
+                })
+                .cloned()
+                .collect();
+            for drv in finished {
+                pending.remove(&drv);
+                let duration = build_started.get(&drv).map(|at| at.elapsed().as_secs_f64());
+                for attr in &jobs[&drv].attrs {
+                    emit(
+                        serde_json::json!({
+                            "type": "BUILD", "attr": attr, "success": true,
+                            "duration": duration,
+                        }),
+                        &mut stream,
+                        &stream_path,
+                        &mut cases,
+                        on_event,
+                    )?;
+                }
+                uploader.push(jobs[&drv].outputs.clone());
+            }
+            settle_deps(&mut dep_pending, &uploader)?;
+            if request
+                .hard_timeout
+                .is_some_and(|timeout| started.elapsed() >= timeout)
+            {
+                timed_out = true;
+                #[cfg(unix)]
+                kill_group(&child);
+                child.wait().map_err(|e| io(&log_path, e))?;
+                break;
+            }
+            if child.try_wait().map_err(|e| io(&log_path, e))?.is_some() {
+                break;
             }
         }
         let _ = reader_thread.join();
