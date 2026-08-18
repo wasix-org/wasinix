@@ -154,6 +154,9 @@ pub enum RunCommand {
     },
     /// List durable runs, newest first
     List {
+        /// Only runs still starting or running
+        #[arg(long)]
+        active: bool,
         #[command(flatten)]
         json: ui::JsonArg,
     },
@@ -400,7 +403,7 @@ fn run_command(command: RunCommand) -> Result<CommandStatus> {
             }
             Ok(CommandStatus::SUCCESS)
         }
-        RunCommand::List { json } => {
+        RunCommand::List { active, json } => {
             #[derive(serde::Serialize, serde::Deserialize)]
             struct RunList {
                 runs: Vec<runs::Run>,
@@ -409,7 +412,10 @@ fn run_command(command: RunCommand) -> Result<CommandStatus> {
                 const KIND: &'static str = "runList";
                 const SCHEMA: u32 = 1;
             }
-            let runs = runs::list()?;
+            let mut runs = runs::list()?;
+            if active {
+                runs.retain(|run| !run.state.is_final());
+            }
             ui::emit(&json, &RunList { runs }, |list| {
                 let rows: Vec<Vec<String>> = list
                     .runs
