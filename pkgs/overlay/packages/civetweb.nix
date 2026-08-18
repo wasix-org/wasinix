@@ -10,9 +10,14 @@
 }:
 helpers.libTweaks {
   buildInputs = [final.openssl];
+  # CivetServer.cpp throws, so the C++ wrapper needs an EH profile.
+  passthru.wasix.supportedProfiles = helpers.profiles.withEh;
   cmakeFlags = [
     "-DCIVETWEB_DISABLE_CGI=ON"
     "-DCIVETWEB_ENABLE_SSL_DYNAMIC_LOADING=OFF"
+    # LTO leaves bitcode in the archive instead of wasm objects, and the abi
+    # check reads the objects' target features.
+    "-DCIVETWEB_CXX_ENABLE_LTO=OFF"
   ];
 }
 prev.civetweb
