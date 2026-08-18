@@ -1,0 +1,79 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 148e326..caf45ee 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -45,3 +45,6 @@
+ version = "1.0"
+ features = ["derive"]
+ optional = true
++
++[target.'cfg(target_vendor = "wasmer")'.dependencies.libc]
++version = "0.2"
+diff --git a/src/base_directories.rs b/src/base_directories.rs
+index 39e5b88..e3bc856 100644
+--- a/src/base_directories.rs
++++ b/src/base_directories.rs
+@@ -1,6 +1,11 @@
+ use std::collections::HashSet;
+ use std::ffi::OsString;
++#[cfg(target_vendor = "wasmer")]
++use std::ffi::CString;
++#[cfg(not(target_vendor = "wasmer"))]
+ use std::os::unix::fs::PermissionsExt;
++#[cfg(target_vendor = "wasmer")]
++use std::os::unix::ffi::OsStrExt;
+ use std::path::{Path, PathBuf};
+ use std::{env, error, fmt, fs, io};
+ 
+@@ -343,10 +348,8 @@ impl BaseDirectories {
+             // do not allow recovery.
+             fs::read_dir(runtime_dir)
+                 .map_err(|e| Error::new(XdgRuntimeDirInaccessible(runtime_dir.clone(), e)))?;
+-            let permissions: u32 = fs::metadata(runtime_dir)
+-                .map_err(|e| Error::new(XdgRuntimeDirInaccessible(runtime_dir.clone(), e)))?
+-                .permissions()
+-                .mode();
++            let permissions = mode(runtime_dir)
++                .map_err(|e| Error::new(XdgRuntimeDirInaccessible(runtime_dir.clone(), e)))?;
+             if permissions & 0o077 != 0 {
+                 Err(Error::new(XdgRuntimeDirInsecure(
+                     runtime_dir.clone(),
+@@ -735,6 +738,28 @@ impl Default for BaseDirectories {
+         Self::new()
+     }
+ }
++
++#[cfg(not(target_vendor = "wasmer"))]
++fn mode(path: &Path) -> io::Result<u32> {
++    Ok(fs::metadata(path)?.permissions().mode())
++}
++
++#[cfg(target_vendor = "wasmer")]
++fn mode(path: &Path) -> io::Result<u32> {
++    use std::mem::MaybeUninit;
++
++    let path = CString::new(path.as_os_str().as_bytes())
++        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "path contains a NUL byte"))?;
++    let mut metadata = MaybeUninit::<libc::stat>::uninit();
++    // SAFETY: `path` is NUL-terminated and `metadata` points to writable storage.
++    if unsafe { libc::stat(path.as_ptr(), metadata.as_mut_ptr()) } == -1 {
++        return Err(io::Error::last_os_error());
++    }
++
++    // SAFETY: a successful `stat` initialized `metadata`.
++    let metadata = unsafe { metadata.assume_init() };
++    Ok(metadata.st_mode as u32)
++}
+ 
+ fn write_file(home: &Path, path: &Path) -> io::Result<PathBuf> {
+     match path.parent() {
+diff --git a/src/lib.rs b/src/lib.rs
+index a43170d..72db190 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,4 +1,4 @@
+-#![cfg(any(unix, target_os = "redox"))]
++#![cfg(any(unix, target_os = "redox", target_vendor = "wasmer"))]
+ 
+ mod base_directories;
+ pub use crate::base_directories::{

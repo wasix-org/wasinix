@@ -29,51 +29,13 @@
  
 --- /dev/null
 +++ b/client/src/wasi.rs
-@@ -0,0 +1,79 @@
-+use std::env;
+@@ -0,0 +1,38 @@
 +use std::ffi::CString;
-+use std::fs::{self, File};
++use std::fs::File;
 +use std::io;
 +use std::os::fd::FromRawFd;
 +use std::os::unix::ffi::OsStrExt;
-+use std::path::{Path, PathBuf};
-+
-+pub struct BaseDirectories {
-+    config_home: Option<PathBuf>,
-+    prefix: PathBuf,
-+}
-+
-+impl BaseDirectories {
-+    pub fn with_prefix<P: AsRef<Path>>(prefix: P) -> Self {
-+        let config_home = env::var_os("XDG_CONFIG_HOME")
-+            .map(PathBuf::from)
-+            .filter(|path| path.is_absolute())
-+            .or_else(|| {
-+                env::var_os("HOME")
-+                    .map(PathBuf::from)
-+                    .map(|home| home.join(".config"))
-+            });
-+
-+        Self {
-+            config_home,
-+            prefix: prefix.as_ref().to_owned(),
-+        }
-+    }
-+
-+    pub fn place_config_file<P: AsRef<Path>>(&self, path: P) -> io::Result<PathBuf> {
-+        let config_home = self.config_home.as_ref().ok_or_else(|| {
-+            io::Error::new(
-+                io::ErrorKind::NotFound,
-+                "neither XDG_CONFIG_HOME nor HOME is set",
-+            )
-+        })?;
-+        let path = config_home.join(&self.prefix).join(path);
-+        if let Some(parent) = path.parent() {
-+            fs::create_dir_all(parent)?;
-+        }
-+        Ok(path)
-+    }
-+}
++use std::path::Path;
 +
 +fn c_path(path: &Path) -> io::Result<CString> {
 +    CString::new(path.as_os_str().as_bytes())
@@ -111,7 +73,7 @@
 +}
 --- a/client/src/config.rs
 +++ b/client/src/config.rs
-@@ -5,15 +5,21 @@
+@@ -5,15 +5,18 @@
  //! experience (e.g., `attic login`).
  
  use std::collections::HashMap;
@@ -125,11 +87,8 @@
  use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
  use std::path::PathBuf;
  
-+#[cfg(target_os = "wasi")]
-+use crate::wasi::BaseDirectories;
  use anyhow::{Context, Result, anyhow};
  use serde::{Deserialize, Serialize};
-+#[cfg(not(target_os = "wasi"))]
  use xdg::BaseDirectories;
  
  use crate::cache::{CacheName, CacheRef, ServerName};
@@ -162,24 +121,9 @@
              file.write_all(serialized.as_bytes())?;
  
              tracing::debug!("Saved modified configuration to {:?}", path);
---- a/client/src/nix_config.rs
-+++ b/client/src/nix_config.rs
-@@ -6,9 +6,12 @@ use std::path::PathBuf;
- 
-+#[cfg(target_os = "wasi")]
-+use crate::wasi::BaseDirectories;
- use anyhow::{Result, anyhow};
- use lazy_static::lazy_static;
- use regex::Regex;
- use tokio::fs;
-+#[cfg(not(target_os = "wasi"))]
- use xdg::BaseDirectories;
- 
- lazy_static! {
-     static ref COMMENT_LINE: Regex = {
 --- a/client/src/nix_netrc.rs
 +++ b/client/src/nix_netrc.rs
-@@ -8,14 +8,21 @@
+@@ -8,14 +8,18 @@
  
  use std::collections::HashMap;
  use std::fmt;
@@ -189,15 +133,12 @@
  use std::os::unix::fs::PermissionsExt;
  use std::path::{Path, PathBuf};
  
-+#[cfg(target_os = "wasi")]
-+use crate::wasi::BaseDirectories;
  use anyhow::{Result, anyhow};
 -use tokio::fs::{self, OpenOptions};
 +use tokio::fs;
 +#[cfg(not(target_os = "wasi"))]
 +use tokio::fs::OpenOptions;
  use tokio::io::AsyncWriteExt;
-+#[cfg(not(target_os = "wasi"))]
  use xdg::BaseDirectories;
  
  /// The permission the configuration file should have.
@@ -234,41 +175,25 @@
          } else {
 --- a/client/src/push.rs
 +++ b/client/src/push.rs
-@@ -385,15 +385,31 @@ impl Session {
+@@ -385,15 +385,15 @@ impl Session {
  
      /// Queues multiple store paths to be pushed.
      pub fn queue_many(&self, store_paths: Vec<StorePath>) -> Result<()> {
-+        #[cfg(not(target_os = "wasi"))]
-+        {
 -        self.sender
 -            .send_blocking(SessionQueueCommand::Paths(store_paths))
 -            .map_err(|e| anyhow!(e))
-+            self.sender
-+                .send_blocking(SessionQueueCommand::Paths(store_paths))
-+                .map_err(|e| anyhow!(e))
-+        }
-+        #[cfg(target_os = "wasi")]
-+        {
-+            futures::executor::block_on(self.sender.send(SessionQueueCommand::Paths(store_paths)))
-+                .map_err(|e| anyhow!(e))
-+        }
++        self.sender
++            .try_send(SessionQueueCommand::Paths(store_paths))
++            .map_err(|e| anyhow!(e))
      }
  
      /// Flushes the worker queue.
      pub fn flush(&self) -> Result<()> {
-+        #[cfg(not(target_os = "wasi"))]
-+        {
 -        self.sender
 -            .send_blocking(SessionQueueCommand::Flush)
 -            .map_err(|e| anyhow!(e))
-+            self.sender
-+                .send_blocking(SessionQueueCommand::Flush)
-+                .map_err(|e| anyhow!(e))
-+        }
-+        #[cfg(target_os = "wasi")]
-+        {
-+            futures::executor::block_on(self.sender.send(SessionQueueCommand::Flush))
-+                .map_err(|e| anyhow!(e))
-+        }
++        self.sender
++            .try_send(SessionQueueCommand::Flush)
++            .map_err(|e| anyhow!(e))
      }
  }

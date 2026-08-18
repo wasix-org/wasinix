@@ -37,6 +37,8 @@ cfg_os_poll! {
         pub(crate) mod tcp;
         pub(crate) mod udp;
         pub(crate) mod pipe;
+        #[path = "../unix/uds/mod.rs"]
+        pub(crate) mod uds;
     }
 }
 

@@ -435,5 +435,8 @@
   },
   "wasite": {
     "1.0.2": "sha256-YYeIgXPWwM+bds+9Ucyr5jcwToa86eJoquGHeDvJ9MU="
+  },
+  "xdg": {
+    "3.0.0": "sha256-kpy8t3ysbnP3K1cgfZGgM6DE5xXJoS5DXVj4gQnDcTs="
   }
 }

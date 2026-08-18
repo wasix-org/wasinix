@@ -4,14 +4,14 @@
  use std::ffi::OsStr;
  use std::fmt;
 -#[cfg(target_family = "unix")]
-+#[cfg(any(target_family = "unix", target_os = "wasi"))]
++#[cfg(any(target_family = "unix", target_vendor = "wasmer"))]
  use std::os::unix::ffi::OsStrExt;
  use std::path::{Path, PathBuf};
 @@ -186,6 +186,6 @@ impl StorePath {
      }
      /// Gets the hash portion of the store path.
 -    #[cfg(target_family = "unix")]
-+    #[cfg(any(target_family = "unix", target_os = "wasi"))]
++    #[cfg(any(target_family = "unix", target_vendor = "wasmer"))]
      pub fn to_hash(&self) -> StorePathHash {
          // Safety: We have already validated the format of the base name,
          // including the hash part. The name is guaranteed valid UTF-8.
@@ -19,7 +19,7 @@
      }
      /// Returns the human-readable name.
 -    #[cfg(target_family = "unix")]
-+    #[cfg(any(target_family = "unix", target_os = "wasi"))]
++    #[cfg(any(target_family = "unix", target_vendor = "wasmer"))]
      pub fn name(&self) -> String {
          // Safety: Already checked
          #[allow(unsafe_code)]
@@ -27,7 +27,7 @@
      }
      #[cfg_attr(not(feature = "nix_store"), allow(dead_code))]
 -    #[cfg(target_family = "unix")]
-+    #[cfg(any(target_family = "unix", target_os = "wasi"))]
++    #[cfg(any(target_family = "unix", target_vendor = "wasmer"))]
      fn as_base_name_bytes(&self) -> &[u8] {
          self.base_name.as_os_str().as_bytes()
      }
