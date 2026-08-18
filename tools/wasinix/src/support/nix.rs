@@ -20,9 +20,10 @@ pub fn canonical_webcs_apply(map: &str) -> String {
     // Revisions from before alias support have no packageKey and contain only
     // canonical entries, which keeps cross-revision comparisons evaluable.
     format!(
-        "ws: builtins.mapAttrs ({map}) \
-         (builtins.filterAttrs (name: p: !(p.passthru.wasmer ? packageKey) \
-         || name == p.passthru.wasmer.packageKey) ws)"
+        "ws: builtins.mapAttrs ({map}) (builtins.listToAttrs (builtins.map \
+         (name: {{ inherit name; value = ws.${{name}}; }}) (builtins.filter \
+         (name: let p = ws.${{name}}; in !(p.passthru.wasmer ? packageKey) \
+         || name == p.passthru.wasmer.packageKey) (builtins.attrNames ws))))"
     )
 }
 
@@ -355,4 +356,32 @@ pub fn eval_installable(installable: &str, apply: Option<&str>) -> Result<Value>
 /// Evaluate `legacyPackages.<system>.<attr>`, optionally through `--apply`.
 pub fn eval(flake: &Flake<'_>, attr: &str, apply: Option<&str>) -> Result<Value> {
     eval_installable(&format!("{}#legacyPackages.{SYSTEM}.{attr}", flake.0), apply)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{canonical_webcs_apply, Invocation};
+
+    #[test]
+    fn canonical_webc_filter_runs_in_nix() {
+        let apply = canonical_webcs_apply("name: _: name");
+        let expression = [
+            "let ws = { \
+             canonical.passthru.wasmer.packageKey = \"canonical\"; \
+             alias.passthru.wasmer.packageKey = \"canonical\"; \
+             legacy.passthru.wasmer = {}; \
+             }; in (",
+            &apply,
+            ") ws",
+        ]
+        .concat();
+        let value = Invocation::expr("eval", expression)
+            .json()
+            .run_json("canonical webc filter")
+            .unwrap();
+        let entries = value.as_object().unwrap();
+        assert_eq!(entries["canonical"], "canonical");
+        assert_eq!(entries["legacy"], "legacy");
+        assert!(!entries.contains_key("alias"));
+    }
 }
