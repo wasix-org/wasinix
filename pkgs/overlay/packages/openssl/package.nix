@@ -3,12 +3,16 @@
 {
   final,
   prev,
+  helpers,
   ...
 }:
-prev.openssl.overrideAttrs (old: {
+helpers.wasmRename {
+  wasmName = "openssl";
+  posixAlias = true;
+} (prev.openssl.overrideAttrs (old: {
   configureScript = "Configure";
   configurePlatforms = [];
-  outputs = ["out" "dev"];
+  outputs = ["out" "dev" "bin"];
   doCheck = false;
   dontDisableStatic = true;
   postInstall = "";
@@ -25,7 +29,7 @@ prev.openssl.overrideAttrs (old: {
       no-shared \
       no-module \
       no-tests \
-      no-apps \
+      -DHAVE_FORK=0 \
       no-dgram \
       no-pic \
       no-dso \
@@ -40,6 +44,7 @@ prev.openssl.overrideAttrs (old: {
   buildPhase = ''
     runHook preBuild
     make -j''${NIX_BUILD_CORES:-1} build_generated build_libs
+    make -j''${NIX_BUILD_CORES:-1} build_programs
     runHook postBuild
   '';
   installPhase = ''
@@ -92,6 +97,8 @@ prev.openssl.overrideAttrs (old: {
     Cflags: -I\''${includedir}
     EOF
 
+    install -Dm755 apps/openssl "$bin/bin/openssl"
+
     runHook postInstall
   '';
-})
+}))
