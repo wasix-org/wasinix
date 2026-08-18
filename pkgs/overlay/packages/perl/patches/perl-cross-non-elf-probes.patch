@@ -1,0 +1,87 @@
+--- a/cnf/configure__f.sh
++++ b/cnf/configure__f.sh
+@@ -314,6 +314,12 @@
+ 	run $readelf $* try$_o
+ }
+ 
++try_nm() {
++	require 'nm'
++	require '_o'
++	run $nm $* try$_o
++}
++
+ try_objdump() {
+ 	require 'objdump'
+ 	require '_o'
+--- a/cnf/configure_tool.sh
++++ b/cnf/configure_tool.sh
+@@ -270,6 +270,10 @@
+ 			define osname "gnu"
+ 			result "GNU"
+ 			;;
++		*-wasi*)
++			define osname "wasix"
++			result "WASIX"
++			;;
+ 		*-midipix*)
+ 			define osname "midipix"
+ 			result "Midipix"
+--- a/cnf/configure_type.sh
++++ b/cnf/configure_type.sh
+@@ -46,6 +46,14 @@
+ 
+ 	result=`grep foo try.out | sed -r -e 's/.*: [0-9]+ +//' -e 's/ .*//' -e 's/^0+//g'`
+ 	if [ -z "$result" ]; then
++		# readelf understands ELF only, and prints no symbol table for other
++		# object formats such as wasm. nm reads those, and reports the size
++		# in hex as its second column.
++		try_nm --print-size > try.out 2>>$cfglog
++		result=`sed -n -r -e 's/^[0-9a-fA-F]+ ([0-9a-fA-F]+) [A-Za-z] foo$/\1/p' try.out`
++		test -n "$result" && result=$((0x$result))
++	fi
++	if [ -z "$result" ]; then
+ 		result "unknown"
+ 		die "Cannot determine sizeof($2)"
+ 	elif [ "$result" -gt 0 ]; then
+--- a/cnf/configure_type_sel.sh
++++ b/cnf/configure_type_sel.sh
+@@ -120,6 +120,21 @@
+ 		bo=''
+ 	fi
+ 
++	if [ -z "$bo" ]; then
++		# Formats other than ELF have no .data section to dump: wasm names
++		# its section DATA and prefixes a segment header, so the dump does
++		# not read back as the constant. Ask the compiler instead.
++		try_start
++		try_add "#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__"
++		try_add "#error big endian"
++		try_add "#endif"
++		if try_compile; then
++			bo=`echo 12345678 | cut -c1-$uvsize`
++		else
++			bo=`echo 87654321 | cut -c$((9-$uvsize))-8`
++		fi
++	fi
++
+ 	if [ -n "$bo" ]; then
+ 		define byteorder "$bo"
+ 		result "$bo"
+--- /dev/null
++++ b/cnf/hints/wasix
+@@ -0,0 +1,15 @@
++# perl-cross never probes these; every target supplies them by hints.
++d_nanosleep='define'
++
++# setlocale(LC_ALL, NULL) reports the categories positionally, separated by
++# semicolons, rather than as glibc's name=value pairs.
++d_perl_lc_all_uses_name_value_pairs='undef'
++d_perl_lc_all_separator='define'
++perl_lc_all_separator='";"'
++d_perl_lc_all_category_positions_init='define'
++perl_lc_all_category_positions_init='{ LC_CTYPE, LC_NUMERIC, LC_TIME, LC_COLLATE, LC_MONETARY, LC_MESSAGES }'
++
++# LLVM translates setjmp/longjmp into wasm exceptions, but not the sigsetjmp
++# pair, whose jump then unwinds past every handler. There are no signal masks
++# to save here anyway.
++d_sigsetjmp='undef'

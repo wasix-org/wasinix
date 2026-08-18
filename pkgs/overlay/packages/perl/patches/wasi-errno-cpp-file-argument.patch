@@ -1,0 +1,14 @@
+--- a/ext/Errno/Errno_pm.PL
++++ b/ext/Errno/Errno_pm.PL
+@@ -161,7 +161,10 @@
+ 	close(CPPI);
+ 
+ 	# invoke CPP and read the output
+-	if ($IsMSWin32) {
++	if ($IsMSWin32 or $Config{osname} eq 'wasix') {
++	    # wasix: the toolchain driver adds the sysroot only when it is given
++	    # a source file, so errno.h goes missing when errno.c comes in on
++	    # stdin.
+ 	    open(CPPO,"$Config{cpprun} $Config{cppflags} errno.c |") or
+ 		die "Cannot run '$Config{cpprun} $Config{cppflags} errno.c'";
+ 	} else {

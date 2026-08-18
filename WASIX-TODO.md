@@ -535,6 +535,23 @@ current toolchain before relying on it.
 
 ## Toolchain
 
+### wasixcc drops the sysroot when the input is stdin 🟡
+
+- `echo '#include <errno.h>' | wasixcc -E -` fails with
+  `<stdin>:1:10: fatal error: 'errno.h' file not found`, while the same source
+  in a file preprocesses fine. wasixcc passes the compiler only
+  `--target=wasm32-wasi -fuse-ld=...` for the stdin form, so the include search
+  is clang's builtin directory alone (verified against wasixcc 0.4.5, clang
+  21.1.206).
+- Consequence: any build step that pipes source into the compiler sees the
+  sysroot as empty. perl's `ext/Errno` harvests its error list that way and
+  reports "No error definitions found"; autoconf probes of the `cpp -` form
+  would misreport every header as missing.
+- Workaround: `packages/perl/patches/wasi-errno-cpp-file-argument.patch` passes
+  the file as an argument, the way perl's own MSWin32 branch already does.
+- Fix: have wasixcc inject the sysroot and include flags for stdin input as it
+  does for a named source file.
+
 ### a wasix-hosted flang cannot run its codegen job 🔴
 
 - `flang -c x.f90` schedules a clang `-cc1` command and spawns it; the spawn

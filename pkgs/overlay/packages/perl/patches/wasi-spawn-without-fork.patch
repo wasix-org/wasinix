@@ -1,0 +1,147 @@
+--- a/perl.h
++++ b/perl.h
+@@ -6159,6 +6159,14 @@
+ 
+ #include "proto.h"
+ 
++#ifdef __wasi__
++/* No fork, so pp_exec and pp_system take the branch that calls these, which
++   proto.h declares for VMS and WIN32 only. doio.c defines them over
++   posix_spawn. */
++int do_aspawn(SV *really, void **mark, void **sp);
++int do_spawn(char *cmd);
++#endif
++
+ /* this has structure inits, so it cannot be included before here */
+ #include "opcode.h"
+ 
+--- a/doio.c
++++ b/doio.c
+@@ -3514,6 +3514,127 @@
+     return fp;
+ }
+ 
++#ifdef __wasi__
++
++/* wasi has no fork, so the spawn path is the only way to run a command.
++   Modelled on cygwin.c, with posix_spawnp in place of spawnvp. */
++
++#include <spawn.h>
++
++static int
++S_wasi_spawnvp(pTHX_ const char *path, const char *const *argv)
++{
++    Sigsave_t ihand, qhand;
++    pid_t childpid;
++    int result, status;
++
++    rsignal_save(SIGINT, (Sighandler_t) SIG_IGN, &ihand);
++    rsignal_save(SIGQUIT, (Sighandler_t) SIG_IGN, &qhand);
++
++    if (posix_spawnp(&childpid, path, NULL, NULL,
++                     (char *const *)argv, environ) != 0) {
++        status = -1;
++        ck_warner(packWARN(WARN_EXEC), "Can't spawn \"%s\": %s",
++                  path, Strerror(errno));
++    }
++    else {
++        do {
++            result = wait4pid(childpid, &status, 0);
++        } while (result == -1 && errno == EINTR);
++        if (result < 0)
++            status = -1;
++    }
++
++    (void)rsignal_restore(SIGINT, &ihand);
++    (void)rsignal_restore(SIGQUIT, &qhand);
++    return status;
++}
++
++int
++do_aspawn(SV *really, void **mark, void **sp)
++{
++    dTHX;
++    const char **a;
++    char *tmps;
++    char **argv;
++    STRLEN n_a;
++
++    if (sp <= mark)
++        return -1;
++
++    argv = (char **) alloca((sp - mark + 3) * sizeof(char *));
++    a = (const char **) argv;
++
++    while (++mark <= sp)
++        if (*mark)
++            *a++ = SvPVx((SV *)*mark, n_a);
++        else
++            *a++ = "";
++    *a = NULL;
++
++    if (argv[0][0] != '/')
++        TAINT_ENV();
++
++    if (really && *(tmps = SvPV(really, n_a)))
++        return S_wasi_spawnvp(aTHX_ tmps, (const char *const *)argv);
++
++    return S_wasi_spawnvp(aTHX_ argv[0], (const char *const *)argv);
++}
++
++int
++do_spawn(char *cmd)
++{
++    dTHX;
++    const char **argv, **a;
++    char *s;
++    const char *metachars = "$&*(){}[]'\";\\?>|<~`\n";
++    const char *command[4];
++    int result;
++
++    ENTER;
++    while (*cmd && isSPACE(*cmd))
++        cmd++;
++
++    /* a command with shell metacharacters has to go through a shell */
++    for (s = cmd; *s; s++)
++        if (strchr(metachars, *s)) {
++            if (*s == '\n' && s[1] == '\0') {
++                *s = '\0';
++                break;
++            }
++            command[0] = "sh";
++            command[1] = "-c";
++            command[2] = cmd;
++            command[3] = NULL;
++
++            result = S_wasi_spawnvp(aTHX_ "sh", command);
++            goto leave;
++        }
++
++    Newx(argv, (s - cmd) / 2 + 2, const char *);
++    SAVEFREEPV(argv);
++    cmd = savepvn(cmd, s - cmd);
++    SAVEFREEPV(cmd);
++    a = argv;
++    for (s = cmd; *s;) {
++        while (*s && isSPACE(*s)) s++;
++        if (*s)
++            *(a++) = s;
++        while (*s && !isSPACE(*s)) s++;
++        if (*s)
++            *s++ = '\0';
++    }
++    *a = NULL;
++
++    result = argv[0] ? S_wasi_spawnvp(aTHX_ argv[0], (const char *const *)argv)
++                     : -1;
++leave:
++    LEAVE;
++    return result;
++}
++
++#endif /* __wasi__ */
++
+ /*
+  * ex: set ts=8 sts=4 sw=4 et:
+  */

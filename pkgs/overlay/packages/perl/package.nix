@@ -1,0 +1,43 @@
+# Perl for wasix. The patches carry perl-cross past its ELF-only type probes,
+# add wasi as a target it knows, and supply the process and extension entry
+# points perl expects a platform to have.
+{
+  prev,
+  helpers,
+  preferredProfilePackages,
+  ...
+}:
+helpers.wasmRename {
+  wasmName = "perl";
+  # scripts and build tooling reach bin/perl by that name
+  posixAlias = true;
+} (helpers.libTweaks {
+    patches = [
+      ./patches/perl-cross-non-elf-probes.patch
+      ./patches/wasi-spawn-without-fork.patch
+      ./patches/wasi-posix-unavailable-calls.patch
+      ./patches/wasi-errno-cpp-file-argument.patch
+    ];
+    # XS modules are dlopened side modules, which the PIC sysroots alone provide.
+    passthru.wasix.supportedProfiles = helpers.profiles.pic;
+    # @INC and the XS .so paths are baked into the interpreter, so a webc has to
+    # carry them.
+    passthru.wasmer.autoSelfMount = true;
+    # nixpkgs disables dynamic loading for every static host, which would link
+    # each extension into perl itself; the re extension then redefines the regcomp
+    # symbols already in libperl.
+    configureFlags = old:
+      (builtins.filter (f: f != "-Uusedl") old)
+      ++ [
+        "-Dusedl"
+        "-Ddlsrc=dl_dlopen.xs"
+        "-Dcccdlflags=-fPIC"
+        "-Dlddlflags=-shared"
+        # wasi-libc calls main(argc, argv), and a wasm function's arity is part
+        # of its type, so perl's three-argument form does not resolve.
+        "-Accflags=-DNO_ENV_ARRAY_IN_MAIN"
+      ];
+  }
+  # ${coreutils}/bin/pwd is a runtime path baked into Cwd, and coreutils builds
+  # at the off profile only.
+  (prev.perl.override {coreutils = preferredProfilePackages.coreutils;}))

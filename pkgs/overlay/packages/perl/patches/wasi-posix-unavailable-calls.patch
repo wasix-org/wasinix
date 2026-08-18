@@ -1,0 +1,24 @@
+--- a/ext/POSIX/POSIX.xs
++++ b/ext/POSIX/POSIX.xs
+@@ -1433,7 +1433,7 @@
+ #else
+ 
+ #  ifndef HAS_MKFIFO
+-#    if defined(OS2) || defined(__amigaos4__)
++#    if defined(OS2) || defined(__amigaos4__) || defined(__wasi__)
+ #      define mkfifo(a,b) not_here("mkfifo")
+ #    else	/* !( defined OS2 ) */
+ #      ifndef mkfifo
+@@ -1442,6 +1442,12 @@
+ #    endif
+ #  endif /* !HAS_MKFIFO */
+ 
++/* wasi has no pause; its declaration is hidden rather than the call failing
++   to link, so reach the same croak the calls above use. */
++#  ifdef __wasi__
++#    define pause() not_here("pause")
++#  endif
++
+ #  ifdef I_GRP
+ #    include <grp.h>
+ #  endif
