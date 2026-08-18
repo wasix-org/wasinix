@@ -5804,7 +5804,22 @@ mod table {
 
 
 mod buildset {
-    use crate::nix::buildset::{dry_run_plan, prebuilt_partition, realise_building_drv};
+    use crate::nix::buildset::{
+        dry_run_plan, failure_excerpt_from_log, prebuilt_partition, realise_building_drv,
+    };
+
+    #[test]
+    fn only_a_nonempty_build_log_proves_a_derivation_ran() {
+        assert_eq!(failure_excerpt_from_log(b""), None);
+        assert_eq!(failure_excerpt_from_log(b"\n"), None);
+        let log = (1..=25)
+            .map(|n| format!("line {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let excerpt = failure_excerpt_from_log(log.as_bytes()).unwrap();
+        assert!(excerpt.starts_with("line 6\n"), "{excerpt}");
+        assert!(excerpt.ends_with("line 25"), "{excerpt}");
+    }
 
     #[test]
     fn the_prebuilt_partition_pushes_only_local_never_pushed_outputs() {

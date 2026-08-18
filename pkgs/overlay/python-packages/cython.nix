@@ -14,7 +14,8 @@ in
     passthru.wasixDeclaredCheckInputs = [pyfinal.numpy pyfinal.setuptools];
     passthru.wasix.emulatedCheck = {
       shards = 8;
-      timeout = 3600;
+      timeout = 1200;
+      ciTags = ["slow-tests"];
     };
     installCheckPhase = _: ''
       export HOME="$NIX_BUILD_TOP"

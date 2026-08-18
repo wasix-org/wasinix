@@ -29,6 +29,7 @@ in {
     # extra wheels copied in beside `wheel` (test deps, pytest plugins)
     deps ? [],
     timeout ? 600,
+    ciTags ? [],
   }: let
     pythonPath = python3.pkgs.makePythonPath ([wheel] ++ deps);
     marker = "PYRUN_OK ${name}";
@@ -43,6 +44,7 @@ in {
     # deliberately grants no --net, so the prompt is reachable here.
     pkgs.runCommand name {
       nativeBuildInputs = [effWasmer];
+      passthru.wasix = lib.optionalAttrs (ciTags != []) {inherit ciTags;};
     } ''
       export HOME=$TMPDIR/home
       mkdir -p "$HOME"
