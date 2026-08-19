@@ -380,15 +380,17 @@ fn evaluate(
         .into_iter()
         .map(|(tag, jobs)| (tag, jobs.len()))
         .collect();
-    let headline = if mapping.errors.is_empty() {
-        format!("{} jobs", mapping.jobs.len())
-    } else {
-        format!(
-            "{} jobs, {} eval errors",
-            mapping.jobs.len(),
-            mapping.errors.len()
-        )
-    };
+    // Everything the evaluation decided, so "my job is not in the build"
+    // has an answer here rather than in the log.
+    let mut parts = vec![format!("{} jobs", mapping.jobs.len())];
+    if !mapping.errors.is_empty() {
+        parts.push(format!("{} eval errors", mapping.errors.len()));
+    }
+    let omitted: usize = omitted_by_tags.values().sum();
+    if omitted > 0 {
+        parts.push(format!("{omitted} omitted by tags"));
+    }
+    let headline = crate::support::ui::counts(&parts);
     Ok(Fragment::new(
         format!("{case_id}.eval"),
         format!("{case_id}: Evaluation"),
@@ -398,6 +400,7 @@ fn evaluate(
     )
     .with_data(FragmentData::Eval(crate::ci::report::EvalSummary {
         job_count: mapping.jobs.len(),
+        error_count: mapping.errors.len(),
         omitted_by_tags,
         base_rev: None,
     })))
@@ -894,6 +897,8 @@ fn run_build_tasks(
 
     let mut worst = CommandStatus::SUCCESS;
     let mut results: BTreeMap<String, PathBuf> = BTreeMap::new();
+    // Summed across placement groups: one task's jobs can span builders.
+    let mut plan = crate::nix::buildset::PlanCensus::default();
     let union_started = Instant::now();
     for (on, cases) in groups {
         let route = Route::from_on(ctx.runner_root, on.as_deref())?;
@@ -947,6 +952,12 @@ fn run_build_tasks(
                     });
                     Ok(())
                 }
+                crate::nix::buildset::StreamEvent::Plan(census) => {
+                    plan.to_build += census.to_build;
+                    plan.to_fetch += census.to_fetch;
+                    plan.present += census.present;
+                    Ok(())
+                }
                 crate::nix::buildset::StreamEvent::Activity => {
                     liveness.activity();
                     Ok(())
@@ -992,7 +1003,7 @@ fn run_build_tasks(
             .ok_or_else(|| Error::Failure(format!("{}: no union results", spec.case)))?;
         project_junit(source, &junit, &spec.case, &spec.jobs, &jobs)?;
         let mapping = maps.get(&spec.case).expect("spec map was loaded");
-        let build_facts = facts::ingest(
+        let mut build_facts = facts::ingest(
             &[junit],
             Some(&crate::ci::prepare::eval_jobs_path(&paths)),
             &mapping.info,
@@ -1024,15 +1035,34 @@ fn run_build_tasks(
         } else {
             TaskStatus::Success
         };
-        let headline = match (failed, blocked) {
-            (0, 0) => format!("{} jobs passed", spec.jobs.len()),
-            (0, _) => format!("{blocked} of {} jobs blocked", spec.jobs.len()),
-            (_, 0) => format!("{failed} of {} jobs failed", spec.jobs.len()),
-            _ => format!(
-                "{failed} of {} jobs failed · {blocked} blocked",
-                spec.jobs.len()
-            ),
-        };
+        // Where the selected jobs went. `reused` came from a published
+        // baseline and never entered the build, so the dry run never saw
+        // them; the rest is the plan's split minus what actually failed.
+        let reused = spec
+            .jobs
+            .iter()
+            .filter(|name| {
+                jobs.get(&format!("{}::{name}", spec.case))
+                    .is_some_and(|job| job.drv.is_empty())
+            })
+            .count();
+        build_facts.census = Some(facts::JobCensus {
+            selected: spec.jobs.len(),
+            reused,
+            to_build: plan.to_build,
+            to_fetch: plan.to_fetch,
+            present: plan.present,
+            built: plan.to_build.saturating_sub(failed + blocked),
+            failed,
+            blocked,
+        });
+        let headline = crate::support::ui::counts(
+            &build_facts
+                .census
+                .as_ref()
+                .expect("just set")
+                .parts(),
+        );
         worst = worst.max(finish_task(
             ctx,
             tracker,

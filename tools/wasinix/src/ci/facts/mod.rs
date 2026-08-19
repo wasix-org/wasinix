@@ -155,6 +155,47 @@ pub struct BuildFacts {
     pub build_seconds: BTreeMap<JobAddr, f64>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub build_seconds_by_drv: BTreeMap<String, f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub census: Option<JobCensus>,
+}
+
+/// Where a build task's selected jobs went, in job addresses. The plan half
+/// is the dry run's prediction, taken before anything ran; the outcome half
+/// is what happened. They differ when a substituter drops out or a failure
+/// blocks its dependents, so merging them would hide the case worth seeing.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobCensus {
+    pub selected: usize,
+    /// Answered by a reused baseline, so never part of this run's build.
+    pub reused: usize,
+    pub to_build: usize,
+    pub to_fetch: usize,
+    pub present: usize,
+    pub built: usize,
+    pub failed: usize,
+    /// Never ran: something below them failed first.
+    pub blocked: usize,
+}
+
+impl JobCensus {
+    /// The parts worth printing, in the order a reader asks about them.
+    pub fn parts(&self) -> Vec<String> {
+        let mut parts = vec![format!("{} selected", self.selected)];
+        for (count, label) in [
+            (self.built, "built"),
+            (self.to_fetch, "fetched"),
+            (self.present, "already present"),
+            (self.reused, "reused"),
+            (self.failed, "failed"),
+            (self.blocked, "blocked"),
+        ] {
+            if count > 0 {
+                parts.push(format!("{count} {label}"));
+            }
+        }
+        parts
+    }
 }
 
 fn test_results(cases: &[junit::Case]) -> Vec<TestResult> {
@@ -236,5 +277,6 @@ pub fn ingest(
         counts,
         build_seconds: metrics.build_seconds,
         build_seconds_by_drv: metrics.build_seconds_by_drv,
+        census: None,
     })
 }

@@ -86,7 +86,9 @@ pub fn brief(error: &Error, limit: usize) -> String {
         .collect()
 }
 
-/// The end of a tool's output, which is where it says what went wrong.
+/// The end of a tool's output, which is where it says what went wrong. The
+/// cut lands on a line boundary: a size-based one opens mid-token, and the
+/// first thing a reader sees is then half a store path.
 pub fn tail(text: &str, limit: usize) -> String {
     let text = text.trim();
     let start = text
@@ -96,5 +98,9 @@ pub fn tail(text: &str, limit: usize) -> String {
         .last()
         .map(|(index, _)| index)
         .unwrap_or(0);
+    let start = match text[start..].find('\n') {
+        Some(at) if start > 0 => start + at + 1,
+        _ => start,
+    };
     text[start..].to_string()
 }

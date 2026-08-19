@@ -1995,6 +1995,7 @@ mod markdown {
             )
             .with_data(FragmentData::Eval(EvalSummary {
                 job_count: jobs,
+                error_count: 0,
                 omitted_by_tags: Default::default(),
                 base_rev: None,
             }))
@@ -2031,6 +2032,133 @@ mod markdown {
             )
             .into_string(),
         );
+    }
+
+    #[test]
+    fn a_census_says_where_the_selected_jobs_went() {
+        use crate::ci::facts::JobCensus;
+        let warm = JobCensus {
+            selected: 5340,
+            reused: 0,
+            to_build: 128,
+            to_fetch: 5100,
+            present: 112,
+            built: 128,
+            failed: 0,
+            blocked: 0,
+        };
+        assert_eq!(
+            crate::support::ui::counts(&warm.parts()),
+            "5340 selected · 128 built · 5100 fetched · 112 already present"
+        );
+        // A blocked selector build says so without inventing a green count.
+        let blocked = JobCensus {
+            selected: 1,
+            to_build: 1,
+            blocked: 1,
+            ..JobCensus::default()
+        };
+        assert_eq!(
+            crate::support::ui::counts(&blocked.parts()),
+            "1 selected · 1 blocked"
+        );
+    }
+
+    /// `/wasinix build checks.gzip-roundtrip` whose only job was blocked by
+    /// a dependency reported "✅ 5340 jobs green": a neutral gate counted
+    /// nowhere, and the heading counted evaluated jobs rather than built.
+    #[test]
+    fn a_blocked_gate_is_never_green() {
+        use crate::ci::facts::{BuildFacts, Failure, FailureCause};
+        use crate::ci::plan::{plan_of, TaskKind};
+        use crate::ci::report::{fold, FoldContext, Fragment, FragmentData};
+        use crate::cli::untrusted::{parse, UntrustedCommand};
+        use crate::support::atoms::{JobAddr, TaskStatus};
+        let UntrustedCommand::Request(request) = parse("build checks.gzip-roundtrip").unwrap()
+        else {
+            panic!("expected a build request");
+        };
+        let plan = plan_of(&request, Some("golden"), &[]);
+        let mut fragments: std::collections::BTreeMap<String, Fragment> = plan
+            .tasks
+            .iter()
+            .map(|task| {
+                let fragment = Fragment::new(
+                    &task.task_id,
+                    &task.label,
+                    task.kind,
+                    TaskStatus::Success,
+                    "ok",
+                );
+                (task.task_id.clone(), fragment)
+            })
+            .collect();
+        let build = plan
+            .tasks
+            .iter()
+            .find(|task| task.kind == TaskKind::Build)
+            .expect("a build request plans a build task");
+        assert!(build.gate, "the selected jobs gate the run");
+        let facts = BuildFacts {
+            complete: true,
+            failures: vec![
+                Failure {
+                    job: JobAddr("checks.gzip-roundtrip".into()),
+                    cause: FailureCause::Transitive,
+                    class: Some("Build".into()),
+                    message: Some("build did not complete".into()),
+                    jobs: Vec::new(),
+                    position: None,
+                    log: None,
+                },
+                Failure {
+                    job: JobAddr("wasix-cc-legacy".into()),
+                    cause: FailureCause::Dependency,
+                    class: None,
+                    message: None,
+                    jobs: vec![JobAddr("checks.gzip-roundtrip".into())],
+                    position: None,
+                    log: None,
+                },
+            ],
+            counts: std::collections::BTreeMap::from([("Build".to_string(), (1usize, 0usize))]),
+            census: Some(crate::ci::facts::JobCensus {
+                selected: 1,
+                to_build: 1,
+                blocked: 1,
+                ..Default::default()
+            }),
+            ..BuildFacts::default()
+        };
+        fragments.insert(
+            build.task_id.clone(),
+            Fragment::new(
+                &build.task_id,
+                &build.label,
+                build.kind,
+                TaskStatus::Neutral,
+                "1 of 1 jobs blocked",
+            )
+            .with_data(FragmentData::Build(facts)),
+        );
+        let report = fold(
+            &plan,
+            &fragments,
+            FoldContext {
+                finished: true,
+                ..FoldContext::default()
+            },
+        );
+        assert_eq!(
+            report.conclusion,
+            Some(crate::ci::report::Conclusion::Neutral),
+            "a blocked gate concluded {:?}",
+            report.conclusion
+        );
+        let body = comment(&report, &fragments, None, &links()).into_string();
+        assert!(!body.contains("jobs green"), "{body}");
+        // The dependency that blocked it is the whole answer.
+        assert!(body.contains("wasix-cc-legacy"), "{body}");
     }
 
     #[test]
@@ -2253,6 +2381,25 @@ mod markdown {
             failures: Vec::new(),
             committed: true,
         }
+    }
+
+    /// A run that died reported "  (probe: a failed note check reports its
+    /// own stderr)" as its whole result: the headline took the log's last
+    /// line, and a probe's note is often what that is.
+    #[test]
+    fn a_run_log_headline_names_the_error_not_the_narration() {
+        let tail = concat!(
+            "materializing: case at 0d1eb9677bc7\n",
+            "error: update s3-server: no such version\n",
+            "  $ nix-build --expr 'let src = ...'\n",
+            "  took 11s\n",
+            "  (probe: a failed note check reports its own stderr)\n",
+        );
+        let fragment = crate::ci::report::run_log_fragment(tail);
+        assert_eq!(fragment.headline, "error: update s3-server: no such version");
+        // With no error line at all, the last real line still beats a note.
+        let quiet = "materializing: case\n  took 11s\n  (probe: something)\n";
+        assert_eq!(crate::ci::report::run_log_fragment(quiet).headline, "took 11s");
     }
 
     #[test]
@@ -5374,6 +5521,15 @@ mod tools {
         command.args(["-c", "echo stdout-detail; exit 1"]);
         let error = checked_text(&mut command, "probing").unwrap_err().to_string();
         assert!(error.contains("stdout-detail"), "{error}");
+    }
+
+    #[test]
+    fn a_truncated_tail_starts_on_a_whole_line() {
+        let text = format!("{}\nthe last line\n", "x".repeat(4000));
+        let cut = crate::support::error::tail(&text, 100);
+        assert_eq!(cut, "the last line");
+        // Nothing to cut: the text survives whole.
+        assert_eq!(crate::support::error::tail("short\nenough", 100), "short\nenough");
     }
 
     #[test]

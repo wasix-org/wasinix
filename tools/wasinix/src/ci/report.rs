@@ -31,6 +31,9 @@ pub struct Annotation {
 #[serde(rename_all = "camelCase")]
 pub struct EvalSummary {
     pub job_count: usize,
+    /// Jobs whose evaluation failed; they are in no build.
+    #[serde(default)]
+    pub error_count: usize,
     /// Tag -> how many jobs the selection omitted for lacking it. Never
     /// silent: a set selection that filtered jobs says so here.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -335,6 +338,12 @@ pub fn fold(
                 && (failed(view.status) || view.status == TaskStatus::Neutral)
         })
         .count();
+    // A gate that ended neither passed nor failed: its work did not happen,
+    // so the run answered nothing. Counting it nowhere concluded success and
+    // reported a build whose jobs never ran as green.
+    let neutral_gate = views.iter().find(|view| {
+        view.task.enabled && view.task.gate && view.status == TaskStatus::Neutral
+    });
     let active_failures = views
         .iter()
         .filter(|view| view.task.enabled && failed(view.status))
@@ -385,6 +394,15 @@ pub fn fold(
         (
             Some(Conclusion::Failure),
             "CI could not compare a candidate".to_string(),
+        )
+    } else if let Some(view) = neutral_gate {
+        let detail = view
+            .fragment
+            .map(|fragment| fragment.headline.clone())
+            .unwrap_or_else(|| view.task.label.clone());
+        (
+            Some(Conclusion::Neutral),
+            format!("CI is inconclusive: {detail}"),
         )
     } else if !plan.tasks.is_empty() || !fragments.is_empty() {
         let title = if advisory_failures > 0 {
@@ -464,6 +482,25 @@ pub fn fold(
     }
 }
 
+/// The line of a log that says what went wrong: the last `error:` when the
+/// run got that far, else the last line that is not a running commentary
+/// note. A note (`  (probe: ...)`) is often the last thing printed before a
+/// tool's own error surfaces elsewhere, and it names nothing.
+pub(crate) fn log_headline(tail: &str) -> String {
+    let lines: Vec<&str> = tail
+        .lines()
+        .map(str::trim_end)
+        .filter(|line| !line.trim().is_empty() && !line.trim_start().starts_with("(probe:"))
+        .collect();
+    lines
+        .iter()
+        .rev()
+        .find(|line| line.trim_start().starts_with("error:"))
+        .or_else(|| lines.last())
+        .map(|line| line.trim().to_string())
+        .unwrap_or_else(|| "the run left no log".to_string())
+}
+
 /// The terminal report for a run that ended without folding one: a cancel, a
 /// timeout, a lost supervisor. Without this, the surfaces stay wedged on the
 /// last in-progress render (the check run in_progress forever); with it, the
@@ -471,12 +508,7 @@ pub fn fold(
 /// The log tail of a report-less run as a fragment, so the surfaces show
 /// the run's own words where a folded report would have carried them.
 pub fn run_log_fragment(tail: &str) -> Fragment {
-    let headline = tail
-        .lines()
-        .rev()
-        .find(|line| !line.trim().is_empty())
-        .unwrap_or("the run left no log")
-        .to_string();
+    let headline = log_headline(tail);
     Fragment::new(
         "run".to_string(),
         "Run log".to_string(),

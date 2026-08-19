@@ -148,10 +148,10 @@ fn failure_cause(failure: &Failure) -> Markdown {
             let first = message.lines().next().unwrap_or_default();
             Markdown::cell(&first.chars().take(120).collect::<String>())
         }
-        None if !failure.jobs.is_empty() => Markdown::text(&format!(
-            "dependency failure taking down {} jobs",
-            failure.jobs.len()
-        )),
+        None if !failure.jobs.is_empty() => Markdown::concat([
+            Markdown::constant("dependency failure taking down "),
+            plural(failure.jobs.len(), "job"),
+        ]),
         None => Markdown::constant("no build log was captured"),
     }
 }
@@ -524,9 +524,26 @@ pub fn comment(
     origin_line(links).push(body)
 }
 
+/// Jobs the request selected, which for a selector build is a handful of the
+/// evaluated thousands. The heading counts these; the footer keeps the
+/// evaluated total, which is what the pipeline sized itself against.
+fn selected_count(fragments: &BTreeMap<String, Fragment>) -> Option<usize> {
+    let mut total = 0usize;
+    let mut found = false;
+    for fragment in fragments.values() {
+        if let Some(FragmentData::Build(facts)) = &fragment.data {
+            if let Some(census) = &facts.census {
+                total += census.selected;
+                found = true;
+            }
+        }
+    }
+    found.then_some(total)
+}
+
 fn green(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Links) -> Markdown {
-    let jobs = match job_count(fragments) {
-        Some(jobs) => Markdown::text(&format!("{jobs} jobs green")),
+    let jobs = match selected_count(fragments).or_else(|| job_count(fragments)) {
+        Some(jobs) => plural(jobs, "job").push(Markdown::constant(" green")),
         None => Markdown::constant("green"),
     };
     Markdown::concat([
@@ -648,31 +665,52 @@ fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
 }
 
 fn neutral(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Links) -> Markdown {
+    // Two ways to end neutral: a diff whose base never evaluated, and a run
+    // whose work was blocked before it could pass or fail. Only the first is
+    // "not your change".
+    let compared = !report.comparisons.is_empty();
+    let (heading, lead) = if compared {
+        (
+            "### ⚠️ Wasinix CI could not compare · ",
+            "> The base did not produce results to compare against. This is not caused by your change.\n\n",
+        )
+    } else {
+        (
+            "### ⚠️ Wasinix CI · ",
+            "> Nothing the request selected finished, so the run neither passed nor failed. The failures below are why.\n\n",
+        )
+    };
     let mut text = Markdown::concat([
-        Markdown::constant("### ⚠️ Wasinix CI could not compare · "),
+        Markdown::constant(heading),
         Markdown::text(&report.title),
         links.heading_suffix(),
         Markdown::constant("\n\n"),
-        Markdown::constant(
-            "> The base did not produce results to compare against. This is not caused by your change.\n\n",
-        ),
+        Markdown::constant(lead),
     ]);
     let all = failures(report);
     if !all.is_empty() {
+        let summary = if compared {
+            format!("Failures on this branch, baseline unknown ({})", all.len())
+        } else {
+            format!("What blocked it ({})", all.len())
+        };
         text = Markdown::concat([
             text,
             Markdown::constant("<details open><summary>"),
-            Markdown::text(&format!(
-                "Failures on this branch, baseline unknown ({})",
-                all.len()
-            )),
+            Markdown::text(&summary),
             Markdown::constant("</summary>\n\n"),
             failure_table(&all, links, FAILURE_ROWS),
             blocked_line(report),
             Markdown::constant("\n</details>\n\n"),
         ]);
     }
-    text.push(footer(report, fragments, links))
+    text = text.push(footer(report, fragments, links));
+    // The pipeline table is what says which task stopped; the compared case
+    // keeps its established shape.
+    if !compared {
+        text = text.push(Markdown::constant("\n")).push(details(report, fragments));
+    }
+    text
 }
 
 fn in_progress(report: &Report, snapshot: Option<&Snapshot>, links: &Links) -> Markdown {

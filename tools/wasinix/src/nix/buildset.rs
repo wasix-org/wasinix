@@ -33,8 +33,20 @@ pub struct UnionRequest<'a> {
     pub push: bool,
 }
 
+/// The dry run's prediction for the selected jobs, counted in job
+/// addresses: several addresses share one derivation, so this is not the
+/// derivation count the uploader works in.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct PlanCensus {
+    pub to_build: usize,
+    pub to_fetch: usize,
+    pub present: usize,
+}
+
 pub enum StreamEvent {
     Result(Value),
+    /// What the build expects to do, before it does any of it.
+    Plan(PlanCensus),
     Activity,
     /// The most recently announced dependency builds, so the ticker can say
     /// what the run is doing when no job derivation is in flight.
@@ -541,10 +553,17 @@ pub fn build_union(
     // pushed them. They go to the uploader, which skips whatever the remote
     // already has.
     let mut local_only: Vec<String> = Vec::new();
+    let mut census = PlanCensus::default();
     for (drv, spec) in &jobs {
         if to_build.contains(drv) {
             pending.insert(drv.clone());
+            census.to_build += spec.attrs.len();
             continue;
+        }
+        if spec.outputs.iter().any(|output| plan.fetched.contains(output)) {
+            census.to_fetch += spec.attrs.len();
+        } else {
+            census.present += spec.attrs.len();
         }
         local_only.extend(
             spec.outputs
@@ -568,11 +587,11 @@ pub fn build_union(
     crate::support::ui::fact(
         "build plan",
         format!(
-            "{} to build · {} cached",
-            pending.len(),
-            jobs.len() - pending.len()
+            "{} to build · {} to fetch · {} present",
+            census.to_build, census.to_fetch, census.present
         ),
     );
+    on_event(StreamEvent::Plan(census))?;
 
     let uploader = Uploader::start(key.as_ref().map(SigningKey::store));
     if key.is_some() && !local_only.is_empty() {
