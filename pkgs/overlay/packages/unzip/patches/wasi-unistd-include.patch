@@ -1,0 +1,14 @@
+--- a/unix/unxcfg.h
++++ b/unix/unxcfg.h
+@@ -120,9 +120,9 @@
+    struct tm *gmtime(), *localtime();
+ #endif
+ 
+-#if (defined(BSD4_4) || (defined(SYSV) && defined(MODERN)))
++#if (defined(BSD4_4) || defined(__wasi__) || (defined(SYSV) && defined(MODERN)))
+ #  include <unistd.h>           /* this includes utime.h on SGIs */
+-#  if (defined(BSD4_4) || defined(linux) || defined(__GLIBC__))
++#  if (defined(BSD4_4) || defined(linux) || defined(__GLIBC__) || defined(__wasi__))
+ #    include <utime.h>
+ #    define GOT_UTIMBUF
+ #  endif
