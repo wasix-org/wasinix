@@ -123,7 +123,6 @@ pub fn pull(client: &Client, repository: &str, number: u64) -> Result<Pull> {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Context {
-    pub schema: u32,
     pub origin: crate::ci::origin::Origin,
     pub command: String,
     pub pull: Pull,
@@ -144,7 +143,6 @@ impl crate::support::schema::Document for Context {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Generated {
-    pub schema: u32,
     pub start_sha: String,
     pub head_sha: String,
     pub changed: bool,
@@ -424,7 +422,6 @@ pub fn mutate(repo: &Path, origin_doc: &Path, out_dir: &Path) -> Result<()> {
     crate::support::schema::write(
         &out_dir.join("context.json"),
         &Context {
-            schema: 1,
             origin: command.origin,
             command: command.command,
             pull,
@@ -438,7 +435,6 @@ pub fn mutate(repo: &Path, origin_doc: &Path, out_dir: &Path) -> Result<()> {
     crate::support::schema::write(
         &out_dir.join("result.json"),
         &Generated {
-            schema: 1,
             start_sha,
             head_sha: head,
             changed,

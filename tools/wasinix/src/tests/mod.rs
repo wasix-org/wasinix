@@ -2965,6 +2965,51 @@ mod mutation_gates {
         }
     }
 
+    /// The write envelope owns "schema" and "kind"; a document field
+    /// reusing either panics the writer, which a run only hits after the
+    /// whole mutation succeeded.
+    #[test]
+    fn the_mutation_documents_round_trip_the_envelope() {
+        let scratch = crate::support::fs::Scratch::create("wasinix-test").unwrap();
+        let path = scratch.path().join("context.json");
+        crate::support::schema::write(
+            &path,
+            &crate::github::mutation::Context {
+                origin: crate::ci::origin::Origin {
+                    repository: "wasix-org/wasinix".into(),
+                    pull_request: 154,
+                    head_sha: "a".repeat(40),
+                    comment_id: 7,
+                    actor: "kilyanni".into(),
+                },
+                command: "update wasmer".into(),
+                pull: pull(),
+                start_sha: "c".repeat(40),
+                force: false,
+                record_state: true,
+                recipe: None,
+            },
+        )
+        .unwrap();
+        let back: crate::github::mutation::Context =
+            crate::support::schema::read(&path).unwrap();
+        assert_eq!(back.command, "update wasmer");
+
+        let result = scratch.path().join("result.json");
+        crate::support::schema::write(
+            &result,
+            &crate::github::mutation::Generated {
+                start_sha: "c".repeat(40),
+                head_sha: "d".repeat(40),
+                changed: true,
+            },
+        )
+        .unwrap();
+        let back: crate::github::mutation::Generated =
+            crate::support::schema::read(&result).unwrap();
+        assert!(back.changed);
+    }
+
     fn update(targets: &[&str], all: bool) -> MutationCommand {
         MutationCommand::Update {
             targets: targets.iter().map(|t| t.to_string()).collect(),
