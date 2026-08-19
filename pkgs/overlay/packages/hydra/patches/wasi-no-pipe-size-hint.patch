@@ -1,0 +1,15 @@
+--- a/subprojects/hydra/hydra-queue-runner/build-remote.cc
++++ b/subprojects/hydra/hydra-queue-runner/build-remote.cc
+@@ -63,10 +63,12 @@
+ 
+     // FIXME: Should this be upstreamed into `startCommand` in Nix?
+ 
++#ifdef F_SETPIPE_SZ
+     int pipesize = 1024 * 1024;
+ 
+     fcntl(ret->in.get(), F_SETPIPE_SZ, &pipesize);
+     fcntl(ret->out.get(), F_SETPIPE_SZ, &pipesize);
++#endif
+ 
+     return ret;
+ }

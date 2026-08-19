@@ -1,0 +1,42 @@
+--- a/lib/YAML/Tiny.pm
++++ b/lib/YAML/Tiny.pm
+@@ -2,6 +2,12 @@
+ use strict;
+ use warnings;
+ package YAML::Tiny; # git description: v1.73-12-ge02f827
++
++# the strict layer lives in PerlIO::encoding, which an XS-less perl (the
++# miniperl a cross build runs Makefile.PL under) cannot load
++our $UTF8_LAYER = eval { require PerlIO::encoding; 1 }
++    ? ':encoding(UTF-8)'
++    : ':utf8';
+ # XXX-INGY is 5.8.1 too old/broken for utf8?
+ # XXX-XDG Lancaster consensus was that it was sufficient until
+ # proven otherwise
+@@ -180,7 +186,7 @@
+         unless -r _;
+ 
+     # Open unbuffered with strict UTF-8 decoding and no translation layers
+-    open( my $fh, "<:unix:encoding(UTF-8)", $file );
++    open( my $fh, "<:unix$UTF8_LAYER", $file );
+     unless ( $fh ) {
+         $class->_error("Failed to open file '$file': $!");
+     }
+@@ -573,7 +579,7 @@
+             or $self->_error("Failed to open file '$file' for writing: $!");
+ 
+         # Use no translation and strict UTF-8
+-        binmode( $fh, ":raw:encoding(UTF-8)");
++        binmode( $fh, ":raw$UTF8_LAYER");
+ 
+         flock( $fh, Fcntl::LOCK_EX() )
+             or warn "Couldn't lock '$file' for reading: $!";
+@@ -583,7 +589,7 @@
+         seek $fh, 0, 0;
+     }
+     else {
+-        open $fh, ">:unix:encoding(UTF-8)", $file;
++        open $fh, ">:unix$UTF8_LAYER", $file;
+     }
+ 
+     # serialize and spew to the handle
