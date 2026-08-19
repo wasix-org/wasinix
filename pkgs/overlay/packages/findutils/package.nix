@@ -1,4 +1,4 @@
-# findutils: find + xargs. Both fork (find -exec, xargs spawns), so they are
+# find + xargs. Both fork (find -exec, xargs spawns), so they are
 # asyncified at link (WASM_OPT_FLAGS below). coreutils is pinned to the
 # build platform (findutils bakes its paths into scripts).
 # locate/frcode/updatedb are dropped: they need a runtime database, useless
@@ -78,7 +78,10 @@ helpers.libTweaks {
   '';
   outputs = _: ["out"];
   postFixup = _: "";
-  passthru.wasmer.entrypoint = "find";
+  passthru.wasmer = {
+    name = "find";
+    entrypoint = "find";
+  };
   # Rename find/xargs to *.wasm (one webc command per bin/*.wasm).
   postInstall = ''
     for prog in find xargs; do
