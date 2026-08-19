@@ -1,0 +1,824 @@
+diff -ruN a/cnf/stub/B.pm b/cnf/stub/B.pm
+--- a/cnf/stub/B.pm
++++ b/cnf/stub/B.pm
+@@ -0,0 +1,18 @@
++package B;
++
++our $VERSION = '1.89';
++
++sub SVf_POK { return 0x00004000 }
++
++sub svref_2object
++{
++	return bless {}, 'B::SV';
++}
++
++package B::SV;
++
++# callers ask whether a scalar carries a string; everything reaching a
++# Makefile.PL here was read as text
++sub FLAGS { return B::SVf_POK() }
++
++1;
+diff -ruN a/cnf/stub/Cwd.pm b/cnf/stub/Cwd.pm
+--- a/cnf/stub/Cwd.pm
++++ b/cnf/stub/Cwd.pm
+@@ -1,5 +1,7 @@
+ package Cwd;
+ 
++our $VERSION = '3.94';
++
+ @ISA = qw(Exporter);
+ require Exporter;
+ 
+@@ -10,6 +12,7 @@
+ sub cwd
+ {
+ 	my $cwd = `pwd`;
++	local $/ = "\n";
+ 	chomp $cwd;
+ 	return $cwd;
+ }
+diff -ruN a/cnf/stub/Digest/SHA.pm b/cnf/stub/Digest/SHA.pm
+--- a/cnf/stub/Digest/SHA.pm
++++ b/cnf/stub/Digest/SHA.pm
+@@ -0,0 +1,106 @@
++package Digest::SHA;
++
++# Digest::SHA is XS. This is SHA-1 in plain perl, enough for the install
++# scripts that hash a string; other algorithms are refused rather than faked.
++
++our $VERSION = '6.05';
++
++use Exporter 'import';
++
++our @EXPORT_OK = qw(sha1 sha1_hex);
++
++sub _rotl
++{
++	my($v, $n) = @_;
++	return ((($v << $n) | ($v >> (32 - $n))) & 0xffffffff);
++}
++
++sub sha1
++{
++	my $msg = join('', @_);
++	my $bits = length($msg) * 8;
++
++	$msg .= chr(0x80);
++	$msg .= "\0" while (length($msg) % 64) != 56;
++	$msg .= pack('N2', int($bits / 4294967296), $bits % 4294967296);
++
++	my @h = (0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0);
++
++	for(my $i = 0; $i < length($msg); $i += 64) {
++		my @w = unpack('N16', substr($msg, $i, 64));
++		for(my $t = 16; $t < 80; $t++) {
++			$w[$t] = _rotl($w[$t-3] ^ $w[$t-8] ^ $w[$t-14] ^ $w[$t-16], 1);
++		}
++
++		my($a, $b, $c, $d, $e) = @h;
++		for(my $t = 0; $t < 80; $t++) {
++			my($f, $k);
++			if($t < 20) {
++				$f = ($b & $c) | ((~$b & 0xffffffff) & $d);
++				$k = 0x5A827999;
++			} elsif($t < 40) {
++				$f = $b ^ $c ^ $d;
++				$k = 0x6ED9EBA1;
++			} elsif($t < 60) {
++				$f = ($b & $c) | ($b & $d) | ($c & $d);
++				$k = 0x8F1BBCDC;
++			} else {
++				$f = $b ^ $c ^ $d;
++				$k = 0xCA62C1D6;
++			}
++			my $tmp = (_rotl($a, 5) + $f + $e + $k + $w[$t]) & 0xffffffff;
++			($e, $d, $c, $b, $a) = ($d, $c, _rotl($b, 30), $a, $tmp);
++		}
++
++		$h[0] = ($h[0] + $a) & 0xffffffff;
++		$h[1] = ($h[1] + $b) & 0xffffffff;
++		$h[2] = ($h[2] + $c) & 0xffffffff;
++		$h[3] = ($h[3] + $d) & 0xffffffff;
++		$h[4] = ($h[4] + $e) & 0xffffffff;
++	}
++
++	return pack('N5', @h);
++}
++
++sub sha1_hex { return unpack('H*', sha1(@_)) }
++
++sub new
++{
++	my($class, $alg) = @_;
++	$alg = 1 unless defined $alg;
++	$alg =~ s/^SHA-?//i;
++	die "Digest::SHA stub implements SHA-1 only, not SHA-$alg" unless $alg eq '1';
++	return bless {data => ''}, ref($class) || $class;
++}
++
++sub add
++{
++	my $self = shift;
++	$self->{data} .= join('', @_);
++	return $self;
++}
++
++sub addfile
++{
++	my($self, $file) = @_;
++	my $fh = $file;
++	unless(ref $file) {
++		open($fh, '<', $file) or die "cannot open $file: $!";
++	}
++	binmode $fh;
++	local $/;
++	$self->{data} .= <$fh>;
++	return $self;
++}
++
++sub digest
++{
++	my $self = shift;
++	my $d = sha1($self->{data});
++	$self->{data} = '';
++	return $d;
++}
++
++sub hexdigest { return unpack('H*', $_[0]->digest) }
++
++1;
+diff -ruN a/cnf/stub/Fcntl.pm b/cnf/stub/Fcntl.pm
+--- a/cnf/stub/Fcntl.pm
++++ b/cnf/stub/Fcntl.pm
+@@ -0,0 +1,116 @@
++package Fcntl;
++
++our $VERSION = '1.20';
++
++use Exporter 'import';
++
++our @EXPORT = qw(
++	FD_CLOEXEC F_DUPFD F_EXLCK F_GETFD F_GETFL F_GETLK F_GETLK64 F_GETOWN
++	F_RDLCK F_SETFD F_SETFL F_SETLK F_SETLK64 F_SETLKW F_SETLKW64 F_SETOWN
++	F_SHLCK F_UNLCK F_WRLCK O_ACCMODE O_APPEND O_ASYNC O_BINARY O_CREAT
++	O_DIRECT O_DIRECTORY O_DSYNC O_EXCL O_LARGEFILE O_NDELAY O_NOCTTY
++	O_NOFOLLOW O_NONBLOCK O_RDONLY O_RDWR O_RSYNC O_SYNC O_TEXT O_TRUNC
++	O_WRONLY
++);
++
++our @EXPORT_OK = (@EXPORT, qw(
++	S_IFREG S_IFDIR S_IFLNK S_IFBLK S_IFCHR S_IFIFO S_IFSOCK S_ISUID S_ISGID
++	S_ISVTX S_IRUSR S_IWUSR S_IXUSR S_IRWXU S_IRGRP S_IWGRP S_IXGRP S_IRWXG
++	S_IROTH S_IWOTH S_IXOTH S_IRWXO S_IREAD S_IWRITE S_IEXEC S_IFMT S_IMODE
++	S_ISREG S_ISDIR S_ISLNK S_ISBLK S_ISCHR S_ISFIFO S_ISSOCK LOCK_SH
++	LOCK_EX LOCK_NB LOCK_UN SEEK_SET SEEK_CUR SEEK_END
++));
++
++our %EXPORT_TAGS = (
++	flock => [qw(LOCK_SH LOCK_EX LOCK_NB LOCK_UN)],
++	seek  => [qw(SEEK_SET SEEK_CUR SEEK_END)],
++	mode  => [grep { /^S_/ } @EXPORT_OK],
++);
++
++use constant {
++	FD_CLOEXEC  => 1,
++	F_DUPFD     => 0,
++	F_EXLCK     => 4,
++	F_GETFD     => 1,
++	F_GETFL     => 3,
++	F_GETLK     => 5,
++	F_GETLK64   => 5,
++	F_GETOWN    => 9,
++	F_RDLCK     => 0,
++	F_SETFD     => 2,
++	F_SETFL     => 4,
++	F_SETLK     => 6,
++	F_SETLK64   => 6,
++	F_SETLKW    => 7,
++	F_SETLKW64  => 7,
++	F_SETOWN    => 8,
++	F_SHLCK     => 8,
++	F_UNLCK     => 2,
++	F_WRLCK     => 1,
++	O_ACCMODE   => 3,
++	O_APPEND    => 1024,
++	O_ASYNC     => 8192,
++	O_BINARY    => 0,
++	O_CREAT     => 64,
++	O_DIRECT    => 16384,
++	O_DIRECTORY => 65536,
++	O_DSYNC     => 4096,
++	O_EXCL      => 128,
++	O_LARGEFILE => 0,
++	O_NDELAY    => 2048,
++	O_NOCTTY    => 256,
++	O_NOFOLLOW  => 131072,
++	O_NONBLOCK  => 2048,
++	O_RDONLY    => 0,
++	O_RDWR      => 2,
++	O_RSYNC     => 1052672,
++	O_SYNC      => 1052672,
++	O_TEXT      => 0,
++	O_TRUNC     => 512,
++	O_WRONLY    => 1,
++	S_IFREG     => 32768,
++	S_IFDIR     => 16384,
++	S_IFLNK     => 40960,
++	S_IFBLK     => 24576,
++	S_IFCHR     => 8192,
++	S_IFIFO     => 4096,
++	S_IFSOCK    => 49152,
++	S_ISUID     => 2048,
++	S_ISGID     => 1024,
++	S_ISVTX     => 512,
++	S_IRUSR     => 256,
++	S_IWUSR     => 128,
++	S_IXUSR     => 64,
++	S_IRWXU     => 448,
++	S_IRGRP     => 32,
++	S_IWGRP     => 16,
++	S_IXGRP     => 8,
++	S_IRWXG     => 56,
++	S_IROTH     => 4,
++	S_IWOTH     => 2,
++	S_IXOTH     => 1,
++	S_IRWXO     => 7,
++	S_IREAD     => 256,
++	S_IWRITE    => 128,
++	S_IEXEC     => 64,
++	LOCK_SH     => 1,
++	LOCK_EX     => 2,
++	LOCK_NB     => 4,
++	LOCK_UN     => 8,
++	SEEK_SET    => 0,
++	SEEK_CUR    => 1,
++	SEEK_END    => 2,
++};
++
++sub S_IFMT  { return @_ ? ($_[0] & 0170000) : 0170000 }
++sub S_IMODE { return @_ ? ($_[0] & 007777) : 0 }
++
++sub S_ISREG  { return S_IFMT($_[0]) == S_IFREG }
++sub S_ISDIR  { return S_IFMT($_[0]) == S_IFDIR }
++sub S_ISLNK  { return S_IFMT($_[0]) == S_IFLNK }
++sub S_ISBLK  { return S_IFMT($_[0]) == S_IFBLK }
++sub S_ISCHR  { return S_IFMT($_[0]) == S_IFCHR }
++sub S_ISFIFO { return S_IFMT($_[0]) == S_IFIFO }
++sub S_ISSOCK { return S_IFMT($_[0]) == S_IFSOCK }
++
++1;
+diff -ruN a/cnf/stub/File/Glob.pm b/cnf/stub/File/Glob.pm
+--- a/cnf/stub/File/Glob.pm
++++ b/cnf/stub/File/Glob.pm
+@@ -0,0 +1,22 @@
++package File::Glob;
++
++our $VERSION = '1.44';
++
++use Exporter 'import';
++
++our @EXPORT_OK = qw(bsd_glob csh_glob);
++
++our %EXPORT_TAGS = (glob => [qw(bsd_glob csh_glob)]);
++
++sub bsd_glob
++{
++	my $pattern = shift;
++	return CORE::glob($pattern);
++}
++
++sub csh_glob
++{
++	return bsd_glob(@_);
++}
++
++1;
+diff -ruN a/cnf/stub/File/Temp.pm b/cnf/stub/File/Temp.pm
+--- a/cnf/stub/File/Temp.pm
++++ b/cnf/stub/File/Temp.pm
+@@ -1,21 +1,124 @@
+ package File::Temp;
+ 
++our $VERSION = '0.2311';
++
++use Exporter 'import';
++
++our @EXPORT_OK = qw(tempfile tempdir tmpnam);
++
++# an object from new() is a handle that also reads as its own filename
++use overload '""' => sub { return ${*{$_[0]}}{filename} }, fallback => 1;
++
++my @CHARS = ('A'..'Z', 'a'..'z', '0'..'9');
++
++# The X run belongs to the template alone: the random characters can be X
++# themselves, so a directory joined in first would be rewritten too.
++sub _expand
++{
++	my($patt, $opts) = @_;
++	$patt =~ s{(X+)}{join '', map { $CHARS[int rand @CHARS] } 1 .. length($1)}e;
++	$patt .= $opts->{SUFFIX} if defined $opts->{SUFFIX};
++	return defined $opts->{DIR} ? "$opts->{DIR}/$patt" : $patt;
++}
++
++sub _tmpdir { return defined $ENV{TMPDIR} ? $ENV{TMPDIR} : '/tmp' }
++
+ sub tempfile
+ {
+-	my $patt = shift;
++	my $patt = @_ % 2 ? shift : 'tempXXXXXXXX';
++	my %opts = @_;
++	my $i;
++	my $tmp;
++	my $fh;
++
++	return unless defined $patt;
++	for($i = 0; $i < 10; $i++) {
++		$tmp = _expand($patt, \%opts);
++		next unless sysopen($fh, $tmp, 02 | 0100 | 0200);	# O_RDWR | O_CREAT | O_EXCL
++		return wantarray ? ($fh, $tmp) : $fh;
++	}
++
++	return;
++}
++
++sub tempdir
++{
++	my $patt = @_ % 2 ? shift : 'tempXXXXXXXX';
+ 	my %opts = @_;
+ 	my $i;
+ 	my $tmp;
+-	local *FH;
+-	
++
+ 	return unless defined $patt;
+ 	for($i = 0; $i < 10; $i++) {
+-		($tmp = $patt) =~ s{X+}{rand()}e;
+-		next unless sysopen(FH, $tmp, 01 | 0100 | 0200);	# O_WRONLY | O_CREAT | O_EXCL
+-		return wantarray ? (\*FH, $tmp) : \*FH;
++		$tmp = _expand($patt, \%opts);
++		return $tmp if mkdir $tmp, 0700;
++	}
++
++	return;
++}
++
++sub tmpnam
++{
++	my %opts = (DIR => _tmpdir());
++	my $i;
++	my $tmp;
++
++	for($i = 0; $i < 10; $i++) {
++		$tmp = _expand('tmpXXXXXXXX', \%opts);
++		return $tmp unless -e $tmp;
++	}
++
++	return;
++}
++
++sub new
++{
++	my $class = shift;
++	my %opts = @_;
++	my $patt = defined $opts{TEMPLATE} ? $opts{TEMPLATE} : 'tempXXXXXXXX';
++	my $i;
++	my $tmp;
++	my $fh;
++
++	$opts{DIR} = _tmpdir() unless defined $opts{DIR};
++	for($i = 0; $i < 10; $i++) {
++		$tmp = _expand($patt, \%opts);
++		next unless sysopen($fh, $tmp, 02 | 0100 | 0200);	# O_RDWR | O_CREAT | O_EXCL
++		${*$fh}{filename} = $tmp;
++		return bless $fh, ref($class) || $class;
++	}
++
++	return;
++}
++
++sub newdir
++{
++	my $class = shift;
++	my $patt = @_ % 2 ? shift : 'tempXXXXXXXX';
++	my %opts = @_;
++	my $i;
++	my $tmp;
++
++	$patt = $opts{TEMPLATE} if defined $opts{TEMPLATE};
++	$opts{DIR} = _tmpdir() unless defined $opts{DIR};
++	for($i = 0; $i < 10; $i++) {
++		$tmp = _expand($patt, \%opts);
++		next unless mkdir $tmp, 0700;
++		return bless \$tmp, 'File::Temp::Dir';
+ 	}
+ 
+ 	return;
+ }
+ 
++sub filename
++{
++	return ${*{$_[0]}}{filename};
++}
++
++package File::Temp::Dir;
++
++use overload '""' => sub { return ${$_[0]} }, fallback => 1;
++
++sub dirname { return ${$_[0]} }
++
+ 1;
+diff -ruN a/cnf/stub/IO/File.pm b/cnf/stub/IO/File.pm
+--- a/cnf/stub/IO/File.pm
++++ b/cnf/stub/IO/File.pm
+@@ -0,0 +1,69 @@
++package IO::File;
++
++our $VERSION = '1.55';
++
++our @ISA = qw(IO::Handle IO::Seekable Exporter);
++
++require IO::Handle;
++require IO::Seekable;
++require Exporter;
++
++# real IO::File re-exports Fcntl's O_ constants; IO::Dir reaches them that way
++our @EXPORT = ();
++eval {
++	require Fcntl;
++	my @o = grep { /^O_/ } @Fcntl::EXPORT;
++	Fcntl->import(@o);
++	push @EXPORT, @o;
++};
++
++my %ansi_mode = (
++	'r'  => '<',
++	'w'  => '>',
++	'a'  => '>>',
++	'r+' => '+<',
++	'w+' => '+>',
++	'a+' => '+>>',
++);
++
++sub new
++{
++	my $class = shift;
++	$class = ref($class) || $class;
++	return IO::Handle::new($class) unless @_;
++	my($file, $mode, $perms) = @_;
++	my $fh;
++	if(defined $perms) {
++		sysopen($fh, $file, $mode, $perms) or return;
++	} elsif(defined $mode) {
++		my $m = exists $ansi_mode{$mode} ? $ansi_mode{$mode} : $mode;
++		open($fh, $m, $file) or return;
++	} else {
++		open($fh, $file) or return;
++	}
++	return bless $fh, $class;
++}
++
++sub open
++{
++	my $fh = shift;
++	my($file, $mode, $perms) = @_;
++	if(defined $perms) {
++		return sysopen($fh, $file, $mode, $perms);
++	} elsif(defined $mode) {
++		my $m = exists $ansi_mode{$mode} ? $ansi_mode{$mode} : $mode;
++		return CORE::open($fh, $m, $file);
++	}
++	return CORE::open($fh, $file);
++}
++
++sub new_tmpfile
++{
++	my $class = shift;
++	require File::Temp;
++	my($fh) = File::Temp::tempfile('tmpXXXXXXXX');
++	return unless $fh;
++	return bless $fh, ref($class) || $class;
++}
++
++1;
+diff -ruN a/cnf/stub/IO/Handle.pm b/cnf/stub/IO/Handle.pm
+--- a/cnf/stub/IO/Handle.pm
++++ b/cnf/stub/IO/Handle.pm
+@@ -0,0 +1,115 @@
++package IO::Handle;
++
++our $VERSION = '1.55';
++
++use Exporter 'import';
++
++our @EXPORT_OK = qw(
++	_IOFBF _IOLBF _IONBF
++	autoflush print printf getline getlines
++	output_field_separator output_record_separator input_record_separator
++	input_line_number format_page_number format_lines_per_page
++	format_lines_left format_name format_top_name
++	format_line_break_characters format_formfeed
++);
++
++use constant {
++	_IOFBF => 0,
++	_IOLBF => 1,
++	_IONBF => 2,
++};
++
++sub new
++{
++	my $class = shift;
++	my $fh = \do { local *HANDLE };
++	return bless $fh, ref($class) || $class;
++}
++
++sub new_from_fd
++{
++	my $class = shift;
++	my $fh = $class->new;
++	return $fh->fdopen(@_) ? $fh : undef;
++}
++
++sub fdopen
++{
++	my($fh, $fd, $mode) = @_;
++	$fd = fileno($fd) if ref $fd;
++	return CORE::open($fh, ($mode =~ /w|>/ ? '>&' : '<&'), $fd);
++}
++
++sub flush
++{
++	my $fh = shift;
++	my $old = select $fh;
++	my $prev = $|;
++	$| = 1;
++	$| = $prev;
++	select $old;
++	return $fh;
++}
++
++sub autoflush
++{
++	my $fh = shift;
++	my $old = select $fh;
++	my $prev = $|;
++	$| = @_ ? shift : 1;
++	select $old;
++	return $prev;
++}
++
++sub printflush
++{
++	my $fh = shift;
++	my $ok = CORE::print {$fh} @_;
++	$fh->flush;
++	return $ok;
++}
++
++sub close   { return CORE::close $_[0] }
++sub fileno  { return CORE::fileno $_[0] }
++sub opened  { return defined CORE::fileno $_[0] }
++sub eof     { return CORE::eof $_[0] }
++sub getc    { return CORE::getc $_[0] }
++sub gets    { my $fh = shift; return scalar <$fh> }
++sub print   { my $fh = shift; return CORE::print {$fh} @_ }
++sub printf  { my $fh = shift; return CORE::printf {$fh} @_ }
++sub binmode { my $fh = shift; return @_ ? CORE::binmode($fh, $_[0]) : CORE::binmode($fh) }
++
++# buffering and error state live in the C library; nothing here reads them back
++sub setbuf   { return }
++sub setvbuf  { return }
++sub error    { return 0 }
++sub clearerr { return 0 }
++sub ungetc   { return }
++sub DESTROY  { return }
++
++sub _open_mode_string
++{
++	my $mode = shift;
++	$mode =~ /^\+?(<|>>?)$/  and return $mode;
++	$mode =~ /^\+?(r|w|a)$/  and return { r => '<', w => '>', a => '>>' }->{$1};
++	return;
++}
++
++sub getline  { my $fh = shift; return scalar <$fh> }
++sub getlines { my $fh = shift; return <$fh> }
++
++# per-handle format and separator state lives in the punctuation variables of
++# whichever handle is selected; nothing here reads it back per handle
++sub output_field_separator  { shift; my $old = $,; $, = shift if @_; return $old }
++sub output_record_separator { shift; my $old = $\; $\ = shift if @_; return $old }
++sub input_record_separator  { shift; my $old = $/; $/ = shift if @_; return $old }
++sub input_line_number       { shift; my $old = $.; eval { $. = shift } if @_; return $old }
++sub format_page_number      { shift; my $old = $%; eval { $% = shift } if @_; return $old }
++sub format_lines_per_page   { shift; my $old = $=; eval { $= = shift } if @_; return $old }
++sub format_lines_left       { shift; my $old = $-; eval { $- = shift } if @_; return $old }
++sub format_name             { shift; my $old = $~; eval { $~ = shift } if @_; return $old }
++sub format_top_name         { shift; my $old = $^; eval { $^ = shift } if @_; return $old }
++sub format_line_break_characters { shift; my $old = $:; eval { $: = shift } if @_; return $old }
++sub format_formfeed         { shift; my $old = $^L; eval { $^L = shift } if @_; return $old }
++
++1;
+diff -ruN a/cnf/stub/IO/Seekable.pm b/cnf/stub/IO/Seekable.pm
+--- a/cnf/stub/IO/Seekable.pm
++++ b/cnf/stub/IO/Seekable.pm
+@@ -0,0 +1,20 @@
++package IO::Seekable;
++
++our $VERSION = '1.55';
++
++use Exporter 'import';
++
++our @EXPORT = qw(SEEK_SET SEEK_CUR SEEK_END);
++
++use constant {
++	SEEK_SET => 0,
++	SEEK_CUR => 1,
++	SEEK_END => 2,
++};
++
++sub seek   { my $fh = shift; return CORE::seek($fh, $_[0], $_[1]) }
++sub tell   { return CORE::tell $_[0] }
++sub getpos { return CORE::tell $_[0] }
++sub setpos { my $fh = shift; return CORE::seek($fh, $_[0], 0) }
++
++1;
+diff -ruN a/cnf/stub/List/Util.pm b/cnf/stub/List/Util.pm
+--- a/cnf/stub/List/Util.pm
++++ b/cnf/stub/List/Util.pm
+@@ -0,0 +1,68 @@
++package List::Util;
++
++our $VERSION = '1.6801';
++
++use Exporter 'import';
++
++our @EXPORT_OK = qw(first any all none sum sum0 max min maxstr minstr uniq uniqstr reduce shuffle pairs);
++
++sub reduce (&@)
++{
++	my $code = shift;
++	no strict 'refs';
++	my $caller = caller;
++	local (*{"${caller}::a"}, *{"${caller}::b"});
++	return undef unless @_;
++	my $a = shift;
++	for my $b (@_) {
++		*{"${caller}::a"} = \$a;
++		*{"${caller}::b"} = \$b;
++		$a = $code->();
++	}
++	return $a;
++}
++
++sub first (&@)
++{
++	my $code = shift;
++	for (@_) {
++		return $_ if $code->();
++	}
++	return undef;
++}
++
++sub any (&@) { my $c = shift; for (@_) { return 1 if $c->() } return 0 }
++sub all (&@) { my $c = shift; for (@_) { return 0 unless $c->() } return 1 }
++sub none (&@) { my $c = shift; for (@_) { return 0 if $c->() } return 1 }
++
++sub sum (@) { return undef unless @_; my $t = 0; $t += $_ for @_; return $t }
++sub sum0 (@) { return 0 unless @_; my $t = 0; $t += $_ for @_; return $t }
++
++sub max (@) { return undef unless @_; my $m = shift; for (@_) { $m = $_ if $_ > $m } return $m }
++sub min (@) { return undef unless @_; my $m = shift; for (@_) { $m = $_ if $_ < $m } return $m }
++sub maxstr (@) { return undef unless @_; my $m = shift; for (@_) { $m = $_ if $_ gt $m } return $m }
++sub minstr (@) { return undef unless @_; my $m = shift; for (@_) { $m = $_ if $_ lt $m } return $m }
++
++sub uniq (@)
++{
++	my %seen;
++	my $undef = 0;
++	return grep { defined $_ ? !$seen{$_}++ : !$undef++ } @_;
++}
++
++sub uniqstr (@) { my %seen; return grep { !$seen{$_}++ } @_ }
++
++sub shuffle (@) { return @_ }
++sub pairs (@)
++{
++	my @pairs;
++	push @pairs, bless([shift, shift], 'List::Util::_Pair') while @_;
++	return @pairs;
++}
++
++package List::Util::_Pair;
++
++sub key   { return $_[0]->[0] }
++sub value { return $_[0]->[1] }
++
++1;
+diff -ruN a/cnf/stub/Scalar/Util.pm b/cnf/stub/Scalar/Util.pm
+--- a/cnf/stub/Scalar/Util.pm
++++ b/cnf/stub/Scalar/Util.pm
+@@ -0,0 +1,79 @@
++package Scalar::Util;
++
++our $VERSION = '1.6801';
++
++use Exporter 'import';
++
++our @EXPORT_OK = qw(
++	blessed reftype refaddr looks_like_number
++	weaken unweaken isweak dualvar isdual isvstring
++	tainted readonly openhandle set_prototype
++);
++
++my %basic = map { $_ => 1 } qw(
++	SCALAR ARRAY HASH CODE REF GLOB LVALUE FORMAT IO VSTRING Regexp
++);
++
++sub reftype ($)
++{
++	ref $_[0] or return undef;
++	my $str = do { no overloading; "$_[0]" };
++	return $1 if $str =~ /=(\w+)\(0x[0-9a-f]+\)$/;
++	return $1 if $str =~ /^(\w+)\(0x[0-9a-f]+\)$/;
++	return undef;
++}
++
++sub blessed ($)
++{
++	my $r = ref $_[0] or return undef;
++	return undef if $basic{$r};
++	return $r;
++}
++
++sub refaddr ($)
++{
++	ref $_[0] or return undef;
++	my $str = do { no overloading; "$_[0]" };
++	return hex $1 if $str =~ /\(0x([0-9a-f]+)\)$/;
++	return undef;
++}
++
++sub looks_like_number ($)
++{
++	my $v = shift;
++	return 0 unless defined $v;
++	return 1 if ref \$v eq 'GLOB';
++	return $v =~ /^\s*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?\s*$/
++	    || $v =~ /^\s*[-+]?(0[xX][0-9a-fA-F]+|Inf(inity)?|NaN)\s*$/i ? 1 : 0;
++}
++
++sub weaken ($) { }
++sub isweak ($) { 0 }
++
++# the numeric half needs XS; callers here only ask whether the target has it
++sub dualvar ($$) { return $_[1] }
++sub isdual ($) { 0 }
++sub isvstring ($) { 0 }
++
++# a prototype cannot be attached to an existing sub without XS; callers here
++# only pass the wrapper along afterwards
++sub set_prototype (&$) { return $_[0] }
++sub unweaken ($) { }
++
++# nothing runs under taint mode here
++sub tainted ($) { 0 }
++
++sub readonly ($)
++{
++	return 0 unless @_;
++	return Internals::SvREADONLY($_[0]) ? 1 : 0;
++}
++
++sub openhandle ($)
++{
++	my $fh = shift;
++	return undef unless ref(\$fh) eq 'GLOB' || ref($fh) eq 'GLOB';
++	return defined(fileno($fh)) ? $fh : undef;
++}
++
++1;
+diff -ruN a/cnf/stub/Sub/Util.pm b/cnf/stub/Sub/Util.pm
+--- a/cnf/stub/Sub/Util.pm
++++ b/cnf/stub/Sub/Util.pm
+@@ -0,0 +1,18 @@
++package Sub::Util;
++
++our $VERSION = '1.6801';
++
++use Exporter 'import';
++
++our @EXPORT_OK = qw(prototype set_prototype subname set_subname);
++
++# naming a sub needs XS; callers keep using the code reference either way
++sub set_subname ($$) { return $_[1] }
++
++sub subname ($) { return 'main::__ANON__' }
++
++sub prototype ($) { return CORE::prototype($_[0]) }
++
++sub set_prototype ($$) { return $_[1] }
++
++1;
