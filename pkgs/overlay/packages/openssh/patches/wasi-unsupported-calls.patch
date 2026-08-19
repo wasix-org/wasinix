@@ -1,0 +1,124 @@
+--- a/openbsd-compat/getrrsetbyname.h
++++ b/openbsd-compat/getrrsetbyname.h
+@@ -56,7 +56,9 @@
+ #include <netinet/in.h>
+ #include <arpa/nameser.h>
+ #include <netdb.h>
++#ifndef __wasi__
+ #include <resolv.h>
++#endif
+ 
+ #ifndef HFIXEDSZ
+ #define HFIXEDSZ 12
+--- a/hostfile.c
++++ b/hostfile.c
+@@ -44,7 +44,9 @@
+ #include <netinet/in.h>
+ 
+ #include <errno.h>
++#ifndef __wasi__
+ #include <resolv.h>
++#endif
+ #include <stdarg.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+--- a/sshbuf-misc.c
++++ b/sshbuf-misc.c
+@@ -26,7 +26,9 @@
+ #include <stdio.h>
+ #include <limits.h>
+ #include <string.h>
++#ifndef __wasi__
+ #include <resolv.h>
++#endif
+ #include <ctype.h>
+ #include <unistd.h>
+ 
+--- a/sshkey.c
++++ b/sshkey.c
+@@ -45,7 +45,9 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
++#ifndef __wasi__
+ #include <resolv.h>
++#endif
+ #include <time.h>
+ #include <util.h>
+ 
+--- a/session.c
++++ b/session.c
+@@ -1304,8 +1304,12 @@
+ 	if (chdir(path) == -1)
+ 		fatal("Unable to chdir to chroot path \"%s\": "
+ 		    "%s", path, strerror(errno));
++#ifdef __wasi__
++	fatal("chroot(\"%s\"): not supported on this platform", path);
++#else
+ 	if (chroot(path) == -1)
+ 		fatal("chroot(\"%s\"): %s", path, strerror(errno));
++#endif
+ 	if (chdir("/") == -1)
+ 		fatal_f("chdir(/) after chroot: %s", strerror(errno));
+ 	verbose("Changed root directory to \"%s\"", path);
+--- a/sshd-auth.c
++++ b/sshd-auth.c
+@@ -187,9 +187,14 @@
+ 	/* Demote the child */
+ 	if (privsep_chroot) {
+ 		/* Change our root directory */
++#ifdef __wasi__
++		fatal("chroot(\"%s\"): not supported on this platform",
++		    _PATH_PRIVSEP_CHROOT_DIR);
++#else
+ 		if (chroot(_PATH_PRIVSEP_CHROOT_DIR) == -1)
+ 			fatal("chroot(\"%s\"): %s", _PATH_PRIVSEP_CHROOT_DIR,
+ 			    strerror(errno));
++#endif
+ 		if (chdir("/") == -1)
+ 			fatal("chdir(\"/\"): %s", strerror(errno));
+ 
+--- a/uidswap.c
++++ b/uidswap.c
+@@ -82,14 +82,20 @@
+ 	privileged = 1;
+ 	temporarily_use_uid_effective = 1;
+ 
++#ifdef __wasi__
++	saved_egroupslen = 0;
++#else
+ 	saved_egroupslen = getgroups(0, NULL);
++#endif
+ 	if (saved_egroupslen == -1)
+ 		fatal("getgroups: %.100s", strerror(errno));
+ 	if (saved_egroupslen > 0) {
+ 		saved_egroups = xreallocarray(saved_egroups,
+ 		    saved_egroupslen, sizeof(gid_t));
++#ifndef __wasi__
+ 		if (getgroups(saved_egroupslen, saved_egroups) == -1)
+ 			fatal("getgroups: %.100s", strerror(errno));
++#endif
+ 	} else { /* saved_egroupslen == 0 */
+ 		free(saved_egroups);
+ 		saved_egroups = NULL;
+@@ -101,14 +107,20 @@
+ 			fatal("initgroups: %s: %.100s", pw->pw_name,
+ 			    strerror(errno));
+ 
++#ifdef __wasi__
++		user_groupslen = 0;
++#else
+ 		user_groupslen = getgroups(0, NULL);
++#endif
+ 		if (user_groupslen == -1)
+ 			fatal("getgroups: %.100s", strerror(errno));
+ 		if (user_groupslen > 0) {
+ 			user_groups = xreallocarray(user_groups,
+ 			    user_groupslen, sizeof(gid_t));
++#ifndef __wasi__
+ 			if (getgroups(user_groupslen, user_groups) == -1)
+ 				fatal("getgroups: %.100s", strerror(errno));
++#endif
+ 		} else { /* user_groupslen == 0 */
+ 			free(user_groups);
+ 			user_groups = NULL;
