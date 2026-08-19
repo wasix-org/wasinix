@@ -112,10 +112,12 @@ malformed or unauthorized command gets a reply.
 
 `/wasinix bisect <target> --good <ref> --bad <ref> -- build <selectors>` runs on
 the runner like every other comment command, so its predicate is a case pinned
-there and it cannot name a builder. The runner's job limit is smaller than a
-long bisect, so a comment bisect carries a budget: it stops with the range
-narrowed, replies with what it tested, and the same command again resumes from
-the recorded outcomes. `/wasinix fmt` formats the branch and commits the result,
+there and it cannot name a builder. `--reverse` asks the other question, where
+the predicate started passing, so `--bad` names the older failing revision and
+`--good` the newer passing one. The runner's job limit is smaller than a long
+bisect, so a comment bisect carries a budget: it stops with the range narrowed,
+replies with what it tested, and the same command again resumes from the
+recorded outcomes. `/wasinix fmt` formats the branch and commits the result,
 serialized per PR with the other mutations.
 
 Every command comment runs its own workflow: acknowledged, authorized, and

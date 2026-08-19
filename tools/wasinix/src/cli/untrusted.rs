@@ -119,6 +119,9 @@ struct UntrustedBisect {
     /// Follow only the first parent of merge commits
     #[arg(long)]
     first_parent: bool,
+    /// Find where the predicate started passing instead
+    #[arg(long)]
+    reverse: bool,
     /// The build or spot command used as the pass/fail predicate
     #[arg(required = true, trailing_var_arg = true, value_name = "PREDICATE")]
     command: Vec<String>,
@@ -201,7 +204,8 @@ pub const HELP: &str = "### `/wasinix` commands\n\n\
     - `/wasinix spot <targets>` rebuilds targets over a cached base\n\
     - `/wasinix diff build ... --vs build ...` compares two cases\n\
     - `/wasinix bisect <target> --good <ref> --bad <ref> -- build <selectors>` \
-    finds the dependency commit that broke it\n\
+    finds the dependency commit that broke it (`--reverse` for the one that \
+    fixed it)\n\
     - `/wasinix update [targets|--all]` refreshes pins (bare on a managed PR \
     replays its recipe)\n\
     - `/wasinix versions bump <specs|--changed>` bumps publication rels\n\
@@ -218,6 +222,7 @@ pub struct BisectCommand {
     pub good: String,
     pub bad: String,
     pub first_parent: bool,
+    pub reverse: bool,
     pub words: Vec<String>,
     pub predicate: ParsedRequest,
 }
@@ -316,6 +321,7 @@ pub fn parse(command: &str) -> Result<UntrustedCommand> {
                 good: args.good,
                 bad: args.bad,
                 first_parent: args.first_parent,
+                reverse: args.reverse,
                 words,
                 predicate,
             })

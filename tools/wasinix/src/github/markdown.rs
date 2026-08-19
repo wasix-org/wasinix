@@ -928,9 +928,12 @@ pub fn bisect_reply(
         ]),
         None => Markdown::new(),
     };
+    let what = if report.reverse { "passing" } else { "bad" };
     let headline = match &report.first_bad {
         Some(rev) => Markdown::concat([
-            Markdown::constant("### ✅ First bad "),
+            Markdown::constant("### ✅ First "),
+            Markdown::text(what),
+            Markdown::constant(" "),
             Markdown::text(&report.target),
             Markdown::constant(" commit: "),
             Markdown::code(rev),

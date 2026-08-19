@@ -22,6 +22,10 @@ pub struct BisectArgs {
     /// Follow only the first parent of merge commits
     #[arg(long)]
     pub first_parent: bool,
+    /// Find where the predicate started passing instead: --bad names the
+    /// older revision where it fails, --good the newer one where it passes
+    #[arg(long)]
+    pub reverse: bool,
     /// Keep bisect state and candidate runs here
     #[arg(long)]
     pub run_dir: Option<PathBuf>,
@@ -64,6 +68,7 @@ pub struct Bisect<'a> {
     pub good: String,
     pub bad: String,
     pub first_parent: bool,
+    pub reverse: bool,
     /// The predicate as written, recorded in the report.
     pub words: Vec<String>,
     pub predicate: ParsedRequest,
@@ -89,6 +94,7 @@ pub fn drive(repo: &Path, request: Bisect) -> Result<bisect::Report> {
             good: request.good,
             bad: request.bad,
             first_parent: request.first_parent,
+            reverse: request.reverse,
             command: request.words,
             run_dir: request.run_dir,
             budget: request.budget,
@@ -155,6 +161,7 @@ pub fn run_bisect(repo: &Path, args: BisectArgs) -> Result<CommandStatus> {
             good: args.good,
             bad: args.bad,
             first_parent: args.first_parent,
+            reverse: args.reverse,
             words,
             predicate,
             run_dir: run_dir.clone(),
@@ -163,11 +170,12 @@ pub fn run_bisect(repo: &Path, args: BisectArgs) -> Result<CommandStatus> {
         },
     )?;
 
+    let what = if report.reverse { "passing" } else { "bad" };
     match &report.first_bad {
         Some(rev) => {
-            ui::result(format!("first bad {} commit: {rev}", report.target));
+            ui::result(format!("first {what} {} commit: {rev}", report.target));
         }
-        None => ui::result(format!("{}: no first-bad commit found", report.target)),
+        None => ui::result(format!("{}: no first-{what} commit found", report.target)),
     }
     ui::fact("report", run_dir.join(bisect::REPORT_FILE).display());
     Ok(CommandStatus::SUCCESS)

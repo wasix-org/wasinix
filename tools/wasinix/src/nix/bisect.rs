@@ -57,6 +57,10 @@ pub struct Report {
     pub good: String,
     pub bad: String,
     pub first_parent: bool,
+    /// Looking for where the predicate started passing rather than where it
+    /// started failing; `first_bad` is then the first commit that passed.
+    #[serde(default)]
+    pub reverse: bool,
     pub command: Vec<String>,
     pub first_bad: Option<String>,
     /// Commits still in range when a budget stopped the run, in git's own
@@ -218,6 +222,7 @@ pub struct Options {
     pub good: String,
     pub bad: String,
     pub first_parent: bool,
+    pub reverse: bool,
     pub command: Vec<String>,
     pub run_dir: PathBuf,
     /// Absent for a terminal run, which the operator can interrupt.
@@ -256,11 +261,18 @@ where
     };
     let good = resolve_end(&source_dir, "good", good_ref, &options.dependency)?;
     let bad = resolve_end(&source_dir, "bad", bad_ref, &options.dependency)?;
+    // Which end is the older one. A reverse bisect looks for where the
+    // predicate started passing, so the failing end is the ancestor.
+    let (old_ref, old_rev, new_ref, new_rev) = if options.reverse {
+        (bad_ref, &bad, good_ref, &good)
+    } else {
+        (good_ref, &good, bad_ref, &bad)
+    };
     // Three-way: exit 1 is "not an ancestor"; a git failure must not read
     // as that answer and abort the bisect with a wrong diagnosis.
     require(
-        crate::support::git::is_ancestor(&source_dir, &good, &bad)?,
-        format!("good revision {good_ref:?} is not an ancestor of bad revision {bad_ref:?}"),
+        crate::support::git::is_ancestor(&source_dir, old_rev, new_rev)?,
+        format!("{old_ref:?} is not an ancestor of {new_ref:?}"),
     )?;
 
     let report_path = options.run_dir.join(REPORT_FILE);
@@ -271,6 +283,7 @@ where
         good: good.clone(),
         bad: bad.clone(),
         first_parent: options.first_parent,
+        reverse: options.reverse,
         command: options.command.clone(),
         first_bad: None,
         revisions_left: None,
@@ -283,6 +296,7 @@ where
             && prior.good == fresh.good
             && prior.bad == fresh.bad
             && prior.first_parent == fresh.first_parent
+            && prior.reverse == fresh.reverse
             && prior.command == fresh.command
         {
             prior
@@ -329,6 +343,14 @@ where
         test_one(&bad, &mut report)? == Outcome::Bad,
         format!("--bad {bad_ref:?} did not fail"),
     )?;
+    // Git always walks from its own good to its own bad, so a reverse
+    // bisect hands it the ends the other way round and the callback below
+    // reports the outcome the other way round with them.
+    let (git_good, git_bad) = if options.reverse {
+        (&bad, &good)
+    } else {
+        (&good, &bad)
+    };
     if good == bad {
         return request_error("good and bad resolve to the same commit");
     }
@@ -338,7 +360,7 @@ where
     if options.first_parent {
         start.push("--first-parent");
     }
-    start.extend([bad.as_str(), good.as_str()]);
+    start.extend([git_bad.as_str(), git_good.as_str()]);
     let output = crate::support::git::git_logged(&source_dir, &start)?;
     if let Some(rev) = completed(&output) {
         report.first_bad = Some(rev);
@@ -361,7 +383,15 @@ where
         prior_head = Some(rev.clone());
         let outcome = test_one(&rev, &mut report)?;
         spent += 1;
-        let output = crate::support::git::git_logged(&source_dir, &["bisect", outcome.git_word(), &rev])?;
+        // Our verdict is about the predicate; git's word is about the end it
+        // walks toward, and a reverse bisect walks toward the passing one.
+        let word = match (options.reverse, outcome) {
+            (true, Outcome::Good) => Outcome::Bad,
+            (true, Outcome::Bad) => Outcome::Good,
+            (_, outcome) => outcome,
+        }
+        .git_word();
+        let output = crate::support::git::git_logged(&source_dir, &["bisect", word, &rev])?;
         report.revisions_left = revisions_left(&output);
         if let Some(rev) = completed(&output) {
             report.first_bad = Some(rev);
@@ -449,6 +479,7 @@ mod tests {
                 good: "pinned".into(),
                 bad: revisions[5].clone(),
                 first_parent: false,
+                reverse: false,
                 command: vec!["build".into(), "example".into()],
                 run_dir: root.join("run"),
                 budget: None,
@@ -518,6 +549,65 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    /// The other question: not "when did it break" but "when did it start
+    /// passing". Git only ever walks toward its own bad end, so the ends and
+    /// the verdicts both go in the other way round.
+    #[test]
+    fn a_reverse_bisect_finds_where_it_started_passing() {
+        if crate::support::git::git_global(&["--version"]).is_err() {
+            return;
+        }
+        let root = crate::support::env::temp_dir().join(format!(
+            "wasinix-bisect-reverse-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let source = root.join("upstream");
+        std::fs::create_dir_all(&source).unwrap();
+        command(&source, &["init", "--initial-branch=main"]);
+        command(&source, &["config", "user.name", "wasinix test"]);
+        command(&source, &["config", "user.email", "test@example.invalid"]);
+        let mut revisions = Vec::new();
+        for index in 0..8 {
+            command(
+                &source,
+                &["commit", "--allow-empty", "-m", &format!("commit {index}")],
+            );
+            revisions.push(command(&source, &["rev-parse", "HEAD"]));
+        }
+        // Broken until commit 5, passing from there on.
+        let report = super::run(
+            Options {
+                dependency: Dependency {
+                    target: "example".into(),
+                    repository: source.to_string_lossy().to_string(),
+                    pinned: revisions[0].clone(),
+                },
+                good: revisions[7].clone(),
+                bad: revisions[0].clone(),
+                first_parent: false,
+                reverse: true,
+                command: vec!["build".into(), "example".into()],
+                run_dir: root.join("run"),
+                budget: None,
+            },
+            |rev, _| {
+                Ok(if revisions[..5].iter().any(|candidate| candidate == rev) {
+                    Outcome::Bad
+                } else {
+                    Outcome::Good
+                })
+            },
+        )
+        .unwrap();
+        assert_eq!(report.first_bad.as_deref(), Some(revisions[5].as_str()));
+        assert!(report.reverse);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn a_spent_budget_narrows_the_range_and_the_next_run_finishes_it() {
         if crate::support::git::git_global(&["--version"]).is_err() {
@@ -553,6 +643,7 @@ mod tests {
             good: "pinned".into(),
             bad: revisions[15].clone(),
             first_parent: false,
+            reverse: false,
             command: vec!["build".into(), "example".into()],
             run_dir: root.join("run"),
             budget,

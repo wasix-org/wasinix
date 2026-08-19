@@ -1041,6 +1041,7 @@ fn ci_bisect(
             good: request.good,
             bad: request.bad,
             first_parent: request.first_parent,
+            reverse: request.reverse,
             words: request.words,
             predicate: request.predicate,
             run_dir: run_dir.join("bisect"),
