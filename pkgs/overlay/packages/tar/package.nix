@@ -11,7 +11,6 @@ helpers.wasmRename {wasmName = "tar";} (
     # failures, 26 more genuinely fail under wasix. Actual functionality
     # is covered separately by the CLI behavior checks (tests/basic.nix).
     doCheck = false;
-    wasixCheckPrebuild = ":";
     configureFlags = [
       "--disable-rmt"
       # Keep archive compression support intentionally narrow for now.

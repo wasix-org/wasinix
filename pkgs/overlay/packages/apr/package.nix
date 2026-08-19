@@ -9,6 +9,10 @@
 }:
 helpers.libTweaks {
   patches = [./patches/wasi-unsupported-calls.patch];
+  # Nixpkgs removes the network tests. Emulated checks run with network access.
+  postPatch = _: "";
+  # APR's test libraries share libtool intermediates and are not parallel-safe.
+  wasixCheckPrebuild = "make -C test -j1 all";
   # its DSO support needs dlopen, so the PIC sysroots
   passthru.wasix.supportedProfiles = helpers.profiles.pic;
   configureFlags = [

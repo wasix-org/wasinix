@@ -271,7 +271,19 @@ in rec {
   # the shipped build; emulated-check.nix un-gates declared suites separately.
   libTweaks = tweaks: pkg:
     pkg.overrideAttrs (old: let
-      merged = extendDrv old tweaks;
+      disablesCheckSnapshot =
+        (old.wasixCheckIsCSuite or false)
+        && tweaks ? doCheck
+        && !tweaks.doCheck;
+      effectiveTweaks =
+        tweaks
+        // lib.optionalAttrs disablesCheckSnapshot {
+          wasixCheckSnapshotPhase = _: ''
+            echo "checks are disabled on this derivation; skipping the test snapshot"
+            mkdir -p "$check"
+          '';
+        };
+      merged = extendDrv old effectiveTweaks;
     in
       merged
       # buildPythonPackage derives passthru.requiredPythonModules when it is
