@@ -571,10 +571,11 @@ pub fn from_run_state(run: &crate::runs::Run, log_tail: Option<&str>) -> Report 
         RunState::Lost => "CI lost its runner before finishing".to_string(),
         _ => format!("CI ended as {} without a report", run.state),
     };
-    // The log's last message line is the run's own statement of what went
-    // wrong, which the title alone cannot carry.
+    // The run's own statement of what went wrong, which the title alone
+    // cannot carry. Same choice as the log fragment's: taking the last line
+    // instead reported "took 11s" for a run whose error was three lines up.
     let tasks = log_tail
-        .and_then(|tail| tail.lines().rev().find(|line| !line.trim().is_empty()))
+        .map(log_headline)
         .map(|line| {
             vec![TaskView {
                 task_id: "run".to_string(),
@@ -584,7 +585,7 @@ pub fn from_run_state(run: &crate::runs::Run, log_tail: Option<&str>) -> Report 
                 status: TaskStatus::Failure,
                 gate: true,
                 enabled: true,
-                headline: line.to_string(),
+                headline: line,
                 elapsed_seconds: None,
                 artifact_bytes: None,
             }]

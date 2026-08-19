@@ -2425,6 +2425,33 @@ mod markdown {
         assert!(bisect_progress("wasixcc", 3).into_string().contains("3 candidates tested"));
     }
 
+    /// The synthesized task and the log fragment made the same choice in two
+    /// places, and only one was fixed: a diff whose override failed reported
+    /// "Run · took 11s" with the error three lines above it.
+    #[test]
+    fn a_report_less_run_names_its_error_in_the_task_too() {
+        let tail = concat!(
+            "materializing: head at 06b43c168c5c\n",
+            "error: update s3-server: Update 0.1.22 -> 0.1.10 in pkgs/products/s3-server\n",
+            "  $ nix-build --expr 'let src = ...'\n",
+            "  took 11s\n",
+        );
+        let run = crate::runs::Run {
+            run_id: "1-2-0".into(),
+            command: vec!["ci".into(), "run".into()],
+            state: crate::support::atoms::RunState::Failed,
+            pid: 7,
+            started_at: 1_755_000_000,
+            finished_at: Some(1_755_000_100),
+            exit_code: Some(1),
+        };
+        let report = crate::ci::report::from_run_state(&run, Some(tail));
+        assert_eq!(
+            report.tasks[0].headline,
+            "error: update s3-server: Update 0.1.22 -> 0.1.10 in pkgs/products/s3-server"
+        );
+    }
+
     #[test]
     fn a_lost_run_renders_a_terminal_comment() {
         let run = crate::runs::Run {
