@@ -52,9 +52,10 @@ maintained beside it. Every progress view (the terminal ladder, `run watch`,
 `run logs --follow`, a remote observer) replays that one stream.
 
 The verdict has three values. A green run passes; a red run has a failed
-required gate or a comparison with regressions; a diff whose baseline could not
-evaluate concludes **neutral**, never red, because a failure the base shares is
-the status quo, not a regression the change introduced.
+required gate or a comparison with regressions. Removed jobs stay in the
+comparison for reviewer information but do not fail it. A diff whose baseline
+could not evaluate concludes **neutral**, never red, because a failure the base
+shares is the status quo, not a regression the change introduced.
 
 ## Where the time went
 
