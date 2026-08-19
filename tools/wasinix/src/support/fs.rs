@@ -32,6 +32,19 @@ pub fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {
     std::fs::rename(&tmp, path).map_err(|e| io(path, e))
 }
 
+/// Append to a file, creating it when absent. The step summary is written by
+/// several steps of one job, so each writes its own section rather than
+/// replacing what came before.
+pub fn append(path: &Path, contents: &[u8]) -> Result<()> {
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|error| io(path, error))?;
+    file.write_all(contents).map_err(|error| io(path, error))
+}
+
 /// An absolute path, so a caller handing it to a tool rooted elsewhere
 /// (`git -C`, a builder's cwd) names the same file the process meant.
 pub fn absolute(path: &Path) -> Result<PathBuf> {

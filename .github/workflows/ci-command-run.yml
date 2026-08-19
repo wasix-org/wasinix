@@ -418,7 +418,7 @@ jobs:
     needs: [authorize, build, mutate, mutate-publish]
     if: always()
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       actions: read
     steps:
@@ -427,5 +427,9 @@ jobs:
         with:
           repository: wasix-org/wasinix
 
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
+
+      # No publish: a command run is one PR's, not a point in main's series.
       - name: Step timings
         uses: ./.github/actions/step-timings

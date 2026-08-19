@@ -110,6 +110,20 @@ pub fn github_event_path() -> Result<Option<String>> {
     optional("GITHUB_EVENT_PATH")
 }
 
+/// The workflow run a step belongs to, which its own step records are
+/// keyed by.
+pub fn github_run_id() -> Result<Option<String>> {
+    optional("GITHUB_RUN_ID")
+}
+
+pub fn github_sha() -> Result<Option<String>> {
+    optional("GITHUB_SHA")
+}
+
+pub fn github_workflow() -> Result<Option<String>> {
+    optional("GITHUB_WORKFLOW")
+}
+
 pub fn github_token() -> Option<String> {
     ["GH_TOKEN", "GITHUB_TOKEN"]
         .iter()

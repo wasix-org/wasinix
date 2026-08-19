@@ -121,7 +121,7 @@ fn reuse_case(
     baseline: bool,
 ) -> Result<bool> {
     let label = format!("evaluation reuse ({})", case.case_id());
-    let Some(published) = crate::ci::baseline::fetch(tree, template, &label) else {
+    let Some(published) = crate::ci::baseline::fetch(tree, template, Some(&label)) else {
         return Ok(false);
     };
     if !crate::ci::baseline::covers(case, &published) {

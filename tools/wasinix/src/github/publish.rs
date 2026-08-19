@@ -432,7 +432,6 @@ pub fn step_summary(
     path: &Path,
     effects: crate::support::effects::Effects,
 ) -> Result<()> {
-    use std::io::Write;
     let links = links(rendered, target, None);
     let text = markdown::truncate_sections(
         with_notice(
@@ -449,11 +448,5 @@ pub fn step_summary(
         );
         return Ok(());
     }
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .map_err(|e| crate::support::error::io(path, e))?;
-    file.write_all(text.as_bytes())
-        .map_err(|e| crate::support::error::io(path, e))
+    crate::support::fs::append(path, text.as_bytes())
 }

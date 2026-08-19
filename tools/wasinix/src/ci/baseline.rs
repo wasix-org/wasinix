@@ -28,8 +28,10 @@ pub fn map_url_template() -> String {
 /// Fetch the map published for a git tree object id. The tree determines the
 /// evaluation, so the key verifies itself: no run can publish under a tree
 /// it did not build. A template without a scheme is read from the
-/// filesystem, which the tests use.
-pub fn fetch(tree: &str, url_template: &str, label: &str) -> Option<EvalMap> {
+/// filesystem, which the tests use. A label narrates why a fetch came back
+/// empty; a caller walking a range counts the misses instead, since most
+/// commits never published one.
+pub fn fetch(tree: &str, url_template: &str, label: Option<&str>) -> Option<EvalMap> {
     let url = url_template.replace("{tree}", tree);
     let value = if url.contains("://") {
         crate::support::http::get_json(&url)
@@ -39,14 +41,14 @@ pub fn fetch(tree: &str, url_template: &str, label: &str) -> Option<EvalMap> {
     let value = match value {
         Ok(value) => value,
         Err(error) => {
-            crate::support::ui::fact(label, format!("off ({error})"));
+            reason(label, format!("off ({error})"));
             return None;
         }
     };
     let published: EvalMap = match crate::support::schema::from_value(value, &url) {
         Ok(published) => published,
         Err(error) => {
-            crate::support::ui::fact(label, format!("off ({error})"));
+            reason(label, format!("off ({error})"));
             return None;
         }
     };
@@ -54,13 +56,16 @@ pub fn fetch(tree: &str, url_template: &str, label: &str) -> Option<EvalMap> {
     // complete baseline. A status map alone cannot: it may contain just the
     // jobs that happened to finish before cancellation.
     if published.status.is_none() || published.coverage.is_empty() {
-        crate::support::ui::fact(
-            label,
-            "off (published map carries no status coverage)",
-        );
+        reason(label, "off (published map carries no status coverage)".into());
         return None;
     }
     Some(published)
+}
+
+fn reason(label: Option<&str>, detail: String) {
+    if let Some(label) = label {
+        crate::support::ui::fact(label, detail);
+    }
 }
 
 /// Lay a fetched baseline out as if its tasks had run in this run directory.
@@ -153,6 +158,7 @@ pub fn publish_from_run(
         &status,
         &coverage,
         &crate::ci::facts::metrics(&junits).build_seconds,
+        &task_timings(run_dir, case_id),
     );
     let scratch = crate::support::fs::Scratch::create("wasinix-baseline")?;
     let file = scratch.path().join("eval-map.json");
@@ -181,17 +187,38 @@ pub fn publish_from_run(
     Ok(())
 }
 
+/// This case's task wall times, from the fragments the run left behind. A
+/// task that never finished has no fragment and no time to report.
+fn task_timings(run_dir: &Path, case_id: &str) -> Vec<crate::ci::evalmap::TaskTiming> {
+    let fragments =
+        crate::ci::report::fragments_under(&crate::ci::prepare::fragments_dir(run_dir))
+            .unwrap_or_default();
+    fragments
+        .values()
+        .filter(|fragment| fragment.task_id.starts_with(&format!("{case_id}.")))
+        .filter_map(|fragment| {
+            Some(crate::ci::evalmap::TaskTiming {
+                task_id: fragment.task_id.clone(),
+                label: fragment.label.clone(),
+                seconds: fragment.elapsed_seconds?.0,
+            })
+        })
+        .collect()
+}
+
 /// The document a completed build publishes for later reuse: its eval map
-/// with status, coverage, and build times folded in.
+/// with status, coverage, and build and task times folded in.
 pub fn publish_document(
     mapping: &EvalMap,
     status: &StatusMap,
     coverage: &[JobAddr],
     build_seconds: &std::collections::BTreeMap<JobAddr, f64>,
+    task_seconds: &[crate::ci::evalmap::TaskTiming],
 ) -> EvalMap {
     let mut document = mapping.clone();
     document.status = Some(status.clone());
     document.coverage = coverage.to_vec();
     document.build_seconds = build_seconds.clone();
+    document.task_seconds = task_seconds.to_vec();
     document
 }

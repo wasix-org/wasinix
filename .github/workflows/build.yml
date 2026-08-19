@@ -197,16 +197,27 @@ jobs:
           fi
           nix run .#wasinix -- ci publish --run-dir "$RUN_DIR" --baseline
 
+  # Which step was slow, per job, without opening any log. A push to main
+  # also publishes the record, which is the series `wasinix timings` folds.
   timings:
     needs: build
     if: always()
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       actions: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
+
       - name: Step timings
         uses: ./.github/actions/step-timings
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        with:
+          publish: ${{ github.event_name == 'push' }}

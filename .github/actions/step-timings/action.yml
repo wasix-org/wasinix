@@ -2,7 +2,15 @@ name: Step timings
 description:
   Append every completed job's step durations to the step summary, from the
   run's own timing records, so a slow setup step is visible without opening any
-  job's log.
+  job's log. With publish, the same record is uploaded for `wasinix timings` to
+  fold across a range of commits.
+inputs:
+  rev:
+    description: The revision the record is keyed by; $GITHUB_SHA when absent
+    default: ""
+  publish:
+    description: Upload the record to the cache; needs the S3 credentials
+    default: "false"
 runs:
   using: composite
   steps:
@@ -10,22 +18,11 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
+        REV: ${{ inputs.rev }}
+        PUBLISH: ${{ inputs.publish }}
       run: |
-        {
-          echo "## Step timings"
-          echo
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" \
-            --jq '
-              def dur: if . >= 60 then "\(. / 60 | floor)m \(. % 60)s" else "\(.)s" end;
-              .jobs[]
-              | select(.conclusion != null)
-              | (((.completed_at // .started_at | fromdateiso8601) - (.started_at | fromdateiso8601))) as $total
-              | "### \(.name) · \($total | dur)\n\n| step | time |\n|:--|--:|\n"
-                + ([ .steps[]
-                     | select(.started_at != null and .completed_at != null)
-                     | ((.completed_at | fromdateiso8601) - (.started_at | fromdateiso8601)) as $s
-                     | select($s >= 1)
-                     | "| \(.name) | \($s | dur) |"
-                   ] | join("\n"))
-                + "\n"'
-        } >> "$GITHUB_STEP_SUMMARY"
+        args=()
+        if [ -n "$REV" ]; then args+=(--rev "$REV"); fi
+        if [ "$PUBLISH" = "true" ]; then args+=(--publish); fi
+        nix run .#wasinix -- ci step-timings \
+          --step-summary "$GITHUB_STEP_SUMMARY" "${args[@]}"

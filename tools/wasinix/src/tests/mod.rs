@@ -3275,6 +3275,57 @@ mod webc_identity {
     }
 }
 
+mod timings {
+    use crate::support::time::parse_utc;
+
+    #[test]
+    fn github_timestamps_parse_and_anything_else_is_none() {
+        // Cross-checked against `date -u -d ... +%s`.
+        assert_eq!(parse_utc("2026-08-19T10:15:26Z"), Some(1_787_134_526));
+        assert_eq!(parse_utc("1970-01-01T00:00:00Z"), Some(0));
+        // A leap day, which the March-shifted year has to place last.
+        assert_eq!(parse_utc("2024-02-29T00:00:00Z"), Some(1_709_164_800));
+        for rejected in [
+            "",
+            "2026-08-19T10:15:26",
+            "2026-08-19T10:15:26.5Z",
+            "2026-08-19 10:15:26Z",
+            "not-a-time-at-all!!!!",
+        ] {
+            assert_eq!(parse_utc(rejected), None, "{rejected} parsed");
+        }
+    }
+
+    #[test]
+    fn published_steps_round_trip_through_their_key() {
+        let scratch = crate::support::fs::Scratch::create("wasinix-test").unwrap();
+        let steps = crate::ci::steps::StepTimings {
+            rev: None,
+            run_id: 7,
+            workflow: "Build".into(),
+            jobs: vec![crate::ci::steps::Job {
+                name: "build".into(),
+                seconds: crate::support::atoms::DurationSecs(90.0),
+                steps: vec![crate::ci::steps::Step {
+                    name: "Set up Nix".into(),
+                    seconds: crate::support::atoms::DurationSecs(30.0),
+                }],
+            }],
+        };
+        // The fold reads documents back through the key the publisher
+        // writes; a local template stands in for the bucket.
+        let rev = "a".repeat(40);
+        let path = scratch.path().join(crate::ci::steps::key(&rev));
+        crate::support::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        crate::support::schema::write(&path, &steps).unwrap();
+        let template = format!("{}/{{key}}", scratch.path().display());
+        let read = crate::ci::steps::fetch(&rev, &template).unwrap();
+        assert_eq!(read.jobs[0].steps[0].name, "Set up Nix");
+        assert!(read.summary().contains("| Set up Nix | 30s |"), "{}", read.summary());
+        assert!(crate::ci::steps::fetch(&"b".repeat(40), &template).is_none());
+    }
+}
+
 mod cargo_publish {
     use crate::registries::cargo::{classify, index_cksum, index_path, Action};
 
@@ -3336,6 +3387,7 @@ mod corpus {
             "bisect",
             "jobs",
             "doctor",
+            "timings",
             "cache push",
             "run start",
             "run list",
@@ -3372,6 +3424,7 @@ mod corpus {
             "ci prepare",
             "ci exec",
             "ci publish",
+            "ci step-timings",
             "ci origin",
             "ci command",
             // The comment-mutation adapters rewrite a PR branch, but their
@@ -3463,6 +3516,7 @@ mod corpus {
             "ci reply --pull-request 1 --comment-id 2 --failure err.txt",
             "ci mutate --origin o.json --out-dir mutation",
             "ci mutate-publish --out-dir mutation",
+            "ci step-timings --run-id 1 --rev abc --publish",
             "ci remote --request r.json --run-dir d --on ec2",
             "ci observe --remote-run-dir /x --run-dir d",
             "ci publish --run-dir d --sha aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --untrusted --check",
@@ -5810,7 +5864,7 @@ mod baseline {
             .into_iter()
             .map(JobAddr)
             .collect();
-        let document = publish_document(&mapping, &complete, &coverage, &Default::default());
+        let document = publish_document(&mapping, &complete, &coverage, &Default::default(), &[]);
         assert!(covers(&selected, &document));
         assert!(!covers(&case(&["one", "two", "three"]), &document));
     }

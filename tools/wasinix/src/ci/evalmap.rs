@@ -147,6 +147,21 @@ pub struct EvalMap {
     /// Per-job build wall time, present only on a published baseline.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub build_seconds: BTreeMap<JobAddr, f64>,
+    /// Per-task wall time, present only on a published baseline. The job
+    /// times above account for the build alone; a run also spends its time
+    /// evaluating, warming inputs, and formatting.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub task_seconds: Vec<TaskTiming>,
+}
+
+/// One pipeline task's wall time, carrying the label so a reader needs no
+/// second document to name it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskTiming {
+    pub task_id: String,
+    pub label: String,
+    pub seconds: f64,
 }
 
 impl Document for EvalMap {

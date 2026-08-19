@@ -7,6 +7,7 @@ pub(crate) mod registries;
 pub(crate) mod remote;
 pub(crate) mod render;
 pub(crate) mod request;
+pub(crate) mod timings;
 pub(crate) mod update;
 pub mod untrusted;
 
@@ -74,6 +75,9 @@ pub enum CommandTree {
     },
     /// First-run facts: what is configured, what is missing, and the fix
     Doctor,
+    /// What CI spent its time on across a commit range, from the timings
+    /// each build publishes
+    Timings(timings::TimingsArgs),
     /// The shared binary cache
     #[command(subcommand)]
     Cache(CacheCommand),
@@ -388,6 +392,26 @@ pub enum CiCommand {
     MutatePublish {
         #[arg(long)]
         out_dir: PathBuf,
+    },
+    /// Record a workflow run's step durations: a step-summary table, and
+    /// with --publish a document the timings fold reads back
+    StepTimings {
+        /// The run to read; the current one by default (GITHUB_RUN_ID)
+        #[arg(long)]
+        run_id: Option<u64>,
+        /// The revision the run built, which the document is keyed by
+        #[arg(long)]
+        rev: Option<String>,
+        #[arg(long)]
+        repository: Option<String>,
+        /// Append the table here ($GITHUB_STEP_SUMMARY)
+        #[arg(long)]
+        step_summary: Option<PathBuf>,
+        /// Upload the document to the cache; needs the S3 credentials
+        #[arg(long)]
+        publish: bool,
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Reply to a `/wasinix` command whose run died before it could publish
     /// a report
@@ -1297,6 +1321,51 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             crate::github::mutation::mutate_publish(&repo, &out_dir)?;
             Ok(CommandStatus::SUCCESS)
         }
+        CiCommand::StepTimings {
+            run_id,
+            rev,
+            repository,
+            step_summary,
+            publish,
+            dry_run,
+        } => {
+            let run_id = match run_id {
+                Some(run_id) => Some(run_id),
+                None => crate::support::env::github_run_id()?
+                    .and_then(|value| value.parse().ok()),
+            };
+            let run_id = run_id
+                .ok_or_else(|| {
+                    crate::support::error::Error::Request(
+                        "step timings need --run-id or GITHUB_RUN_ID".into(),
+                    )
+                })?;
+            let repository =
+                crate::github::surfaces::resolve_repository(repository.as_deref(), &repo)?;
+            let rev = match rev {
+                Some(rev) => Some(rev),
+                None => crate::support::env::github_sha()?,
+            };
+            let rev = rev
+                .map(|rev| crate::support::atoms::Rev::parse(&rev))
+                .transpose()?;
+            let workflow = crate::support::env::github_workflow()?.unwrap_or_default();
+            let timings = crate::ci::steps::collect(
+                &crate::github::client::Client::new(None),
+                &repository,
+                run_id,
+                rev,
+                &workflow,
+            )?;
+            if let Some(path) = &step_summary {
+                crate::support::fs::append(path, timings.summary().as_bytes())?;
+            }
+            if publish {
+                timings.publish(crate::support::effects::Effects::from_dry_run(dry_run))?;
+            }
+            crate::support::ui::fact("step timings", format!("{} jobs", timings.jobs.len()));
+            Ok(CommandStatus::SUCCESS)
+        }
         CiCommand::Reply {
             surface,
             comment_id,
@@ -1392,6 +1461,7 @@ fn run(command: CommandTree) -> Result<CommandStatus> {
         CommandTree::Bisect(args) => bisect::run_bisect(&crate::support::git::repo_root()?, args),
         CommandTree::Jobs { pattern, json } => jobs_command(pattern, json),
         CommandTree::Doctor => doctor(),
+        CommandTree::Timings(args) => timings::run(args),
         CommandTree::Cache(command) => cache_command(command),
         CommandTree::Run(command) => run_command(command),
         CommandTree::Cargo(command) => registries::run_cargo(command),

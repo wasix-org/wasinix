@@ -56,6 +56,27 @@ required gate or a comparison with regressions; a diff whose baseline could not
 evaluate concludes **neutral**, never red, because a failure the base shares is
 the status quo, not a regression the change introduced.
 
+## Where the time went
+
+A run directory dies with its runner, so the times a main build measures are
+published: per-job build seconds and per-task wall time ride the eval map
+(`eval-maps/<tree>.json`, keyed by git tree), and the workflow's own step
+durations go to `step-timings/<rev>.json`.
+
+```sh
+wasinix timings [<range>] [--by job|task|step|rev]
+```
+
+folds them across a commit range, defaulting to `HEAD~20..HEAD`. Keys derive
+from the range, so the fold needs no bucket listing and no credentials. Each row
+carries the total, how many runs measured it, and the first and last value,
+since a mean hides a regression. Commits that published nothing are a gap, and
+the header says how much of the range was measured.
+
+`--by job` finds the package that grew, `--by task` the pipeline phase,
+`--by step` the setup cost, and `--by rev` answers whether CI as a whole is
+getting slower.
+
 ## Durable and remote runs
 
 `run start -- <command>` detaches a supervisor that is the only writer of

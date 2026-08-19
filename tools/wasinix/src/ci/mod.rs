@@ -10,5 +10,6 @@ pub mod origin;
 pub mod plan;
 pub mod prepare;
 pub mod report;
+pub mod steps;
 pub mod types;
 pub mod workspace;
