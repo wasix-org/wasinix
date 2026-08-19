@@ -240,6 +240,14 @@
           postInstall = ''
             for n in python${pyVer} python3 python; do ln -sf python${pyVer}.wasm "$out/bin/$n"; done
 
+            # `python -m pip` works under wasix, but ensurepip installs it by running
+            # the target interpreter, which a cross build cannot do. The wheel it
+            # bundles is pure python, so unpack that instead.
+            whl=$(echo "$out"/lib/python${pyVer}/ensurepip/_bundled/pip-*.whl)
+            [ -f "$whl" ] || { echo "no bundled pip wheel in $out" >&2; exit 1; }
+            ${final.buildPackages.python3}/bin/python3 -m zipfile -e "$whl" \
+              "$out/lib/python${pyVer}/site-packages"
+
             for f in \
               "$out"/lib/pkgconfig/python-*.pc \
               "$out"/lib/python${pyVer}/_sysconfigdata*.py \
