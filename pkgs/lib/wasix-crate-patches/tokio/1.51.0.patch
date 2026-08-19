@@ -136,6 +136,9 @@ diff --git a/Cargo.toml b/Cargo.toml
 diff --git a/src/macros/cfg.rs b/src/macros/cfg.rs
 --- a/src/macros/cfg.rs
 +++ b/src/macros/cfg.rs
+@@ -438,1 +438,1 @@
+-            #[cfg(any(feature = "signal", all(unix, feature = "process")))]
++            #[cfg(any(feature = "signal", all(any(unix, target_vendor = "wasmer"), feature = "process")))]
 @@ -445,6 +445,6 @@ macro_rules! cfg_signal_internal {
  macro_rules! cfg_signal_internal_and_unix {
      ($($item:item)*) => {

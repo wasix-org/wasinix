@@ -29,7 +29,7 @@
  
 --- /dev/null
 +++ b/client/src/wasi.rs
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,41 @@
 +use std::ffi::CString;
 +use std::fs::File;
 +use std::io;

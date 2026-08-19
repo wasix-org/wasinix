@@ -83,6 +83,16 @@ index 0b9497a..cc7893f 100644
      pub(crate) fn selector(&self) -> &sys::Selector {
          &self.selector
      }
+diff --git a/src/net/mod.rs b/src/net/mod.rs
+--- a/src/net/mod.rs
++++ b/src/net/mod.rs
+@@ -36,4 +36,4 @@
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ mod uds;
+-#[cfg(unix)]
++#[cfg(any(unix, target_vendor = "wasmer"))]
+ pub use self::uds::{UnixDatagram, UnixListener, UnixStream};
 diff --git a/src/sys/mod.rs b/src/sys/mod.rs
 index de8e079..0cff574 100644
 --- a/src/sys/mod.rs
@@ -95,18 +105,9 @@ index de8e079..0cff574 100644
      macro_rules! debug_detail {
          (
              $type: ident ($event_type: ty), $test: path,
-@@ -53,7 +54,9 @@ cfg_os_poll! {
- #[cfg(any(
-     unix,
-     target_os = "hermit",
--    all(target_os = "wasi", not(target_env = "p1"))
-+    // wasmer-wasi uses the dedicated wasi backend below; other non-p1 wasi
-+    // still uses the unix backend.
-+    all(target_os = "wasi", not(target_env = "p1"), not(target_vendor = "wasmer"))
- ))]
- cfg_os_poll! {
-     mod unix;
-@@ -67,7 +70,20 @@ cfg_os_poll! {
+@@ -60,0 +62,1 @@
++    #[cfg(not(all(target_os = "wasi", target_vendor = "wasmer")))]
+@@ -67,7 +69,20 @@ cfg_os_poll! {
      pub use self::windows::*;
  }
  
@@ -128,7 +129,7 @@ index de8e079..0cff574 100644
  cfg_os_poll! {
      mod wasip1;
      pub(crate) use self::wasip1::*;
-@@ -77,6 +93,15 @@ cfg_not_os_poll! {
+@@ -77,6 +92,15 @@ cfg_not_os_poll! {
      mod shell;
      pub(crate) use self::shell::*;
  
@@ -144,7 +145,7 @@ index de8e079..0cff574 100644
      #[cfg(unix)]
      cfg_any_os_ext! {
          mod unix;
-@@ -84,3 +109,72 @@ cfg_not_os_poll! {
+@@ -84,3 +108,72 @@ cfg_not_os_poll! {
          pub use self::unix::SourceFd;
      }
  }
@@ -218,6 +219,48 @@ index de8e079..0cff574 100644
 +)))]
 +pub(crate) const LISTEN_BACKLOG_SIZE: i32 = libc::SOMAXCONN;
 
+diff --git a/src/sys/unix/mod.rs b/src/sys/unix/mod.rs
+--- a/src/sys/unix/mod.rs
++++ b/src/sys/unix/mod.rs
+@@ -16,0 +17,1 @@
++#[cfg(not(all(target_os = "wasi", target_vendor = "wasmer")))]
+@@ -125,1 +126,4 @@
+-        #[cfg(not(any(target_os = "hermit", target_os = "wasi")))]
++        #[cfg(not(any(
++            target_os = "hermit",
++            all(target_os = "wasi", not(target_vendor = "wasmer"))
++        )))]
+@@ -164,0 +169,8 @@
++
++#[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++cfg_os_poll! {
++    cfg_net! {
++        mod net;
++        pub(crate) mod uds;
++    }
++}
+diff --git a/src/sys/unix/net.rs b/src/sys/unix/net.rs
+--- a/src/sys/unix/net.rs
++++ b/src/sys/unix/net.rs
+@@ -115,1 +115,5 @@
+-                #[cfg(not(any(target_os = "haiku", target_os = "vita", target_os = "wasi")))]
++                #[cfg(not(any(
++                    target_os = "haiku",
++                    target_os = "vita",
++                    all(target_os = "wasi", not(target_vendor = "wasmer"))
++                )))]
+diff --git a/src/sys/unix/uds/listener.rs b/src/sys/unix/uds/listener.rs
+--- a/src/sys/unix/uds/listener.rs
++++ b/src/sys/unix/uds/listener.rs
+@@ -33,6 +33,6 @@
+     )) {
+         -1
+     } else {
+-        libc::SOMAXCONN
++        crate::sys::LISTEN_BACKLOG_SIZE
+     };
+     syscall!(listen(fd, backlog))?;
+diff --git a/Cargo.toml b/Cargo.toml
 --- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -151,3 +151,4 @@
