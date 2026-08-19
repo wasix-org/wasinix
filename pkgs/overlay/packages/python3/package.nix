@@ -17,6 +17,19 @@
 
     mkWasixPython = base: let
       pyVer = base.pythonVersion;
+      pythonCommand = name: {
+        inherit name;
+        module = "python";
+        wasm = "python${pyVer}.wasm";
+        output = "python${pyVer}.wasm";
+        env = {
+          SSL_CERT_FILE = "/etc/ssl/certs/ca-bundle.crt";
+          SSL_CERT_DIR = "/etc/ssl/certs";
+          # getpath can't resolve argv0 (no PATH in the guest), leaving sys.executable
+          # empty, which breaks subprocess([sys.executable, ..]) and spawn.
+          PYTHONEXECUTABLE = "${py}/bin/python${pyVer}.wasm";
+        };
+      };
       py =
         helpers.libTweaks {
           configureFlags = [
@@ -270,27 +283,9 @@
                 then ["python3" "python314"]
                 else ["python313"];
               entrypoint = "python${pyVer}";
-              # The atom is the module name, and a consumer's manifest refers to
-              # an interpreter as <package>:python (anybuild's serve command
-              # does). The command keeps its version, so `--entrypoint
-              # python3.13` and the run-by-name shims are unaffected.
-              commands = [
-                {
-                  name = "python${pyVer}";
-                  module = "python";
-                  wasm = "python${pyVer}.wasm";
-                  output = "python${pyVer}.wasm";
-                  # commandEnv only reaches auto-globbed commands, so a declared
-                  # one carries its own.
-                  env = {
-                    SSL_CERT_FILE = "/etc/ssl/certs/ca-bundle.crt";
-                    SSL_CERT_DIR = "/etc/ssl/certs";
-                    # getpath can't resolve argv0 (no PATH in the guest), leaving sys.executable
-                    # empty, which breaks subprocess([sys.executable, ..]) and spawn.
-                    PYTHONEXECUTABLE = "${py}/bin/python${pyVer}.wasm";
-                  };
-                }
-              ];
+              # Consumers address the atom as <package>:python; each command
+              # shares it while Wasmer exposes the usual names under /bin.
+              commands = map pythonCommand ["python${pyVer}" "python3" "python"];
               autoSelfMount = true;
               # autoSelfMount only scans bin/*.wasm, but bash is baked into subprocess.py and
               # tzdata into _sysconfigdata (else zoneinfo raises "No time zone found").
