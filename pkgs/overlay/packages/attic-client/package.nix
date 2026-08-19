@@ -34,6 +34,13 @@ helpers.libTweaks {
   postPatch = ''
     cp Cargo.lock "$cargoDepsCopy/Cargo.lock"
   '';
+  postInstall = ''
+    ${final.buildPackages.binaryen}/bin/wasm-opt "$out/bin/attic.wasm" \
+      --enable-bulk-memory --enable-threads --enable-reference-types \
+      --enable-exception-handling --no-validation --translate-to-exnref \
+      -o "$out/bin/attic.wasm.exnref"
+    mv "$out/bin/attic.wasm.exnref" "$out/bin/attic.wasm"
+  '';
   passthru.wasix.shipped = true;
   passthru.wasmer = {
     name = "attic-client";

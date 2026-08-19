@@ -160,6 +160,57 @@ diff --git a/src/macros/cfg.rs b/src/macros/cfg.rs
          )*
      }
  }
+diff --git a/src/runtime/io/driver/signal.rs b/src/runtime/io/driver/signal.rs
+--- a/src/runtime/io/driver/signal.rs
++++ b/src/runtime/io/driver/signal.rs
+@@ -0,0 +1,2 @@
++#![cfg_attr(target_os = "wasi", allow(unused_imports))]
++
+@@ -7,0 +10 @@
++        #[cfg(not(target_os = "wasi"))]
+@@ -9,0 +13 @@
++        #[cfg(not(target_os = "wasi"))]
+diff --git a/src/runtime/signal/mod.rs b/src/runtime/signal/mod.rs
+--- a/src/runtime/signal/mod.rs
++++ b/src/runtime/signal/mod.rs
+@@ -1,0 +2 @@
++#![cfg_attr(target_os = "wasi", allow(unused, dead_code))]
+@@ -7,0 +9 @@
++#[cfg(not(target_os = "wasi"))]
+@@ -23,0 +26 @@
++    #[cfg(not(target_os = "wasi"))]
+@@ -66,0 +70 @@
++        #[cfg(not(target_os = "wasi"))]
+@@ -69,0 +74 @@
++        #[cfg(not(target_os = "wasi"))]
+@@ -71,0 +77 @@
++        #[cfg(not(target_os = "wasi"))]
+@@ -73,0 +80 @@
++        #[cfg(not(target_os = "wasi"))]
+@@ -77,0 +85 @@
++            #[cfg(not(target_os = "wasi"))]
+@@ -114,8 +122,11 @@
+-        let mut buf = [0; 128];
+-        #[allow(clippy::unused_io_amount)]
+-        loop {
+-            match self.receiver.read(&mut buf) {
+-                Ok(0) => panic!("EOF on self-pipe"),
+-                Ok(_) => continue, // Keep reading
+-                Err(e) if e.kind() == std_io::ErrorKind::WouldBlock => break,
+-                Err(e) => panic!("Bad read on self-pipe: {e}"),
++        #[cfg(not(target_os = "wasi"))]
++        {
++            let mut buf = [0; 128];
++            #[allow(clippy::unused_io_amount)]
++            loop {
++                match self.receiver.read(&mut buf) {
++                    Ok(0) => panic!("EOF on self-pipe"),
++                    Ok(_) => continue, // Keep reading
++                    Err(e) if e.kind() == std_io::ErrorKind::WouldBlock => break,
++                    Err(e) => panic!("Bad read on self-pipe: {e}"),
++                }
+             }
+         }
 diff --git a/src/signal/ctrl_c.rs b/src/signal/ctrl_c.rs
 --- a/src/signal/ctrl_c.rs
 +++ b/src/signal/ctrl_c.rs
@@ -196,12 +247,30 @@ diff --git a/src/signal/registry.rs b/src/signal/registry.rs
 diff --git a/src/signal/unix.rs b/src/signal/unix.rs
 --- a/src/signal/unix.rs
 +++ b/src/signal/unix.rs
-@@ -3,7 +3,7 @@
- //! This module is only defined on Unix platforms and contains the primary
- //! `Signal` type for receiving notifications of signals.
- 
+@@ -6 +6 @@
 -#![cfg(unix)]
 +#![cfg(any(unix, target_vendor = "wasmer"))]
- #![cfg_attr(docsrs, doc(cfg(all(unix, feature = "signal"))))]
- 
- use crate::runtime::scheduler;
+@@ -7,0 +8 @@
++#![cfg_attr(target_os = "wasi", allow(unused))]
+@@ -14,0 +16 @@
++#[cfg(not(target_os = "wasi"))]
+@@ -64,0 +67 @@
++    #[cfg(not(target_os = "wasi"))]
+@@ -65,0 +69 @@
++    #[cfg(not(target_os = "wasi"))]
+@@ -69,0 +74 @@
++    #[cfg(not(target_os = "wasi"))]
+@@ -74,0 +80,5 @@
++
++    #[cfg(target_os = "wasi")]
++    fn default() -> Self {
++        Self {}
++    }
+@@ -260,2 +270,5 @@
+-    let mut sender = &globals.sender;
+-    drop(sender.write(&[1]));
++    #[cfg(not(target_os = "wasi"))]
++    {
++        let mut sender = &globals.sender;
++        drop(sender.write(&[1]));
++    }

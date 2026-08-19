@@ -1,8 +1,8 @@
 # tokio: the wasi-networking backend patch, floored across 1.47.0+ (a version the
 # floor no longer fits hard-fails). Tokio 1.51's target_env = "p1" gates leave
-# WASIX's env = "dl" on the supported fd path, so the 1.51.0 floor shrinks to the
-# wasm-family compile-error rewrite, the raw-fd impls and the opt-in
-# tokio_wasix_waker gates. Below 1.47.0 upstream rejects the net/fs/process/signal
+# WASIX's env = "dl" on the supported fd path, so the 1.51.0 floor keeps the
+# wasm-family rewrite, raw-fd impls, opt-in waker, and signal self-pipe gates.
+# Below 1.47.0 upstream rejects the net/fs/process/signal
 # features on wasm outright, so those versions are unvetted rather than stock,
 # even though a sync-only dependent compiles.
 # 1.24.x is not served. The overlay registry's fork builds for it carry 1.20.1
