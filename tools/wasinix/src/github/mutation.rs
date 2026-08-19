@@ -316,8 +316,7 @@ pub fn mutate(repo: &Path, origin_doc: &Path, out_dir: &Path) -> Result<()> {
     // The bundle is written by a `git -C <worktree>` invocation, which
     // resolves a relative out-dir inside the worktree instead of the
     // caller's directory.
-    let out_dir = &std::path::absolute(out_dir)
-        .map_err(|error| crate::support::error::io(out_dir, error))?;
+    let out_dir = &crate::support::fs::absolute(out_dir)?;
     let command: crate::ci::origin::Command = crate::support::schema::read(origin_doc)?;
     let api = crate::ci::origin::Rest {
         token: crate::github::client::token(),
@@ -453,6 +452,9 @@ pub fn mutate(repo: &Path, origin_doc: &Path, out_dir: &Path) -> Result<()> {
 /// origin against live state, verify the bundle is exactly what mutate
 /// declared, push (with lease when replacing), reply, and record the state.
 pub fn mutate_publish(repo: &Path, out_dir: &Path) -> Result<()> {
+    // The bundle is read back by a `git -C <scratch>` invocation, the same
+    // way `mutate` writes it.
+    let out_dir = &crate::support::fs::absolute(out_dir)?;
     let context: Context = crate::support::schema::read(&out_dir.join("context.json"))?;
     let generated: Generated = crate::support::schema::read(&out_dir.join("result.json"))?;
     let changes: ChangeSet = crate::support::schema::read(&out_dir.join("changeset.json"))?;

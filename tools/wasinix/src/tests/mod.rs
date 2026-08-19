@@ -5615,6 +5615,33 @@ mod git_support {
         assert!(!is_ancestor(&repo, "HEAD", first.full()).unwrap());
         assert!(is_ancestor(&repo, "not-a-rev", "HEAD").is_err());
     }
+
+    /// A bundle is fetched by a git rooted in a scratch worktree, which
+    /// resolves the path against that worktree. The mutation adapter passes
+    /// `--out-dir mutation`, so the path has to be made absolute first.
+    #[test]
+    fn a_bundle_fetch_needs_an_absolute_path() {
+        let (scratch, repo) = repo();
+        let bundle = scratch.path().join("out").join("commits.bundle");
+        crate::support::fs::create_dir_all(bundle.parent().unwrap()).unwrap();
+        git(
+            &repo,
+            &["bundle", "create", &bundle.to_string_lossy(), "HEAD"],
+        )
+        .unwrap();
+
+        let elsewhere = scratch.path().join("work");
+        std::fs::create_dir(&elsewhere).unwrap();
+        git(&elsewhere, &["init", "-q", "."]).unwrap();
+        let relative = std::path::Path::new("out/commits.bundle");
+        assert!(
+            git(&elsewhere, &["fetch", &relative.to_string_lossy(), "HEAD"]).is_err(),
+            "a relative bundle path resolved from the wrong root"
+        );
+        let absolute = crate::support::fs::absolute(&bundle).unwrap();
+        git(&elsewhere, &["fetch", &absolute.to_string_lossy(), "HEAD"]).unwrap();
+        assert!(!git(&elsewhere, &["rev-parse", "FETCH_HEAD"]).unwrap().is_empty());
+    }
 }
 
 mod workspace {

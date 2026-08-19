@@ -32,6 +32,12 @@ pub fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {
     std::fs::rename(&tmp, path).map_err(|e| io(path, e))
 }
 
+/// An absolute path, so a caller handing it to a tool rooted elsewhere
+/// (`git -C`, a builder's cwd) names the same file the process meant.
+pub fn absolute(path: &Path) -> Result<PathBuf> {
+    std::path::absolute(path).map_err(|error| io(path, error))
+}
+
 pub fn create_dir_all(path: &Path) -> Result<()> {
     std::fs::create_dir_all(path).map_err(|e| io(path, e))
 }
