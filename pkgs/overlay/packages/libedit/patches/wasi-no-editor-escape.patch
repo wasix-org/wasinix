@@ -1,0 +1,22 @@
+--- a/src/vi.c
++++ b/src/vi.c
+@@ -1000,6 +1000,11 @@
+ /*ARGSUSED*/
+ vi_histedit(EditLine *el, wint_t c __attribute__((__unused__)))
+ {
++#ifdef __wasi__
++	/* the editor is spawned with fork, which wasi has no equivalent for */
++	(void)el;
++	return CC_ERROR;
++#else
+ 	int fd;
+ 	pid_t pid;
+ 	ssize_t st;
+@@ -1075,6 +1080,7 @@
+ 	close(fd);
+ 	unlink(tempfile);
+ 	return CC_ERROR;
++#endif
+ }
+ 
+ /* vi_history_word():
