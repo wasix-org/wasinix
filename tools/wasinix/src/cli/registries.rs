@@ -95,6 +95,9 @@ pub enum WasmerCommand {
         /// Rev recorded in each published README; HEAD, -dirty suffixed, by default
         #[arg(long)]
         rev: Option<String>,
+        /// Publish the one selected package under [<namespace>/]<name>[@<version>]
+        #[arg(long = "as", value_name = "IDENTITY")]
+        publish_as: Option<String>,
     },
     /// Publish changed webcs as <version>-<TAG> prereleases, hidden from latest
     Preview {
@@ -252,6 +255,7 @@ pub fn run_wasmer(command: WasmerCommand) -> Result<CommandStatus> {
             dry_run,
             skip_sha_validation,
             rev,
+            publish_as,
         } => wasmer::publish(wasmer::Options {
             registry,
             packages,
@@ -259,6 +263,7 @@ pub fn run_wasmer(command: WasmerCommand) -> Result<CommandStatus> {
             skip_sha_validation,
             rev,
             preview: None,
+            publish_as,
         }),
         WasmerCommand::Preview {
             tag,
@@ -273,6 +278,7 @@ pub fn run_wasmer(command: WasmerCommand) -> Result<CommandStatus> {
             skip_sha_validation: false,
             rev,
             preview: Some(tag),
+            publish_as: None,
         }),
     }
 }
@@ -370,6 +376,7 @@ pub fn run_meta_publish(effects: Effects) -> Result<CommandStatus> {
                     skip_sha_validation: false,
                     rev: None,
                     preview: None,
+                    publish_as: None,
                 })
             }),
         ),

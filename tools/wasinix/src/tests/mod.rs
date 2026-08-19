@@ -3135,6 +3135,101 @@ mod webc_tree {
     }
 }
 
+mod webc_identity {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    use crate::registries::wasmer::{parse_publish_as, stage, Package};
+    use crate::support::fs::Scratch;
+
+    fn package(path: &std::path::Path) -> Package {
+        Package {
+            full_name: "wasmer/python".into(),
+            version: "3.13.7".into(),
+            path: path.to_path_buf(),
+            dependencies: BTreeMap::new(),
+            source: None,
+        }
+    }
+
+    #[test]
+    fn an_identity_spec_overrides_only_the_parts_it_names() {
+        let pkg = package(std::path::Path::new("/nonexistent"));
+        let applied = |spec: &str| parse_publish_as(spec).unwrap().apply(&pkg);
+        assert_eq!(
+            applied("kilyanni/python@3.13.99"),
+            ("kilyanni/python".to_string(), "3.13.99".to_string())
+        );
+        assert_eq!(
+            applied("kilyanni/python"),
+            ("kilyanni/python".to_string(), "3.13.7".to_string())
+        );
+        assert_eq!(
+            applied("@3.13.99"),
+            ("wasmer/python".to_string(), "3.13.99".to_string())
+        );
+        // A bare name keeps the manifest's namespace.
+        assert_eq!(
+            applied("python3"),
+            ("wasmer/python3".to_string(), "3.13.7".to_string())
+        );
+        for rejected in ["", "a/b/c", "kilyanni/", "python@", "kil yanni/python"] {
+            assert!(
+                parse_publish_as(rejected).is_err(),
+                "{rejected} should not parse"
+            );
+        }
+    }
+
+    #[test]
+    fn staging_rewrites_the_manifest_identity_or_fails_loud() {
+        let scratch = Scratch::create("wasinix-test").unwrap();
+        let src = scratch.path().join("src");
+        crate::support::fs::create_dir_all(&src).unwrap();
+        let manifest = src.join("wasmer.toml");
+        let write = |body: &str| crate::support::fs::write(&manifest, body.as_bytes()).unwrap();
+        // A module's `name =` must not be mistaken for the package's.
+        let real = concat!(
+            "[package]\n",
+            "name = \"wasmer/python\"\n",
+            "version = \"3.13.7\"\n",
+            "\n[[module]]\n",
+            "name = \"python\"\n",
+        );
+        write(real);
+        let pkg = package(&src);
+
+        let into = scratch.path().join("staged");
+        let staged = stage(
+            &pkg,
+            "abc",
+            &into,
+            "kilyanni/python",
+            "3.13.99",
+            None,
+            &BTreeSet::new(),
+        )
+        .unwrap();
+        let text = crate::support::fs::read_to_string(&staged.join("wasmer.toml")).unwrap();
+        assert!(text.contains("name = \"kilyanni/python\""), "{text}");
+        assert!(text.contains("version = \"3.13.99\""), "{text}");
+        assert!(text.contains("name = \"python\"\n"), "{text}");
+
+        write("[package]\nname=\"wasmer/python\"\nversion=\"3.13.7\"\n");
+        let error = stage(
+            &pkg,
+            "abc",
+            &scratch.path().join("unspaced"),
+            "kilyanni/python",
+            "3.13.99",
+            None,
+            &BTreeSet::new(),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("no `name`/`version` line to rewrite"), "{error}");
+    }
+}
+
 mod cargo_publish {
     use crate::registries::cargo::{classify, index_cksum, index_path, Action};
 

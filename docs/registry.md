@@ -36,6 +36,11 @@ does not already have. `--dry-run` previews.
 - **Failures** are isolated per package and reported at the end.
 - **Owner**: webcs publish under `wasmer/` on wasmer.io, the default in
   `pkgs/wasmer/make-wasmer-package.nix`.
+- **One-off identity**: `--as [<namespace>/]<name>[@<version>]` publishes a
+  single package under a different identity, rewriting the staged manifest.
+  Whatever the spec omits keeps the manifest's value, and a bare name keeps the
+  namespace. It needs exactly one selected package, since a renamed dependency
+  would leave its dependents pinned to a name the registry lacks.
 - **Provenance** rides the package README: the generated README carries the attr
   and rel, and the publish step appends the source rev and a rebuild command.
   Verification restages the local build with the recorded rev to reproduce the

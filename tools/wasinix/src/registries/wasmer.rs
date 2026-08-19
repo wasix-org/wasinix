@@ -484,33 +484,53 @@ pub fn provenance(pkg: &Package, rev: &str) -> String {
     )
 }
 
-fn stage(
+#[allow(clippy::too_many_arguments)]
+pub fn stage(
     pkg: &Package,
     rev: &str,
     into: &Path,
+    pub_name: &str,
+    pub_version: &str,
     preview_tag: Option<&str>,
     batch: &BTreeSet<(String, String)>,
 ) -> Result<PathBuf> {
     let dst = into.join("pkg");
     copy_tree(&pkg.path, &dst)?;
-    if let Some(tag) = preview_tag {
-        // An ephemeral prerelease: a distinct version per PR iteration, hidden
-        // from `latest`. Batch-internal dependency pins follow it so every
-        // reference in the preview resolves.
+    // `wasmer publish` reads the identity out of the manifest, so a preview
+    // tag or a one-off `--as` has to be written into the staged copy. Batch
+    // dependency pins follow the preview tag so its references resolve.
+    let renamed = pub_name != pkg.full_name || pub_version != pkg.version;
+    if renamed || preview_tag.is_some() {
         let manifest = dst.join("wasmer.toml");
-        let mut text = crate::support::fs::read_to_string(&manifest)?;
-        text = text.replacen(
-            &format!("version = \"{}\"", pkg.version),
-            &format!("version = \"{}-{tag}\"", pkg.version),
+        let original = crate::support::fs::read_to_string(&manifest)?;
+        let mut text = original.replacen(
+            &format!("name = \"{}\"", pkg.full_name),
+            &format!("name = \"{pub_name}\""),
             1,
         );
-        for (dep, version) in &pkg.dependencies {
-            if batch.contains(&(dep.clone(), version.clone())) {
-                text = text.replacen(
-                    &format!("\"{dep}\" = \"{version}\""),
-                    &format!("\"{dep}\" = \"{version}-{tag}\""),
-                    1,
-                );
+        text = text.replacen(
+            &format!("version = \"{}\"", pkg.version),
+            &format!("version = \"{pub_version}\""),
+            1,
+        );
+        // A manifest spelling the identity some other way would leave the
+        // staged copy under the old one while every registry call uses the
+        // new one, publishing the wrong package.
+        if renamed && text == original {
+            return package_error(format!(
+                "{}: no `name`/`version` line to rewrite for {pub_name}@{pub_version}",
+                manifest.display()
+            ));
+        }
+        if let Some(tag) = preview_tag {
+            for (dep, version) in &pkg.dependencies {
+                if batch.contains(&(dep.clone(), version.clone())) {
+                    text = text.replacen(
+                        &format!("\"{dep}\" = \"{version}\""),
+                        &format!("\"{dep}\" = \"{version}-{tag}\""),
+                        1,
+                    );
+                }
             }
         }
         crate::support::fs::write(&manifest, text.as_bytes())?;
@@ -522,18 +542,36 @@ fn stage(
     Ok(dst)
 }
 
-fn staged_sha256(pkg: &Package, rev: &str) -> Result<String> {
+fn staged_sha256(
+    pkg: &Package,
+    rev: &str,
+    pub_name: &str,
+    pub_version: &str,
+) -> Result<String> {
     let scratch = Scratch::new("restage")?;
-    let staged = stage(pkg, rev, &scratch.0, None, &BTreeSet::new())?;
+    let staged = stage(
+        pkg,
+        rev,
+        &scratch.0,
+        pub_name,
+        pub_version,
+        None,
+        &BTreeSet::new(),
+    )?;
     build_webc_sha256(&staged, pkg)
 }
 
 /// `wasmer publish` can exit 0 without tagging anything, so re-query until the
 /// version shows up; the retries also cover indexing lag.
-fn verify_published(graphql_url: &str, pkg: &Package, version: &str, expected: &str) -> Result<()> {
+fn verify_published(
+    graphql_url: &str,
+    full_name: &str,
+    version: &str,
+    expected: &str,
+) -> Result<()> {
     let mut info = Published::default();
     for attempt in 0..5 {
-        info = get_published(graphql_url, &pkg.full_name, version)?;
+        info = get_published(graphql_url, full_name, version)?;
         if info.exists {
             break;
         }
@@ -553,11 +591,63 @@ fn verify_published(graphql_url: &str, pkg: &Package, version: &str, expected: &
         Some(_) => Ok(()),
         None => {
             crate::support::ui::warning(format!(
-                "registry returned no hash for {}@{version}; cannot cross-check the published content",
-                pkg.full_name
+                "registry returned no hash for {full_name}@{version}; cannot cross-check the published content"
             ));
             Ok(())
         }
+    }
+}
+
+/// A one-off publish identity, `[<namespace>/]<name>[@<version>]`. Every
+/// part is optional; what the spec omits keeps the manifest's value.
+#[derive(Debug, Default, PartialEq)]
+pub struct PublishAs {
+    /// Either `namespace/name` or a bare name replacing only that segment.
+    name: Option<String>,
+    version: Option<String>,
+}
+
+pub fn parse_publish_as(spec: &str) -> Result<PublishAs> {
+    if spec.chars().any(char::is_whitespace) {
+        return request_error(format!("--as {spec}: an identity holds no whitespace"));
+    }
+    let (name, version) = match spec.split_once('@') {
+        Some((name, version)) => (name, Some(version)),
+        None => (spec, None),
+    };
+    if version.is_some_and(str::is_empty) {
+        return request_error(format!("--as {spec}: the version after `@` is empty"));
+    }
+    if name.matches('/').count() > 1 {
+        return request_error(format!("--as {spec}: a name is `namespace/name`"));
+    }
+    if name.split('/').any(str::is_empty) && !name.is_empty() {
+        return request_error(format!("--as {spec}: a name segment is empty"));
+    }
+    let parsed = PublishAs {
+        name: (!name.is_empty()).then(|| name.to_string()),
+        version: version.map(str::to_string),
+    };
+    if parsed == PublishAs::default() {
+        return request_error("--as: the identity overrides nothing");
+    }
+    Ok(parsed)
+}
+
+impl PublishAs {
+    /// The identity to publish `pkg` under. A bare name keeps the manifest's
+    /// namespace, so `--as python` renames within the same namespace.
+    pub fn apply(&self, pkg: &Package) -> (String, String) {
+        let name = match &self.name {
+            Some(name) if name.contains('/') => name.clone(),
+            Some(name) => match pkg.full_name.split_once('/') {
+                Some((namespace, _)) => format!("{namespace}/{name}"),
+                None => name.clone(),
+            },
+            None => pkg.full_name.clone(),
+        };
+        let version = self.version.clone().unwrap_or_else(|| pkg.version.clone());
+        (name, version)
     }
 }
 
@@ -568,6 +658,7 @@ pub struct Options {
     pub skip_sha_validation: bool,
     pub rev: Option<String>,
     pub preview: Option<String>,
+    pub publish_as: Option<String>,
 }
 
 pub fn publish(options: Options) -> Result<crate::support::process::CommandStatus> {
@@ -586,8 +677,26 @@ pub fn publish(options: Options) -> Result<crate::support::process::CommandStatu
         }
     };
 
+    let publish_as = options
+        .publish_as
+        .as_deref()
+        .map(parse_publish_as)
+        .transpose()?;
+    // The exact count needs the built roots, but an empty selection means
+    // every shipped package; refusing here saves that build.
+    if publish_as.is_some() && options.packages.is_empty() {
+        return request_error("--as needs exactly one package; none selected means all shipped");
+    }
     let packages = read_packages(&build_pkg_roots(&selected_packages(&options.packages)?)?)?;
     let ordered = order_packages(&packages)?;
+    // One identity cannot name several packages, and a renamed dependency
+    // would leave its dependents pinned to a name the registry lacks.
+    if publish_as.is_some() && ordered.len() != 1 {
+        return request_error(format!(
+            "--as needs exactly one package; {} selected",
+            ordered.len()
+        ));
+    }
     let graphql_url = graphql_endpoint(&options.registry)?;
     let publish_host = publish_registry(&options.registry)?;
     crate::support::ui::fact("packages", ordered.len());
@@ -611,13 +720,17 @@ pub fn publish(options: Options) -> Result<crate::support::process::CommandStatu
     let mut failures: Vec<String> = Vec::new();
 
     for pkg in &ordered {
-        let pub_version = match &options.preview {
-            Some(tag) => format!("{}-{tag}", pkg.version),
-            None => pkg.version.clone(),
+        let (pub_name, mut pub_version) = match &publish_as {
+            Some(publish_as) => publish_as.apply(pkg),
+            None => (pkg.full_name.clone(), pkg.version.clone()),
         };
+        if let Some(tag) = &options.preview {
+            pub_version = format!("{pub_version}-{tag}");
+        }
         // One broken package must not abort the rest.
         match publish_one(
             pkg,
+            &pub_name,
             &pub_version,
             &graphql_url,
             &publish_host,
@@ -631,11 +744,10 @@ pub fn publish(options: Options) -> Result<crate::support::process::CommandStatu
             Ok(false) => skipped += 1,
             Err(error) => {
                 crate::support::ui::result(format!(
-                    "✗ {}@{pub_version}  {}",
-                    pkg.full_name,
+                    "✗ {pub_name}@{pub_version}  {}",
                     crate::support::error::brief(&error, 400)
                 ));
-                failures.push(pkg.full_name.clone());
+                failures.push(pub_name.clone());
             }
         }
     }
@@ -656,6 +768,7 @@ pub fn publish(options: Options) -> Result<crate::support::process::CommandStatu
 #[allow(clippy::too_many_arguments)]
 fn publish_one(
     pkg: &Package,
+    pub_name: &str,
     pub_version: &str,
     graphql_url: &str,
     publish_host: &str,
@@ -665,13 +778,12 @@ fn publish_one(
     batch: &BTreeSet<(String, String)>,
     available: &mut BTreeSet<(String, String)>,
 ) -> Result<bool> {
-    let existing = get_published(graphql_url, &pkg.full_name, pub_version)?;
+    let existing = get_published(graphql_url, pub_name, pub_version)?;
     if existing.exists {
         available.insert(pkg.key());
         if options.skip_sha_validation || options.preview.is_some() {
             crate::support::ui::result(format!(
-                "· {}@{pub_version}  already exists (hash validation skipped)",
-                pkg.full_name
+                "· {pub_name}@{pub_version}  already exists (hash validation skipped)"
             ));
             return Ok(false);
         }
@@ -684,7 +796,7 @@ fn publish_one(
         // local build is restaged with the recorded rev to reproduce it.
         // Artifacts published without provenance compare bare.
         let local = match recorded_rev(existing.readme.as_deref()) {
-            Some(published_rev) => staged_sha256(pkg, &published_rev)?,
+            Some(published_rev) => staged_sha256(pkg, &published_rev, pub_name, pub_version)?,
             None => build_webc_sha256(&pkg.path, pkg)?,
         };
         if &local != registry_sha {
@@ -693,8 +805,7 @@ fn publish_one(
             ));
         }
         crate::support::ui::result(format!(
-            "· {}@{pub_version}  already exists (hash match: {local})",
-            pkg.full_name
+            "· {pub_name}@{pub_version}  already exists (hash match: {local})"
         ));
         return Ok(false);
     }
@@ -722,26 +833,30 @@ fn publish_one(
 
     if options.effects.is_dry_run() {
         crate::support::ui::result(format!(
-            "✓ {}@{pub_version}  would publish ({})",
-            pkg.full_name,
+            "✓ {pub_name}@{pub_version}  would publish ({})",
             pkg.path.display()
         ));
         available.insert(pkg.key());
         return Ok(true);
     }
 
-    crate::support::ui::fact(
-        "publishing",
-        format!("{}@{pub_version} at {rev}", pkg.full_name),
-    );
+    crate::support::ui::fact("publishing", format!("{pub_name}@{pub_version} at {rev}"));
     let scratch = Scratch::new("publish")?;
-    let staged = stage(pkg, rev, &scratch.0, options.preview.as_deref(), batch)?;
+    let staged = stage(
+        pkg,
+        rev,
+        &scratch.0,
+        pub_name,
+        pub_version,
+        options.preview.as_deref(),
+        batch,
+    )?;
     let staged_sha = build_webc_sha256(&staged, pkg)?;
     run(Command::new("wasmer")
         .args(["publish", "--non-interactive", "--registry", publish_host])
         .current_dir(&staged))?;
     drop(scratch);
-    verify_published(graphql_url, pkg, pub_version, &staged_sha)?;
+    verify_published(graphql_url, pub_name, pub_version, &staged_sha)?;
     available.insert(pkg.key());
     Ok(true)
 }

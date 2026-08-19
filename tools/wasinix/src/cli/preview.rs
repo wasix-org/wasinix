@@ -233,6 +233,7 @@ fn publish(args: &PreviewArgs, repo: &Path) -> Result<()> {
             skip_sha_validation: false,
             rev: args.rev.clone(),
             preview: Some(args.tag.clone()),
+            publish_as: None,
         })?;
     }
 
