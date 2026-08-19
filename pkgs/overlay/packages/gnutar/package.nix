@@ -8,6 +8,8 @@
 }:
 helpers.libTweaks {
   patches = [./patches/wasi-opendirat.patch];
+  # The autotest suite depends on POSIX permissions, sparse files, and symlinks.
+  doCheck = false;
   # tar spawns its compression programs with fork, which the off profile
   # asyncifies for; binaryen cannot asyncify the EH instructions the others
   # emit.
