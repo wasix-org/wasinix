@@ -18,4 +18,5 @@
   "openjpeg"
   "popt" # rsync
   "tinyxml-2"
+  "xz"
 ]
