@@ -571,6 +571,7 @@ pub fn starting(log_tail: Option<&str>) -> Report {
         annotations: Vec::new(),
         tasks: Vec::new(),
         failures: BTreeMap::new(),
+        tests: BTreeMap::new(),
         version_updates: BTreeMap::new(),
         comparisons: Vec::new(),
         request: None,
