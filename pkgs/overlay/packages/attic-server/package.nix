@@ -10,6 +10,9 @@ helpers.libTweaks {
     AWS_LC_SYS_CFLAGS = "-DOPENSSL_NO_TTY";
     RUSTFLAGS = "-Lnative=${final.buildPackages.wasix-sysroot}/sysroot-eh/lib/wasm32-wasi";
   };
+  # nixpkgs defines the server by overriding attic-client, so drop the
+  # client-only exnref conversion; the server installs atticd.wasm.
+  postInstall = _: "";
   passthru.wasix.shipped = true;
   passthru.wasmer = {
     name = "attic-server";
