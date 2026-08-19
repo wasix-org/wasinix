@@ -2,7 +2,7 @@ name: PR preview cleanup
 
 # Deletes the per-PR index app when the PR closes or drops the `preview`
 # label. Preview webc prereleases cannot be deleted (registry versions are
-# immutable); they accumulate on the dev registry.
+# immutable); they accumulate in the preview namespace.
 on:
   pull_request:
     types: [closed, unlabeled]
@@ -19,8 +19,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
-      # preview apps live on the dev registry (preview.yml)
-      REGISTRY: wasmer.wtf
+      # preview apps live where preview.yml puts them
+      REGISTRY: wasmer.io
+      NAMESPACE: kilyanni
       PR: ${{ github.event.pull_request.number }}
     steps:
       - name: Checkout
@@ -41,6 +42,6 @@ jobs:
         run: |
           for app in python-registry cargo-registry; do
             nix shell .#wasmer --accept-flake-config -c wasmer app delete \
-              "wasmer/$app-pr${PR}" --registry "$WASMER_REGISTRY" --non-interactive \
+              "$NAMESPACE/$app-pr${PR}" --registry "$WASMER_REGISTRY" --non-interactive \
               || echo "no $app preview app to delete"
           done

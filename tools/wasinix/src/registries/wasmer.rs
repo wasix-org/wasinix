@@ -484,33 +484,40 @@ pub fn provenance(pkg: &Package, rev: &str) -> String {
     )
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn stage(
-    pkg: &Package,
-    rev: &str,
-    into: &Path,
-    pub_name: &str,
-    pub_version: &str,
-    preview_tag: Option<&str>,
-    batch: &BTreeSet<(String, String)>,
-) -> Result<PathBuf> {
+/// What a staged copy is published as. `wasmer publish` reads the identity
+/// out of the manifest, so anything the registry calls use has to be written
+/// into the copy first.
+pub struct Staged<'a> {
+    pub name: &'a str,
+    pub version: &'a str,
+    /// The namespace a preview moves the whole batch to, which its internal
+    /// dependency pins follow.
+    pub namespace: Option<&'a str>,
+    pub preview_tag: Option<&'a str>,
+    pub batch: &'a BTreeSet<(String, String)>,
+}
+
+/// A full name under `namespace`, keeping its name segment.
+pub fn renamespace(full_name: &str, namespace: &str) -> String {
+    let name = full_name.rsplit_once('/').map_or(full_name, |(_, n)| n);
+    format!("{namespace}/{name}")
+}
+
+pub fn stage(pkg: &Package, rev: &str, into: &Path, as_: &Staged) -> Result<PathBuf> {
     let dst = into.join("pkg");
     copy_tree(&pkg.path, &dst)?;
-    // `wasmer publish` reads the identity out of the manifest, so a preview
-    // tag or a one-off `--as` has to be written into the staged copy. Batch
-    // dependency pins follow the preview tag so its references resolve.
-    let renamed = pub_name != pkg.full_name || pub_version != pkg.version;
-    if renamed || preview_tag.is_some() {
+    let renamed = as_.name != pkg.full_name || as_.version != pkg.version;
+    if renamed || as_.preview_tag.is_some() {
         let manifest = dst.join("wasmer.toml");
         let original = crate::support::fs::read_to_string(&manifest)?;
         let mut text = original.replacen(
             &format!("name = \"{}\"", pkg.full_name),
-            &format!("name = \"{pub_name}\""),
+            &format!("name = \"{}\"", as_.name),
             1,
         );
         text = text.replacen(
             &format!("version = \"{}\"", pkg.version),
-            &format!("version = \"{pub_version}\""),
+            &format!("version = \"{}\"", as_.version),
             1,
         );
         // A manifest spelling the identity some other way would leave the
@@ -518,16 +525,24 @@ pub fn stage(
         // new one, publishing the wrong package.
         if renamed && text == original {
             return package_error(format!(
-                "{}: no `name`/`version` line to rewrite for {pub_name}@{pub_version}",
-                manifest.display()
+                "{}: no `name`/`version` line to rewrite for {}@{}",
+                manifest.display(),
+                as_.name,
+                as_.version
             ));
         }
-        if let Some(tag) = preview_tag {
+        // Only pins the batch resolves: a dependency published elsewhere
+        // keeps its released name and version.
+        if let Some(tag) = as_.preview_tag {
             for (dep, version) in &pkg.dependencies {
-                if batch.contains(&(dep.clone(), version.clone())) {
+                if as_.batch.contains(&(dep.clone(), version.clone())) {
+                    let moved = match as_.namespace {
+                        Some(namespace) => renamespace(dep, namespace),
+                        None => dep.clone(),
+                    };
                     text = text.replacen(
                         &format!("\"{dep}\" = \"{version}\""),
-                        &format!("\"{dep}\" = \"{version}-{tag}\""),
+                        &format!("\"{moved}\" = \"{version}-{tag}\""),
                         1,
                     );
                 }
@@ -549,14 +564,18 @@ fn staged_sha256(
     pub_version: &str,
 ) -> Result<String> {
     let scratch = Scratch::new("restage")?;
+    let batch = BTreeSet::new();
     let staged = stage(
         pkg,
         rev,
         &scratch.0,
-        pub_name,
-        pub_version,
-        None,
-        &BTreeSet::new(),
+        &Staged {
+            name: pub_name,
+            version: pub_version,
+            namespace: None,
+            preview_tag: None,
+            batch: &batch,
+        },
     )?;
     build_webc_sha256(&staged, pkg)
 }
@@ -659,7 +678,14 @@ pub struct Options {
     pub rev: Option<String>,
     pub preview: Option<String>,
     pub publish_as: Option<String>,
+    /// Publish the whole batch under this namespace instead of the one the
+    /// manifests carry.
+    pub namespace: Option<String>,
 }
+
+/// Namespaces a preview may not publish into: a `-pr123.gabc` prerelease on a
+/// released package is permanent, since registry versions are immutable.
+const RELEASED_NAMESPACES: [&str; 1] = ["wasmer"];
 
 pub fn publish(options: Options) -> Result<crate::support::process::CommandStatus> {
     let rev = match &options.rev {
@@ -686,6 +712,16 @@ pub fn publish(options: Options) -> Result<crate::support::process::CommandStatu
     // every shipped package; refusing here saves that build.
     if publish_as.is_some() && options.packages.is_empty() {
         return request_error("--as needs exactly one package; none selected means all shipped");
+    }
+    if options.preview.is_some() {
+        let Some(namespace) = options.namespace.as_deref() else {
+            return request_error("a preview needs its own namespace to publish into");
+        };
+        if RELEASED_NAMESPACES.contains(&namespace) {
+            return request_error(format!(
+                "a preview cannot publish into {namespace}, which carries released packages"
+            ));
+        }
     }
     let packages = read_packages(&build_pkg_roots(&selected_packages(&options.packages)?)?)?;
     let ordered = order_packages(&packages)?;
@@ -720,10 +756,13 @@ pub fn publish(options: Options) -> Result<crate::support::process::CommandStatu
     let mut failures: Vec<String> = Vec::new();
 
     for pkg in &ordered {
-        let (pub_name, mut pub_version) = match &publish_as {
+        let (mut pub_name, mut pub_version) = match &publish_as {
             Some(publish_as) => publish_as.apply(pkg),
             None => (pkg.full_name.clone(), pkg.version.clone()),
         };
+        if let Some(namespace) = &options.namespace {
+            pub_name = renamespace(&pub_name, namespace);
+        }
         if let Some(tag) = &options.preview {
             pub_version = format!("{pub_version}-{tag}");
         }
@@ -846,10 +885,13 @@ fn publish_one(
         pkg,
         rev,
         &scratch.0,
-        pub_name,
-        pub_version,
-        options.preview.as_deref(),
-        batch,
+        &Staged {
+            name: pub_name,
+            version: pub_version,
+            namespace: options.namespace.as_deref(),
+            preview_tag: options.preview.as_deref(),
+            batch,
+        },
     )?;
     let staged_sha = build_webc_sha256(&staged, pkg)?;
     run(Command::new("wasmer")

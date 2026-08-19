@@ -224,10 +224,16 @@ serves every artifact (labeling an already-green PR triggers immediately),
 `preview.yml` diffs it against its base at the drvPath level and publishes what
 changed, all through `wasinix preview`.
 
-Webcs go to the dev registry as `<version>-pr<N>.g<sha7>` prereleases: distinct
-versions per iteration, hidden from `latest`, not deletable, so they accumulate
-on wasmer.wtf. Changed wheels become an ephemeral per-PR Edge app serving an
-overlay index:
+Everything lands in the preview namespace `preview.yml` names, on wasmer.io:
+prod is where the released packages a preview depends on actually live, and the
+namespace keeps prereleases off them. `wasinix preview` requires `--namespace`
+and refuses one holding released packages.
+
+Webcs publish there as `<version>-pr<N>.g<sha7>` prereleases: distinct versions
+per iteration, hidden from `latest`, not deletable, so they accumulate. A
+dependency the same preview publishes is repinned to the namespace and the tag;
+one that is already released keeps its name and version. Changed wheels become
+an ephemeral per-PR Edge app serving an overlay index:
 
 ```sh
 pip install --index-url <preview>/simple --extra-index-url <prod>/simple

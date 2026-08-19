@@ -103,8 +103,12 @@ pub enum WasmerCommand {
     Preview {
         #[arg(value_name = "TAG")]
         tag: String,
-        #[arg(long, default_value = "wasmer.wtf")]
+        #[arg(long, default_value = "wasmer.io")]
         registry: String,
+        /// Namespace the prereleases publish into, never one carrying
+        /// released packages
+        #[arg(long)]
+        namespace: String,
         packages: Vec<String>,
         #[arg(long)]
         dry_run: bool,
@@ -264,10 +268,12 @@ pub fn run_wasmer(command: WasmerCommand) -> Result<CommandStatus> {
             rev,
             preview: None,
             publish_as,
+            namespace: None,
         }),
         WasmerCommand::Preview {
             tag,
             registry,
+            namespace,
             packages,
             dry_run,
             rev,
@@ -279,6 +285,7 @@ pub fn run_wasmer(command: WasmerCommand) -> Result<CommandStatus> {
             rev,
             preview: Some(tag),
             publish_as: None,
+            namespace: Some(namespace),
         }),
     }
 }
@@ -377,6 +384,7 @@ pub fn run_meta_publish(effects: Effects) -> Result<CommandStatus> {
                     rev: None,
                     preview: None,
                     publish_as: None,
+                    namespace: None,
                 })
             }),
         ),

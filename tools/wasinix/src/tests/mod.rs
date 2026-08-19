@@ -3138,7 +3138,7 @@ mod webc_tree {
 mod webc_identity {
     use std::collections::{BTreeMap, BTreeSet};
 
-    use crate::registries::wasmer::{parse_publish_as, stage, Package};
+    use crate::registries::wasmer::{parse_publish_as, stage, Package, Staged};
     use crate::support::fs::Scratch;
 
     fn package(path: &std::path::Path) -> Package {
@@ -3198,17 +3198,16 @@ mod webc_identity {
         write(real);
         let pkg = package(&src);
 
+        let empty = BTreeSet::new();
+        let as_ = |name, version| Staged {
+            name,
+            version,
+            namespace: None,
+            preview_tag: None,
+            batch: &empty,
+        };
         let into = scratch.path().join("staged");
-        let staged = stage(
-            &pkg,
-            "abc",
-            &into,
-            "kilyanni/python",
-            "3.13.99",
-            None,
-            &BTreeSet::new(),
-        )
-        .unwrap();
+        let staged = stage(&pkg, "abc", &into, &as_("kilyanni/python", "3.13.99")).unwrap();
         let text = crate::support::fs::read_to_string(&staged.join("wasmer.toml")).unwrap();
         assert!(text.contains("name = \"kilyanni/python\""), "{text}");
         assert!(text.contains("version = \"3.13.99\""), "{text}");
@@ -3219,14 +3218,60 @@ mod webc_identity {
             &pkg,
             "abc",
             &scratch.path().join("unspaced"),
-            "kilyanni/python",
-            "3.13.99",
-            None,
-            &BTreeSet::new(),
+            &as_("kilyanni/python", "3.13.99"),
         )
         .unwrap_err()
         .to_string();
         assert!(error.contains("no `name`/`version` line to rewrite"), "{error}");
+    }
+
+    #[test]
+    fn a_preview_namespace_carries_its_batch_internal_pins() {
+        let scratch = Scratch::create("wasinix-test").unwrap();
+        let src = scratch.path().join("src");
+        crate::support::fs::create_dir_all(&src).unwrap();
+        crate::support::fs::write(
+            &src.join("wasmer.toml"),
+            concat!(
+                "[package]\n",
+                "name = \"wasmer/curl\"\n",
+                "version = \"8.21.0\"\n",
+                "\n[dependencies]\n",
+                "\"wasmer/bash\" = \"5.3.15\"\n",
+                "\"wasmer/jq\" = \"1.8.2\"\n",
+            )
+            .as_bytes(),
+        )
+        .unwrap();
+        let mut pkg = package(&src);
+        pkg.full_name = "wasmer/curl".into();
+        pkg.version = "8.21.0".into();
+        pkg.dependencies = BTreeMap::from([
+            ("wasmer/bash".to_string(), "5.3.15".to_string()),
+            ("wasmer/jq".to_string(), "1.8.2".to_string()),
+        ]);
+        // Only bash is in the batch; jq is published elsewhere.
+        let batch = BTreeSet::from([("wasmer/bash".to_string(), "5.3.15".to_string())]);
+        let staged = stage(
+            &pkg,
+            "abc",
+            &scratch.path().join("staged"),
+            &Staged {
+                name: "kilyanni/curl",
+                version: "8.21.0-pr1.gabc",
+                namespace: Some("kilyanni"),
+                preview_tag: Some("pr1.gabc"),
+                batch: &batch,
+            },
+        )
+        .unwrap();
+        let text = crate::support::fs::read_to_string(&staged.join("wasmer.toml")).unwrap();
+        assert!(text.contains("name = \"kilyanni/curl\""), "{text}");
+        assert!(
+            text.contains("\"kilyanni/bash\" = \"5.3.15-pr1.gabc\""),
+            "{text}"
+        );
+        assert!(text.contains("\"wasmer/jq\" = \"1.8.2\""), "{text}");
     }
 }
 
@@ -3435,7 +3480,7 @@ mod corpus {
             "bisect wasix-libc --good pinned --bad main -- build checks.wasixcc",
             "cargo serve --port 9000 -- cargo check",
             "wasmer publish --dry-run",
-            "wasmer preview pr-123 --dry-run",
+            "wasmer preview pr-123 --namespace kilyanni --dry-run",
             "python serve",
             "python publish --dry-run",
             "python publish --registry wasmer.wtf --dry-run",
@@ -3466,6 +3511,8 @@ mod corpus {
             "publish-index --registry r",
             "preview-diff main",
             "preview-deploy site app",
+            // a preview without a namespace of its own
+            "wasmer preview pr-123 --dry-run",
             "wheel-natives",
             "build all --local",
             "build all --remote ec2",

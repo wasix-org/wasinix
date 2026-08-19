@@ -33,8 +33,12 @@ pub struct PreviewArgs {
     #[arg(long, value_enum)]
     pub status: Option<Status>,
     /// Registry the webc prereleases go to
-    #[arg(long, default_value = "wasmer.wtf")]
+    #[arg(long, default_value = "wasmer.io")]
     pub registry: String,
+    /// Namespace the prereleases and the ephemeral apps land in, never one
+    /// carrying released packages
+    #[arg(long)]
+    pub namespace: Option<String>,
     /// Rev recorded in each published webc README
     #[arg(long)]
     pub rev: Option<String>,
@@ -154,12 +158,15 @@ fn published_body(
             Markdown::constant(" (failures listed in the workflow log):\n"),
         ]);
         for webc in &plan.webcs {
+            // The plan's owner is the manifest's; the preview publishes under
+            // the namespace, so the run line has to name that one.
+            let owner = args.namespace.as_deref().unwrap_or(&webc.owner);
             body = Markdown::concat([
                 body,
                 Markdown::constant("- "),
                 Markdown::code(&format!(
-                    "wasmer run {}/{}@{}-{} --registry {}",
-                    webc.owner, webc.name, webc.version, args.tag, args.registry
+                    "wasmer run {owner}/{}@{}-{} --registry {}",
+                    webc.name, webc.version, args.tag, args.registry
                 )),
                 Markdown::constant("\n"),
             ]);
@@ -221,6 +228,11 @@ fn publish(args: &PreviewArgs, repo: &Path) -> Result<()> {
     let base = args.base.as_ref().ok_or_else(|| {
         Error::Request("a preview needs --base to diff against".into())
     })?;
+    // Checked before the diff, which builds both plans: the namespace is
+    // wanted by every step below, and wasmer::publish refuses without it.
+    let namespace = args.namespace.clone().ok_or_else(|| {
+        Error::Request("a preview needs --namespace to publish into".into())
+    })?;
     let plan = python::plan_diff(&base.to_string_lossy())?;
     ui::fact("changed webcs", plan.webcs.len());
     ui::fact("changed wheels", plan.wheels.len());
@@ -234,6 +246,7 @@ fn publish(args: &PreviewArgs, repo: &Path) -> Result<()> {
             rev: args.rev.clone(),
             preview: Some(args.tag.clone()),
             publish_as: None,
+            namespace: Some(namespace.clone()),
         })?;
     }
 
@@ -251,7 +264,7 @@ fn publish(args: &PreviewArgs, repo: &Path) -> Result<()> {
             let url = python::preview(python::Preview {
                 site,
                 app: format!("python-registry-pr{pull_request}"),
-                owner: "wasmer".into(),
+                owner: namespace.clone(),
                 registry: args.registry.clone(),
             })?;
             ui::fact("index", &url);
@@ -267,7 +280,7 @@ fn publish(args: &PreviewArgs, repo: &Path) -> Result<()> {
             .surface
             .pull_request
             .map(|pull_request| format!("cargo-registry-pr{pull_request}")),
-        owner: "wasmer".into(),
+        owner: namespace.clone(),
         registry: args.registry.clone(),
         mint: None,
         base_mint: Some(base_mint),

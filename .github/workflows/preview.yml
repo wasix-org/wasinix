@@ -4,12 +4,13 @@ name: PR preview
 # and no preview is minted for commits that fail CI): the main trigger is
 # Build completing for a same-repo PR labeled `preview`; the `labeled`
 # trigger covers labeling an already-green PR, whose Build's workflow_run
-# event has already fired. Publishes the PR's changed webcs to the dev
-# registry as <version>-pr<N>.g<sha7> prereleases (distinct versions per
-# iteration, hidden from `latest`; no cleanup exists, they accumulate on the
-# dev registry) and deploys the changed wheels as an ephemeral per-PR index
-# app, consumed as an overlay via --extra-index-url; preview-cleanup.yml
-# deletes the app when the PR closes.
+# event has already fired. Publishes the PR's changed webcs as
+# <version>-pr<N>.g<sha7> prereleases (distinct versions per iteration, hidden
+# from `latest`; registry versions are immutable, so they accumulate) and
+# deploys the changed wheels as an ephemeral per-PR index app, consumed as an
+# overlay via --extra-index-url; preview-cleanup.yml deletes the app when the
+# PR closes. Everything lands in NAMESPACE, never one holding released
+# packages.
 on:
   workflow_run:
     workflows: [Build]
@@ -41,9 +42,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
-      # previews stay on the dev registry: the prerelease versions are
-      # immutable and accumulate
-      REGISTRY: wasmer.wtf
+      # prod, where the released dependencies a preview resolves against
+      # actually live; the dev registry was flaky and holds almost nothing
+      REGISTRY: wasmer.io
+      # stop-gap until an org-owned namespace exists
+      NAMESPACE: kilyanni
     steps:
       # Both trigger shapes funnel into PR/HEAD_SHA/BASE_REF + a proceed flag:
       # the workflow_run path resolves the PR from the run's head sha and
@@ -147,7 +150,8 @@ jobs:
         run: |
           nix run .#wasinix --option accept-flake-config true -- \
             preview "$TAG" --base base \
-            --registry "$WASMER_REGISTRY" --rev "$HEAD_SHA" \
+            --registry "$WASMER_REGISTRY" --namespace "$NAMESPACE" \
+            --rev "$HEAD_SHA" \
             --pull-request "$PR" --comment \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 
