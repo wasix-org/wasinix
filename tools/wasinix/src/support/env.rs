@@ -124,6 +124,21 @@ pub fn github_workflow() -> Result<Option<String>> {
     optional("GITHUB_WORKFLOW")
 }
 
+/// The workflow run's own page, which a reply links to for the detail it
+/// cannot carry. Absent off a runner.
+pub fn github_run_url() -> Result<Option<String>> {
+    let (Some(server), Some(repository), Some(run_id)) = (
+        optional("GITHUB_SERVER_URL")?,
+        github_repository()?,
+        github_run_id()?,
+    ) else {
+        return Ok(None);
+    };
+    Ok(Some(format!(
+        "{server}/{repository}/actions/runs/{run_id}"
+    )))
+}
+
 pub fn github_token() -> Option<String> {
     ["GH_TOKEN", "GITHUB_TOKEN"]
         .iter()

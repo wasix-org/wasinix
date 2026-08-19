@@ -846,6 +846,73 @@ pub fn failure_reply(detail: &str, run_url: Option<&str>, origin: Option<&str>) 
     body
 }
 
+/// The reply a `/wasinix bisect` posts. A run stopped by its budget still
+/// answers: the range it narrowed to is the useful half of the result.
+pub fn bisect_reply(
+    report: &crate::nix::bisect::Report,
+    run_url: Option<&str>,
+    origin: Option<&str>,
+) -> Markdown {
+    let answering = match origin {
+        Some(url) => Markdown::concat([
+            Markdown::constant("<sub>"),
+            Markdown::html_link("↳ in reply to this command", url),
+            Markdown::constant("</sub>\n\n"),
+        ]),
+        None => Markdown::new(),
+    };
+    let headline = match &report.first_bad {
+        Some(rev) => Markdown::concat([
+            Markdown::constant("### ✅ First bad "),
+            Markdown::text(&report.target),
+            Markdown::constant(" commit: "),
+            Markdown::code(rev),
+            Markdown::constant("\n\n"),
+        ]),
+        None => Markdown::concat([
+            Markdown::constant("### ⚠ Bisect stopped on its budget\n\n"),
+            match report.revisions_left {
+                Some(left) => Markdown::concat([
+                    Markdown::constant("Narrowed to "),
+                    plural(left as usize, "revision"),
+                    Markdown::constant("; re-run the command to continue.\n\n"),
+                ]),
+                None => Markdown::constant("Re-run the command to continue.\n\n"),
+            },
+        ]),
+    };
+    let mut body = Markdown::concat([
+        answering,
+        headline,
+        Markdown::constant("| candidate | outcome | time |\n|:--|:--|--:|\n"),
+    ]);
+    for test in &report.tests {
+        body = Markdown::concat([
+            body,
+            Markdown::constant("| "),
+            Markdown::code(&test.rev.chars().take(12).collect::<String>()),
+            Markdown::constant(" | "),
+            Markdown::text(match test.outcome {
+                crate::nix::bisect::Outcome::Good => "good",
+                crate::nix::bisect::Outcome::Bad => "bad",
+                crate::nix::bisect::Outcome::Skip => "skipped",
+            }),
+            Markdown::constant(" | "),
+            Markdown::text(&format::duration(test.seconds)),
+            Markdown::constant(" |\n"),
+        ]);
+    }
+    if let Some(url) = run_url {
+        body = Markdown::concat([
+            body,
+            Markdown::constant("\n"),
+            Markdown::link("Actions run", url),
+            Markdown::constant("\n"),
+        ]);
+    }
+    body
+}
+
 /// Drop trailing `<details>` blocks whole until the text fits, and say what
 /// was dropped; never cut mid-fence.
 pub fn truncate_sections(text: String, budget: usize) -> String {

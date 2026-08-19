@@ -109,6 +109,13 @@ authorizes it (the shared grammar, a live write-permission check, PR state),
 `ci command` runs it, and the reply is keyed to the commenting comment. Every
 malformed or unauthorized command gets a reply.
 
+`/wasinix bisect <target> --good <ref> --bad <ref> -- build <selectors>` runs on
+the runner like every other comment command, so its predicate is a case pinned
+there and it cannot name a builder. The runner's job limit is smaller than a
+long bisect, so a comment bisect carries a budget: it stops with the range
+narrowed, replies with what it tested, and the same command again resumes from
+the recorded outcomes.
+
 Every command comment runs its own workflow: acknowledged, authorized, and
 answered even in a burst, and builds run in parallel, each replying to its own
 comment (the PR's required check stays build.yml's). Mutations rewrite shared

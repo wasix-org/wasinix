@@ -2034,6 +2034,34 @@ mod markdown {
     }
 
     #[test]
+    fn a_comment_bisect_pins_its_predicate_and_owns_the_override() {
+        use crate::cli::untrusted::{parse, UntrustedCommand};
+        let UntrustedCommand::Bisect(bisect) =
+            parse("bisect wasmer --good pinned --bad main -- build checks.zlib").unwrap()
+        else {
+            panic!("expected a bisect");
+        };
+        assert_eq!(bisect.target, "wasmer");
+        for case in bisect.predicate.cases() {
+            let on = match case {
+                crate::ci::types::CaseRef::Build(build) => build.on.as_deref(),
+                crate::ci::types::CaseRef::Spot(spot) => spot.on.as_deref(),
+            };
+            assert_eq!(on, Some("local"), "a bisect predicate escaped the runner");
+        }
+        // The predicate cannot name a builder, and bisect owns the target's
+        // revision, so a predicate pinning it is refused.
+        assert!(parse("bisect wasmer --good pinned --bad main -- build all --on ec2").is_err());
+        let UntrustedCommand::Bisect(owned) =
+            parse("bisect wasmer --good pinned --bad main -- build all --with wasmer@7.1.0")
+                .unwrap()
+        else {
+            panic!("expected a bisect");
+        };
+        assert!(crate::cli::bisect::reject_own_override(&owned.predicate, "wasmer").is_err());
+    }
+
+    #[test]
     fn comment_commands_pin_every_case_to_the_runner() {
         use crate::cli::untrusted::{parse, UntrustedCommand};
         let parsed = parse("build checks.zlib --with wasixcc@0.4.3").unwrap();
@@ -2694,6 +2722,7 @@ mod bisect {
                 first_parent: false,
                 command: vec!["build".into(), "example".into()],
                 run_dir: scratch.path().join("run"),
+                budget: None,
             },
             |rev, _| {
                 Ok(if revisions[..3].iter().any(|candidate| candidate == rev) {
@@ -3517,6 +3546,7 @@ mod corpus {
             "ci mutate --origin o.json --out-dir mutation",
             "ci mutate-publish --out-dir mutation",
             "ci step-timings --run-id 1 --rev abc --publish",
+            "bisect wasmer --good pinned --bad main -- build checks.jq",
             "ci remote --request r.json --run-dir d --on ec2",
             "ci observe --remote-run-dir /x --run-dir d",
             "ci publish --run-dir d --sha aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --untrusted --check",

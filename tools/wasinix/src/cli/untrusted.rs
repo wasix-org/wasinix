@@ -103,6 +103,27 @@ enum UntrustedCase {
     Spot(UntrustedSpot),
 }
 
+/// Bisect from a comment. The adapter owns the run directory and the
+/// budget; the predicate re-enters the untrusted case grammar, so it is a
+/// build or spot pinned to the runner like any other comment command.
+#[derive(clap::Args)]
+struct UntrustedBisect {
+    /// Revision-capable update target, e.g. wasix-libc or wasmer
+    target: String,
+    /// Known passing ref, or `pinned` for the current pin
+    #[arg(long)]
+    good: String,
+    /// Known failing ref, or `pinned` for the current pin
+    #[arg(long)]
+    bad: String,
+    /// Follow only the first parent of merge commits
+    #[arg(long)]
+    first_parent: bool,
+    /// The build or spot command used as the pass/fail predicate
+    #[arg(required = true, trailing_var_arg = true, value_name = "PREDICATE")]
+    command: Vec<String>,
+}
+
 /// The mutation verbs a PR comment may ask for. The adapter owns branches,
 /// tokens, and commit flags, so none of those are spellable here.
 #[derive(clap::Args)]
@@ -150,6 +171,7 @@ enum UntrustedCli {
     Build(UntrustedBuild),
     Spot(UntrustedSpot),
     Diff(UntrustedDiff),
+    Bisect(UntrustedBisect),
     Update(UntrustedUpdate),
     #[command(subcommand)]
     Versions(UntrustedVersions),
@@ -175,6 +197,8 @@ pub const HELP: &str = "### `/wasinix` commands\n\n\
     - `/wasinix build <selectors>` builds sets or jobs on this PR\n\
     - `/wasinix spot <targets>` rebuilds targets over a cached base\n\
     - `/wasinix diff build ... --vs build ...` compares two cases\n\
+    - `/wasinix bisect <target> --good <ref> --bad <ref> -- build <selectors>` \
+    finds the dependency commit that broke it\n\
     - `/wasinix update [targets|--all]` refreshes pins (bare on a managed PR \
     replays its recipe)\n\
     - `/wasinix versions bump <specs|--changed>` bumps publication rels\n\
@@ -182,9 +206,22 @@ pub const HELP: &str = "### `/wasinix` commands\n\n\
     - `/wasinix help` prints this message\n\n\
     Any line of a comment works; the command runs against this pull request.\n";
 
+/// A bisect a comment asked for, with its predicate already parsed and
+/// pinned to the runner.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BisectCommand {
+    pub target: String,
+    pub good: String,
+    pub bad: String,
+    pub first_parent: bool,
+    pub words: Vec<String>,
+    pub predicate: ParsedRequest,
+}
+
 #[derive(Debug)]
 pub enum UntrustedCommand {
     Request(ParsedRequest),
+    Bisect(BisectCommand),
     Mutation(MutationCommand),
     Help,
 }
@@ -256,6 +293,28 @@ pub fn parse(command: &str) -> Result<UntrustedCommand> {
             }
             UntrustedCommand::Request(super::request::diff_of(cases, args.content_diff)?)
         }
+        UntrustedCli::Bisect(args) => {
+            let words: Vec<String> = args
+                .command
+                .iter()
+                .skip_while(|word| *word == "--")
+                .cloned()
+                .collect();
+            // The predicate is a case like any other, so it arrives pinned
+            // and a bisect grows no way to name a builder.
+            let predicate = match untrusted_case(&words, "predicate".to_string())? {
+                Case::Build(build) => Request::Build(build),
+                Case::Spot(spot) => Request::Spot(spot),
+            };
+            UntrustedCommand::Bisect(BisectCommand {
+                target: args.target,
+                good: args.good,
+                bad: args.bad,
+                first_parent: args.first_parent,
+                words,
+                predicate,
+            })
+        }
     })
 }
 
@@ -266,7 +325,9 @@ pub struct ClapClassifier;
 impl Classifier for ClapClassifier {
     fn classify(&self, command: &str) -> Result<CommandKind> {
         match parse(command)? {
-            UntrustedCommand::Request(_) => Ok(CommandKind::Build),
+            // A bisect runs builds and reports; the build job's shape fits
+            // it, and it carries no write credential.
+            UntrustedCommand::Request(_) | UntrustedCommand::Bisect(_) => Ok(CommandKind::Build),
             UntrustedCommand::Help => Ok(CommandKind::Help),
             UntrustedCommand::Mutation(_) => Ok(CommandKind::Mutation),
         }

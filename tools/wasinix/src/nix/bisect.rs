@@ -59,7 +59,19 @@ pub struct Report {
     pub first_parent: bool,
     pub command: Vec<String>,
     pub first_bad: Option<String>,
+    /// Commits still in range when a budget stopped the run, in git's own
+    /// count. A resumed run picks up from the recorded outcomes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revisions_left: Option<u64>,
     pub tests: Vec<TestResult>,
+}
+
+/// What one invocation may spend on candidates. A bisect is resumable, so
+/// exhausting the budget narrows the range and stops; it never fails.
+#[derive(Debug, Clone, Copy)]
+pub struct Budget {
+    pub candidates: usize,
+    pub wall: Duration,
 }
 
 fn source_repository(source: &Value) -> Option<String> {
@@ -161,6 +173,8 @@ pub struct Options {
     pub first_parent: bool,
     pub command: Vec<String>,
     pub run_dir: PathBuf,
+    /// Absent for a terminal run, which the operator can interrupt.
+    pub budget: Option<Budget>,
 }
 
 /// Drive Git's native bisect graph selection. The callback owns candidate
@@ -212,6 +226,7 @@ where
         first_parent: options.first_parent,
         command: options.command.clone(),
         first_bad: None,
+        revisions_left: None,
         tests: Vec::new(),
     };
     let mut report = if report_path.exists() {
@@ -282,8 +297,15 @@ where
         report.first_bad = Some(rev);
     }
 
+    let started = Instant::now();
+    let mut spent = 0usize;
     let mut prior_head = None;
     while report.first_bad.is_none() {
+        if let Some(budget) = &options.budget {
+            if spent >= budget.candidates || started.elapsed() >= budget.wall {
+                break;
+            }
+        }
         let rev = resolve(&source_dir, "BISECT_HEAD")?;
         require(
             prior_head.as_deref() != Some(rev.as_str()),
@@ -291,7 +313,9 @@ where
         )?;
         prior_head = Some(rev.clone());
         let outcome = test_one(&rev, &mut report)?;
+        spent += 1;
         let output = crate::support::git::git_logged(&source_dir, &["bisect", outcome.git_word(), &rev])?;
+        report.revisions_left = revisions_left(&output);
         if let Some(rev) = completed(&output) {
             report.first_bad = Some(rev);
             break;
@@ -305,6 +329,13 @@ where
     Ok(report)
 }
 
+/// `Bisecting: 12 revisions left to test after this` names how much range
+/// survives, which is the whole answer a stopped run has to give.
+fn revisions_left(output: &str) -> Option<u64> {
+    let (_, rest) = output.split_once("Bisecting: ")?;
+    rest.split_whitespace().next()?.parse().ok()
+}
+
 fn duration_seconds(duration: Duration) -> f64 {
     duration.as_secs_f64()
 }
@@ -312,7 +343,7 @@ fn duration_seconds(duration: Duration) -> f64 {
 #[cfg(test)]
 mod tests {
 
-    use super::{completed, Dependency, Options, Outcome};
+    use super::{completed, Budget, Dependency, Duration, Options, Outcome};
 
     #[test]
     fn reads_first_bad_commit() {
@@ -373,6 +404,7 @@ mod tests {
                 first_parent: false,
                 command: vec!["build".into(), "example".into()],
                 run_dir: root.join("run"),
+                budget: None,
             },
             |rev, _| {
                 Ok(if revisions[..3].iter().any(|candidate| candidate == rev) {
@@ -384,6 +416,83 @@ mod tests {
         )
         .unwrap();
         assert_eq!(report.first_bad.as_deref(), Some(revisions[3].as_str()));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_spent_budget_narrows_the_range_and_the_next_run_finishes_it() {
+        if crate::support::git::git_global(&["--version"]).is_err() {
+            return;
+        }
+        let root = crate::support::env::temp_dir().join(format!(
+            "wasinix-bisect-budget-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let source = root.join("upstream");
+        std::fs::create_dir_all(&source).unwrap();
+        command(&source, &["init", "--initial-branch=main"]);
+        command(&source, &["config", "user.name", "wasinix test"]);
+        command(&source, &["config", "user.email", "test@example.invalid"]);
+        let mut revisions = Vec::new();
+        for index in 0..16 {
+            command(
+                &source,
+                &["commit", "--allow-empty", "-m", &format!("commit {index}")],
+            );
+            revisions.push(command(&source, &["rev-parse", "HEAD"]));
+        }
+        let options = |budget| Options {
+            dependency: Dependency {
+                target: "example".into(),
+                repository: source.to_string_lossy().to_string(),
+                pinned: revisions[0].clone(),
+            },
+            good: "pinned".into(),
+            bad: revisions[15].clone(),
+            first_parent: false,
+            command: vec!["build".into(), "example".into()],
+            run_dir: root.join("run"),
+            budget,
+        };
+        let mut tested = 0usize;
+        let verdict = |rev: &str| {
+            if revisions[..9].iter().any(|candidate| candidate == rev) {
+                Outcome::Good
+            } else {
+                Outcome::Bad
+            }
+        };
+        let stopped = super::run(
+            options(Some(Budget {
+                candidates: 1,
+                wall: Duration::from_secs(3600),
+            })),
+            |rev, _| {
+                tested += 1;
+                Ok(verdict(rev))
+            },
+        )
+        .unwrap();
+        assert!(stopped.first_bad.is_none(), "one candidate cannot decide 16");
+        assert!(stopped.revisions_left.is_some(), "the range was not narrowed");
+
+        // Resuming reuses the recorded outcomes: the good and bad ends are
+        // not retested, and the run finishes.
+        let before = tested;
+        let finished = super::run(options(None), |rev, _| {
+            tested += 1;
+            Ok(verdict(rev))
+        })
+        .unwrap();
+        assert_eq!(finished.first_bad.as_deref(), Some(revisions[9].as_str()));
+        assert!(
+            tested - before < finished.tests.len(),
+            "a resumed run retested everything"
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 }

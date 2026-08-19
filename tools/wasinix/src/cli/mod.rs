@@ -983,6 +983,70 @@ fn cache_intent(push_cache: bool) -> request::CacheIntent {
     }
 }
 
+/// A GitHub runner kills the job at six hours, so a comment bisect is given
+/// a smaller budget of its own: it stops with the range narrowed and the
+/// report on disk, and the same command run again continues from there.
+const COMMENT_BISECT_BUDGET: crate::nix::bisect::Budget = crate::nix::bisect::Budget {
+    candidates: 8,
+    wall: std::time::Duration::from_secs(4 * 60 * 60),
+};
+
+/// Run a `/wasinix bisect` and reply with what it found. The answer is a
+/// commit, so it never enters the report fold.
+fn ci_bisect(
+    repo: &std::path::Path,
+    command: &crate::ci::origin::Command,
+    request: untrusted::BisectCommand,
+    run_dir: PathBuf,
+) -> Result<CommandStatus> {
+    let report = bisect::drive(
+        repo,
+        bisect::Bisect {
+            target: request.target,
+            good: request.good,
+            bad: request.bad,
+            first_parent: request.first_parent,
+            words: request.words,
+            predicate: request.predicate,
+            run_dir: run_dir.join("bisect"),
+            budget: Some(COMMENT_BISECT_BUDGET),
+        },
+    )?;
+    let client = crate::github::client::Client::new(crate::github::client::token().as_deref());
+    let mut registry = crate::github::surfaces::Registry::new(
+        &client,
+        command.origin.repository.clone(),
+        command.origin.pull_request,
+        crate::github::surfaces::BOT_AUTHOR,
+        crate::support::effects::Effects::Apply,
+    );
+    let origin = crate::github::surfaces::origin_comment_url(
+        &command.origin.repository,
+        command.origin.pull_request,
+        command.origin.comment_id,
+    );
+    registry.upsert(
+        &crate::github::surfaces::Surface::CiReportReply {
+            comment_id: command.origin.comment_id,
+        },
+        &[],
+        crate::github::markdown::bisect_reply(
+            &report,
+            crate::support::env::github_run_url()?.as_deref(),
+            Some(&origin),
+        ),
+    )?;
+    match &report.first_bad {
+        Some(rev) => ui::result(format!("first bad {} commit: {rev}", report.target)),
+        None => ui::result(format!(
+            "{}: budget spent, {} candidates tested",
+            report.target,
+            report.tests.len()
+        )),
+    }
+    Ok(CommandStatus::SUCCESS)
+}
+
 fn ci_command(command: CiCommand) -> Result<CommandStatus> {
     let repo = crate::support::git::repo_root()?;
     match command {
@@ -1255,6 +1319,11 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             )?;
             let mut parsed = match untrusted::parse(&command.command)? {
                 untrusted::UntrustedCommand::Request(request) => request,
+                // A bisect answers with its own reply rather than a CI
+                // report: its result is a commit, not a set of job outcomes.
+                untrusted::UntrustedCommand::Bisect(bisect) => {
+                    return ci_bisect(&repo, &command, bisect, run_dir);
+                }
                 // The build job carries no write credential; mutations run
                 // through the ci mutate / mutate-publish pair.
                 untrusted::UntrustedCommand::Mutation(_) => {
