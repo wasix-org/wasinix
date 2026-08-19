@@ -5,6 +5,7 @@
 {
   final,
   prev,
+  helpers,
   preferredProfilePackages,
   ...
 }: let
@@ -31,6 +32,10 @@ in
     withpcre2 = true;
   })
   .overrideAttrs (old: {
+    # SHELL_PATH is the literal /bin/bash and the webc mounts it, so nothing
+    # links bash; propagating it puts an off-profile closure in the environment
+    # of everything that depends on git.
+    propagatedBuildInputs = helpers.dropInputsByName ["bash-interactive"] (old.propagatedBuildInputs or []);
     passthru =
       (old.passthru or {})
       // {
