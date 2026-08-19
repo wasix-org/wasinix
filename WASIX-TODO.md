@@ -901,6 +901,27 @@ current toolchain before relying on it.
   one.
 - **pcre2grep callout-fork** 🟡: uses fork(); `--disable-pcre2grep-callout-fork`
   (the library is unaffected).
+- **hydra-queue-runner --status** 🟡: exits through
+  `RuntimeError: uninitialized element` in `prometheus::Registry::~Registry()`,
+  reached from `State::~State()`. The path that takes a status snapshot and
+  returns is the only one that runs the destructor; the daemon loop, which is
+  how the queue runner is actually run, is unaffected and serves its metrics. An
+  uninitialised table element is an indirect call to a slot the PIC build never
+  filled, so the suspect is the registry's cross-module vtable rather than
+  anything hydra does.
+- **breezy** 🔴: `brz` is a setuptools-rust `Binding.Exec` that embeds CPython,
+  so it links libpython. Our CPython is ehpic-only and reaches its extensions
+  through dlopen, and no sysroot defines dlopen or mmap for a static link, so
+  libpython's `dynload_shlib.o` and `mmapmodule.o` come up undefined. The
+  wheel's own extensions do build: rustc needs the directory holding libpython
+  on its search path rather than PYO3_CROSS_LIB_DIR's sysconfig one, and the
+  readdir accelerator calls fchdir, which wasi-libc has no declaration or symbol
+  for. hydra drops bzr from its VCS tools. Fix: a dlopen-free static CPython to
+  embed, or link brz against the dl target.
+- **darcs** 🔴: GHC's wasm backend panics compiling atomic primops:
+  `wasm32-wasi-ghc: panic! ... onCmmLocalReg_Typed: unreachable` on
+  atomic-counter 0.1.2.4 (GHC 9.12.4.20260731). Needs a fix in GHC, not here.
+  hydra drops it from its VCS tools and keeps git, mercurial and subversion.
 - **glib** 🟡: never built on wasix. Its bundled gnulib builds broken math
   replacements (meson `cc.links` fails wholesale on this cross-static stdenv, so
   every math fn is "missing"; `isinf.c` is Visual-Studio-only) and GIO needs
