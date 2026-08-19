@@ -37,13 +37,8 @@ jobs:
       - name: Free runner disk
         uses: ./.github/actions/free-disk
 
-      # wasinix-binary also warms the closure cache for the command
-      # pipeline: a merge changes the cache key, and this run repopulates it
-      # before the first `/wasinix` comment would pay the compile.
       - name: Set up Nix
         uses: ./.github/actions/setup-nix
-        with:
-          wasinix-binary: "true"
 
       # The fetch cache above only avoids re-downloading tarballs; the unpacked
       # ...-source store paths still substitute from the cache bucket every run

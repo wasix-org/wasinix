@@ -3,12 +3,6 @@ description:
   Install Nix with the wasinix cache configured and restore the flake-inputs
   cache. The nix config block is a verified copy of `wasinix ci nix-config` (the
   binary cannot run before Nix exists); a crate test fails when the two drift.
-inputs:
-  wasinix-binary:
-    description:
-      Make the wasinix binary ready in the store, from the actions cache when
-      its sources are unchanged, building and re-caching it otherwise
-    default: "false"
 runs:
   using: composite
   steps:
@@ -36,49 +30,3 @@ runs:
         # the key version bumps whenever the cached shape changes
         key: nix-flake-inputs-v3-${{ hashFiles('flake.lock') }}
         restore-keys: nix-flake-inputs-v3-
-
-    # Restore/save split instead of the post-step: the post only saves on
-    # job success, so a failed authorize (an invalid command) would discard
-    # the closure it just built and every later job would compile again.
-    - name: Restore the wasinix binary closure
-      if: inputs.wasinix-binary == 'true'
-      id: bin-cache
-      uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
-      with:
-        # A file:// binary cache holding only the wasinix closure: an
-        # actions-cache hit imports it at runner-local speed, beating both
-        # the S3 substituter and a compile.
-        path: ~/.cache/wasinix-bin
-        key:
-          wasinix-bin-v2-${{ hashFiles('tools/wasinix/**', 'flake.nix',
-          'flake.lock') }}
-
-    - name: Provide the wasinix binary
-      if: inputs.wasinix-binary == 'true'
-      shell: bash
-      run: |
-        # The cache is an optimization: a torn or stale entry falls back to
-        # the build, never fails the job.
-        store="file://$HOME/.cache/wasinix-bin"
-        if [ -e "$HOME/.cache/wasinix-bin/nix-cache-info" ]; then
-          nix copy --from "$store" --all --no-check-sigs \
-            || echo "closure cache import failed; building instead"
-        fi
-        nix build .#wasinix --no-link
-        nix copy --to "$store" .#wasinix \
-          || echo "closure cache save failed; the next run builds again"
-        # Tripwire for a poisoned entry: the two counts must match, and the
-        # names must be the binary's closure, not alien litter.
-        echo "closure: $(nix path-info -r .#wasinix | wc -l) paths built," \
-          "$(ls "$HOME/.cache/wasinix-bin/"*.narinfo 2>/dev/null | wc -l) in the cache dir"
-
-    - name: Save the wasinix binary closure
-      if:
-        inputs.wasinix-binary == 'true' && steps.bin-cache.outputs.cache-hit !=
-        'true'
-      uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
-      with:
-        path: ~/.cache/wasinix-bin
-        key:
-          wasinix-bin-v2-${{ hashFiles('tools/wasinix/**', 'flake.nix',
-          'flake.lock') }}
