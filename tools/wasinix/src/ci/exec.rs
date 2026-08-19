@@ -1247,7 +1247,8 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
             let status = match run_build_tasks(ctx, request, &tasks, &broken, &mut tracker) {
                 Ok(status) => status,
                 Err(error) => {
-                    crate::support::ui::error(format!("build union: {error}"));
+                    let detail = error.to_string();
+                    crate::support::ui::error(format!("build union: {detail}"));
                     // Every planned build task still ends through the gate,
                     // so none is left with a started phase that never
                     // finishes.
@@ -1259,12 +1260,11 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
                             finish_task(
                                 ctx,
                                 &mut tracker,
-                                Fragment::new(
+                                crate::ci::report::union_failure_fragment(
                                     build.task_id.clone(),
                                     build.label.clone(),
                                     build.kind,
-                                    TaskStatus::Failure,
-                                    "build union failed",
+                                    &detail,
                                 ),
                                 None,
                             )?;

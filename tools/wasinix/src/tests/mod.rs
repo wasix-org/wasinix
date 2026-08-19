@@ -2233,6 +2233,30 @@ mod markdown {
     }
 
     #[test]
+    fn a_failed_build_union_states_its_error() {
+        use crate::ci::plan::{plan_of, TaskKind};
+        use crate::ci::report::{fold, union_failure_fragment, FoldContext};
+        use crate::cli::untrusted::{parse, UntrustedCommand};
+        let UntrustedCommand::Request(request) = parse("build checks.zlib").unwrap() else {
+            panic!("expected a build request");
+        };
+        let plan = plan_of(&request, Some("golden"), &[]);
+        let build = plan
+            .tasks
+            .iter()
+            .find(|task| task.kind == TaskKind::Build)
+            .expect("a build request plans a build task");
+        let detail = "checks.zlib: no match in the evaluated job list; \
+                      nearest: packagesByProfile.zlib";
+        let fragment = union_failure_fragment(&build.task_id, &build.label, build.kind, detail);
+        let fragments: std::collections::BTreeMap<String, crate::ci::report::Fragment> =
+            [(fragment.task_id.clone(), fragment)].into();
+        let report = fold(&plan, &fragments, FoldContext::default());
+        let body = comment(&report, &fragments, None, &links()).into_string();
+        assert!(body.contains(detail), "the union's error is missing:\n{body}");
+    }
+
+    #[test]
     fn comment_projections_match_their_goldens() {
         for (name, scenario) in [
             ("comment-green.md", scenarios::green()),

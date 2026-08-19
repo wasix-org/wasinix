@@ -490,6 +490,28 @@ pub fn run_log_fragment(tail: &str) -> Fragment {
     }))
 }
 
+/// A build task the union never reached, carrying the union's own error. A
+/// selector matching nothing, or a builder that cannot be acquired, fails
+/// before any job starts, so no build fact can hold the reason.
+pub fn union_failure_fragment(
+    task_id: impl Into<String>,
+    label: impl Into<String>,
+    kind: TaskKind,
+    detail: &str,
+) -> Fragment {
+    let headline = detail
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("build union failed");
+    Fragment::new(task_id, label, kind, TaskStatus::Failure, headline).with_data(
+        FragmentData::Log(LogExcerpt {
+            lines: detail.lines().map(str::to_string).collect(),
+            truncated: false,
+        }),
+    )
+}
+
 pub fn from_run_state(run: &crate::runs::Run, log_tail: Option<&str>) -> Report {
     use crate::support::atoms::RunState;
     let title = match run.state {
