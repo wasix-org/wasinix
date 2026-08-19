@@ -59,7 +59,7 @@ pub fn reject_own_override(request: &ParsedRequest, dependency_target: &str) -> 
 
 /// One bisect to drive: the predicate is already parsed, so an untrusted
 /// caller supplies one whose placement it has pinned.
-pub struct Bisect {
+pub struct Bisect<'a> {
     pub target: String,
     pub good: String,
     pub bad: String,
@@ -69,6 +69,9 @@ pub struct Bisect {
     pub predicate: ParsedRequest,
     pub run_dir: PathBuf,
     pub budget: Option<bisect::Budget>,
+    /// Called with the candidate count before each build, for a caller whose
+    /// answer is hours away and who has somewhere to say so.
+    pub progress: Option<&'a mut dyn FnMut(usize) -> Result<()>>,
 }
 
 /// Walk the candidates, building the predicate against each. The report is
@@ -78,6 +81,8 @@ pub fn drive(repo: &Path, request: Bisect) -> Result<bisect::Report> {
     let dependency = bisect::dependency(repo, &request.target)?;
     reject_own_override(&request.predicate, &dependency.target)?;
     let target = dependency.target.clone();
+    let mut progress = request.progress;
+    let mut tested = 0usize;
     bisect::run(
         bisect::Options {
             dependency,
@@ -89,6 +94,10 @@ pub fn drive(repo: &Path, request: Bisect) -> Result<bisect::Report> {
             budget: request.budget,
         },
         |rev, candidate_dir| {
+            if let Some(progress) = progress.as_mut() {
+                progress(tested)?;
+            }
+            tested += 1;
             let mut predicate = request.predicate.clone();
             super::request::with_override(&mut predicate, &target, rev);
             crate::support::fs::create_dir_all(candidate_dir)?;
@@ -150,6 +159,7 @@ pub fn run_bisect(repo: &Path, args: BisectArgs) -> Result<CommandStatus> {
             predicate,
             run_dir: run_dir.clone(),
             budget: None,
+            progress: None,
         },
     )?;
 

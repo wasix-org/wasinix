@@ -2402,6 +2402,29 @@ mod markdown {
         assert_eq!(crate::ci::report::run_log_fragment(quiet).headline, "took 11s");
     }
 
+    /// A build spends minutes materializing a worktree and resolving
+    /// overrides before its first phase, and the pull request saw nothing
+    /// for all of it: the surfaces waited for a plan that did not exist yet.
+    #[test]
+    fn a_run_without_a_plan_still_says_what_it_is_doing() {
+        let report = crate::ci::report::starting(Some(
+            "case: build checks.zlib at 0d1eb9677bc7 · on local\nmaterializing: case at 0d1eb9677bc7\n",
+        ));
+        assert!(report.conclusion.is_none(), "a starting run has no verdict");
+        let body = comment(&report, &Default::default(), None, &links()).into_string();
+        assert!(body.contains("⏳"), "{body}");
+        assert!(body.contains("materializing: case at 0d1eb9677bc7"), "{body}");
+    }
+
+    #[test]
+    fn a_bisect_reply_exists_before_its_first_answer() {
+        use crate::github::markdown::bisect_progress;
+        let opening = bisect_progress("wasixcc", 0).into_string();
+        assert!(opening.contains("resolving the range"), "{opening}");
+        assert!(bisect_progress("wasixcc", 1).into_string().contains("1 candidate tested"));
+        assert!(bisect_progress("wasixcc", 3).into_string().contains("3 candidates tested"));
+    }
+
     #[test]
     fn a_lost_run_renders_a_terminal_comment() {
         let run = crate::runs::Run {
@@ -6291,10 +6314,14 @@ mod prepare {
         });
         let run_dir = scratch.path().join("run");
 
-        // Before the plan is recorded there is nothing to say.
-        assert!(crate::github::publish::load_running(&run_dir, &[])
+        // Before the plan is recorded the run still has something to say:
+        // materializing runs for minutes, and silence there reads as a
+        // command nobody picked up.
+        let starting = crate::github::publish::load_running(&run_dir, &[])
             .unwrap()
-            .is_none());
+            .expect("a run without a plan still publishes");
+        assert!(starting.report.conclusion.is_none());
+        assert!(starting.report.tasks.is_empty());
 
         prepare_all(&repo, &request, &run_dir).unwrap();
         let events = [Event::RunStarted { at: 1, pid: 7 }];

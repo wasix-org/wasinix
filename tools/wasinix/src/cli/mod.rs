@@ -991,6 +991,30 @@ const COMMENT_BISECT_BUDGET: crate::nix::bisect::Budget = crate::nix::bisect::Bu
     wall: std::time::Duration::from_secs(4 * 60 * 60),
 };
 
+/// Upsert the bisect's one reply. Every tick rewrites the same comment, so
+/// a long bisect leaves one current answer rather than a trail.
+fn bisect_reply(
+    command: &crate::ci::origin::Command,
+    body: crate::github::sanitize::Markdown,
+) -> Result<()> {
+    let client = crate::github::client::Client::new(crate::github::client::token().as_deref());
+    let mut registry = crate::github::surfaces::Registry::new(
+        &client,
+        command.origin.repository.clone(),
+        command.origin.pull_request,
+        crate::github::surfaces::BOT_AUTHOR,
+        crate::support::effects::Effects::Apply,
+    );
+    registry.upsert(
+        &crate::github::surfaces::Surface::CiReportReply {
+            comment_id: command.origin.comment_id,
+        },
+        &[],
+        body,
+    )?;
+    Ok(())
+}
+
 /// Run a `/wasinix bisect` and reply with what it found. The answer is a
 /// commit, so it never enters the report fold.
 fn ci_bisect(
@@ -999,6 +1023,17 @@ fn ci_bisect(
     request: untrusted::BisectCommand,
     run_dir: PathBuf,
 ) -> Result<CommandStatus> {
+    let target = request.target.clone();
+    // A candidate is a whole build, so the first answer is hours away. The
+    // reply exists before the first one and is rewritten after each, which
+    // is also what a budget-stopped run leaves behind.
+    let mut progress = |tested: usize| {
+        bisect_reply(
+            command,
+            crate::github::markdown::bisect_progress(&target, tested),
+        )
+    };
+    progress(0)?;
     let report = bisect::drive(
         repo,
         bisect::Bisect {
@@ -1010,6 +1045,7 @@ fn ci_bisect(
             predicate: request.predicate,
             run_dir: run_dir.join("bisect"),
             budget: Some(COMMENT_BISECT_BUDGET),
+            progress: Some(&mut progress),
         },
     )?;
     let client = crate::github::client::Client::new(crate::github::client::token().as_deref());

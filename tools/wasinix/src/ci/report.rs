@@ -544,6 +544,25 @@ pub fn union_failure_fragment(
     )
 }
 
+/// The report before a run has a plan: materializing a worktree and
+/// resolving overrides takes minutes, and publishing nothing until then
+/// leaves the pull request silent while the work it asked for happens.
+pub fn starting(log_tail: Option<&str>) -> Report {
+    Report {
+        title: log_tail.map(log_headline).unwrap_or_default(),
+        conclusion: None,
+        complete: false,
+        started_at: None,
+        finished_at: None,
+        annotations: Vec::new(),
+        tasks: Vec::new(),
+        failures: BTreeMap::new(),
+        version_updates: BTreeMap::new(),
+        comparisons: Vec::new(),
+        request: None,
+    }
+}
+
 pub fn from_run_state(run: &crate::runs::Run, log_tail: Option<&str>) -> Report {
     use crate::support::atoms::RunState;
     let title = match run.state {

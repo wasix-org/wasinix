@@ -92,7 +92,15 @@ pub(crate) fn load_running(
     events: &[crate::ci::events::Event],
 ) -> Result<Option<Rendered>> {
     if !crate::ci::prepare::preparation_path(run_dir).exists() {
-        return Ok(None);
+        // No plan yet, but the run is doing something the pull request
+        // should see: materializing a worktree and resolving overrides runs
+        // for minutes before the first phase opens.
+        let tail = crate::runs::log_tail(run_dir, 4_000);
+        return Ok(Some(Rendered {
+            report: crate::ci::report::starting(tail.as_deref()),
+            fragments: BTreeMap::new(),
+            snapshot: None,
+        }));
     }
     let loaded = crate::ci::prepare::load(run_dir)?;
     let fragments =

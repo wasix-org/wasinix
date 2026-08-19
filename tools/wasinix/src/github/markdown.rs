@@ -714,6 +714,10 @@ fn neutral(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
 }
 
 fn in_progress(report: &Report, snapshot: Option<&Snapshot>, links: &Links) -> Markdown {
+    // Before the plan exists there are no phases to count, and the title is
+    // the run's own last word ("materializing: case at abc1234"). Without
+    // it the heading says only "building" for the minutes a worktree and
+    // its overrides take.
     let counts = match snapshot {
         Some(snapshot) => {
             // The planned total, known once the phases opened; before that
@@ -732,8 +736,16 @@ fn in_progress(report: &Report, snapshot: Option<&Snapshot>, links: &Links) -> M
         }
         None => Markdown::new(),
     };
+    // With no phases yet, the title is the run's own last word; with them,
+    // "building" plus the counts says more.
+    let what = if report.tasks.is_empty() && !report.title.is_empty() {
+        Markdown::text(&report.title)
+    } else {
+        Markdown::constant("building")
+    };
     let mut text = Markdown::concat([
-        Markdown::constant("### ⏳ Wasinix CI · building"),
+        Markdown::constant("### ⏳ Wasinix CI · "),
+        what,
         counts,
         links.heading_suffix(),
         Markdown::constant("\n\n"),
@@ -882,6 +894,23 @@ pub fn failure_reply(detail: &str, run_url: Option<&str>, origin: Option<&str>) 
         ]);
     }
     body
+}
+
+/// The bisect's reply while it runs. A candidate is a whole build, so the
+/// tick is the only sign the command was picked up at all.
+pub fn bisect_progress(target: &str, tested: usize) -> Markdown {
+    let what = if tested == 0 {
+        Markdown::constant("resolving the range")
+    } else {
+        plural(tested, "candidate").push(Markdown::constant(" tested"))
+    };
+    Markdown::concat([
+        Markdown::constant("### ⏳ Bisecting "),
+        Markdown::code(target),
+        Markdown::constant(" · "),
+        what,
+        Markdown::constant("\n"),
+    ])
 }
 
 /// The reply a `/wasinix bisect` posts. A run stopped by its budget still
