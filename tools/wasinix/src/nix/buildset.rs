@@ -272,6 +272,13 @@ pub(crate) fn realise_building_drv(line: &str) -> Option<&str> {
     drv.ends_with(".drv").then_some(drv)
 }
 
+/// The derivation named by a terminal Nix build failure.
+pub(crate) fn realise_failed_drv(line: &str) -> Option<&str> {
+    let rest = line.trim_start().strip_prefix("error: Cannot build '")?;
+    let (drv, _) = rest.split_once('\'')?;
+    drv.ends_with(".drv").then_some(drv)
+}
+
 pub(crate) fn failure_excerpt_from_log(log: &[u8]) -> Option<String> {
     if log.is_empty() {
         return None;
@@ -678,7 +685,24 @@ pub fn build_union(
             match receiver.recv_timeout(Duration::from_secs(5)) {
                 Ok(line) => {
                     writeln!(log, "{line}").map_err(|e| io(&log_path, e))?;
-                    if let Some(drv) = realise_building_drv(&line) {
+                    if let Some(drv) = realise_failed_drv(&line) {
+                        if pending.contains(drv) {
+                            if let Some(error) = build_failure(drv) {
+                                pending.remove(drv);
+                                failures += emit_failure(
+                                    drv,
+                                    &error,
+                                    &jobs,
+                                    &build_started,
+                                    &mut stream,
+                                    &stream_path,
+                                    &mut cases,
+                                    on_event,
+                                )?;
+                            }
+                        }
+                        on_event(StreamEvent::Output(line))?;
+                    } else if let Some(drv) = realise_building_drv(&line) {
                         if let Some(spec) = jobs.get(drv) {
                             attempt_started.insert(drv.to_string());
                             build_started
