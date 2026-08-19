@@ -96,10 +96,10 @@
     };
   depCc = mkDepCc "wasix-dep-cc" profiles.eh;
   depCcDl = mkDepCc "wasix-dep-cc-dl" profiles.ehpic;
-  depCcPath = lib.getExe' depCc "${depCc.targetPrefix}cc";
-  depCxxPath = lib.getExe' depCc "${depCc.targetPrefix}c++";
-  depCcDlPath = lib.getExe' depCcDl "${depCcDl.targetPrefix}cc";
-  depCxxDlPath = lib.getExe' depCcDl "${depCcDl.targetPrefix}c++";
+  depCcPath = lib.getExe' depCc "${depCc.targetPrefix}clang";
+  depCxxPath = lib.getExe' depCc "${depCc.targetPrefix}clang++";
+  depCcDlPath = lib.getExe' depCcDl "${depCcDl.targetPrefix}clang";
+  depCxxDlPath = lib.getExe' depCcDl "${depCcDl.targetPrefix}clang++";
   # cc-rs also reads the dash triple with dashes replaced by underscores, the
   # only form bash can export.
   wasixDepCcHook =

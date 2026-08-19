@@ -1,0 +1,109 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 4c93a27..88e44ef 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1026,6 +1026,30 @@ impl Library {
+ }
+
+ impl Library {
++    fn lib_name_from_link_file<'a>(target: &str, filename: &'a str) -> Option<&'a str> {
++        fn strip_suffixes<'a>(filename: &'a str, suffixes: &[&str]) -> Option<&'a str> {
++            suffixes
++                .iter()
++                .find_map(|suffix| filename.strip_suffix(suffix))
++        }
++
++        if target.contains("windows") {
++            let filename = if target.contains("gnu") {
++                filename.strip_prefix("lib").unwrap_or(filename)
++            } else {
++                filename
++            };
++            strip_suffixes(filename, &[".dll.a", ".dll", ".lib", ".a"])
++        } else {
++            let filename = filename.strip_prefix("lib")?;
++            if target.contains("apple") {
++                strip_suffixes(filename, &[".a", ".so", ".dylib"])
++            } else {
++                strip_suffixes(filename, &[".a", ".so"])
++            }
++        }
++    }
++
+     fn from_pkg_config(name: &str, l: pkg_config::Library) -> Self {
+         // taken from: https://github.com/rust-lang/pkg-config-rs/blob/54325785816695df031cef3b26b6a9a203bbc01b/src/lib.rs#L502
+         let system_roots = if cfg!(target_os = "macos") {
+@@ -1063,15 +1087,36 @@ impl Library {
+             })
+         };
+
++        let mut libs = l
++            .libs
++            .iter()
++            .map(|lib| InternalLib::new(lib.to_owned(), is_static_available(lib)))
++            .collect::<Vec<_>>();
++        let mut link_paths = l.link_paths;
++
++        if let Ok(target) = env::var("TARGET") {
++            for link_file in l.link_files {
++                let Some((directory, filename)) = link_file.parent().zip(link_file.file_name())
++                else {
++                    continue;
++                };
++                let Some(filename) = filename.to_str() else {
++                    continue;
++                };
++                let Some(lib) = Self::lib_name_from_link_file(&target, filename) else {
++                    continue;
++                };
++
++                link_paths.push(directory.to_path_buf());
++                libs.push(InternalLib::new(lib.to_string(), true));
++            }
++        }
++
+         Self {
+             name: name.to_string(),
+             source: Source::PkgConfig,
+-            libs: l
+-                .libs
+-                .iter()
+-                .map(|lib| InternalLib::new(lib.to_owned(), is_static_available(lib)))
+-                .collect(),
+-            link_paths: l.link_paths,
++            libs,
++            link_paths,
+             include_paths: l.include_paths,
+             ld_args: l.ld_args,
+             frameworks: l.frameworks,
+diff --git a/src/test.rs b/src/test.rs
+index 9a94f83..6896ba7 100644
+--- a/src/test.rs
++++ b/src/test.rs
+@@ -1004,6 +1004,26 @@ fn aggregate() {
+ }
+
+ #[test]
++fn link_file_names() {
++    assert_eq!(
++        Library::lib_name_from_link_file("wasm32-wasmer-wasi", "libboost_url.a"),
++        Some("boost_url")
++    );
++    assert_eq!(
++        Library::lib_name_from_link_file("x86_64-apple-darwin", "libz.dylib"),
++        Some("z")
++    );
++    assert_eq!(
++        Library::lib_name_from_link_file("x86_64-pc-windows-msvc", "z.lib"),
++        Some("z")
++    );
++    assert_eq!(
++        Library::lib_name_from_link_file("x86_64-pc-windows-gnu", "libz.dll.a"),
++        Some("z")
++    );
++}
++
++#[test]
+ fn os_specific() {
+     let (libraries, _) = toml(
+         "toml-os-specific",
