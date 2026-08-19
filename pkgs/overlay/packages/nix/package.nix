@@ -75,19 +75,32 @@
         done
       '';
   });
-in
-  helpers.wasmRename {wasmName = "nix";} (helpers.libTweaks {
-      passthru.wasix.shipped = true;
-      passthru.wasix.updateNotes = [
-        {message = "recheck the vendored WASI portability patches against the new Nix release";}
-      ];
-      # nixpkgs appends "+<n>" for the patches we add, which is not semver.
-      # The patch count is a rebuild of the same upstream release, so it belongs
-      # in the rel, not the version.
-      passthru.wasmer.version = v: final.lib.head (final.lib.splitString "+" v);
-      # C++ exceptions rule out the no-EH profile; PIC is untested.
-      passthru.wasix.supportedProfiles =
-        builtins.filter (p: builtins.elem p helpers.profiles.withoutPic) helpers.profiles.withEh;
+  nixComponents = components.libs;
+  nixCli = helpers.wasmRename {wasmName = "nix";} (helpers.libTweaks {
+      # Hydra takes the CLI and component set through nixVersions; keep that
+      # versioned pair here so consumers cannot mix patched and stock Nix.
+      passthru = {
+        inherit nixComponents;
+        nixVersions =
+          prev.nixVersions
+          // {
+            nix_2_34 = nixCli;
+            nixComponents_2_34 = nixComponents;
+          };
+        wasix = {
+          shipped = true;
+          updateNotes = [
+            {message = "recheck the vendored WASI portability patches against the new Nix release";}
+          ];
+          # C++ exceptions rule out the no-EH profile; PIC is untested.
+          supportedProfiles =
+            builtins.filter (p: builtins.elem p helpers.profiles.withoutPic) helpers.profiles.withEh;
+        };
+        # nixpkgs appends "+<n>" for the patches we add, which is not semver.
+        # The patch count is a rebuild of the same upstream release, so it belongs
+        # in the rel, not the version.
+        wasmer.version = v: final.lib.head (final.lib.splitString "+" v);
+      };
       # wasmRename renames bin/nix after this hook. Keep Nix's compatibility
       # commands and build-remote entry point targeting the final name.
       postInstall = ''
@@ -101,4 +114,6 @@ in
         fi
       '';
     }
-    components.nix-cli)
+    components.nix-cli);
+in
+  nixCli
