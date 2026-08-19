@@ -5988,12 +5988,19 @@ mod buildset {
 
     #[test]
     fn realise_progress_lines_name_their_derivation() {
+        use crate::nix::buildset::realise_failed_drv;
+
         assert_eq!(
             realise_building_drv("building '/nix/store/abc-zlib.drv'..."),
             Some("/nix/store/abc-zlib.drv")
         );
         assert_eq!(realise_building_drv("copying path '/nix/store/x'"), None);
         assert_eq!(realise_building_drv("building trees"), None);
+        assert_eq!(
+            realise_failed_drv("error: Cannot build '/nix/store/abc-zlib.drv'."),
+            Some("/nix/store/abc-zlib.drv")
+        );
+        assert_eq!(realise_failed_drv("error: dependency failed"), None);
     }
 }
 
