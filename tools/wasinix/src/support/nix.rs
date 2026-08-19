@@ -330,11 +330,16 @@ impl Invocation {
 
     /// An unchecked run for callers that parse failure output (a dry-run
     /// plan, a hash minted from a failing build). The reason names why the
-    /// exit code is the caller's to judge; the allowlist test keys on it.
+    /// exit code is the caller's to judge: it explains the call site to a
+    /// reader, so it belongs in the transcript only when asked for. Printed
+    /// unconditionally it became the whole result of a failed run, since a
+    /// note is often a log's last line.
     pub fn probe(&self, reason: &str) -> Result<Probe> {
         let mut cmd = self.command()?;
         crate::support::tools::log(&cmd);
-        crate::support::ui::note(format!("  (probe: {reason})"));
+        if crate::support::ui::verbosity() == crate::support::ui::Verbosity::Verbose {
+            crate::support::ui::note(format!("  (probe: {reason})"));
+        }
         let output = crate::support::tools::output(&mut cmd)?;
         Ok(Probe {
             status: CommandStatus::from_exit(output.status),
