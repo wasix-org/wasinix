@@ -13,9 +13,8 @@
   testLib,
 }: let
   hostPython = pkgs.python3.withPackages (ps: [ps.pip]);
+  hostPythonExe = "${hostPython}/bin/python3";
   pyVersion = python3.pythonVersion;
-  # The shim dir precedes PATH, so this shadows hostPython's own bin/python3.13;
-  # plain `python3` stays the host interpreter (pip).
   guestPython = "python${pyVersion}";
 
   # Platform tag of the wasix wheels; if the target triple drifts, re-derive
@@ -51,7 +50,7 @@
       wasixPkgs = [pythonWebc];
       inherit forwardEnv;
       script = ''
-        python3 -m pip install ${pipFlags} --target site ${attr}
+        ${hostPythonExe} -m pip install ${pipFlags} --target site ${attr}
         for dep in ${lib.escapeShellArgs expectDeps}; do
           if [ ! -e "site/$dep" ]; then
             echo "dependency '$dep' was not resolved into the install target" >&2
@@ -92,9 +91,9 @@ in {
     wasmerArgs = ["--net"];
     inherit forwardEnv;
     script = ''
-      python3 -m http.server 8080 --bind 127.0.0.1 --directory ${registry} &
+      ${hostPythonExe} -m http.server 8080 --bind 127.0.0.1 --directory ${registry} &
       sleep 1
-      python3 -m pip install ${pipResolveFlags} --index-url http://127.0.0.1:8080/simple --target site requests
+      ${hostPythonExe} -m pip install ${pipResolveFlags} --index-url http://127.0.0.1:8080/simple --target site requests
       export PYTHONPATH="$PWD/site"
       ${guestPython} -c 'import requests; r = requests.get("http://127.0.0.1:8080/simple/", timeout=30); assert r.ok and "requests" in r.text; print("REGISTRY_HTTP_OK")' | tee net.log
       grep -q REGISTRY_HTTP_OK net.log
@@ -110,12 +109,12 @@ in {
     inherit forwardEnv;
     script = ''
       # the pyproject is the single source of the dep list
-      mapfile -t deps < <(python3 -c '
+      mapfile -t deps < <(${hostPythonExe} -c '
       import tomllib
       with open("${./e2e/pyproject.toml}", "rb") as f:
           print("\n".join(tomllib.load(f)["project"]["dependencies"]))
       ')
-      python3 -m pip install ${pipFlags} --target site "''${deps[@]}"
+      ${hostPythonExe} -m pip install ${pipFlags} --target site "''${deps[@]}"
 
       # not listed in pyproject.toml: these must arrive as transitive deps the resolver pulls from
       # the served wheels' metadata, proving the index carries usable dependency info.
