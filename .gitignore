@@ -7,3 +7,4 @@ nix-fast-build-result.json
 .ci-run/
 .remote-builder
 tools/wasinix/target/
+.direnv/
