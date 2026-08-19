@@ -1,7 +1,9 @@
 # Perl for wasix. The patches carry perl-cross past its ELF-only type probes,
-# add wasi as a target it knows, and supply the process and extension entry
-# points perl expects a platform to have.
+# add wasi as a target it knows, supply the process and extension entry points
+# perl expects a platform to have, and fill in the perl-cross stubs that
+# miniperl runs Makefile.PL against.
 {
+  final,
   prev,
   helpers,
   preferredProfilePackages,
@@ -18,7 +20,19 @@
           ./patches/wasi-spawn-without-fork.patch
           ./patches/wasi-posix-unavailable-calls.patch
           ./patches/wasi-errno-cpp-file-argument.patch
+          ./patches/cross-perl-stubs.patch
         ];
+        postPatch = ''
+          ${final.buildPackages.perl}/bin/perl -Icnf/stub -MList::Util=pairs,reduce -e '
+            my ($pair) = pairs(key => "value");
+            my $reduced = reduce { (defined $a ? $a : "x") . $b } undef, "y";
+            die "List::Util stub mismatch\n"
+              unless $reduced eq "xy"
+                && ref($pair) eq "List::Util::_Pair"
+                && $pair->key eq "key"
+                && $pair->value eq "value";
+          '
+        '';
         # XS modules are dlopened side modules, which the PIC sysroots alone provide.
         passthru.wasix.supportedProfiles = helpers.profiles.pic;
         # @INC and the XS .so paths are baked into the interpreter, so a webc has to
