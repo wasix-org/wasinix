@@ -279,8 +279,10 @@ in rec {
         tweaks
         // lib.optionalAttrs disablesCheckSnapshot {
           wasixCheckSnapshotPhase = _: ''
-            echo "checks are disabled on this derivation; skipping the test snapshot"
-            mkdir -p "$check"
+            if [ -n "''${check:-}" ]; then
+              echo "checks are disabled on this derivation; skipping the test snapshot"
+              mkdir -p "$check"
+            fi
           '';
         };
       merged = extendDrv old effectiveTweaks;
