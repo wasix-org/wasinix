@@ -1,0 +1,11 @@
+diff --git a/ext/opcache/config.m4 b/ext/opcache/config.m4
+--- a/ext/opcache/config.m4
++++ b/ext/opcache/config.m4
+@@ -232,6 +232,6 @@ int main(void) {
+ ]])],[have_shm_mmap_anon=yes],[have_shm_mmap_anon=no],[
+   case $host_alias in
+-    *linux*)
++    *linux*|*wasm*)
+       have_shm_mmap_anon=yes
+       ;;
+     *)

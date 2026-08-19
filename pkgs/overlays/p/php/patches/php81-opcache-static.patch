@@ -1,0 +1,99 @@
+--- a/ext/opcache/config.m4
++++ b/ext/opcache/config.m4
+@@ -333,7 +333,7 @@
+ 	shared_alloc_mmap.c \
+ 	shared_alloc_posix.c \
+ 	$ZEND_JIT_SRC,
+-	shared,,"-Wno-implicit-fallthrough -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1",,yes)
++	no,,"-Wno-implicit-fallthrough -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1",,yes)
+ 
+   PHP_ADD_EXTENSION_DEP(opcache, pcre)
+ 
+--- a/ext/opcache/ZendAccelerator.h
++++ b/ext/opcache/ZendAccelerator.h
+@@ -103,6 +103,8 @@
+ typedef time_t accel_time_t;
+ #endif
+ 
++extern zend_extension zend_extension_entry;
++
+ typedef enum _zend_accel_restart_reason {
+ 	ACCEL_RESTART_OOM,    /* restart because of out of memory */
+ 	ACCEL_RESTART_HASH,   /* restart because of hash overflow */
+--- a/ext/opcache/ZendAccelerator.c
++++ b/ext/opcache/ZendAccelerator.c
+@@ -2937,7 +2937,7 @@
+ 	return SUCCESS;
+ }
+ 
+-static void accel_globals_ctor(zend_accel_globals *accel_globals)
++void accel_globals_ctor(zend_accel_globals *accel_globals)
+ {
+ #if defined(COMPILE_DL_OPCACHE) && defined(ZTS)
+ 	ZEND_TSRMLS_CACHE_UPDATE();
+@@ -3113,12 +3113,6 @@
+ 
+ static int accel_startup(zend_extension *extension)
+ {
+-#ifdef ZTS
+-	accel_globals_id = ts_allocate_id(&accel_globals_id, sizeof(zend_accel_globals), (ts_allocate_ctor) accel_globals_ctor, NULL);
+-#else
+-	accel_globals_ctor(&accel_globals);
+-#endif
+-
+ #ifdef HAVE_JIT
+ 	zend_jit_init();
+ #endif
+--- a/ext/opcache/zend_accelerator_module.c
++++ b/ext/opcache/zend_accelerator_module.c
+@@ -383,12 +383,22 @@
+ 	}
+ }
+ 
++void accel_globals_ctor(zend_accel_globals *accel_globals);
++
+ static ZEND_MINIT_FUNCTION(zend_accelerator)
+ {
+ 	(void)type; /* keep the compiler happy */
+ 
++#ifdef ZTS
++	accel_globals_id = ts_allocate_id(&accel_globals_id, sizeof(zend_accel_globals), (ts_allocate_ctor) accel_globals_ctor, NULL);
++#else
++	accel_globals_ctor(&accel_globals);
++#endif
++
+ 	REGISTER_INI_ENTRIES();
+ 
++	zend_register_extension(&zend_extension_entry, NULL);
++
+ 	return SUCCESS;
+ }
+ 
+@@ -511,7 +521,7 @@
+ 	DISPLAY_INI_ENTRIES();
+ }
+ 
+-static zend_module_entry accel_module_entry = {
++zend_module_entry accel_module_entry = {
+ 	STANDARD_MODULE_HEADER,
+ 	ACCELERATOR_PRODUCT_NAME,
+ 	ext_functions,
+@@ -528,7 +538,7 @@
+ 
+ int start_accel_module(void)
+ {
+-	return zend_startup_module(&accel_module_entry);
++	return SUCCESS;
+ }
+ 
+ /* {{{ Get the scripts which are accelerated by ZendAccelerator */
+--- a/ext/opcache/zend_accelerator_module.h
++++ b/ext/opcache/zend_accelerator_module.h
+@@ -26,4 +26,7 @@
+ 
+ void zend_accel_override_file_functions(void);
+ 
++extern zend_module_entry accel_module_entry;
++#define phpext_opcache_ptr &accel_module_entry
++
+ #endif /* _ZEND_ACCELERATOR_MODULE_H */

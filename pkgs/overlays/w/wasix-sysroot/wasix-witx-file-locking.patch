@@ -1,0 +1,45 @@
+diff --git a/phases/snapshot/witx/typenames.witx b/phases/snapshot/witx/typenames.witx
+index 187eb4f..89451d8 100644
+--- a/phases/snapshot/witx/typenames.witx
++++ b/phases/snapshot/witx/typenames.witx
+@@ -11,6 +11,11 @@
+ ;;; Represents an ID of a waker to be woken
+ (typename $waker u64)
+
++;;; File lock result fields.
++(typename $file_lock_type u32)
++(typename $file_lock_whence u32)
++(typename $file_lock_pid u32)
++
+ ;;; Error codes returned by functions.
+ ;;; Not all of these error codes are returned by the functions provided by this
+ ;;; API; some are used in higher-level library layers, and others are provided
+diff --git a/phases/snapshot/witx/wasix_v1.witx b/phases/snapshot/witx/wasix_v1.witx
+index e7ceb24..f092e92 100644
+--- a/phases/snapshot/witx/wasix_v1.witx
++++ b/phases/snapshot/witx/wasix_v1.witx
+@@ -39,6 +39,24 @@
+     (result $error (expected $fd (error $errno)))
+   )
+
++  ;;; Get, set, or wait for a POSIX advisory byte-range lock.
++  (@interface func (export "fd_lock")
++    (param $fd $fd)
++    (param $operation u32)
++    (param $lock_type u32)
++    (param $whence u32)
++    (param $start $filedelta)
++    (param $len $filedelta)
++    (result $error (expected (tuple $file_lock_type $file_lock_whence $filedelta $filedelta $file_lock_pid) (error $errno)))
++  )
++
++  ;;; Apply a BSD advisory whole-file lock.
++  (@interface func (export "fd_flock")
++    (param $fd $fd)
++    (param $operation u32)
++    (result $error (expected (error $errno)))
++  )
++
+   ;;; Creates a file handle for event notifications
+   ;;;
+   (@interface func (export "fd_event")

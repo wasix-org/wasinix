@@ -1,15 +1,107 @@
+diff --git a/libc-bottom-half/cloudlibc/src/libc/fcntl/fcntl.c b/libc-bottom-half/cloudlibc/src/libc/fcntl/fcntl.c
+index 06b72883..ad5cf6f1 100644
+--- a/libc-bottom-half/cloudlibc/src/libc/fcntl/fcntl.c
++++ b/libc-bottom-half/cloudlibc/src/libc/fcntl/fcntl.c
+@@ -89,8 +89,72 @@ int fcntl(int fildes, int cmd, ...) {
+       }
+       return fd;
+     }
++    case F_GETLK:
++    case F_SETLK:
++    case F_SETLKW: {
++      va_list ap;
++      va_start(ap, cmd);
++      struct flock *lock = va_arg(ap, struct flock *);
++      va_end(ap);
++
++      uint32_t operation = cmd == F_GETLK ? 0 : cmd == F_SETLK ? 1 : 2;
++      uint32_t lock_type;
++      switch (lock->l_type) {
++      case F_RDLCK:
++        lock_type = 0;
++        break;
++      case F_WRLCK:
++        lock_type = 1;
++        break;
++      case F_UNLCK:
++        lock_type = 2;
++        break;
++      default:
++        errno = EINVAL;
++        return -1;
++      }
++      uint32_t whence;
++      switch (lock->l_whence) {
++      case SEEK_SET:
++        whence = 0;
++        break;
++      case SEEK_CUR:
++        whence = 1;
++        break;
++      case SEEK_END:
++        whence = 2;
++        break;
++      default:
++        errno = EINVAL;
++        return -1;
++      }
++
++      uint32_t result_type = lock_type;
++      uint32_t result_whence = whence;
++      int64_t result_start = lock->l_start;
++      int64_t result_len = lock->l_len;
++      uint32_t result_pid = 0;
++      __wasi_errno_t error =
++          __wasi_fd_lock(fildes, operation, lock_type, whence, lock->l_start,
++                         lock->l_len, &result_type, &result_whence,
++                         &result_start, &result_len, &result_pid);
++      if (error != 0) {
++        errno = error;
++        return -1;
++      }
++      if (cmd == F_GETLK) {
++        lock->l_type = result_type == 0   ? F_RDLCK
++                       : result_type == 1 ? F_WRLCK
++                                          : F_UNLCK;
++        lock->l_whence = SEEK_SET;
++        lock->l_start = result_start;
++        lock->l_len = result_len;
++        lock->l_pid = result_pid;
++      }
++      return 0;
++    }
+     default:
+       errno = EINVAL;
+       return -1;
+-  }
++    }
+ }
+diff --git a/libc-bottom-half/cloudlibc/src/libc/fcntl/flock.c b/libc-bottom-half/cloudlibc/src/libc/fcntl/flock.c
+new file mode 100644
+index 00000000..a988fc6e
+--- /dev/null
++++ b/libc-bottom-half/cloudlibc/src/libc/fcntl/flock.c
+@@ -0,0 +1,12 @@
++#include <errno.h>
++#include <sys/file.h>
++#include <wasi/api.h>
++
++int flock(int fd, int operation) {
++  __wasi_errno_t error = __wasi_fd_flock(fd, operation);
++  if (error != 0) {
++    errno = error;
++    return -1;
++  }
++  return 0;
++}
 diff --git a/libc-bottom-half/headers/public/__header_fcntl.h b/libc-bottom-half/headers/public/__header_fcntl.h
+index 40ba106f..5a6e5fed 100644
 --- a/libc-bottom-half/headers/public/__header_fcntl.h
 +++ b/libc-bottom-half/headers/public/__header_fcntl.h
-@@ -48,6 +48,19 @@
+@@ -48,6 +48,14 @@
  #define F_DUPFD (5)
  #define F_DUPFD_CLOEXEC (6)
 
-+/* POSIX advisory record-lock constants. The lock-type values mirror musl's
-+ * generic bits/fcntl.h; the command numbers are WASIX-local (5/6 are already
-+ * taken by F_DUPFD/F_DUPFD_CLOEXEC above). Wasmer currently has no syscall for
-+ * coordinating record locks between WASIX processes, so fcntl() reports these
-+ * operations as unsupported rather than pretending that a lock was acquired. */
 +#define F_GETLK (7)
 +#define F_SETLK (8)
 +#define F_SETLKW (9)
@@ -21,19 +113,3 @@ diff --git a/libc-bottom-half/headers/public/__header_fcntl.h b/libc-bottom-half
  #define FD_CLOEXEC (1)
 
  #define AT_EACCESS          (0x0)
-diff --git a/libc-bottom-half/cloudlibc/src/libc/fcntl/fcntl.c b/libc-bottom-half/cloudlibc/src/libc/fcntl/fcntl.c
---- a/libc-bottom-half/cloudlibc/src/libc/fcntl/fcntl.c
-+++ b/libc-bottom-half/cloudlibc/src/libc/fcntl/fcntl.c
-@@ -89,6 +89,12 @@
-       }
-       return fd;
-     }
-+    case F_GETLK:
-+    case F_SETLK:
-+    case F_SETLKW:
-+      // Requires shared lock state across proc_fork/proc_spawn instances.
-+      errno = ENOSYS;
-+      return -1;
-     default:
-       errno = EINVAL;
-       return -1;

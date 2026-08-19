@@ -16,6 +16,7 @@
     ./wasmer-forward-term-on-tty.patch
     ./wasmer-dev-fd.patch
     ./wasmer-epoll-stale-handler-deadlock.patch
+    ./wasmer-file-locking.patch
   ];
   src = pkgs.applyPatches {
     name = "${package.name}-patched-source";

@@ -1,0 +1,25 @@
+diff --git a/ext/opcache/ZendAccelerator.c b/ext/opcache/ZendAccelerator.c
+--- a/ext/opcache/ZendAccelerator.c
++++ b/ext/opcache/ZendAccelerator.c
+@@ -4671,6 +4671,7 @@ static int accel_finish_startup(void)
+ 			return SUCCESS;
+ 		}
+ 
++#ifdef HAVE_FORK
+ 		if (geteuid() == 0) {
+ 			pid_t pid;
+ 			struct passwd *pw;
+@@ -4734,5 +4735,13 @@ static int accel_finish_startup(void)
+ 			}
+ 		}
++#else
++		if (ZCG(accel_directives).preload_user
++		 && *ZCG(accel_directives).preload_user) {
++			zend_shared_alloc_unlock();
++			zend_accel_error(ACCEL_LOG_FATAL, "Preloading cannot change users without fork()");
++			return FAILURE;
++		}
++#endif
+ 
+ 		sapi_module.activate = NULL;
+ 		sapi_module.deactivate = NULL;

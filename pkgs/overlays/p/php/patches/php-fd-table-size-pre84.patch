@@ -1,0 +1,23 @@
+diff --git a/configure.ac b/configure.ac
+--- a/configure.ac
++++ b/configure.ac
+@@ -582,6 +582,7 @@
+ funopen \
+ gai_strerror \
+ getcwd \
++getdtablesize \
+ getloadavg \
+ getlogin \
+ getprotobyname \
+diff --git a/ext/standard/php_fopen_wrapper.c b/ext/standard/php_fopen_wrapper.c
+--- a/ext/standard/php_fopen_wrapper.c
++++ b/ext/standard/php_fopen_wrapper.c
+@@ -317,7 +317,7 @@ static php_stream * php_stream_url_wrap_php(php_stream_wrapper *wrapper, const c
+ 			return NULL;
+ 		}
+ 
+-#ifdef HAVE_UNISTD_H
++#ifdef HAVE_GETDTABLESIZE
+ 		dtablesize = getdtablesize();
+ #else
+ 		dtablesize = INT_MAX;

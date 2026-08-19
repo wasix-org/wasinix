@@ -59,14 +59,36 @@
       inherit system;
       importNixpkgs = args: import nixpkgs args;
       ci.sources = ["wasinix"];
-      projectTests = builtins.listToAttrs (map (name: {
-          inherit name;
-          value = {
+      projectTests =
+        builtins.listToAttrs (map (name: {
+            inherit name;
+            value = {
+              source = "wasinix";
+              check = _project: repositoryChecks.${name};
+            };
+          })
+          repositoryCheckNames)
+        // {
+          asyncify-eh = {
             source = "wasinix";
-            check = _project: repositoryChecks.${name};
+            check = checkedProject: let
+              nativePkgs = checkedProject.internals.packageSets.nativeRaw;
+              toolchain = import ./pkgs/toolchain {pkgs = nativePkgs;};
+              testLib = import ./pkgs/wasmer/test-lib.nix {
+                pkgs = nativePkgs;
+                wasmer = checkedProject.packages.native.wasmer;
+              };
+              devEnvFor = import ./pkgs/toolchain/dev-env.nix {
+                pkgs = nativePkgs;
+                inherit toolchain;
+              };
+            in
+              nativePkgs.callPackage ./pkgs/toolchain/tests/asyncify-eh-test.nix {
+                inherit testLib;
+                toolchain = devEnvFor {wasmExceptions = "yes";};
+              };
           };
-        })
-        repositoryCheckNames);
+        };
       repository = {
         source = "wasinix";
         root = repositorySource;

@@ -1,0 +1,28 @@
+--- a/main/network.c
++++ b/main/network.c
+@@ -347,7 +347,9 @@
+ 	socklen_t len;
+ 	int ret = 0;
+ 
++#ifndef __wasi__
+ 	SET_SOCKET_BLOCKING_MODE(sockfd, orig_flags);
++#endif
+ 
+ 	if ((n = connect(sockfd, addr, addrlen)) != 0) {
+ 		error = php_socket_errno();
+@@ -430,9 +432,15 @@
+ 
+ ok:
++#ifdef __wasi__
++	if (asynchronous) {
++		SET_SOCKET_BLOCKING_MODE(sockfd, orig_flags);
++	}
++#else
+ 	if (!asynchronous) {
+ 		/* back to blocking mode */
+ 		RESTORE_SOCKET_BLOCKING_MODE(sockfd, orig_flags);
+ 	}
++#endif
+ 
+ 	if (error_code) {
+ 		*error_code = error;

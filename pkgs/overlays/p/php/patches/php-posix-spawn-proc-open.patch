@@ -1,0 +1,13 @@
+diff --git a/ext/standard/config.m4 b/ext/standard/config.m4
+index ef6b3c5a..f87d68e2 100644
+--- a/ext/standard/config.m4
++++ b/ext/standard/config.m4
+@@ -276,7 +276,7 @@ dnl
+ dnl Check if there is a support means of creating a new process and defining
+ dnl which handles it receives
+ dnl
+-AC_CHECK_FUNCS([fork CreateProcess],
++AC_CHECK_FUNCS([fork posix_spawn CreateProcess],
+   [php_can_support_proc_open=yes; break;],
+   [php_can_support_proc_open=no])
+ AC_MSG_CHECKING([if your OS can spawn processes with inherited handles])
