@@ -38,6 +38,9 @@
             # WASIX has it, and without this a passive getaddrinfo still returns
             # AF_INET6 while socketmodule cannot parse it: "bind(): bad family".
             "--enable-ipv6"
+            # configure disables pymalloc for WASI along with Emscripten. It works
+            # here, and allocation-heavy code runs ~15% faster with it.
+            "--with-pymalloc"
             # nixpkgs presets ac_cv_x87_double_rounding=yes for every cross build, an
             # x86-only assumption; at "yes" pycore_pymath.h drops Python/dtoa.c and
             # repr(1.1) prints 1.1000000000000001. A configure argument beats nixpkgs' env.
