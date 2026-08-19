@@ -1,0 +1,44 @@
+Backport https://github.com/langchain-ai/langchain/commit/9f738f52977ef10063935e3f57d2a4367efb64de
+for Pydantic 2.13+, which returns PydanticUndefined for an uncalled default
+factory. LangChain otherwise mistakes default-valued fields for changed fields.
+
+--- a/langchain_core/load/serializable.py
++++ b/langchain_core/load/serializable.py
+@@ -12,6 +12,7 @@ from typing import Any, Literal, cast
+ 
+ from pydantic import BaseModel, ConfigDict
+ from pydantic.fields import FieldInfo
++from pydantic_core import PydanticUndefined
+ from typing_extensions import NotRequired, override
+ 
+ logger = logging.getLogger(__name__)
+@@ -70,5 +71,12 @@ def try_neq_default(value: Any, key: str, model: BaseModel) -> bool:
+     return _try_neq_default(value, field)
+ 
+ 
++def _get_field_default(field: FieldInfo) -> Any:
++    default = field.get_default()
++    if default is PydanticUndefined and field.default_factory is not None:
++        return None
++    return default
++
++
+ def _try_neq_default(value: Any, field: FieldInfo) -> bool:
+     # Handle edge case: inequality of two objects does not evaluate to a bool (e.g. two
+@@ -75,9 +83,14 @@ def _try_neq_default(value: Any, field: FieldInfo) -> bool:
+     # Pandas DataFrames).
+     try:
+-        return bool(field.get_default() != value)
++        default = _get_field_default(field)
++    except Exception as _:
++        # A raising default_factory means we cannot compare; treat as non-default.
++        return True
++    try:
++        return bool(default != value)
+     except Exception as _:
+         try:
+-            return all(field.get_default() != value)
++            return all(default != value)
+         except Exception as _:
+             try:
+                 return value is not field.default
