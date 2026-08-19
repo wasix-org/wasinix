@@ -1,0 +1,31 @@
+--- a/gnu/opendirat.c
++++ b/gnu/opendirat.c
+@@ -33,7 +33,7 @@
+    On success, *PNEW_FD is at least 3, so this is a "safer" function.  */
+ 
+ DIR *
+-opendirat (int dir_fd, char const *dir, int extra_flags, int *pnew_fd)
++gl_opendirat (int dir_fd, char const *dir, int extra_flags, int *pnew_fd)
+ {
+   int open_flags = (O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOCTTY
+                     | O_NONBLOCK | extra_flags);
+--- a/gnu/opendirat.h
++++ b/gnu/opendirat.h
+@@ -22,5 +22,5 @@
+ 
+ #include <dirent.h>
+ 
+-DIR *opendirat (int, char const *, int, int *)
++DIR *gl_opendirat (int, char const *, int, int *)
+   _GL_ATTRIBUTE_MALLOC _GL_ATTRIBUTE_DEALLOC (closedir, 1);
+--- a/gnu/backupfile.c
++++ b/gnu/backupfile.c
+@@ -224,7 +224,7 @@
+       char *base = buf + base_offset;
+       memcpy (tmp, base, sizeof ".");
+       strcpy (base, ".");
+-      dirp = opendirat (dir_fd, buf, 0, pnew_fd);
++      dirp = gl_opendirat (dir_fd, buf, 0, pnew_fd);
+       if (!dirp && errno == ENOMEM)
+         result = BACKUP_NOMEM;
+       memcpy (base, tmp, sizeof ".");
