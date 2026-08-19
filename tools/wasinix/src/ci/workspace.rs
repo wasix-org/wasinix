@@ -58,6 +58,7 @@ fn materialize_overrides(worktree: &Path, overrides: &[Override]) -> Result<()> 
         let source = match value.kind {
             OverrideKind::Release => value.value.clone(),
             OverrideKind::Revision => format!("rev:{}", value.value),
+            OverrideKind::Tag => format!("tag:{}", value.value),
         };
         let exe = crate::support::env::current_exe()?;
         let mut cmd = Command::new(exe);

@@ -38,7 +38,7 @@ pub struct RequestArgs {
     /// Wasinix revision to build; HEAD includes uncommitted changes
     #[arg(long, default_value = "HEAD")]
     pub at: String,
-    /// Materialize TARGET from a version or rev:SHA (repeatable)
+    /// Materialize TARGET from a version, tag:NAME or rev:SHA (repeatable)
     #[arg(
         long = "with",
         value_name = "TARGET@SOURCE",
@@ -174,15 +174,16 @@ struct CaseSpot {
 fn parse_override(spec: &str) -> Result<Override> {
     let Some((target, value)) = spec.split_once('@') else {
         return request_error(format!(
-            "--with {spec:?}: expected TARGET@VERSION or TARGET@rev:SHA"
+            "--with {spec:?}: expected TARGET@VERSION, TARGET@tag:NAME or TARGET@rev:SHA"
         ));
     };
     if target.is_empty() || value.is_empty() {
         return request_error(format!("--with {spec:?}: target and source must be non-empty"));
     }
-    let (kind, value) = match crate::support::naming::rev_override(value)? {
-        Some(rev) => (OverrideKind::Revision, rev),
-        None => (OverrideKind::Release, value),
+    let (kind, value) = match crate::support::naming::source_spec(value)? {
+        crate::support::naming::SourceSpec::Revision(rev) => (OverrideKind::Revision, rev),
+        crate::support::naming::SourceSpec::Tag(tag) => (OverrideKind::Tag, tag),
+        crate::support::naming::SourceSpec::Release(value) => (OverrideKind::Release, value),
     };
     Ok(Override {
         target: target.to_string(),
@@ -193,7 +194,7 @@ fn parse_override(spec: &str) -> Result<Override> {
     })
 }
 
-fn parse_overrides(specs: &[String]) -> Result<Vec<Override>> {
+pub(crate) fn parse_overrides(specs: &[String]) -> Result<Vec<Override>> {
     specs.iter().map(|spec| parse_override(spec)).collect()
 }
 

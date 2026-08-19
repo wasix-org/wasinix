@@ -9,9 +9,13 @@ wasinix update wasmer@rev:<40-hex>          # a specific revision
 wasinix update --all --pr                   # commit, push, open the PRs
 ```
 
-`TARGET@VERSION` and `TARGET@rev:SHA` are the whole request grammar, shared with
-`build --with`. A target that does not accept the mode you asked for says so;
-`cargo-registry` re-resolves the crate pins.
+`TARGET@VERSION`, `TARGET@tag:NAME` and `TARGET@rev:SHA` are the whole request
+grammar, shared with `build --with` and `bisect --good/--bad`. A version is
+whatever the target's own update script resolves; a tag is looked up in the
+target's remote and pinned as the commit it names, so a repository that tags
+`v1.2.3` needs `tag:v1.2.3` and one that tags `1.2.3` needs `tag:1.2.3`. A
+target that does not accept the mode you asked for says so; `cargo-registry`
+re-resolves the crate pins.
 
 How a pin bumps is declared next to it (`passthru.updateScript`, the standard
 nixpkgs convention); its constraints and quirks are comments in the same file. A

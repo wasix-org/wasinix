@@ -99,7 +99,7 @@ fn conclude(
 
 #[derive(clap::Args)]
 pub struct UpdateArgs {
-    /// Targets (TARGET, TARGET@VERSION, TARGET@rev:SHA); `list` shows them,
+    /// Targets (TARGET, TARGET@VERSION, TARGET@tag:NAME, TARGET@rev:SHA); `list` shows them,
     /// `hooks` runs only the re-sync hooks. For package update scripts:
     /// `request` prints the driver's request, `nix-update -- <argv>` runs a
     /// declared nix-update command with the request applied

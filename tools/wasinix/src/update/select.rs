@@ -1,6 +1,6 @@
 //! Which targets a set of specs selects, and the explicit requests they
-//! carry. `TARGET@VERSION` and `TARGET@rev:SOURCE` are the whole grammar,
-//! shared with `--with`.
+//! carry. `TARGET@VERSION`, `TARGET@tag:NAME` and `TARGET@rev:SOURCE` are
+//! the whole grammar, shared with `--with`.
 
 use std::collections::BTreeMap;
 
@@ -51,6 +51,62 @@ fn parse_revision(name: &str, value: &str, owner: &str, repo: &str) -> Result<St
     request_error(format!(
         "{name} revision expects a 40-character commit SHA or github:OWNER/REPO@SHA"
     ))
+}
+
+/// The commit a tag points at, read straight from the target's own remote.
+/// Resolving it here keeps `tag:` a spelling rather than a third kind of
+/// pin: everything downstream sees the revision it names.
+fn resolve_tag(targets: &[Target], name: &str, tag: &str) -> Result<String> {
+    let target = targets
+        .iter()
+        .find(|target| target.name == name)
+        .ok_or_else(|| crate::support::error::Error::Request(format!("unknown target {name:?}")))?;
+    let Some(repository) = target.source.as_ref().and_then(source_repository) else {
+        return request_error(format!(
+            "tag:{tag}: {name} declares no git source to resolve a tag against"
+        ));
+    };
+    let output = crate::support::git::git_global(&[
+        "ls-remote",
+        "--tags",
+        &repository,
+        &format!("refs/tags/{tag}"),
+        &format!("refs/tags/{tag}^{{}}"),
+    ])?;
+    match tag_commit(&output) {
+        Some(sha) => Ok(sha.to_string()),
+        None => request_error(format!("tag:{tag}: {repository} has no such tag")),
+    }
+}
+
+/// The commit an `ls-remote` answer names. An annotated tag lists the tag
+/// object and, as `<ref>^{}`, the commit it dereferences to; pinning the tag
+/// object would pin something no build can check out.
+pub(crate) fn tag_commit(output: &str) -> Option<&str> {
+    let mut found = None;
+    for line in output.lines() {
+        let Some((sha, reference)) = line.split_once('\t') else {
+            continue;
+        };
+        if reference.ends_with("^{}") {
+            return Some(sha);
+        }
+        found = found.or(Some(sha));
+    }
+    found
+}
+
+/// The clone url a target's source names, for the backends that have one.
+fn source_repository(source: &Value) -> Option<String> {
+    match source["kind"].as_str()? {
+        "github" => Some(format!(
+            "https://github.com/{}/{}.git",
+            source["owner"].as_str()?,
+            source["repo"].as_str()?
+        )),
+        "git" => source["url"].as_str().map(str::to_string),
+        _ => None,
+    }
 }
 
 /// Validate per-target requests against the modes each target declares.
@@ -166,11 +222,15 @@ pub fn target_requests(
         if requests.contains_key(&name) {
             return request_error(format!("update repeats source for target {name:?}"));
         }
-        let (mode, value) = match crate::support::naming::rev_override(source.as_str())? {
-            Some(rev) => (Mode::Revision, rev),
-            None => (Mode::Release, source.as_str()),
+        use crate::support::naming::SourceSpec;
+        let (mode, value) = match crate::support::naming::source_spec(source.as_str())? {
+            SourceSpec::Revision(rev) => (Mode::Revision, rev.to_string()),
+            // A tag names one commit; resolving it here means nothing
+            // downstream learns a third kind of source.
+            SourceSpec::Tag(tag) => (Mode::Revision, resolve_tag(targets, &name, tag)?),
+            SourceSpec::Release(value) => (Mode::Release, value.to_string()),
         };
-        let assignment = BTreeMap::from([(name.clone(), value.to_string())]);
+        let assignment = BTreeMap::from([(name.clone(), value)]);
         requests.extend(explicit_requests(targets, mode, &assignment)?);
         if !wanted.contains(&name) {
             wanted.push(name);

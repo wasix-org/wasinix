@@ -405,14 +405,36 @@ pub fn matches_glob(pattern: &str, value: &str) -> bool {
     walk(pattern.as_bytes(), value.as_bytes())
 }
 
-/// The `rev:<revision>` override spelling shared by every source grammar; an
-/// empty revision is an error, never an empty value.
-pub fn rev_override(value: &str) -> Result<Option<&str>> {
-    match value.strip_prefix("rev:") {
-        Some("") => crate::support::error::request_error("rev: names no revision"),
-        Some(rev) => Ok(Some(rev)),
-        None => Ok(None),
+/// How a source is named, in the one spelling every grammar takes: a bare
+/// release the update script resolves, an exact commit, or a tag resolved to
+/// the commit it points at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceSpec<'a> {
+    Release(&'a str),
+    Revision(&'a str),
+    Tag(&'a str),
+}
+
+/// Parse a source spelling. A scheme naming nothing is an error, never an
+/// empty value, and an unknown scheme is a release: a version may contain a
+/// colon in principle, and guessing otherwise would refuse valid pins.
+pub fn source_spec(value: &str) -> Result<SourceSpec<'_>> {
+    let scheme = |prefix: &str| -> Result<Option<&str>> {
+        match value.strip_prefix(prefix) {
+            Some("") => crate::support::error::request_error(format!(
+                "{prefix} names no {}",
+                prefix.trim_end_matches(':')
+            )),
+            other => Ok(other),
+        }
+    };
+    if let Some(rev) = scheme("rev:")? {
+        return Ok(SourceSpec::Revision(rev));
     }
+    if let Some(tag) = scheme("tag:")? {
+        return Ok(SourceSpec::Tag(tag));
+    }
+    Ok(SourceSpec::Release(value))
 }
 
 /// One attribute segment as an installable or address spells it: quoted

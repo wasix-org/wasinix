@@ -2162,6 +2162,46 @@ mod markdown {
     }
 
     #[test]
+    fn the_source_grammar_is_one_spelling_everywhere() {
+        use crate::support::naming::{source_spec, SourceSpec};
+        assert_eq!(source_spec("1.2.3").unwrap(), SourceSpec::Release("1.2.3"));
+        assert_eq!(source_spec("rev:abc123").unwrap(), SourceSpec::Revision("abc123"));
+        assert_eq!(source_spec("tag:v1.2.3").unwrap(), SourceSpec::Tag("v1.2.3"));
+        // A scheme naming nothing is an error, never an empty pin.
+        assert!(source_spec("rev:").is_err());
+        assert!(source_spec("tag:").is_err());
+        // `--with` carries the tag through to the update grammar that
+        // resolves it, rather than inventing a second kind of pin.
+        use crate::ci::types::OverrideKind;
+        let parsed = crate::cli::request::parse_overrides(&["wasixcc@tag:v0.4.3".into()])
+            .unwrap();
+        assert_eq!(parsed[0].kind, OverrideKind::Tag);
+        assert_eq!(parsed[0].value, "v0.4.3");
+    }
+
+    /// wasixcc tags annotated (`v0.4.3` is a tag object dereferencing to a
+    /// commit) and s3-server tags lightweight; pinning the tag object would
+    /// pin something no build can check out.
+    #[test]
+    fn a_tag_resolves_to_its_commit_through_either_tag_shape() {
+        use crate::update::select::tag_commit;
+        let annotated = concat!(
+            "3227d1f0636901dc2ea3bb839bc4362f0f0f8140\trefs/tags/v0.4.3\n",
+            "8a505d4605b15fd466a3881d286582b23e4ffecb\trefs/tags/v0.4.3^{}\n",
+        );
+        assert_eq!(
+            tag_commit(annotated),
+            Some("8a505d4605b15fd466a3881d286582b23e4ffecb")
+        );
+        let lightweight = "559865097f233abca013cf8b27ff88b4936a49c6\trefs/tags/0.1.22\n";
+        assert_eq!(
+            tag_commit(lightweight),
+            Some("559865097f233abca013cf8b27ff88b4936a49c6")
+        );
+        assert_eq!(tag_commit(""), None);
+    }
+
+    #[test]
     fn a_comment_bisect_pins_its_predicate_and_owns_the_override() {
         use crate::cli::untrusted::{parse, UntrustedCommand};
         let UntrustedCommand::Bisect(bisect) =

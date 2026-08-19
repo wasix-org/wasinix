@@ -45,6 +45,8 @@ pub struct Selector {
 pub enum OverrideKind {
     Release,
     Revision,
+    /// A tag, resolved to its commit by the update grammar that applies it.
+    Tag,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
