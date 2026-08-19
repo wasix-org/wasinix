@@ -34,6 +34,10 @@
         helpers.libTweaks {
           configureFlags = [
             "--enable-wasm-dynamic-linking"
+            # configure hardcodes ipv6=no for WASI, whose libc has no AF_INET6.
+            # WASIX has it, and without this a passive getaddrinfo still returns
+            # AF_INET6 while socketmodule cannot parse it: "bind(): bad family".
+            "--enable-ipv6"
             # nixpkgs presets ac_cv_x87_double_rounding=yes for every cross build, an
             # x86-only assumption; at "yes" pycore_pymath.h drops Python/dtoa.c and
             # repr(1.1) prints 1.1000000000000001. A configure argument beats nixpkgs' env.
