@@ -5095,6 +5095,20 @@ mod tools {
         let error = checked_text(&mut command, "probing").unwrap_err().to_string();
         assert!(error.contains("stdout-detail"), "{error}");
     }
+
+    #[test]
+    fn transfer_chatter_never_pushes_the_error_out_of_the_tail() {
+        let mut text = String::new();
+        for index in 0..2000 {
+            text.push_str(&format!(
+                "copying path '/nix/store/{index}-filler' from 'https://cache'...\n"
+            ));
+        }
+        text.push_str("error: builder for '/nix/store/x.drv' failed\n");
+        let tail = crate::support::tools::diagnostics_tail(&text);
+        assert!(tail.contains("error: builder for"), "{tail}");
+        assert!(!tail.contains("copying path"), "{tail}");
+    }
 }
 
 mod format {

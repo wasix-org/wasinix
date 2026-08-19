@@ -438,11 +438,14 @@ pub fn preview_index(
             .workdir(repo)
             .probe("a failing preview wheel build reports its own stderr")?;
         if !built.status.is_success() {
-            return request_error("building a preview wheel failed");
+            return request_error(format!(
+                "building the preview wheel {attr} failed: {}",
+                crate::support::tools::diagnostics_tail(&built.stderr)
+            ));
         }
         let out = String::from_utf8_lossy(&built.stdout).trim().to_string();
         if out.is_empty() {
-            return request_error("a preview wheel built to no output path");
+            return request_error(format!("the preview wheel {attr} built to no output path"));
         }
         let mut entry = wheel.clone();
         entry["published"] = Value::String(out);

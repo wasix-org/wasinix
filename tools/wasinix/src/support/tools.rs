@@ -66,10 +66,24 @@ pub fn spawn(cmd: &mut Command) -> Result<std::process::Child> {
 /// How much of a failing tool's diagnostics reaches the caller's message.
 const STDERR_TAIL: usize = 1500;
 
+/// The end of a failing tool's diagnostics. Transfer chatter is dropped
+/// first, so a nix error under hundreds of `copying path` lines survives
+/// the tail.
+pub fn diagnostics_tail(text: &str) -> String {
+    let kept: String = text
+        .lines()
+        .filter(|line| !crate::support::nix::progress_noise(line))
+        .fold(String::new(), |mut kept, line| {
+            kept.push_str(line);
+            kept.push('\n');
+            kept
+        });
+    crate::support::error::tail(&kept, STDERR_TAIL)
+}
+
 /// Run to completion; a nonzero exit becomes a request error carrying the
 /// context and the end of the tool's diagnostics (stderr, or stdout when the
-/// tool reports there). Transfer chatter is dropped first, so a nix error
-/// under hundreds of `copying path` lines survives the tail.
+/// tool reports there).
 pub fn checked_output(cmd: &mut Command, context: &str) -> Result<Vec<u8>> {
     log(cmd);
     let output = output(cmd)?;
@@ -82,15 +96,7 @@ pub fn checked_output(cmd: &mut Command, context: &str) -> Result<Vec<u8>> {
     } else {
         stderr.into_owned()
     };
-    let diagnostics: String = diagnostics
-        .lines()
-        .filter(|line| !crate::support::nix::progress_noise(line))
-        .fold(String::new(), |mut kept, line| {
-            kept.push_str(line);
-            kept.push('\n');
-            kept
-        });
-    let detail = crate::support::error::tail(&diagnostics, STDERR_TAIL);
+    let detail = diagnostics_tail(&diagnostics);
     if detail.is_empty() {
         Err(Error::Failure(format!("{context}: {} failed with {}", rendered(cmd), output.status)))
     } else {
