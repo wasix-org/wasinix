@@ -587,6 +587,22 @@ current toolchain before relying on it.
 
 ## Toolchain
 
+### apr cannot spawn a process 🟡
+
+- `apr_proc_create` builds its child with fork, and fork is declared only when
+  wasm exception handling is off, so the EH profiles fail to compile it with
+  "use of undeclared identifier 'fork'" (verified against wasix-libc's unistd.h,
+  which gates the declaration on `!defined(__wasm_exception_handling__)`).
+- Consequence: apr consumers cannot run a helper program. Subversion loses
+  `svn+ssh://` and external diff and editor commands; the rest of it, including
+  http and https access through serf, is unaffected.
+- Workaround: `packages/apr/patches/wasi-unsupported-calls.patch` answers
+  APR_ENOTIMPL, alongside `apr_proc_fork` and `apr_proc_detach`, which have no
+  equivalent at all.
+- Fix: build the child through `posix_spawn`, whose wasi file actions cover what
+  apr needs here (`addclose`, `addopen`, `adddup`, `addchdir_np`). Its
+  user-switching and rlimit options stay unimplementable.
+
 ### wasixcc drops the sysroot when the input is stdin 🟡
 
 - `echo '#include <errno.h>' | wasixcc -E -` fails with

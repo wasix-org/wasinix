@@ -1,0 +1,118 @@
+--- a/network_io/unix/sockopt.c
++++ b/network_io/unix/sockopt.c
+@@ -134,12 +134,16 @@
+ #endif
+         break;
+     case APR_SO_DEBUG:
++#ifdef SO_DEBUG
+         if (on != apr_is_option_set(sock, APR_SO_DEBUG)) {
+             if (setsockopt(sock->socketdes, SOL_SOCKET, SO_DEBUG, (void *)&one, sizeof(int)) == -1) {
+                 return errno;
+             }
+             apr_set_option(sock, APR_SO_DEBUG, on);
+         }
++#else
++        return APR_ENOTIMPL;
++#endif
+         break;
+     case APR_SO_BROADCAST:
+ #ifdef SO_BROADCAST
+@@ -372,7 +376,7 @@
+ 
+ apr_status_t apr_socket_atmark(apr_socket_t *sock, int *atmark)
+ {
+-#ifndef BEOS_R5
++#if !defined(BEOS_R5) && defined(SIOCATMARK)
+     int oobmark;
+ 
+     if (ioctl(sock->socketdes, SIOCATMARK, (void*) &oobmark) < 0)
+@@ -381,7 +385,7 @@
+     *atmark = (oobmark != 0);
+ 
+     return APR_SUCCESS;
+-#else /* BEOS_R5 */
++#else /* BEOS_R5 or no SIOCATMARK */
+     return APR_ENOTIMPL;
+ #endif
+ }
+--- a/file_io/unix/pipe.c
++++ b/file_io/unix/pipe.c
+@@ -280,12 +280,17 @@
+ APR_DECLARE(apr_status_t) apr_file_namedpipe_create(const char *filename, 
+                                                     apr_fileperms_t perm, apr_pool_t *pool)
+ {
++#ifdef __wasi__
++    /* no fifos: sys/stat.h declares neither mkfifo nor mknod */
++    return APR_ENOTIMPL;
++#else
+     mode_t mode = apr_unix_perms2mode(perm);
+ 
+     if (mkfifo(filename, mode) == -1) {
+         return errno;
+     }
+     return APR_SUCCESS;
++#endif
+ } 
+ 
+     
+--- a/threadproc/unix/proc.c
++++ b/threadproc/unix/proc.c
+@@ -218,6 +218,10 @@
+ 
+ APR_DECLARE(apr_status_t) apr_proc_fork(apr_proc_t *proc, apr_pool_t *pool)
+ {
++#ifdef __wasi__
++    /* a fork with no exec after it has no posix_spawn equivalent */
++    return APR_ENOTIMPL;
++#else
+     int pid;
+     
+     memset(proc, 0, sizeof(apr_proc_t));
+@@ -236,6 +240,7 @@
+     proc->pid = pid;
+ 
+     return APR_INPARENT;
++#endif
+ }
+ 
+ static apr_status_t limit_proc(apr_procattr_t *attr)
+@@ -388,6 +393,10 @@
+         }
+     }
+ 
++#ifdef __wasi__
++    /* posix_spawn covers this, see WASIX-TODO.md */
++    return APR_ENOTIMPL;
++#else
+     if ((new->pid = fork()) < 0) {
+         return errno;
+     }
+@@ -592,6 +601,7 @@
+         _exit(-1);  /* if we get here, there is a problem, so exit with an
+                      * error code. */
+     }
++#endif
+ 
+     /* Parent process */
+     if (attr->child_in && (attr->child_in->filedes != -1)) {
+--- a/threadproc/unix/procsup.c
++++ b/threadproc/unix/procsup.c
+@@ -26,6 +26,10 @@
+     /* Don't detach for MPE because child processes can't survive the death of
+      * the parent. */
+     if (daemonize) {
++#ifdef __wasi__
++        /* detaching means forking and letting the parent exit */
++        return APR_ENOTIMPL;
++#else
+         int x;
+ 
+         if ((x = fork()) > 0) {
+@@ -37,6 +41,7 @@
+             exit(1);  /* we can't do anything here, so just exit. */
+         }
+         /* RAISE_SIGSTOP(DETACH); */
++#endif
+     }
+ #endif
+ 
