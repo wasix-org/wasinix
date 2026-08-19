@@ -60,6 +60,17 @@
       "check-output wrapper applied to a derivation that already has a 'check' output";
         (old.outputs or ["out"]) ++ ["check"];
 
+      # Reference restrictions apply to shipped outputs; the snapshot retains build tools.
+      __structuredAttrs = true;
+      disallowedReferences = [];
+      outputChecks = lib.genAttrs (old.outputs or ["out"]) (output: let
+        checks = (old.outputChecks or {}).${output} or {};
+      in
+        checks
+        // {
+          disallowedReferences = (old.disallowedReferences or []) ++ (checks.disallowedReferences or []);
+        });
+
       # Cross stdenv drops check inputs. C suites need them to compile tests;
       # Python install checks receive theirs only in the run derivation.
       nativeBuildInputs =

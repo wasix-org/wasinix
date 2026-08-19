@@ -3,7 +3,16 @@
 # platform: wasip1"), and the jar runs on the build platform anyway.
 {
   pyprev,
+  pyfinal,
   final,
+  helpers,
   ...
 }:
-pyprev.hydra-core.override {antlr4 = final.buildPackages.antlr4;}
+helpers.libTweaks {
+  # Preserve nixpkgs' pytest 8.3 pin and expose setuptools to build-helper tests.
+  passthru.wasixDeclaredCheckInputs = [
+    pyfinal.pytest8_3CheckHook
+    pyfinal.setuptools
+  ];
+}
+(pyprev.hydra-core.override {antlr4 = final.buildPackages.antlr4;})

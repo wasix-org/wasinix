@@ -8,8 +8,13 @@
   ...
 }:
 helpers.libTweaks (lib.optionalAttrs (lib.versionOlder pyprev.langchain-core.version "1") {
-  propagatedBuildInputs = helpers.replaceInputsByName {
-    packaging = pyfinal.packaging_25_0;
-  };
-})
+    propagatedBuildInputs = helpers.replaceInputsByName {
+      packaging = pyfinal.packaging_25_0;
+    };
+  }
+  // {
+    patches = [./patches/langchain-core-pydantic-default.patch];
+    # The guest cannot execute its Python Wasm binary through host subprocess APIs.
+    disabledTests = ["test_importable_all_via_subprocess"];
+  })
 pyprev.langchain-core
