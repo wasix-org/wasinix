@@ -9,7 +9,9 @@ inputs:
     description: The revision the record is keyed by; $GITHUB_SHA when absent
     default: ""
   publish:
-    description: Upload the record to the cache; needs the S3 credentials
+    description:
+      Upload the record to the cache; skipped without the S3 credentials, as a
+      fork run has none
     default: "false"
 runs:
   using: composite
@@ -23,6 +25,8 @@ runs:
       run: |
         args=()
         if [ -n "$REV" ]; then args+=(--rev "$REV"); fi
-        if [ "$PUBLISH" = "true" ]; then args+=(--publish); fi
+        if [ "$PUBLISH" = "true" ] && [ -n "$AWS_ACCESS_KEY_ID" ]; then
+          args+=(--publish)
+        fi
         nix run .#wasinix -- ci step-timings \
           --step-summary "$GITHUB_STEP_SUMMARY" "${args[@]}"

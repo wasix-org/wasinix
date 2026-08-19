@@ -197,8 +197,10 @@ jobs:
           fi
           nix run .#wasinix -- ci publish --run-dir "$RUN_DIR" --baseline
 
-  # Which step was slow, per job, without opening any log. A push to main
-  # also publishes the record, which is the series `wasinix timings` folds.
+  # Which step was slow, per job, without opening any log. Every run
+  # publishes its record, the way the baseline does: the builds that cost
+  # anything happen on pull requests and in the merge queue, so a series of
+  # pushes alone would measure a warm cache.
   timings:
     needs: build
     if: always()
@@ -220,4 +222,4 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
         with:
-          publish: ${{ github.event_name == 'push' }}
+          publish: "true"
