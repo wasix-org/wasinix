@@ -187,11 +187,13 @@ in
     pname = "wasix-rust-toolchain";
     inherit version src;
 
-    patches = optionals hostedOnWasix [
-      ./wasix-host-tools.patch
-      ./wasix-process-fds.patch
-      ./tool-atomic-wait-feature.patch
-    ];
+    patches =
+      [./wasix-cc-linker.patch]
+      ++ optionals hostedOnWasix [
+        ./wasix-host-tools.patch
+        ./wasix-process-fds.patch
+        ./tool-atomic-wait-feature.patch
+      ];
 
     nativeBuildInputs =
       [

@@ -1,0 +1,33 @@
+diff --git a/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs b/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs
+--- a/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs
++++ b/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs
+@@ -74,1 +74,3 @@
+-use crate::spec::{Arch, Cc, LinkSelfContainedDefault, LinkerFlavor, Os, Target, base, crt_objects};
++use crate::spec::{
++    add_link_args, base, crt_objects, Arch, Cc, LinkSelfContainedDefault, LinkerFlavor, Os, Target,
++};
+@@ -111,0 +114,24 @@
++
++    // rustc passes -nodefaultlibs to the C compiler driver, so provide the
++    // WASIX runtime archives after Rust and dependency libraries.
++    add_link_args(
++        &mut options.late_link_args,
++        LinkerFlavor::WasmLld(Cc::Yes),
++        &[
++            "-lc++abi",
++            "-Wl,--whole-archive",
++            "-lc",
++            "-lresolv",
++            "-lrt",
++            "-lm",
++            "-lpthread",
++            "-lutil",
++            "-lcommon-tag-stubs",
++            "-Wl,--no-whole-archive",
++            "-lwasi-emulated-getpid",
++            "-lwasi-emulated-mman",
++            "-lwasi-emulated-process-clocks",
++            "-lunwind",
++            "-lclang_rt.builtins-wasm32",
++        ],
++    );

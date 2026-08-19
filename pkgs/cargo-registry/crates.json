@@ -381,6 +381,9 @@
   "sys-info": {
     "0.9.1": "sha256-tzgOsQis9Pr6G4JZ/81BT4+CTNcy5EtRhTb9HlK0ud0="
   },
+  "system-deps": {
+    "7.0.8": "sha256-aA/XTlXpr0wxxzlmNXx3niwBim7YLeglHlDVI6LRZbs="
+  },
   "target-lexicon": {
     "0.12.14": "sha256-/zdpSfCWgdq5Le4Y+GpcqBcJRB+Gjwp9QbZTaWya9l0=",
     "0.12.15": "sha256-ZBj4O5509lnyaJPOU87k41Ds5E+7XUtFwZ8sgJZO75Y=",
