@@ -1,0 +1,14 @@
+diff --git a/Zend/zend_long.h b/Zend/zend_long.h
+index 19621b37f2..5aa5d5deae 100644
+--- a/Zend/zend_long.h
++++ b/Zend/zend_long.h
+@@ -26 +26 @@
+-#if defined(__x86_64__) || defined(__LP64__) || defined(_LP64) || defined(_WIN64)
++#if defined(__x86_64__) || defined(__LP64__) || defined(_LP64) || defined(_WIN64) || defined(WASIX_64BIT_LONG_PATCH)
+diff --git a/ext/date/lib/timelib.h b/ext/date/lib/timelib.h
+index 535584e561..50948da159 100644
+--- a/ext/date/lib/timelib.h
++++ b/ext/date/lib/timelib.h
+@@ -112 +112 @@
+-#if (defined(__x86_64__) || defined(__LP64__) || defined(_LP64) || defined(_WIN64)) && !defined(TIMELIB_FORCE_LONG32)
++#if (defined(__x86_64__) || defined(__LP64__) || defined(_LP64) || defined(_WIN64) || defined(WASIX_64BIT_LONG_PATCH)) && !defined(TIMELIB_FORCE_LONG32)

@@ -1,0 +1,120 @@
+diff --git a/ext/standard/config.m4 b/ext/standard/config.m4
+index f0b67331..e2d26286 100644
+--- a/ext/standard/config.m4
++++ b/ext/standard/config.m4
+@@ -310 +310 @@ dnl
+-AC_CHECK_FUNCS(fork CreateProcess, [
++AC_CHECK_FUNCS(fork posix_spawn CreateProcess, [
+@@ -366,0 +367,2 @@ PHP_CHECK_FUNC(res_search, resolv, bind, socket)
++PHP_CHECK_FUNC(posix_spawn_file_actions_addchdir_np)
++
+diff --git a/ext/standard/proc_open.c b/ext/standard/proc_open.c
+index 25a5f7fe..18acd2bb 100644
+--- a/ext/standard/proc_open.c
++++ b/ext/standard/proc_open.c
+@@ -50,0 +51,5 @@
++#ifdef HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDCHDIR_NP
++#include <spawn.h>
++#define USE_POSIX_SPAWN
++#endif
++
+@@ -398,0 +404,56 @@ struct php_proc_open_descriptor_item {
++#if defined(USE_POSIX_SPAWN)
++static void close_spawn_descriptors(
++		struct php_proc_open_descriptor_item *descriptors,
++		int ndesc)
++{
++	int i;
++
++	for (i = 0; i < ndesc; i++) {
++		close(descriptors[i].childend);
++		if (descriptors[i].parentend) {
++			close(descriptors[i].parentend);
++		}
++	}
++}
++
++static int add_spawn_file_actions(
++		posix_spawn_file_actions_t *actions,
++		struct php_proc_open_descriptor_item *descriptors,
++		int ndesc)
++{
++	int i;
++	int result;
++
++	for (i = 0; i < ndesc; i++) {
++		if ((descriptors[i].mode & ~DESC_PARENT_MODE_WRITE) == DESC_PIPE) {
++			result = posix_spawn_file_actions_addclose(actions, descriptors[i].parentend);
++			if (result != 0) {
++				php_error_docref(NULL, E_WARNING, "Cannot close file descriptor %d: %s",
++					descriptors[i].parentend, strerror(result));
++				return FAILURE;
++			}
++		}
++
++		if (descriptors[i].childend != descriptors[i].index) {
++			result = posix_spawn_file_actions_adddup2(
++				actions, descriptors[i].childend, descriptors[i].index);
++			if (result != 0) {
++				php_error_docref(NULL, E_WARNING,
++					"Unable to copy file descriptor %d into file descriptor %d: %s",
++					descriptors[i].childend, descriptors[i].index, strerror(result));
++				return FAILURE;
++			}
++
++			result = posix_spawn_file_actions_addclose(actions, descriptors[i].childend);
++			if (result != 0) {
++				php_error_docref(NULL, E_WARNING, "Cannot close file descriptor %d: %s",
++					descriptors[i].childend, strerror(result));
++				return FAILURE;
++			}
++		}
++	}
++
++	return SUCCESS;
++}
++#endif
++
+@@ -1004,0 +1066,42 @@ PHP_FUNCTION(proc_open)
++#elif defined(USE_POSIX_SPAWN)
++	posix_spawn_file_actions_t actions;
++	int result = posix_spawn_file_actions_init(&actions);
++
++	if (result != 0) {
++		php_error_docref(NULL, E_WARNING, "posix_spawn_file_actions_init() failed: %s", strerror(result));
++		close_spawn_descriptors(descriptors, ndesc);
++		goto exit_fail;
++	}
++
++	if (add_spawn_file_actions(&actions, descriptors, ndesc) == FAILURE) {
++		posix_spawn_file_actions_destroy(&actions);
++		close_spawn_descriptors(descriptors, ndesc);
++		goto exit_fail;
++	}
++
++	if (cwd) {
++		result = posix_spawn_file_actions_addchdir_np(&actions, cwd);
++		if (result != 0) {
++			php_error_docref(NULL, E_WARNING,
++				"posix_spawn_file_actions_addchdir_np() failed: %s", strerror(result));
++			posix_spawn_file_actions_destroy(&actions);
++			close_spawn_descriptors(descriptors, ndesc);
++			goto exit_fail;
++		}
++	}
++
++	if (argv) {
++		result = posix_spawnp(&child, command, &actions, NULL, argv,
++			env.envarray ? env.envarray : environ);
++	} else {
++		char *spawn_argv[] = {"sh", "-c", command, NULL};
++		result = posix_spawn(&child, "/bin/sh", &actions, NULL, spawn_argv,
++			env.envarray ? env.envarray : environ);
++	}
++
++	posix_spawn_file_actions_destroy(&actions);
++	if (result != 0) {
++		php_error_docref(NULL, E_WARNING, "posix_spawn() failed: %s", strerror(result));
++		close_spawn_descriptors(descriptors, ndesc);
++		goto exit_fail;
++	}

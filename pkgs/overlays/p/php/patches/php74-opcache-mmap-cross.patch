@@ -1,0 +1,25 @@
+diff --git a/ext/opcache/config.m4 b/ext/opcache/config.m4
+--- a/ext/opcache/config.m4
++++ b/ext/opcache/config.m4
+@@ -139,9 +139,19 @@ int main() {
+   }
+   return 0;
+ }
+-]])],[dnl
++]])],[
+     AC_DEFINE(HAVE_SHM_MMAP_ANON, 1, [Define if you have mmap(MAP_ANON) SHM support])
+-    msg=yes],[msg=no],[msg=no])
++    msg=yes],[msg=no],[
++    case $host_alias in
++      *wasm*)
++        AC_DEFINE(HAVE_SHM_MMAP_ANON, 1, [Define if you have mmap(MAP_ANON) SHM support])
++        msg=yes
++        ;;
++      *)
++        msg=no
++        ;;
++    esac
++  ])
+   AC_MSG_RESULT([$msg])
+ 
+   PHP_CHECK_FUNC_LIB(shm_open, rt)

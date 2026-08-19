@@ -1,0 +1,87 @@
+diff --git a/ext/sockets/conversions.h b/ext/sockets/conversions.h
+index 1f1fd29c..2deb79c8 100644
+--- a/ext/sockets/conversions.h
++++ b/ext/sockets/conversions.h
+@@ -22 +22,23 @@
+-#include "php_sockets.h"
++#include "php_sockets.h"
++
++#if defined(__wasi__) && !defined(CMSG_DATA)
++struct cmsghdr {
++	socklen_t cmsg_len;
++	int cmsg_level;
++	int cmsg_type;
++};
++
++#define PHP_CMSG_ALIGN(length) (((length) + sizeof(size_t) - 1) & ~(sizeof(size_t) - 1))
++#define CMSG_DATA(cmsg) ((unsigned char *)((struct cmsghdr *)(cmsg) + 1))
++#define CMSG_SPACE(length) (sizeof(struct cmsghdr) + PHP_CMSG_ALIGN(length))
++#define CMSG_LEN(length) (sizeof(struct cmsghdr) + (length))
++#define CMSG_FIRSTHDR(message) \
++	((message)->msg_controllen >= sizeof(struct cmsghdr) \
++		? (struct cmsghdr *)(message)->msg_control \
++		: NULL)
++#define CMSG_NXTHDR(message, cmsg) \
++	((((unsigned char *)(cmsg) + PHP_CMSG_ALIGN((cmsg)->cmsg_len) + sizeof(struct cmsghdr)) \
++		<= ((unsigned char *)(message)->msg_control + (message)->msg_controllen)) \
++		? (struct cmsghdr *)((unsigned char *)(cmsg) + PHP_CMSG_ALIGN((cmsg)->cmsg_len)) \
++		: NULL)
++#endif
+diff --git a/ext/sockets/multicast.c b/ext/sockets/multicast.c
+index f331fd17..2e91be4d 100644
+--- a/ext/sockets/multicast.c
++++ b/ext/sockets/multicast.c
+@@ -733,5 +733,10 @@ zend_result php_if_index_to_addr4(unsigned if_index, php_socket *php_sock, struc
+-	if (if_index == 0) {
+-		out_addr->s_addr = INADDR_ANY;
+-		return SUCCESS;
+-	}
+-
++	if (if_index == 0) {
++		out_addr->s_addr = INADDR_ANY;
++		return SUCCESS;
++	}
++
++#ifdef __wasi__
++	(void) php_sock;
++	php_error_docref(NULL, E_WARNING, "Interface index lookup is not supported");
++	return FAILURE;
++#else
+@@ -761,4 +766,5 @@ zend_result php_if_index_to_addr4(unsigned if_index, php_socket *php_sock, struc
+-	memcpy(out_addr, &((struct sockaddr_in *) &if_req.ifr_addr)->sin_addr,
+-		sizeof *out_addr);
+-	return SUCCESS;
+-}
++	memcpy(out_addr, &((struct sockaddr_in *) &if_req.ifr_addr)->sin_addr,
++		sizeof *out_addr);
++	return SUCCESS;
++#endif
++}
+@@ -775,5 +781,10 @@ zend_result php_add4_to_if_index(struct in_addr *addr, php_socket *php_sock, uns
+-	if (addr->s_addr == INADDR_ANY) {
+-		*if_index = 0;
+-		return SUCCESS;
+-	}
+-
++	if (addr->s_addr == INADDR_ANY) {
++		*if_index = 0;
++		return SUCCESS;
++	}
++
++#ifdef __wasi__
++	(void) php_sock;
++	php_error_docref(NULL, E_WARNING, "Interface address lookup is not supported");
++	return FAILURE;
++#else
+@@ -853,5 +864,6 @@ err:
+-err:
+-	if (buf != NULL)
+-		efree(buf);
+-	return FAILURE;
+-}
++err:
++	if (buf != NULL)
++		efree(buf);
++	return FAILURE;
++#endif
++}

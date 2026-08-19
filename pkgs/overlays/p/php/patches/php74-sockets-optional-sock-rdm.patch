@@ -1,0 +1,9 @@
+diff --git a/ext/sockets/sockets.c b/ext/sockets/sockets.c
+index 36c1691956..f2bc548b04 100644
+--- a/ext/sockets/sockets.c
++++ b/ext/sockets/sockets.c
+@@ -732 +732,3 @@ PHP_MINIT_FUNCTION(sockets)
+-	REGISTER_LONG_CONSTANT("SOCK_RDM",		SOCK_RDM,		CONST_CS | CONST_PERSISTENT);
++#if defined(SOCK_RDM)
++	REGISTER_LONG_CONSTANT("SOCK_RDM",		SOCK_RDM,		CONST_CS | CONST_PERSISTENT);
++#endif

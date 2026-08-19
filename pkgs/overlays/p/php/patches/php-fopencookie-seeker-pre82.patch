@@ -1,0 +1,19 @@
+--- a/main/streams/cast.c
++++ b/main/streams/cast.c
+@@ -121,9 +121,14 @@
+ }
+ # else
+-static int stream_cookie_seeker(void *cookie, zend_off_t position, int whence)
++static int stream_cookie_seeker(void *cookie, off_t *position, int whence)
+ {
+ 
+-	return php_stream_seek((php_stream *)cookie, position, whence);
++	*position = php_stream_seek((php_stream *)cookie, (zend_off_t)*position, whence);
++
++	if (*position == -1) {
++		return -1;
++	}
++	return 0;
+ }
+ # endif
+ 

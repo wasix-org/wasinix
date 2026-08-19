@@ -1,0 +1,13 @@
+diff --git a/Zend/zend_portability.h b/Zend/zend_portability.h
+index bd293895ea..e3a29f10ae 100644
+--- a/Zend/zend_portability.h
++++ b/Zend/zend_portability.h
+@@ -370,7 +370,7 @@ typedef intptr_t zend_intptr_t;
+ # define free_alloca(p, use_heap)\tefree(p)
+ #endif
+ 
+-#ifdef HAVE_SIGSETJMP
++#if defined(HAVE_SIGSETJMP) && !(defined(__wasi__) && !defined(__wasm_exception_handling__))
+ # define SETJMP(a) sigsetjmp(a, 0)
+ # define LONGJMP(a,b) siglongjmp(a, b)
+ # define JMP_BUF sigjmp_buf

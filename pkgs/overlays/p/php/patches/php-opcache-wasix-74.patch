@@ -1,0 +1,243 @@
+--- a/ext/opcache/ZendAccelerator.c
++++ b/ext/opcache/ZendAccelerator.c
+@@ -145,6 +145,12 @@
+ # define INCREMENT(v) InterlockedIncrement64(&ZCSG(v))
+ # define DECREMENT(v) InterlockedDecrement64(&ZCSG(v))
+ # define LOCKVAL(v)   (ZCSG(v))
++#elif defined(__wasi__)
++static uint32_t accel_wasi_mem_usage = 0;
++static uint32_t accel_wasi_restart_in = 0;
++# define INCREMENT(v) __atomic_add_fetch(&accel_wasi_##v, 1, __ATOMIC_SEQ_CST)
++# define DECREMENT(v) __atomic_sub_fetch(&accel_wasi_##v, 1, __ATOMIC_SEQ_CST)
++# define LOCKVAL(v)   __atomic_load_n(&accel_wasi_##v, __ATOMIC_SEQ_CST)
+ #endif
+ 
+ #ifdef ZEND_WIN32
+@@ -245,7 +251,7 @@
+ 
+ static inline void accel_restart_enter(void)
+ {
+-#ifdef ZEND_WIN32
++#if defined(ZEND_WIN32) || defined(__wasi__)
+ 	INCREMENT(restart_in);
+ #else
+ 	struct flock restart_in_progress;
+@@ -264,7 +270,7 @@
+ 
+ static inline void accel_restart_leave(void)
+ {
+-#ifdef ZEND_WIN32
++#if defined(ZEND_WIN32) || defined(__wasi__)
+ 	ZCSG(restart_in_progress) = 0;
+ 	DECREMENT(restart_in);
+ #else
+@@ -285,7 +291,9 @@
+ static inline int accel_restart_is_active(void)
+ {
+ 	if (ZCSG(restart_in_progress)) {
+-#ifndef ZEND_WIN32
++#if defined(ZEND_WIN32) || defined(__wasi__)
++		return LOCKVAL(restart_in) != 0;
++#else
+ 		struct flock restart_check;
+ 
+ 		restart_check.l_type = F_WRLCK;
+@@ -303,8 +311,6 @@
+ 		} else {
+ 			return 1;
+ 		}
+-#else
+-		return LOCKVAL(restart_in) != 0;
+ #endif
+ 	}
+ 	return 0;
+@@ -313,7 +319,7 @@
+ /* Creates a read lock for SHM access */
+ static inline int accel_activate_add(void)
+ {
+-#ifdef ZEND_WIN32
++#if defined(ZEND_WIN32) || defined(__wasi__)
+ 	SHM_UNPROTECT();
+ 	INCREMENT(mem_usage);
+ 	SHM_PROTECT();
+@@ -336,7 +342,7 @@
+ /* Releases a lock for SHM access */
+ static inline void accel_deactivate_sub(void)
+ {
+-#ifdef ZEND_WIN32
++#if defined(ZEND_WIN32) || defined(__wasi__)
+ 	if (ZCG(counted)) {
+ 		SHM_UNPROTECT();
+ 		DECREMENT(mem_usage);
+@@ -359,7 +365,7 @@
+ 
+ static inline void accel_unlock_all(void)
+ {
+-#ifdef ZEND_WIN32
++#if defined(ZEND_WIN32) || defined(__wasi__)
+ 	accel_deactivate_sub();
+ #else
+ 	struct flock mem_usage_unlock_all;
+@@ -767,7 +773,7 @@
+ 	HANDLE_UNBLOCK_INTERRUPTIONS();
+ }
+ 
+-#ifndef ZEND_WIN32
++#if !defined(ZEND_WIN32) && !defined(__wasi__)
+ static inline void kill_all_lockers(struct flock *mem_usage_check)
+ {
+ 	int success, tries;
+@@ -830,7 +836,7 @@
+ 
+ static inline int accel_is_inactive(void)
+ {
+-#ifdef ZEND_WIN32
++#if defined(ZEND_WIN32) || defined(__wasi__)
+ 	if (LOCKVAL(mem_usage) == 0) {
+ 		return SUCCESS;
+ 	}
+@@ -2638,6 +2644,10 @@
+ 	ZCSG(start_time) = zend_accel_get_time();
+ 	ZCSG(last_restart_time) = 0;
+ 	ZCSG(restart_in_progress) = 0;
++#ifdef __wasi__
++	__atomic_store_n(&accel_wasi_mem_usage, 0, __ATOMIC_SEQ_CST);
++	__atomic_store_n(&accel_wasi_restart_in, 0, __ATOMIC_SEQ_CST);
++#endif
+ 
+ 	for (i = 0; i < -HT_MIN_MASK; i++) {
+ 		ZCSG(uninitialized_bucket)[i] = HT_INVALID_IDX;
+--- a/ext/opcache/zend_file_cache.c
++++ b/ext/opcache/zend_file_cache.c
+@@ -89,9 +89,15 @@
+ #elif defined(HAVE_FLOCK)
+ # define zend_file_cache_flock flock
+ #else
+-# define LOCK_SH 0
+-# define LOCK_EX 1
+-# define LOCK_UN 2
++# ifndef LOCK_SH
++#  define LOCK_SH 0
++# endif
++# ifndef LOCK_EX
++#  define LOCK_EX 1
++# endif
++# ifndef LOCK_UN
++#  define LOCK_UN 2
++# endif
+ static int zend_file_cache_flock(int fd, int type)
+ {
+ 	return 0;
+--- a/ext/opcache/zend_shared_alloc.c
++++ b/ext/opcache/zend_shared_alloc.c
+@@ -56,6 +56,14 @@
+ static char lockfile_name[MAXPATHLEN];
+ #endif
+ 
++#ifdef __wasi__
++# ifdef ZTS
++static MUTEX_T zend_shared_alloc_wasi_mutex;
++# else
++static uint8_t zend_shared_alloc_wasi_lock;
++# endif
++#endif
++
+ static const zend_shared_memory_handler_entry handler_table[] = {
+ #ifdef USE_MMAP
+ 	{ "mmap", &zend_alloc_mmap_handlers },
+@@ -162,7 +170,15 @@
+ 	ZSMMG(shared_free) = requested_size; /* goes to tmp_shared_globals.shared_free */
+ 
+ #ifndef ZEND_WIN32
++#ifdef __wasi__
++#ifdef ZTS
++	zend_shared_alloc_wasi_mutex = tsrm_mutex_alloc();
++#else
++	__atomic_store_n(&zend_shared_alloc_wasi_lock, 0, __ATOMIC_SEQ_CST);
++#endif
++#else
+ 	zend_shared_alloc_create_lock(ZCG(accel_directives).lockfile_path);
++#endif
+ #else
+ 	zend_shared_alloc_create_lock();
+ #endif
+@@ -284,10 +300,17 @@
+ 	ZSMMG(shared_segments) = NULL;
+ 	g_shared_alloc_handler = NULL;
+ #ifndef ZEND_WIN32
+-	close(lock_file);
++	if (lock_file >= 0) {
++		close(lock_file);
++		lock_file = -1;
++	}
+ 
+ # ifdef ZTS
++#  ifdef __wasi__
++	tsrm_mutex_free(zend_shared_alloc_wasi_mutex);
++#  else
+ 	tsrm_mutex_free(zts_lock);
++#  endif
+ # endif
+ #endif
+ }
+@@ -441,7 +464,16 @@
+ 
+ void zend_shared_alloc_lock(void)
+ {
+-#ifndef ZEND_WIN32
++#ifdef ZEND_WIN32
++	zend_shared_alloc_lock_win32();
++#elif defined(__wasi__)
++#ifdef ZTS
++	tsrm_mutex_lock(zend_shared_alloc_wasi_mutex);
++#else
++	while (__atomic_exchange_n(&zend_shared_alloc_wasi_lock, 1, __ATOMIC_SEQ_CST)) {
++	}
++#endif
++#else
+ 	struct flock mem_write_lock;
+ 
+ 	mem_write_lock.l_type = F_WRLCK;
+@@ -469,8 +501,6 @@
+ 		}
+ 		break;
+ 	}
+-#else
+-	zend_shared_alloc_lock_win32();
+ #endif
+ 
+ 	ZCG(locked) = 1;
+@@ -478,7 +508,7 @@
+ 
+ void zend_shared_alloc_unlock(void)
+ {
+-#ifndef ZEND_WIN32
++#if !defined(ZEND_WIN32) && !defined(__wasi__)
+ 	struct flock mem_write_unlock;
+ 
+ 	mem_write_unlock.l_type = F_UNLCK;
+@@ -489,15 +519,21 @@
+ 
+ 	ZCG(locked) = 0;
+ 
+-#ifndef ZEND_WIN32
++#ifdef ZEND_WIN32
++	zend_shared_alloc_unlock_win32();
++#elif defined(__wasi__)
++#ifdef ZTS
++	tsrm_mutex_unlock(zend_shared_alloc_wasi_mutex);
++#else
++	__atomic_store_n(&zend_shared_alloc_wasi_lock, 0, __ATOMIC_SEQ_CST);
++#endif
++#else
+ 	if (fcntl(lock_file, F_SETLK, &mem_write_unlock) == -1) {
+ 		zend_accel_error(ACCEL_LOG_ERROR, "Cannot remove lock - %s (%d)", strerror(errno), errno);
+ 	}
+ #ifdef ZTS
+ 	tsrm_mutex_unlock(zts_lock);
+ #endif
+-#else
+-	zend_shared_alloc_unlock_win32();
+ #endif
+ }
+ 

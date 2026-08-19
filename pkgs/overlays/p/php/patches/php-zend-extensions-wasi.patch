@@ -1,0 +1,41 @@
+--- a/Zend/zend_portability.h
++++ b/Zend/zend_portability.h
+@@ -176,6 +176,9 @@
+ # define DL_UNLOAD					FreeLibrary
+ # define DL_HANDLE					HMODULE
+ # define ZEND_EXTENSIONS_SUPPORT	1
++#elif defined(__wasi__)
++# define DL_HANDLE					void *
++# define ZEND_EXTENSIONS_SUPPORT	1
+ #else
+ # define DL_HANDLE					void *
+ # define ZEND_EXTENSIONS_SUPPORT	0
+--- a/Zend/zend_extensions.c
++++ b/Zend/zend_extensions.c
+@@ -27,7 +27,7 @@
+ 
+ zend_result zend_load_extension(const char *path)
+ {
+-#if ZEND_EXTENSIONS_SUPPORT
++#if ZEND_EXTENSIONS_SUPPORT && !defined(__wasi__)
+ 	DL_HANDLE handle;
+ 
+ 	handle = DL_LOAD(path);
+@@ -61,7 +61,7 @@
+ 
+ zend_result zend_load_extension_handle(DL_HANDLE handle, const char *path)
+ {
+-#if ZEND_EXTENSIONS_SUPPORT
++#if ZEND_EXTENSIONS_SUPPORT && !defined(__wasi__)
+ 	zend_extension *new_extension;
+ 	zend_extension_version_info *extension_version_info;
+ 
+@@ -226,7 +226,7 @@
+ 
+ void zend_extension_dtor(zend_extension *extension)
+ {
+-#if ZEND_EXTENSIONS_SUPPORT && !ZEND_DEBUG
++#if ZEND_EXTENSIONS_SUPPORT && !ZEND_DEBUG && !defined(__wasi__)
+ 	if (extension->handle && !getenv("ZEND_DONT_UNLOAD_MODULES")) {
+ 		DL_UNLOAD(extension->handle);
+ 	}

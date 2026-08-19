@@ -1,0 +1,9 @@
+diff --git a/ext/sockets/sockets_arginfo.h b/ext/sockets/sockets_arginfo.h
+index d6925f93c8..c50de52c93 100644
+--- a/ext/sockets/sockets_arginfo.h
++++ b/ext/sockets/sockets_arginfo.h
+@@ -375 +375,3 @@ static void register_sockets_symbols(int module_number)
+-	REGISTER_LONG_CONSTANT("SO_DEBUG", SO_DEBUG, CONST_PERSISTENT);
++#if defined(SO_DEBUG)
++	REGISTER_LONG_CONSTANT("SO_DEBUG", SO_DEBUG, CONST_PERSISTENT);
++#endif

@@ -1,0 +1,109 @@
+--- a/ext/opcache/config.m4
++++ b/ext/opcache/config.m4
+@@ -337,7 +337,7 @@
+ 	shared_alloc_mmap.c \
+ 	shared_alloc_posix.c \
+ 	$ZEND_JIT_SRC,
+-	shared,,"$PHP_OPCACHE_CFLAGS -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1",,yes)
++	no,,"$PHP_OPCACHE_CFLAGS -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1",,yes)
+ 
+   PHP_ADD_EXTENSION_DEP(opcache, pcre)
+ 
+--- a/ext/opcache/ZendAccelerator.h
++++ b/ext/opcache/ZendAccelerator.h
+@@ -103,6 +103,8 @@
+ typedef time_t accel_time_t;
+ #endif
+ 
++extern zend_extension zend_extension_entry;
++
+ typedef enum _zend_accel_restart_reason {
+ 	ACCEL_RESTART_OOM,    /* restart because of out of memory */
+ 	ACCEL_RESTART_HASH,   /* restart because of hash overflow */
+--- a/ext/opcache/ZendAccelerator.c
++++ b/ext/opcache/ZendAccelerator.c
+@@ -2929,7 +2929,7 @@
+ 	return SUCCESS;
+ }
+ 
+-static void accel_globals_ctor(zend_accel_globals *accel_globals)
++void accel_globals_ctor(zend_accel_globals *accel_globals)
+ {
+ #if defined(COMPILE_DL_OPCACHE) && defined(ZTS)
+ 	ZEND_TSRMLS_CACHE_UPDATE();
+@@ -2939,7 +2939,7 @@
+ 	GC_MAKE_PERSISTENT_LOCAL(accel_globals->key);
+ }
+ 
+-static void accel_globals_dtor(zend_accel_globals *accel_globals)
++void accel_globals_dtor(zend_accel_globals *accel_globals)
+ {
+ 	zend_string_free(accel_globals->key);
+ }
+@@ -3114,12 +3114,6 @@
+ 
+ static int accel_startup(zend_extension *extension)
+ {
+-#ifdef ZTS
+-	accel_globals_id = ts_allocate_id(&accel_globals_id, sizeof(zend_accel_globals), (ts_allocate_ctor) accel_globals_ctor, (ts_allocate_dtor) accel_globals_dtor);
+-#else
+-	accel_globals_ctor(&accel_globals);
+-#endif
+-
+ #ifdef HAVE_JIT
+ 	zend_jit_init();
+ #endif
+--- a/ext/opcache/zend_accelerator_module.c
++++ b/ext/opcache/zend_accelerator_module.c
+@@ -404,12 +404,23 @@
+ 	}
+ }
+ 
++void accel_globals_ctor(zend_accel_globals *accel_globals);
++void accel_globals_dtor(zend_accel_globals *accel_globals);
++
+ static ZEND_MINIT_FUNCTION(zend_accelerator)
+ {
+ 	(void)type; /* keep the compiler happy */
+ 
++#ifdef ZTS
++	accel_globals_id = ts_allocate_id(&accel_globals_id, sizeof(zend_accel_globals), (ts_allocate_ctor) accel_globals_ctor, (ts_allocate_dtor) accel_globals_dtor);
++#else
++	accel_globals_ctor(&accel_globals);
++#endif
++
+ 	REGISTER_INI_ENTRIES();
+ 
++	zend_register_extension(&zend_extension_entry, NULL);
++
+ 	return SUCCESS;
+ }
+ 
+@@ -555,7 +566,7 @@
+ 	DISPLAY_INI_ENTRIES();
+ }
+ 
+-static zend_module_entry accel_module_entry = {
++zend_module_entry accel_module_entry = {
+ 	STANDARD_MODULE_HEADER,
+ 	ACCELERATOR_PRODUCT_NAME,
+ 	ext_functions,
+@@ -572,7 +583,7 @@
+ 
+ int start_accel_module(void)
+ {
+-	return zend_startup_module(&accel_module_entry);
++	return SUCCESS;
+ }
+ 
+ /* {{{ Get the scripts which are accelerated by ZendAccelerator */
+--- a/ext/opcache/zend_accelerator_module.h
++++ b/ext/opcache/zend_accelerator_module.h
+@@ -26,4 +26,7 @@
+ 
+ void zend_accel_override_file_functions(void);
+ 
++extern zend_module_entry accel_module_entry;
++#define phpext_opcache_ptr &accel_module_entry
++
+ #endif /* _ZEND_ACCELERATOR_MODULE_H */

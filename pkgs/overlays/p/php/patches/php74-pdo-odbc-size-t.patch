@@ -1,0 +1,7 @@
+diff --git a/ext/pdo_odbc/odbc_stmt.c b/ext/pdo_odbc/odbc_stmt.c
+index bd7a58f9..8f84ec16 100644
+--- a/ext/pdo_odbc/odbc_stmt.c
++++ b/ext/pdo_odbc/odbc_stmt.c
+@@ -651 +651 @@ static int odbc_stmt_describe(pdo_stmt_t *stmt, int colno)
+-static int odbc_stmt_get_col(pdo_stmt_t *stmt, int colno, char **ptr, zend_ulong *len, int *caller_frees)
++static int odbc_stmt_get_col(pdo_stmt_t *stmt, int colno, char **ptr, size_t *len, int *caller_frees)

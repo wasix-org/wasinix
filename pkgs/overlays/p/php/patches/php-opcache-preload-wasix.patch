@@ -1,0 +1,23 @@
+diff --git a/ext/opcache/ZendAccelerator.c b/ext/opcache/ZendAccelerator.c
+--- a/ext/opcache/ZendAccelerator.c
++++ b/ext/opcache/ZendAccelerator.c
+@@ -5015,6 +5015,7 @@ static zend_result accel_finish_startup_preload_subprocess(pid_t *pid)
+ 		return SUCCESS;
+ 	}
+ 
++#ifdef HAVE_FORK
+ 	*pid = fork();
+ 	if (*pid == -1) {
+ 		zend_shared_alloc_unlock();
+@@ -5039,6 +5040,11 @@ static zend_result accel_finish_startup_preload_subprocess(pid_t *pid)
+ 	}
+ 
+ 	return SUCCESS;
++#else
++	zend_shared_alloc_unlock();
++	zend_accel_error_noreturn(ACCEL_LOG_FATAL, "Preloading cannot change users without fork()");
++	return FAILURE;
++#endif
+ }
+ #endif /* ZEND_WIN32 */
+ 

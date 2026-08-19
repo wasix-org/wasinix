@@ -1,0 +1,17 @@
+diff --git a/Zend/zend_alloc.c b/Zend/zend_alloc.c
+--- a/Zend/zend_alloc.c
++++ b/Zend/zend_alloc.c
+@@ -704,6 +704,7 @@ static zend_always_inline int zend_mm_bitset_is_free_range(zend_mm_bitset *bitse
+ 
+ static zend_always_inline void zend_mm_hugepage(void* ptr, size_t size)
+ {
++#ifndef __wasi__
+ #if defined(MADV_HUGEPAGE)
+ 	(void)madvise(ptr, size, MADV_HUGEPAGE);
+ #elif defined(HAVE_MEMCNTL)
+@@ -714,4 +715,5 @@ static zend_always_inline void zend_mm_hugepage(void* ptr, size_t size)
+ #endif
++#endif
+ }
+ 
+ static void *zend_mm_chunk_alloc_int(size_t size, size_t alignment)

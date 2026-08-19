@@ -1,0 +1,18 @@
+diff --git a/ext/readline/readline_cli.c b/ext/readline/readline_cli.c
+index 2b095078..93c2aaa5 100644
+--- a/ext/readline/readline_cli.c
++++ b/ext/readline/readline_cli.c
+@@ -742,2 +742,5 @@ typedef cli_shell_callbacks_t *(__cdecl *get_cli_shell_callbacks)(void);
+-#else
+-/*
++#else
++#ifdef __wasi__
++#define GET_SHELL_CB(cb) (cb) = php_cli_get_shell_callbacks()
++#else
++/*
+@@ -760,2 +763,3 @@ this extension sharedto offer compatibility.
+-#endif*/
+-#endif
++#endif*/
++#endif
++#endif

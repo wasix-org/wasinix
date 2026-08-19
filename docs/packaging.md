@@ -210,6 +210,31 @@ Crates not in nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
   [Registry history](registry.md#registry-history).
 - Which wheel to add next, and what it unblocks: `python-coverage.md`.
 
+## PHP extensions
+
+WASIX PHP cannot load shared modules, so `php.withExtensions` rebuilds the
+interpreter with the selected extension sources compiled statically. It uses the
+nixpkgs selector interface:
+
+```nix
+php.withExtensions ({enabled, all}: enabled ++ [all.igbinary])
+```
+
+`php.extensions` contains the available extension source packages and
+`php.enabledExtensions` contains the current selection. Dependencies declared by
+an extension must come from the same-profile `final` package set. Keep the
+source, configure flag, build inputs, and cross-build environment together in
+the extension entry in `pkgs/wasix/php/package.nix`.
+
+The `php-int64` and versioned `php*-int64` attributes keep the wasm32 pointer
+ABI while using a 64-bit `zend_long` and timelib integer. Their `withExtensions`
+results retain that integer ABI, so select extensions from the same PHP
+attribute rather than mixing interpreter builds.
+
+The registry serves these variants as `php/php-32` and `php/php-64`. The PHP 8.5
+builds are current and the other versioned attributes publish as history under
+the same two package names.
+
 ## Tests
 
 `pkgs/overlays/<first-character>/<name>/tests/*.nix` files receive the same

@@ -1,0 +1,10 @@
+--- a/ext/opcache/ZendAccelerator.c
++++ b/ext/opcache/ZendAccelerator.c
+@@ -81,7 +81,6 @@
+ #ifndef ZEND_WIN32
+ # include <sys/types.h>
+ # include <sys/wait.h>
+-# include <sys/ipc.h>
+ # include <pwd.h>
+ # include <grp.h>
+ #endif
