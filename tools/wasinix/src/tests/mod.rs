@@ -2110,6 +2110,12 @@ mod markdown {
         ));
         // --force is required at the type level, not checked afterwards.
         assert!(parse("regenerate").is_err());
+        assert!(matches!(
+            parse("fmt").unwrap(),
+            UntrustedCommand::Mutation(MutationCommand::Format)
+        ));
+        // fmt takes the whole tree; there is nothing to aim it at.
+        assert!(parse("fmt pkgs").is_err());
         use crate::ci::origin::{Classifier, CommandKind};
         assert_eq!(
             crate::cli::untrusted::ClapClassifier
@@ -2128,6 +2134,18 @@ mod markdown {
         assert_eq!(
             crate::cli::untrusted::ClapClassifier.classify("help").unwrap(),
             CommandKind::Help
+        );
+        // fmt rewrites the branch, so it serializes with the other mutations.
+        assert_eq!(
+            crate::cli::untrusted::ClapClassifier.classify("fmt").unwrap(),
+            CommandKind::Mutation
+        );
+        // A bisect only builds and replies; it takes the build job's shape.
+        assert_eq!(
+            crate::cli::untrusted::ClapClassifier
+                .classify("bisect wasmer --good pinned --bad main -- build all")
+                .unwrap(),
+            CommandKind::Build
         );
         // clap already prefixes its rendering; the wrapper must not.
         let refusal = crate::cli::untrusted::parse("frobnicate --now")

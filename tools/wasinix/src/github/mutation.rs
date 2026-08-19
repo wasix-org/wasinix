@@ -160,6 +160,43 @@ fn bot_committer() -> crate::support::git::Identity<'static> {
     }
 }
 
+/// `/wasinix fmt`: the repo's own formatter over the pull request's tree,
+/// committed as one change. The entry counts the files, since a formatting
+/// commit is otherwise opaque in the reply.
+fn format_tree(worktree: &Path) -> Result<ChangeSet> {
+    use crate::update::changeset::{Entry, EntryKind, Unchanged};
+    crate::support::nix::fmt(worktree)?;
+    let files: Vec<String> = git(worktree, &["diff", "--name-only"])?
+        .lines()
+        .map(str::to_string)
+        .collect();
+    let mut changes = ChangeSet::default();
+    if files.is_empty() {
+        changes.unchanged.push(Unchanged {
+            subject: "formatting".into(),
+            detail: "the tree is already formatted".into(),
+        });
+        return Ok(changes);
+    }
+    let entry = Entry {
+        kind: EntryKind::Format,
+        subject: "formatting".into(),
+        from: None,
+        to: None,
+        detail: Some(format!("{} files reformatted", files.len())),
+        changelog: None,
+        files,
+    };
+    changes.committed = crate::support::git::commit(
+        worktree,
+        crate::support::git::Stage::All,
+        &ChangeSet::commit_message(&entry),
+        Some(&bot_committer()),
+    )?;
+    changes.entries.push(entry);
+    Ok(changes)
+}
+
 fn mutation_registry<'a>(
     client: &'a Client,
     origin: &crate::ci::origin::Origin,
@@ -397,6 +434,7 @@ pub fn mutate(repo: &Path, origin_doc: &Path, out_dir: &Path) -> Result<()> {
                 committer: Some(bot_committer()),
             },
         )?,
+        MutationCommand::Format => format_tree(worktree.path())?,
         MutationCommand::Regenerate => unreachable!("resolved to its recipe above"),
     };
     if !git(worktree.path(), &["status", "--porcelain"])?.trim().is_empty() {

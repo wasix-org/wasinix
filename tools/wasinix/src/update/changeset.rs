@@ -21,6 +21,8 @@ pub enum EntryKind {
     Backfill,
     /// A derived listing re-synced.
     Hook,
+    /// The tree reformatted by the repo's formatter.
+    Format,
     /// An advisory note surfaced by the run, never a file change.
     Notable,
 }
@@ -105,6 +107,7 @@ impl ChangeSet {
             },
             EntryKind::Prune => "pkgs: prune rels keys nothing serves".into(),
             EntryKind::Hook => format!("{}: re-sync generated listing", entry.subject),
+            EntryKind::Format => "treewide: apply the repo formatter".into(),
             EntryKind::Notable => format!("{}: note", entry.subject),
         }
     }

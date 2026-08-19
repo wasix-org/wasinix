@@ -176,6 +176,8 @@ enum UntrustedCli {
     #[command(subcommand)]
     Versions(UntrustedVersions),
     Regenerate(UntrustedRegenerate),
+    /// Run the repo's formatter over the pull request's tree
+    Fmt,
     /// Reply with the command language
     Help,
 }
@@ -190,6 +192,7 @@ pub enum MutationCommand {
         changed: bool,
     },
     Regenerate,
+    Format,
 }
 
 /// The reply `/wasinix help` posts.
@@ -202,6 +205,7 @@ pub const HELP: &str = "### `/wasinix` commands\n\n\
     - `/wasinix update [targets|--all]` refreshes pins (bare on a managed PR \
     replays its recipe)\n\
     - `/wasinix versions bump <specs|--changed>` bumps publication rels\n\
+    - `/wasinix fmt` formats the branch and commits the result\n\
     - `/wasinix regenerate --force` rebuilds a managed branch from its recipe\n\
     - `/wasinix help` prints this message\n\n\
     Any line of a comment works; the command runs against this pull request.\n";
@@ -277,6 +281,7 @@ pub fn parse(command: &str) -> Result<UntrustedCommand> {
             changed,
         }),
         UntrustedCli::Regenerate(_) => UntrustedCommand::Mutation(MutationCommand::Regenerate),
+        UntrustedCli::Fmt => UntrustedCommand::Mutation(MutationCommand::Format),
         // Comment commands execute on the workflow runner itself, and the
         // untrusted grammar rightly cannot spell --on, so every case is
         // pinned local; a runner has no builders.toml to default from.

@@ -87,7 +87,7 @@ fn secondary_details(changes: &ChangeSet) -> Markdown {
     let mut lines = Vec::new();
     for entry in &changes.entries {
         match entry.kind {
-            EntryKind::Retain | EntryKind::Prune | EntryKind::Hook => {
+            EntryKind::Retain | EntryKind::Prune | EntryKind::Hook | EntryKind::Format => {
                 lines.push(Markdown::concat([
                     Markdown::constant("- **"),
                     Markdown::text(&entry.subject),
