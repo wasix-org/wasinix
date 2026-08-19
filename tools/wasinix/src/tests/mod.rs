@@ -818,7 +818,7 @@ mod compare {
     }
 
     #[test]
-    fn new_and_dropped_jobs_count_as_regressions() {
+    fn new_failures_regress_while_removed_jobs_remain_information() {
         let (_, builds) = compare_cases(
             &case(&["kept", "dropped"]),
             &map(&[
@@ -837,7 +837,7 @@ mod compare {
         assert!(builds.regressions.is_empty());
         assert_eq!(builds.new_failures, addrs(&["fresh"]));
         assert_eq!(builds.dropped_successes, addrs(&["dropped"]));
-        assert_eq!(builds.regression_count(), 2);
+        assert_eq!(builds.regression_count(), 1);
     }
 
     #[test]
@@ -4518,6 +4518,42 @@ mod fold {
         );
         assert_eq!(report.conclusion, Some(Conclusion::Failure));
         assert!(report.title.contains("1 regressions"), "{}", report.title);
+    }
+
+    #[test]
+    fn removed_jobs_do_not_fail_the_projection() {
+        let plan = plan_of(&diff_request(), None, &[]);
+        let report = fold(
+            &plan,
+            &all_green(&plan),
+            FoldContext {
+                baseline_case: Some("baseline".into()),
+                finished: true,
+                comparisons: vec![projected(
+                    Some(crate::ci::compare::EvalDiff {
+                        removed: vec![crate::support::atoms::JobAddr("checks.find".into())],
+                        ..crate::ci::compare::EvalDiff::default()
+                    }),
+                    Some(crate::ci::compare::BuildDiff {
+                        dropped_successes: vec![crate::support::atoms::JobAddr(
+                            "checks.find".into(),
+                        )],
+                        ..crate::ci::compare::BuildDiff::default()
+                    }),
+                )],
+                ..FoldContext::default()
+            },
+        );
+        assert_eq!(report.conclusion, Some(Conclusion::Success), "{}", report.title);
+        assert_eq!(report.comparisons[0].regression_count(), 0);
+        assert_eq!(
+            report.comparisons[0]
+                .builds
+                .as_ref()
+                .unwrap()
+                .dropped_successes,
+            vec![crate::support::atoms::JobAddr("checks.find".into())]
+        );
     }
 
     #[test]

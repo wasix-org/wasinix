@@ -176,6 +176,7 @@ pub struct BuildDiff {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub new_failures: Vec<JobAddr>,
     /// Jobs only the baseline covers that were passing when they vanished.
+    /// They remain visible for review but do not fail the comparison.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dropped_successes: Vec<JobAddr>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -192,7 +193,6 @@ impl BuildDiff {
     pub fn regression_count(&self) -> usize {
         self.regressions.len()
             + self.new_failures.len()
-            + self.dropped_successes.len()
             + usize::from(self.case_failure)
     }
 }
