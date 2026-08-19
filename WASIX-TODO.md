@@ -603,6 +603,21 @@ current toolchain before relying on it.
   apr needs here (`addclose`, `addopen`, `adddup`, `addchdir_np`). Its
   user-switching and rlimit options stay unimplementable.
 
+### wasixcc only reads link inputs whose name ends in `.o` 🟡
+
+- Linking a shared library from an object named `foo.os` fails with
+  `wasm-ld: error: cannot open <tmpdir>/foo.os.0.o: No such file or directory`,
+  while the same bytes named `foo.o` link. The name is the only difference, so
+  wasixcc selects on the extension; what it means to write at
+  `<tmpdir>/<name>.0.o` is not visible from outside (verified against wasixcc
+  0.4.5, clang 21.1.206).
+- Consequence: scons builds, which name shared objects `.os` by default, cannot
+  link a shared library at all.
+- Workaround: `packages/serf/patches/wasi-shared-object-suffix.patch` sets
+  scons' `SHOBJSUFFIX` to `.shared.o`.
+- Fix: have wasixcc classify link inputs by content, or accept the other object
+  suffixes in common use.
+
 ### wasixcc drops the sysroot when the input is stdin 🟡
 
 - `echo '#include <errno.h>' | wasixcc -E -` fails with
