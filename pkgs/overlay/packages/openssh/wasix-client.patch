@@ -1,0 +1,211 @@
+diff --git a/dns.c b/dns.c
+index a44dc27..cc6e8d4 100644
+--- a/dns.c
++++ b/dns.c
+@@ -40 +40,9 @@
+-#include "digest.h"
++#include "digest.h"
++#ifndef ERRSET_SUCCESS
++#define ERRSET_SUCCESS 0
++#define ERRSET_NOMEMORY 1
++#define ERRSET_FAIL 2
++#define ERRSET_INVAL 3
++#define ERRSET_NONAME 4
++#define ERRSET_NODATA 5
++#endif
+@@ -178 +178,8 @@ verify_host_key_dns(const char *hostname, struct sockaddr *address,
+-	u_int counter;
++#ifdef __wasix__
++	(void)hostname;
++	(void)address;
++	(void)hostkey;
++	*flags = 0;
++	return -1;
++#else
++	u_int counter;
+@@ -277 +284,2 @@ verify_host_key_dns(const char *hostname, struct sockaddr *address,
+-	return 0;
++	return 0;
++#endif
+diff --git a/misc.c b/misc.c
+index 2973085..2219e1b 100644
+--- a/misc.c
++++ b/misc.c
+@@ -67 +67,21 @@
+ #include "platform.h"
++
++#ifdef __wasix__
++struct passwd *
++wasix_fallback_passwd(uid_t uid)
++{
++	static struct passwd pw;
++	char *home;
++
++	home = getenv("HOME");
++	pw.pw_name = "wasix";
++	pw.pw_passwd = "";
++	pw.pw_uid = uid;
++	pw.pw_gid = getgid();
++	pw.pw_gecos = "WASIX";
++	pw.pw_dir = home != NULL && *home != '\0' ? home : "/";
++	pw.pw_shell = "/bin/sh";
++	return &pw;
++}
++#endif
++
+@@ -1303,4 +1323,9 @@ tilde_expand(const char *filename, uid_t uid, char **retp)
+-	} else if ((pw = getpwuid(uid)) == NULL) {
+-		error_f("No such uid %ld", (long)uid);
+-		goto out;
+-	}
++#ifdef __wasix__
++	} else if ((pw = getpwuid(uid)) == NULL) {
++		pw = wasix_fallback_passwd(uid);
++#else
++	} else if ((pw = getpwuid(uid)) == NULL) {
++		error_f("No such uid %ld", (long)uid);
++		goto out;
++#endif
++	}
+@@ -2842 +2842,14 @@ subprocess(const char *tag, const char *command,
+-	FILE *f = NULL;
++#ifdef __wasix__
++	(void)tag;
++	(void)command;
++	(void)ac;
++	(void)av;
++	(void)child;
++	(void)flags;
++	(void)pw;
++	(void)drop_privs;
++	(void)restore_privs;
++	error_f("subprocess execution is not supported");
++	return 0;
++#else
++	FILE *f = NULL;
+@@ -2979 +2992,2 @@ subprocess(const char *tag, const char *command,
+-	return pid;
++	return pid;
++#endif
+diff --git a/misc.h b/misc.h
+index 8ed5a80..c2a19d4 100644
+--- a/misc.h
++++ b/misc.h
+@@ -89 +89,7 @@ int	 tilde_expand(const char *, uid_t, char **);
+ char	*tilde_expand_filename(const char *, uid_t);
++
++#ifdef __wasix__
++struct passwd;
++struct passwd *wasix_fallback_passwd(uid_t);
++#endif
++
+diff --git a/mux.c b/mux.c
+index e4c368e..5f71c70 100644
+--- a/mux.c
++++ b/mux.c
+@@ -31,6 +31,15 @@
+ #include <string.h>
+ #include <unistd.h>
+-
++#ifdef __wasix__
++static int
++wasix_daemon(int nochdir, int noclose)
++{
++	errno = ENOSYS;
++	return -1;
++}
++#define daemon wasix_daemon
++#endif
++
+ #include "xmalloc.h"
+ #include "log.h"
+ #include "ssh.h"
+diff --git a/readpass.c b/readpass.c
+index 525c0db..bd7210a 100644
+--- a/readpass.c
++++ b/readpass.c
+@@ -50 +50,2 @@ ssh_askpass(char *askpass, const char *msg, const char *env_hint)
+-	pid_t pid, ret;
++#ifndef __wasix__
++	pid_t pid, ret;
+@@ -107,0 +109,6 @@ ssh_askpass(char *askpass, const char *msg, const char *env_hint)
++#else
++	(void)askpass;
++	(void)msg;
++	(void)env_hint;
++	return NULL;
++#endif
+@@ -267,0 +276 @@ notify_start(int force_askpass, const char *fmt, ...)
++#ifndef __wasix__
+@@ -286 +296,2 @@ notify_start(int force_askpass, const char *fmt, ...)
+- out_ctx:
++#endif
++ out_ctx:
+diff --git a/readconf.c b/readconf.c
+index 8ab9072..711d222 100644
+--- a/readconf.c
++++ b/readconf.c
+@@ -50,6 +50,10 @@
+ #if defined(HAVE_STRNVIS) && defined(HAVE_VIS_H) && !defined(BROKEN_STRNVIS)
+ # include <vis.h>
+ #endif
++
++#ifdef __wasix__
++#undef HAVE_IFADDRS_H
++#endif
+-
++
+ #include "xmalloc.h"
+ #include "ssh.h"
+diff --git a/ssh.c b/ssh.c
+index 1530cdf..03ae64d 100644
+--- a/ssh.c
++++ b/ssh.c
+@@ -63,9 +63,17 @@
+ #include <limits.h>
+ #include <locale.h>
+-
++#ifdef __wasix__
++static int
++wasix_daemon(int nochdir, int noclose)
++{
++	errno = ENOSYS;
++	return -1;
++}
++#define daemon wasix_daemon
++#endif
++
+ #include <netinet/in.h>
+ #include <arpa/inet.h>
+-
+ #ifdef WITH_OPENSSL
+ #include <openssl/evp.h>
+ #include <openssl/err.h>
+@@ -664,4 +672,8 @@ main(int ac, char **av)
+-	if (!pw) {
+-		logit("No user exists for uid %lu", (u_long)getuid());
+-		exit(255);
+-	}
++	if (!pw) {
++#ifdef __wasix__
++		pw = wasix_fallback_passwd(getuid());
++#else
++		logit("No user exists for uid %lu", (u_long)getuid());
++		exit(255);
++#endif
++	}
+diff --git a/sshconnect.c b/sshconnect.c
+index 764a1cc..c77db18 100644
+--- a/sshconnect.c
++++ b/sshconnect.c
+@@ -37,6 +37,9 @@
+ #include <unistd.h>
+ #include <ifaddrs.h>
+-
++#ifdef __wasix__
++#undef HAVE_IFADDRS_H
++#endif
++
+ #include "xmalloc.h"
+ #include "hostfile.h"
+ #include "ssh.h"

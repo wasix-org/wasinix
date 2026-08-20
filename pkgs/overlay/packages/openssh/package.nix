@@ -4,26 +4,79 @@
 # session isolation reports that rather than pretending. ssh forks for
 # multiplexing and ProxyCommand, so this builds at the off profile.
 {
+  final,
   prev,
   helpers,
   ...
 }:
-helpers.libTweaks {
-  patches = [./patches/wasi-unsupported-calls.patch];
-  # no SCM_RIGHTS: openssh passes descriptors between its privsep processes and
-  # for ControlMaster multiplexing, and already carries a switch for platforms
-  # that cannot. wasi's msghdr does carry msg_control, so the probe says yes
-  # while struct cmsghdr stays undefined.
-  # wasi keeps no login records and has no chroot, so the accounting openssh
-  # writes on a session has nothing behind it; it carries switches for each.
-  env.NIX_CFLAGS_COMPILE = "-DDISABLE_FD_PASSING -DDISABLE_UTMP -DDISABLE_UTMPX -DDISABLE_WTMP -DDISABLE_WTMPX -DDISABLE_LASTLOG -DDISABLE_LOGIN";
-  configureFlags = [
-    "ac_cv_have_control_in_msghdr=no"
-    "ac_cv_have_accrights_in_msghdr=no"
-    # ifaddrs.h exists and getifaddrs does not, and openssh keys BindInterface
-    # off the header
-    "ac_cv_header_ifaddrs_h=no"
-  ];
-  passthru.wasix.supportedProfiles = ["off"];
-}
-prev.openssh
+helpers.wasmRename {wasmName = "ssh";} (
+  helpers.libTweaks {
+    patches = [
+      ./patches/wasi-unsupported-calls.patch
+      ./wasix-client.patch
+    ];
+    # no SCM_RIGHTS: openssh passes descriptors between its privsep processes and
+    # for ControlMaster multiplexing, and already carries a switch for platforms
+    # that cannot. wasi's msghdr does carry msg_control, so the probe says yes
+    # while struct cmsghdr stays undefined.
+    # wasi keeps no login records and has no chroot, so the accounting openssh
+    # writes on a session has nothing behind it; it carries switches for each.
+    env = {
+      NIX_CFLAGS_COMPILE = "-DDISABLE_FD_PASSING -DDISABLE_UTMP -DDISABLE_UTMPX -DDISABLE_WTMP -DDISABLE_WTMPX -DDISABLE_LASTLOG -DDISABLE_LOGIN";
+      ac_cv_func_daemon = "yes";
+      ac_cv_func_freeifaddrs = "no";
+      ac_cv_func_getifaddrs = "no";
+      ac_cv_search_getrrsetbyname = "none required";
+    };
+    configureFlags = old:
+      (helpers.dropFlagsByPrefix ["--with-libedit"] old)
+      ++ [
+        "--without-pam"
+        "--without-kerberos5"
+        "--without-security-key-builtin"
+        "--disable-security-key"
+        "--without-ldns"
+        "ac_cv_have_control_in_msghdr=no"
+        "ac_cv_have_accrights_in_msghdr=no"
+        # ifaddrs.h exists and getifaddrs does not, and openssh keys BindInterface
+        # off the header
+        "ac_cv_header_ifaddrs_h=no"
+      ];
+    passthru.wasix = {
+      shipped = true;
+      supportedProfiles = ["off"];
+    };
+    passthru.wasmer = {
+      name = "ssh";
+      entrypoint = "ssh";
+    };
+    outputs = _: ["out"];
+    postPatch = ''
+      mkdir -p wasix-compat
+      cp ${../git/wasix-compat/unistd.h} wasix-compat/unistd.h
+      cp ${../git/wasix-compat/proc.c} wasix-compat/proc.c
+    '';
+    preConfigure = ''
+      $CC -c wasix-compat/proc.c -o wasix-compat/proc.o
+      $AR rcs wasix-compat/libwasix-compat.a wasix-compat/proc.o
+      export NIX_CFLAGS_COMPILE="''${NIX_CFLAGS_COMPILE-} -I$PWD/wasix-compat"
+      export NIX_LDFLAGS="''${NIX_LDFLAGS-} -L$PWD/wasix-compat -lwasix-compat"
+    '';
+    buildInputs = helpers.dropInputsByNameInfix ["libedit"];
+    propagatedBuildInputs = helpers.dropInputsByNameInfix ["libedit"];
+    buildFlags = old: old ++ ["ssh"];
+    installPhase = _: ''
+      runHook preInstall
+      install -D -m 0755 ssh "$out/bin/ssh"
+      runHook postInstall
+    '';
+    postInstall = _: "";
+  } (prev.openssh.override {
+    inherit (final) libedit openssl zlib;
+    withFIDO = false;
+    withKerberos = false;
+    withLdns = false;
+    withPAM = false;
+    withSecurityKey = false;
+  })
+)
