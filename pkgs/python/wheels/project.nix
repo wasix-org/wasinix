@@ -275,59 +275,39 @@
           });
       });
     checkSpec = ((wheel.passthru or {}).wasinix or {}).checks.captured or {};
-    shardCount = checkSpec.shards or 1;
-    mkDerivedUpstream = shard:
-      emulatedChecks.checkFor {
-        drv = withCheck;
-        # timeout / expectFail / broken, same declaration the C side uses
-        spec = removeAttrs checkSpec ["shards"];
-        phase = "pythonCheckPhase";
-        # The runner, every check input, and the TRANSITIVE closure of both:
-        # PYTHONPATH does no propagation, so a plugin's own dependencies must
-        # be named too or their imports fail in the guest.
-        guestInputs = let
-          evalOk = d: d != null && (builtins.tryEval (builtins.seq d.drvPath true)).success;
-          guestUsable = d: d ? pythonModule || lib.hasInfix "check-hook" (lib.getName d);
-          declared = lib.filter evalOk selectedCheckInputs;
-          # Keep the declared input when its propagated closure cannot
-          # evaluate. The check then fails if it imports the missing module.
-          closureFor = d: let
-            attempted = builtins.tryEval (
-              let
-                modules = pythonPackages.requiredPythonModules [d];
-              in
-                builtins.seq (builtins.length modules) modules
-            );
+    # The runner, every check input, and the TRANSITIVE closure of both:
+    # PYTHONPATH does no propagation, so a plugin's own dependencies must
+    # be named too or their imports fail in the guest.
+    guestCheckInputs = let
+      evalOk = d: d != null && (builtins.tryEval (builtins.seq d.drvPath true)).success;
+      guestUsable = d: d ? pythonModule || lib.hasInfix "check-hook" (lib.getName d);
+      declared = lib.filter evalOk selectedCheckInputs;
+      # Keep the declared input when its propagated closure cannot
+      # evaluate. The check then fails if it imports the missing module.
+      closureFor = d: let
+        attempted = builtins.tryEval (
+          let
+            modules = pythonPackages.requiredPythonModules [d];
           in
-            if attempted.success
-            then attempted.value
-            else [];
-        in
-          lib.unique (declared ++ lib.filter (d: evalOk d && guestUsable d) (lib.concatMap closureFor (lib.filter guestUsable declared)));
-        name = "wheel-${name}" + lib.optionalString (shard != null) "-upstream-${toString shard}-of-${toString shardCount}";
-        postRestore = lib.optionalString (shard != null) ''
-          export WASIX_CHECK_SHARD_COUNT=${toString shardCount}
-          export WASIX_CHECK_SHARD_NUM=${toString shard}
-        '';
-      };
+            builtins.seq (builtins.length modules) modules
+        );
+      in
+        if attempted.success
+        then attempted.value
+        else [];
+    in
+      lib.unique (declared ++ lib.filter (d: evalOk d && guestUsable d) (lib.concatMap closureFor (lib.filter guestUsable declared)));
     derivedUpstream =
-      lib.throwIf (!(builtins.isInt shardCount && shardCount > 0))
-      "wheel-${name}: checks.captured.shards must be a positive integer"
-      (
-        if !(withCheck ? check)
-        then {}
-        else if shardCount == 1
-        then {upstream = mkDerivedUpstream null;}
-        else
-          # Split large suites into cacheable CI leaves that share the captured tree.
-          lib.listToAttrs (lib.genList (
-              shard:
-                lib.nameValuePair
-                "upstream-${toString shard}-of-${toString shardCount}"
-                (mkDerivedUpstream shard)
-            )
-            shardCount)
-      );
+      if !(withCheck ? check)
+      then {}
+      else
+        emulatedChecks.checksFor {
+          drv = withCheck;
+          spec = checkSpec;
+          phase = "pythonCheckPhase";
+          guestInputs = guestCheckInputs;
+          name = "wheel-${name}";
+        };
   in
     wheel.overrideAttrs (o: {
       passthru =

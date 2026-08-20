@@ -50,10 +50,11 @@ in {
       && phase != null
       && builtins.elem entry.variant.profile profiles
     ) {
-      tests.captured = emulatedChecks.checkFor {
+      tests = emulatedChecks.checksFor {
         drv = entry.package;
         inherit spec phase;
         name = "${entry.name}-${entry.variant.profile}-captured";
+        testName = "captured";
       };
     };
 }

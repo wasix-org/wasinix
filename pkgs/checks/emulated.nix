@@ -181,7 +181,7 @@
       ${verdict.onCheckFail}
     fi
   '';
-in {
+in rec {
   inherit restore shebangExecs;
 
   # The package's emulated upstream check derivation. Callers attach it as
@@ -192,8 +192,7 @@ in {
     spec ? {},
     # "checkPhase" (C suites) or "pythonCheckPhase" (buildPythonPackage)
     phase ? "checkPhase",
-    # Host-platform packages the guest needs on its path; the check hooks
-    # propagate build-platform ones, which a wasm interpreter cannot import.
+    # Build-platform check inputs cannot supply commands executed by the guest.
     guestInputs ? [],
     name ? "${lib.getName drv}-check",
     postRestore ? "",
@@ -216,6 +215,18 @@ in {
           export PYTHONUNBUFFERED=1
           export CI=true
           export enableParallelChecking=false
+          ${lib.optionalString (guestInputs != []) ''
+            _wasix_guest_bin="$NIX_BUILD_TOP/.wasix-guest-bin"
+            ${pkgs.coreutils}/bin/mkdir -p "$_wasix_guest_bin"
+            for _wasix_guest_input in ${lib.escapeShellArgs (map toString guestInputs)}; do
+              for _wasix_guest_command in "$_wasix_guest_input"/bin/*; do
+                [ -e "$_wasix_guest_command" ] || continue
+                _wasix_guest_name=$(${pkgs.coreutils}/bin/basename "$_wasix_guest_command")
+                ${pkgs.coreutils}/bin/ln -s "$_wasix_guest_command" "$_wasix_guest_bin/$_wasix_guest_name"
+              done
+            done
+            export WASIX_RUN_FLAGS="$WASIX_RUN_FLAGS --volume $_wasix_guest_bin:/bin"
+          ''}
           ${postRestore}
           if [ -n "''${WASIX_CHECK_SHARD_COUNT:-}" ]; then
             export PYTEST_ADDOPTS="''${PYTEST_ADDOPTS:+$PYTEST_ADDOPTS }-p wasix_pytest_shard"
@@ -267,4 +278,43 @@ in {
         cp "$_log" "$_wasix_runner_out/check.log"
       '';
     };
+
+  checksFor = {
+    drv,
+    spec ? {},
+    phase ? "checkPhase",
+    guestInputs ? spec.guestInputs or [],
+    name ? "${lib.getName drv}-check",
+    postRestore ? spec.postRestore or "",
+    testName ? "upstream",
+  }: let
+    shardCount = spec.shards or 1;
+    runnerSpec = removeAttrs spec ["guestInputs" "postRestore" "shards"];
+    mkCheck = shard:
+      checkFor {
+        inherit drv guestInputs phase;
+        spec = runnerSpec;
+        name = name + lib.optionalString (shard != null) "-upstream-${toString shard}-of-${toString shardCount}";
+        postRestore =
+          lib.optionalString (shard != null) ''
+            export WASIX_CHECK_SHARD_COUNT=${toString shardCount}
+            export WASIX_CHECK_SHARD_NUM=${toString shard}
+          ''
+          + postRestore;
+      };
+  in
+    lib.throwIf (!(builtins.isInt shardCount && shardCount > 0))
+    "${name}: emulatedCheck.shards must be a positive integer"
+    (
+      if shardCount == 1
+      then {${testName} = mkCheck null;}
+      else
+        lib.listToAttrs (lib.genList (
+            shard:
+              lib.nameValuePair
+              "${testName}-${toString shard}-of-${toString shardCount}"
+              (mkCheck shard)
+          )
+          shardCount)
+    );
 }
