@@ -5,7 +5,7 @@
   wasixPython,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.srsly {
   # setup.py prepends the running build interpreter's include directory,
   # making its 64-bit pyport.h win over the wasm32 Python headers.
   postPatch = ''
@@ -34,4 +34,3 @@ helpers.libTweaks {
     "test_issue_245"
   ];
 }
-pyprev.srsly

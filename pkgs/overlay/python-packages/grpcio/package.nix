@@ -10,7 +10,7 @@
   # has no file to patch.
   noPyproject = lib.versionOlder pyprev.grpcio.version "1.75";
 in
-  helpers.libTweaks (
+  helpers.extendPackage pyprev.grpcio (
     {
       patches = [./patches/grpcio-wasix.patch];
       env = {
@@ -28,4 +28,3 @@ in
     // helpers.linkInputs (helpers.dropInputsByNameInfix ["c-ares" "openssl" "zlib" "protobuf"])
     // lib.optionalAttrs noPyproject {postPatch = _: "";}
   )
-  pyprev.grpcio

@@ -4,7 +4,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.httpcore {
   passthru.wasixDeclaredCheckInputs = [
     pyfinal.pytestCheckHook
     pyfinal.pytest-asyncio
@@ -24,4 +24,3 @@ helpers.libTweaks {
   pytestFlags = ["--override-ini=markers=trio"];
   disabledTests = ["trio"];
 }
-pyprev.httpcore

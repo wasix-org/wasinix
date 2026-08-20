@@ -16,7 +16,7 @@
       --replace-fail 'OS_NAME = platform.system().lower()' 'OS_NAME = "wasm"'
   '';
 in
-  helpers.libTweaks {
+  helpers.extendPackage pyprev.caio {
     postPatch = old: helpers.mergeScript (lib.optional (!isHistory) old ++ [forceThreadAio]);
     # the asyncio adapter tests import aiomisc at collection
     disabledTestPaths = ["tests/test_asyncio_adapter.py"];
@@ -27,4 +27,3 @@ in
         wasinix = (old.wasinix or {}) // {checks.captured.install = false;};
       };
   }
-  pyprev.caio

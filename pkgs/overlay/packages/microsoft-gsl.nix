@@ -5,10 +5,9 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.microsoft-gsl {
   cmakeFlags = ["-DGSL_TEST=OFF"];
   passthru.wasix.supportedProfiles = helpers.profiles.all;
   # header-only: ships no static archive to link-smoke.
   passthru.wasix.smokeTest = false;
 }
-prev.microsoft-gsl

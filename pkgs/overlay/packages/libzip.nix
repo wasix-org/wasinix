@@ -5,10 +5,10 @@
   helpers,
   ...
 }:
-(helpers.libTweaks {} (prev.libzip.override {
+(helpers.extendPackage (prev.libzip.override {
   withLZMA = true;
   withBzip2 = false;
-}))
+}) {})
 .overrideAttrs (o: {
   # libzip's cmake feature checks link conftests that the default wasm-opt pass
   # false-negatives; skip wasm-opt during configure.

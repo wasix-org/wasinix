@@ -8,7 +8,7 @@
   lib,
   ...
 }:
-helpers.libTweaks (
+helpers.extendPackage pyprev.pydantic (
   lib.optionalAttrs ((pyprev.pydantic.passthru.wasix.historySpec or null) != null) {
     patches = _: [];
     propagatedBuildInputs =
@@ -36,4 +36,3 @@ helpers.libTweaks (
     pytestFlags = ["-W" "ignore::pytest.PytestUnknownMarkWarning"];
   }
 )
-pyprev.pydantic

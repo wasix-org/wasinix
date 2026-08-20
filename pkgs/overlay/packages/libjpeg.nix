@@ -6,11 +6,10 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.libjpeg {
   # libjpeg declares a `man` output but installs no man pages on this target;
   # materialise the dir so the output isn't empty.
   postInstall = ''mkdir -p "$man/share/man"'';
   cmakeFlags = ["-DWITH_SIMD=OFF"];
   checkFlagsArray = [''ARGS=--output-on-failure''];
 }
-prev.libjpeg

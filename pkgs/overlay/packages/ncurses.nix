@@ -10,7 +10,10 @@
 }: let
   buildCc = final.lib.getExe' final.buildPackages.stdenv.cc "cc";
 in
-  helpers.libTweaks {
+  helpers.extendPackage (prev.ncurses.override {
+    enableStatic = true;
+    withCxx = false;
+  }) {
     # The link smoke fails without diagnostics, likely on the alias symlink
     # farm (libtinfo/libcurses point at libncursesw.a); untriaged,
     # WASIX-TODO.md. The CLIs that link the library cover it at runtime.
@@ -64,7 +67,4 @@ in
         materialize_pc "$pcdir/ticw.pc" "$pcdir/tinfow.pc" "$pcdir/ncursesw.pc"
       fi
     '';
-  } (prev.ncurses.override {
-    enableStatic = true;
-    withCxx = false;
-  })
+  }

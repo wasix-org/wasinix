@@ -11,7 +11,7 @@
   inherit (prev) lib;
   sysroot = toolchain.sysroot.variants.${helpers.profileOf prev.stdenv.hostPlatform}.sysroot;
 in
-  helpers.libTweaks {
+  helpers.extendPackage prev.garage {
     patches = [
       ./patches/garage-manifest.patch
       ./patches/garage-code.patch
@@ -38,4 +38,3 @@ in
 
     passthru.wasinix.shipped = true;
   }
-  prev.garage

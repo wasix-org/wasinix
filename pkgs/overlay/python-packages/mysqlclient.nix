@@ -10,10 +10,9 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.mysqlclient {
   preConfigure = ''
     export MYSQLCLIENT_CFLAGS="$($PKG_CONFIG --cflags libmariadb)"
     export MYSQLCLIENT_LDFLAGS="$($PKG_CONFIG --static --libs libmariadb)"
   '';
 }
-pyprev.mysqlclient

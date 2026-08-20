@@ -7,7 +7,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (pyprev.pytz.override {tzdata = final.buildPackages.tzdata;}) {
   # pytest, not the native unittestCheckHook: unittest discovery imports
   # through the source pytz, which has no zoneinfo. test_suite is the
   # unittest.main() aggregator; under pytest it collects nothing.
@@ -22,4 +22,3 @@ helpers.libTweaks {
   # pytz at the same build-platform tzdata it bundles from
   env.PYTZ_TZDATADIR = "${final.buildPackages.tzdata}/share/zoneinfo";
 }
-(pyprev.pytz.override {tzdata = final.buildPackages.tzdata;})

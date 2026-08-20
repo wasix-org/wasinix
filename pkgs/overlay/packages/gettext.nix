@@ -5,7 +5,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (prev.gettext.override {bashNonInteractive = null;}) {
   passthru.wasinix.shipped = true;
   configureFlags = [
     "--disable-java"
@@ -45,4 +45,4 @@ helpers.libTweaks {
       [ -f "$prog" ] && mv "$prog" "$prog.wasm"
     done
   '';
-} (prev.gettext.override {bashNonInteractive = null;})
+}

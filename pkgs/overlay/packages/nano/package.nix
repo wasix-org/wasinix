@@ -9,7 +9,12 @@
   nc = final.ncurses;
 in
   helpers.wasmRename {wasmName = "nano";} (
-    helpers.libTweaks {
+    helpers.extendPackage (final.callPackage "${nixpkgs}/pkgs/by-name/na/nano/package.nix" {
+      enableNls = false;
+      enableTiny = true;
+      gettext = null;
+      file = null;
+    }) {
       passthru.wasinix.shipped = true;
       configureFlags = ["--with-ncursesw"];
       preConfigure = ''
@@ -27,10 +32,5 @@ in
       '';
       patches = [./patches/0002-wasix-runtime-and-config-tolerance.patch];
       postInstall = ''rm -f "$out/bin/rnano"'';
-    } (final.callPackage "${nixpkgs}/pkgs/by-name/na/nano/package.nix" {
-      enableNls = false;
-      enableTiny = true;
-      gettext = null;
-      file = null;
-    })
+    }
   )

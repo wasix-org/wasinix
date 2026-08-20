@@ -18,7 +18,7 @@
   pinnedBuildTools = lib.versionOlder pyprev.pandas.version "2.3";
 in
   # wasm build only: a native pandas must keep its own np.get_include().
-  helpers.libTweaks {
+  helpers.extendPackage pyprev.pandas {
     # nixpkgs leaves pandas' suite off; opt in, running from the installed
     # wheel (the source tree lacks the compiled extensions). Replaces the
     # stashed check inputs: nixpkgs' list carries an optional-IO test matrix
@@ -111,4 +111,3 @@ in
       then lib.const ours
       else ours;
   }
-  pyprev.pandas

@@ -6,7 +6,15 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (prev.thrift.override {
+  static = true;
+  boost = final.buildPackages.boost;
+  # unspliced withPackages would build a wasm env; only serves the compiler
+  python3 = final.buildPackages.python3;
+  openssl = null;
+  zlib = null;
+  libevent = null;
+}) {
   # eh: wasm-opt corrupts the function-exists probes (WASIX-TODO.md)
   nativeBuildInputs = [final.disableWasmOptInConfigureHook];
   cmakeFlags = [
@@ -24,12 +32,3 @@ helpers.libTweaks {
   # throws (TException)
   passthru.wasix.supportedProfiles = helpers.profiles.withEh;
 }
-(prev.thrift.override {
-  static = true;
-  boost = final.buildPackages.boost;
-  # unspliced withPackages would build a wasm env; only serves the compiler
-  python3 = final.buildPackages.python3;
-  openssl = null;
-  zlib = null;
-  libevent = null;
-})

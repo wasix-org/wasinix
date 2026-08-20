@@ -5,9 +5,8 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.subversion {
   env.NIX_CFLAGS_COMPILE = "-D_GNU_SOURCE";
   # apr is PIC-only, and svn links it
   passthru.wasix.supportedProfiles = helpers.profiles.pic;
 }
-prev.subversion

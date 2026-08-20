@@ -364,14 +364,14 @@
         done
         touch "$out"
       '';
-    metadataNamespaceCheck =
-      wasix.pkgs.runCommand "wasinix-metadata-namespace-check" {
+    sourceShapeCheck =
+      wasix.pkgs.runCommand "wasinix-source-shape-check" {
         nativeBuildInputs = [wasix.pkgs.ripgrep];
       } ''
         if rg -n \
-          'passthru\.wasix\.(shipped|ciProfiles|ciTags|emulatedCheck|installCheck|publication|testExpectation)|passthru\.wasmer\.aliases|\bwasix\.shipped' \
+          'passthru\.wasix\.(shipped|ciProfiles|ciTags|emulatedCheck|installCheck|publication|testExpectation)|passthru\.wasmer\.aliases|\bwasix\.shipped|helpers\.libTweaks|\blibTweaks\s*=' \
           ${self}/pkgs; then
-          echo "Wasinix policy is stored outside passthru.wasinix" >&2
+          echo "A removed Wasinix source shape is still in use" >&2
           exit 1
         fi
         touch "$out"
@@ -559,7 +559,7 @@
           wasinix = wasinixTests;
           wasinix-core-closure = wasinixCoreClosureCheck;
           wasinix-interface = wasinixInterfaceCheck;
-          wasinix-metadata-namespace = metadataNamespaceCheck;
+          wasinix-source-shape = sourceShapeCheck;
           wasinix-cargo-publish = wasinixCargoPublishCheck;
           wasinix-wasmer-serve = wasinixWasmerServeCheck;
           wasinix-serve-all = wasinixServeAllCheck;

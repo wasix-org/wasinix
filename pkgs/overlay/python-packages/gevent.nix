@@ -6,7 +6,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks (
+helpers.extendPackage pyprev.gevent (
   helpers.linkInputs (helpers.dropInputsByNameInfix ["libev" "libuv" "c-ares"])
   // {
     env = {
@@ -21,4 +21,3 @@ helpers.libTweaks (
     '';
   }
 )
-pyprev.gevent

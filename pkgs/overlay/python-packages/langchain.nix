@@ -16,7 +16,7 @@
   lib,
   ...
 }:
-helpers.libTweaks ({
+helpers.extendPackage pyprev.langchain ({
     postPatch = _: "";
     disabledTestPaths = [
       "tests/unit_tests/agents/middleware/implementations/test_shell_tool.py"
@@ -36,4 +36,3 @@ helpers.libTweaks ({
         pyfinal.sqlalchemy
       ];
   })
-pyprev.langchain

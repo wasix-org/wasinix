@@ -4,8 +4,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.nlohmann_json {
   # header-only: ships no static archive to link-smoke.
   passthru.wasix.smokeTest = false;
 }
-prev.nlohmann_json

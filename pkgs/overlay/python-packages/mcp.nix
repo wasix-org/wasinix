@@ -4,7 +4,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.mcp {
   # Replaces the stashed check inputs: the inherited list drags ruff (via
   # inline-snapshot), which cannot compile on wasix.
   passthru = old:
@@ -38,4 +38,3 @@ helpers.libTweaks {
     "test_fn_returns_assistant_message"
   ];
 }
-pyprev.mcp

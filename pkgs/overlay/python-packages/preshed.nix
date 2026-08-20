@@ -5,7 +5,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.preshed {
   postPatch = ''
     substituteInPlace setup.py \
       --replace-fail 'include_dirs = [get_path("include")]' 'include_dirs = []'
@@ -25,4 +25,3 @@ helpers.libTweaks {
     cd "$NIX_BUILD_TOP"
   '';
 }
-pyprev.preshed

@@ -6,11 +6,10 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.burner-redis {
   postPatch = ''
     substituteInPlace src/lib.rs \
       --replace-fail "Builder::new_multi_thread()" "Builder::new_current_thread()"
   '';
   passthru.wasinix.checks.captured.broken = "graceful-shutdown tests do not complete";
 }
-pyprev.burner-redis

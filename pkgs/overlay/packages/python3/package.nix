@@ -33,7 +33,58 @@
         };
       };
       py =
-        helpers.libTweaks {
+        helpers.extendPackage (base.override {
+          # The cross tzcode doesn't build (getresuid), and null breaks the build python's
+          # zoneinfo; the platform-independent data is mounted into the webc via selfMounts.
+          tzdata = final.buildPackages.tzdata;
+          gdbm = null;
+          # nixpkgs sets libuuid null off Linux; the overlay util-linux ships libuuid only.
+          libuuid = final.util-linux;
+          bashNonInteractive = final.buildPackages.bashNonInteractive;
+          # python3.pkgs.<pkg> then builds against THIS python, not the unfixed python313.
+          self = py;
+          # Imported per python so each interpreter's extension wheels cross-build against
+          # the python they target, not the default. `.override` also splices packageOverrides
+          # onto the native pythonForBuild, which the isWasixHost gate below keeps vanilla;
+          # setuptools-rust is exempt as a build-host tool that compiles rust for wasix.
+          packageOverrides = pyfinal: pyprev: let
+            # Includes the registry-history attrs (numpy_2_1_3, ...) the loader mints.
+            wasixOverrides =
+              (import ../../python-packages {
+                callArgs = {
+                  inherit final prev preferredProfilePackages helpers lib toolchain nix-update-script;
+                  wasixPython = py;
+                };
+              })
+              pyfinal
+              pyprev
+              // {
+                # PYO3_CROSS_LIB_DIR is interpreter-specific, so its natural home is the python's
+                # own buildPythonPackage rather than a per-wheel override; applying it to every
+                # package here (not just pyo3 ones) is harmless, since non-pyo3 builds never read
+                # the var. extendMkDerivation keeps the functor set intact, but forwards neither
+                # `override` nor the wrapper, so re-attach both.
+                buildPythonPackage = let
+                  withPyo3 = bpp:
+                    lib.extendMkDerivation {
+                      constructDrv = bpp;
+                      extendDrvArgs = _finalAttrs: prevArgs: {
+                        env = {PYO3_CROSS_LIB_DIR = "${py}/lib/${py.libPrefix}";} // (prevArgs.env or {});
+                        # Cross builds drop check inputs. The wheel layer recovers
+                        # them from the native package without adding them to the
+                        # shipped wheel; package overrides can declare a replacement
+                        # guest list for optional stacks that do not exist on wasix.
+                      };
+                    };
+                in
+                  withPyo3 pyprev.buildPythonPackage
+                  // {override = args: withPyo3 (pyprev.buildPythonPackage.override args);};
+              };
+          in
+            if pyprev.python.stdenv.hostPlatform.isWasix or false
+            then wasixOverrides
+            else {inherit (wasixOverrides) setuptools-rust;};
+        }) {
           configureFlags = [
             "--enable-wasm-dynamic-linking"
             # configure hardcodes ipv6=no for WASI, whose libc has no AF_INET6.
@@ -322,58 +373,7 @@
               fs."/etc/ssl" = "${final.cacert}/etc/ssl";
             };
           };
-        } (base.override {
-          # The cross tzcode doesn't build (getresuid), and null breaks the build python's
-          # zoneinfo; the platform-independent data is mounted into the webc via selfMounts.
-          tzdata = final.buildPackages.tzdata;
-          gdbm = null;
-          # nixpkgs sets libuuid null off Linux; the overlay util-linux ships libuuid only.
-          libuuid = final.util-linux;
-          bashNonInteractive = final.buildPackages.bashNonInteractive;
-          # python3.pkgs.<pkg> then builds against THIS python, not the unfixed python313.
-          self = py;
-          # Imported per python so each interpreter's extension wheels cross-build against
-          # the python they target, not the default. `.override` also splices packageOverrides
-          # onto the native pythonForBuild, which the isWasixHost gate below keeps vanilla;
-          # setuptools-rust is exempt as a build-host tool that compiles rust for wasix.
-          packageOverrides = pyfinal: pyprev: let
-            # Includes the registry-history attrs (numpy_2_1_3, ...) the loader mints.
-            wasixOverrides =
-              (import ../../python-packages {
-                callArgs = {
-                  inherit final prev preferredProfilePackages helpers lib toolchain nix-update-script;
-                  wasixPython = py;
-                };
-              })
-              pyfinal
-              pyprev
-              // {
-                # PYO3_CROSS_LIB_DIR is interpreter-specific, so its natural home is the python's
-                # own buildPythonPackage rather than a per-wheel override; applying it to every
-                # package here (not just pyo3 ones) is harmless, since non-pyo3 builds never read
-                # the var. extendMkDerivation keeps the functor set intact, but forwards neither
-                # `override` nor the wrapper, so re-attach both.
-                buildPythonPackage = let
-                  withPyo3 = bpp:
-                    lib.extendMkDerivation {
-                      constructDrv = bpp;
-                      extendDrvArgs = _finalAttrs: prevArgs: {
-                        env = {PYO3_CROSS_LIB_DIR = "${py}/lib/${py.libPrefix}";} // (prevArgs.env or {});
-                        # Cross builds drop check inputs. The wheel layer recovers
-                        # them from the native package without adding them to the
-                        # shipped wheel; package overrides can declare a replacement
-                        # guest list for optional stacks that do not exist on wasix.
-                      };
-                    };
-                in
-                  withPyo3 pyprev.buildPythonPackage
-                  // {override = args: withPyo3 (pyprev.buildPythonPackage.override args);};
-              };
-          in
-            if pyprev.python.stdenv.hostPlatform.isWasix or false
-            then wasixOverrides
-            else {inherit (wasixOverrides) setuptools-rust;};
-        });
+        };
     in
       py;
   in rec {

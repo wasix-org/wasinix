@@ -7,7 +7,7 @@
 }: let
   pytest8CheckHook = pyfinal.pytestCheckHook.override {pytest = pyfinal.pytest_8_3;};
 in
-  helpers.libTweaks ({
+  helpers.extendPackage pyprev.pydantic-core ({
       maturinBuildFlags = ["--features" "pyo3/extension-module"];
       patches = lib.optionals (lib.versionAtLeast pyprev.pydantic-core.version "2.46") [
         ./patches/wasm-function-recursion.patch
@@ -30,4 +30,3 @@ in
     // lib.optionalAttrs (lib.versionOlder pyprev.pydantic-core.version "2.42") {
       sourceRoot = "source";
     })
-  pyprev.pydantic-core

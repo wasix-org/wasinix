@@ -16,7 +16,7 @@
     helpers.dropInputsByNameInfix ["openmp-static"]
     (helpers.dropInputsByName ["openblas" "blas" "lapack" "openmp"] xs);
 in
-  helpers.libTweaks {
+  helpers.extendPackage pyprev.scikit-learn {
     # The full estimator matrix takes roughly 35 minutes under emulation.
     passthru.wasinix.checks.captured = {
       shards = 8;
@@ -57,4 +57,3 @@ in
     buildInputs = old: dropUnwanted old ++ [toolchain.openmp];
     propagatedBuildInputs = dropUnwanted;
   }
-  pyprev.scikit-learn

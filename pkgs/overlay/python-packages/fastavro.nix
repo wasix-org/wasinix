@@ -6,7 +6,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.fastavro {
   pytestFlags =
     ["--import-mode=importlib"]
     # asserts python-snappy is absent, but cramjam satisfies snappy; the prefix
@@ -20,4 +20,3 @@ helpers.libTweaks {
       wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.numpy pyfinal.zlib-ng pyfinal.pandas pyfinal.zstandard pyfinal.lz4];
     };
 }
-pyprev.fastavro

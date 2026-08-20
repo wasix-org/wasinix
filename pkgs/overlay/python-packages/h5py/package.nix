@@ -13,7 +13,7 @@
 }: let
   crossNumpyInc = wasixPython.pkgs.numpy.crossInclude;
 in
-  helpers.libTweaks {
+  helpers.extendPackage pyprev.h5py {
     env.HDF5_VERSION = final.hdf5.version;
     env.H5PY_ROS3 = "0";
     env.H5PY_DIRECT_VFD = "0";
@@ -88,4 +88,3 @@ in
         --replace-fail "'libraries'      : ['hdf5', 'hdf5_hl']," "'libraries'      : ['hdf5', 'hdf5_hl', 'z', 'sz', 'aec'],"
     '';
   }
-  pyprev.h5py

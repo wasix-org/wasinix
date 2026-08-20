@@ -7,7 +7,7 @@
   toolchain,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (prev.lapack-reference.override {shared = false;}) {
   # The archives carry unresolved flang-rt symbols; propagation is what puts its
   # setup hook, and so the runtime, on a consumer's link line.
   propagatedBuildInputs = [toolchain.flangRt];
@@ -24,4 +24,3 @@ helpers.libTweaks {
   # a non-PIC build fails abiCheck.
   passthru.wasix.supportedProfiles = helpers.profiles.pic;
 }
-(prev.lapack-reference.override {shared = false;})

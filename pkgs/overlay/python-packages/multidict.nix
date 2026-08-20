@@ -4,7 +4,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.multidict {
   # Omit objgraph, whose Graphviz closure cannot build for WASIX.
   passthru.wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.pytest-cov-stub];
   disabledTestPaths = [
@@ -15,4 +15,3 @@ helpers.libTweaks {
   # The harness invokes the omitted isolated leak programs as subprocesses.
   disabledTests = ["test_leak"];
 }
-pyprev.multidict

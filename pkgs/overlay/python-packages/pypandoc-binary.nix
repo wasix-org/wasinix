@@ -10,7 +10,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyfinal.pypandoc {
   pname = "pypandoc-binary";
   nativeBuildInputs = [pyfinal.setuptools pyfinal.wheel];
   postPatch = ''
@@ -23,4 +23,3 @@ helpers.libTweaks {
     install -Dm755 ${pyfinal.lib.getExe' preferredProfilePackages.pandoc "pandoc.wasm"} pypandoc/files/pandoc
   '';
 }
-pyfinal.pypandoc

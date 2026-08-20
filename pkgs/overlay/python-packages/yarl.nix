@@ -6,7 +6,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.yarl {
   # yarl's addopts say `-n auto`, and xdist workers crash nondeterministically;
   # -n 0 (appended, so it wins) serialises without touching addopts
   pytestFlags = ["-n" "0"];
@@ -21,4 +21,3 @@ helpers.libTweaks {
       wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.hypothesis pyfinal.pytest-asyncio pyfinal.pytest-cov-stub pyfinal.pytest-xdist];
     };
 }
-pyprev.yarl

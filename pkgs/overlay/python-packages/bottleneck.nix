@@ -6,8 +6,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.bottleneck {
   nativeBuildInputs = [wasixPython.pythonOnBuildForHost.pkgs.numpy];
   passthru.wasinix.checks.captured.broken = "input-modification tests trap on integer division by zero";
 }
-pyprev.bottleneck

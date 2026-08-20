@@ -11,7 +11,7 @@
   ...
 }: let
 in
-  helpers.libTweaks (helpers.python.dropSphinxDocs []
+  helpers.extendPackage pyprev.pynacl (helpers.python.dropSphinxDocs []
     // {
       # Replaces the stashed check inputs: the inherited hypothesis is the
       # build-platform one, whose Rust _native the guest cannot import.
@@ -26,4 +26,3 @@ in
       # (WASIX-TODO.md); deselected so the rest of the suite reports
       disabledTestPaths = ["tests/test_pwhash.py"];
     })
-  pyprev.pynacl

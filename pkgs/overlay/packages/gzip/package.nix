@@ -5,7 +5,7 @@
   ...
 }:
 helpers.wasmRename {wasmName = "gzip";} (
-  helpers.libTweaks {
+  helpers.extendPackage (prev.gzip.override {runtimeShellPackage = null;}) {
     passthru.wasinix.shipped = true;
     # Drop nixpkgs' preFixup: it PATH-injects the gunzip/zcat shell scripts
     # (which we delete) and wrapProgram's bin/gzip (which we rename to
@@ -38,5 +38,5 @@ helpers.wasmRename {wasmName = "gzip";} (
         mainArgs = ["-d" "-c" "-f"];
       }
     ];
-  } (prev.gzip.override {runtimeShellPackage = null;})
+  }
 )

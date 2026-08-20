@@ -10,7 +10,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.psutil {
   # The suite loops on a TypeError because the guest has no /proc.
   passthru.wasinix.checks.captured.install = false;
   patches =
@@ -26,4 +26,3 @@ helpers.libTweaks {
     ! grep -q '"py_limited_api": True' setup.py
   '';
 }
-pyprev.psutil

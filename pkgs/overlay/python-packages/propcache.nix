@@ -5,7 +5,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.propcache {
   pytestFlags = ["--import-mode=importlib"];
 }
-pyprev.propcache

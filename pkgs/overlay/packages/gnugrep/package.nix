@@ -10,7 +10,9 @@ helpers.wasmRename {
   wasmName = "grep";
   posixAlias = true;
 } (
-  helpers.libTweaks {
+  helpers.extendPackage (prev.gnugrep.override {
+    runtimeShellPackage = null;
+  }) {
     passthru.wasinix.shipped = true;
     postPatch = ''
       sed -i 's:gnulib-tests::g' Makefile.in
@@ -20,7 +22,5 @@ helpers.wasmRename {
       ./patches/0002a-stdin-lseek-permission-as-nonseekable.patch
       ./patches/0003a-fallback-progname-when-runtime-argv0-is-missing.patch
     ];
-  } (prev.gnugrep.override {
-    runtimeShellPackage = null;
-  })
+  }
 )

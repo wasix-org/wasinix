@@ -4,7 +4,7 @@
   lib,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.docutils {
   postPatch =
     ''
       matches=()
@@ -24,4 +24,3 @@ helpers.libTweaks {
           'subprocess.CalledProcessError, OSError, ValueError'
     '';
 }
-pyprev.docutils

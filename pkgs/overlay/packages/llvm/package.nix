@@ -17,58 +17,54 @@
     enablePolly = false;
     enableTerminfo = false;
   };
-  common =
-    helpers.libTweaks {
-      patches = [
-        ./support-wasix.patch
-        ./unix-optional-dlfcn.patch
-        ./wasi-endian.patch
-      ];
+  common = helpers.extendPackage base {
+    patches = [
+      ./support-wasix.patch
+      ./unix-optional-dlfcn.patch
+      ./wasi-endian.patch
+    ];
 
-      # LLVM's support library probes optional host integrations by default.
-      # Keep WASIX builds self-contained and restrict code generation to the
-      # backend used by every frontend and utility package in this directory.
-      cmakeFlags = [
-        # CMake does not classify WasiP1 as Unix. LLVM's platform selection and
-        # the older WASIX build-scripts recipe both require this explicitly.
-        "-DUNIX=ON"
-        "-DLLVM_TARGETS_TO_BUILD=WebAssembly"
-        "-DLLVM_ENABLE_THREADS=ON"
-        "-DHAVE_SIGALTSTACK=OFF"
-        "-DLLVM_ENABLE_FFI=OFF"
-        "-DLLVM_ENABLE_TERMINFO=OFF"
-        "-DLLVM_ENABLE_ZLIB=OFF"
-        "-DLLVM_ENABLE_ZSTD=OFF"
-        "-DLLVM_ENABLE_LIBEDIT=OFF"
-        "-DLLVM_ENABLE_LIBXML2=OFF"
-        "-DLLVM_ENABLE_CURL=OFF"
-        "-DLLVM_INCLUDE_BENCHMARKS=OFF"
-        "-DLLVM_INCLUDE_EXAMPLES=OFF"
-        "-DLLVM_INCLUDE_TESTS=OFF"
-      ];
-      nativeBuildInputs = [final.disableWasmOptInConfigureHook];
-    }
-    base;
-  libllvm =
-    helpers.libTweaks {
-      # Frontends consume LLVM's libraries and CMake package only. Building every
-      # unrelated target utility reaches lli, whose child-executor mode assumes
-      # fork(2), and needlessly makes each frontend wait for the whole CLI suite.
-      cmakeFlags = ["-DLLVM_BUILD_TOOLS=OFF"];
-      # nixpkgs expects llvm-config in LLVMExports, but LLVM_BUILD_TOOLS=OFF
-      # installs it only as a target helper and creates no native copy. Preserve
-      # the useful output split without requiring those absent artifacts.
-      postInstall = _old: ''
-        mkdir -p "$python/share"
-        if [ -d "$out/share/opt-viewer" ]; then
-          mv "$out/share/opt-viewer" "$python/share/opt-viewer"
-        fi
-        moveToOutput "bin/llvm-config*" "$dev"
-        substituteInPlace "$dev/lib/cmake/llvm/LLVMConfig.cmake" \
-          --replace-fail 'set(LLVM_BINARY_DIR "''${LLVM_INSTALL_PREFIX}")' 'set(LLVM_BINARY_DIR "'"$lib"'")'
-      '';
-    }
-    common;
+    # LLVM's support library probes optional host integrations by default.
+    # Keep WASIX builds self-contained and restrict code generation to the
+    # backend used by every frontend and utility package in this directory.
+    cmakeFlags = [
+      # CMake does not classify WasiP1 as Unix. LLVM's platform selection and
+      # the older WASIX build-scripts recipe both require this explicitly.
+      "-DUNIX=ON"
+      "-DLLVM_TARGETS_TO_BUILD=WebAssembly"
+      "-DLLVM_ENABLE_THREADS=ON"
+      "-DHAVE_SIGALTSTACK=OFF"
+      "-DLLVM_ENABLE_FFI=OFF"
+      "-DLLVM_ENABLE_TERMINFO=OFF"
+      "-DLLVM_ENABLE_ZLIB=OFF"
+      "-DLLVM_ENABLE_ZSTD=OFF"
+      "-DLLVM_ENABLE_LIBEDIT=OFF"
+      "-DLLVM_ENABLE_LIBXML2=OFF"
+      "-DLLVM_ENABLE_CURL=OFF"
+      "-DLLVM_INCLUDE_BENCHMARKS=OFF"
+      "-DLLVM_INCLUDE_EXAMPLES=OFF"
+      "-DLLVM_INCLUDE_TESTS=OFF"
+    ];
+    nativeBuildInputs = [final.disableWasmOptInConfigureHook];
+  };
+  libllvm = helpers.extendPackage common {
+    # Frontends consume LLVM's libraries and CMake package only. Building every
+    # unrelated target utility reaches lli, whose child-executor mode assumes
+    # fork(2), and needlessly makes each frontend wait for the whole CLI suite.
+    cmakeFlags = ["-DLLVM_BUILD_TOOLS=OFF"];
+    # nixpkgs expects llvm-config in LLVMExports, but LLVM_BUILD_TOOLS=OFF
+    # installs it only as a target helper and creates no native copy. Preserve
+    # the useful output split without requiring those absent artifacts.
+    postInstall = _old: ''
+      mkdir -p "$python/share"
+      if [ -d "$out/share/opt-viewer" ]; then
+        mv "$out/share/opt-viewer" "$python/share/opt-viewer"
+      fi
+      moveToOutput "bin/llvm-config*" "$dev"
+      substituteInPlace "$dev/lib/cmake/llvm/LLVMConfig.cmake" \
+        --replace-fail 'set(LLVM_BINARY_DIR "''${LLVM_INSTALL_PREFIX}")' 'set(LLVM_BINARY_DIR "'"$lib"'")'
+    '';
+  };
   buildTools = [
     "llc"
     "opt"
@@ -91,7 +87,7 @@
   };
   shippedTools = buildTools ++ builtins.attrNames toolAliases;
 in
-  helpers.libTweaks {
+  helpers.extendPackage common {
     passthru.wasix = {
       shipped = true;
       # Frontends link this complete, consistently patched LLVM build. The llvm
@@ -131,4 +127,3 @@ in
       )}
     '';
   }
-  common

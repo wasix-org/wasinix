@@ -5,7 +5,7 @@
   lib,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.urllib3 {
   postPatch = ''
     substituteInPlace test/test_util.py \
       --replace-fail 'chain(parse_url_host_map, non_round_tripping_parse_url_host_map)' 'list(chain(parse_url_host_map, non_round_tripping_parse_url_host_map))'
@@ -29,4 +29,3 @@ helpers.libTweaks {
     tags = ["slow-tests"];
   };
 }
-pyprev.urllib3

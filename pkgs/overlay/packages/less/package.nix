@@ -9,7 +9,7 @@
   nc = final.ncurses;
 in
   helpers.wasmRename {wasmName = "less";} (
-    helpers.libTweaks {
+    helpers.extendPackage prev.less {
       passthru.wasinix.shipped = true;
       configureFlags = ["--with-regex=pcre2"];
       preConfigure = ''
@@ -28,5 +28,4 @@ in
       patches = [./patches/0001-wasix-term-fallback.patch];
       meta.platforms = ["wasm32-wasi"];
     }
-    prev.less
   )

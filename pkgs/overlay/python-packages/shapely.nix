@@ -11,7 +11,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.shapely {
   env.GEOS_CONFIG = final.lib.getExe' final.geos "geos-config";
   env.NIX_LDFLAGS = "-lc++ -lc++abi -lunwind";
   # Replaces nixpkgs' preCheck: its `cd $out` breaks in the run-only check
@@ -25,4 +25,3 @@ helpers.libTweaks {
   # access, a real cross geos/shapely defect (WASIX-TODO.md).
   passthru.wasinix.checks.captured.install = false;
 }
-pyprev.shapely

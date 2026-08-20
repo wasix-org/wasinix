@@ -3,7 +3,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.kiwisolver {
   nativeBuildInputs = [pyprev.cppy];
   buildInputs = helpers.dropInputsByName ["cppy"];
   propagatedBuildInputs = helpers.dropInputsByName ["cppy"];
@@ -11,4 +11,3 @@ helpers.libTweaks {
   # Solver exceptions currently trap while unwinding through the extension.
   passthru.wasinix.checks.captured.install = false;
 }
-pyprev.kiwisolver

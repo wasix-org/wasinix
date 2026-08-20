@@ -5,4 +5,4 @@
   helpers,
   ...
 }:
-helpers.libTweaks (helpers.python.dropSphinxDocs ["myst"]) pyprev.aiohappyeyeballs
+helpers.extendPackage pyprev.aiohappyeyeballs (helpers.python.dropSphinxDocs ["myst"])

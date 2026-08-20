@@ -3,7 +3,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.zlib {
   # Function form drops nixpkgs' default preConfigure (CHOST/AR fixups
   # targeting autoconf, which zlib's hand-written configure is not).
   preConfigure = _: "";
@@ -21,4 +21,3 @@ helpers.libTweaks {
   # hand-written Makefile, so link the test programs ahead of time.
   wasixCheckPrebuild = ''make -j"''${NIX_BUILD_CORES:-1}" example minigzip'';
 }
-prev.zlib

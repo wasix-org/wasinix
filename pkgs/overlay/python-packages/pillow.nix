@@ -11,7 +11,7 @@
   ...
 }: let
 in
-  helpers.libTweaks (
+  helpers.extendPackage pyprev.pillow (
     helpers.linkInputs (helpers.dropInputsByName ["lcms2" "libavif" "libimagequant" "libraqm" "libxcb"])
     // {
       # the fuzzer tests shell out to `find` at collection; the guest has no
@@ -34,4 +34,3 @@ in
       '';
     }
   )
-  pyprev.pillow

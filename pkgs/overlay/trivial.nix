@@ -1,6 +1,5 @@
-# Packages needing no wasix tweaks beyond doCheck=false, each built as
-# `libTweaks {} prev.<name>`. Move one to packages/<name>.nix as soon as it
-# needs a flag/patch/test/passthru.
+# Packages needing no WASIX-specific changes. Move one to
+# packages/<name>.nix as soon as it needs a flag, patch, test, or metadata.
 [
   "brotli"
   "bzip2"

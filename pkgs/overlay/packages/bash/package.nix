@@ -11,7 +11,7 @@
 }: let
   offProfile = (final.stdenv.hostPlatform.wasmExceptions or "yes") == "no";
 in
-  helpers.libTweaks {
+  helpers.extendPackage prev.bash {
     configureFlags = [
       "--without-bash-malloc" # bash's malloc assumes sbrk/brk; use libc's.
       "--disable-nls"
@@ -102,4 +102,3 @@ in
       fi
     '';
   }
-  prev.bash

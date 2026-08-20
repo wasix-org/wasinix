@@ -9,7 +9,7 @@
   lib,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.redis {
   propagatedBuildInputs =
     lib.optionals (lib.versionOlder pyprev.redis.version "6") [pyfinal.pyjwt];
   redisTestPort = 0;
@@ -26,4 +26,3 @@ helpers.libTweaks {
   # Requires the fork multiprocessing context.
   disabledTestPaths = ["tests/test_multiprocessing.py"];
 }
-pyprev.redis

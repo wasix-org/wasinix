@@ -3,7 +3,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.libxcrypt {
   # The four dropped tests fail at link: three build mprotect guard pages,
   # which wasm lacks; getrandom-fallbacks needs -Wl,--wrap=close, which
   # wasm-ld cannot satisfy. XFAIL covers run failures only and one failed link
@@ -28,4 +28,3 @@ helpers.libTweaks {
     ''XFAIL_TESTS=test/ka-yescrypt test/ka-gost-yescrypt test/ka-sm3-yescrypt test/ka-scrypt test/crypt-too-long-phrase test/special-char-salt''
   ];
 }
-prev.libxcrypt

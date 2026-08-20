@@ -8,7 +8,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.protobuf4 {
   buildInputs = [final.abseil-cpp];
   preBuild = ''
     for _archive in ${final.abseil-cpp}/lib/libabsl_*.a; do
@@ -19,4 +19,3 @@ helpers.libTweaks {
     export NIX_LDFLAGS="$NIX_LDFLAGS -L${final.abseil-cpp}/lib"
   '';
 }
-pyprev.protobuf4

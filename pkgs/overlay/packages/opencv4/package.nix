@@ -18,7 +18,47 @@
   dropByName = helpers.dropInputsByName dropInputs;
   extraInputs = [lapack toolchain.openmp final.freetype final.harfbuzz final.hdf5];
 in
-  helpers.libTweaks {
+  helpers.extendPackage (
+    prev.opencv4.override {
+      # No wasm backend for windowing toolkits, capture hardware, or IPP's
+      # prebuilt x86 binaries; vtk and ogre both need libGL and a window system.
+      enableFfmpeg = false;
+      enableGStreamer = false;
+      enableVA = false;
+      enableGtk3 = false;
+      enableGPhoto2 = false;
+      enableDC1394 = false;
+      enableVtk = false;
+      enableOvis = false;
+      enableIpp = false;
+
+      enableDocs = false;
+      # tesseract pulls pango and so glib, dropped above.
+      enableTesseract = false;
+      enableTbb = false;
+      # OPENCV_ENABLE_NONFREE flips meta.license to unfree, which fails to eval.
+      enableUnfree = false;
+      # LTO archives carry no target_features section, so the EH-profile
+      # abiCheck reports "exception-handling feature missing".
+      enableLto = false;
+      enableContrib = true;
+      enablePython = false;
+      enableBlas = false;
+      enableEigen = true;
+
+      # Cross builds cannot run them, and linking needs unpropagated libsharpyuv.
+      runAccuracyTests = false;
+      runPerformanceTests = false;
+
+      enableJPEG = true;
+      enablePNG = true;
+      enableTIFF = true;
+      enableWebP = true;
+      enableJPEG2000 = true;
+      enableJpegXL = true;
+      enableEXR = true;
+    }
+  ) {
     passthru.wasix.supportedProfiles = helpers.profiles.pic;
 
     # freetype + harfbuzz drive the contrib freetype module, hdf5 the hdf one,
@@ -93,44 +133,3 @@ in
         (lib.cmakeFeature "CPU_DISPATCH" "")
       ];
   }
-  (
-    prev.opencv4.override {
-      # No wasm backend for windowing toolkits, capture hardware, or IPP's
-      # prebuilt x86 binaries; vtk and ogre both need libGL and a window system.
-      enableFfmpeg = false;
-      enableGStreamer = false;
-      enableVA = false;
-      enableGtk3 = false;
-      enableGPhoto2 = false;
-      enableDC1394 = false;
-      enableVtk = false;
-      enableOvis = false;
-      enableIpp = false;
-
-      enableDocs = false;
-      # tesseract pulls pango and so glib, dropped above.
-      enableTesseract = false;
-      enableTbb = false;
-      # OPENCV_ENABLE_NONFREE flips meta.license to unfree, which fails to eval.
-      enableUnfree = false;
-      # LTO archives carry no target_features section, so the EH-profile
-      # abiCheck reports "exception-handling feature missing".
-      enableLto = false;
-      enableContrib = true;
-      enablePython = false;
-      enableBlas = false;
-      enableEigen = true;
-
-      # Cross builds cannot run them, and linking needs unpropagated libsharpyuv.
-      runAccuracyTests = false;
-      runPerformanceTests = false;
-
-      enableJPEG = true;
-      enablePNG = true;
-      enableTIFF = true;
-      enableWebP = true;
-      enableJPEG2000 = true;
-      enableJpegXL = true;
-      enableEXR = true;
-    }
-  )

@@ -8,10 +8,9 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.xxhash {
   postPatch = ''
     substituteInPlace xxhash.h \
       --replace-quiet 'defined(__wasm_simd128__) && XXH_HAS_INCLUDE(<arm_neon.h>)' '0'
   '';
 }
-prev.xxhash

@@ -6,11 +6,10 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.cargo-registry {
   passthru.wasix = {
     shipped = true;
     # A deployed server, not a version-pinned library.
     retention = "none";
   };
 }
-prev.cargo-registry

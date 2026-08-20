@@ -9,7 +9,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.libarchive {
   # no emulated check: all 5 test binaries (libarchive_test, bsdtar_test,
   # bsdcpio_test, bsdcat_test, bsdunzip_test) trap with "out of bounds
   # memory access" immediately in main, before any real test logic runs
@@ -46,4 +46,3 @@ helpers.libTweaks {
     $AR r "''${lib-$out}/lib/libarchive.a" wasix-fchdir.o
   '';
 }
-prev.libarchive

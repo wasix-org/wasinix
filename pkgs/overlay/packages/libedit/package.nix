@@ -7,10 +7,9 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.libedit {
   env.NIX_CFLAGS_COMPILE = "-include stdc-predef.h";
   patches = [./patches/wasi-no-editor-escape.patch];
   # the example programs fork; nothing installs them
   configureFlags = ["--disable-examples"];
 }
-prev.libedit

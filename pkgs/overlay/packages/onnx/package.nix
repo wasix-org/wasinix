@@ -9,7 +9,7 @@
   py = final.python3;
   buildPy = py.pythonOnBuildForHost;
 in
-  helpers.libTweaks {
+  helpers.extendPackage prev.onnx {
     # onnx's cross branch creates Python3::Module; nanobind's config wants Python::Module.
     patches = [./patches/onnx-wasi-nanobind-python-module.patch];
 
@@ -30,4 +30,3 @@ in
     doCheck = false;
     passthru.wasix.supportedProfiles = helpers.profiles.pic;
   }
-  prev.onnx

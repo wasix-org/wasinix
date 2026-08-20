@@ -12,7 +12,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.pycurl {
   preConfigure = ''
     mkdir -p "$TMPDIR/curl-config-static"
     cat > "$TMPDIR/curl-config-static/curl-config" <<'EOF'
@@ -46,4 +46,3 @@ helpers.libTweaks {
       wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.flaky pyfinal.flask pyfinal.bottle pyfinal.numpy];
     };
 }
-pyprev.pycurl

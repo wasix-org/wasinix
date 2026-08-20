@@ -10,7 +10,7 @@ helpers.wasmRename {
   wasmName = "gawk";
   posixAlias = true;
 } (
-  helpers.libTweaks {
+  helpers.extendPackage prev.gawk {
     passthru.wasinix.shipped = true;
     passthru.wasix.supportedProfiles = ["off"];
     # The bundled extensions are dlopen'd, which a static wasm build cannot do,
@@ -37,5 +37,4 @@ helpers.wasmRename {
       ln -sf gawk.wasm "$out/bin/awk"
     '';
   }
-  prev.gawk
 )

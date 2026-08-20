@@ -270,8 +270,6 @@ in rec {
   extendPackage = pkg: attrs:
     pkg.overrideAttrs (old: extendDrv old attrs);
 
-  libTweaks = attrs: pkg: extendPackage pkg attrs;
-
   # The webc packaging derives one command per bin/*.wasm. posixAlias also keeps
   # the unsuffixed name as a symlink, for consumers that exec it by store path
   # (git's shell subcommands run sed by its store path).

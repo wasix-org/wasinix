@@ -15,11 +15,12 @@ in {
     ...
   }: let
     inherit (prev) lib;
-    tweak = helpers.libTweaks {
-      preConfigure = ''
-        cmakeFlagsArray+=("-DWITH_PROTOC=$build_protobuf/bin/protoc")
-      '';
-    };
+    tweak = package:
+      helpers.extendPackage package {
+        preConfigure = ''
+          cmakeFlagsArray+=("-DWITH_PROTOC=$build_protobuf/bin/protoc")
+        '';
+      };
   in
     {protobuf = tweak prev.protobuf;}
     // lib.genAttrs (map (v: "protobuf_${v}") versions) (n: tweak prev.${n});

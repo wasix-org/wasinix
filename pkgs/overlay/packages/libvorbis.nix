@@ -10,8 +10,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.libvorbis {
   doCheck = false;
   wasixCheckPrebuild = ":";
 }
-prev.libvorbis

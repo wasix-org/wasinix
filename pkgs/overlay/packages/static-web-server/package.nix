@@ -7,7 +7,21 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (prev.static-web-server.overrideAttrs (_: {
+  # This wraps an existing buildRustPackage result, so set the hook variables
+  # produced by buildRustPackage rather than its already-consumed arguments.
+  cargoBuildNoDefaultFeatures = true;
+  cargoBuildFeatures = [
+    "compression"
+    "directory-listing"
+    "basic-auth"
+    "fallback-page"
+    "metrics"
+  ];
+
+  # These units launch a native binary and are not part of the webc payload.
+  postInstall = "";
+})) {
   patches = [./wasix.patch];
   postPatch = ''
     substituteInPlace Cargo.toml \
@@ -47,18 +61,4 @@ helpers.libTweaks {
       }
     ];
   };
-} (prev.static-web-server.overrideAttrs (_: {
-  # This wraps an existing buildRustPackage result, so set the hook variables
-  # produced by buildRustPackage rather than its already-consumed arguments.
-  cargoBuildNoDefaultFeatures = true;
-  cargoBuildFeatures = [
-    "compression"
-    "directory-listing"
-    "basic-auth"
-    "fallback-page"
-    "metrics"
-  ];
-
-  # These units launch a native binary and are not part of the webc payload.
-  postInstall = "";
-}))
+}

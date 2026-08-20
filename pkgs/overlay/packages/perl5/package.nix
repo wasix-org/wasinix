@@ -14,7 +14,14 @@
       wasmName = "perl";
       # scripts and build tooling reach bin/perl by that name
       posixAlias = true;
-    } (helpers.libTweaks {
+    } (helpers.extendPackage (prev.perl5.override {
+        # ${coreutils}/bin/pwd is a runtime path baked into Cwd, and coreutils
+        # builds at the off profile only.
+        coreutils = preferredProfilePackages.coreutils;
+        # the module set is built against `self`, so without this every perl module
+        # compiles against an interpreter carrying none of the above
+        self = perl;
+      }) {
         patches = [
           ./patches/perl-cross-non-elf-probes.patch
           ./patches/wasi-spawn-without-fork.patch
@@ -52,14 +59,6 @@
             # of its type, so perl's three-argument form does not resolve.
             "-Accflags=-DNO_ENV_ARRAY_IN_MAIN"
           ];
-      }
-      (prev.perl5.override {
-        # The coreutils pwd executable is a runtime path baked into Cwd, and coreutils
-        # builds at the off profile only.
-        coreutils = preferredProfilePackages.coreutils;
-        # the module set is built against `self`, so without this every perl module
-        # compiles against an interpreter carrying none of the above
-        self = perl;
-      }));
+      });
 in
   perl

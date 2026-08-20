@@ -5,9 +5,8 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.bytecode {
   pytestFlags = ["--import-mode=importlib"];
   # recurses deeply enough to exhaust the wasm call stack, killing the guest
   disabledTestPaths = ["tests/test_cfg.py"];
 }
-pyprev.bytecode

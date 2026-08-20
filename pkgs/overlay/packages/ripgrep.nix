@@ -10,7 +10,7 @@
 }:
 # No emulatedCheck: the globset --lib suite traps the runtime (exit 27, no
 # Rust panic); a wasmer bug, WASIX-TODO.md.
-helpers.libTweaks {passthru.wasinix.shipped = true;} (prev.ripgrep.overrideAttrs (_: {
+helpers.extendPackage (prev.ripgrep.overrideAttrs (_: {
   postFixup = "";
   installCheckPhase = "";
-}))
+})) {passthru.wasinix.shipped = true;}

@@ -9,7 +9,7 @@
   lib,
   ...
 }:
-helpers.libTweaks (
+helpers.extendPackage pyprev.charset-normalizer (
   lib.optionalAttrs ((pyprev.charset-normalizer.passthru.wasix.historySpec or null) != null) {
     postPatch = _: ''
       sed -i 's/^MYPYC_SPEC = .*/MYPYC_SPEC = "mypy"/' _mypyc_hook/backend.py
@@ -18,4 +18,3 @@ helpers.libTweaks (
   }
   // {pytestFlags = ["--import-mode=importlib"];}
 )
-pyprev.charset-normalizer

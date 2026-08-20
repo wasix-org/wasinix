@@ -8,11 +8,10 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.pybase64 {
   nativeBuildInputs = [final.buildPackages.cmake];
   # cmake's own setup hook would otherwise hijack configurePhase into `cmake
   # ..` at the top level; pybase64's real build backend is pypa/setuptools,
   # which only shells out to cmake itself, internally, as an accelerator.
   dontUseCmakeConfigure = true;
 }
-pyprev.pybase64

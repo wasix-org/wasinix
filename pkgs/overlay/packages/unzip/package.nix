@@ -6,8 +6,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.unzip {
   patches = [./patches/wasi-unistd-include.patch];
   passthru.wasix.smokeTest = false;
 }
-prev.unzip

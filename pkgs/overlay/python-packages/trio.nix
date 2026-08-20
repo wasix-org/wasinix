@@ -3,7 +3,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.trio {
   # Gate optional platform APIs by the capabilities WASIX exposes.
   postPatch = ''
     substituteInPlace src/trio/_core/__init__.py \
@@ -23,4 +23,3 @@ helpers.libTweaks {
       $'    try:\n        waitid_cffi = waitid_ffi.dlopen(None).waitid  # type: ignore[attr-defined]\n    except AttributeError as ex:\n        raise ImportError from ex'
   '';
 }
-pyprev.trio

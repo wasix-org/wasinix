@@ -10,7 +10,7 @@
 }: let
   absl = final.abseil-cpp;
 in
-  helpers.libTweaks {
+  helpers.extendPackage pyprev.google-re2 {
     buildInputs = [absl];
     # The -l set is enumerated in the build, where abseil is an input anyway;
     # an eval-time readDir would import-from-derivation the whole toolchain.
@@ -23,4 +23,3 @@ in
       export NIX_LDFLAGS
     '';
   }
-  pyprev.google-re2

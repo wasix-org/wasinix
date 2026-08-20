@@ -6,7 +6,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.pytest-asyncio_0 {
   PYTHONDONTWRITEBYTECODE = "1";
 }
-pyprev.pytest-asyncio_0

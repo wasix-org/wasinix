@@ -7,6 +7,6 @@
   helpers,
   ...
 }:
-(helpers.libTweaks {} prev.sqlite).overrideAttrs (o: {
+(helpers.extendPackage prev.sqlite {}).overrideAttrs (o: {
   nativeBuildInputs = (o.nativeBuildInputs or []) ++ [final.disableWasmOptInConfigureHook];
 })

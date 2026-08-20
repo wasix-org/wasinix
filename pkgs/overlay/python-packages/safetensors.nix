@@ -4,7 +4,7 @@
   pyprev,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.safetensors {
   patches = [./patches/safetensors-wasi-read-exact-at.patch];
   passthru.wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.numpy pyfinal.fsspec];
   passthru.wasix.updateNotes = [
@@ -25,4 +25,3 @@ helpers.libTweaks {
     "--deselect=tests/test_threadable.py::TestCase::test_serialize_file_releases_gil"
   ];
 }
-pyprev.safetensors

@@ -16,7 +16,7 @@
     inherit libllvm;
   };
 in
-  helpers.libTweaks {
+  helpers.extendPackage base {
     passthru.wasix = {
       shipped = true;
       updateNotes = [
@@ -52,4 +52,3 @@ in
       runHook postInstall
     '';
   }
-  base

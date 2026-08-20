@@ -8,7 +8,6 @@
 }: let
   offMode = (final.stdenv.hostPlatform.wasmExceptions or "yes") == "no";
 in
-  helpers.libTweaks {
+  helpers.extendPackage prev.readline {
     configureFlags = final.lib.optionals offMode ["bash_cv_func_sigsetjmp=missing"];
   }
-  prev.readline

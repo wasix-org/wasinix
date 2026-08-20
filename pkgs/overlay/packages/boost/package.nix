@@ -23,7 +23,7 @@
     patches = [./boost-context-wasm-binary-format.patch];
   };
 in
-  helpers.libTweaks {
+  helpers.extendPackage base {
     # nixpkgs adds --without-python when Python is disabled, but b2 rejects any
     # --without-* together with the --with-url library selection.
     buildPhase = old: final.lib.replaceStrings ["--without-python"] [""] old;
@@ -65,4 +65,3 @@ in
       {message = "recheck the Boost.Build WASIX feature patches against the new Boost release";}
     ];
   }
-  base

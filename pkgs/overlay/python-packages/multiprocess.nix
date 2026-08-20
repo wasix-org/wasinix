@@ -6,7 +6,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.multiprocess {
   passthru = pyprev.multiprocess.passthru // {wasix = {interpreterSpecific = true;};};
 }
-pyprev.multiprocess

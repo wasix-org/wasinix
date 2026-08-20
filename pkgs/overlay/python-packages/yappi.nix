@@ -3,7 +3,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.yappi {
   passthru.wasinix.checks.captured.broken = "the context-statistics tests do not complete";
 }
-pyprev.yappi

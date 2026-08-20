@@ -6,7 +6,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.aiohttp {
   pytestFlags = ["--import-mode=importlib"];
   # Replaces the stashed check inputs: the inherited list drags cross builds
   # that cannot compile on wasix (bash-interactive via pexpect, paramiko).
@@ -18,4 +18,3 @@ helpers.libTweaks {
       wasinix = (old.wasinix or {}) // {checks.captured.install = false;};
     };
 }
-pyprev.aiohttp

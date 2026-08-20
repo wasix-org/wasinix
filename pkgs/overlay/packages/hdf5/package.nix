@@ -3,7 +3,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.hdf5 {
   # HDF5's float type detection uses FE_INVALID, which wasix <fenv.h> lacks.
   patches = [
     ./patches/hdf5-wasi-fenv.patch
@@ -12,4 +12,3 @@ helpers.libTweaks {
   cmakeFlags = ["-DHDF5_USE_LIBAEC_STATIC=ON"];
   passthru.wasix.supportedProfiles = helpers.profiles.pic;
 }
-prev.hdf5

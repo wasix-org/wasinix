@@ -5,7 +5,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.transformers {
   passthru = pyprev.transformers.passthru // {wasix = {interpreterSpecific = true;};};
 }
-pyprev.transformers

@@ -5,8 +5,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.openjph {
   outputs = _: ["out"];
   passthru.wasix.supportedProfiles = helpers.profiles.withEh;
 }
-prev.openjph

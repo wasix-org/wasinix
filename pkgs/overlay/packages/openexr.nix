@@ -6,8 +6,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.openexr {
   propagatedBuildInputs = [final.openjph];
   passthru.wasix.supportedProfiles = helpers.profiles.withEh;
 }
-prev.openexr

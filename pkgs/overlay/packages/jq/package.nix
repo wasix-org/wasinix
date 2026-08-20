@@ -20,7 +20,7 @@
   old = lib.versionOlder base.version "1.7";
 in
   helpers.wasmRename {wasmName = "jq";} (
-    helpers.libTweaks ({
+    helpers.extendPackage base ({
         passthru.wasinix.shipped = true;
         # jq's postFixup strips $dev/$man/$doc refs from the binary to break a
         # bin<->dev output cycle; retarget it at jq.wasm, since wasmRename's
@@ -39,5 +39,4 @@ in
           patchShebangs scripts/version
         '';
       })
-    base
   )

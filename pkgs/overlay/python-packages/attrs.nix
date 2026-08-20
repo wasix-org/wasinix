@@ -10,7 +10,7 @@
 }: let
   buildPy = pyprev.python.pythonOnBuildForHost;
 in
-  helpers.libTweaks (
+  helpers.extendPackage pyprev.attrs (
     lib.optionalAttrs ((pyprev.attrs.passthru.wasix.historySpec or null) != null) {
       patches = _: [];
       nativeBuildInputs = [
@@ -29,4 +29,3 @@ in
       disabledTests = ["test_overwrite_base"];
     }
   )
-  pyprev.attrs

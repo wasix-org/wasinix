@@ -6,7 +6,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.outcome {
   # check inputs go through the stash; input-list additions never reach the
   # check derivation (see packaging.nix)
   passthru = old:
@@ -17,4 +17,3 @@ helpers.libTweaks {
     };
   disabledTestPaths = ["tests/test_async.py"];
 }
-pyprev.outcome

@@ -6,7 +6,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.binaryen {
   passthru.wasinix.ci.profiles = ["exnrefEhpic"];
 }
-prev.binaryen

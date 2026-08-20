@@ -7,9 +7,8 @@
   lib,
   ...
 }:
-helpers.libTweaks (lib.optionalAttrs ((pyprev.pydantic-ai-slim.passthru.wasix.historySpec or null) != null) {
+helpers.extendPackage pyprev.pydantic-ai-slim (lib.optionalAttrs ((pyprev.pydantic-ai-slim.passthru.wasix.historySpec or null) != null) {
   propagatedBuildInputs = helpers.replaceInputsByName {
     pydantic-graph = pyfinal."pydantic-graph_${lib.replaceStrings ["."] ["_"] pyprev.pydantic-ai-slim.version}";
   };
 })
-pyprev.pydantic-ai-slim

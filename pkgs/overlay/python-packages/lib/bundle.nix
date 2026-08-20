@@ -5,9 +5,9 @@
 # The copy is source-level (postPatch), before the wheel is built, so the file
 # lands inside the .whl; a post-install inject would miss the distributed wheel.
 #
-# Usage (a libTweaks fragment):
+# Usage (an extendPackage fragment):
 #   bundle = import ./lib/bundle.nix {inherit lib;};
-#   helpers.libTweaks (bundle.bundleNative {
+#   helpers.extendPackage drv (bundle.bundleNative {
 #     pkg = "pyzbar";                                  # top-level source package dir
 #     files = [ { src = "${final.zbar.lib}/lib/libzbar.so"; } ];
 #     rewrites = [
@@ -17,7 +17,7 @@
 #       # the __file__-relative path where the loader takes an arg mid-call)
 #       # { file = "..."; from = "load_lib(\"gmp\","; to = "load_lib(${bundle.relPath "libgmp.so.10"},"; }
 #     ];
-#   }) drv;
+#   });
 #
 # setuptools needs the natives declared as package_data; flit/hatchling include
 # package-dir files already, so the appended setup.cfg section is harmless there.

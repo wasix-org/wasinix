@@ -7,7 +7,7 @@
   lib,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.snowflake-connector-python {
   dontCheckRuntimeDeps = true;
 
   # 3.x imports boto3 from platform_detection at module scope, so the extra is
@@ -19,4 +19,3 @@ helpers.libTweaks {
   # storage backends. The wheel still receives its import check.
   passthru.wasinix.checks.captured.install = false;
 }
-pyprev.snowflake-connector-python

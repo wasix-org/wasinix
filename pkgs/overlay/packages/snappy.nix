@@ -5,10 +5,9 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.snappy {
   postPatch = ''
     substituteInPlace CMakeLists.txt \
       --replace-fail ' -fno-exceptions"' '"'
   '';
 }
-prev.snappy

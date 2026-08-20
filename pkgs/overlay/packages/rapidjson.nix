@@ -5,7 +5,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.rapidjson {
   cmakeFlags = [
     "-DRAPIDJSON_BUILD_TESTS=OFF"
     "-DRAPIDJSON_BUILD_DOC=OFF"
@@ -22,4 +22,3 @@ helpers.libTweaks {
   buildInputs = helpers.dropInputsByName ["gtest"];
   doCheck = false;
 }
-prev.rapidjson

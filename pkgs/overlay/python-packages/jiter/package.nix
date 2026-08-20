@@ -14,7 +14,7 @@
 }: let
   lock = ./locks/${pyprev.jiter.version}.lock;
 in
-  helpers.libTweaks ({
+  helpers.extendPackage pyprev.jiter ({
       maturinBuildFlags = ["--features" "pyo3/extension-module"];
     }
     // lib.optionalAttrs (builtins.pathExists lock) {
@@ -28,4 +28,3 @@ in
         cp ${lock} Cargo.lock
       '';
     })
-  pyprev.jiter

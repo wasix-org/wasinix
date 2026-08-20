@@ -4,7 +4,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (prev.libjxl.override {enablePlugins = false;}) {
   # pkg_check_modules scopes PkgConfig::OpenEXR to lib/, so tools/ links without
   # -lOpenEXR and fails on undefined Imf_3_4 symbols.
   patches = [
@@ -39,4 +39,3 @@ helpers.libTweaks {
   ];
   passthru.wasix.supportedProfiles = helpers.profiles.pic;
 }
-(prev.libjxl.override {enablePlugins = false;})

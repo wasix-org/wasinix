@@ -8,7 +8,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.uvloop {
   env.NIX_CFLAGS_COMPILE = "-DPyOS_BeforeFork()= -DPyOS_AfterFork_Parent()= -DPyOS_AfterFork_Child()=";
   # both raise at import, aborting collection: test_process imports psutil,
   # test_tcp fails to load a helper module in the guest
@@ -17,4 +17,3 @@ helpers.libTweaks {
   # taking the session down; the core loop does not run on wasix yet.
   passthru.wasinix.checks.captured.install = false;
 }
-pyprev.uvloop

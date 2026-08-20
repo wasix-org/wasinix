@@ -41,7 +41,7 @@
       postBuild = "${buildPy.interpreter} ../setup.py bdist_wheel";
     });
 in
-  helpers.libTweaks {
+  helpers.extendPackage (pyprev.onnxruntime.override {onnxruntime = engine;}) {
     # nixpkgs enables pytest without shipping tests in the installed wheel.
     # The package-specific inference check below provides runtime coverage.
     passthru.wasinix.checks.captured.install = false;
@@ -50,4 +50,3 @@ in
     buildInputs = dropByName;
     propagatedBuildInputs = dropByName;
   }
-  (pyprev.onnxruntime.override {onnxruntime = engine;})

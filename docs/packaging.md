@@ -17,9 +17,9 @@ recipe:
 
 ```nix
 {prev, helpers, ...}:
-helpers.libTweaks {
+helpers.extendPackage prev.foo {
   passthru.wasinix.shipped = true;
-} prev.foo
+}
 ```
 
 Where the native and WASIX builds differ in something small, branch on
@@ -67,16 +67,16 @@ and a version tag over a pinned hash.
 
 ## Tweaks
 
-`helpers.libTweaks { <attrs> } prev.foo` merges attributes by kind: phases
+`helpers.extendPackage prev.foo { <attrs> }` merges attributes by kind: phases
 concatenate, lists append, attrsets merge recursively, scalars replace, a
-function gets the old value. `doCheck = false` is the default. Don't write
+function gets the old value. It does not choose check policy. Don't write
 `(old.X or []) ++ ...` by hand.
 
 ## A library
 
 ```nix
 { prev, helpers, ... }:
-helpers.libTweaks { configureFlags = [ "--disable-bar" ]; } prev.foo
+helpers.extendPackage prev.foo { configureFlags = [ "--disable-bar" ]; }
 ```
 
 Profile limits are declared, never written to meta directly:
@@ -116,9 +116,9 @@ nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
 
    ```nix
    { prev, helpers, ... }:
-   helpers.wasmRename { wasmName = "foo"; } (helpers.libTweaks {
+   helpers.wasmRename { wasmName = "foo"; } (helpers.extendPackage prev.foo {
      passthru.wasinix.shipped = true;
-   } prev.foo)
+   })
    ```
 
    Programs needing `fork()` or `setjmp` set

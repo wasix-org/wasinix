@@ -8,9 +8,8 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.fribidi {
   # no suite: the tests drive the bin/ CLIs skipped above.
   doCheck = false;
   mesonFlags = ["-Dbin=false" "-Dtests=false"];
 }
-prev.fribidi

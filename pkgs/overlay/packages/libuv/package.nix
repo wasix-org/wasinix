@@ -7,7 +7,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.libuv {
   # no emulated check: patch 0011 makes uv_spawn return UV_ENOSYS under
   # __wasi__ on every profile (fork itself is undeclared only under Wasm-EH,
   # not on off; WASIX-TODO.md); the library doesn't otherwise need fork().
@@ -32,4 +32,3 @@ helpers.libTweaks {
     ./patches/libuv-0013-wasix-ifaddrs-names-no-if_index.patch
   ];
 }
-prev.libuv

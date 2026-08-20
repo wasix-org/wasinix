@@ -6,7 +6,14 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (prev.zbar.override {
+  # zbarcam needs V4L2 (/dev/video) and the GTK/Qt viewers need an X display;
+  # wasmer has neither.
+  enableVideo = false;
+  withXorg = false;
+  imagemagickBig = final.imagemagick;
+  libintl = null;
+}) {
   # zbarimg is a C program, but MagickWand's static closure reaches C++ archives
   # (libuhdr), so wasm-ld wants operator new and __cxa_guard_* on the C link.
   env.NIX_LDFLAGS = "-lc++ -lc++abi -lunwind";
@@ -67,11 +74,3 @@ helpers.libTweaks {
   '';
   passthru.wasix.supportedProfiles = helpers.profiles.pic;
 }
-(prev.zbar.override {
-  # zbarcam needs V4L2 (/dev/video) and the GTK/Qt viewers need an X display;
-  # wasmer has neither.
-  enableVideo = false;
-  withXorg = false;
-  imagemagickBig = final.imagemagick;
-  libintl = null;
-})

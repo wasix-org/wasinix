@@ -6,9 +6,8 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.freetype {
   configureFlags = ["--with-harfbuzz=no"];
   propagatedBuildInputs = _: [final.zlib final.libpng];
   postInstall = _: "";
 }
-prev.freetype

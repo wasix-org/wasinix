@@ -6,7 +6,6 @@
   pyprev,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.opentelemetry-instrumentation {
   propagatedBuildInputs = [pyfinal.opentelemetry-semantic-conventions];
 }
-pyprev.opentelemetry-instrumentation

@@ -18,7 +18,7 @@
     tzdata = final.buildPackages.tzdata;
   };
 in
-  helpers.libTweaks {
+  helpers.extendPackage base {
     # orc/boost/grpc/gtest don't cross-build; the static stdenv mirrors the two lists.
     buildInputs = _: [final.zlib final.zstd final.lz4 final.snappy final.thrift final.openssl];
     propagatedBuildInputs = _: [final.zlib final.zstd final.lz4 final.snappy final.thrift final.openssl];
@@ -87,4 +87,3 @@ in
       {message = "recheck ARROW_RAPIDJSON_URL against cpp/thirdparty/versions.txt (ARROW_RAPIDJSON_BUILD_VERSION + _SHA256_CHECKSUM); arrow hash-verifies it, so a bump that moves the pin fails the build";}
     ];
   }
-  base

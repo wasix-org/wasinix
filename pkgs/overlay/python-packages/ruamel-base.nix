@@ -5,7 +5,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.ruamel-base {
   passthru = pyprev.ruamel-base.passthru // {wasix = {interpreterSpecific = true;};};
 }
-pyprev.ruamel-base

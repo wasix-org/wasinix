@@ -35,7 +35,7 @@
     "-DPython3_NumPy_INCLUDE_DIR=${crossNumpyInc}"
   ];
 in
-  helpers.libTweaks ({
+  helpers.extendPackage pyprev.pyarrow ({
       patches = [./patches/pyarrow-static-arrow-wasix.patch];
       # No suite: the extension fails to load its arrow C++
       # ("arrow::compute::Initialize" unresolved), dying at collection;
@@ -92,4 +92,3 @@ in
           ];
       }
     ))
-  pyprev.pyarrow

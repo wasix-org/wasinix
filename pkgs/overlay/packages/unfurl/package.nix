@@ -4,9 +4,8 @@
   ...
 }:
 helpers.wasmRename {wasmName = "unfurl";} (
-  helpers.libTweaks {
+  helpers.extendPackage prev.unfurl {
     subPackages = ["."];
     passthru.wasinix.shipped = true;
   }
-  prev.unfurl
 )

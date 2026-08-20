@@ -4,7 +4,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.potrace {
   # no emulated check: the test programs bundle getopt, which collides with
   # wasix-libc's at link.
   doCheck = false;
@@ -22,4 +22,3 @@ helpers.libTweaks {
     runHook postInstall
   '';
 }
-prev.potrace
