@@ -202,6 +202,51 @@ in rec {
       allExtensions;
 
     project = let
+      profileNames = lib.attrNames profiles.profiles;
+
+      supportedProfilesFor = package: let
+        declared = ((package.passthru or {}).wasix or {}).supportedProfiles or profileNames;
+        unknown = lib.subtractLists profileNames declared;
+      in
+        lib.throwIf (declared == [])
+        "${package.pname or package.name}: supportedProfiles must not be empty"
+        (lib.throwIf (unknown != [])
+          "${package.pname or package.name}: supportedProfiles contains unknown profile(s): ${lib.concatStringsSep ", " unknown}"
+          declared);
+
+      preferredProfileFor = package: let
+        metadata = (package.passthru or {}).wasix or {};
+        supported = supportedProfilesFor package;
+        preferred =
+          metadata.preferredProfile
+          or (
+            if builtins.elem profiles.defaultProfileName supported
+            then profiles.defaultProfileName
+            else builtins.head supported
+          );
+      in
+        lib.throwIf (!(builtins.elem preferred supported))
+        "${package.pname or package.name}: preferred profile '${preferred}' is unsupported"
+        preferred;
+
+      ciProfilesFor = package: let
+        compatibility = (package.passthru or {}).wasix or {};
+        policy = projectLib.packageMetadata package;
+        ci = policy.ci or {};
+        supported = supportedProfilesFor package;
+        selected =
+          ci.profiles
+          or (
+            if compatibility ? preferredProfile || (policy.shipped or false)
+            then [(preferredProfileFor package)]
+            else supported
+          );
+        unsupported = lib.subtractLists supported selected;
+      in
+        lib.throwIf (unsupported != [])
+        "${package.pname or package.name}: CI selects unsupported profile(s): ${lib.concatStringsSep ", " unsupported}"
+        selected;
+
       historySpecsFor = scope: name: package: let
         source = (projectLib.packageMetadata package).source;
       in
@@ -350,13 +395,16 @@ in rec {
       pythonHistoryValid = lib.all (packageSet: validateHistory "python" packageSet) (lib.attrValues pythonRaw);
 
       native = packageSetView "native" nativeRaw;
-      wasix = lib.mapAttrs (_: packageSet: packageSetView "wasix" packageSet) wasixRaw;
+      wasix = lib.mapAttrs (profile: packageSet:
+        lib.filterAttrs (_: package: builtins.elem profile (supportedProfilesFor package))
+        (packageSetView "wasix" packageSet))
+      wasixRaw;
       python = lib.mapAttrs (_: packageSet: packageSetView "python" packageSet) pythonRaw;
       allWasixNames = lib.unique (lib.concatMap lib.attrNames (lib.attrValues wasix));
       preferred = lib.genAttrs allWasixNames (name: let
         defaultProfile = profiles.defaultProfileName or null;
-        packageAtDefault = wasix.${defaultProfile}.${name} or null;
-        declaredProfile = ((packageAtDefault.passthru or {}).wasix or {}).preferredProfile or defaultProfile;
+        packageAtDefault = wasixRaw.${defaultProfile}.${name};
+        declaredProfile = preferredProfileFor packageAtDefault;
       in
         lib.throwIf (defaultProfile == null)
         "the WASIX profile inventory does not define defaultProfileName"
@@ -459,7 +507,19 @@ in rec {
         (checksFor (contextForEntry entry) entry))
       packageEntries;
       entries = packageEntries // testEntries;
-      ciEntries = lib.filterAttrs (_: entry: builtins.elem entry.source requestedCiSources) entries;
+      ciPackageEntries = lib.filterAttrs (_: entry:
+        builtins.elem entry.source requestedCiSources
+        && (
+          entry.scope
+          != "wasix"
+          || builtins.elem entry.variant.profile (ciProfilesFor entry.package)
+        ))
+      packageEntries;
+      ciPackageAddresses = lib.attrNames ciPackageEntries;
+      ciTestEntries = lib.filterAttrs (_: entry:
+        builtins.elem entry.subject ciPackageAddresses)
+      testEntries;
+      ciEntries = ciPackageEntries // ciTestEntries;
       derivationOf = entry:
         if entry.kind == "package"
         then entry.package

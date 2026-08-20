@@ -151,12 +151,21 @@
         core = projectLib.extendPackage previous.core {
           passthru.wasinix.overrides = "wasinix";
           passthru.wasinix.checks.probe = true;
+          passthru.wasinix.ci.profiles = ["default" "alternate"];
         };
         consumer = mkPackage {
           name = "consumer-${final.profile}";
           passthru.wasinix.checks.probe = true;
         };
         "dot.name" = mkPackage {name = "dot-name";};
+        limited = mkPackage {
+          name = "limited-${final.profile}";
+          passthru.wasix.supportedProfiles = ["alternate"];
+        };
+        ciNarrow = mkPackage {
+          name = "ci-narrow-${final.profile}";
+          passthru.wasinix.ci.profiles = ["default"];
+        };
         helper = "not-a-package";
         plumbing = mkPackage {
           name = "plumbing";
@@ -211,8 +220,8 @@
     extensions = [
       {
         id = "variant-shape";
-        overlays.wasix = final: _previous:
-          lib.optionalAttrs (final.profile == "default") {
+        overlays.wasix = _final: previous:
+          lib.optionalAttrs (previous.profile == "default") {
             conditional = mkPackage {name = "conditional";};
           };
       }
@@ -225,6 +234,35 @@
       {
         id = "stale-history";
         history.wasix = ./tests/wasix-history.json;
+      }
+    ];
+  };
+  invalidProfileProject = projectApi.mkProject {
+    system = "test-system";
+    importNixpkgs = fakeImportNixpkgs;
+    extensions = [
+      {
+        id = "invalid-profile";
+        overlays.wasix = _final: _previous: {
+          invalidProfile = mkPackage {
+            passthru.wasix.supportedProfiles = ["missing"];
+          };
+        };
+      }
+    ];
+  };
+  invalidCiProfileProject = projectApi.mkProject {
+    system = "test-system";
+    importNixpkgs = fakeImportNixpkgs;
+    extensions = [
+      {
+        id = "invalid-ci-profile";
+        overlays.wasix = _final: _previous: {
+          invalidCiProfile = mkPackage {
+            passthru.wasix.supportedProfiles = ["alternate"];
+            passthru.wasinix.ci.profiles = ["default"];
+          };
+        };
       }
     ];
   };
@@ -289,9 +327,11 @@ in {
       schemaVersion = project.schemaVersion;
       nativeNames = lib.attrNames project.packages.native;
       defaultNames = lib.attrNames project.packages.wasix.default;
+      alternateNames = lib.attrNames project.packages.wasix.alternate;
       coreSource = project.packages.wasix.default.core.passthru.wasinix.source;
       coreLineage = project.packages.wasix.default.core.passthru.wasinix.lineage;
       preferredProfile = project.packages.preferred.core.name;
+      limitedPreferred = project.packages.preferred.limited.name;
       consumerName = project.packages.wasix.alternate.consumer.name;
       inheritedDependencyName = project.packages.wasix.default.uses-inherited.name;
       pythonNames = lib.attrNames project.packages.python.py;
@@ -315,19 +355,23 @@ in {
       invalidCheckFails = !(force invalidCheckProject.tests).success;
       variantShapeFails = !(force variantShapeProject).success;
       staleHistoryFails = !(force staleHistoryProject).success;
+      invalidProfileFails = !(force invalidProfileProject).success;
+      invalidCiProfileFails = !(force invalidCiProfileProject.ci).success;
     };
     expected = {
       schemaVersion = 1;
       nativeNames = ["core"];
-      defaultNames = ["consumer" "core" "dot.name"];
+      defaultNames = ["ciNarrow" "consumer" "core" "dot.name" "topOwned" "uses-inherited"];
+      alternateNames = ["ciNarrow" "consumer" "core" "dot.name" "limited" "topOwned" "uses-inherited"];
       coreSource = "consumer";
       coreLineage = ["wasinix" "consumer"];
       preferredProfile = "core";
+      limitedPreferred = "limited-alternate";
       consumerName = "consumer-alternate";
       inheritedDependencyName = "uses-inherited";
       pythonNames = ["contextProof" "corePython" "inheritedPython" "uses-python"];
       pythonSource = "consumer";
-      pythonContextName = "top-owned-false";
+      pythonContextName = "top-owned-";
       wasixHistoryVersion = "0.9";
       preferredHistoryVersion = "0.9";
       pythonHistoryVersion = "0.8";
@@ -338,11 +382,13 @@ in {
       ciJobNames = [
         "packages.python.py.inheritedPython"
         ''packages.python.py.inheritedPython.versions["0.8"]''
-        ''packages.python.py["uses-python"]''
+        "packages.python.py.uses-python"
         "packages.wasix.alternate.consumer"
         "packages.wasix.alternate.core"
         ''packages.wasix.alternate.core.versions["0.9"]''
+        "packages.wasix.alternate.limited"
         ''packages.wasix.alternate["dot.name"]''
+        "packages.wasix.default.ciNarrow"
         "packages.wasix.default.consumer"
         "packages.wasix.default.core"
         ''packages.wasix.default.core.versions["0.9"]''
@@ -357,11 +403,13 @@ in {
       catalogJobNames = [
         "packages.python.py.inheritedPython"
         ''packages.python.py.inheritedPython.versions["0.8"]''
-        ''packages.python.py["uses-python"]''
+        "packages.python.py.uses-python"
         "packages.wasix.alternate.consumer"
         "packages.wasix.alternate.core"
         ''packages.wasix.alternate.core.versions["0.9"]''
+        "packages.wasix.alternate.limited"
         ''packages.wasix.alternate["dot.name"]''
+        "packages.wasix.default.ciNarrow"
         "packages.wasix.default.consumer"
         "packages.wasix.default.core"
         ''packages.wasix.default.core.versions["0.9"]''
@@ -389,6 +437,8 @@ in {
       invalidCheckFails = true;
       variantShapeFails = true;
       staleHistoryFails = true;
+      invalidProfileFails = true;
+      invalidCiProfileFails = true;
     };
   };
 }
