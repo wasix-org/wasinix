@@ -18,7 +18,7 @@ recipe:
 ```nix
 {prev, helpers, ...}:
 helpers.libTweaks {
-  passthru.wasix.shipped = true;
+  passthru.wasinix.shipped = true;
 } prev.foo
 ```
 
@@ -95,13 +95,13 @@ without hiding the other supported builds:
 passthru.wasix = {
   supportedProfiles = ["eh" "ehpic"];
   preferredProfile = "eh";
-  ciProfiles = ["eh" "ehpic"];
 };
+passthru.wasinix.ci.profiles = ["eh" "ehpic"];
 ```
 
-`ciProfiles` must be a subset of `supportedProfiles`. The complete result is
-always available as `packagesByProfile.<profile>.foo`; CI selects from that
-matrix using the package declaration.
+`wasinix.ci.profiles` must be a subset of `supportedProfiles`. The complete
+result is always available as `packagesByProfile.<profile>.foo`; CI selects from
+that matrix using the package declaration.
 
 ## A Rust CLI
 
@@ -117,7 +117,7 @@ nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
    ```nix
    { prev, helpers, ... }:
    helpers.wasmRename { wasmName = "foo"; } (helpers.libTweaks {
-     passthru.wasix.shipped = true;
+     passthru.wasinix.shipped = true;
    } prev.foo)
    ```
 
@@ -126,12 +126,12 @@ nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
    time.
 
 2. The webc manifest is generated; most packages need zero config. Deviations go
-   in `passthru.wasmer`: `name`, `version`, `aliases` (`wasmerPackages` attr
-   aliases), `commands` (manifest command aliases), `entrypoint`,
-   `fs."<path>" = <store path>`, `env` (set on every command),
-   `commandEnv.<cmd>`, `autoSelfMount` (mount store paths found in the wasm),
-   `selfMounts` (paths referenced from scripts, which autoSelfMount can't see).
-   See git's package.nix for an example with several deviations.
+   in `passthru.wasmer`: `name`, `version`, `commands` (manifest command
+   aliases), `entrypoint`, `fs."<path>" = <store path>`, `env` (set on every
+   command), `commandEnv.<cmd>`, `autoSelfMount` (mount store paths found in the
+   wasm), `selfMounts` (paths referenced from scripts, which autoSelfMount can't
+   see). See git's package.nix for an example with several deviations. Public
+   package aliases belong in `passthru.wasinix.aliases`.
 
    `aliases` are explicit public addresses for the same package. They must not
    collide with a canonical published-name key or resolve to different packages.
@@ -220,11 +220,11 @@ host-side wrappers so build systems can invoke them by filename.
 
 C and C++ packages use their nixpkgs `checkPhase`. Python wheels use the native
 nixpkgs custom `installCheckPhase` or check hook. Override that choice with
-`passthru.wasix.installCheck`; configure the run with
-`passthru.wasix.emulatedCheck` (`timeout`, `expectFail`, `broken`, or `ciTags`).
-Large Python suites can set `shards = N`; pytest checks partition collected node
-IDs deterministically, while custom phases consume `WASIX_CHECK_SHARD_COUNT` and
-`WASIX_CHECK_SHARD_NUM` themselves.
+`passthru.wasinix.checks.captured.install`; configure the run with
+`passthru.wasinix.checks.captured` (`timeout`, `expectFail`, `broken`, or
+`tags`). Large Python suites can set `shards = N`; pytest checks partition
+collected node IDs deterministically, while custom phases consume
+`WASIX_CHECK_SHARD_COUNT` and `WASIX_CHECK_SHARD_NUM` themselves.
 
 Unsharded checks appear as `passthru.tests.upstream`; sharded checks use
 `upstream-<number>-of-<count>`. Handwritten package tests remain appropriate for

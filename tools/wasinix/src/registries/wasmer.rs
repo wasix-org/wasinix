@@ -72,7 +72,7 @@ fn run(cmd: &mut Command) -> Result<()> {
 /// Canonical shipped webc names with every accepted alias.
 fn webc_domain() -> Result<Domain> {
     let apply = crate::support::nix::canonical_webcs_apply(
-        "_: p: { overlay = p.overlayName; aliases = p.passthru.wasmer.aliases or []; }",
+        "_: p: { overlay = p.overlayName; aliases = p.passthru.wasinix.aliases or []; }",
     );
     let named = crate::support::nix::eval(&Flake::default(), "wasmerPackages", Some(&apply))?;
     let mut domain = Domain::new(".#wasmerPackages");

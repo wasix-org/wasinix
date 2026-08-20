@@ -28,7 +28,7 @@ helpers.libTweaks {
       -o "$out/bin/attic.wasm.exnref"
     mv "$out/bin/attic.wasm.exnref" "$out/bin/attic.wasm"
   '';
-  passthru.wasix.shipped = true;
+  passthru.wasinix.shipped = true;
   passthru.wasmer = {
     name = "attic-client";
     entrypoint = "attic";

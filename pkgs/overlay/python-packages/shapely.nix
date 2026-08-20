@@ -23,6 +23,6 @@ helpers.libTweaks {
   '';
   # Suite off: the tests reach geos and die on a wasm out-of-bounds memory
   # access, a real cross geos/shapely defect (WASIX-TODO.md).
-  passthru.wasix.installCheck = false;
+  passthru.wasinix.checks.captured.install = false;
 }
 pyprev.shapely

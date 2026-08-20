@@ -6,7 +6,7 @@
 helpers.wasmRename {wasmName = "unfurl";} (
   helpers.libTweaks {
     subPackages = ["."];
-    passthru.wasix.shipped = true;
+    passthru.wasinix.shipped = true;
   }
   prev.unfurl
 )

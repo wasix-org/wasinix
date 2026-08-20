@@ -9,6 +9,6 @@ helpers.libTweaks {
   patches = [./patches/cffi-ffi-closure-wasix.patch];
   # No suite: the tests compile C at test time, and the guest cannot exec the
   # compiler; cffi-consuming suites cover the shipped module.
-  passthru.wasix.installCheck = false;
+  passthru.wasinix.checks.captured.install = false;
 }
 pyprev.cffi

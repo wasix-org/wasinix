@@ -44,7 +44,7 @@ in {
     # deliberately grants no --net, so the prompt is reachable here.
     pkgs.runCommand name {
       nativeBuildInputs = [effWasmer];
-      passthru.wasix = lib.optionalAttrs (ciTags != []) {inherit ciTags;};
+      passthru.wasinix = lib.optionalAttrs (ciTags != []) {ci.tags = ciTags;};
     } ''
       export HOME=$TMPDIR/home
       mkdir -p "$HOME"

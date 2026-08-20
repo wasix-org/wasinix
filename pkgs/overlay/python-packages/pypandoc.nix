@@ -9,6 +9,6 @@
 helpers.libTweaks {
   patches = _: [];
   nativeCheckInputs = _: [];
-  passthru.wasix.installCheck = false;
+  passthru.wasinix.checks.captured.install = false;
 }
 pyprev.pypandoc

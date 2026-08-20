@@ -4,6 +4,6 @@
   ...
 }:
 helpers.libTweaks {
-  passthru.wasix.emulatedCheck.broken = "compliance tests require CPython's test package";
+  passthru.wasinix.checks.captured.broken = "compliance tests require CPython's test package";
 }
 pyprev.zlib-ng

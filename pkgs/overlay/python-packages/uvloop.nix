@@ -15,6 +15,6 @@ helpers.libTweaks {
   disabledTestPaths = ["tests/test_process.py" "tests/test_tcp.py"];
   # No suite: libuv itself aborts the guest mid-run (uv_close assertion),
   # taking the session down; the core loop does not run on wasix yet.
-  passthru.wasix.installCheck = false;
+  passthru.wasinix.checks.captured.install = false;
 }
 pyprev.uvloop

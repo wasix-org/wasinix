@@ -19,7 +19,7 @@ in
     };
     cargoHash = "sha256-ejCXTplGKAtJjkOO6yAkR/TDiXKqiXZseXkcwrx0e2c=";
     passthru = {
-      wasix.shipped = true;
+      wasinix.shipped = true;
       # upstream cuts no releases, so track its default branch
       updateScript = {
         command = nix-update-script {extraArgs = ["--flake" "--version=branch"];};

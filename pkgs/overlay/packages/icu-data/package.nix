@@ -26,7 +26,7 @@ in {
           license = lib.licenses.icu;
           platforms = lib.platforms.all;
         };
-        passthru.wasix.shipped = true;
+        passthru.wasinix.shipped = true;
         # No auto-retention: each icu major is already a first-class attr
         # (icu-data${v}), so a pinned major stays served without minting a
         # history entry when the default alias crosses a major.

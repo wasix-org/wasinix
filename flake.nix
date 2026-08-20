@@ -175,11 +175,11 @@
         passthru =
           (drv.passthru or {})
           // {
-            wasix =
-              (drv.passthru.wasix or {})
+            wasinix =
+              (drv.passthru.wasinix or {})
               // {
-                ciSubject = owner;
-                ciTestName = testName;
+                check.subject = owner;
+                check.name = testName;
               };
           };
       };
@@ -190,7 +190,7 @@
           fallback = {"${prefix}${name}" = pkg;};
           single = {"${prefix}${name}" = testWithOwner name "tests" tests;};
           testAttrs = let
-            declaredCases = (tests.passthru.wasix or {}).testCases or null;
+            declaredCases = (tests.passthru.wasinix or {}).testCases or null;
           in
             if declaredCases != null
             then
@@ -362,6 +362,18 @@
         for shell in bash fish zsh; do
           wasinix completions "$shell" >/dev/null
         done
+        touch "$out"
+      '';
+    metadataNamespaceCheck =
+      wasix.pkgs.runCommand "wasinix-metadata-namespace-check" {
+        nativeBuildInputs = [wasix.pkgs.ripgrep];
+      } ''
+        if rg -n \
+          'passthru\.wasix\.(shipped|ciProfiles|ciTags|emulatedCheck|installCheck|publication|testExpectation)|passthru\.wasmer\.aliases|\bwasix\.shipped' \
+          ${self}/pkgs; then
+          echo "Wasinix policy is stored outside passthru.wasinix" >&2
+          exit 1
+        fi
         touch "$out"
       '';
     # End to end for `wasinix cargo publish`: the real wasm server under
@@ -547,6 +559,7 @@
           wasinix = wasinixTests;
           wasinix-core-closure = wasinixCoreClosureCheck;
           wasinix-interface = wasinixInterfaceCheck;
+          wasinix-metadata-namespace = metadataNamespaceCheck;
           wasinix-cargo-publish = wasinixCargoPublishCheck;
           wasinix-wasmer-serve = wasinixWasmerServeCheck;
           wasinix-serve-all = wasinixServeAllCheck;
@@ -748,7 +761,7 @@
         wasix.ciPackagesByProfile;
       wasmerJobAliases =
         lib.concatMapAttrs (packageKey: package: let
-          aliases = package.passthru.wasmer.aliases or [];
+          aliases = package.passthru.wasinix.aliases or [];
           addresses = map (alias: "wasmerPackages.${alias}") aliases;
         in {
           "wasmerPackages.${packageKey}" = addresses;
@@ -757,8 +770,8 @@
         wasix.wasmerPackageInventory;
       ciJobInfo = lib.mapAttrs (name: drv: let
         isCheck = lib.hasPrefix "checks." name;
-        wasixMeta = drv.passthru.wasix or {};
-        subject = wasixMeta.ciSubject or drv.pname or (lib.getName drv);
+        wasinixMeta = drv.passthru.wasinix or {};
+        subject = wasinixMeta.check.subject or drv.pname or (lib.getName drv);
         segments = lib.splitString "." name;
         variant =
           if
@@ -780,7 +793,7 @@
         // {
           displayName = subject;
           inherit subject;
-          testName = wasixMeta.ciTestName or null;
+          testName = wasinixMeta.check.name or null;
           testFamily =
             if lib.hasPrefix "checks.wheel-" name
             then "wheel"

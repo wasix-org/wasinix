@@ -12,10 +12,10 @@ in
       lib.optionals (old != null) old
       ++ lib.optionals (!isHistory) [./patches/cython-wasix-builtin-compatibility.patch];
     passthru.wasixDeclaredCheckInputs = [pyfinal.numpy pyfinal.setuptools];
-    passthru.wasix.emulatedCheck = {
+    passthru.wasinix.checks.captured = {
       shards = 8;
       timeout = 1200;
-      ciTags = ["slow-tests"];
+      tags = ["slow-tests"];
     };
     installCheckPhase = _: ''
       export HOME="$NIX_BUILD_TOP"

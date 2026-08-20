@@ -11,7 +11,7 @@
   ...
 }:
 helpers.libTweaks {
-  passthru.wasix.shipped = true;
+  passthru.wasinix.shipped = true;
   # fork() needs asyncified binaries; wasixcc only asyncifies in the off profile
   # on its own, so apply the pass here too (see git/findutils).
   env.WASIXCC_WASM_OPT_FLAGS = "--asyncify:-O2";

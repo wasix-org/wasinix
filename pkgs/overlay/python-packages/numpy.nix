@@ -19,7 +19,7 @@ in
         passthru.crossInclude = "${self}/lib/${pyprev.python.libPrefix}/site-packages/numpy/_core/include";
         # the wheel-shipped suite in tests/upstream.nix replaces the derived
         # source-tree check (the source numpy/ has no compiled modules)
-        passthru.wasix.installCheck = false;
+        passthru.wasinix.checks.captured.install = false;
         nativeBuildInputs = noFortran;
         # numpy < 2.3 vendors meson 1.5, which rejects default_both_libraries
         # (nixpkgs passes it for current numpy; meson knows it from 1.6).

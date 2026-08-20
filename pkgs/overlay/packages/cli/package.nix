@@ -22,7 +22,7 @@ in
     inherit pname version;
     meta.description = "Shell environment with common command-line tools";
     passthru = {
-      wasix.shipped = true;
+      wasinix.shipped = true;
       wasmer = {
         name = pname;
         entrypoint = "bash";

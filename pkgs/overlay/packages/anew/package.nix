@@ -18,7 +18,7 @@ helpers.wasmRename {wasmName = "anew";} (
     subPackages = ["."];
 
     passthru = {
-      wasix.shipped = true;
+      wasinix.shipped = true;
       updateScript = nix-update-script {extraArgs = ["--flake"];};
     };
 

@@ -9,6 +9,6 @@
 helpers.libTweaks {
   preBuild = _: "";
   # Eight xdist workers block under emulation until the outer 1200-second cap.
-  passthru.wasix.installCheck = false;
+  passthru.wasinix.checks.captured.install = false;
 }
 pyprev.debugpy

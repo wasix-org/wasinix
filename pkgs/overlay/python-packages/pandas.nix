@@ -27,12 +27,14 @@ in
       old
       // {
         wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.hypothesis pyfinal.pytest-xdist];
-        wasix =
-          (old.wasix or {})
+        wasinix =
+          (old.wasinix or {})
           // {
-            installCheck = true;
-            # 174k tests under emulation; the 1200s default is far too short
-            emulatedCheck.timeout = 7200;
+            checks.captured = {
+              install = true;
+              # 174k tests under emulation; the default is too short.
+              timeout = 7200;
+            };
           };
       };
     # Replaces nixpkgs' preCheck: its `cd $out/site-packages/pandas` breaks

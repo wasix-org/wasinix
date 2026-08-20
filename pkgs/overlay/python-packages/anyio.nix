@@ -36,7 +36,7 @@ helpers.libTweaks {
   passthru = old:
     old
     // {
-      wasix = (old.wasix or {}) // {emulatedCheck.timeout = 3600;};
+      wasinix = (old.wasinix or {}) // {checks.captured.timeout = 3600;};
       wasixDeclaredCheckInputs = [
         pyfinal.pytestCheckHook
         pyfinal.exceptiongroup

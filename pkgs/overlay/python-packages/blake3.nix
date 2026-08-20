@@ -4,6 +4,6 @@
   ...
 }:
 helpers.libTweaks {
-  passthru.wasix.emulatedCheck.broken = "mmap is unsupported by the Python runtime";
+  passthru.wasinix.checks.captured.broken = "mmap is unsupported by the Python runtime";
 }
 pyprev.blake3

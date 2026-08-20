@@ -98,8 +98,8 @@
         inherit crate version wasixVersion crateFile rel;
         wasix = {
           supportedProfiles = [];
-          publication = {inherit version rel;};
         };
+        wasinix.publication = {inherit version rel;};
       };
 
       meta = {

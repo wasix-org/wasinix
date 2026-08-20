@@ -40,7 +40,7 @@ in
     passthru = old:
       old
       // {
-        wasix = (old.wasix or {}) // {installCheck = false;};
+        wasinix = (old.wasinix or {}) // {checks.captured.install = false;};
       };
   }
   pyprev.tokenizers

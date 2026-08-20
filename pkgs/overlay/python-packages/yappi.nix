@@ -4,6 +4,6 @@
   ...
 }:
 helpers.libTweaks {
-  passthru.wasix.emulatedCheck.broken = "the context-statistics tests do not complete";
+  passthru.wasinix.checks.captured.broken = "the context-statistics tests do not complete";
 }
 pyprev.yappi

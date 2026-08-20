@@ -9,6 +9,6 @@ helpers.libTweaks {
   propagatedBuildInputs = helpers.dropInputsByName ["cppy"];
   disabledTestPaths = ["py/tests/test_expression.py"];
   # Solver exceptions currently trap while unwinding through the extension.
-  passthru.wasix.installCheck = false;
+  passthru.wasinix.checks.captured.install = false;
 }
 pyprev.kiwisolver

@@ -71,6 +71,6 @@ in
         # No suite: the libpq dylib fails symbol resolution mid-run
         # ("pg_vsnprintf"), killing the session; WASIX-TODO.md tracks the
         # dylib symbol-resolution defect.
-        wasix = ((o.passthru or {}).wasix or {}) // {installCheck = false;};
+        wasinix = ((o.passthru or {}).wasinix or {}) // {checks.captured.install = false;};
       };
   })

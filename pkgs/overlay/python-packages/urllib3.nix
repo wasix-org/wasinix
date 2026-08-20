@@ -24,9 +24,9 @@ helpers.libTweaks {
       pyfinal.trio
     ]
     ++ lib.concatAttrValues pyprev.urllib3.passthru.optional-dependencies;
-  passthru.wasix.emulatedCheck = {
+  passthru.wasinix.checks.captured = {
     shards = 8;
-    ciTags = ["slow-tests"];
+    tags = ["slow-tests"];
   };
 }
 pyprev.urllib3

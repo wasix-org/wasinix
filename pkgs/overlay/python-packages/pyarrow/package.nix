@@ -40,7 +40,7 @@ in
       # No suite: the extension fails to load its arrow C++
       # ("arrow::compute::Initialize" unresolved), dying at collection;
       # WASIX-TODO.md tracks the dylib symbol-resolution defect.
-      passthru.wasix.installCheck = false;
+      passthru.wasinix.checks.captured.install = false;
       # PyArrow uses libcst only in a maintenance script; its native Rust build
       # cannot target wasm32-wasmer-wasi-dl. Remove it from inputs and pyproject.
       nativeBuildInputs = helpers.dropInputsByNameInfix ["libcst"];

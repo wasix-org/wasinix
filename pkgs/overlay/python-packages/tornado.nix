@@ -32,6 +32,6 @@ helpers.libTweaks {
   # remaining failures are wasix socket-semantics gaps, kept visible via
   # expectFail rather than deselected.
   disabledTestPaths = ["tornado/test/process_test.py" "tornado/test/autoreload_test.py"];
-  passthru.wasix.emulatedCheck.expectFail = "wasix socket-semantics gaps: client timeouts never fire and iostream/tcpserver fd behaviour differs; ~23 failures out of ~1300";
+  passthru.wasinix.checks.captured.expectFail = "wasix socket-semantics gaps: client timeouts never fire and iostream/tcpserver fd behaviour differs; ~23 failures out of ~1300";
 }
 pyprev.tornado

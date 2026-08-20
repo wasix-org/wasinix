@@ -340,10 +340,9 @@
   # Replay only the package's declared upstream suite. Synthetic checks do not
   # participate in its detection, profile selection, or opt-out policy.
   withEmulatedCheck = profile: name: drv: let
-    meta = wasixLib.wasixMetaOf drv;
-    declared = meta.emulatedCheck or null;
-    # emulatedCheck carries only what is not derivable (expectFail/broken,
-    # timeout); `false` opts out.
+    wasix = wasixLib.wasixMetaOf drv;
+    declared = (wasixLib.wasinixMetaOf drv).checks.captured or null;
+    # The declaration carries only what is not derivable. `false` opts out.
     spec =
       if declared == null
       then {}
@@ -353,7 +352,7 @@
     profiles =
       if spec != null && spec ? profiles
       then spec.profiles
-      else meta.supportedProfiles or [profile];
+      else wasix.supportedProfiles or [profile];
     checkPhaseName =
       if spec == null
       then null
@@ -445,7 +444,7 @@
     )
     profilesCfg.sysrootEncodings;
 
-  # Everything declaring passthru.wasix.shipped, at its preferred profile; the
+  # Everything declaring passthru.wasinix.shipped, at its preferred profile; the
   # wasmer layer adds .pkg/.webc + .tests.
   shippedCommands =
     lib.filter
@@ -470,8 +469,8 @@
         passthru =
           (old.passthru or {})
           // {
-            wasix =
-              ((old.passthru or {}).wasix or {})
+            wasinix =
+              ((old.passthru or {}).wasinix or {})
               // {
                 publication = {
                   inherit (drv) version;
@@ -535,12 +534,12 @@
     packagesDir = ./overlay/packages;
     inherit pythonRegistry;
     emulatedCheckFor = drv: emulatedChecks.checkFor {inherit drv;};
-    # Shipped CLIs run only a declared emulatedCheck, never an auto-detected
+    # Shipped CLIs run only a declared captured suite, never an auto-detected
     # one: they already carry curated suites or the liveness smoke, and their
     # build layouts do not fit the generic runner. Libraries keep the
     # auto-detection.
     emulatedChecksFor = drv: let
-      spec = (wasixLib.wasixMetaOf drv).emulatedCheck or null;
+      spec = (wasixLib.wasinixMetaOf drv).checks.captured or null;
     in
       if spec == null || spec == false
       then {}

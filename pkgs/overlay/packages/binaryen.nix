@@ -7,6 +7,6 @@
   ...
 }:
 helpers.libTweaks {
-  passthru.wasix.ciProfiles = ["exnrefEhpic"];
+  passthru.wasinix.ci.profiles = ["exnrefEhpic"];
 }
 prev.binaryen

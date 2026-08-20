@@ -115,9 +115,9 @@
           webc = pkg.webc;
           # run-by-name wrapper; forcing it never forces .tests
           shim = pkg.webc.shim;
-          wasix =
-            ((o.passthru or {}).wasix or {})
-            // {inherit (pkg.passthru.wasix) publication;};
+          wasinix =
+            ((o.passthru or {}).wasinix or {})
+            // {inherit (pkg.passthru.wasinix) publication;};
         }
         // (lib.optionalAttrs (effGroup != null) {tests = effGroup;});
     });
@@ -162,7 +162,7 @@
     map (name: {
       inherit name packageKey;
       package = wasmerPackageInventory.${packageKey};
-    }) ((lib.head is).crossPkg.passthru.wasmer.aliases or []))
+    }) ((lib.head is).crossPkg.passthru.wasinix.aliases or []))
   byKey);
   byAlias = lib.groupBy (i: i.name) aliasInfo;
   conflictingAliases = lib.attrNames (lib.filterAttrs (_: is:

@@ -13,6 +13,6 @@ helpers.libTweaks {
     ${pyfinal.python.interpreter} -c 'import bitarray; bitarray.test()' 2>&1 | ${final.lib.getExe' final.buildPackages.coreutils "tee"} "$_log"
     ${final.lib.getExe final.buildPackages.gnugrep} -qx OK "$_log"
   '';
-  passthru.wasix.emulatedCheck.broken = "WASIX reports bitarray objects as hashable";
+  passthru.wasinix.checks.captured.broken = "WASIX reports bitarray objects as hashable";
 }
 pyprev.bitarray

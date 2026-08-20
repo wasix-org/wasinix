@@ -36,6 +36,6 @@ in
       helpers.dropInputsByName ["protobuf"] old
       ++ [final.buildPackages.protobuf];
 
-    passthru.wasix.shipped = true;
+    passthru.wasinix.shipped = true;
   }
   prev.garage

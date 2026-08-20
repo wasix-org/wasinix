@@ -11,7 +11,7 @@ helpers.wasmRename {
   posixAlias = true;
 } (
   helpers.libTweaks {
-    passthru.wasix.shipped = true;
+    passthru.wasinix.shipped = true;
     postPatch = ''
       sed -i 's:gnulib-tests::g' Makefile.in
     '';

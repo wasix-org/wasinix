@@ -113,7 +113,7 @@
 
   # Wall-clock ceiling for a suite; the cap separately catches loud loops,
   # and nix's own timeout is unset. Genuinely long suites raise it via
-  # passthru.wasix.emulatedCheck.timeout.
+  # passthru.wasinix.checks.captured.timeout.
   defaultTimeout = 1200;
 
   # Poll a backgrounded runPhase for the deadline while retaining its status
@@ -199,7 +199,7 @@ in {
     pkgs.stdenvNoCC.mkDerivation {
       name = "${name}-${drv.version or "0"}";
       dontUnpack = true;
-      passthru.wasix = lib.optionalAttrs (spec ? ciTags) {inherit (spec) ciTags;};
+      passthru.wasinix = lib.optionalAttrs (spec ? tags) {ci.tags = spec.tags;};
       phases = ["wasixRestorePhase" "wasixCheckPhase" "wasixInstallPhase"];
       nativeBuildInputs = guestInputs ++ [wasixRun.stub pkgs.writableTmpDirAsHomeHook];
       wasixRestorePhase =

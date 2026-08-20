@@ -5,6 +5,6 @@
 }:
 helpers.libTweaks {
   # Formatter subprocess/editor coverage does not complete under WASIX.
-  passthru.wasix.installCheck = false;
+  passthru.wasinix.checks.captured.install = false;
 }
 pyprev.black

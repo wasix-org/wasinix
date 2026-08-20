@@ -35,8 +35,8 @@
   # the wasmer package and its webc point back at the package definition
   packagePos = posOf package;
   w = package.passthru.wasmer or {};
-  ciTags = (package.passthru.wasix or {}).ciTags or [];
-  ciWasix = {inherit publication;} // lib.optionalAttrs (ciTags != []) {inherit ciTags;};
+  ciTags = (package.passthru.wasinix or {}).ci.tags or [];
+  ciWasinix = {inherit publication;} // lib.optionalAttrs (ciTags != []) {ci.tags = ciTags;};
 
   ident = import ./ident.nix {inherit lib;};
   inherit (ident) rels webcIdent;
@@ -236,7 +236,7 @@ in
     passAsFile = ["readme"];
     passthru = {
       id = {inherit owner name version baseVersion;};
-      wasix = ciWasix;
+      wasinix = ciWasinix;
       # depTree is the closure as one --include-webc tree, null when there are no
       # dependencies; a consumer assembling its own offline tree needs it, since
       # a package's own webc carries no dependency.
@@ -246,8 +246,8 @@ in
       # vs the pkg .shim below which drives the wasmer.toml source dir.
       webc = let
         built = pkgs.runCommand "webc-${owner}-${name}-${version}" ({
-            passthru.wasix =
-              ciWasix
+            passthru.wasinix =
+              ciWasinix
               // {
                 updateNotes = lib.optional (staleRels != []) {
                   message = "release-revisions.json has stale keys (${lib.concatMapStringsSep ", " (v: "wasmerPackages.${name} ${v}") staleRels}); nix run .#update -- nixpkgs drops them";

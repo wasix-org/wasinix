@@ -22,7 +22,7 @@ helpers.libTweaks ({
       "tests/unit_tests/agents/middleware/implementations/test_shell_tool.py"
       "tests/unit_tests/agents/middleware/implementations/test_shell_execution_policies.py"
     ];
-    passthru.wasix.installCheck = false;
+    passthru.wasinix.checks.captured.install = false;
   }
   // lib.optionalAttrs (lib.versionOlder pyprev.langchain.version "1") {
     sourceRoot = "source/libs/langchain";

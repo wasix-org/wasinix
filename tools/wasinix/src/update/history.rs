@@ -138,7 +138,7 @@ fn wheel_path(attr: &str) -> Result<String> {
 fn cli_map() -> Result<BTreeMap<String, (String, String)>> {
     let apply = crate::support::nix::canonical_webcs_apply(
         "webc: p: { overlay = p.overlayName; \
-         aliases = p.passthru.wasmer.aliases or []; \
+         aliases = p.passthru.wasinix.aliases or []; \
          history = p.passthru.wasmer.history or false; }",
     );
     let packages = eval(&Flake::default(), "wasmerPackages", Some(&apply))?;

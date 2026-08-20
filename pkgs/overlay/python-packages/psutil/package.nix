@@ -12,7 +12,7 @@
 }:
 helpers.libTweaks {
   # The suite loops on a TypeError because the guest has no /proc.
-  passthru.wasix.installCheck = false;
+  passthru.wasinix.checks.captured.install = false;
   patches =
     if lib.versionOlder pyprev.psutil.version "7"
     then [./patches/psutil-presplit-wasix.patch]

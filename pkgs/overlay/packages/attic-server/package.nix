@@ -11,7 +11,7 @@ helpers.libTweaks {
   # nixpkgs defines the server by overriding attic-client, so drop the
   # client-only exnref conversion; the server installs atticd.wasm.
   postInstall = _: "";
-  passthru.wasix.shipped = true;
+  passthru.wasinix.shipped = true;
   passthru.wasmer = {
     name = "attic-server";
     entrypoint = "atticd";
