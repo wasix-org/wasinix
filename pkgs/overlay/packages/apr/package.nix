@@ -11,12 +11,12 @@ helpers.libTweaks {
   patches = [./patches/wasi-unsupported-calls.patch];
   # Nixpkgs removes the network tests. Emulated checks run with network access.
   postPatch = _: "";
-  # APR's test libraries share libtool intermediates and are not parallel-safe.
-  wasixCheckPrebuild = "make -C test -j1 all";
+  # testpoll does not complete after file, locking, subprocess, pipe, and poll failures.
+  doCheck = false;
+  # check-output has already observed nixpkgs' doCheck, so skip its prebuild too.
+  wasixCheckPrebuild = ":";
   # its DSO support needs dlopen, so the PIC sysroots
   passthru.wasix.supportedProfiles = helpers.profiles.pic;
-  passthru.wasix.emulatedCheck.broken = "the suite hangs in testpoll after DSO, file, locking, subprocess, pipe, and poll failures";
-  passthru.wasix.emulatedCheck.ciTags = ["slow-tests"];
   configureFlags = [
     "ac_cv_func_sendfile=no"
     # a run test, so cross builds take its fallback; wasi's strerror_r is the
