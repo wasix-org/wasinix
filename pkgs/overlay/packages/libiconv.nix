@@ -5,4 +5,4 @@
   helpers,
   ...
 }:
-helpers.libTweaks {passthru.wasix.smokeTest = false;} prev.libiconv
+helpers.extendPackage prev.libiconv {passthru.wasix.smokeTest = false;}

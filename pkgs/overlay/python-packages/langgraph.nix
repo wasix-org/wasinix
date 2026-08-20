@@ -7,7 +7,7 @@
   lib,
   ...
 }:
-helpers.libTweaks (
+helpers.extendPackage pyprev.langgraph (
   lib.optionalAttrs (lib.versionOlder pyprev.langgraph.version "1.1") {
     propagatedBuildInputs = helpers.replaceInputsByName {
       langgraph-prebuilt = pyfinal.langgraph-prebuilt_1_0_8;
@@ -16,4 +16,3 @@ helpers.libTweaks (
   }
   // {passthru.wasinix.checks.captured.install = false;}
 )
-pyprev.langgraph

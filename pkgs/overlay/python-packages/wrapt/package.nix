@@ -6,7 +6,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.wrapt {
   patches = [./patches/c-slot-signatures.patch];
 }
-pyprev.wrapt

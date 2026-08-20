@@ -4,10 +4,10 @@
   helpers,
   ...
 }:
-helpers.libTweaks {} (prev.libwebp.override {
+helpers.extendPackage (prev.libwebp.override {
   threadingSupport = false;
   pngSupport = true;
   jpegSupport = true;
   tiffSupport = false;
   gifSupport = false;
-})
+}) {}

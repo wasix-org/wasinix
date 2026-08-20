@@ -31,39 +31,38 @@
     ];
   };
 in
-  helpers.wasmRename {wasmName = "clang";} (helpers.libTweaks {
-      passthru.wasix = {
-        shipped = true;
-        updateNotes = [
-          {message = "recheck the WASIX Clang resource headers and default driver arguments when the toolchain fork base version moves";}
-          {message = "drop wasm-visibility.patch once upstream Clang recognizes the standard __wasm__ target macro";}
-        ];
+  helpers.wasmRename {wasmName = "clang";} (helpers.extendPackage base {
+    passthru.wasix = {
+      shipped = true;
+      updateNotes = [
+        {message = "recheck the WASIX Clang resource headers and default driver arguments when the toolchain fork base version moves";}
+        {message = "drop wasm-visibility.patch once upstream Clang recognizes the standard __wasm__ target macro";}
+      ];
+    };
+    passthru.wasmer = {
+      name = "clang";
+      entrypoint = "clang";
+      commands = map command [
+        "clang"
+        "clang++"
+      ];
+      dependencies = [preferredProfilePackages.lld];
+      fs = {
+        "/sysroot" = toolchain.variants.exnrefEh.sysroot;
+        "/lib/clang/${major}/include" = "${monorepoSrc}/clang/lib/Headers";
       };
-      passthru.wasmer = {
-        name = "clang";
-        entrypoint = "clang";
-        commands = map command [
-          "clang"
-          "clang++"
-        ];
-        dependencies = [preferredProfilePackages.lld];
-        fs = {
-          "/sysroot" = toolchain.variants.exnrefEh.sysroot;
-          "/lib/clang/${major}/include" = "${monorepoSrc}/clang/lib/Headers";
-        };
-      };
+    };
 
-      cmakeFlags = [
-        "-DUNIX=ON"
-        "-DCLANG_DEFAULT_LINKER=wasm-ld"
-        "-DCLANG_DEFAULT_CXX_STDLIB=libc++"
-        "-DCLANG_DEFAULT_RTLIB=compiler-rt"
-      ];
-      patches = [
-        ./wasm-visibility.patch
-        ./no-fork-remote-jit.patch
-        ./dlfcn-optional.patch
-      ];
-      nativeBuildInputs = [final.disableWasmOptInConfigureHook];
-    }
-    base)
+    cmakeFlags = [
+      "-DUNIX=ON"
+      "-DCLANG_DEFAULT_LINKER=wasm-ld"
+      "-DCLANG_DEFAULT_CXX_STDLIB=libc++"
+      "-DCLANG_DEFAULT_RTLIB=compiler-rt"
+    ];
+    patches = [
+      ./wasm-visibility.patch
+      ./no-fork-remote-jit.patch
+      ./dlfcn-optional.patch
+    ];
+    nativeBuildInputs = [final.disableWasmOptInConfigureHook];
+  })

@@ -32,7 +32,7 @@
     assert final.lib.assertMsg (c != null) "rust: version ${v} is not YYYY-MM-DD.REV+rust-MAJOR.MINOR";
     assert final.lib.assertMsg (n 3 < 100) "rust: fork revision ${toString (n 3)} overflows its base-100 version slot"; "${toString (n 0)}.${toString (n 1)}.${toString (n 2 * 100 + n 3)}";
 in
-  helpers.libTweaks {
+  helpers.extendPackage runtime {
     passthru.wasix = {
       shipped = true;
       supportedProfiles = ["eh"];
@@ -75,4 +75,3 @@ in
       fs."/rust" = runtime;
     };
   }
-  runtime

@@ -10,7 +10,7 @@
 }: let
   py = wasixPython;
 in
-  helpers.libTweaks {
+  helpers.extendPackage pyprev.pyzmq {
     patches = [./patches/pyzmq-detect-static-libzmq.patch];
     cmakeFlags = [
       "-DPython_INCLUDE_DIR=${py.crossIncludeDir}"
@@ -25,4 +25,3 @@ in
     # smoke test still exercises the extension and bundled libzmq.
     passthru.wasinix.checks.captured.install = false;
   }
-  pyprev.pyzmq

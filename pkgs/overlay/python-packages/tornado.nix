@@ -14,7 +14,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.tornado {
   postPatch = _:
     if (pyprev.tornado.passthru.wasix.historySpec or null) == null
     then ''
@@ -34,4 +34,3 @@ helpers.libTweaks {
   disabledTestPaths = ["tornado/test/process_test.py" "tornado/test/autoreload_test.py"];
   passthru.wasinix.checks.captured.expectFail = "wasix socket-semantics gaps: client timeouts never fire and iostream/tcpserver fd behaviour differs; ~23 failures out of ~1300";
 }
-pyprev.tornado

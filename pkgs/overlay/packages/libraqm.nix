@@ -7,8 +7,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.libraqm {
   doCheck = false;
   mesonFlags = ["-Dtests=false"];
 }
-prev.libraqm

@@ -4,7 +4,7 @@
   ...
 }:
 helpers.wasmRename {wasmName = "yq";} (
-  helpers.libTweaks {
+  helpers.extendPackage prev.yq-go {
     vendorHash = "sha256-1UpQBsSVPQHdo5mukXGatLl7ru0qS4OS6ybuyMszJHc=";
     subPackages = ["."];
     tinygoBuildFlags = ["-opt=1"];
@@ -24,5 +24,4 @@ helpers.wasmRename {wasmName = "yq";} (
       postUpdateHook = ["pkgs/overlay/packages/yq-go/update-vendor-hash.py"];
     };
   }
-  prev.yq-go
 )

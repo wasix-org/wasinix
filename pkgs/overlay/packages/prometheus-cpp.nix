@@ -5,9 +5,8 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.prometheus-cpp {
   cmakeFlags = ["-DGENERATE_PKGCONFIG=ON"];
   # it throws, and civetweb underneath it needs an EH profile too
   passthru.wasix.supportedProfiles = helpers.profiles.withEh;
 }
-prev.prometheus-cpp

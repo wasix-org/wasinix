@@ -4,9 +4,8 @@
   ...
 }:
 helpers.wasmRename {wasmName = "qsreplace";} (
-  helpers.libTweaks {
+  helpers.extendPackage prev.qsreplace {
     subPackages = ["."];
     passthru.wasinix.shipped = true;
   }
-  prev.qsreplace
 )

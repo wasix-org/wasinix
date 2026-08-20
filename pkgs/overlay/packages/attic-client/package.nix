@@ -4,7 +4,9 @@
   prev,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (prev.attic-client.override {
+  nixVersions.nix_2_34 = final.nix;
+}) {
   buildInputs = [
     final.bzip2
     final.boost
@@ -38,6 +40,3 @@ helpers.libTweaks {
       assert final.lib.assertMsg (d != null) "attic-client: version ${v} is not <ver>-unstable-YYYY-MM-DD"; "0.0.${final.lib.concatStrings d}";
   };
 }
-(prev.attic-client.override {
-  nixVersions.nix_2_34 = final.nix;
-})

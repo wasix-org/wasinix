@@ -5,10 +5,9 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.zstandard {
   pytestFlags = ["--import-mode=importlib"];
   # No suite: the extension trips the wasm indirect-call trap mid-run, killing
   # the session (WASIX-TODO.md).
   passthru.wasinix.checks.captured.install = false;
 }
-pyprev.zstandard

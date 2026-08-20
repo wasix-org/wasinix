@@ -4,7 +4,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.sse-starlette {
   propagatedBuildInputs = [pyfinal.starlette];
 }
-pyprev.sse-starlette

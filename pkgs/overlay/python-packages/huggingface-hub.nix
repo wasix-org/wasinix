@@ -4,4 +4,4 @@
   helpers,
   ...
 }:
-helpers.libTweaks {doCheck = false;} pyprev.huggingface-hub
+helpers.extendPackage pyprev.huggingface-hub {doCheck = false;}

@@ -7,7 +7,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (prev.gd.override {withXorg = false;}) {
   propagatedBuildInputs = helpers.dropInputsByName ["libavif"];
 }
-(prev.gd.override {withXorg = false;})

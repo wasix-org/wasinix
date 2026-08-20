@@ -3,7 +3,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.gmp {
   # t-nextprime and t-scanf fail under wasmer (wasix scanf gaps); XFAIL so the
   # rest of the suite still runs.
   checkFlagsArray = [''XFAIL_TESTS=t-nextprime t-scanf''];
@@ -20,4 +20,3 @@ helpers.libTweaks {
   '';
   passthru.wasinix.checks.captured.timeout = 3600;
 }
-prev.gmp

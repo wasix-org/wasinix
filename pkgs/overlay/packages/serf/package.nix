@@ -15,7 +15,7 @@
     final.runCommand "krb5-unavailable" {outputs = ["out" "dev"];}
     "mkdir -p \"$out\" \"$dev\"";
 in
-  helpers.libTweaks {
+  helpers.extendPackage (prev.serf.override {libkrb5 = noKerberos;}) {
     patches = [./patches/wasi-shared-object-suffix.patch];
     # apr is PIC-only, and serf links it
     passthru.wasix.supportedProfiles = helpers.profiles.pic;
@@ -23,4 +23,3 @@ in
       final.lib.concatStringsSep "\n"
       (builtins.filter (l: !(final.lib.hasInfix "GSSAPI=" l)) (final.lib.splitString "\n" old));
   }
-  (prev.serf.override {libkrb5 = noKerberos;})

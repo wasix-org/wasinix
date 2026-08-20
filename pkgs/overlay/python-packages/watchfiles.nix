@@ -5,7 +5,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.watchfiles {
   passthru.wasinix.checks.captured.install = false;
 }
-pyprev.watchfiles

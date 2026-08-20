@@ -7,10 +7,9 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.optree {
   postPatch = ''
     substituteInPlace optree/version.py \
       --replace-fail "__release__ = False" "__release__ = True"
   '';
 }
-pyprev.optree

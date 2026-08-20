@@ -7,7 +7,7 @@
 }: let
   isHistory = (pyprev.cython.passthru.wasix.historySpec or null) != null;
 in
-  helpers.libTweaks {
+  helpers.extendPackage pyprev.cython {
     patches = old:
       lib.optionals (old != null) old
       ++ lib.optionals (!isHistory) [./patches/cython-wasix-builtin-compatibility.patch];
@@ -23,4 +23,3 @@ in
         --shard_count "$WASIX_CHECK_SHARD_COUNT" --shard_num "$WASIX_CHECK_SHARD_NUM"
     '';
   }
-  pyprev.cython

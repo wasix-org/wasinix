@@ -1,6 +1,6 @@
 # aioresponses imports packaging at runtime; nixpkgs doesn't propagate it
 # (its native test env happens to provide it). overridePythonAttrs, not
-# libTweaks: requiredPythonModules is computed from the builder arguments.
+# extendPackage cannot change requiredPythonModules computed by the builder.
 {
   pyfinal,
   pyprev,

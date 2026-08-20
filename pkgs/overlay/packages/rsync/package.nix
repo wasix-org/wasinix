@@ -10,7 +10,10 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (prev.rsync.overrideAttrs (old: {
+  buildInputs =
+    builtins.filter (d: !builtins.elem (d.pname or d.name or "") ["acl"]) (old.buildInputs or []);
+})) {
   passthru.wasinix.shipped = true;
   # fork() needs asyncified binaries; wasixcc only asyncifies in the off profile
   # on its own, so apply the pass here too (see git/findutils).
@@ -90,7 +93,4 @@ helpers.libTweaks {
       mv "$out/bin/rsync" "$out/bin/rsync.wasm"
     fi
   '';
-} (prev.rsync.overrideAttrs (old: {
-  buildInputs =
-    builtins.filter (d: !builtins.elem (d.pname or d.name or "") ["acl"]) (old.buildInputs or []);
-}))
+}

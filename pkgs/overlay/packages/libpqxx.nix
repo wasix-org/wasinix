@@ -8,7 +8,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (prev.libpqxx.override {gcc14Stdenv = final.stdenv;}) {
   configureFlags = ["LIBS=-lpgcommon -lpgport -lssl -lcrypto -lm"];
   # The guest cannot connect to the native test server's Unix socket.
   preCheck = ''
@@ -19,4 +19,3 @@ helpers.libTweaks {
   # the library throws
   passthru.wasix.supportedProfiles = helpers.profiles.withEh;
 }
-(prev.libpqxx.override {gcc14Stdenv = final.stdenv;})

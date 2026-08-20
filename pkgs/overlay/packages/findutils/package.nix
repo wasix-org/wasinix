@@ -9,7 +9,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (prev.findutils.override {coreutils = final.buildPackages.coreutils;}) {
   passthru.wasinix.shipped = true;
   # fork() needs asyncified binaries. wasixcc only asyncifies in the off
   # profile on its own; these extra wasm-opt flags apply the pass here too.
@@ -90,4 +90,4 @@ helpers.libTweaks {
       fi
     done
   '';
-} (prev.findutils.override {coreutils = final.buildPackages.coreutils;})
+}

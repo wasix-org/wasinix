@@ -20,7 +20,7 @@
         duckdb = final."duckdb_${lib.replaceStrings ["."] ["_"] pyprev.duckdb.version}";
       };
 in
-  helpers.libTweaks {
+  helpers.extendPackage wheel {
     # The build-host importlib.metadata cannot resolve a cross-layout version.
     dontCheckPythonMetadata = true;
     # The Python suite pulls optional native extension and service stacks. The
@@ -39,4 +39,3 @@ in
       "-DCMAKE_CXX_LINK_LIBRARY_USING_WHOLE_ARCHIVE=LINKER:--whole-archive;<LINK_ITEM>;LINKER:--no-whole-archive"
     ];
   }
-  wheel

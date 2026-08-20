@@ -5,7 +5,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.tzdata {
   pytestFlags = ["--import-mode=importlib"];
 }
-pyprev.tzdata

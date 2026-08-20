@@ -7,10 +7,9 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.cymem {
   postPatch = ''
     substituteInPlace setup.py \
       --replace-fail 'include_dirs = [get_path("include")]' 'include_dirs = []'
   '';
 }
-pyprev.cymem

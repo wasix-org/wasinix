@@ -76,44 +76,43 @@
       '';
   });
   nixComponents = components.libs;
-  nixCli = helpers.wasmRename {wasmName = "nix";} (helpers.libTweaks {
-      # Hydra takes the CLI and component set through nixVersions; keep that
-      # versioned pair here so consumers cannot mix patched and stock Nix.
-      passthru = {
-        inherit nixComponents;
-        nixVersions =
-          prev.nixVersions
-          // {
-            nix_2_34 = nixCli;
-            nixComponents_2_34 = nixComponents;
-          };
-        wasix = {
-          shipped = true;
-          updateNotes = [
-            {message = "recheck the vendored WASI portability patches against the new Nix release";}
-          ];
-          # C++ exceptions rule out the no-EH profile; PIC is untested.
-          supportedProfiles =
-            builtins.filter (p: builtins.elem p helpers.profiles.withoutPic) helpers.profiles.withEh;
+  nixCli = helpers.wasmRename {wasmName = "nix";} (helpers.extendPackage components.nix-cli {
+    # Hydra takes the CLI and component set through nixVersions; keep that
+    # versioned pair here so consumers cannot mix patched and stock Nix.
+    passthru = {
+      inherit nixComponents;
+      nixVersions =
+        prev.nixVersions
+        // {
+          nix_2_34 = nixCli;
+          nixComponents_2_34 = nixComponents;
         };
-        # nixpkgs appends "+<n>" for the patches we add, which is not semver.
-        # The patch count is a rebuild of the same upstream release, so it belongs
-        # in the rel, not the version.
-        wasmer.version = v: final.lib.head (final.lib.splitString "+" v);
+      wasix = {
+        shipped = true;
+        updateNotes = [
+          {message = "recheck the vendored WASI portability patches against the new Nix release";}
+        ];
+        # C++ exceptions rule out the no-EH profile; PIC is untested.
+        supportedProfiles =
+          builtins.filter (p: builtins.elem p helpers.profiles.withoutPic) helpers.profiles.withEh;
       };
-      # wasmRename renames bin/nix after this hook. Keep Nix's compatibility
-      # commands and build-remote entry point targeting the final name.
-      postInstall = ''
-        for alias in "$out"/bin/nix-*; do
-          if [ -L "$alias" ] && [ "$(readlink "$alias")" = nix ]; then
-            ln -sf nix.wasm "$alias"
-          fi
-        done
-        if [ -L "$out/libexec/nix/build-remote" ]; then
-          ln -sf ../../bin/nix.wasm "$out/libexec/nix/build-remote"
+      # nixpkgs appends "+<n>" for the patches we add, which is not semver.
+      # The patch count is a rebuild of the same upstream release, so it belongs
+      # in the rel, not the version.
+      wasmer.version = v: final.lib.head (final.lib.splitString "+" v);
+    };
+    # wasmRename renames bin/nix after this hook. Keep Nix's compatibility
+    # commands and build-remote entry point targeting the final name.
+    postInstall = ''
+      for alias in "$out"/bin/nix-*; do
+        if [ -L "$alias" ] && [ "$(readlink "$alias")" = nix ]; then
+          ln -sf nix.wasm "$alias"
         fi
-      '';
-    }
-    components.nix-cli);
+      done
+      if [ -L "$out/libexec/nix/build-remote" ]; then
+        ln -sf ../../bin/nix.wasm "$out/libexec/nix/build-remote"
+      fi
+    '';
+  });
 in
   nixCli

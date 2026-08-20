@@ -5,7 +5,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.jq {
   pytestFlags = ["--import-mode=importlib"];
 }
-pyprev.jq

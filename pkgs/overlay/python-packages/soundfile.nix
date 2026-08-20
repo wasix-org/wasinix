@@ -10,7 +10,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.soundfile {
   # setup.py derives the bundled libname from these; keep the runtime name below in step.
   # Only `linux` packages _soundfile_data at all, and it also picks the wheel's
   # platform tag, which the postPatch below corrects.
@@ -40,4 +40,3 @@ helpers.libTweaks {
       "--deselect=tests/test_soundfile.py::test_file_attributes_should_save_to_disk[obj]"
     ];
 }
-pyprev.soundfile

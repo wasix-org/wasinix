@@ -6,7 +6,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.sentencepiece {
   patches = [./patches/setup-honor-pkg-config.patch];
 }
-pyprev.sentencepiece

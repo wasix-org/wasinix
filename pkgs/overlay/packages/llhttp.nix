@@ -3,7 +3,7 @@
   prev,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.llhttp {
   # __wasm__ enables Node embedder callbacks that WASIX does not provide.
   # __wasi__ excludes WASIX without changing Node's Emscripten build.
   postPatch = ''
@@ -11,4 +11,3 @@ helpers.libTweaks {
       --replace-fail '#if defined(__wasm__)' '#if defined(__wasm__) && !defined(__wasi__)'
   '';
 }
-prev.llhttp

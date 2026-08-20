@@ -3,7 +3,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.rsa {
   pytestFlags = ["--deselect=tests/test_parallel.py::ParallelTest::test_parallel_primegen"];
 }
-pyprev.rsa

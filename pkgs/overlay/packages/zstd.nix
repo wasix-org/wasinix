@@ -7,7 +7,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {} (prev.zstd.override {
+helpers.extendPackage (prev.zstd.override {
   bashNonInteractive = final.buildPackages.bashNonInteractive;
   gnugrep = final.buildPackages.gnugrep;
-})
+}) {}

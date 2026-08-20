@@ -8,10 +8,9 @@
 }: let
   lib = final.lib;
 in
-  helpers.libTweaks {
+  helpers.extendPackage prev.howard-hinnant-date {
     cmakeFlags = [(lib.cmakeBool "BUILD_SHARED_LIBS" false)];
     patches = helpers.dropPatchesByNameInfix ["zoneinfo"];
     # date's tz.cpp throws, and the off profile is -fno-exceptions.
     passthru.wasix.supportedProfiles = helpers.profiles.withEh;
   }
-  prev.howard-hinnant-date

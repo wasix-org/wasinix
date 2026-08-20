@@ -8,7 +8,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.civetweb {
   buildInputs = [final.openssl];
   # CivetServer.cpp throws, so the C++ wrapper needs an EH profile.
   passthru.wasix.supportedProfiles = helpers.profiles.withEh;
@@ -20,4 +20,3 @@ helpers.libTweaks {
     "-DCIVETWEB_CXX_ENABLE_LTO=OFF"
   ];
 }
-prev.civetweb

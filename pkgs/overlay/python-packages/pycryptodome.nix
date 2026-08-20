@@ -9,10 +9,9 @@
   lib,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.pycryptodome {
   # the wheel-shipped SelfTest suite in tests/upstream.nix replaces the derived
   # source-tree check (the source Crypto/ has no compiled modules)
   passthru.wasinix.checks.captured.install = false;
   postPatch = lib.const "";
 }
-pyprev.pycryptodome

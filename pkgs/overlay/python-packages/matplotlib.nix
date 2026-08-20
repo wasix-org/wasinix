@@ -11,16 +11,18 @@
   helpers,
   ...
 }: let
-  qhullR =
-    helpers.libTweaks {
-      postInstall = ''
-        ln -sf libqhullstatic_r.a "$out/lib/libqhull_r.a"
-      '';
-    }
-    final.qhull;
+  qhullR = helpers.extendPackage final.qhull {
+    postInstall = ''
+      ln -sf libqhullstatic_r.a "$out/lib/libqhull_r.a"
+    '';
+  };
 in
-  helpers.libTweaks
-  (
+  helpers.extendPackage (
+    pyprev.matplotlib.override {
+      enableTk = false;
+      qhull = qhullR;
+    }
+  ) (
     helpers.linkInputs (helpers.dropInputsByNameInfix ["ffmpeg"])
     // {
       passthru.wasinix.checks.captured.shards = 8;
@@ -85,11 +87,5 @@ in
         ${lib.getExe' final.buildPackages.coreutils "mkdir"} "$NIX_BUILD_TOP/check"
         cd "$NIX_BUILD_TOP/check"
       '';
-    }
-  )
-  (
-    pyprev.matplotlib.override {
-      enableTk = false;
-      qhull = qhullR;
     }
   )

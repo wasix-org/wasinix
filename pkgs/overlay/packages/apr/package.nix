@@ -7,7 +7,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.apr {
   patches = [./patches/wasi-unsupported-calls.patch];
   # Nixpkgs removes the network tests. Emulated checks run with network access.
   postPatch = _: "";
@@ -24,4 +24,3 @@ helpers.libTweaks {
     "ac_cv_strerror_r_rc_int=yes"
   ];
 }
-prev.apr

@@ -159,7 +159,7 @@
           toolchain = profileToolchain;
         };
         # takes the set so a history rebase reaches a trivial name too
-        mkTrivial = set: n: helpers.libTweaks {} set.${n};
+        mkTrivial = set: n: helpers.extendPackage set.${n} {};
         trivialPosition = ./trivial.nix;
       });
 

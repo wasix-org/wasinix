@@ -7,7 +7,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.hf-xet {
   patches = [./patches/hf-xet-wasi-sigint.patch];
   postPatch = ''
     chmod -R u+w ..
@@ -23,4 +23,3 @@ helpers.libTweaks {
     AWS_LC_SYS_CFLAGS = "-DOPENSSL_NO_TTY -D_GNU_SOURCE";
   };
 }
-pyprev.hf-xet

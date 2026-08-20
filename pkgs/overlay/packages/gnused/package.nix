@@ -8,7 +8,7 @@ helpers.wasmRename {
   wasmName = "sed";
   posixAlias = true;
 } (
-  helpers.libTweaks {
+  helpers.extendPackage prev.gnused {
     passthru.wasinix.shipped = true;
     meta.platforms = _: final.lib.platforms.all;
     # sed's build compiles the bundled gnulib-tests, whose
@@ -21,5 +21,4 @@ helpers.wasmRename {
         '  return (struct string_with_storage) { "C", STORAGE_INDEFINITE };'
     '';
   }
-  prev.gnused
 )

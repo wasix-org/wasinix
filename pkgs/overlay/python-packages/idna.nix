@@ -5,7 +5,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.idna {
   disabledTests = ["test_python_dash_m_idna_reads_piped_stdin"];
 }
-pyprev.idna

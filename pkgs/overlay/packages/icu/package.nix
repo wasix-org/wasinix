@@ -13,7 +13,7 @@ in {
   }: let
     inherit (prev) lib;
     tweak = base:
-      helpers.libTweaks {
+      helpers.extendPackage base {
         configureFlags = [
           "--with-data-packaging=archive"
           "--disable-extras"
@@ -57,8 +57,7 @@ in {
           + lib.optionalString (lib.versionOlder base.version "67") ''
             install -Dm444 -t "$out/share/icu/${base.version}" data/in/icudt*l.dat
           '';
-      }
-      base;
+      };
   in
     # nixpkgs' `icu` aliases the default icuNN through the fixpoint, so
     # tweaking prev.icu would re-tweak our icuNN. Follow the alias instead.

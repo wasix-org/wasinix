@@ -10,7 +10,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.httptools {
   postPatch = ''
     substituteInPlace vendor/llhttp/src/api.c \
       --replace-fail '#if defined(__wasm__)' '#if defined(__wasm__) && !defined(__wasi__)'
@@ -30,4 +30,3 @@ helpers.libTweaks {
       wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook];
     };
 }
-pyprev.httptools

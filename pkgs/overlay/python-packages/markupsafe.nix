@@ -5,7 +5,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.markupsafe {
   pytestFlags = ["--import-mode=importlib"];
 }
-pyprev.markupsafe

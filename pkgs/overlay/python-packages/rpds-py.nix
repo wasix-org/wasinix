@@ -5,7 +5,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.rpds-py {
   maturinBuildFlags = ["--features" "pyo3/extension-module"];
 }
-pyprev.rpds-py

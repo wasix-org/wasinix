@@ -7,11 +7,10 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyfinal.psycopg2 {
   pname = "psycopg2-binary";
   postPatch = ''
     substituteInPlace setup.py \
       --replace-fail 'setup(name="psycopg2"' 'setup(name="psycopg2-binary"'
   '';
 }
-pyfinal.psycopg2

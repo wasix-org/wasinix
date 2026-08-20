@@ -24,10 +24,7 @@
     assert lib.assertMsg (n 3 < 100) "pandoc ${v}: PVP component 4 >= 100 overflows the base-100 patch fold"; "${toString (n 0)}.${toString (n 1)}.${toString (n 2 * 100 + n 3)}";
 in
   # the standard ghc-wasm post-link wasm-opt pass.
-  helpers.libTweaks {
-    passthru.wasinix.shipped = true;
-    passthru.wasmer.version = pvpToSemver;
-  } (
+  helpers.extendPackage (
     final.buildPackages.runCommand "pandoc" {
       inherit (pandoc-cli) version; # so the webc is pandoc-<ver>
       nativeBuildInputs = [toolchain.haskell.binaryen];
@@ -36,4 +33,7 @@ in
         --flatten --rereloop -Oz ${lib.getExe' pandoc-cli "pandoc.wasm"} -o pandoc.opt.wasm
       install -Dm755 pandoc.opt.wasm "$out/bin/pandoc.wasm"
     ''
-  )
+  ) {
+    passthru.wasinix.shipped = true;
+    passthru.wasmer.version = pvpToSemver;
+  }

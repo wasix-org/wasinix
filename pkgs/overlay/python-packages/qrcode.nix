@@ -9,7 +9,7 @@
   lib,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.qrcode {
   propagatedBuildInputs = lib.optionals (lib.versionOlder pyprev.qrcode.version "8") [
     pyfinal.typing-extensions
     pyfinal.pypng
@@ -22,4 +22,3 @@ helpers.libTweaks {
       wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.pillow];
     };
 }
-pyprev.qrcode

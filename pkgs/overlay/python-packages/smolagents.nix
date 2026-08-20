@@ -5,7 +5,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.smolagents {
   passthru.wasinix.checks.captured.install = false;
 }
-pyprev.smolagents

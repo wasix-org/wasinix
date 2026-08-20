@@ -7,7 +7,16 @@
 }: let
   lib = final.lib;
 in
-  helpers.libTweaks {
+  helpers.extendPackage (prev.onnxruntime.override {
+    cudaSupport = false;
+    ncclSupport = false;
+    rocmSupport = false;
+    coremlSupport = false;
+    openvinoSupport = false;
+    # nixpkgs sets meta.broken = withFullProtobuf (duplicate onnx-ml.proto).
+    withFullProtobuf = false;
+    pythonSupport = false;
+  }) {
     # onnx, the proto dependency, is declared PIC-only.
     passthru.wasix.supportedProfiles = helpers.profiles.pic;
 
@@ -54,13 +63,3 @@ in
         (lib.cmakeBool "onnxruntime_ENABLE_WEBASSEMBLY_RELAXED_SIMD" true)
       ];
   }
-  (prev.onnxruntime.override {
-    cudaSupport = false;
-    ncclSupport = false;
-    rocmSupport = false;
-    coremlSupport = false;
-    openvinoSupport = false;
-    # nixpkgs sets meta.broken = withFullProtobuf (duplicate onnx-ml.proto).
-    withFullProtobuf = false;
-    pythonSupport = false;
-  })

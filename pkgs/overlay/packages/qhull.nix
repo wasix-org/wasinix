@@ -5,7 +5,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.qhull {
   postInstall = ''
     ln -s libqhullstatic_r.a "$out/lib/libqhull_r.a"
     ln -s libqhullstatic.a "$out/lib/libqhull.a"
@@ -13,4 +13,3 @@ helpers.libTweaks {
   # libqhullcpp throws, so the off profile (-fno-exceptions) can't compile it.
   passthru.wasix.supportedProfiles = helpers.profiles.withEh;
 }
-prev.qhull

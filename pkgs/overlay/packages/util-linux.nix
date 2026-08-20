@@ -7,7 +7,7 @@
 }: let
   lib = prev.lib;
 in
-  helpers.libTweaks {
+  helpers.extendPackage prev.util-linux {
     configureFlags = [
       # Every program links libcommon, and libcommon does not compile here:
       # lib/configs.c wants sys/syslog.h, lib/fileutils.c calls fork, and
@@ -50,4 +50,3 @@ in
     # libuuid uses poll (present only in the PIC sysroots, cf. mariadb).
     passthru.wasix.supportedProfiles = helpers.profiles.pic;
   }
-  prev.util-linux

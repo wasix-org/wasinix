@@ -8,11 +8,10 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (pyprev.hydra-core.override {antlr4 = final.buildPackages.antlr4;}) {
   # Preserve nixpkgs' pytest 8.3 pin and expose setuptools to build-helper tests.
   passthru.wasixDeclaredCheckInputs = [
     pyfinal.pytest8_3CheckHook
     pyfinal.setuptools
   ];
 }
-(pyprev.hydra-core.override {antlr4 = final.buildPackages.antlr4;})

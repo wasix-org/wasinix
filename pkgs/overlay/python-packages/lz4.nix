@@ -5,7 +5,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.lz4 {
   # the *_2.py memory tests import psutil, which raises on wasix at collection
   # and aborts the whole run
   disabledTestPaths = ["tests/stream/test_stream_2.py" "tests/block/test_block_2.py"];
@@ -20,4 +20,3 @@ helpers.libTweaks {
   # 22k tests take ~600s idle; the 1200s default is too tight under load
   passthru.wasinix.checks.captured.timeout = 3600;
 }
-pyprev.lz4

@@ -7,11 +7,10 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.threadpoolctl {
   postPatch = ''
     substituteInPlace threadpoolctl.py --replace-fail \
       'self._find_libraries_with_dl_iterate_phdr()' \
       '(None if sys.platform.startswith("wasi") else self._find_libraries_with_dl_iterate_phdr())'
   '';
 }
-pyprev.threadpoolctl

@@ -6,7 +6,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.onigurumacffi {
   nativeBuildInputs = [wasixPython.pythonOnBuildForHost.pkgs.cffi];
 }
-pyprev.onigurumacffi

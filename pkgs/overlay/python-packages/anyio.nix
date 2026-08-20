@@ -8,7 +8,7 @@
   lib,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.anyio {
   pytestFlags = old: lib.filter (flag: flag != "-Wignore::trio.TrioDeprecationWarning") old;
   # CPython's experimental subinterpreter queues are not built for WASIX.
   # Loopback TLS blocks in Wasmer; see WASIX-TODO.md.
@@ -50,4 +50,3 @@ helpers.libTweaks {
       ];
     };
 }
-pyprev.anyio

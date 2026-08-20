@@ -5,7 +5,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.pcre2 {
   configureFlags = ["--disable-pcre2grep-callout-fork"];
 }
-prev.pcre2

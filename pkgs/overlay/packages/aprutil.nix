@@ -6,8 +6,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (prev.aprutil.override {ldapSupport = false;}) {
   # apr is PIC-only, and apr-util links it
   passthru.wasix.supportedProfiles = helpers.profiles.pic;
 }
-(prev.aprutil.override {ldapSupport = false;})

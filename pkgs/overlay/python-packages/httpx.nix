@@ -5,7 +5,7 @@
   lib,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.httpx {
   # Omit pytest-trio: Trio dispatches WASIX to its kqueue backend.
   passthru.wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.pytest-asyncio pyfinal.pytest-mock pyfinal.anyio pyfinal.brotlicffi pyfinal.chardet pyfinal.h2 pyfinal.sniffio pyfinal.socksio pyfinal.trustme pyfinal.uvicorn pyfinal.zstandard];
   postPatch = ''
@@ -18,4 +18,3 @@ helpers.libTweaks {
   pytestFlags = old: lib.filter (flag: flag != "-Wignore::trio.TrioDeprecationWarning") old;
   disabledTests = ["trio"];
 }
-pyprev.httpx

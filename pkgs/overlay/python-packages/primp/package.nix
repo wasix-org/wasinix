@@ -13,7 +13,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.primp {
   postPatch = ''
     for f in $(grep -rlE 'target_arch = "wasm32"' crates/primp-reqwest crates/primp); do
       substituteInPlace "$f" \
@@ -33,4 +33,3 @@ helpers.libTweaks {
   # (WASIX-TODO.md).
   passthru.wasinix.checks.captured.install = false;
 }
-pyprev.primp

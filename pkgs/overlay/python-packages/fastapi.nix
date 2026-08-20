@@ -7,7 +7,7 @@
   lib,
   ...
 }:
-helpers.libTweaks (
+helpers.extendPackage pyprev.fastapi (
   lib.optionalAttrs (lib.versionOlder pyprev.fastapi.version "0.116") {
     propagatedBuildInputs = helpers.replaceInputsByName {
       starlette = pyfinal.starlette_0_46_2;
@@ -42,4 +42,3 @@ helpers.libTweaks (
     ];
   }
 )
-pyprev.fastapi

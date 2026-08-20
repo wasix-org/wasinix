@@ -4,11 +4,10 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.libhwy {
   # contrib/thread_pool includes <emscripten/threading.h> on any __wasm__ target.
   patches = [
     ./highway-wasi-emscripten-only-futex.patch
   ];
   passthru.wasix.supportedProfiles = helpers.profiles.pic;
 }
-prev.libhwy

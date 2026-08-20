@@ -10,7 +10,7 @@ helpers.wasmRename {
   wasmName = "tar";
   posixAlias = true;
 } (
-  helpers.libTweaks {
+  helpers.extendPackage prev.gnutar {
     patches = [./patches/wasi-opendirat.patch];
     # The autotest suite depends on POSIX permissions, sparse files, and symlinks.
     doCheck = false;
@@ -43,5 +43,4 @@ helpers.wasmRename {
       rm -f "$out/bin/rmt"
     '';
   }
-  prev.gnutar
 )

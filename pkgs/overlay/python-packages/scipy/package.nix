@@ -26,7 +26,13 @@
     then pyfinal.numpy_2_2_6
     else pyfinal.numpy_2_3_5;
 in
-  helpers.libTweaks {
+  helpers.extendPackage (pyprev.scipy.override ({
+      blas = lapack;
+      lapack = lapack;
+      pythran = buildPythran;
+      boost191 = buildBoost;
+    }
+    // lib.optionalAttrs isHistory {numpy = historyNumpy;})) {
     # The full upstream suite collects roughly 96,000 cases under emulation.
     passthru.wasinix.checks.captured = {
       shards = 16;
@@ -193,10 +199,3 @@ in
       "--deselect=scipy/stats/tests/test_stats.py::TestBrunnerMunzel::test_brunnermunzel_normal_dist[numpy]"
     ];
   }
-  (pyprev.scipy.override ({
-      blas = lapack;
-      lapack = lapack;
-      pythran = buildPythran;
-      boost191 = buildBoost;
-    }
-    // lib.optionalAttrs isHistory {numpy = historyNumpy;}))

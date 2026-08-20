@@ -11,7 +11,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.ormsgpack {
   postPatch = ''
     cat >> src/serialize/uuid.rs <<'RS'
 
@@ -35,4 +35,3 @@ helpers.libTweaks {
   # guest; the import error at collection aborts the entire run
   disabledTestPaths = ["tests/test_pydantic.py" "tests/test_types.py"];
 }
-pyprev.ormsgpack

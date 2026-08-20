@@ -4,8 +4,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.toml11 {
   # header-only: ships no static archive to link-smoke.
   passthru.wasix.smokeTest = false;
 }
-prev.toml11

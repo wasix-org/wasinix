@@ -5,10 +5,9 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.requests {
   # both files run a real listening server over loopback; the guest cannot
   # bind a listener, so every test touching the fixture fails
   disabledTestPaths = ["tests/test_testserver.py" "tests/test_lowlevel.py"];
   pytestFlags = ["--import-mode=importlib"];
 }
-pyprev.requests

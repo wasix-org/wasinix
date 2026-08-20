@@ -3,7 +3,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.regex {
   disabledTests = ["test_main"];
 }
-pyprev.regex

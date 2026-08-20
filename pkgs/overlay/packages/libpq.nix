@@ -8,14 +8,14 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
-  # off sysroot's <setjmp.h> lacks the sigsetjmp postgres error handling needs.
-  passthru.wasix.supportedProfiles = helpers.profiles.withEh;
-  # wasm32-wasi matches no configure template; pick one explicitly.
-  configureFlags = old: old ++ ["--with-template=linux"];
-} (prev.libpq.override {
+helpers.extendPackage (prev.libpq.override {
   curlSupport = false;
   gssSupport = false;
   nlsSupport = false;
   tzdata = final.buildPackages.tzdata;
-})
+}) {
+  # off sysroot's <setjmp.h> lacks the sigsetjmp postgres error handling needs.
+  passthru.wasix.supportedProfiles = helpers.profiles.withEh;
+  # wasm32-wasi matches no configure template; pick one explicitly.
+  configureFlags = old: old ++ ["--with-template=linux"];
+}

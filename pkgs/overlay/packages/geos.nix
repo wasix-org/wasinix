@@ -6,7 +6,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.geos {
   doCheck = false;
   cmakeFlags = ["-DBUILD_GEOSOP=OFF"];
   # This geos is static-only: there is no shared libgeos_c.so to pull the C++
@@ -19,4 +19,3 @@ helpers.libTweaks {
   '';
   passthru.wasix.supportedProfiles = helpers.profiles.withEh;
 }
-prev.geos

@@ -12,7 +12,7 @@
   cc = final.lib.getExe' final.stdenv.cc "${final.stdenv.cc.targetPrefix}cc";
   cxx = final.lib.getExe' final.stdenv.cc "${final.stdenv.cc.targetPrefix}c++";
 in
-  helpers.libTweaks {
+  helpers.extendPackage pyprev.tokenizers {
     # tokio's rt-multi-thread + signal are unsupported on wasm (compile_error!); sync
     # tokenization doesn't need the async runtime, so trim the bindings' tokio features
     # and switch to a current-thread runtime. The bindings are the wheel's own source
@@ -43,4 +43,3 @@ in
         wasinix = (old.wasinix or {}) // {checks.captured.install = false;};
       };
   }
-  pyprev.tokenizers

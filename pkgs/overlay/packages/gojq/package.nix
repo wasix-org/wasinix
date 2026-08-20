@@ -4,8 +4,7 @@
   ...
 }:
 helpers.wasmRename {wasmName = "gojq";} (
-  helpers.libTweaks {
+  helpers.extendPackage prev.gojq {
     passthru.wasinix.shipped = true;
   }
-  prev.gojq
 )

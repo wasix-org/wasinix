@@ -5,7 +5,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.peewee {
   passthru.wasinix.checks.captured.install = false;
 }
-pyprev.peewee

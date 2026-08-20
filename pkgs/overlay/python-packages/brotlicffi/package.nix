@@ -3,7 +3,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.brotlicffi {
   patches = [./patches/test-with-system-brotli.patch];
 
   postPatch = ''
@@ -12,4 +12,3 @@ helpers.libTweaks {
       --replace-fail "libraries = ['brotlienc', 'brotlidec']" "libraries = ['brotlienc', 'brotlidec', 'brotlicommon']"
   '';
 }
-pyprev.brotlicffi

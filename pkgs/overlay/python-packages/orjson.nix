@@ -6,7 +6,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.orjson {
   env = {
     CFLAGS = "-fwasm-exceptions";
   };
@@ -26,4 +26,3 @@ helpers.libTweaks {
       --replace-fail '#[cfg(all(target_arch = "x86_64", not(target_os = "macos")))]' '#[cfg(any())]'
   '';
 }
-pyprev.orjson

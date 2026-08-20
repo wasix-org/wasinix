@@ -3,4 +3,4 @@
   helpers,
   ...
 }:
-helpers.libTweaks {} (prev.zlib-ng.override {gtest = null;})
+helpers.extendPackage (prev.zlib-ng.override {gtest = null;}) {}

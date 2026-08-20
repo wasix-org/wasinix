@@ -9,10 +9,9 @@
 }: let
   py = wasixPython;
 in
-  helpers.libTweaks {
+  helpers.extendPackage pyprev.rapidfuzz {
     cmakeFlags = ["-DPython_INCLUDE_DIR=${py.crossIncludeDir}"];
     # Hamming distance throws through a C++ extension path that Wasmer cannot
     # currently unwind. Keep the extension import smoke test.
     passthru.wasinix.checks.captured.install = false;
   }
-  pyprev.rapidfuzz

@@ -117,7 +117,7 @@
     "yes"
   ];
 in
-  helpers.libTweaks {
+  helpers.extendPackage (prev.coreutils.override {gmpSupport = false;}) {
     passthru.wasinix.shipped = true;
     passthru.wasix.supportedProfiles = ["off"];
     passthru.wasmer.entrypoint = "coreutils";
@@ -210,4 +210,4 @@ in
         [ "$(readlink "$f")" = "coreutils" ] && ln -sf coreutils.wasm "$f"
       done
     '';
-  } (prev.coreutils.override {gmpSupport = false;})
+  }

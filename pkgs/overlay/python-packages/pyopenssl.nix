@@ -21,7 +21,7 @@
     then pyfinal.cryptography_46_0_7
     else null;
 in
-  helpers.libTweaks (
+  helpers.extendPackage pyprev.pyopenssl (
     helpers.python.dropSphinxDocs []
     # dev holds no module, so keep out (module) + dist (wheel) only.
     // {
@@ -34,4 +34,3 @@ in
     }
     // lib.optionalAttrs (lib.versionOlder version "24") {dontCheckRuntimeDeps = true;}
   )
-  pyprev.pyopenssl

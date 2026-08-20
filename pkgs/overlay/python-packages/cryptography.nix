@@ -26,7 +26,7 @@
   # the same lock, from the history entry's vendorLayout.
   splitCargoRoot = lib.versionOlder pyprev.cryptography.version "45";
 in
-  helpers.libTweaks ({
+  helpers.extendPackage pyprev.cryptography ({
       env = {
         CC = lib.getExe' final.stdenv.cc "${final.stdenv.cc.targetPrefix}cc";
         OPENSSL_NO_VENDOR = "1";
@@ -53,4 +53,3 @@ in
     }
     // lib.optionalAttrs isHistory {patches = _: [];}
     // lib.optionalAttrs splitCargoRoot {cargoRoot = "src/rust";})
-  pyprev.cryptography

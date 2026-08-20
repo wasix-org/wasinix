@@ -11,7 +11,7 @@
 in
   # wasm build only: the noblas/-fexceptions/no-gfortran variant breaks the native checkPhase.
   lib.fix (self:
-    helpers.libTweaks (
+    helpers.extendPackage pyprev.numpy (
       helpers.linkInputs (helpers.dropInputsByName ["blas" "lapack"])
       // {
         # Extensions must use the target numpy headers: build-python headers use
@@ -57,5 +57,4 @@ in
               --replace-fail '#elif defined(__EMSCRIPTEN__)' '#elif defined(__EMSCRIPTEN__) || defined(__wasm__)'
           '');
       }
-    )
-    pyprev.numpy)
+    ))

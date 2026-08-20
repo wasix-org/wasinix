@@ -3,7 +3,7 @@
   prev,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.attic-server {
   env = {
     AWS_LC_SYS_NO_JITTER_ENTROPY = "1";
     AWS_LC_SYS_CFLAGS = "-DOPENSSL_NO_TTY";
@@ -17,4 +17,3 @@ helpers.libTweaks {
     entrypoint = "atticd";
   };
 }
-prev.attic-server

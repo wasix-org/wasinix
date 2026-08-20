@@ -5,7 +5,7 @@
   wasmerDependencies,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (prev.anybuild.override {shellPath = "/bin/bash";}) {
   passthru.wasinix.shipped = true;
   passthru.wasmer = {
     entrypoint = "anybuild";
@@ -16,4 +16,3 @@ helpers.libTweaks {
     };
   };
 }
-(prev.anybuild.override {shellPath = "/bin/bash";})

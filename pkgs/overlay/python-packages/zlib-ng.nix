@@ -3,7 +3,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.zlib-ng {
   passthru.wasinix.checks.captured.broken = "compliance tests require CPython's test package";
 }
-pyprev.zlib-ng

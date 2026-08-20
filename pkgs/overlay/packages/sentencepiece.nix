@@ -6,7 +6,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (prev.sentencepiece.override {withGPerfTools = false;}) {
   cmakeFlags = ["-DSPM_ENABLE_SHARED=OFF"];
   # protobuf-lite is vendored into libsentencepiece.a, so Requires.private makes
   # `pkg-config sentencepiece` fail on the missing protobuf-lite.pc.
@@ -15,4 +15,4 @@ helpers.libTweaks {
       --replace-fail 'Requires.private: @libprotobuf_lite@' ""
   '';
   passthru.wasix.supportedProfiles = helpers.profiles.withEh;
-} (prev.sentencepiece.override {withGPerfTools = false;})
+}

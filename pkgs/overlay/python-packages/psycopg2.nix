@@ -21,7 +21,7 @@
     esac
   '';
 in
-  helpers.libTweaks (
+  helpers.extendPackage pyprev.psycopg2 (
     helpers.python.dropSphinxDocs []
     // {
       # nixpkgs' own postPatch rewrites this same line to the wasm libpq.pg_config,
@@ -33,4 +33,3 @@ in
       '';
     }
   )
-  pyprev.psycopg2

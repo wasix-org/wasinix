@@ -3,7 +3,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.s3-server {
   passthru.wasinix.shipped = true;
 }
-prev.s3-server

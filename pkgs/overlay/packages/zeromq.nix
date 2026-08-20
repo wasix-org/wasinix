@@ -6,7 +6,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.zeromq {
   # wasm-opt false-negatives the cmake feature conftests (WASIX-TODO.md).
   nativeBuildInputs = [final.disableWasmOptInConfigureHook];
   cmakeFlags = [
@@ -17,4 +17,3 @@ helpers.libTweaks {
   ];
   passthru.wasix.supportedProfiles = helpers.profiles.withEh;
 }
-prev.zeromq

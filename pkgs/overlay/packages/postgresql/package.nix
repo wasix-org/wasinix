@@ -5,7 +5,27 @@
   preferredProfilePackages,
   ...
 }:
-(helpers.libTweaks {
+(helpers.extendPackage (prev.postgresql.override {
+    # curl carries only the OAuth flow and a static libpq fails its
+    # curl_multi_init probe; GSSAPI has no krb5 built for wasix.
+    curlSupport = false;
+    gssSupport = false;
+    # nixpkgs sets libuuid null off Linux; the overlay util-linux ships libuuid only.
+    libuuid = final.util-linux;
+    tzdata = final.buildPackages.tzdata;
+    # nixpkgs bakes `${stdenv.cc.libc}/bin/locale` into pg_import_system_collations,
+    # and the wasix stdenv has cc.libc = null. No wasm locale binary exists.
+    stdenv =
+      final.stdenv
+      // {
+        cc = final.stdenv.cc // {libc = "/nonexistent-wasix-has-no-glibc";};
+        hostPlatform =
+          final.stdenv.hostPlatform
+          // {
+            extensions = final.stdenv.hostPlatform.extensions // {sharedLibrary = ".so";};
+          };
+      };
+  }) {
     passthru.wasinix.shipped = true;
     # The backend loads extensions with dlopen, and only the PIC sysroots ship
     # <dlfcn.h>.
@@ -52,28 +72,7 @@
       export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -I$PWD/wasix-compat"
       export NIX_LDFLAGS="$NIX_LDFLAGS -L$PWD/wasix-compat -lwasix-compat -lc++ -lc++abi -lunwind"
     '';
-  }
-  (prev.postgresql.override {
-    # curl carries only the OAuth flow and a static libpq fails its
-    # curl_multi_init probe; GSSAPI has no krb5 built for wasix.
-    curlSupport = false;
-    gssSupport = false;
-    # nixpkgs sets libuuid null off Linux; the overlay util-linux ships libuuid only.
-    libuuid = final.util-linux;
-    tzdata = final.buildPackages.tzdata;
-    # nixpkgs bakes the libc locale executable's store path into pg_import_system_collations,
-    # and the wasix stdenv has cc.libc = null. No wasm locale binary exists.
-    stdenv =
-      final.stdenv
-      // {
-        cc = final.stdenv.cc // {libc = "/nonexistent-wasix-has-no-glibc";};
-        hostPlatform =
-          final.stdenv.hostPlatform
-          // {
-            extensions = final.stdenv.hostPlatform.extensions // {sharedLibrary = ".so";};
-          };
-      };
-  }))
+  })
 # wasmer places every command at /bin, so PATH is all find_my_exec needs to
 # resolve the running program and its siblings. my_exec_path is then /bin/<cmd>,
 # and postgres derives SHAREDIR and PKGLIBDIR relative to it, which is why those

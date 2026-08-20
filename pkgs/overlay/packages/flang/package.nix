@@ -22,7 +22,13 @@
     ninjaFlags = old.ninjaFlags ++ ["mlir-linalg-ods-yaml-gen"];
   });
   mlir =
-    helpers.libTweaks {
+    helpers.extendPackage (prev.llvmPackages.mlir.override {
+      version = wasixLlvm.version;
+      release_version = wasixLlvm.llvmVersion;
+      monorepoSrc = wasixLlvm.monorepoSrc;
+      inherit libllvm;
+      devExtraCmakeFlags = ["-DUNIX=ON"];
+    }) {
       patches = [./external-mlir-tblgen.patch];
       # get_host_tool_path caches MLIR_LINALG_ODS_YAML_GEN and derives the _EXE
       # variable from it, so the setting name is what a caller supplies.
@@ -33,14 +39,7 @@
         "-DMLIR_LINALG_ODS_YAML_GEN=${final.lib.getExe' nativeOdsYamlGen "mlir-linalg-ods-yaml-gen"}"
         "-DLLVM_BUILD_UTILS=ON"
       ];
-    }
-    (prev.llvmPackages.mlir.override {
-      version = wasixLlvm.version;
-      release_version = wasixLlvm.llvmVersion;
-      monorepoSrc = wasixLlvm.monorepoSrc;
-      inherit libllvm;
-      devExtraCmakeFlags = ["-DUNIX=ON"];
-    });
+    };
   base = prev.llvmPackages.flang-unwrapped.override {
     version = wasixLlvm.version;
     release_version = wasixLlvm.llvmVersion;
@@ -52,7 +51,7 @@
     inherit libllvm libclang mlir;
   };
 in
-  helpers.libTweaks {
+  helpers.extendPackage base {
     patches = [
       ./wasm32-target.patch
       ./wasm32-main.patch
@@ -112,4 +111,3 @@ in
     '';
     postInstall = _old: "";
   }
-  base

@@ -7,7 +7,11 @@
   prev,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (prev.rustfs.override {
+  # cross tzdata doesn't build (tzcode needs getresuid), and TZDIR only names a
+  # zoneinfo tree, which is platform-independent data
+  tzdata = final.buildPackages.tzdata;
+}) {
   patches = [
     ./patches/rustfs-manifest.patch
     ./patches/rustfs-code.patch
@@ -45,8 +49,4 @@ helpers.libTweaks {
   # the trailing number as a fourth component and refuse. `wasmer run
   # wasmer/rustfs` with no version cannot select a prerelease (WASIX-TODO.md).
   passthru.wasmer.version = v: v;
-} (prev.rustfs.override {
-  # cross tzdata doesn't build (tzcode needs getresuid), and TZDIR only names a
-  # zoneinfo tree, which is platform-independent data
-  tzdata = final.buildPackages.tzdata;
-})
+}

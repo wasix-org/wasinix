@@ -8,7 +8,17 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (prev.pixz.override {
+  inherit
+    (final.buildPackages)
+    libtool
+    asciidoc
+    libxslt
+    libxml2
+    docbook_xml_dtd_45
+    docbook_xsl
+    ;
+}) {
   passthru.wasix.smokeTest = false;
   configureFlags = [
     "ac_cv_file_src_pixz_1=no"
@@ -23,14 +33,3 @@ helpers.libTweaks {
     docbook_xsl
   ];
 }
-(prev.pixz.override {
-  inherit
-    (final.buildPackages)
-    libtool
-    asciidoc
-    libxslt
-    libxml2
-    docbook_xml_dtd_45
-    docbook_xsl
-    ;
-})

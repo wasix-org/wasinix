@@ -6,7 +6,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.greenlet {
   patches = [./patches/greenlet-wasm-switch.patch];
   passthru.wasinix.checks.captured.broken = "cross-thread context access traps in _Unwind_RaiseException";
   # the mod_* functions are 1-arg but bound METH_NOARGS, so wasm's typed function
@@ -18,4 +18,3 @@ helpers.libTweaks {
       --replace-fail "green_getstate(PyGreenlet* self)" "green_getstate(PyGreenlet* self, PyObject* UNUSED(_noargs))"
   '';
 }
-pyprev.greenlet

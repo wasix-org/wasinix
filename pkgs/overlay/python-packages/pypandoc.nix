@@ -6,9 +6,8 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.pypandoc {
   patches = _: [];
   nativeCheckInputs = _: [];
   passthru.wasinix.checks.captured.install = false;
 }
-pyprev.pypandoc

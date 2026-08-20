@@ -5,7 +5,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.bitarray {
   # The guest exits zero after bitarray.test(), so check unittest's summary.
   installCheckPhase = _: ''
     cd $out
@@ -15,4 +15,3 @@ helpers.libTweaks {
   '';
   passthru.wasinix.checks.captured.broken = "WASIX reports bitarray objects as hashable";
 }
-pyprev.bitarray

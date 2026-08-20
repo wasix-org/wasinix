@@ -6,7 +6,7 @@
   ...
 }:
 helpers.wasmRename {wasmName = "psql";} (
-  helpers.libTweaks {
+  helpers.extendPackage final.libpq {
     passthru.wasix = {
       shipped = true;
     };
@@ -39,5 +39,4 @@ helpers.wasmRename {wasmName = "psql";} (
       rm -rf "$out/share"
     '';
   }
-  final.libpq
 )

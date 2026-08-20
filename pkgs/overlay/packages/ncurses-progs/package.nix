@@ -8,7 +8,10 @@
 }: let
   buildCc = final.lib.getExe' final.buildPackages.stdenv.cc "cc";
 in
-  helpers.libTweaks {
+  helpers.extendPackage (prev.ncurses.override {
+    enableStatic = true;
+    withCxx = false;
+  }) {
     passthru.wasinix.shipped = true;
     # clear/reset/tput take -V, not --version.
     passthru.wasmer.smokeArgs = ["-V"];
@@ -70,7 +73,4 @@ in
       fi
     '';
     postFixup = _: "";
-  } (prev.ncurses.override {
-    enableStatic = true;
-    withCxx = false;
-  })
+  }

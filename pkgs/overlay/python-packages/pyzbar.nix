@@ -11,7 +11,11 @@
   bundle = import ./lib/bundle.nix {inherit lib;};
   zbar = final.zbar // {override = _: final.zbar;};
 in
-  helpers.libTweaks (bundle.bundleNative {
+  helpers.extendPackage (
+    # drop nixpkgs' postPatch: it references extensions.sharedLibrary (unset for
+    # wasm32) and rewrites find_library itself, both superseded here.
+    (pyprev.pyzbar.override {pkgs = {inherit zbar;};}).overridePythonAttrs (_: {postPatch = "";})
+  ) (bundle.bundleNative {
     pkg = "pyzbar";
     files = [{src = "${lib.getLib final.zbar}/lib/libzbar.so";}];
     rewrites = [
@@ -21,8 +25,4 @@ in
         load = "libzbar.so";
       }
     ];
-  }) (
-    # drop nixpkgs' postPatch: it references extensions.sharedLibrary (unset for
-    # wasm32) and rewrites find_library itself, both superseded here.
-    (pyprev.pyzbar.override {pkgs = {inherit zbar;};}).overridePythonAttrs (_: {postPatch = "";})
-  )
+  })

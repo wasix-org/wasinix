@@ -5,10 +5,9 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.murmurhash {
   postPatch = ''
     substituteInPlace setup.py \
       --replace-fail 'get_path("include"),' ""
   '';
 }
-pyprev.murmurhash

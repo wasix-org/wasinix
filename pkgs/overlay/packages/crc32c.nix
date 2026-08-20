@@ -5,8 +5,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.crc32c {
   cmakeFlags = ["-DCRC32C_BUILD_TESTS=0"];
   doInstallCheck = false;
 }
-prev.crc32c

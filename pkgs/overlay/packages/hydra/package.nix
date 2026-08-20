@@ -31,59 +31,7 @@
       postPatch = (o.postPatch or "") + "\n" + substitution;
     });
 in
-  helpers.libTweaks {
-    doCheck = false;
-    nativeCheckInputs = _: [];
-    # The wrapper carries PERL5LIB and HYDRA_HOME for the perl scripts, and
-    # nixpkgs keeps it off compiled programs by reading their magic. Ours begins
-    # "\0asm", which the ELF test misses, so every binary came out a shell
-    # script instead of the wasm the runtime loads.
-    postInstall = old:
-      builtins.replaceStrings
-      ["if [[ $chars =~ ELF ]]; then continue; fi"]
-      ["if [[ $chars =~ ELF || $chars =~ asm ]]; then continue; fi"]
-      old;
-    # F_SETPIPE_SZ is a linux fcntl, and the calls are an unchecked buffer size
-    # hint on the pipes to the remote builder.
-    patches = [./patches/wasi-no-pipe-size-hint.patch];
-    # The top-level project is a dev-shell stub that pulls in every subproject.
-    # The linters run perlcritic and the tests run the harness, both under a
-    # perl this build cannot execute; the manual and hydra itself stay.
-    postPatch = ''
-      substituteInPlace meson.build \
-        --replace-fail "subproject('hydra-linters')" "" \
-        --replace-fail "subproject('hydra-tests')" ""
-    '';
-    # prometheus-cpp installs cmake config and no pkg-config file, and meson
-    # reads the former only when it can run cmake. meson also runs unzip on the
-    # bundled bootstrap archive, so that one has to be a build-platform binary;
-    # the wasix unzip stays in the runtime environment.
-    nativeBuildInputs = with final.buildPackages; [cmake unzip];
-    # The perl modules are XS, so they load through dlopen like perl itself, and
-    # apr's DSO check wants the same dlfcn.h.
-    passthru.wasix.supportedProfiles = helpers.profiles.pic;
-    passthru.wasinix.shipped = true;
-    passthru.wasmer.selfMounts = runtimeTools;
-    passthru.wasmer.version = v: let
-      d = builtins.match ".*-unstable-([0-9]{4})-([0-9]{2})-([0-9]{2})" v;
-    in
-      assert final.lib.assertMsg (d != null) "hydra: version ${v} is not <ver>-unstable-YYYY-MM-DD"; "0.0.${final.lib.concatStrings d}";
-    # The compiled daemons keep their plain names (the perl scripts exec them),
-    # so name them rather than leaving the bin/*.wasm glob to find nothing.
-    passthru.wasmer.commands = [
-      {
-        name = "hydra-evaluator";
-        wasm = "hydra-evaluator";
-        output = "hydra-evaluator.wasm";
-      }
-      {
-        name = "hydra-queue-runner";
-        wasm = "hydra-queue-runner";
-        output = "hydra-queue-runner.wasm";
-      }
-    ];
-  }
-  (prev.hydra.override {
+  helpers.extendPackage (prev.hydra.override {
     perlPackages = final.perlPackages.overrideScope (_: pprev: {
       # Sub::Name carries its test-only B::C in buildInputs, and B::C builds by
       # loading the XS module B into miniperl, which has no dynamic loading.
@@ -160,4 +108,55 @@ in
     # only the test suite reads OPENLDAP_ROOT, and openldap reaches bash through
     # libtool, which builds at the off profile alone
     openldap = final.emptyDirectory;
-  })
+  }) {
+    doCheck = false;
+    nativeCheckInputs = _: [];
+    # The wrapper carries PERL5LIB and HYDRA_HOME for the perl scripts, and
+    # nixpkgs keeps it off compiled programs by reading their magic. Ours begins
+    # "\0asm", which the ELF test misses, so every binary came out a shell
+    # script instead of the wasm the runtime loads.
+    postInstall = old:
+      builtins.replaceStrings
+      ["if [[ $chars =~ ELF ]]; then continue; fi"]
+      ["if [[ $chars =~ ELF || $chars =~ asm ]]; then continue; fi"]
+      old;
+    # F_SETPIPE_SZ is a linux fcntl, and the calls are an unchecked buffer size
+    # hint on the pipes to the remote builder.
+    patches = [./patches/wasi-no-pipe-size-hint.patch];
+    # The top-level project is a dev-shell stub that pulls in every subproject.
+    # The linters run perlcritic and the tests run the harness, both under a
+    # perl this build cannot execute; the manual and hydra itself stay.
+    postPatch = ''
+      substituteInPlace meson.build \
+        --replace-fail "subproject('hydra-linters')" "" \
+        --replace-fail "subproject('hydra-tests')" ""
+    '';
+    # prometheus-cpp installs cmake config and no pkg-config file, and meson
+    # reads the former only when it can run cmake. meson also runs unzip on the
+    # bundled bootstrap archive, so that one has to be a build-platform binary;
+    # the wasix unzip stays in the runtime environment.
+    nativeBuildInputs = with final.buildPackages; [cmake unzip];
+    # The perl modules are XS, so they load through dlopen like perl itself, and
+    # apr's DSO check wants the same dlfcn.h.
+    passthru.wasix.supportedProfiles = helpers.profiles.pic;
+    passthru.wasinix.shipped = true;
+    passthru.wasmer.selfMounts = runtimeTools;
+    passthru.wasmer.version = v: let
+      d = builtins.match ".*-unstable-([0-9]{4})-([0-9]{2})-([0-9]{2})" v;
+    in
+      assert final.lib.assertMsg (d != null) "hydra: version ${v} is not <ver>-unstable-YYYY-MM-DD"; "0.0.${final.lib.concatStrings d}";
+    # The compiled daemons keep their plain names (the perl scripts exec them),
+    # so name them rather than leaving the bin/*.wasm glob to find nothing.
+    passthru.wasmer.commands = [
+      {
+        name = "hydra-evaluator";
+        wasm = "hydra-evaluator";
+        output = "hydra-evaluator.wasm";
+      }
+      {
+        name = "hydra-queue-runner";
+        wasm = "hydra-queue-runner";
+        output = "hydra-queue-runner.wasm";
+      }
+    ];
+  }

@@ -13,7 +13,7 @@
   crossNumpyInc = py.pkgs.numpy.crossInclude;
   pyInc = py.crossIncludeDir;
 in
-  helpers.libTweaks {
+  helpers.extendPackage pyprev.opencv4 {
     # nixpkgs enables pytest without shipping tests in this wheel. The
     # package-specific cv2 operations check supplies runtime coverage.
     passthru.wasinix.checks.captured.install = false;
@@ -44,4 +44,3 @@ in
       echo "BINARIES_PATHS = []" > "$out/${py.sitePackages}/cv2/config.py"
     '';
   }
-  pyprev.opencv4

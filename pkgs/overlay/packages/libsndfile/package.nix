@@ -3,7 +3,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (prev.libsndfile.override {alsa-lib = null;}) {
   configureFlags = ["--disable-alsa"];
   patches = [./patches/xi-initial-write-length.patch];
   # libtool records some codec deps as `<dir>/libNAME.la` paths wasm-ld can't read.
@@ -18,4 +18,3 @@ helpers.libTweaks {
   '';
   passthru.wasix.supportedProfiles = helpers.profiles.pic;
 }
-(prev.libsndfile.override {alsa-lib = null;})

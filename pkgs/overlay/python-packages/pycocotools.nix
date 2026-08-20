@@ -6,7 +6,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.pycocotools {
   nativeBuildInputs = [wasixPython.pythonOnBuildForHost.pkgs.numpy];
 }
-pyprev.pycocotools

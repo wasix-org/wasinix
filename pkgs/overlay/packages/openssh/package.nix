@@ -8,7 +8,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.openssh {
   patches = [./patches/wasi-unsupported-calls.patch];
   # no SCM_RIGHTS: openssh passes descriptors between its privsep processes and
   # for ControlMaster multiplexing, and already carries a switch for platforms
@@ -27,4 +27,3 @@ helpers.libTweaks {
   passthru.wasix.supportedProfiles = ["off"];
   passthru.wasix.smokeTest = false;
 }
-prev.openssh

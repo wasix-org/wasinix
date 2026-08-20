@@ -10,7 +10,7 @@
   # (WASIX-TODO.md), so build the CLI only in the off profile, as upstream does.
   offProfile = (helpers.profileOf prev.stdenv.hostPlatform) == "off";
 in
-  helpers.libTweaks (
+  helpers.extendPackage prev.libgit2 (
     {
       # appended after nixpkgs' flags; for duplicated -D options the last wins
       cmakeFlags = [
@@ -35,4 +35,3 @@ in
     }
     // helpers.linkInputs (helpers.dropInputsByName ["libssh2"])
   )
-  prev.libgit2

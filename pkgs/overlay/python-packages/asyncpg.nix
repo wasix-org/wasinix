@@ -8,10 +8,9 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage (pyprev.asyncpg.override {postgresql = final.buildPackages.postgresql;}) {
   doCheck = false;
   # nothing runs them, and some do not evaluate for wasm
   nativeCheckInputs = _: [];
   passthru.wasinix.checks.captured.broken = "the suite launches a WASIX PostgreSQL executable through host subprocess APIs";
 }
-(pyprev.asyncpg.override {postgresql = final.buildPackages.postgresql;})

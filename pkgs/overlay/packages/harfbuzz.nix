@@ -31,7 +31,10 @@
     skip_sanity_check = true
   '';
 in
-  helpers.libTweaks {
+  helpers.extendPackage (prev.harfbuzz.override {
+    glib = null;
+    withGraphite2 = false;
+  }) {
     doCheck = hasEh;
     mesonFlags =
       ["-Dglib=disabled" "-Dgobject=disabled" "-Dcpp_eh=default" "-Dutilities=disabled"]
@@ -69,7 +72,4 @@ in
       substituteInPlace meson.build \
         --replace-fail "'-fno-exceptions'," "'-fexceptions',"
     '';
-  } (prev.harfbuzz.override {
-    glib = null;
-    withGraphite2 = false;
-  })
+  }

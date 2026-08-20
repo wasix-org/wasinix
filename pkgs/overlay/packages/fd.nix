@@ -4,7 +4,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.fd {
   passthru.wasix.broken = ''
     porting needs per-function wasi arms for code that has no wasi support — jemalloc
     (doesn't cross-build), the `ctrlc` crate (no wasi platform at all), and fd's own
@@ -13,4 +13,3 @@ helpers.libTweaks {
     cfg(unix)->cfg(unix,wasi) rewrite doesn't work (it leaves 13 errors). See memory
     note wasix-rust-unix-cfg-gap for the full breakdown.'';
 }
-prev.fd

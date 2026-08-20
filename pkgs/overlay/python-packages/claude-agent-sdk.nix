@@ -5,7 +5,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.claude-agent-sdk {
   passthru.wasinix.checks.captured.install = false;
 }
-pyprev.claude-agent-sdk

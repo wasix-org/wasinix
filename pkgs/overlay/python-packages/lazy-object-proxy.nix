@@ -4,7 +4,6 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.lazy-object-proxy {
   passthru.wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.pytest-benchmark];
 }
-pyprev.lazy-object-proxy

@@ -9,8 +9,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage prev.libffi {
   patches = [./wasi-backend.patch];
   configureFlags = ["--disable-multi-os-directory" "--disable-raw-api"];
 }
-prev.libffi

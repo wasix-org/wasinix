@@ -9,7 +9,33 @@
 }: let
   lib = final.lib;
 in
-  helpers.libTweaks {
+  helpers.extendPackage (prev.imagemagick.override {
+    bzip2Support = false;
+    zlibSupport = true;
+    libX11Support = false;
+    libXtSupport = false;
+    fontconfigSupport = false;
+    freetypeSupport = true;
+    ghostscriptSupport = false;
+    libjpegSupport = true;
+    djvulibreSupport = false;
+    lcms2Support = false;
+    openexrSupport = false;
+    libjxlSupport = false;
+    libpngSupport = true;
+    liblqr1Support = false;
+    libraqmSupport = false;
+    librawSupport = false;
+    librsvgSupport = false;
+    libtiffSupport = true;
+    libxml2Support = true;
+    openjpegSupport = true;
+    libwebpSupport = true;
+    libheifSupport = false;
+    fftwSupport = false;
+    coreutils = final.buildPackages.coreutils;
+    potrace = final.buildPackages.runCommand "potrace-placeholder" {} ''mkdir -p "$out"'';
+  }) {
     # Magick++ throws; the off profile compiles C++ with -fno-exceptions.
     passthru.wasix.supportedProfiles = helpers.profiles.withEh;
     postPatch = ''
@@ -36,30 +62,4 @@ in
         ln -s "$(basename "$(echo "$out"/include/ImageMagick-* | awk '{ print $1 }')")" "$out/include/ImageMagick"
       fi
     '';
-  } (prev.imagemagick.override {
-    bzip2Support = false;
-    zlibSupport = true;
-    libX11Support = false;
-    libXtSupport = false;
-    fontconfigSupport = false;
-    freetypeSupport = true;
-    ghostscriptSupport = false;
-    libjpegSupport = true;
-    djvulibreSupport = false;
-    lcms2Support = false;
-    openexrSupport = false;
-    libjxlSupport = false;
-    libpngSupport = true;
-    liblqr1Support = false;
-    libraqmSupport = false;
-    librawSupport = false;
-    librsvgSupport = false;
-    libtiffSupport = true;
-    libxml2Support = true;
-    openjpegSupport = true;
-    libwebpSupport = true;
-    libheifSupport = false;
-    fftwSupport = false;
-    coreutils = final.buildPackages.coreutils;
-    potrace = final.buildPackages.runCommand "potrace-placeholder" {} ''mkdir -p "$out"'';
-  })
+  }

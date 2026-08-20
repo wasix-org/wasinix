@@ -4,7 +4,7 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
+helpers.extendPackage pyprev.starlette {
   postPatch = ''
     substituteInPlace tests/test_testclient.py \
       --replace-fail 'import trio.lowlevel' '# Trio cases are disabled on WASIX.'
@@ -32,4 +32,3 @@ helpers.libTweaks {
     "test_staticfiles_with_invalid_dir_permissions_returns_401"
   ];
 }
-pyprev.starlette

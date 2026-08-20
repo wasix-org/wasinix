@@ -27,7 +27,7 @@
       ./patches/duckdb-wasi-no-if2ip-pre15.patch;
   };
 in
-  helpers.libTweaks {
+  helpers.extendPackage prev.duckdb {
     src = patchedSrc;
     cmakeFlags = [
       # Skips a probe that runs a just-built duckdb_platform_binary, here wasm.
@@ -41,4 +41,3 @@ in
     # `off` compiles with -fno-exceptions, which libpg_query's try/throw rejects.
     passthru.wasix.supportedProfiles = helpers.profiles.pic;
   }
-  prev.duckdb
