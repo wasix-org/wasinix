@@ -142,6 +142,14 @@ pub enum PythonCommand {
         registry: Option<String>,
         #[arg(long)]
         dry_run: bool,
+        /// Upload the index pages even when no wheel is new, for a change in
+        /// how a project is listed
+        #[arg(long)]
+        refresh_listings: bool,
+        /// Withdraw the listing of a project that no longer belongs in simple/,
+        /// so it stops shadowing PyPI
+        #[arg(long)]
+        withdraw_stale: bool,
     },
     /// Deploy a built preview index as an ephemeral Edge app
     Preview {
@@ -304,12 +312,16 @@ pub fn run_python(command: PythonCommand) -> Result<CommandStatus> {
             rev,
             registry,
             dry_run,
+            refresh_listings,
+            withdraw_stale,
         } => python::publish_index(python::Index {
             registry_path: index,
             registry: python::registry(registry.as_deref()),
             rev,
             effects: Effects::from_dry_run(dry_run),
             repo: crate::support::git::repo_root()?,
+            refresh_listings,
+            withdraw_stale,
         }),
         PythonCommand::Preview {
             site,
@@ -404,6 +416,8 @@ pub fn run_meta_publish(effects: Effects) -> Result<CommandStatus> {
                     rev: String::new(),
                     effects,
                     repo,
+                    refresh_listings: false,
+                    withdraw_stale: false,
                 })
             }),
         ),
