@@ -597,11 +597,14 @@ in rec {
           );
         ownArtifacts = lib.mapAttrs' (_: node: lib.nameValuePair node.entry.address node.entry) artifactNodes;
         ownCommands = lib.mapAttrs' (name: command: let
-          address = projectLib.address "commands" [name];
+          projectionPath =
+            [name]
+            ++ lib.optionals (baseEntry.instance.kind == "history") ["versions" baseEntry.instance.version];
+          address = projectLib.address "commands" projectionPath;
         in
           lib.nameValuePair address {
             kind = "command";
-            inherit address command;
+            inherit address command projectionPath;
             inherit (baseEntry) definition source lineage scope variant instance;
             subject = baseEntry.address;
             packageSubject = baseEntry.packageSubject or baseEntry.address;
@@ -658,9 +661,9 @@ in rec {
       artifactsView = lib.foldl' lib.recursiveUpdate {} (map (entry:
         lib.setAttrByPath ([entry.artifactKind] ++ entry.projectionPath) entry.artifact)
       (lib.attrValues artifactEntries));
-      commandsView = lib.mapAttrs' (_: entry:
-        lib.nameValuePair entry.command.name entry.command)
-      commandEntries;
+      commandsView = lib.foldl' lib.recursiveUpdate {} (map (entry:
+        lib.setAttrByPath entry.projectionPath entry.command)
+      (lib.attrValues commandEntries));
       ciPackageEntries = lib.filterAttrs (_: entry:
         builtins.elem entry.source requestedCiSources
         && (
