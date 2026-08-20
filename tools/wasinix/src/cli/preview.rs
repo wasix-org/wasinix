@@ -245,6 +245,7 @@ fn publish(args: &PreviewArgs, repo: &Path) -> Result<()> {
             skip_sha_validation: false,
             rev: args.rev.clone(),
             preview: Some(args.tag.clone()),
+            with_dependencies: false,
             publish_as: None,
             namespace: Some(namespace.clone()),
         })?;

@@ -3676,7 +3676,10 @@ mod overrides {
 mod webc_identity {
     use std::collections::{BTreeMap, BTreeSet};
 
-    use crate::registries::wasmer::{order_packages, parse_publish_as, stage, Package, Staged};
+    use crate::registries::wasmer::{
+        include_unpublished_dependencies, order_packages, parse_publish_as, stage, Package,
+        ResolvedGraph, Staged,
+    };
     use crate::support::fs::Scratch;
 
     fn package(path: &std::path::Path) -> Package {
@@ -3846,6 +3849,60 @@ mod webc_identity {
             .map(|pkg| pkg.full_name)
             .collect();
         assert_eq!(names, ["wasmer/bash", "wasmer/cli"]);
+    }
+
+    #[test]
+    fn preview_closure_stops_at_published_dependencies() {
+        let key = |name: &str, version: &str| (format!("wasmer/{name}"), version.to_string());
+        let cli = key("cli", "0.1.4");
+        let bash = key("bash", "5.3.15");
+        let curl = key("curl", "8.21.0");
+        let coreutils = key("coreutils", "9.11.0");
+        let ca = key("ca-bundle", "1.0.0");
+        let graph = ResolvedGraph {
+            dependencies: BTreeMap::from([
+                (
+                    cli.clone(),
+                    BTreeMap::from([
+                        (bash.0.clone(), bash.1.clone()),
+                        (curl.0.clone(), curl.1.clone()),
+                    ]),
+                ),
+                (
+                    bash.clone(),
+                    BTreeMap::from([(coreutils.0.clone(), coreutils.1.clone())]),
+                ),
+                (
+                    curl.clone(),
+                    BTreeMap::from([(ca.0.clone(), ca.1.clone())]),
+                ),
+                (coreutils.clone(), BTreeMap::new()),
+                (ca.clone(), BTreeMap::new()),
+            ]),
+            keys_by_attr: BTreeMap::from([
+                ("cli".into(), cli.clone()),
+                ("bash".into(), bash.clone()),
+                ("curl".into(), curl.clone()),
+                ("coreutils".into(), coreutils.clone()),
+                ("ca-bundle".into(), ca.clone()),
+            ]),
+            attrs_by_key: BTreeMap::from([
+                (cli, "cli".into()),
+                (bash, "bash".into()),
+                (curl.clone(), "curl".into()),
+                (coreutils, "coreutils".into()),
+                (ca.clone(), "ca-bundle".into()),
+            ]),
+        };
+        let mut queried = Vec::new();
+        let selected = include_unpublished_dependencies(&["cli".into()], &graph, |name, _| {
+            queried.push(name.to_string());
+            Ok(name == curl.0)
+        })
+        .unwrap();
+
+        assert_eq!(selected, ["bash", "cli", "coreutils"]);
+        assert!(!queried.contains(&ca.0));
     }
 }
 
@@ -4113,6 +4170,7 @@ mod corpus {
             "cargo serve --port 9000 -- cargo check",
             "wasmer publish --dry-run",
             "wasmer preview pr-123 --namespace kilyanni --dry-run",
+            "wasmer preview pr-123 --namespace kilyanni --with-dependencies --dry-run",
             "python serve",
             "python publish --dry-run",
             "python publish --registry wasmer.wtf --dry-run",

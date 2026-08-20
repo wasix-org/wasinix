@@ -145,7 +145,13 @@ fn build_pkg_roots(selected: &[String]) -> Result<Vec<PathBuf>> {
 
 type PackageKey = (String, String);
 
-fn resolved_dependencies() -> Result<BTreeMap<PackageKey, BTreeMap<String, String>>> {
+pub(crate) struct ResolvedGraph {
+    pub(crate) dependencies: BTreeMap<PackageKey, BTreeMap<String, String>>,
+    pub(crate) keys_by_attr: BTreeMap<String, PackageKey>,
+    pub(crate) attrs_by_key: BTreeMap<PackageKey, String>,
+}
+
+fn resolved_graph() -> Result<ResolvedGraph> {
     let apply = crate::support::nix::canonical_webcs_apply(
         r#"_: p: {
           name = "${p.pkg.id.owner}/${p.pkg.id.name}";
@@ -160,7 +166,11 @@ fn resolved_dependencies() -> Result<BTreeMap<PackageKey, BTreeMap<String, Strin
     let Some(values) = values.as_object() else {
         return request_error("wasmerPackages dependency map is not an object");
     };
-    let mut resolved = BTreeMap::new();
+    let mut graph = ResolvedGraph {
+        dependencies: BTreeMap::new(),
+        keys_by_attr: BTreeMap::new(),
+        attrs_by_key: BTreeMap::new(),
+    };
     for (attr, value) in values {
         let identity = |value: &Value| -> Result<PackageKey> {
             let Some(name) = value["name"].as_str() else {
@@ -190,14 +200,57 @@ fn resolved_dependencies() -> Result<BTreeMap<PackageKey, BTreeMap<String, Strin
                 }
             }
         }
-        if resolved.insert(key.clone(), package_dependencies).is_some() {
+        graph.keys_by_attr.insert(attr.clone(), key.clone());
+        if graph.attrs_by_key.insert(key.clone(), attr.clone()).is_some()
+            || graph
+                .dependencies
+                .insert(key.clone(), package_dependencies)
+                .is_some()
+        {
             return request_error(format!(
                 "wasmerPackages has duplicate identity {}@{}",
                 key.0, key.1
             ));
         }
     }
-    Ok(resolved)
+    Ok(graph)
+}
+
+pub(crate) fn include_unpublished_dependencies(
+    selected: &[String],
+    graph: &ResolvedGraph,
+    mut published: impl FnMut(&str, &str) -> Result<bool>,
+) -> Result<Vec<String>> {
+    let mut attrs: BTreeSet<String> = selected.iter().cloned().collect();
+    let mut examined = BTreeSet::new();
+    let mut pending = Vec::new();
+    for attr in selected {
+        let Some(key) = graph.keys_by_attr.get(attr) else {
+            return request_error(format!("wasmerPackages.{attr}: no resolved identity"));
+        };
+        if examined.insert(key.clone()) {
+            pending.push(key.clone());
+        }
+    }
+    while let Some(key) = pending.pop() {
+        let Some(dependencies) = graph.dependencies.get(&key) else {
+            return request_error(format!("no resolved dependencies for {}@{}", key.0, key.1));
+        };
+        for (name, version) in dependencies {
+            let dependency = (name.clone(), version.clone());
+            if !examined.insert(dependency.clone()) || published(name, version)? {
+                continue;
+            }
+            let Some(attr) = graph.attrs_by_key.get(&dependency) else {
+                return request_error(format!(
+                    "no wasmerPackages attribute for {name}@{version}"
+                ));
+            };
+            attrs.insert(attr.clone());
+            pending.push(dependency);
+        }
+    }
+    Ok(attrs.into_iter().collect())
 }
 
 fn attach_resolved_dependencies(
@@ -768,6 +821,7 @@ pub struct Options {
     pub skip_sha_validation: bool,
     pub rev: Option<String>,
     pub preview: Option<String>,
+    pub with_dependencies: bool,
     pub publish_as: Option<String>,
     /// Publish the whole batch under this namespace instead of the one the
     /// manifests carry.
@@ -814,8 +868,16 @@ pub fn publish(options: Options) -> Result<crate::support::process::CommandStatu
             ));
         }
     }
-    let mut packages = read_packages(&build_pkg_roots(&selected_packages(&options.packages)?)?)?;
-    attach_resolved_dependencies(&mut packages, &resolved_dependencies()?)?;
+    let graphql_url = graphql_endpoint(&options.registry)?;
+    let graph = resolved_graph()?;
+    let mut selected = selected_packages(&options.packages)?;
+    if options.preview.is_some() && options.with_dependencies && !selected.is_empty() {
+        selected = include_unpublished_dependencies(&selected, &graph, |name, version| {
+            Ok(get_published(&graphql_url, name, version)?.exists)
+        })?;
+    }
+    let mut packages = read_packages(&build_pkg_roots(&selected)?)?;
+    attach_resolved_dependencies(&mut packages, &graph.dependencies)?;
     let ordered = order_packages(&packages)?;
     // One identity cannot name several packages, and a renamed dependency
     // would leave its dependents pinned to a name the registry lacks.
@@ -825,7 +887,6 @@ pub fn publish(options: Options) -> Result<crate::support::process::CommandStatu
             ordered.len()
         ));
     }
-    let graphql_url = graphql_endpoint(&options.registry)?;
     let publish_host = publish_registry(&options.registry)?;
     crate::support::ui::fact("packages", ordered.len());
     crate::support::ui::fact(

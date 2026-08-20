@@ -110,6 +110,9 @@ pub enum WasmerCommand {
         #[arg(long)]
         namespace: String,
         packages: Vec<String>,
+        /// Add transitive dependencies absent from the production registry
+        #[arg(long)]
+        with_dependencies: bool,
         #[arg(long)]
         dry_run: bool,
         /// Rev recorded in each published README; HEAD, -dirty suffixed, by default
@@ -267,6 +270,7 @@ pub fn run_wasmer(command: WasmerCommand) -> Result<CommandStatus> {
             skip_sha_validation,
             rev,
             preview: None,
+            with_dependencies: false,
             publish_as,
             namespace: None,
         }),
@@ -275,6 +279,7 @@ pub fn run_wasmer(command: WasmerCommand) -> Result<CommandStatus> {
             registry,
             namespace,
             packages,
+            with_dependencies,
             dry_run,
             rev,
         } => wasmer::publish(wasmer::Options {
@@ -284,6 +289,7 @@ pub fn run_wasmer(command: WasmerCommand) -> Result<CommandStatus> {
             skip_sha_validation: false,
             rev,
             preview: Some(tag),
+            with_dependencies,
             publish_as: None,
             namespace: Some(namespace),
         }),
@@ -383,6 +389,7 @@ pub fn run_meta_publish(effects: Effects) -> Result<CommandStatus> {
                     skip_sha_validation: false,
                     rev: None,
                     preview: None,
+                    with_dependencies: false,
                     publish_as: None,
                     namespace: None,
                 })
