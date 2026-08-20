@@ -160,6 +160,13 @@
   address = root: segments:
     root + lib.concatMapStrings addressSegment segments;
 
+  loadPackageOverlays = directories:
+    lib.mapAttrs (_: directory: {
+      __wasinixPackageDirectory = true;
+      inherit directory;
+    })
+    directories;
+
   stampPackage = {
     name,
     package,
@@ -240,7 +247,7 @@
         })
         // {versions = {};}));
 in rec {
-  inherit address addressSegment callWith discoverUnits extendAttrs extensionContextsAttr historyBaseAttr historyOverlaysAttr machineMetadata mergeScript packageMetadata registryAttr stampPackage unitOverlaysAttr unitResult;
+  inherit address addressSegment callWith discoverUnits extendAttrs extensionContextsAttr historyBaseAttr historyOverlaysAttr loadPackageOverlays machineMetadata mergeScript packageMetadata registryAttr stampPackage unitOverlaysAttr unitResult;
 
   inherit extendPackage;
 

@@ -125,6 +125,26 @@
         name = "${package.name}-${version}";
       });
   };
+  fakeWebcIdent = package: {
+    name = package.passthru.wasmer.name or package.pname or package.name;
+    baseVersion = toString (package.version or package.name);
+  };
+  fakeMakeWasmerPackage = {
+    package,
+    servedVersions,
+  }: let
+    webc = mkPackage {name = "webc-${package.name}";};
+  in
+    mkPackage {
+      name = "pkg-${package.name}";
+      inherit webc;
+      passthru = {inherit servedVersions;};
+    };
+  wasmerProjectionRules = import ../artifacts/wasmer.nix {
+    inherit lib;
+    makeWasmerPackage = fakeMakeWasmerPackage;
+    webcIdent = fakeWebcIdent;
+  };
   projectApi = import ./default.nix (projectApiArgs
     // {
       projectionRules = {
@@ -231,6 +251,81 @@
     extensions = [consumerExtension unitExtension pythonContextExtension];
     ci.sources = ["consumer"];
   };
+  wasmerProjectApi = import ./default.nix (projectApiArgs // {projectionRules = wasmerProjectionRules;});
+  wasmerExtension = {
+    id = "wasmer-fixture";
+    history.wasix = ./tests/wasix-history.json;
+    overlays.wasix = final: previous: {
+      core = projectLib.extendPackage previous.core {
+        passthru.wasinix = {
+          overrides = "wasinix";
+          shipped = true;
+        };
+      };
+      auto = mkPackage {
+        name = "auto-${final.profile}";
+        version = "1.0";
+        passthru = {
+          wasmer = {
+            name = "auto";
+            entrypoint = "launch";
+          };
+          wasinix.shipped = true;
+        };
+      };
+      explicit = mkPackage {
+        name = "explicit-${final.profile}";
+        version = "2.0";
+        passthru = {
+          wasmer.commands = [
+            {name = "first";}
+            {name = "second";}
+          ];
+          wasinix.shipped = true;
+        };
+      };
+      data = mkPackage {
+        name = "data-${final.profile}";
+        version = "3.0";
+        passthru = {
+          wasmer.commands = [];
+          wasinix.shipped = true;
+        };
+      };
+      unshipped = mkPackage {name = "unshipped-${final.profile}";};
+    };
+  };
+  wasmerProject = wasmerProjectApi.mkProject {
+    system = "test-system";
+    importNixpkgs = fakeImportNixpkgs;
+    extensions = [wasmerExtension];
+  };
+  wasmerValidationProject = id: commands:
+    wasmerProjectApi.mkProject {
+      system = "test-system";
+      importNixpkgs = fakeImportNixpkgs;
+      extensions = [
+        {
+          inherit id;
+          overlays.wasix = _final: _previous: {
+            probe = mkPackage {
+              name = "probe";
+              version = "1.0";
+              passthru = {
+                wasmer = {inherit commands;};
+                wasinix.shipped = true;
+              };
+            };
+          };
+        }
+      ];
+    };
+  unnamedWasmerCommandProject = wasmerValidationProject "unnamed-command" [{}];
+  invalidWasmerCommandsProject = wasmerValidationProject "invalid-commands" "not a list";
+  duplicateWasmerCommandProject = wasmerValidationProject "duplicate-command" [
+    {name = "same";}
+    {name = "same";}
+  ];
   unknownCiSource = projectApi.mkProject {
     system = "test-system";
     importNixpkgs = fakeImportNixpkgs;
@@ -387,7 +482,23 @@
   invalidResultProject = projectWithProjectionRules {
     invalid = _args: "not an attribute set";
   };
+  extensionDeclaration = import ../extension.nix {inherit (projectLib) loadPackageOverlays;};
 in {
+  builtInExtension = {
+    expr = {
+      inherit (extensionDeclaration) id;
+      lanes = lib.attrNames extensionDeclaration.overlays;
+      history = lib.attrNames extensionDeclaration.history;
+      sharedDirectory = toString extensionDeclaration.overlays.shared.directory;
+    };
+    expected = {
+      id = "wasinix";
+      lanes = ["python" "shared" "wasix"];
+      history = ["python" "wasix"];
+      sharedDirectory = toString ../shared;
+    };
+  };
+
   packageUnits = {
     expr = {
       names = lib.attrNames loaded;
@@ -421,6 +532,41 @@ in {
       extensionLineage = ["wasinix" "my-project"];
       missingDeclarationFails = true;
       orphanDeclarationFails = true;
+    };
+  };
+
+  wasmerProjection = {
+    expr = {
+      packageArtifact = wasmerProject.packages.wasix.default.auto.artifacts.pkg.name;
+      webcArtifact = wasmerProject.artifacts.webc.auto.name;
+      historyArtifact = wasmerProject.artifacts.webc.core.versions."0.9".name;
+      servedVersions = wasmerProject.artifacts.pkg.core.passthru.servedVersions;
+      commands = lib.attrNames wasmerProject.commands;
+      autoCommand = wasmerProject.packages.wasix.default.auto.commands.auto.entrypoint;
+      explicitCommand = wasmerProject.commands.second.entrypoint;
+      dataCommands = wasmerProject.packages.wasix.default.data.commands;
+      unshippedArtifacts = wasmerProject.packages.wasix.default.unshipped.artifacts;
+      alternateArtifacts = wasmerProject.packages.wasix.alternate.auto.artifacts;
+      artifactKind = wasmerProject.catalog.entries."artifacts.webc.auto".kind;
+      unnamedCommandFails = !(force unnamedWasmerCommandProject.artifacts).success;
+      invalidCommandsFails = !(force invalidWasmerCommandsProject.artifacts).success;
+      duplicateCommandFails = !(force duplicateWasmerCommandProject.artifacts).success;
+    };
+    expected = {
+      packageArtifact = "pkg-auto-default";
+      webcArtifact = "webc-auto-default";
+      historyArtifact = "webc-core-0.9";
+      servedVersions = ["core" "0.9"];
+      commands = ["auto" "core" "first" "second"];
+      autoCommand = "launch";
+      explicitCommand = "second";
+      dataCommands = {};
+      unshippedArtifacts = {};
+      alternateArtifacts = {};
+      artifactKind = "artifact";
+      unnamedCommandFails = true;
+      invalidCommandsFails = true;
+      duplicateCommandFails = true;
     };
   };
 

@@ -93,6 +93,7 @@
     address,
     name,
     package,
+    preferred ? false,
     projectionPath,
     scope,
     variant,
@@ -111,7 +112,7 @@
       else basePolicy;
   in {
     kind = "package";
-    inherit address name package projectionPath scope variant;
+    inherit address name package preferred projectionPath scope variant;
     inherit (metadata) source lineage instance;
     inherit policy;
   };
@@ -191,14 +192,7 @@
     "${label} package-unit attributes vary by variant: ${lib.concatStringsSep ", " mismatches}"
     true;
 in rec {
-  inherit (projectLib) extendPackage;
-
-  loadPackageOverlays = directories:
-    lib.mapAttrs (_: directory: {
-      __wasinixPackageDirectory = true;
-      inherit directory;
-    })
-    directories;
+  inherit (projectLib) extendPackage loadPackageOverlays;
 
   mkProject = {
     system,
@@ -354,6 +348,7 @@ in rec {
           then
             (projectEntry (packageEntry {
               inherit address name package scope variant;
+              preferred = scope == "wasix" && preferredProfileFor package == variant.profile;
               projectionPath = [name];
             })).value
           else package);
@@ -498,6 +493,7 @@ in rec {
         in
           lib.nameValuePair address (packageEntry {
             inherit address name package;
+            preferred = preferredProfileNameFor name == profile;
             projectionPath = [name];
             scope = "wasix";
             variant = {inherit profile;};
@@ -523,7 +519,7 @@ in rec {
         in
           lib.nameValuePair address (packageEntry {
             inherit address package;
-            inherit (entry) name;
+            inherit (entry) name preferred;
             projectionPath = entry.projectionPath ++ ["versions" version];
             inherit (entry) scope variant;
           }))
@@ -566,7 +562,7 @@ in rec {
             address = projectLib.address "artifacts" ([kind] ++ baseEntry.projectionPath);
             artifactKind = kind;
             inherit artifact;
-            inherit (baseEntry) name projectionPath source lineage scope variant instance;
+            inherit (baseEntry) name preferred projectionPath source lineage scope variant instance;
             subject = baseEntry.address;
             packageSubject = baseEntry.packageSubject or baseEntry.address;
             policy = inheritedPolicy baseEntry artifact;
