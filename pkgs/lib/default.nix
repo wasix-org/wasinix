@@ -267,59 +267,10 @@ in rec {
     )
     new;
 
-  # Apply tweaks (merged per extendDrv). The cross gate keeps the phase out of
-  # the shipped build; emulated-check.nix un-gates declared suites separately.
-  libTweaks = tweaks: pkg:
-    pkg.overrideAttrs (old: let
-      disablesCheckSnapshot =
-        (old.wasixCheckIsCSuite or false)
-        && tweaks ? doCheck
-        && !tweaks.doCheck;
-      effectiveTweaks =
-        tweaks
-        // lib.optionalAttrs disablesCheckSnapshot {
-          wasixCheckSnapshotPhase = _: ''
-            if [ -n "''${check:-}" ]; then
-              echo "checks are disabled on this derivation; skipping the test snapshot"
-              mkdir -p "$check"
-            fi
-          '';
-        };
-      merged = extendDrv old effectiveTweaks;
-      # Rewriting the source or the build changes what the wheel contains, so
-      # PyPI's copy of this version is not a substitute and the registry has to
-      # serve ours (pkgs/python-registry). Skipping a test does not.
-      supersedesPyPI = lib.any (a: effectiveTweaks ? ${a}) [
-        "src"
-        "version"
-        "pname"
-        "patches"
-        "prePatch"
-        "postPatch"
-        "preBuild"
-        "postBuild"
-      ];
-    in
-      merged
-      # buildPythonPackage derives passthru.requiredPythonModules when it is
-      # called, and overrideAttrs runs after that, so a python dependency added
-      # here is otherwise missing from the closure the wheel tests and the
-      # registry walk read. extendDrv answers only for the attrs tweaks names,
-      # so the inputs come from the same old // new the override itself applies.
-      // lib.optionalAttrs (pkg ? pythonModule) {
-        passthru =
-          (old.passthru or {})
-          // (merged.passthru or {})
-          // {
-            requiredPythonModules =
-              pkg.pythonModule.pkgs.requiredPythonModules
-              ((old // merged).propagatedBuildInputs or []);
-            wasix =
-              (old.passthru.wasix or {})
-              // (merged.passthru.wasix or {})
-              // lib.optionalAttrs supersedesPyPI {inherit supersedesPyPI;};
-          };
-      });
+  extendPackage = pkg: attrs:
+    pkg.overrideAttrs (old: extendDrv old attrs);
+
+  libTweaks = attrs: pkg: extendPackage pkg attrs;
 
   # The webc packaging derives one command per bin/*.wasm. posixAlias also keeps
   # the unsuffixed name as a symlink, for consumers that exec it by store path

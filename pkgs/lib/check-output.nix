@@ -104,6 +104,9 @@
       "check-output requires a native reference scanner and zstd"; ''
         if [ -z "''${check:-}" ]; then
           echo "no check output on this derivation; skipping the test snapshot"
+        elif [ -n "''${wasixCheckIsCSuite:-}" ] && [ -z "''${doCheck:-}" ]; then
+          echo "checks are disabled on this derivation; skipping the test snapshot"
+          mkdir -p "$check"
         else
           mkdir -p "$check"
           if (

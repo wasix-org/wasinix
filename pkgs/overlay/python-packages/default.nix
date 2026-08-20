@@ -84,8 +84,21 @@
   # lands in the wheel. A py3-none-any artifact then differs per interpreter,
   # and the registry refuses the two as one filename with conflicting contents.
   noBuildBytecode = drv: drv.overrideAttrs (_: {PYTHONDONTWRITEBYTECODE = "1";});
+  repairRequiredPythonModules = drv:
+    if drv ? pythonModule
+    then
+      drv.overrideAttrs (old: {
+        passthru =
+          (old.passthru or {})
+          // {
+            requiredPythonModules =
+              drv.pythonModule.pkgs.requiredPythonModules
+              (old.propagatedBuildInputs or []);
+          };
+      })
+    else drv;
 in
-  builtins.mapAttrs (_: drv: noBuildBytecode (historyFixups drv))
+  builtins.mapAttrs (_: drv: repairRequiredPythonModules (noBuildBytecode (historyFixups drv)))
   (
     (callArgs.helpers.loadPackageDir {
       dir = ./.;
