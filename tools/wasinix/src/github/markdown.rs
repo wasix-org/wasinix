@@ -278,6 +278,16 @@ fn footer(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Links
 
 fn details(report: &Report, fragments: &BTreeMap<String, Fragment>) -> Markdown {
     let mut body = Markdown::new();
+    // What was asked for, in the words it was asked in. A run that died
+    // before resolving a request has only this.
+    if let Some(command) = &report.command {
+        body = Markdown::concat([
+            body,
+            Markdown::constant("**Command**\n\n"),
+            Markdown::fenced(command, "text"),
+            Markdown::constant("\n"),
+        ]);
+    }
     if let Some(request) = &report.request {
         if let Ok(echo) = serde_json::to_string_pretty(request) {
             body = Markdown::concat([

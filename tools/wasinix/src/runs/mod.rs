@@ -18,6 +18,10 @@ use crate::support::schema::{self, Document};
 use crate::support::time::unix_secs;
 
 pub const RUN_FILE: &str = "run.json";
+/// The comment command a run was started for, recorded in the run directory
+/// so a run that dies before it plans anything can still say what it was
+/// asked to do.
+pub const ORIGIN_FILE: &str = "origin-command.json";
 pub const LOG_FILE: &str = "run.log";
 pub const CANCEL_MARKER: &str = "cancel";
 const CANCEL_GRACE: Duration = Duration::from_secs(30);

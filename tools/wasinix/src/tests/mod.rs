@@ -2492,6 +2492,60 @@ mod markdown {
         );
     }
 
+    /// Six of forty-two comment reports carried the request; the rest died
+    /// before `prepare` wrote one. The command itself was known all along,
+    /// one directory over, and the report could not see it.
+    #[test]
+    fn a_run_that_died_early_still_names_its_command() {
+        use crate::support::atoms::RunState;
+        let scratch = crate::support::fs::Scratch::create("wasinix-test").unwrap();
+        let run_dir = scratch.path().join("run");
+        crate::support::fs::create_dir_all(&run_dir).unwrap();
+        crate::support::schema::write(
+            &run_dir.join(crate::runs::RUN_FILE),
+            &crate::runs::Run {
+                run_id: "1-2-0".into(),
+                command: vec!["ci".into(), "command".into()],
+                state: RunState::Failed,
+                pid: 7,
+                started_at: 1_755_000_000,
+                finished_at: Some(1_755_000_100),
+                exit_code: Some(1),
+            },
+        )
+        .unwrap();
+        crate::support::fs::write(
+            &run_dir.join("run.log"),
+            b"materializing: head at 06b43c16\nerror: update s3-server: no such version\n",
+        )
+        .unwrap();
+        crate::support::schema::write(
+            &run_dir.join(crate::runs::ORIGIN_FILE),
+            &crate::ci::origin::Command {
+                command: "/wasinix build checks.gzip-roundtrip --with s3-server@0.1.10".into(),
+                kind: "build".into(),
+                origin: crate::ci::origin::Origin {
+                    repository: "wasix-org/wasinix".into(),
+                    pull_request: 154,
+                    comment_id: 1,
+                    actor: "kilyanni".into(),
+                    head_sha: "a".repeat(40),
+                },
+            },
+        )
+        .unwrap();
+        let rendered = crate::github::publish::load(&run_dir).unwrap();
+        assert_eq!(
+            rendered.report.command.as_deref(),
+            Some("/wasinix build checks.gzip-roundtrip --with s3-server@0.1.10")
+        );
+        let body = comment(&rendered.report, &rendered.fragments, None, &links()).into_string();
+        assert!(body.contains("**Command**"), "{body}");
+        assert!(body.contains("--with s3-server@0.1.10"), "{body}");
+        // And the error still leads, rather than the narration below it.
+        assert!(body.contains("error: update s3-server: no such version"), "{body}");
+    }
+
     #[test]
     fn a_lost_run_renders_a_terminal_comment() {
         let run = crate::runs::Run {

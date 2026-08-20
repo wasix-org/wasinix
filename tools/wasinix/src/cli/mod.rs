@@ -1328,6 +1328,10 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             push_cache,
         } => {
             let command: crate::ci::origin::Command = schema::read(&origin)?;
+            // Before anything that can fail: a run that dies during
+            // materialization has no plan and no request, and its report
+            // could not say which command it was.
+            schema::write(&run_dir.join(crate::runs::ORIGIN_FILE), &command)?;
             let api = crate::ci::origin::Rest {
                 token: crate::github::client::token(),
             };

@@ -50,7 +50,7 @@ pub struct Rendered {
 pub fn load(run_dir: &Path) -> Result<Rendered> {
     let report_path = crate::ci::prepare::report_path(run_dir);
     let mut synthesized: Option<crate::ci::report::Fragment> = None;
-    let report = if report_path.exists() {
+    let mut report = if report_path.exists() {
         crate::support::schema::read(&report_path)?
     } else {
         // A run that died without folding a report (cancel, timeout, lost
@@ -71,6 +71,7 @@ pub fn load(run_dir: &Path) -> Result<Rendered> {
         }
         crate::ci::report::from_run_state(&run, tail.as_deref())
     };
+    report.command = origin_command(run_dir);
     let mut fragments =
         crate::ci::report::fragments_under(&crate::ci::prepare::fragments_dir(run_dir))?;
     if let Some(fragment) = synthesized {
@@ -82,6 +83,15 @@ pub fn load(run_dir: &Path) -> Result<Rendered> {
         fragments,
         snapshot,
     })
+}
+
+/// The command a comment asked for, recorded by `ci command` before it
+/// plans anything. A run that died in materialization has no request to
+/// echo, and the command is what a reader needs to see.
+fn origin_command(run_dir: &Path) -> Option<String> {
+    let document: crate::ci::origin::Command =
+        crate::support::schema::read(&run_dir.join(crate::runs::ORIGIN_FILE)).ok()?;
+    Some(document.command)
 }
 
 /// [`load`] for a run still executing: the same fold over the fragments
@@ -97,7 +107,10 @@ pub(crate) fn load_running(
         // for minutes before the first phase opens.
         let tail = crate::runs::log_tail(run_dir, 4_000);
         return Ok(Some(Rendered {
-            report: crate::ci::report::starting(tail.as_deref()),
+            report: crate::ci::report::Report {
+                command: origin_command(run_dir),
+                ..crate::ci::report::starting(tail.as_deref())
+            },
             fragments: BTreeMap::new(),
             snapshot: None,
         }));
@@ -119,7 +132,10 @@ pub(crate) fn load_running(
         },
     );
     Ok(Some(Rendered {
-        report,
+        report: crate::ci::report::Report {
+            command: origin_command(run_dir),
+            ..report
+        },
         fragments,
         snapshot: Some(snapshot),
     }))

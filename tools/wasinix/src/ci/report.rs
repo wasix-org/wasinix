@@ -221,6 +221,10 @@ pub struct Report {
     /// selected without reconstructing it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub request: Option<ResolvedRequest>,
+    /// The comment command as it was written, for a run whose request was
+    /// never resolved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
 }
 
 impl Document for Report {
@@ -493,6 +497,7 @@ pub fn fold(
         version_updates,
         comparisons: context.comparisons,
         request: context.request,
+        command: None,
     }
 }
 
@@ -575,6 +580,7 @@ pub fn starting(log_tail: Option<&str>) -> Report {
         version_updates: BTreeMap::new(),
         comparisons: Vec::new(),
         request: None,
+        command: None,
     }
 }
 
@@ -619,5 +625,6 @@ pub fn from_run_state(run: &crate::runs::Run, log_tail: Option<&str>) -> Report 
         version_updates: std::collections::BTreeMap::new(),
         comparisons: Vec::new(),
         request: None,
+        command: None,
     }
 }
