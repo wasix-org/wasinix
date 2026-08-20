@@ -119,7 +119,9 @@ in rec {
           packages =
             project.packages
             // {
-              sameProfile = lib.mapAttrs (_: packageView) (projectLib.registeredPackages final);
+              sameProfile =
+                final
+                // lib.mapAttrs (_: packageView) (projectLib.registeredPackages final);
             };
         }
         // lib.optionalAttrs (enclosingPkgs != null) {pkgs = enclosingPkgs;};
