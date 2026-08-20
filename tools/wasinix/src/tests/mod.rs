@@ -2456,6 +2456,53 @@ mod markdown {
         assert!(body.contains("materializing: case at 0d1eb9677bc7"), "{body}");
     }
 
+    /// A bisect that died mid-range had tested three candidates and the
+    /// reply showed a truncated nix-update command instead: the generic
+    /// failure path does not know the report on disk exists.
+    #[test]
+    fn a_died_bisect_still_reports_what_it_tested() {
+        use crate::nix::bisect::{Outcome, Report, TestResult};
+        let report = Report {
+            schema: 1,
+            target: "wasixcc".into(),
+            repository: "https://github.com/wasix-org/wasixcc".into(),
+            good: "d".repeat(40),
+            bad: "8".repeat(40),
+            first_parent: false,
+            reverse: true,
+            command: vec!["build".into(), "nativePackages.wasixcc-unwrapped".into()],
+            first_bad: None,
+            revisions_left: None,
+            tests: vec![
+                TestResult {
+                    rev: "de6585f76fa0".repeat(3) + "abcd",
+                    outcome: Outcome::Good,
+                    seconds: 163.0,
+                    run_dir: "/x".into(),
+                },
+                TestResult {
+                    rev: "8a505d4605b1".repeat(3) + "abcd",
+                    outcome: Outcome::Bad,
+                    seconds: 129.0,
+                    run_dir: "/x".into(),
+                },
+            ],
+        };
+        let body = crate::github::markdown::bisect_reply(
+            &report,
+            Some("update wasixcc: no such revision"),
+            None,
+            None,
+        )
+        .into_string();
+        assert!(body.contains("stopped on an error"), "{body}");
+        assert!(body.contains("update wasixcc: no such revision"), "{body}");
+        // The candidates it did test survive the error.
+        assert!(body.contains("`de6585f76fa0`"), "{body}");
+        assert!(body.contains("| good | 2m 43s |"), "{body}");
+        assert!(body.contains("`8a505d4605b1`"), "{body}");
+    }
+
     #[test]
     fn a_bisect_reply_exists_before_its_first_answer() {
         use crate::github::markdown::bisect_progress;

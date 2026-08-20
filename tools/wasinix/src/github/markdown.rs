@@ -906,6 +906,28 @@ pub fn failure_reply(detail: &str, run_url: Option<&str>, origin: Option<&str>) 
     body
 }
 
+/// Every candidate a bisect tested, in the order it tested them.
+fn candidates(report: &crate::nix::bisect::Report) -> Markdown {
+    let mut table = Markdown::constant("| candidate | outcome | time |\n|:--|:--|--:|\n");
+    for test in &report.tests {
+        table = Markdown::concat([
+            table,
+            Markdown::constant("| "),
+            Markdown::code(&test.rev.chars().take(12).collect::<String>()),
+            Markdown::constant(" | "),
+            Markdown::text(match test.outcome {
+                crate::nix::bisect::Outcome::Good => "good",
+                crate::nix::bisect::Outcome::Bad => "bad",
+                crate::nix::bisect::Outcome::Skip => "skipped",
+            }),
+            Markdown::constant(" | "),
+            Markdown::text(&format::duration(test.seconds)),
+            Markdown::constant(" |\n"),
+        ]);
+    }
+    table
+}
+
 /// The bisect's reply while it runs. A candidate is a whole build, so the
 /// tick is the only sign the command was picked up at all.
 pub fn bisect_progress(target: &str, tested: usize) -> Markdown {
@@ -927,6 +949,7 @@ pub fn bisect_progress(target: &str, tested: usize) -> Markdown {
 /// answers: the range it narrowed to is the useful half of the result.
 pub fn bisect_reply(
     report: &crate::nix::bisect::Report,
+    failure: Option<&str>,
     run_url: Option<&str>,
     origin: Option<&str>,
 ) -> Markdown {
@@ -939,6 +962,26 @@ pub fn bisect_reply(
         None => Markdown::new(),
     };
     let what = if report.reverse { "passing" } else { "bad" };
+    // A bisect that died still narrowed the range; the candidates it did
+    // test are the useful half and they are already on disk.
+    if let Some(failure) = failure {
+        let mut body = Markdown::concat([
+            answering,
+            Markdown::constant("### ❌ Bisect stopped on an error\n\n"),
+            Markdown::fenced(failure, "text"),
+            Markdown::constant("\n"),
+        ]);
+        body = body.push(candidates(report));
+        if let Some(url) = run_url {
+            body = Markdown::concat([
+                body,
+                Markdown::constant("\n"),
+                Markdown::link("Actions run", url),
+                Markdown::constant("\n"),
+            ]);
+        }
+        return body;
+    }
     let headline = match &report.first_bad {
         Some(rev) => Markdown::concat([
             Markdown::constant("### ✅ First "),
@@ -961,27 +1004,7 @@ pub fn bisect_reply(
             },
         ]),
     };
-    let mut body = Markdown::concat([
-        answering,
-        headline,
-        Markdown::constant("| candidate | outcome | time |\n|:--|:--|--:|\n"),
-    ]);
-    for test in &report.tests {
-        body = Markdown::concat([
-            body,
-            Markdown::constant("| "),
-            Markdown::code(&test.rev.chars().take(12).collect::<String>()),
-            Markdown::constant(" | "),
-            Markdown::text(match test.outcome {
-                crate::nix::bisect::Outcome::Good => "good",
-                crate::nix::bisect::Outcome::Bad => "bad",
-                crate::nix::bisect::Outcome::Skip => "skipped",
-            }),
-            Markdown::constant(" | "),
-            Markdown::text(&format::duration(test.seconds)),
-            Markdown::constant(" |\n"),
-        ]);
-    }
+    let mut body = Markdown::concat([answering, headline, candidates(report)]);
     if let Some(url) = run_url {
         body = Markdown::concat([
             body,

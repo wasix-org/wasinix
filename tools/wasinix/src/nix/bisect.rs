@@ -196,6 +196,13 @@ fn resolve(repo: &Path, reference: &str) -> Result<String> {
         .to_string())
 }
 
+/// The report a run left behind, however it ended. A bisect that dies
+/// mid-range has still answered part of the question, and the file is
+/// written after every candidate.
+pub fn read_report(run_dir: &Path) -> Option<Report> {
+    crate::support::json::read(&run_dir.join(REPORT_FILE)).ok()
+}
+
 pub(crate) fn completed(output: &str) -> Option<String> {
     output.lines().find_map(|line| {
         let (rev, rest) = line.split_once(" is the first")?;

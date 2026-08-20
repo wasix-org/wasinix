@@ -1019,7 +1019,8 @@ fn ci_bisect(
         )
     };
     progress(0)?;
-    let report = bisect::drive(
+    let bisect_dir = run_dir.join("bisect");
+    let report = match bisect::drive(
         repo,
         bisect::Bisect {
             target: request.target,
@@ -1029,11 +1030,33 @@ fn ci_bisect(
             reverse: request.reverse,
             words: request.words,
             predicate: request.predicate,
-            run_dir: run_dir.join("bisect"),
+            run_dir: bisect_dir.clone(),
             budget: Some(COMMENT_BISECT_BUDGET),
             progress: Some(&mut progress),
         },
-    )?;
+    ) {
+        Ok(report) => report,
+        // What it narrowed before it died is the useful half, and it is on
+        // disk: losing it to the generic failure path costs a build apiece.
+        Err(error) => {
+            if let Some(partial) = crate::nix::bisect::read_report(&bisect_dir) {
+                let _ = bisect_reply(
+                    command,
+                    crate::github::markdown::bisect_reply(
+                        &partial,
+                        Some(&crate::support::error::brief(&error, 1500)),
+                        crate::support::env::github_run_url()?.as_deref(),
+                        Some(&crate::github::surfaces::origin_comment_url(
+                            &command.origin.repository,
+                            command.origin.pull_request,
+                            command.origin.comment_id,
+                        )),
+                    ),
+                );
+            }
+            return Err(error);
+        }
+    };
     let client = crate::github::client::Client::new(crate::github::client::token().as_deref());
     let mut registry = crate::github::surfaces::Registry::new(
         &client,
@@ -1054,6 +1077,7 @@ fn ci_bisect(
         &[],
         crate::github::markdown::bisect_reply(
             &report,
+            None,
             crate::support::env::github_run_url()?.as_deref(),
             Some(&origin),
         ),
