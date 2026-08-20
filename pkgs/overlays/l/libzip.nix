@@ -9,6 +9,7 @@ exposeWasixPackage (
   (extendPackage (package.override {
     withLZMA = true;
     withBzip2 = false;
+    withOpenssl = true;
   }) {})
 .overrideAttrs (o: {
     # libzip's cmake feature checks link conftests that the default wasm-opt pass
