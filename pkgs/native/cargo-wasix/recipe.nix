@@ -1,5 +1,5 @@
 # cargo-wasix, the cargo subcommand driving WASIX builds. The binary is a
-# binary is shared/cargo-wasix-unwrapped; this wrapper pins the toolchain
+# binary is native/cargo-wasix-unwrapped; this wrapper pins the toolchain
 # env (wasixcc + LLVM + binaryen + sysroot) and links the from-source rust
 # toolchain into rustup before exec'ing.
 {
@@ -65,7 +65,7 @@ in
     '';
 
     passthru = {
-      # The recipe is shared/cargo-wasix, which carries the version and
+      # The recipe is native/cargo-wasix, which carries the version and
       # the src; the wrapper adds the toolchain env and declares the bump.
       unwrapped = cargoWasixUnwrapped;
       # nix-update needs version + src on the drv it evals: the wrapper has

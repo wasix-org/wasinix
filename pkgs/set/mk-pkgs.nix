@@ -7,7 +7,7 @@
   system,
   nixpkgs,
   mkWasixStdenv,
-  sharedOverlay,
+  infrastructureOverlays,
   wasixOverlay,
 }:
 # extraOverlays is the spot-override seam (see spot.nix): empty in every normal
@@ -32,5 +32,5 @@ import nixpkgs {
   config.replaceCrossStdenv = mkWasixStdenv;
   # Shared recipes come first. wasixOverlay layers target/product adaptations
   # over them and remains the only writer of WASIX support meta.
-  overlays = [sharedOverlay wasixOverlay] ++ extraOverlays;
+  overlays = infrastructureOverlays ++ [wasixOverlay] ++ extraOverlays;
 }

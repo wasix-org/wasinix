@@ -8,7 +8,7 @@
 # Invoked as `update.sh <nix-update ...>` by the driver.
 set -euo pipefail
 
-libc="$(git rev-parse --show-toplevel)/pkgs/shared/wasix-sysroot/libc.nix"
+libc="$(git rev-parse --show-toplevel)/pkgs/native/wasix-sysroot/libc.nix"
 # The wasix-libc pin: tag or rev, plus the hash belonging to the same fetcher.
 source_block='/repo = "wasix-libc"/,/hash = "sha256-/'
 

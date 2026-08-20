@@ -11,6 +11,7 @@
   spotOverlays ? {},
 }: let
   sharedPackages = import ./shared;
+  nativePackageRecipes = import ./native;
   pkgs = import nixpkgs {
     inherit system;
     overlays = [
@@ -32,6 +33,7 @@
           patches = (old.patches or []) ++ [./binaryen-irbuilder-wrapper-block-spans.patch];
         });
       })
+      (nativePackageRecipes.overlay {})
       (sharedPackages.overlay {})
     ];
   };
@@ -120,9 +122,12 @@
     wasixRunStub = wasixRun.stub;
     inherit (pkgs) nix-update-script;
   };
-  sharedOverlay = sharedPackages.overlay {nativeNixUpdateScript = pkgs.nix-update-script;};
+  infrastructureOverlays = [
+    (nativePackageRecipes.overlay {nativeNixUpdateScript = pkgs.nix-update-script;})
+    (sharedPackages.overlay {nativeNixUpdateScript = pkgs.nix-update-script;})
+  ];
   mkWasixPkgs = import ./set/mk-pkgs.nix {
-    inherit system nixpkgs mkWasixStdenv sharedOverlay wasixOverlay;
+    inherit system nixpkgs mkWasixStdenv infrastructureOverlays wasixOverlay;
   };
   nixpkgsByProfile = lib.mapAttrs (name: spec: mkWasixPkgs (spotOverlays.${name} or []) spec) profilesCfg.profiles;
 
@@ -152,7 +157,7 @@
 
   # Shared product recipes built independently for the native host, never taken
   # from a cross set's buildPackages splice.
-  nativePackages = lib.genAttrs sharedPackages.names (name: pkgs.${name});
+  nativePackages = lib.genAttrs (nativePackageRecipes.names ++ sharedPackages.names) (name: pkgs.${name});
 
   # Profiles whose executables wasmer can execute, for the compile+link+run tests:
   # everything except legacy EH, whose `try` opcode wasmer has no feature flag for.

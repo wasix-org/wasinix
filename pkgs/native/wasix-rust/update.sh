@@ -10,7 +10,7 @@
 # nix-update-script produced, so the package declares its bump once.
 set -euo pipefail
 
-toolchain="$(git rev-parse --show-toplevel)/pkgs/shared/wasix-rust/package.nix"
+toolchain="$(git rev-parse --show-toplevel)/pkgs/native/wasix-rust/recipe.nix"
 
 wasinix update nix-update -- "$@"
 

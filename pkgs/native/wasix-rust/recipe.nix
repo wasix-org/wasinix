@@ -52,7 +52,7 @@
     name = "wasix-rust-update";
     runtimeInputs = with buildPackages; [curl git gnugrep gnused jq];
     text = ''
-      exec bash "$(git rev-parse --show-toplevel)/pkgs/shared/wasix-rust/update.sh" "$@"
+      exec bash "$(git rev-parse --show-toplevel)/pkgs/native/wasix-rust/update.sh" "$@"
     '';
   };
   inherit (wasix-sysroot.passthru.variants) eh ehpic;

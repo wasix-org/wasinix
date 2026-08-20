@@ -612,7 +612,7 @@ in {
     };
     expected = {
       id = "wasinix";
-      lanes = ["python" "shared" "wasix"];
+      lanes = ["native" "python" "shared" "wasix"];
       history = ["python" "wasix"];
       sharedDirectory = toString ../shared;
     };

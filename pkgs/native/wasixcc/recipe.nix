@@ -1,5 +1,5 @@
 # wasixcc, the WASIX cc driver. The wasixccenv binary is a product
-# (shared/wasixcc); this wraps it, holding one makeWrapper wrapper
+# (`native/wasixcc`); this wraps it, holding one makeWrapper wrapper
 # per tool name with the toolchain locations from env.nix baked in.
 {
   lib,
@@ -40,7 +40,7 @@ in
     '';
 
     passthru = {
-      # The recipe is shared/wasixcc, which carries the version and the
+      # The recipe is native/wasixcc, which carries the version and the
       # src; the wrapper adds the toolchain locations and declares the bump.
       unwrapped = wasixccUnwrapped;
       updateScript = {

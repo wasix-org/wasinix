@@ -24,10 +24,15 @@ details live in:
 
 ## Package lanes
 
-`pkgs/shared/<name>/package.nix` is the shared recipe for a package built both
-natively and with a WASIX host. Its overlay is applied to the native set and,
-before the WASIX overlay, to every profile set. The same recipe receives the
-appropriate `stdenv`, `rustPlatform`, and dependency splice from its scope.
+`pkgs/shared/<name>/recipe.nix` is the shared recipe for a package built both
+natively and with a WASIX host; its sibling `package.nix` is the structured
+package unit. The recipe overlay is applied to the native set and, before the
+WASIX overlay, to every profile set. The same recipe receives the appropriate
+`stdenv`, `rustPlatform`, and dependency splice from its scope.
+
+Buildable compiler and sysroot recipes use the same pair under `pkgs/native/`.
+Their recipe overlay remains available to cross-set build stages, while only the
+native instance is a package-unit catalog entry.
 
 WASIX-specific policy lives in `pkgs/wasix/`: patches, flags, runtime
 dependencies, wasm command names, webc configuration, and tests. An entry

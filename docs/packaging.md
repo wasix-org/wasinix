@@ -5,11 +5,12 @@ keeping older versions rebuildable, is `docs/registry.md`.
 
 ## A package provided natively and for WASIX
 
-Put its standard nixpkgs-style recipe in `pkgs/shared/<name>/package.nix`. The
-directory is enumerated automatically and the recipe is called in both the
-native package set and every WASIX profile set. Use ordinary function arguments
-such as `stdenv`, `rustPlatform`, and named dependencies; do not take a native
-build from a cross set's `buildPackages`.
+Put its standard nixpkgs-style recipe in `pkgs/shared/<name>/recipe.nix` and its
+package-unit wrapper in the sibling `package.nix`. The directory is enumerated
+automatically and the recipe is called in both the native package set and every
+WASIX profile set. Use ordinary function arguments such as `stdenv`,
+`rustPlatform`, and named dependencies; do not take a native build from a cross
+set's `buildPackages`.
 
 Keep the matching overlay entry. Put only WASIX-specific adaptation in
 `pkgs/wasix/<name>/package.nix`, deriving from the preceding shared recipe:
