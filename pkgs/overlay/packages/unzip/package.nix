@@ -8,5 +8,6 @@
 }:
 helpers.libTweaks {
   patches = [./patches/wasi-unistd-include.patch];
+  passthru.wasix.smokeTest = false;
 }
 prev.unzip

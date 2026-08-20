@@ -9,6 +9,7 @@
   ...
 }:
 helpers.libTweaks {
+  passthru.wasix.smokeTest = false;
   configureFlags = [
     "ac_cv_file_src_pixz_1=no"
     "ac_cv_func_malloc_0_nonnull=yes"

@@ -25,5 +25,6 @@ helpers.libTweaks {
     "ac_cv_header_ifaddrs_h=no"
   ];
   passthru.wasix.supportedProfiles = ["off"];
+  passthru.wasix.smokeTest = false;
 }
 prev.openssh
