@@ -10,6 +10,12 @@
 }:
 helpers.libTweaks {
   configureFlags = ["LIBS=-lpgcommon -lpgport -lssl -lcrypto -lm"];
+  # The guest cannot connect to the native test server's Unix socket.
+  preCheck = ''
+    mkdir -p "$NIX_BUILD_TOP/run/postgresql"
+    export PGHOST=127.0.0.1
+    export postgresqlEnableTCP=1
+  '';
   # the library throws
   passthru.wasix.supportedProfiles = helpers.profiles.withEh;
 }
