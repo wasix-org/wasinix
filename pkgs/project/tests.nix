@@ -131,6 +131,11 @@
         alternate = {};
       };
       defaultProfileName = "default";
+      profileOf = platform: platform.wasinixProfile;
+      sysrootEncodings = {
+        default = {};
+        alternate = {};
+      };
     };
     builtInExtension = {
       id = "wasinix";
@@ -633,6 +638,7 @@ in {
       fileUnitDirectory = (lib.findFirst (unit: unit.name == "existing") null discoveredUnits).directory;
       directoryUnitDirectory = toString (lib.findFirst (unit: unit.name == "family") null discoveredUnits).directory;
       bareUnitFails = !(force bareUnit).success;
+      wasmRename = lib.hasInfix "tool.wasm" ((projectLib.wasmRename {wasmName = "tool";} (mkPackage {name = "tool";})).postInstall);
     };
     expected = {
       names = ["existing" "family-a" "family-b" "new"];
@@ -642,6 +648,7 @@ in {
       fileUnitDirectory = null;
       directoryUnitDirectory = toString ./tests/units/family;
       bareUnitFails = true;
+      wasmRename = true;
     };
   };
 

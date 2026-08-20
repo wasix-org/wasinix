@@ -93,6 +93,29 @@
   extendPackage = package: attrs:
     package.overrideAttrs (old: extendAttrs old attrs);
 
+  wasmRename = {
+    wasmName,
+    posixAlias ? false,
+  }: package:
+    package.overrideAttrs (old: {
+      postInstall = mergeScript [
+        (old.postInstall or "")
+        ''
+          for _bindir in "$out" ''${bin:+"$bin"}; do
+            if [ -f "$_bindir/bin/${wasmName}" ]; then
+              mv "$_bindir/bin/${wasmName}" "$_bindir/bin/${wasmName}.wasm"
+              for _link in "$_bindir/bin/"*; do
+                if [ -L "$_link" ] && [ "$(basename "$(readlink "$_link")")" = "${wasmName}" ]; then
+                  ln -sf "${wasmName}.wasm" "$_link"
+                fi
+              done
+              ${lib.optionalString posixAlias ''ln -s "${wasmName}.wasm" "$_bindir/bin/${wasmName}"''}
+            fi
+          done
+        ''
+      ];
+    });
+
   callWithLabel = label: available: function: let
     formals = builtins.functionArgs function;
     missing = lib.filter (name: !formals.${name} && !(builtins.hasAttr name available)) (lib.attrNames formals);
@@ -332,7 +355,7 @@
         })
         // {versions = {};}));
 in rec {
-  inherit address addressSegment callWith callWithLabel discoverUnits dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix extendAttrs extensionContextsAttr historyBaseAttr historyOverlaysAttr linkInputs loadPackageOverlays loadTestDirectory machineMetadata mergeScript packageMetadata registryAttr replaceInputsByName stampPackage unitOverlaysAttr unitResult;
+  inherit address addressSegment callWith callWithLabel discoverUnits dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix extendAttrs extensionContextsAttr historyBaseAttr historyOverlaysAttr linkInputs loadPackageOverlays loadTestDirectory machineMetadata mergeScript packageMetadata registryAttr replaceInputsByName stampPackage unitOverlaysAttr unitResult wasmRename;
 
   inherit extendPackage;
 

@@ -412,13 +412,15 @@ in rec {
         artifacts = artifactsView;
         harnesses = harnessesView;
         runners = runnersView;
+        inherit (profiles) profileOf;
+        profileTraitsOf = platform: profiles.sysrootEncodings.${profiles.profileOf platform};
         pkgs =
           if enclosingPkgs != null
           then enclosingPkgs
           else if scope == "wasix"
           then nativeRaw
           else final;
-        inherit (projectLib) dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix extendPackage linkInputs mergeScript replaceInputsByName;
+        inherit (projectLib) dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix extendPackage linkInputs mergeScript replaceInputsByName wasmRename;
       };
 
       nativeRaw = importNixpkgs {
