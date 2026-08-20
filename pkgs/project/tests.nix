@@ -72,6 +72,14 @@
   };
   force = value: builtins.tryEval (builtins.deepSeq value value);
 
+  mkPythonSet = overlays:
+    lib.fix (final:
+      builtins.foldl' (previous: overlay: previous // overlay final previous) {
+        inheritedPython = mkPackage {name = "inherited-python";};
+        overrideScope = overlay: mkPythonSet (overlays ++ [overlay]);
+      }
+      overlays);
+
   projectApiArgs = {
     inherit lib;
     profiles = {
@@ -89,8 +97,17 @@
           passthru.wasix.preferredProfile = "alternate";
         };
       };
+      overlays.python = _final: _previous: _pyfinal: _pyprevious: {
+        corePython = mkPackage {name = "core-python";};
+      };
     };
     crossSystemFor = profile: _spec: {wasinixProfile = profile;};
+    pythonSetsFor = {wasixRaw, ...}: {
+      py = {
+        pkgs = wasixRaw.default;
+        packageSet = mkPythonSet [];
+      };
+    };
   };
   projectApi = import ./default.nix (projectApiArgs
     // {
@@ -108,20 +125,26 @@
     lib.fix (final: builtins.foldl' (previous: overlay: previous // overlay final previous) base args.overlays);
   consumerExtension = {
     id = "consumer";
-    overlays.wasix = final: previous: {
-      core = projectLib.extendPackage previous.core {
-        passthru.wasinix.overrides = "wasinix";
+    overlays = {
+      wasix = final: previous: {
+        core = projectLib.extendPackage previous.core {
+          passthru.wasinix.overrides = "wasinix";
+        };
+        consumer = mkPackage {
+          name = "consumer-${final.profile}";
+          passthru.wasinix.checks.probe = true;
+        };
+        "dot.name" = mkPackage {name = "dot-name";};
+        helper = "not-a-package";
+        plumbing = mkPackage {
+          name = "plumbing";
+          passthru.wasinix.catalog = false;
+        };
       };
-      consumer = mkPackage {
-        name = "consumer-${final.profile}";
-        passthru.wasinix.checks.probe = true;
-      };
-      "dot.name" = mkPackage {name = "dot-name";};
-      helper = "not-a-package";
-      plumbing = mkPackage {
-        name = "plumbing";
-        passthru.wasinix.catalog = false;
-      };
+      python =
+        (projectApi.loadPackageOverlays {
+          python = ./tests/python-units;
+        }).python;
     };
   };
   unitExtension = {
@@ -130,10 +153,23 @@
       wasix = ./tests/project-units;
     };
   };
+  pythonContextExtension = {
+    id = "python-context";
+    overlays = {
+      wasix = _final: _previous: {
+        topOwned = mkPackage {name = "top-owned";};
+      };
+      python = final: previous: _pyfinal: _pyprevious: {
+        contextProof = mkPackage {
+          name = "${final.topOwned.name}-${toString (previous ? topOwned)}";
+        };
+      };
+    };
+  };
   project = projectApi.mkProject {
     system = "test-system";
     importNixpkgs = fakeImportNixpkgs;
-    extensions = [consumerExtension unitExtension];
+    extensions = [consumerExtension unitExtension pythonContextExtension];
     ci.sources = ["consumer"];
   };
   unknownCiSource = projectApi.mkProject {
@@ -146,6 +182,19 @@
     system = "test-system";
     importNixpkgs = fakeImportNixpkgs;
     extensions = [consumerExtension consumerExtension];
+  };
+  variantShapeProject = projectApi.mkProject {
+    system = "test-system";
+    importNixpkgs = fakeImportNixpkgs;
+    extensions = [
+      {
+        id = "variant-shape";
+        overlays.wasix = final: _previous:
+          lib.optionalAttrs (final.profile == "default") {
+            conditional = mkPackage {name = "conditional";};
+          };
+      }
+    ];
   };
   duplicateCheckProject = (import ./default.nix (projectApiArgs
     // {
@@ -209,6 +258,9 @@ in {
       preferredProfile = project.packages.preferred.core.name;
       consumerName = project.packages.wasix.alternate.consumer.name;
       inheritedDependencyName = project.packages.wasix.default.uses-inherited.name;
+      pythonNames = lib.attrNames project.packages.python.py;
+      pythonSource = project.packages.python.py.uses-python.passthru.wasinix.source;
+      pythonContextName = project.packages.python.py.contextProof.name;
       ciSources = project.ci.sources;
       ciJobNames = lib.attrNames project.ci.jobs;
       catalogJobNames = lib.attrNames project.ci.catalog.jobs;
@@ -218,6 +270,7 @@ in {
       duplicateExtensionFails = !(force duplicateExtension).success;
       duplicateCheckFails = !(force duplicateCheckProject.tests).success;
       invalidCheckFails = !(force invalidCheckProject.tests).success;
+      variantShapeFails = !(force variantShapeProject).success;
     };
     expected = {
       schemaVersion = 1;
@@ -228,8 +281,12 @@ in {
       preferredProfile = "core";
       consumerName = "consumer-alternate";
       inheritedDependencyName = "uses-inherited";
+      pythonNames = ["contextProof" "corePython" "uses-python"];
+      pythonSource = "consumer";
+      pythonContextName = "top-owned-false";
       ciSources = ["consumer"];
       ciJobNames = [
+        ''packages.python.py["uses-python"]''
         "packages.wasix.alternate.consumer"
         "packages.wasix.alternate.core"
         ''packages.wasix.alternate["dot.name"]''
@@ -240,6 +297,7 @@ in {
         "tests.packages.wasix.default.consumer.probe"
       ];
       catalogJobNames = [
+        ''packages.python.py["uses-python"]''
         "packages.wasix.alternate.consumer"
         "packages.wasix.alternate.core"
         ''packages.wasix.alternate["dot.name"]''
@@ -258,6 +316,7 @@ in {
       duplicateExtensionFails = true;
       duplicateCheckFails = true;
       invalidCheckFails = true;
+      variantShapeFails = true;
     };
   };
 }

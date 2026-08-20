@@ -9,6 +9,8 @@
   artifactsFor ? _project: {},
   harnessesFor ? _project: {},
   checkRules ? {},
+  pythonSetsFor ? _args: {},
+  extendPythonSet ? packageSet: overlay: packageSet.overrideScope overlay,
 }: let
   projectLib = import ./lib.nix {inherit lib;};
   schema = builtins.fromJSON (builtins.readFile ../../schema/project.json);
@@ -50,6 +52,35 @@
           dir = declared.directory;
         }
       else throw "Wasinix extension '${extension.id}' overlay lane '${lane}' is not an overlay";
+  in
+    projectLib.registerOverlay {
+      inherit overlay;
+      source = extension.id;
+    };
+
+  captureExtensionContext = extension: final: prev: {
+    ${projectLib.extensionContextsAttr} =
+      (prev.${projectLib.extensionContextsAttr} or {})
+      // {${extension.id} = {inherit final prev;};};
+  };
+
+  pythonLaneOverlay = {
+    contextFor,
+    enclosingPkgs,
+    extension,
+  }: let
+    declared = (extension.overlays or {}).python;
+    enclosingContext = enclosingPkgs.${projectLib.extensionContextsAttr}.${extension.id};
+    overlay =
+      if builtins.isFunction declared
+      then declared enclosingContext.final enclosingContext.prev
+      else if lib.isAttrs declared && declared.__wasinixPackageDirectory or false
+      then
+        projectLib.loadPackageOverlay {
+          inherit contextFor;
+          dir = declared.directory;
+        }
+      else throw "Wasinix extension '${extension.id}' Python lane is not an overlay";
   in
     projectLib.registerOverlay {
       inherit overlay;
@@ -99,6 +130,25 @@
           (state // result)));
   in
     lib.foldlAttrs merge {} checkRules;
+
+  validateVariantShapes = label: extensionIds: packageSets: let
+    variants = lib.attrNames packageSets;
+    namesFor = source: variant:
+      lib.attrNames (lib.filterAttrs (_: package:
+        (projectLib.packageMetadata package).source or null == source)
+      (projectLib.registeredPackages packageSets.${variant}));
+    mismatches = lib.concatMap (source: let
+      expected = namesFor source (builtins.head variants);
+    in
+      lib.concatMap (variant:
+        lib.optional (namesFor source variant != expected)
+        "${source}.${variant}")
+      (builtins.tail variants))
+    extensionIds;
+  in
+    lib.throwIf (variants != [] && mismatches != [])
+    "${label} package-unit attributes vary by variant: ${lib.concatStringsSep ", " mismatches}"
+    true;
 in rec {
   inherit (projectLib) extendPackage;
 
@@ -123,7 +173,10 @@ in rec {
     overlaysFor = contextFor: lanes:
       lib.concatMap (
         extension:
-          map (lane:
+          [
+            (captureExtensionContext extension)
+          ]
+          ++ map (lane:
             laneOverlay {
               inherit contextFor extension lane;
             })
@@ -163,8 +216,29 @@ in rec {
         )
         profiles.profiles;
 
+      pythonSpecs = pythonSetsFor {inherit project nativeRaw wasixRaw;};
+      pythonRaw = lib.mapAttrs (interpreter: spec:
+        lib.foldl' (
+          packageSet: extension:
+            if (extension.overlays or {}) ? python
+            then
+              extendPythonSet packageSet (pythonLaneOverlay {
+                contextFor = contextFor "python" {inherit interpreter;} spec.pkgs;
+                enclosingPkgs = spec.pkgs;
+                inherit extension;
+              })
+            else packageSet
+        )
+        spec.packageSet
+        allExtensions)
+      pythonSpecs;
+
+      wasixShapesValid = validateVariantShapes "WASIX" extensionIds wasixRaw;
+      pythonShapesValid = validateVariantShapes "Python" extensionIds pythonRaw;
+
       native = lib.mapAttrs (_: packageView) (projectLib.registeredPackages nativeRaw);
       wasix = lib.mapAttrs (_: packageSet: lib.mapAttrs (_: packageView) (projectLib.registeredPackages packageSet)) wasixRaw;
+      python = lib.mapAttrs (_: packageSet: lib.mapAttrs (_: packageView) (projectLib.registeredPackages packageSet)) pythonRaw;
       allWasixNames = lib.unique (lib.concatMap lib.attrNames (lib.attrValues wasix));
       preferred = lib.genAttrs allWasixNames (name: let
         defaultProfile = profiles.defaultProfileName or null;
@@ -197,7 +271,18 @@ in rec {
           }))
         packages)
       wasix;
-      packageEntries = nativeEntries // wasixEntries;
+      pythonEntries = lib.concatMapAttrs (interpreter: packages:
+        lib.mapAttrs' (name: package: let
+          address = projectLib.address "packages" ["python" interpreter name];
+        in
+          lib.nameValuePair address (packageEntry {
+            inherit address package;
+            scope = "python";
+            variant = {inherit interpreter;};
+          }))
+        packages)
+      python;
+      packageEntries = nativeEntries // wasixEntries // pythonEntries;
       testEntries = lib.concatMapAttrs (_: entry:
         lib.mapAttrs' (name: check: let
           address = "tests.${entry.address}${projectLib.addressSegment name}";
@@ -218,35 +303,36 @@ in rec {
         if entry.kind == "package"
         then entry.package
         else entry.check;
-    in {
-      schemaVersion = schema.version;
-      packages = {
-        inherit native wasix preferred;
-        toolchain = {};
-        python = {};
-      };
-      toolchain = toolchainFor project;
-      commands = commandsFor project;
-      artifacts = artifactsFor project;
-      harnesses = harnessesFor project;
-      tests = lib.mapAttrs (_: entry: entry.check) testEntries;
-      catalog = {inherit entries;};
-      ci = {
-        sources = requestedCiSources;
-        jobs = lib.mapAttrs (_: derivationOf) ciEntries;
-        catalog = {
-          schemaVersion = project.schemaVersion;
-          jobs = lib.mapAttrs (_: serializableEntry) ciEntries;
+    in
+      assert wasixShapesValid;
+      assert pythonShapesValid; {
+        schemaVersion = schema.version;
+        packages = {
+          inherit native wasix python preferred;
+          toolchain = {};
+        };
+        toolchain = toolchainFor project;
+        commands = commandsFor project;
+        artifacts = artifactsFor project;
+        harnesses = harnessesFor project;
+        tests = lib.mapAttrs (_: entry: entry.check) testEntries;
+        catalog = {inherit entries;};
+        ci = {
+          sources = requestedCiSources;
+          jobs = lib.mapAttrs (_: derivationOf) ciEntries;
+          catalog = {
+            schemaVersion = project.schemaVersion;
+            jobs = lib.mapAttrs (_: serializableEntry) ciEntries;
+          };
+        };
+        context = {
+          inherit (project) packages commands artifacts harnesses;
+          inherit (projectLib) extendPackage mergeScript;
+        };
+        internals.packageSets = {
+          inherit nativeRaw wasixRaw pythonRaw;
         };
       };
-      context = {
-        inherit (project) packages commands artifacts harnesses;
-        inherit (projectLib) extendPackage mergeScript;
-      };
-      internals.packageSets = {
-        inherit nativeRaw wasixRaw;
-      };
-    };
   in
     lib.throwIf (unknownCiSources != [])
     "CI selects unknown Wasinix source(s): ${lib.concatStringsSep ", " unknownCiSources}"
