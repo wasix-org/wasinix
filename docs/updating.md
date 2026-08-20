@@ -57,15 +57,18 @@ weekly, one PR per moved target (`auto/update-<target>`), each opened by
 
 Update PRs the bot opens are managed: the PR body records the recipe that
 generated the branch and the head the bot last wrote (a
-`<!-- wasinix:changeset ... -->` marker). Commenting `/wasinix update` on a
-managed PR replays its recipe; `/wasinix update <targets>` or
-`/wasinix versions bump <specs|--changed>` runs as spelled on any same-repo PR.
-Pushing your own commits pauses automated refreshes, and the bot replies with
-the intervening commits instead of replacing them; `/wasinix regenerate --force`
-discards the branch and rebuilds it from the recipe. The mutation runs in a job
-with no push credential (the PR tree's own update scripts execute there); a
-second job re-verifies the bundle and pushes with a lease. `ci-command.yml`
-carries the split; the `UPDATE_PR_TOKEN` secret makes pushed heads trigger CI.
+`<!-- wasinix:changeset ... -->` marker). Only a mutation a comment can spell
+records one, so a pin update and a rel bump are replayable and a history
+backfill is not; a PR without the marker carries no managed footer either.
+Commenting `/wasinix update` on a managed PR replays its recipe;
+`/wasinix update <targets>` or `/wasinix versions bump <specs|--changed>` runs
+as spelled on any same-repo PR, paused or not. Pushing your own commits pauses
+automated refreshes, and the bot replies with the intervening commits instead of
+replacing them; `/wasinix regenerate` discards the branch and rebuilds it from
+the recipe. The mutation runs in a job with no push credential (the PR tree's
+own update scripts execute there); a second job re-verifies the bundle and
+pushes with a lease. `ci-command.yml` carries the split; the `UPDATE_PR_TOKEN`
+secret makes pushed heads trigger CI.
 
 The served-version tables are maintained under the `versions` noun:
 `versions add <package>@<version>` (or `--per-major`/`--per-minor` in bulk)

@@ -2326,11 +2326,11 @@ mod markdown {
             UntrustedCommand::Mutation(MutationCommand::Bump { changed: true, .. })
         ));
         assert!(matches!(
-            parse("regenerate --force").unwrap(),
+            parse("regenerate").unwrap(),
             UntrustedCommand::Mutation(MutationCommand::Regenerate)
         ));
-        // --force is required at the type level, not checked afterwards.
-        assert!(parse("regenerate").is_err());
+        // regenerate replays the recipe; there is nothing to aim it at.
+        assert!(parse("regenerate --force").is_err());
         assert!(matches!(
             parse("fmt").unwrap(),
             UntrustedCommand::Mutation(MutationCommand::Format)
@@ -3455,6 +3455,60 @@ mod managed {
     fn a_tampered_record_is_an_error_never_unmanaged() {
         assert!(decode("<!-- wasinix:changeset data=not-base64 -->").is_err());
         assert_eq!(decode("no marker here").unwrap(), None);
+    }
+
+    #[test]
+    fn a_recorded_recipe_reparses_to_the_command_it_names() {
+        use crate::cli::untrusted::MutationCommand;
+        let commands = [
+            MutationCommand::Update {
+                targets: Vec::new(),
+                all: true,
+            },
+            MutationCommand::Update {
+                targets: vec!["nixpkgs".into(), "wasmer".into()],
+                all: false,
+            },
+            MutationCommand::Bump {
+                specs: vec!["zlib@1.3.1".into()],
+                all_versions: true,
+                changed: false,
+            },
+            MutationCommand::Bump {
+                specs: Vec::new(),
+                all_versions: false,
+                changed: true,
+            },
+            MutationCommand::Format,
+        ];
+        for command in commands {
+            let recipe = command.recipe().expect("command has a recipe");
+            assert_eq!(
+                crate::update::managed::parse_recipe(&recipe).unwrap(),
+                command,
+                "{recipe} did not reparse to what it names"
+            );
+        }
+        // Replaying a regenerate would replay a replay; it is never a recipe.
+        assert_eq!(MutationCommand::Regenerate.recipe(), None);
+        // A bare update means "replay the recipe", so it cannot be one.
+        assert_eq!(
+            MutationCommand::Update {
+                targets: Vec::new(),
+                all: false
+            }
+            .recipe(),
+            None
+        );
+        // A word the tokenizer would resplit is refused, not quoted.
+        assert_eq!(
+            MutationCommand::Update {
+                targets: vec!["two words".into()],
+                all: false
+            }
+            .recipe(),
+            None
+        );
     }
 
     #[test]

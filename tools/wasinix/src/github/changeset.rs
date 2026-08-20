@@ -11,7 +11,8 @@ pub const PR_BODY_BUDGET: usize = 20_000;
 
 /// The managed footer, stating the contract for a bot-owned branch.
 const MANAGED_FOOTER: &str = "\n---\n<sub>Managed by wasinix: pushing to this \
-    branch pauses automated refreshes; `/wasinix update` refreshes it.</sub>\n";
+    branch pauses automated refreshes; `/wasinix update` refreshes it, \
+    `/wasinix regenerate` discards it and rebuilds it from scratch.</sub>\n";
 
 fn bump_rows(entries: &[&Entry]) -> Markdown {
     let mut table = Markdown::constant("| target | from | to | changelog |\n|:--|:--|:--|:--|\n");
@@ -110,12 +111,13 @@ fn secondary_details(changes: &ChangeSet) -> Markdown {
     ])
 }
 
-/// The update PR body. `managed` adds the bot-branch footer; a human's fork PR
-/// carries the same body without it, so the bot never force-pushes over it.
-pub fn pr_body(changes: &ChangeSet, managed: bool) -> Markdown {
+/// The update PR body. `replayable` adds the bot-branch footer, whose every
+/// clause needs the recorded recipe to be true: a human's fork PR and a
+/// mutation no comment can spell carry the same body without it.
+pub fn pr_body(changes: &ChangeSet, replayable: bool) -> Markdown {
     let mut body = Markdown::constant("### Automated pin update\n\n");
     body = body.push(sections(changes));
-    if managed {
+    if replayable {
         body = body.push(Markdown::constant(MANAGED_FOOTER));
     }
     body

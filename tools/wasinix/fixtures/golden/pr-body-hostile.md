@@ -14,4 +14,4 @@
 > **note|subject** (6.0|x → 6.1`y): line1 | forged | row | &gt; quote ### heading
 
 ---
-<sub>Managed by wasinix: pushing to this branch pauses automated refreshes; `/wasinix update` refreshes it.</sub>
+<sub>Managed by wasinix: pushing to this branch pauses automated refreshes; `/wasinix update` refreshes it, `/wasinix regenerate` discards it and rebuilds it from scratch.</sub>

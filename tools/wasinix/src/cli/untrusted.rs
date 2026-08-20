@@ -156,13 +156,6 @@ enum UntrustedVersions {
     },
 }
 
-#[derive(clap::Args)]
-struct UntrustedRegenerate {
-    /// Discard the branch and regenerate it from the recorded recipe
-    #[arg(long, required = true)]
-    force: bool,
-}
-
 #[derive(Parser)]
 #[command(
     name = "/wasinix",
@@ -178,7 +171,8 @@ enum UntrustedCli {
     Update(UntrustedUpdate),
     #[command(subcommand)]
     Versions(UntrustedVersions),
-    Regenerate(UntrustedRegenerate),
+    /// Discard the branch and rebuild it from the recorded recipe
+    Regenerate,
     /// Run the repo's formatter over the pull request's tree
     Fmt,
     /// Reply with the command language
@@ -198,6 +192,43 @@ pub enum MutationCommand {
     Format,
 }
 
+/// A word the comment tokenizer returns unchanged, so a recipe built from it
+/// re-parses to the same word without quoting.
+fn plain_words(words: &[String]) -> bool {
+    words.iter().all(|word| {
+        !word.is_empty()
+            && !word.contains(['\'', '"', '\\'])
+            && !word.chars().any(char::is_whitespace)
+    })
+}
+
+impl MutationCommand {
+    /// The comment that replays this mutation, recorded as a managed PR's
+    /// recipe. Rendered from the parsed command rather than from the
+    /// invocation that produced the branch, so a recorded recipe always
+    /// re-parses to what it names. A command that replays a recipe rather
+    /// than being one has none.
+    pub fn recipe(&self) -> Option<String> {
+        match self {
+            MutationCommand::Update { all: true, .. } => Some("update --all".into()),
+            MutationCommand::Update { targets, .. } => (!targets.is_empty()
+                && plain_words(targets))
+            .then(|| format!("update {}", targets.join(" "))),
+            MutationCommand::Bump { changed: true, .. } => Some("versions bump --changed".into()),
+            MutationCommand::Bump {
+                specs,
+                all_versions,
+                ..
+            } => (!specs.is_empty() && plain_words(specs)).then(|| {
+                let versions = if *all_versions { " --all-versions" } else { "" };
+                format!("versions bump {}{versions}", specs.join(" "))
+            }),
+            MutationCommand::Format => Some("fmt".into()),
+            MutationCommand::Regenerate => None,
+        }
+    }
+}
+
 /// The reply `/wasinix help` posts.
 pub const HELP: &str = "### `/wasinix` commands\n\n\
     - `/wasinix build <selectors>` builds sets or jobs on this PR\n\
@@ -210,7 +241,8 @@ pub const HELP: &str = "### `/wasinix` commands\n\n\
     replays its recipe)\n\
     - `/wasinix versions bump <specs|--changed>` bumps publication rels\n\
     - `/wasinix fmt` formats the branch and commits the result\n\
-    - `/wasinix regenerate --force` rebuilds a managed branch from its recipe\n\
+    - `/wasinix regenerate` discards a managed branch and rebuilds it from \
+    its recipe\n\
     - `/wasinix help` prints this message\n\n\
     Any line of a comment works; the command runs against this pull request.\n";
 
@@ -285,7 +317,7 @@ pub fn parse(command: &str) -> Result<UntrustedCommand> {
             all_versions,
             changed,
         }),
-        UntrustedCli::Regenerate(_) => UntrustedCommand::Mutation(MutationCommand::Regenerate),
+        UntrustedCli::Regenerate => UntrustedCommand::Mutation(MutationCommand::Regenerate),
         UntrustedCli::Fmt => UntrustedCommand::Mutation(MutationCommand::Format),
         // Comment commands execute on the workflow runner itself, and the
         // untrusted grammar rightly cannot spell --on, so every case is

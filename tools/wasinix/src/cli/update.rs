@@ -57,6 +57,9 @@ struct PrShape {
     branch: Option<String>,
     /// The PR title; None derives it from the ChangeSet.
     title: Option<String>,
+    /// The comment that replays this branch; None for an arm no comment can
+    /// spell, whose PR then advertises no refresh.
+    recipe: Option<crate::cli::untrusted::MutationCommand>,
 }
 
 /// The one mutation exit: PR upsert when asked, then the receipt or the
@@ -85,6 +88,7 @@ fn conclude(
                 title,
                 base: mode.base.clone(),
                 managed: !mode.fork,
+                recipe: shape.recipe.and_then(|command| command.recipe()),
             },
         )?;
         ui::fact("pull request", number);
@@ -254,6 +258,7 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
                 PrShape {
                     branch: None,
                     title: None,
+                    recipe: None,
                 },
             )
         }
@@ -265,6 +270,10 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
             let title = args
                 .all
                 .then(|| "pins: automated source-pin bump".to_string());
+            let recipe = crate::cli::untrusted::MutationCommand::Update {
+                targets: args.targets.clone(),
+                all: args.all,
+            };
             let changes = drive::drive(
                 &repo,
                 drive::Options {
@@ -275,7 +284,16 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
                     committer: args.mode.committer(),
                 },
             )?;
-            conclude(&repo, &changes, &args.mode, PrShape { branch, title })
+            conclude(
+                &repo,
+                &changes,
+                &args.mode,
+                PrShape {
+                    branch,
+                    title,
+                    recipe: Some(recipe),
+                },
+            )
         }
     }
 }
@@ -402,6 +420,7 @@ pub fn run_versions(command: VersionsCommand) -> Result<CommandStatus> {
                 PrShape {
                     branch: Some(branch),
                     title: Some("pkgs: backfill registry history".into()),
+                    recipe: None,
                 },
             )
         }
@@ -420,6 +439,7 @@ pub fn run_versions(command: VersionsCommand) -> Result<CommandStatus> {
                 PrShape {
                     branch: Some("auto/backfill-import".into()),
                     title: Some("pkgs: backfill registry history".into()),
+                    recipe: None,
                 },
             )
         }
@@ -429,6 +449,11 @@ pub fn run_versions(command: VersionsCommand) -> Result<CommandStatus> {
             changed_from,
             mode,
         } => {
+            let recipe = crate::cli::untrusted::MutationCommand::Bump {
+                specs: specs.clone(),
+                all_versions,
+                changed: changed_from.is_some(),
+            };
             let changes = bump_rels(
                 &repo,
                 BumpRequest {
@@ -446,6 +471,7 @@ pub fn run_versions(command: VersionsCommand) -> Result<CommandStatus> {
                 PrShape {
                     branch: Some("auto/bump-rel".into()),
                     title: Some("pkgs: bump publication releases".into()),
+                    recipe: Some(recipe),
                 },
             )
         }

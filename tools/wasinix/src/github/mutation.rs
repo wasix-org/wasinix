@@ -20,6 +20,10 @@ pub struct PrOptions {
     pub base: String,
     /// Whether the bot owns the branch (managed footer, force-push allowed).
     pub managed: bool,
+    /// The command that regenerates this branch, recorded in the PR body so
+    /// `/wasinix update` and `/wasinix regenerate` can replay it. None for a
+    /// mutation no comment can spell, which then advertises neither.
+    pub recipe: Option<String>,
 }
 
 /// Push the committed changes to `branch` and open or update its PR. The
@@ -45,10 +49,18 @@ pub fn open_pr(repo: &Path, changes: &ChangeSet, options: &PrOptions) -> Result<
     git(repo, &push)?;
 
     let client = Client::new(crate::github::client::token().as_deref());
-    let body = crate::github::markdown::truncate_sections(
-        changeset::pr_body(changes, options.managed).into_string(),
+    let recipe = options.recipe.clone().filter(|_| options.managed);
+    let mut body = crate::github::markdown::truncate_sections(
+        changeset::pr_body(changes, recipe.is_some()).into_string(),
         changeset::PR_BODY_BUDGET,
     );
+    // Recorded after the truncation, so a body at the budget drops sections
+    // rather than the marker every later comment mutation reads.
+    if let Some(recipe) = recipe {
+        let head = git(repo, &["rev-parse", "HEAD"])?.trim().to_string();
+        let state = crate::update::managed::State::new(recipe, head)?;
+        body = crate::update::managed::with_state(&body, &state)?;
+    }
     if let Some(number) = existing_pr(&client, options)? {
         client.patch(
             &format!("repos/{}/pulls/{number}", options.repository),
@@ -232,7 +244,7 @@ fn reply_surface(origin: &crate::ci::origin::Origin) -> crate::github::surfaces:
     }
 }
 
-/// The paused warning: what moved, and the one command that discards it.
+/// The paused warning: what moved, and what still runs against it.
 fn paused_reply(
     state: &crate::update::managed::State,
     pull: &Pull,
@@ -271,8 +283,10 @@ fn paused_reply(
         }
     }
     body.push(Markdown::constant(
-        "\nTo discard the branch and regenerate it from its recorded recipe, comment:\n\n\
-         ```text\n/wasinix regenerate --force\n```\n",
+        "\n`/wasinix update <targets>` still runs as spelled, on top of those commits. \
+         Automated refreshes stay paused until the branch is the bot's again: \
+         `/wasinix regenerate` discards the commits above and rebuilds it from the \
+         recorded recipe.\n",
     ))
 }
 
