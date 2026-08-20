@@ -30,8 +30,8 @@
   # "pyprev" (python packageOverrides).
   historyFrom ? "prev",
 }: let
-  # non-fetch spec keys, stripped before the args go to the src fetcher
-  historyMeta = ["note" "variants" "cargoHash" "vendorLayout"];
+  historyLib = import ../project/history.nix {inherit lib;};
+  inherit (historyLib) historyMeta;
   entries = builtins.readDir dir;
   historyUnder = v: lib.replaceStrings ["."] ["_"] v;
   historyNames = lib.concatLists (lib.mapAttrsToList
@@ -78,67 +78,7 @@
         line = 1;
       };
     });
-  # A drv re-pointed at a history version, reusing its OWN fetcher:
-  # src.override with the spec's fetch args (rev/tag/version + hash). fetchurl
-  # release tarballs aren't overridable, so patch the src derivation's url +
-  # hash directly (spec carries `url`). Survives the `.override` many package
-  # files call (it re-runs the nixpkgs function, which would drop a plain
-  # overrideAttrs) by re-pinning the src after each override.
-  pinToHistory = version: spec: drv: let
-    fetchArgs = builtins.removeAttrs spec historyMeta;
-    src =
-      if drv.src ? override
-      then drv.src.override fetchArgs
-      else
-        drv.src.overrideAttrs (_: {
-          urls = [spec.url];
-          outputHash = spec.hash;
-          name = baseNameOf spec.url;
-        });
-    # A rust wheel vendors its crates from the Cargo.lock IN its src, so a
-    # rebased src needs a rebased vendor. Two vendor shapes (set/rust-platform.nix):
-    # a granular importCargoLock vendor carries `wasixRebuildVendor`, which
-    # re-vendors the rebased src's lock directly (per-crate hashes live in the
-    # lock, so no stored cargoHash). Where the lock sits differs between the two
-    # releases (pydantic-core is its own repo below 2.42, a monorepo directory
-    # above), and the entry's vendorLayout says so: correcting it in the package
-    # file is too late, since reading the rebuilt vendor's attributes forces the
-    # broken one. A monolithic fetchCargoVendor vendor is a
-    # runCommand over one re-pointable vendorStaging FOD; nothing derives its
-    # hash, so the entry carries it (the history tool TOFUs it).
-    rustVendor = old:
-      if old.cargoDeps ? wasixRebuildVendor
-      then
-        old.cargoDeps.wasixRebuildVendor ({
-            inherit src;
-            cargoHash = spec.cargoHash or null;
-          }
-          // (spec.vendorLayout or {}))
-      else
-        lib.throwIf (!(spec ? cargoHash))
-        "load-packages: ${drv.pname or drv.name} ${version} vendors rust deps; its history entry needs a cargoHash (nix run .#history -- add <attr>==${version} re-derives it)"
-        (lib.throwIf (!(old.cargoDeps ? vendorStaging))
-          "load-packages: ${drv.pname or drv.name} ${version}: cargoDeps has no vendorStaging, so nixpkgs' vendor mechanism moved; the history rebase needs updating"
-          (old.cargoDeps.overrideAttrs (o: {
-            vendorStaging = o.vendorStaging.overrideAttrs (_: {
-              inherit src;
-              outputHash = spec.cargoHash;
-            });
-          })));
-    pinned = drv.overrideAttrs (old:
-      {
-        inherit version src;
-        # The entry itself, for a package whose drift the generic rebase can't
-        # cover: a lock that moved (cargoRoot) has to be corrected in the
-        # package file, which then rebuilds the vendor from this spec.
-        # passthru only, so it moves no drvPath.
-        passthru =
-          (old.passthru or {})
-          // {wasix = (old.passthru.wasix or {}) // {historySpec = spec;};};
-      }
-      // lib.optionalAttrs (old ? cargoDeps) {cargoDeps = rustVendor old;});
-  in
-    pinned // {override = args: pinToHistory version spec (drv.override args);};
+  pinToHistory = historyLib.rebasePackage;
 
   # `<set>` with `<set>.<name>` rebased, so a package file that derives from it
   # re-runs its own version conditionals against the older src.
