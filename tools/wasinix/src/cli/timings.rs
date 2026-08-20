@@ -146,16 +146,18 @@ fn ran_revisions(repository: &str, workflow: &str, limit: usize) -> Result<Vec<R
 
 /// The tree a revision names. Local when the repository has the commit, and
 /// from the API when it does not, which is the whole point of folding runs.
-fn tree_of(repo: &std::path::Path, repository: &str, rev: &str) -> Option<String> {
+fn tree_of(repo: &std::path::Path, repository: Option<&str>, rev: &str) -> Option<String> {
     if let Ok(tree) = crate::support::git::git(repo, &["rev-parse", &format!("{rev}^{{tree}}")]) {
         return Some(tree);
     }
     let client = crate::github::client::Client::new(crate::github::client::token().as_deref());
-    let value = client.get(&format!("repos/{repository}/commits/{rev}")).ok()?;
+    let value = client
+        .get(&format!("repos/{}/commits/{rev}", repository?))
+        .ok()?;
     value["commit"]["tree"]["sha"].as_str().map(str::to_string)
 }
 
-fn published(repo: &std::path::Path, repository: &str, ran: &[Ran]) -> Vec<Published> {
+fn published(repo: &std::path::Path, repository: Option<&str>, ran: &[Ran]) -> Vec<Published> {
     let map_template = crate::ci::baseline::map_url_template();
     let step_template = crate::ci::steps::url_template();
     ran.iter()
@@ -233,15 +235,36 @@ fn series(published: &[Published], by: By) -> BTreeMap<String, Series> {
 
 pub fn run(args: TimingsArgs) -> Result<crate::support::process::CommandStatus> {
     let repo = crate::support::git::repo_root()?;
-    let repository = crate::github::surfaces::resolve_repository(args.repository.as_deref(), &repo)?;
+    // Only the runs enumeration needs to name a repository, and only a
+    // revision this checkout lacks needs to ask it for a tree. A range of
+    // local commits needs neither, and demanding one refused a fold that
+    // would have worked.
+    let repository = match args.repository.as_deref() {
+        // A name that was given and does not parse is a mistake in either
+        // mode; only its absence is what a range can do without.
+        Some(_) => Some(crate::github::surfaces::resolve_repository(
+            args.repository.as_deref(),
+            &repo,
+        )?),
+        None => crate::github::surfaces::resolve_repository(None, &repo).ok(),
+    };
     let (ran, over) = match args.runs {
-        Some(limit) => (
-            ran_revisions(&repository, &args.workflow, limit)?,
-            format!("{limit} runs of {}", args.workflow),
-        ),
+        Some(limit) => {
+            let repository = repository.as_deref().ok_or_else(|| {
+                crate::support::error::Error::Request(
+                    "--runs names a repository's runs: pass --repository, set \
+                     GITHUB_REPOSITORY, or add a github.com remote"
+                        .into(),
+                )
+            })?;
+            (
+                ran_revisions(repository, &args.workflow, limit)?,
+                format!("{limit} runs of {}", args.workflow),
+            )
+        }
         None => (ranged(&repo, &args.range)?, args.range.clone()),
     };
-    let published = published(&repo, &repository, &ran);
+    let published = published(&repo, repository.as_deref(), &ran);
     let mut series: Vec<Series> = series(&published, args.by)
         .into_iter()
         .filter(|(_, series)| series.total >= args.floor)
