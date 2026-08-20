@@ -3803,6 +3803,8 @@ mod corpus {
             "ci mutate-publish --out-dir mutation",
             "ci step-timings --run-id 1 --rev abc --publish",
             "bisect wasmer --good pinned --bad main -- build checks.jq",
+            "timings --runs 100 --by step",
+            "timings main~50..main --by job",
             "bisect wasmer --good main --bad pinned --reverse -- build checks.jq",
             "ci remote --request r.json --run-dir d --on ec2",
             "ci observe --remote-run-dir /x --run-dir d",
@@ -3852,6 +3854,8 @@ mod corpus {
             "publish-index --registry r",
             "preview-diff main",
             "preview-deploy site app",
+            // a range and a run count name two different folds
+            "timings main~50..main --runs 100",
             // a preview without a namespace of its own
             "wasmer preview pr-123 --dry-run",
             "wheel-natives",

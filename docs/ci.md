@@ -65,14 +65,20 @@ published: per-job build seconds and per-task wall time ride the eval map
 durations go to `step-timings/<rev>.json`.
 
 ```sh
+wasinix timings --runs 100 [--by job|task|step|rev]
 wasinix timings [<range>] [--by job|task|step|rev]
 ```
 
-folds them across a commit range, defaulting to `HEAD~20..HEAD`. Keys derive
-from the range, so the fold needs no bucket listing and no credentials. Each row
-carries the total, how many runs measured it, and the first and last value,
-since a mean hides a regression. Commits that published nothing are a gap, and
-the header says how much of the range was measured.
+`--runs` folds the revisions CI actually ran on, from the workflow's own run
+list. That is the form to reach the work: a rebase-merge gives a landed pull
+request a new sha, so its run's head is an ancestor of no branch, and the builds
+that cost anything happen there and in the merge queue rather than on main. A
+range folds a branch's own commits instead, defaulting to `HEAD~20..HEAD`.
+
+Either way the keys derive from what is being folded, so no bucket listing is
+needed. Each row carries the total, how many runs measured it, and the first and
+last value, since a mean hides a regression. Revisions that published nothing
+are a gap, and the header says how many were measured.
 
 `--by job` finds the package that grew, `--by task` the pipeline phase,
 `--by step` the setup cost, and `--by rev` answers whether CI as a whole is
