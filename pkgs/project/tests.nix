@@ -127,14 +127,39 @@
   };
   projectApi = import ./default.nix (projectApiArgs
     // {
-      checkRules.probe = {
-        entry,
-        packages,
-        ...
-      }:
-        lib.optionalAttrs (entry.policy.checks.probe or false) {
-          probe = mkPackage {name = "probe-${entry.package.name}-${packages.sameProfile.core.versions."0.9".version}";};
-        };
+      projectionRules = {
+        probe = {
+          entry,
+          packages,
+          ...
+        }:
+          lib.optionalAttrs (entry.kind == "package" && entry.policy.checks.probe or false) {
+            tests.probe = mkPackage {name = "probe-${entry.package.name}-${packages.sameProfile.core.versions."0.9".version}";};
+          };
+        package = {entry, ...}:
+          lib.optionalAttrs (
+            entry.kind
+            == "package"
+            && entry.address == "packages.wasix.default.consumer"
+          ) (let
+            bundle = mkPackage {name = "consumer-bundle";};
+          in {
+            artifacts.bundle = bundle;
+            commands.consumer = {
+              name = "consumer";
+              artifact = bundle;
+              entrypoint = "consumer";
+            };
+          });
+        packaged = {
+          commands,
+          entry,
+          ...
+        }:
+          lib.optionalAttrs (entry.kind == "artifact" && entry.artifactKind == "bundle") {
+            tests.packaged = mkPackage {name = "packaged-${entry.artifact.name}-${commands.consumer.name}";};
+          };
+      };
     });
   fakeImportNixpkgs = args: let
     base = {
@@ -278,24 +303,89 @@
     system = "test-system";
     importNixpkgs = fakeImportNixpkgs;
   };
-  duplicateCheckProject = (import ./default.nix (projectApiArgs
-    // {
-      checkRules = {
-        first = {entry, ...}: lib.optionalAttrs (entry.policy.checks.probe or false) {same = mkPackage {};};
-        second = {entry, ...}: lib.optionalAttrs (entry.policy.checks.probe or false) {same = mkPackage {};};
-      };
-    })).mkProject {
-    system = "test-system";
-    importNixpkgs = fakeImportNixpkgs;
-    extensions = [consumerExtension];
+  projectWithProjectionRules = projectionRules:
+    (import ./default.nix (projectApiArgs // {inherit projectionRules;})).mkProject {
+      system = "test-system";
+      importNixpkgs = fakeImportNixpkgs;
+      extensions = [consumerExtension];
+    };
+  duplicateProjectionProject = projectWithProjectionRules {
+    first = {entry, ...}: lib.optionalAttrs (entry.policy.checks.probe or false) {tests.same = mkPackage {};};
+    second = {entry, ...}: lib.optionalAttrs (entry.policy.checks.probe or false) {tests.same = mkPackage {};};
   };
-  invalidCheckProject = (import ./default.nix (projectApiArgs
-    // {
-      checkRules.invalid = {entry, ...}: lib.optionalAttrs (entry.policy.checks.probe or false) {invalid = "not a derivation";};
-    })).mkProject {
-    system = "test-system";
-    importNixpkgs = fakeImportNixpkgs;
-    extensions = [consumerExtension];
+  duplicateArtifactProject = projectWithProjectionRules {
+    duplicate = {entry, ...}:
+      lib.optionalAttrs (
+        entry.kind
+        == "package"
+        && entry.scope == "wasix"
+        && entry.name == "core"
+        && entry.instance.kind == "current"
+      ) {artifacts.bundle = mkPackage {};};
+  };
+  duplicateCommandProject = projectWithProjectionRules {
+    duplicate = {entry, ...}:
+      lib.optionalAttrs (
+        entry.kind
+        == "package"
+        && entry.scope == "wasix"
+        && entry.name == "core"
+        && entry.instance.kind == "current"
+      ) {
+        commands.core = {
+          name = "core";
+          artifact = mkPackage {};
+          entrypoint = "core";
+        };
+      };
+  };
+  typedNamespaceProject = projectWithProjectionRules {
+    same = {entry, ...}:
+      lib.optionalAttrs (entry.address == "packages.wasix.default.consumer") {
+        artifacts.same = mkPackage {name = "same-artifact";};
+        tests.same = mkPackage {name = "same-test";};
+      };
+  };
+  historyProjectionProject = projectWithProjectionRules {
+    retained = {entry, ...}:
+      lib.optionalAttrs (
+        entry.kind
+        == "package"
+        && entry.scope == "wasix"
+        && entry.variant.profile == "default"
+        && entry.name == "core"
+      ) {
+        artifacts.retained = mkPackage {name = "retained-${entry.instance.version}";};
+      };
+    inspect = {entry, ...}:
+      lib.optionalAttrs (entry.kind == "artifact" && entry.artifactKind == "retained") {
+        tests.inspect = mkPackage {name = "inspect-${entry.artifact.name}";};
+      };
+  };
+  invalidProjectionProject = projectWithProjectionRules {
+    invalid = {entry, ...}: lib.optionalAttrs (entry.policy.checks.probe or false) {tests.invalid = "not a derivation";};
+  };
+  invalidArtifactProject = projectWithProjectionRules {
+    invalid = {entry, ...}: lib.optionalAttrs (entry.policy.checks.probe or false) {artifacts.invalid = "not a derivation";};
+  };
+  invalidCommandProject = projectWithProjectionRules {
+    invalid = {entry, ...}:
+      lib.optionalAttrs (entry.policy.checks.probe or false) {
+        commands.invalid = {
+          name = "mismatched";
+          artifact = mkPackage {};
+          entrypoint = "invalid";
+        };
+      };
+  };
+  invalidNamespaceProject = projectWithProjectionRules {
+    invalid = {entry, ...}: lib.optionalAttrs (entry.policy.checks.probe or false) {unknown = {};};
+  };
+  invalidNamespaceShapeProject = projectWithProjectionRules {
+    invalid = {entry, ...}: lib.optionalAttrs (entry.policy.checks.probe or false) {tests = "not an attribute set";};
+  };
+  invalidResultProject = projectWithProjectionRules {
+    invalid = _args: "not an attribute set";
   };
 in {
   packageUnits = {
@@ -354,6 +444,11 @@ in {
       preferredHistoryVersion = project.packages.preferred.core.versions."0.9".version;
       pythonHistoryVersion = project.packages.python.py.inheritedPython.versions."0.8".version;
       historyDependencyVersion = project.packages.python.py.inheritedPython.versions."0.8".passthru.wasinix.historyDependency;
+      packageArtifactName = project.packages.wasix.default.consumer.artifacts.bundle.name;
+      globalArtifactName = project.artifacts.bundle.consumer.name;
+      commandName = project.commands.consumer.name;
+      artifactTestName = project.tests."tests.artifacts.bundle.consumer.packaged".name;
+      artifactTestSubject = project.ci.catalog.jobs."tests.artifacts.bundle.consumer.packaged".subject;
       historyTags = project.ci.catalog.jobs."packages.wasix.default.core.versions[\"0.9\"]".policy.ci.tags;
       historyTestTags = project.ci.catalog.jobs."tests.packages.wasix.default.core.versions[\"0.9\"].probe".policy.ci.tags;
       ciSources = project.ci.sources;
@@ -364,8 +459,25 @@ in {
       testContextName = project.tests."tests.packages.wasix.default.consumer.probe".name;
       unknownCiSourceFails = !(force unknownCiSource).success;
       duplicateExtensionFails = !(force duplicateExtension).success;
-      duplicateCheckFails = !(force duplicateCheckProject.tests).success;
-      invalidCheckFails = !(force invalidCheckProject.tests).success;
+      duplicateProjectionFails = !(force duplicateProjectionProject.tests).success;
+      duplicateArtifactFails = !(force duplicateArtifactProject.artifacts).success;
+      duplicateCommandFails = !(force duplicateCommandProject.commands).success;
+      typedNamespacesMerge =
+        (force {
+          artifact = typedNamespaceProject.artifacts.same.consumer.name;
+          test = typedNamespaceProject.tests."tests.packages.wasix.default.consumer.same".name;
+        }).success;
+      historyProjections = {
+        current = historyProjectionProject.artifacts.retained.core.name;
+        history = historyProjectionProject.artifacts.retained.core.versions."0.9".name;
+        test = historyProjectionProject.tests.${''tests.artifacts.retained.core.versions["0.9"].inspect''}.name;
+      };
+      invalidProjectionFails = !(force invalidProjectionProject.tests).success;
+      invalidArtifactFails = !(force invalidArtifactProject.artifacts).success;
+      invalidCommandFails = !(force invalidCommandProject.commands).success;
+      invalidNamespaceFails = !(force invalidNamespaceProject.catalog).success;
+      invalidNamespaceShapeFails = !(force invalidNamespaceShapeProject.catalog).success;
+      invalidResultFails = !(force invalidResultProject.catalog).success;
       variantShapeFails = !(force variantShapeProject).success;
       staleHistoryFails = !(force staleHistoryProject).success;
       invalidProfileFails = !(force invalidProfileProject).success;
@@ -391,10 +503,16 @@ in {
       preferredHistoryVersion = "0.9";
       pythonHistoryVersion = "0.8";
       historyDependencyVersion = "0.9";
+      packageArtifactName = "consumer-bundle";
+      globalArtifactName = "consumer-bundle";
+      commandName = "consumer";
+      artifactTestName = "packaged-consumer-bundle-consumer";
+      artifactTestSubject = "artifacts.bundle.consumer";
       historyTags = ["history-tests"];
       historyTestTags = ["history-tests"];
       ciSources = ["consumer"];
       ciJobNames = [
+        "artifacts.bundle.consumer"
         "packages.python.py.inheritedPython"
         ''packages.python.py.inheritedPython.versions["0.8"]''
         "packages.python.py.uses-python"
@@ -408,6 +526,7 @@ in {
         "packages.wasix.default.core"
         ''packages.wasix.default.core.versions["0.9"]''
         ''packages.wasix.default["dot.name"]''
+        "tests.artifacts.bundle.consumer.packaged"
         "tests.packages.wasix.alternate.consumer.probe"
         "tests.packages.wasix.alternate.core.probe"
         ''tests.packages.wasix.alternate.core.versions["0.9"].probe''
@@ -416,6 +535,7 @@ in {
         ''tests.packages.wasix.default.core.versions["0.9"].probe''
       ];
       catalogJobNames = [
+        "artifacts.bundle.consumer"
         "packages.python.py.inheritedPython"
         ''packages.python.py.inheritedPython.versions["0.8"]''
         "packages.python.py.uses-python"
@@ -429,6 +549,7 @@ in {
         "packages.wasix.default.core"
         ''packages.wasix.default.core.versions["0.9"]''
         ''packages.wasix.default["dot.name"]''
+        "tests.artifacts.bundle.consumer.packaged"
         "tests.packages.wasix.alternate.consumer.probe"
         "tests.packages.wasix.alternate.core.probe"
         ''tests.packages.wasix.alternate.core.versions["0.9"].probe''
@@ -437,6 +558,7 @@ in {
         ''tests.packages.wasix.default.core.versions["0.9"].probe''
       ];
       testNames = [
+        "tests.artifacts.bundle.consumer.packaged"
         "tests.packages.wasix.alternate.consumer.probe"
         "tests.packages.wasix.alternate.core.probe"
         ''tests.packages.wasix.alternate.core.versions["0.9"].probe''
@@ -448,8 +570,21 @@ in {
       testContextName = "probe-consumer-default-0.9";
       unknownCiSourceFails = true;
       duplicateExtensionFails = true;
-      duplicateCheckFails = true;
-      invalidCheckFails = true;
+      duplicateProjectionFails = true;
+      duplicateArtifactFails = true;
+      duplicateCommandFails = true;
+      typedNamespacesMerge = true;
+      historyProjections = {
+        current = "retained-core";
+        history = "retained-0.9";
+        test = "inspect-retained-0.9";
+      };
+      invalidProjectionFails = true;
+      invalidArtifactFails = true;
+      invalidCommandFails = true;
+      invalidNamespaceFails = true;
+      invalidNamespaceShapeFails = true;
+      invalidResultFails = true;
       variantShapeFails = true;
       staleHistoryFails = true;
       invalidProfileFails = true;

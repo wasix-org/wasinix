@@ -5,10 +5,8 @@
   crossSystemFor,
   configFor ? _scope: _variant: {},
   nativePackageInterfacesFor ? _project: {},
-  commandsFor ? _project: {},
-  artifactsFor ? _project: {},
   harnessesFor ? _project: {},
-  checkRules ? {},
+  projectionRules ? {},
   pythonSetsFor ? _args: {},
   extendPythonSet ? packageSet: overlay: packageSet.overrideScope overlay,
   rebasePackage ? (import ./history.nix {inherit lib;}).rebasePackage,
@@ -93,7 +91,9 @@
 
   packageEntry = {
     address,
+    name,
     package,
+    projectionPath,
     scope,
     variant,
   }: let
@@ -111,7 +111,7 @@
       else basePolicy;
   in {
     kind = "package";
-    inherit address package scope variant;
+    inherit address name package projectionPath scope variant;
     inherit (metadata) source lineage instance;
     inherit policy;
   };
@@ -128,21 +128,49 @@
     }
     // lib.optionalAttrs (entry ? subject) {inherit (entry) subject;};
 
-  checksFor = context: entry: let
+  projectionsFor = context: entry: let
+    namespaces = ["artifacts" "commands" "tests"];
+    empty = lib.genAttrs namespaces (_: {});
     merge = state: ruleName: rule: let
       result = projectLib.callWith (context // {inherit entry;}) rule;
-      invalid = lib.filterAttrs (_: check: !lib.isDerivation check) result;
-      duplicates = lib.intersectLists (lib.attrNames state) (lib.attrNames result);
+      unknown = lib.subtractLists namespaces (lib.attrNames result);
+      invalidNamespaces = lib.filter (name: !lib.isAttrs (result.${name} or {})) namespaces;
+      invalidArtifacts = lib.filterAttrs (_: artifact: !lib.isDerivation artifact) (result.artifacts or {});
+      invalidTests = lib.filterAttrs (_: test: !lib.isDerivation test) (result.tests or {});
+      validCommand = name: command:
+        lib.isAttrs command
+        && builtins.isString (command.name or null)
+        && command.name == name
+        && lib.isDerivation (command.artifact or null)
+        && builtins.isString (command.entrypoint or null);
+      invalidCommands = lib.filterAttrs (name: command: !validCommand name command) (result.commands or {});
+      duplicates = lib.concatMap (namespace:
+        map (name: "${namespace}.${name}")
+        (lib.intersectLists (lib.attrNames state.${namespace}) (lib.attrNames (result.${namespace} or {}))))
+      namespaces;
+      merged = lib.mapAttrs (namespace: values: values // (result.${namespace} or {})) state;
+      error =
+        if !lib.isAttrs result
+        then "must return an attribute set"
+        else if unknown != []
+        then "returned unknown namespace(s): ${lib.concatStringsSep ", " unknown}"
+        else if invalidNamespaces != []
+        then "returned non-attribute namespace(s): ${lib.concatStringsSep ", " invalidNamespaces}"
+        else if invalidArtifacts != {}
+        then "returned non-derivation artifact(s): ${lib.concatStringsSep ", " (lib.attrNames invalidArtifacts)}"
+        else if invalidCommands != {}
+        then "returned invalid command(s): ${lib.concatStringsSep ", " (lib.attrNames invalidCommands)}"
+        else if invalidTests != {}
+        then "returned non-derivation test(s): ${lib.concatStringsSep ", " (lib.attrNames invalidTests)}"
+        else if duplicates != []
+        then "returned duplicate output(s) for ${entry.address}: ${lib.concatStringsSep ", " duplicates}"
+        else null;
     in
-      lib.throwIf (!lib.isAttrs result)
-      "check rule '${ruleName}' must return an attribute set"
-      (lib.throwIf (invalid != {})
-        "check rule '${ruleName}' returned non-derivation check(s): ${lib.concatStringsSep ", " (lib.attrNames invalid)}"
-        (lib.throwIf (duplicates != [])
-          "check rules returned duplicate check(s) for ${entry.address}: ${lib.concatStringsSep ", " duplicates}"
-          (state // result)));
+      lib.throwIf (error != null)
+      "projection rule '${ruleName}' ${error}"
+      merged;
   in
-    lib.foldlAttrs merge {} checkRules;
+    lib.foldlAttrs merge empty projectionRules;
 
   validateVariantShapes = label: extensionIds: packageSets: let
     variants = lib.attrNames packageSets;
@@ -310,9 +338,25 @@ in rec {
         lib.mapAttrs (name: package: packageViewFor scope finalSet name package)
         (projectLib.registeredPackages finalSet);
 
-      packageSetProjection = scope: finalSet:
-        lib.genAttrs (projectLib.registeredNames finalSet)
-        (name: packageViewFor scope finalSet name finalSet.${name});
+      projectedPackageSet = scope: variant: finalSet:
+        lib.genAttrs (projectLib.registeredNames finalSet) (name: let
+          package = packageViewFor scope finalSet name finalSet.${name};
+          address =
+            if scope == "native"
+            then projectLib.address "packages" ["native" name]
+            else if scope == "wasix"
+            then projectLib.address "packages" ["wasix" variant.profile name]
+            else projectLib.address "packages" ["python" variant.interpreter name];
+          cataloged = (projectLib.packageMetadata package).catalog or true;
+          supported = scope != "wasix" || builtins.elem variant.profile (supportedProfilesFor package);
+        in
+          if cataloged && supported
+          then
+            (projectEntry (packageEntry {
+              inherit address name package scope variant;
+              projectionPath = [name];
+            })).value
+          else package);
 
       historyDeclarationsFor = scope:
         lib.concatMap (extension:
@@ -345,7 +389,7 @@ in rec {
         {
           packages = {
             inherit native wasix python preferred;
-            sameProfile = final // packageSetProjection scope final;
+            sameProfile = final // projectedPackageSet scope variant final;
           };
           commands = commandsView;
           artifacts = artifactsView;
@@ -399,31 +443,25 @@ in rec {
         lib.throwIf (unknownInterfacePackages != [])
         "native package interfaces target unknown package(s): ${lib.concatStringsSep ", " unknownInterfacePackages}"
         true;
-      native = lib.mapAttrs (name: package:
+      baseNative = lib.mapAttrs (name: package:
         package // (nativePackageInterfaces.${name} or {}))
       (packageSetView "native" nativeRaw);
-      wasix = lib.mapAttrs (profile: packageSet:
+      baseWasix = lib.mapAttrs (profile: packageSet:
         lib.filterAttrs (_: package: builtins.elem profile (supportedProfilesFor package))
         (packageSetView "wasix" packageSet))
       wasixRaw;
-      python = lib.mapAttrs (_: packageSet: packageSetView "python" packageSet) pythonRaw;
-      allWasixNames = lib.unique (lib.concatMap lib.attrNames (lib.attrValues wasix));
-      preferred = lib.genAttrs allWasixNames (name: let
+      basePython = lib.mapAttrs (_: packageSet: packageSetView "python" packageSet) pythonRaw;
+      allWasixNames = lib.unique (lib.concatMap lib.attrNames (lib.attrValues baseWasix));
+      preferredProfileNameFor = name: let
         defaultProfile = profiles.defaultProfileName or null;
         packageAtDefault = wasixRaw.${defaultProfile}.${name};
         declaredProfile = preferredProfileFor packageAtDefault;
       in
         lib.throwIf (defaultProfile == null)
         "the WASIX profile inventory does not define defaultProfileName"
-        (lib.throwIf (!(wasix.${declaredProfile} ? ${name}))
+        (lib.throwIf (!(baseWasix.${declaredProfile} ? ${name}))
           "${name}: preferred WASIX profile '${declaredProfile}' is unavailable"
-          wasix.${declaredProfile}.${name}));
-
-      packageViews = {
-        inherit native wasix python preferred;
-      };
-      commandsView = commandsFor project;
-      artifactsView = artifactsFor project;
+          declaredProfile);
       harnessesView = harnessesFor project;
       contextForEntry = entry: let
         selected =
@@ -448,33 +486,36 @@ in rec {
         address = projectLib.address "packages" ["native" name];
       in
         lib.nameValuePair address (packageEntry {
-          inherit address package;
+          inherit address name package;
+          projectionPath = [name];
           scope = "native";
           variant = {};
         }))
-      native;
+      baseNative;
       wasixEntries = lib.concatMapAttrs (profile: packages:
         lib.mapAttrs' (name: package: let
           address = projectLib.address "packages" ["wasix" profile name];
         in
           lib.nameValuePair address (packageEntry {
-            inherit address package;
+            inherit address name package;
+            projectionPath = [name];
             scope = "wasix";
             variant = {inherit profile;};
           }))
         packages)
-      wasix;
+      baseWasix;
       pythonEntries = lib.concatMapAttrs (interpreter: packages:
         lib.mapAttrs' (name: package: let
           address = projectLib.address "packages" ["python" interpreter name];
         in
           lib.nameValuePair address (packageEntry {
-            inherit address package;
+            inherit address name package;
+            projectionPath = [name];
             scope = "python";
             variant = {inherit interpreter;};
           }))
         packages)
-      python;
+      basePython;
       currentPackageEntries = nativeEntries // wasixEntries // pythonEntries;
       historyEntries = lib.concatMapAttrs (_: entry:
         lib.mapAttrs' (version: package: let
@@ -482,36 +523,147 @@ in rec {
         in
           lib.nameValuePair address (packageEntry {
             inherit address package;
+            inherit (entry) name;
+            projectionPath = entry.projectionPath ++ ["versions" version];
             inherit (entry) scope variant;
           }))
         entry.package.versions)
       currentPackageEntries;
       packageEntries = currentPackageEntries // historyEntries;
-      testEntries = lib.concatMapAttrs (_: entry:
-        lib.mapAttrs' (name: check: let
-          address = "tests.${entry.address}${projectLib.addressSegment name}";
-          metadata = projectLib.packageMetadata check;
-          checkPolicy = builtins.removeAttrs metadata projectLib.machineMetadata;
-          subjectCi = entry.policy.ci or {};
-          checkCi = checkPolicy.ci or {};
+      inheritedPolicy = subject: derivation: let
+        own = builtins.removeAttrs (projectLib.packageMetadata derivation) projectLib.machineMetadata;
+        subjectCi = subject.policy.ci or {};
+        ownCi = own.ci or {};
+      in
+        own
+        // {
+          ci =
+            subjectCi
+            // ownCi
+            // {tags = lib.unique ((subjectCi.tags or []) ++ (ownCi.tags or []));};
+        };
+      mergeDisjoint = label: left: right: let
+        duplicates = lib.intersectLists (lib.attrNames left) (lib.attrNames right);
+      in
+        lib.throwIf (duplicates != [])
+        "duplicate ${label} address(es): ${lib.concatStringsSep ", " duplicates}"
+        (left // right);
+      mergeProjectionCollections = left: right: {
+        artifacts = mergeDisjoint "artifact" left.artifacts right.artifacts;
+        commands = mergeDisjoint "command" left.commands right.commands;
+        tests = mergeDisjoint "test" left.tests right.tests;
+      };
+      emptyProjectionCollection = {
+        artifacts = {};
+        commands = {};
+        tests = {};
+      };
+      projectEntry = baseEntry: let
+        outputs = projectionsFor (contextForEntry entry) entry;
+        artifactNodes = lib.mapAttrs (kind: artifact:
+          projectEntry {
+            kind = "artifact";
+            address = projectLib.address "artifacts" ([kind] ++ baseEntry.projectionPath);
+            artifactKind = kind;
+            inherit artifact;
+            inherit (baseEntry) name projectionPath source lineage scope variant instance;
+            subject = baseEntry.address;
+            packageSubject = baseEntry.packageSubject or baseEntry.address;
+            policy = inheritedPolicy baseEntry artifact;
+          })
+        outputs.artifacts;
+        relativeArtifacts = lib.mapAttrs (_: node: node.value) artifactNodes;
+        versions = lib.optionalAttrs (baseEntry.kind == "package" && baseEntry.instance.kind == "current") {
+          versions = lib.mapAttrs (version: _:
+            projectedPackageNodes.${"${baseEntry.address}.versions${projectLib.addressSegment version}"}.value)
+          baseEntry.package.versions;
+        };
+        relative = {
+          artifacts = relativeArtifacts;
+          inherit (outputs) commands tests;
+        };
+        value =
+          (
+            if baseEntry.kind == "package"
+            then baseEntry.package
+            else baseEntry.artifact
+          )
+          // versions
+          // relative;
+        entry =
+          baseEntry
+          // relative
+          // (
+            if baseEntry.kind == "package"
+            then {package = value;}
+            else {artifact = value;}
+          );
+        ownArtifacts = lib.mapAttrs' (_: node: lib.nameValuePair node.entry.address node.entry) artifactNodes;
+        ownCommands = lib.mapAttrs' (name: command: let
+          address = projectLib.address "commands" [name];
+        in
+          lib.nameValuePair address {
+            kind = "command";
+            inherit address command;
+            inherit (baseEntry) source lineage scope variant instance;
+            subject = baseEntry.address;
+            packageSubject = baseEntry.packageSubject or baseEntry.address;
+            policy = baseEntry.policy;
+          })
+        outputs.commands;
+        ownTests = lib.mapAttrs' (name: check: let
+          address = "tests.${baseEntry.address}${projectLib.addressSegment name}";
         in
           lib.nameValuePair address {
             kind = "test";
             inherit address check;
-            inherit (entry) source lineage scope variant instance;
-            subject = entry.address;
-            policy =
-              checkPolicy
-              // {
-                ci =
-                  subjectCi
-                  // checkCi
-                  // {tags = lib.unique ((subjectCi.tags or []) ++ (checkCi.tags or []));};
-              };
+            inherit (baseEntry) source lineage scope variant instance;
+            subject = baseEntry.address;
+            packageSubject = baseEntry.packageSubject or baseEntry.address;
+            policy = inheritedPolicy baseEntry check;
           })
-        (checksFor (contextForEntry entry) entry))
-      packageEntries;
-      entries = packageEntries // testEntries;
+        outputs.tests;
+        descendants = lib.foldl' mergeProjectionCollections emptyProjectionCollection (map (node: node.descendants) (lib.attrValues artifactNodes));
+      in {
+        inherit entry value;
+        descendants = mergeProjectionCollections descendants {
+          artifacts = ownArtifacts;
+          commands = ownCommands;
+          tests = ownTests;
+        };
+      };
+      projectedPackageNodes = lib.mapAttrs (_: projectEntry) packageEntries;
+      projectedPackageEntries = lib.mapAttrs (_: node: node.entry) projectedPackageNodes;
+      projected = lib.foldl' mergeProjectionCollections emptyProjectionCollection (map (node: node.descendants) (lib.attrValues projectedPackageNodes));
+      artifactEntries = projected.artifacts;
+      commandEntries = projected.commands;
+      testEntries = projected.tests;
+      entries = lib.foldl' (mergeDisjoint "catalog") {} [projectedPackageEntries artifactEntries commandEntries testEntries];
+      native = lib.mapAttrs (name: _:
+        projectedPackageNodes.${projectLib.address "packages" ["native" name]}.value)
+      baseNative;
+      wasix = lib.mapAttrs (profile: packages:
+        lib.mapAttrs (name: _:
+          projectedPackageNodes.${projectLib.address "packages" ["wasix" profile name]}.value)
+        packages)
+      baseWasix;
+      python = lib.mapAttrs (interpreter: packages:
+        lib.mapAttrs (name: _:
+          projectedPackageNodes.${projectLib.address "packages" ["python" interpreter name]}.value)
+        packages)
+      basePython;
+      preferred =
+        lib.genAttrs allWasixNames (name:
+          wasix.${preferredProfileNameFor name}.${name});
+      packageViews = {
+        inherit native wasix python preferred;
+      };
+      artifactsView = lib.foldl' lib.recursiveUpdate {} (map (entry:
+        lib.setAttrByPath ([entry.artifactKind] ++ entry.projectionPath) entry.artifact)
+      (lib.attrValues artifactEntries));
+      commandsView = lib.mapAttrs' (_: entry:
+        lib.nameValuePair entry.command.name entry.command)
+      commandEntries;
       ciPackageEntries = lib.filterAttrs (_: entry:
         builtins.elem entry.source requestedCiSources
         && (
@@ -519,15 +671,20 @@ in rec {
           != "wasix"
           || builtins.elem entry.variant.profile (ciProfilesFor entry.package)
         ))
-      packageEntries;
+      projectedPackageEntries;
       ciPackageAddresses = lib.attrNames ciPackageEntries;
+      ciArtifactEntries = lib.filterAttrs (_: entry:
+        builtins.elem entry.packageSubject ciPackageAddresses)
+      artifactEntries;
       ciTestEntries = lib.filterAttrs (_: entry:
-        builtins.elem entry.subject ciPackageAddresses)
+        builtins.elem entry.packageSubject ciPackageAddresses)
       testEntries;
-      ciEntries = ciPackageEntries // ciTestEntries;
+      ciEntries = lib.foldl' (mergeDisjoint "CI job") {} [ciPackageEntries ciArtifactEntries ciTestEntries];
       derivationOf = entry:
         if entry.kind == "package"
         then entry.package
+        else if entry.kind == "artifact"
+        then entry.artifact
         else entry.check;
     in
       assert wasixShapesValid;
