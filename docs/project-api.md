@@ -409,9 +409,9 @@ namespaces.
 
 ## Catalog
 
-The constructor creates one canonical internal catalog. Package views, tests,
-artifacts, and CI are projections from it rather than independently maintained
-inventories.
+The constructor creates one canonical internal catalog. Package views,
+artifacts, commands, tests, and CI are projections from it rather than
+independently maintained inventories.
 
 A package entry has this shape:
 
@@ -433,8 +433,9 @@ A package entry has this shape:
 ```
 
 `project.catalog.entries.<address>` contains full Nix records, including
-derivations and helper values. `ci.catalog` is its serializable CI projection;
-it is not a second catalog.
+derivations, helper values, and the entry-relative `artifacts`, `commands`, and
+`tests` projections. `ci.catalog` is its serializable CI projection; it is not a
+second catalog.
 
 Addresses are canonical structured-project paths. Examples include:
 
@@ -444,6 +445,7 @@ packages.python.py314.numpy
 packages.native.wasix-llvm
 tests.packages.wasix.exnrefEh.zlib.abi
 artifacts.webc.git
+commands.git
 ```
 
 The implementation owns one encoder and parser for addresses, including
@@ -520,14 +522,48 @@ derivation:
 }
 ```
 
-Current and historical package instances pass through the same artifact and test
-machinery. History is not a special test class.
+Current and historical package instances pass through the same projection
+machinery. History is not a special artifact or test class.
 
 ## Artifacts and commands
 
-Artifacts are distributable projections of package entries. WebCs, wheels,
-registries, and similar outputs live under `artifacts` and retain the package
-entry's provenance and instance identity.
+The general construction operation maps a catalog entry to typed projections:
+
+```nix
+projectionRules.wasmer = {
+  entry,
+  artifacts,
+  commands,
+  ...
+}:
+  lib.optionalAttrs (entry.policy.shipped or false) {
+    artifacts = {
+      pkg = pkgDerivation;
+      webc = webcDerivation;
+    };
+
+    commands.git = {
+      name = "git";
+      artifact = webcDerivation;
+      entrypoint = "git";
+    };
+
+    tests.packaged = packagedBehaviorCheck;
+  };
+```
+
+Every rule returns a possibly empty attrset containing any of `artifacts`,
+`commands`, and `tests`. Results merge disjointly within each namespace;
+collisions and invalid payloads are errors. This is one projection mechanism,
+not separate artifact and check APIs.
+
+Artifacts are distributable derivation projections. WebCs, wheels, registries,
+and similar outputs live under their subject entry and in a global view indexed
+by artifact kind and subject identity, such as `artifacts.webc.git`. Their
+catalog entries inherit the subject's provenance and instance identity. Artifact
+entries may themselves pass through projection rules, allowing packaged behavior
+tests to belong to the WebC rather than its source package. Commands and tests
+are terminal entry kinds in v1.
 
 Commands describe packaged commands as facts:
 
@@ -563,7 +599,7 @@ where they are consumed.
 
 ## Tests
 
-Every test constructor destructures the same lazy recursive context:
+Every projection rule destructures the same lazy recursive context:
 
 ```nix
 {
@@ -575,9 +611,9 @@ Every test constructor destructures the same lazy recursive context:
 }
 ```
 
-`entry` is exactly the canonical internal catalog entry being checked. It is not
-a second context record with copied package fields. The fields below are common
-check dependencies, not a test-owned or test-only API:
+`entry` is exactly the canonical internal catalog entry being projected. It is
+not a second context record with copied package fields. The fields below are
+common projection dependencies, not a test-owned API:
 
 - `packages.sameProfile` and `packages.preferred`, with retained history under
   each package's `versions`;
@@ -586,33 +622,24 @@ check dependencies, not a test-owned or test-only API:
 - `harnesses`.
 
 The package-unit argument `package` remains distinct: it is the preceding
-derivation being adapted. A test's `entry` is the completed canonical record,
-which may represent a package, artifact, or another catalog entry kind. These
-are the only constructor-specific fields; every other requested argument is a
-projection of the same shared context.
+derivation being adapted. A projection rule's `entry` is the completed canonical
+record, which may represent a package or artifact. These are the only
+constructor-specific fields; every other requested argument is a projection of
+the same shared context.
 
-A generated check rule is one function that returns a possibly empty attrset:
+An empty attrset means a rule does not apply. A rule may return several named
+test shards alongside artifacts and commands. There is no separate `appliesTo`
+operation and no architectural distinction between current-package and
+history-package checks.
 
-```nix
-checkRules.abi = {entry}:
-  lib.optionalAttrs (supportsAbiCheck entry) {
-    abi = checkDerivation;
-  };
-```
-
-An empty attrset means the rule does not apply. A rule may return several named
-shards. Rule outputs are merged disjointly, and collisions are errors. There is
-no separate `appliesTo` operation and no architectural distinction between
-current-package and history-package checks.
-
-Checks are constructors and rules, not a taxonomy of upstream, ABI, link, or
-behavior test classes. The captured-suite rule applies when a package provides
-the prepared check output. Link checks require explicit package policy, such as
+Tests are projections, not instances of a fixed upstream, ABI, link, or behavior
+taxonomy. The captured-suite projection applies when a package provides the
+prepared check output. Link checks require explicit package policy, such as
 `passthru.wasinix.checks.link`; the machinery does not infer a `packageKind`.
-Per-package ABI rules reject contradictory evidence from that package. Separate
-profile witnesses establish positive profile capabilities, such as support for
-PIC relocations, because no individual package necessarily exercises every
-capability.
+Per-package ABI projections reject contradictory evidence from that package.
+Separate profile witnesses establish positive profile capabilities, such as
+support for PIC relocations, because no individual package necessarily exercises
+every capability.
 
 Package-specific behavior checks are colocated with the package unit and named
 through `passthru.wasinix.checks`. Cross-cutting rules and profile witnesses
@@ -744,8 +771,8 @@ introduces them:
 - package-unit attributes are disjoint and invariant across applicable variants;
 - registered overrides match their declared previous owner;
 - machine-stamped provenance cannot be authored or overwritten;
-- package, artifact, test, and job addresses are unique;
-- generated check outputs merge disjointly;
+- package, artifact, command, test, and job addresses are unique;
+- generated projection outputs merge disjointly within each typed namespace;
 - aliases resolve to one canonical entry and cannot shadow another address;
 - `ci.jobs` and `ci.catalog.jobs` have identical keys;
 - every serialized catalog carries the project schema version.
