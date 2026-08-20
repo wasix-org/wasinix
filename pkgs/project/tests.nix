@@ -154,6 +154,9 @@
     nativePackageInterfacesFor = project': {
       core.profiles.default.package = project'.packages.wasix.default.core;
     };
+    runnersFor = _project: {
+      rawWasm.unbound = mkPackage {name = "raw-wasm-unbound";};
+    };
     rebasePackage = version: _spec: package:
       package.overrideAttrs (_: {
         inherit version;
@@ -775,6 +778,8 @@ in {
       consumerName = project.packages.wasix.alternate.consumer.name;
       inheritedDependencyName = project.packages.wasix.default.uses-inherited.name;
       focusedHelper = project.packages.wasix.default.uses-inherited.passthru.usedFocusedHelper;
+      runnerContextName = project.packages.wasix.default.uses-inherited.passthru.runnerContextName;
+      runnerName = project.runners.rawWasm.unbound.name;
       pythonNames = lib.attrNames project.packages.python.py;
       pythonSource = project.packages.python.py.uses-python.passthru.wasinix.source;
       pythonContextName = project.packages.python.py.contextProof.name;
@@ -836,6 +841,8 @@ in {
       consumerName = "consumer-alternate";
       inheritedDependencyName = "uses-inherited";
       focusedHelper = true;
+      runnerContextName = "raw-wasm-unbound";
+      runnerName = "raw-wasm-unbound";
       pythonNames = ["contextProof" "corePython" "inheritedPython" "uses-python"];
       pythonSource = "consumer";
       pythonContextName = "top-owned-";

@@ -59,6 +59,7 @@ The result starts with:
   packages = ...;
   commands = ...;
   artifacts = ...;
+  runners = ...;
   tests = ...;
   ci = ...;
 }
@@ -227,7 +228,7 @@ uses. The context includes:
 - `packages.sameProfile`: the immediate recursive package set.
 - `packages.preferred`: the attribute-wise projection of each package's
   preferred WASIX profile.
-- `commands`, `artifacts`, and `harnesses`.
+- `commands`, `artifacts`, `harnesses`, and `runners`.
 - `extendPackage` and the other focused package helpers.
 
 A package-unit invocation additionally supplies `package`, the preceding value
