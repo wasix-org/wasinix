@@ -9,6 +9,7 @@
   writeText,
   rustPlatform,
   wasmer,
+  binaryen,
 }: let
   cargoToml = writeText "Cargo.toml" ''
     [package]
@@ -52,13 +53,19 @@ in
     inherit src;
     cargoLock.lockFileContents = cargoLockText;
 
-    # Stock cargo build for wasm32-wasmer-wasi; the install phase runs the wasm
-    # under wasmer as the check.
+    # Stock cargo build for wasm32-wasmer-wasi; the install phase bounds the
+    # static export set and runs the wasm under wasmer.
     installPhase = ''
       runHook preInstall
       wasm=target/wasm32-wasmer-wasi/release/hello.wasm
       magic="$(od -An -tx1 -N4 "$wasm" | tr -d ' \n')"
       [ "$magic" = "0061736d" ] || { echo "not a wasm module (magic=$magic)"; exit 1; }
+      ${binaryen}/bin/wasm-dis "$wasm" >hello.wat
+      exports=$(awk '/\(export "/ { count++ } END { print count + 0 }' hello.wat)
+      if [ "$exports" -gt 128 ]; then
+        echo "FAIL: static Rust executable exported $exports symbols (expected at most 128)"
+        exit 1
+      fi
       install -Dm644 "$wasm" "$out/bin/hello.wasm"
 
       export HOME="$TMPDIR" WASMER_DIR="$TMPDIR/.wasmer"

@@ -20,12 +20,9 @@ rustPlatform.buildRustPackage (finalAttrs: {
 
   cargoHash = "sha256-6f0LnlsAKK/VywTFfjPIMBmG+Ht1q2ItRSvmKkd8qpU=";
 
-  # A shared module gets no C++ runtime injected (that block is executable-only),
-  # so a build system passing the GNU name -lstdc++ fails to link. -fopenmp is a
-  # driver flag that never reaches wasm-ld, so the omp symbols go unresolved
-  # unless the driver names libomp itself, as clang's own does. The remaining
-  # four keep the driver from synthesising executable setup for a link that is
-  # not producing one.
+  # Translate GNU C++ and OpenMP inputs for shared modules, avoid executable-only
+  # inputs for non-executable links, and export the full symbol table only from
+  # dynamically linked modules.
   patches = [
     ./wasixcc-map-libstdcxx-to-libcxx.patch
     ./wasixcc-openmp-link.patch
@@ -33,6 +30,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
     ./wasixcc-rlib-linker-input.patch
     ./wasixcc-nodefaultlibs.patch
     ./wasixcc-nostartfiles.patch
+    ./wasixcc-export-dynamic.patch
   ];
 
   doCheck = true;
