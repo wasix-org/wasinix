@@ -1,9 +1,8 @@
 {
-  package,
+  exposeExtendedPackage,
   packages,
-  extendPackage,
 }:
-extendPackage package {
+exposeExtendedPackage {
   buildInputs = [packages.sameProfile.dependency];
   passthru.wasinix.test = true;
 }

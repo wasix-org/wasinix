@@ -11,6 +11,7 @@
   checkRules ? {},
   pythonSetsFor ? _args: {},
   extendPythonSet ? packageSet: overlay: packageSet.overrideScope overlay,
+  rebasePackage ? (import ./history.nix {inherit lib;}).rebasePackage,
 }: let
   projectLib = import ./lib.nix {inherit lib;};
   schema = builtins.fromJSON (builtins.readFile ../../schema/project.json);
@@ -18,6 +19,7 @@
   validateExtension = extension: let
     id = extension.id or null;
     invalidLanes = lib.subtractLists ["shared" "native" "wasix" "python"] (lib.attrNames (extension.overlays or {}));
+    invalidHistory = lib.subtractLists ["wasix" "python"] (lib.attrNames (extension.history or {}));
   in
     lib.throwIf (
       !builtins.isString id
@@ -26,7 +28,9 @@
     "Wasinix extension IDs must use lowercase letters, numbers, '.', '_', or '-'"
     (lib.throwIf (invalidLanes != [])
       "Wasinix extension '${id}' has unknown overlay lane(s): ${lib.concatStringsSep ", " invalidLanes}"
-      extension);
+      (lib.throwIf (invalidHistory != [])
+        "Wasinix extension '${id}' has unknown history lane(s): ${lib.concatStringsSep ", " invalidHistory}"
+        extension));
 
   ensureUniqueExtensions = extensions: let
     grouped = lib.groupBy (extension: extension.id) extensions;
@@ -87,8 +91,6 @@
       source = extension.id;
     };
 
-  packageView = package: package // {versions = {};};
-
   packageEntry = {
     address,
     package,
@@ -96,11 +98,22 @@
     variant,
   }: let
     metadata = projectLib.packageMetadata package;
+    basePolicy = builtins.removeAttrs metadata projectLib.machineMetadata;
+    policy =
+      if metadata.instance.kind == "history"
+      then
+        basePolicy
+        // {
+          ci =
+            (basePolicy.ci or {})
+            // {tags = lib.unique ((basePolicy.ci.tags or []) ++ ["history-tests"]);};
+        }
+      else basePolicy;
   in {
     kind = "package";
     inherit address package scope variant;
     inherit (metadata) source lineage instance;
-    policy = builtins.removeAttrs metadata ["source" "lineage" "instance"];
+    inherit policy;
   };
 
   serializableEntry = entry:
@@ -167,6 +180,10 @@ in rec {
   }: let
     allExtensions = ensureUniqueExtensions (map validateExtension ([builtInExtension] ++ extensions));
     extensionIds = map (extension: extension.id) allExtensions;
+    historyTables = lib.listToAttrs (map (extension:
+      lib.nameValuePair extension.id
+      (lib.mapAttrs (_: path: builtins.fromJSON (builtins.readFile path)) (extension.history or {})))
+    allExtensions);
     requestedCiSources = ci.sources or (map (extension: extension.id) extensions);
     unknownCiSources = lib.subtractLists extensionIds requestedCiSources;
 
@@ -185,16 +202,111 @@ in rec {
       allExtensions;
 
     project = let
-      contextFor = scope: variant: enclosingPkgs: {final, ...}:
-        project.context
+      historySpecsFor = scope: name: package: let
+        source = (projectLib.packageMetadata package).source;
+      in
+        ((historyTables.${source} or {}).${scope} or {}).${name} or {};
+
+      replayHistory = {
+        finalSet,
+        name,
+        package,
+        spec,
+        version,
+      }: let
+        metadata = projectLib.packageMetadata package;
+        source = metadata.source;
+        baseSet = metadata.${projectLib.historyBaseAttr};
+        overlays = metadata.${projectLib.historyOverlaysAttr};
+        rebased =
+          lib.throwIf (!(baseSet ? ${name}))
+          "${source}.${name}: history requires a preceding package to rebase"
+          (rebasePackage version spec baseSet.${name});
+        initial = baseSet // {${name} = rebased;};
+        replayed = lib.foldl' (previous: overlay:
+          previous
+          // (projectLib.registerOverlay {
+              inherit overlay source;
+              instanceFor = resultName: result:
+                if resultName == name
+                then {
+                  kind = "history";
+                  inherit version;
+                }
+                else
+                  (projectLib.packageMetadata
+                    result).instance or {
+                    kind = "current";
+                    version = toString (result.version or result.name);
+                  };
+            }
+            finalSet
+            previous))
+        initial
+        overlays;
+        result = replayed.${name};
+      in
+        lib.throwIf (toString result.version != version)
+        "${source}.${name}: history requested ${version}, but replay produced ${toString result.version}"
+        result;
+
+      packageViewFor = scope: finalSet: name: package:
+        package
         // {
-          packages =
-            project.packages
-            // {
-              sameProfile =
-                final
-                // lib.mapAttrs (_: packageView) (projectLib.registeredPackages final);
-            };
+          versions = lib.mapAttrs (version: spec:
+            (replayHistory {
+              inherit finalSet name package spec version;
+            })
+            // {versions = {};})
+          (historySpecsFor scope name package);
+        };
+
+      packageSetView = scope: finalSet:
+        lib.mapAttrs (name: package: packageViewFor scope finalSet name package)
+        (projectLib.registeredPackages finalSet);
+
+      packageSetProjection = scope: finalSet:
+        lib.genAttrs (projectLib.registeredNames finalSet)
+        (name: packageViewFor scope finalSet name finalSet.${name});
+
+      historyDeclarationsFor = scope:
+        lib.concatMap (extension:
+          map (name: {
+            inherit name;
+            source = extension.id;
+          })
+          (lib.attrNames ((historyTables.${extension.id} or {}).${scope} or {})))
+        allExtensions;
+
+      validateHistory = scope: packageSet: let
+        declarations = historyDeclarationsFor scope;
+        grouped = lib.groupBy (declaration: declaration.name) declarations;
+        duplicates = lib.attrNames (lib.filterAttrs (_: values: lib.length values > 1) grouped);
+        invalid = lib.filter (declaration: let
+          package = packageSet.${declaration.name} or null;
+        in
+          package
+          == null
+          || (projectLib.packageMetadata package).source or null != declaration.source)
+        declarations;
+      in
+        lib.throwIf (duplicates != [])
+        "multiple Wasinix sources retain history for ${scope} package(s): ${lib.concatStringsSep ", " duplicates}"
+        (lib.throwIf (invalid != [])
+          "${scope} history does not match its current package owner: ${lib.concatStringsSep ", " (map (declaration: "${declaration.source}.${declaration.name}") invalid)}"
+          true);
+
+      contextFor = scope: variant: enclosingPkgs: {final, ...}:
+        {
+          packages = {
+            inherit native wasix python preferred;
+            toolchain = {};
+            sameProfile = final // packageSetProjection scope final;
+          };
+          commands = commandsView;
+          artifacts = artifactsView;
+          harnesses = harnessesView;
+          inherit (projectLib) extendPackage mergeScript;
         }
         // lib.optionalAttrs (enclosingPkgs != null) {pkgs = enclosingPkgs;};
 
@@ -217,8 +329,7 @@ in rec {
         profiles.profiles;
 
       pythonSpecs = pythonSetsFor {inherit project nativeRaw wasixRaw;};
-      pythonRaw = lib.mapAttrs (interpreter: spec:
-        lib.foldl' (
+      pythonRaw = lib.mapAttrs (interpreter: spec: (lib.foldl' (
           packageSet: extension:
             if (extension.overlays or {}) ? python
             then
@@ -230,15 +341,17 @@ in rec {
             else packageSet
         )
         spec.packageSet
-        allExtensions)
+        allExtensions))
       pythonSpecs;
 
       wasixShapesValid = validateVariantShapes "WASIX" extensionIds wasixRaw;
       pythonShapesValid = validateVariantShapes "Python" extensionIds pythonRaw;
+      wasixHistoryValid = lib.all (packageSet: validateHistory "wasix" packageSet) (lib.attrValues wasixRaw);
+      pythonHistoryValid = lib.all (packageSet: validateHistory "python" packageSet) (lib.attrValues pythonRaw);
 
-      native = lib.mapAttrs (_: packageView) (projectLib.registeredPackages nativeRaw);
-      wasix = lib.mapAttrs (_: packageSet: lib.mapAttrs (_: packageView) (projectLib.registeredPackages packageSet)) wasixRaw;
-      python = lib.mapAttrs (_: packageSet: lib.mapAttrs (_: packageView) (projectLib.registeredPackages packageSet)) pythonRaw;
+      native = packageSetView "native" nativeRaw;
+      wasix = lib.mapAttrs (_: packageSet: packageSetView "wasix" packageSet) wasixRaw;
+      python = lib.mapAttrs (_: packageSet: packageSetView "python" packageSet) pythonRaw;
       allWasixNames = lib.unique (lib.concatMap lib.attrNames (lib.attrValues wasix));
       preferred = lib.genAttrs allWasixNames (name: let
         defaultProfile = profiles.defaultProfileName or null;
@@ -250,6 +363,33 @@ in rec {
         (lib.throwIf (!(wasix.${declaredProfile} ? ${name}))
           "${name}: preferred WASIX profile '${declaredProfile}' is unavailable"
           wasix.${declaredProfile}.${name}));
+
+      packageViews = {
+        inherit native wasix python preferred;
+        toolchain = {};
+      };
+      toolchainView = toolchainFor project;
+      commandsView = commandsFor project;
+      artifactsView = artifactsFor project;
+      harnessesView = harnessesFor project;
+      contextForEntry = entry: let
+        selected =
+          if entry.scope == "native"
+          then {
+            final = nativeRaw;
+            enclosing = null;
+          }
+          else if entry.scope == "wasix"
+          then {
+            final = wasixRaw.${entry.variant.profile};
+            enclosing = null;
+          }
+          else {
+            final = pythonRaw.${entry.variant.interpreter};
+            enclosing = pythonSpecs.${entry.variant.interpreter}.pkgs;
+          };
+      in
+        contextFor entry.scope entry.variant selected.enclosing {inherit (selected) final;};
 
       nativeEntries = lib.mapAttrs' (name: package: let
         address = projectLib.address "packages" ["native" name];
@@ -282,20 +422,41 @@ in rec {
           }))
         packages)
       python;
-      packageEntries = nativeEntries // wasixEntries // pythonEntries;
+      currentPackageEntries = nativeEntries // wasixEntries // pythonEntries;
+      historyEntries = lib.concatMapAttrs (_: entry:
+        lib.mapAttrs' (version: package: let
+          address = "${entry.address}.versions${projectLib.addressSegment version}";
+        in
+          lib.nameValuePair address (packageEntry {
+            inherit address package;
+            inherit (entry) scope variant;
+          }))
+        entry.package.versions)
+      currentPackageEntries;
+      packageEntries = currentPackageEntries // historyEntries;
       testEntries = lib.concatMapAttrs (_: entry:
         lib.mapAttrs' (name: check: let
           address = "tests.${entry.address}${projectLib.addressSegment name}";
           metadata = projectLib.packageMetadata check;
+          checkPolicy = builtins.removeAttrs metadata projectLib.machineMetadata;
+          subjectCi = entry.policy.ci or {};
+          checkCi = checkPolicy.ci or {};
         in
           lib.nameValuePair address {
             kind = "test";
             inherit address check;
             inherit (entry) source lineage scope variant instance;
             subject = entry.address;
-            policy = builtins.removeAttrs metadata ["source" "lineage" "instance"];
+            policy =
+              checkPolicy
+              // {
+                ci =
+                  subjectCi
+                  // checkCi
+                  // {tags = lib.unique ((subjectCi.tags or []) ++ (checkCi.tags or []));};
+              };
           })
-        (checksFor project.context entry))
+        (checksFor (contextForEntry entry) entry))
       packageEntries;
       entries = packageEntries // testEntries;
       ciEntries = lib.filterAttrs (_: entry: builtins.elem entry.source requestedCiSources) entries;
@@ -305,16 +466,15 @@ in rec {
         else entry.check;
     in
       assert wasixShapesValid;
-      assert pythonShapesValid; {
+      assert pythonShapesValid;
+      assert wasixHistoryValid;
+      assert pythonHistoryValid; {
         schemaVersion = schema.version;
-        packages = {
-          inherit native wasix python preferred;
-          toolchain = {};
-        };
-        toolchain = toolchainFor project;
-        commands = commandsFor project;
-        artifacts = artifactsFor project;
-        harnesses = harnessesFor project;
+        packages = packageViews;
+        toolchain = toolchainView;
+        commands = commandsView;
+        artifacts = artifactsView;
+        harnesses = harnessesView;
         tests = lib.mapAttrs (_: entry: entry.check) testEntries;
         catalog = {inherit entries;};
         ci = {
@@ -324,10 +484,6 @@ in rec {
             schemaVersion = project.schemaVersion;
             jobs = lib.mapAttrs (_: serializableEntry) ciEntries;
           };
-        };
-        context = {
-          inherit (project) packages commands artifacts harnesses;
-          inherit (projectLib) extendPackage mergeScript;
         };
         internals.packageSets = {
           inherit nativeRaw wasixRaw pythonRaw;

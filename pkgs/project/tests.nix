@@ -29,10 +29,18 @@
     packages.sameProfile = final;
     inherit (projectLib) extendPackage;
   };
-  loaded =
+  loadedRaw =
     projectLib.loadPackageOverlay {
       inherit contextFor;
       dir = ./tests/units;
+    }
+    final
+    prev;
+  loaded = builtins.removeAttrs loadedRaw [projectLib.unitOverlaysAttr];
+  bareUnit =
+    projectLib.loadPackageOverlay {
+      inherit contextFor;
+      dir = ./tests/invalid-units;
     }
     final
     prev;
@@ -108,12 +116,21 @@
         packageSet = mkPythonSet [];
       };
     };
+    rebasePackage = version: _spec: package:
+      package.overrideAttrs (_: {
+        inherit version;
+        name = "${package.name}-${version}";
+      });
   };
   projectApi = import ./default.nix (projectApiArgs
     // {
-      checkRules.probe = {entry, ...}:
+      checkRules.probe = {
+        entry,
+        packages,
+        ...
+      }:
         lib.optionalAttrs (entry.policy.checks.probe or false) {
-          probe = mkPackage {name = "probe-${entry.package.name}";};
+          probe = mkPackage {name = "probe-${entry.package.name}-${packages.sameProfile.core.versions."0.9".version}";};
         };
     });
   fakeImportNixpkgs = args: let
@@ -125,10 +142,15 @@
     lib.fix (final: builtins.foldl' (previous: overlay: previous // overlay final previous) base args.overlays);
   consumerExtension = {
     id = "consumer";
+    history = {
+      wasix = ./tests/wasix-history.json;
+      python = ./tests/python-history.json;
+    };
     overlays = {
       wasix = final: previous: {
         core = projectLib.extendPackage previous.core {
           passthru.wasinix.overrides = "wasinix";
+          passthru.wasinix.checks.probe = true;
         };
         consumer = mkPackage {
           name = "consumer-${final.profile}";
@@ -196,6 +218,16 @@
       }
     ];
   };
+  staleHistoryProject = projectApi.mkProject {
+    system = "test-system";
+    importNixpkgs = fakeImportNixpkgs;
+    extensions = [
+      {
+        id = "stale-history";
+        history.wasix = ./tests/wasix-history.json;
+      }
+    ];
+  };
   duplicateCheckProject = (import ./default.nix (projectApiArgs
     // {
       checkRules = {
@@ -221,11 +253,15 @@ in {
       names = lib.attrNames loaded;
       existingInputs = map (package: package.name) loaded.existing.buildInputs;
       existingPolicy = loaded.existing.passthru.wasinix.test;
+      replayNames = lib.attrNames loadedRaw.${projectLib.unitOverlaysAttr};
+      bareUnitFails = !(force bareUnit).success;
     };
     expected = {
       names = ["existing" "family-a" "family-b" "new"];
       existingInputs = ["dependency"];
       existingPolicy = true;
+      replayNames = ["existing" "family-a" "family-b" "new"];
+      bareUnitFails = true;
     };
   };
 
@@ -261,16 +297,24 @@ in {
       pythonNames = lib.attrNames project.packages.python.py;
       pythonSource = project.packages.python.py.uses-python.passthru.wasinix.source;
       pythonContextName = project.packages.python.py.contextProof.name;
+      wasixHistoryVersion = project.packages.wasix.default.core.versions."0.9".version;
+      preferredHistoryVersion = project.packages.preferred.core.versions."0.9".version;
+      pythonHistoryVersion = project.packages.python.py.inheritedPython.versions."0.8".version;
+      historyDependencyVersion = project.packages.python.py.inheritedPython.versions."0.8".passthru.wasinix.historyDependency;
+      historyTags = project.ci.catalog.jobs."packages.wasix.default.core.versions[\"0.9\"]".policy.ci.tags;
+      historyTestTags = project.ci.catalog.jobs."tests.packages.wasix.default.core.versions[\"0.9\"].probe".policy.ci.tags;
       ciSources = project.ci.sources;
       ciJobNames = lib.attrNames project.ci.jobs;
       catalogJobNames = lib.attrNames project.ci.catalog.jobs;
       testNames = lib.attrNames project.tests;
       testSubject = project.ci.catalog.jobs."tests.packages.wasix.default.consumer.probe".subject;
+      testContextName = project.tests."tests.packages.wasix.default.consumer.probe".name;
       unknownCiSourceFails = !(force unknownCiSource).success;
       duplicateExtensionFails = !(force duplicateExtension).success;
       duplicateCheckFails = !(force duplicateCheckProject.tests).success;
       invalidCheckFails = !(force invalidCheckProject.tests).success;
       variantShapeFails = !(force variantShapeProject).success;
+      staleHistoryFails = !(force staleHistoryProject).success;
     };
     expected = {
       schemaVersion = 1;
@@ -281,42 +325,70 @@ in {
       preferredProfile = "core";
       consumerName = "consumer-alternate";
       inheritedDependencyName = "uses-inherited";
-      pythonNames = ["contextProof" "corePython" "uses-python"];
+      pythonNames = ["contextProof" "corePython" "inheritedPython" "uses-python"];
       pythonSource = "consumer";
       pythonContextName = "top-owned-false";
+      wasixHistoryVersion = "0.9";
+      preferredHistoryVersion = "0.9";
+      pythonHistoryVersion = "0.8";
+      historyDependencyVersion = "0.9";
+      historyTags = ["history-tests"];
+      historyTestTags = ["history-tests"];
       ciSources = ["consumer"];
       ciJobNames = [
+        "packages.python.py.inheritedPython"
+        ''packages.python.py.inheritedPython.versions["0.8"]''
         ''packages.python.py["uses-python"]''
         "packages.wasix.alternate.consumer"
         "packages.wasix.alternate.core"
+        ''packages.wasix.alternate.core.versions["0.9"]''
         ''packages.wasix.alternate["dot.name"]''
         "packages.wasix.default.consumer"
         "packages.wasix.default.core"
+        ''packages.wasix.default.core.versions["0.9"]''
         ''packages.wasix.default["dot.name"]''
         "tests.packages.wasix.alternate.consumer.probe"
+        "tests.packages.wasix.alternate.core.probe"
+        ''tests.packages.wasix.alternate.core.versions["0.9"].probe''
         "tests.packages.wasix.default.consumer.probe"
+        "tests.packages.wasix.default.core.probe"
+        ''tests.packages.wasix.default.core.versions["0.9"].probe''
       ];
       catalogJobNames = [
+        "packages.python.py.inheritedPython"
+        ''packages.python.py.inheritedPython.versions["0.8"]''
         ''packages.python.py["uses-python"]''
         "packages.wasix.alternate.consumer"
         "packages.wasix.alternate.core"
+        ''packages.wasix.alternate.core.versions["0.9"]''
         ''packages.wasix.alternate["dot.name"]''
         "packages.wasix.default.consumer"
         "packages.wasix.default.core"
+        ''packages.wasix.default.core.versions["0.9"]''
         ''packages.wasix.default["dot.name"]''
         "tests.packages.wasix.alternate.consumer.probe"
+        "tests.packages.wasix.alternate.core.probe"
+        ''tests.packages.wasix.alternate.core.versions["0.9"].probe''
         "tests.packages.wasix.default.consumer.probe"
+        "tests.packages.wasix.default.core.probe"
+        ''tests.packages.wasix.default.core.versions["0.9"].probe''
       ];
       testNames = [
         "tests.packages.wasix.alternate.consumer.probe"
+        "tests.packages.wasix.alternate.core.probe"
+        ''tests.packages.wasix.alternate.core.versions["0.9"].probe''
         "tests.packages.wasix.default.consumer.probe"
+        "tests.packages.wasix.default.core.probe"
+        ''tests.packages.wasix.default.core.versions["0.9"].probe''
       ];
       testSubject = "packages.wasix.default.consumer";
+      testContextName = "probe-consumer-default-0.9";
       unknownCiSourceFails = true;
       duplicateExtensionFails = true;
       duplicateCheckFails = true;
       invalidCheckFails = true;
       variantShapeFails = true;
+      staleHistoryFails = true;
     };
   };
 }

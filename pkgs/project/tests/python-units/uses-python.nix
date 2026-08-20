@@ -1,2 +1,5 @@
-{packages}:
-packages.sameProfile.inheritedPython.overrideAttrs (_: {name = "uses-python";})
+{
+  exposePackage,
+  packages,
+}:
+exposePackage (packages.sameProfile.inheritedPython.overrideAttrs (_: {name = "uses-python";}))
