@@ -2067,6 +2067,59 @@ mod markdown {
     /// `/wasinix build checks.gzip-roundtrip` whose only job was blocked by
     /// a dependency reported "✅ 5340 jobs green": a neutral gate counted
     /// nowhere, and the heading counted evaluated jobs rather than built.
+    /// A diff concluded "CI found 1 regressions" and named nothing: the
+    /// regression was a job that never ran, whose failure atom is transitive
+    /// and so is filtered from every failure table.
+    #[test]
+    fn a_regression_that_never_ran_is_named() {
+        use crate::ci::facts::{Failure, FailureCause};
+        use crate::ci::plan::TaskKind;
+        use crate::ci::report::{Conclusion, TaskView};
+        use crate::support::atoms::{JobAddr, TaskStatus};
+        let report = crate::ci::report::Report {
+            title: "CI found 1 regressions".into(),
+            conclusion: Some(Conclusion::Failure),
+            complete: true,
+            started_at: None,
+            finished_at: None,
+            annotations: Vec::new(),
+            tasks: vec![TaskView {
+                task_id: "head.packages".into(),
+                label: "head: Packages".into(),
+                kind: TaskKind::Build,
+                case: "head".into(),
+                status: TaskStatus::Neutral,
+                gate: true,
+                enabled: true,
+                headline: "1529 selected · 1 blocked".into(),
+                elapsed_seconds: None,
+                artifact_bytes: None,
+            }],
+            failures: std::collections::BTreeMap::from([(
+                "head.packages".to_string(),
+                vec![Failure {
+                    job: JobAddr("checks.cli-behavior-find".into()),
+                    cause: FailureCause::Transitive,
+                    class: Some("Build".into()),
+                    message: Some("build failed before producing a log".into()),
+                    jobs: Vec::new(),
+                    position: None,
+                    log: None,
+                }],
+            )]),
+            tests: std::collections::BTreeMap::new(),
+            version_updates: std::collections::BTreeMap::new(),
+            comparisons: Vec::new(),
+            request: None,
+            command: None,
+        };
+        let body = comment(&report, &Default::default(), None, &links()).into_string();
+        assert!(body.contains("checks.cli-behavior-find"), "{body}");
+        assert!(body.contains("Never ran (1)"), "{body}");
+        // And the task that carried it, which is neutral rather than failed.
+        assert!(body.contains("head: Packages"), "{body}");
+    }
+
     #[test]
     fn a_blocked_gate_is_never_green() {
         use crate::ci::facts::{BuildFacts, Failure, FailureCause};

@@ -173,6 +173,42 @@ fn plural(count: usize, noun: &str) -> Markdown {
     }
 }
 
+/// The jobs that never ran, by name. Their failure atoms are transitive,
+/// which every failure table filters out, so a run whose only loss is
+/// blocked work has nothing to show without this.
+fn blocked_jobs(report: &Report) -> Markdown {
+    let blocked: Vec<&Failure> = report
+        .failures
+        .values()
+        .flatten()
+        .filter(|failure| failure.cause == FailureCause::Transitive)
+        .collect();
+    if blocked.is_empty() {
+        return Markdown::new();
+    }
+    let mut text = Markdown::concat([
+        Markdown::constant("Never ran ("),
+        Markdown::text(&blocked.len().to_string()),
+        Markdown::constant("):\n"),
+    ]);
+    for failure in blocked.iter().take(FAILURE_ROWS) {
+        text = Markdown::concat([
+            text,
+            Markdown::constant("- "),
+            Markdown::code(failure.job.as_str()),
+            match &failure.message {
+                Some(message) => Markdown::concat([
+                    Markdown::constant(" · "),
+                    headline_cell(message),
+                ]),
+                None => Markdown::new(),
+            },
+            Markdown::constant("\n"),
+        ]);
+    }
+    text.push(Markdown::constant("\n"))
+}
+
 /// `N jobs blocked behind these failures`, or nothing.
 fn blocked_line(report: &Report) -> Markdown {
     let blocked = blocked_count(report);
@@ -633,8 +669,16 @@ fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
         Markdown::constant("\n\n"),
     ]);
     if primary.is_empty() {
+        // A regression can be a job that never ran, whose failure atom is
+        // transitive and so appears in no failure table. Naming it is the
+        // whole answer; without this the comment counted a regression and
+        // said nothing about which one.
+        text = text.push(blocked_jobs(report));
         for task in &report.tasks {
-            if matches!(task.status, TaskStatus::Failure | TaskStatus::Cancelled) {
+            if matches!(
+                task.status,
+                TaskStatus::Failure | TaskStatus::Cancelled | TaskStatus::Neutral
+            ) {
                 text = Markdown::concat([
                     text,
                     Markdown::constant("- "),
