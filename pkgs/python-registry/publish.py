@@ -172,7 +172,10 @@ def main():
             for f, m in sorted(wheels.items())
         ]
         pages[project] = files
-    make_index.write_views(staging, pages)
+    # a manifest predating the field has no flag, so a project last published
+    # before it existed stays out of simple/ until its next publish
+    supersedes = {m["project"] for m in manifests.values() if m.get("supersedes")}
+    make_index.write_views(staging, pages, supersedes)
     (staging / "index.html").write_text(make_index.landing(projects))
     make_index.write_packages_json(
         staging / "packages.json",

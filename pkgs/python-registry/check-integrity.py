@@ -74,13 +74,16 @@ def check_views(root: Path, wheels: list[tuple[str, Path]]) -> None:
     Being the priority index is what binds a resolver to our versions, so a
     project listed here that PyPI could have supplied blocks the version a
     consuming project asks for. A project missing here is the opposite defect:
-    the resolver silently takes upstream's build of something we patched."""
+    the resolver silently takes upstream's build of something we patched.
+
+    A tweak that only skips a test leaves the wheel identical to upstream's, so
+    it does not qualify; pkgs/lib/default.nix decides that."""
     simple = root / "simple"
     provenance = json.loads((root / "provenance.json").read_text())
     expected = {
         m["name"]
         for fname, m in provenance.items()
-        if fname[: -len(".whl")].rsplit("-", 1)[-1] != "any" or m.get("source")
+        if fname[: -len(".whl")].rsplit("-", 1)[-1] != "any" or m.get("supersedes")
     }
     listed = set(PROJECT_LINK.findall((simple / "index.html").read_text()))
     paged = {

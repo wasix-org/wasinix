@@ -286,6 +286,19 @@ in rec {
           '';
         };
       merged = extendDrv old effectiveTweaks;
+      # Rewriting the source or the build changes what the wheel contains, so
+      # PyPI's copy of this version is not a substitute and the registry has to
+      # serve ours (pkgs/python-registry). Skipping a test does not.
+      supersedesPyPI = lib.any (a: effectiveTweaks ? ${a}) [
+        "src"
+        "version"
+        "pname"
+        "patches"
+        "prePatch"
+        "postPatch"
+        "preBuild"
+        "postBuild"
+      ];
     in
       merged
       # buildPythonPackage derives passthru.requiredPythonModules when it is
@@ -301,6 +314,10 @@ in rec {
             requiredPythonModules =
               pkg.pythonModule.pkgs.requiredPythonModules
               ((old // merged).propagatedBuildInputs or []);
+            wasix =
+              (old.passthru.wasix or {})
+              // (merged.passthru.wasix or {})
+              // lib.optionalAttrs supersedesPyPI {inherit supersedesPyPI;};
           };
       });
 
