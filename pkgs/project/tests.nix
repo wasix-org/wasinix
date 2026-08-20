@@ -24,7 +24,10 @@
   final = {
     inherit dependency newRecipe familyA familyB;
   };
-  prev = {existing = previous;};
+  prev = {
+    existing = previous;
+    new = throw "an exposePackage unit must not force its preceding value";
+  };
   contextFor = {final, ...}: {
     packages.sameProfile = final;
     inherit (projectLib) extendPackage;
@@ -151,10 +154,10 @@
         packageSet = mkPythonSet [];
       };
     };
-    nativePackageInterfacesFor = project': {
-      core.profiles.default.package = project'.packages.wasix.default.core;
+    nativePackageInterfacesFor = {project, ...}: {
+      core.profiles.default.package = project.packages.wasix.default.core;
     };
-    runnersFor = _project: {
+    runnersFor = _args: {
       rawWasm.unbound = mkPackage {name = "raw-wasm-unbound";};
     };
     rebasePackage = version: _spec: package:
@@ -358,7 +361,7 @@
   wasmerProjectApi = import ./default.nix (projectApiArgs // {projectionRules = wasmerProjectionRules;});
   behaviorProjectApi = import ./default.nix (projectApiArgs
     // {
-      harnessesFor = _project: fakeHarnesses;
+      harnessesFor = _args: fakeHarnesses;
       projectionRules = wasmerProjectionRules // behaviorProjectionRules;
     });
   wasmerExtension = {
@@ -513,7 +516,7 @@
   };
   invalidNativeInterfaceProject = (import ./default.nix (projectApiArgs
     // {
-      nativePackageInterfacesFor = _project: {
+      nativePackageInterfacesFor = _args: {
         missing.profiles = {};
       };
     })).mkProject {

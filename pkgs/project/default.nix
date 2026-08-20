@@ -3,10 +3,11 @@
   profiles,
   builtInExtension,
   crossSystemFor,
-  configFor ? _scope: _variant: {},
-  nativePackageInterfacesFor ? _project: {},
-  harnessesFor ? _project: {},
-  runnersFor ? _project: {},
+  configFor ? _args: {},
+  setOverlaysFor ? _args: [],
+  nativePackageInterfacesFor ? _args: {},
+  harnessesFor ? _args: {},
+  runnersFor ? _args: {},
   projectionRules ? {},
   pythonSetsFor ? _args: {},
   extendPythonSet ? packageSet: overlay: packageSet.overrideScope overlay,
@@ -412,16 +413,30 @@ in rec {
         harnesses = harnessesView;
         runners = runnersView;
         pkgs =
-          if enclosingPkgs == null
+          if enclosingPkgs != null
+          then enclosingPkgs
+          else if scope == "wasix"
           then nativeRaw
-          else enclosingPkgs;
+          else final;
         inherit (projectLib) dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix extendPackage linkInputs mergeScript replaceInputsByName;
       };
 
       nativeRaw = importNixpkgs {
         localSystem = {inherit system;};
-        config = configFor "native" {};
-        overlays = overlaysFor (contextFor "native" {} null) ["shared" "native"];
+        config = configFor {
+          inherit project;
+          nativeRaw = null;
+          scope = "native";
+          variant = {};
+        };
+        overlays =
+          setOverlaysFor {
+            inherit project;
+            nativeRaw = null;
+            scope = "native";
+            variant = {};
+          }
+          ++ overlaysFor (contextFor "native" {} null) ["shared" "native"];
       };
 
       wasixRaw =
@@ -430,8 +445,18 @@ in rec {
             importNixpkgs {
               localSystem = {inherit system;};
               crossSystem = crossSystemFor profile spec;
-              config = configFor "wasix" {inherit profile;};
-              overlays = overlaysFor (contextFor "wasix" {inherit profile;} null) ["shared" "wasix"];
+              config = configFor {
+                inherit project nativeRaw;
+                scope = "wasix";
+                variant = {inherit profile;};
+              };
+              overlays =
+                setOverlaysFor {
+                  inherit project nativeRaw;
+                  scope = "wasix";
+                  variant = {inherit profile;};
+                }
+                ++ overlaysFor (contextFor "wasix" {inherit profile;} null) ["shared" "wasix"];
             }
         )
         profiles.profiles;
@@ -457,7 +482,9 @@ in rec {
       wasixHistoryValid = lib.all (packageSet: validateHistory "wasix" packageSet) (lib.attrValues wasixRaw);
       pythonHistoryValid = lib.all (packageSet: validateHistory "python" packageSet) (lib.attrValues pythonRaw);
 
-      nativePackageInterfaces = nativePackageInterfacesFor project;
+      nativePackageInterfaces = nativePackageInterfacesFor {
+        inherit project nativeRaw wasixRaw pythonRaw;
+      };
       unknownInterfacePackages = lib.subtractLists (projectLib.registeredNames nativeRaw) (lib.attrNames nativePackageInterfaces);
       nativeInterfacesValid =
         lib.throwIf (unknownInterfacePackages != [])
@@ -482,8 +509,11 @@ in rec {
         (lib.throwIf (!(baseWasix.${declaredProfile} ? ${name}))
           "${name}: preferred WASIX profile '${declaredProfile}' is unavailable"
           declaredProfile);
-      harnessesView = harnessesFor project;
-      runnersView = runnersFor project;
+      callbackArgs = {
+        inherit project nativeRaw wasixRaw pythonRaw;
+      };
+      harnessesView = harnessesFor callbackArgs;
+      runnersView = runnersFor callbackArgs;
       contextForEntry = entry: let
         selected =
           if entry.scope == "native"

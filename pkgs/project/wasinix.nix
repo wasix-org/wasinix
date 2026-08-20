@@ -12,66 +12,58 @@ in {
     extensions ? [],
     ci ? {},
   }: let
-    # Cross sets consume the catalogued native toolchain through unregistered
-    # overlays; registering those recipes again would duplicate their ownership.
     project = projectApi.mkProject {
-      inherit system extensions ci;
-      importNixpkgs = args:
-        importNixpkgs (
-          args
-          // {
-            overlays =
-              lib.optionals (args ? crossSystem) [
-                (nativePackageRecipes.overlay {nativeNixUpdateScript = nativePkgs.nix-update-script;})
-                wasixInfrastructureOverlay
-              ]
-              ++ (args.overlays or []);
-          }
-        );
+      inherit system importNixpkgs extensions ci;
     };
 
-    nativePkgs = project.internals.packageSets.nativeRaw;
-    rawWasm = import ../runners/raw-wasm.nix {pkgs = nativePkgs;};
-    runtime =
-      if wasmerRuntime == null
-      then nativePkgs.wasmer
-      else wasmerRuntime;
-    referenceScanner = nativePkgs.callPackage ../lib/check-reference-scanner.nix {};
-    toolchain = import ../toolchain {
-      pkgs = nativePkgs;
-      inherit ghcWasm;
-    };
-
-    rustCrossPkgs = importNixpkgs {
-      localSystem = {inherit system;};
-      crossSystem = {
-        config = "wasm32-unknown-wasi";
-        useLLVM = true;
-        isWasix = true;
-        rust.rustcTarget = "wasm32-wasmer-wasi";
-      };
-      config.allowUnsupportedSystem = true;
-      overlays = [];
-    };
-    crateEdits =
-      import ../lib/crate-edits.nix {
+    constructionFor = nativePkgs: let
+      rawWasm = import ../runners/raw-wasm.nix {pkgs = nativePkgs;};
+      runtime =
+        if wasmerRuntime == null
+        then nativePkgs.wasmer
+        else wasmerRuntime;
+      referenceScanner = nativePkgs.callPackage ../lib/check-reference-scanner.nix {};
+      toolchain = import ../toolchain {
         pkgs = nativePkgs;
-        pins = builtins.fromJSON (builtins.readFile ../cargo-registry/crates.json);
-      }
-      ../lib/wasix-crate-patches;
-    wasixRustPlatform = import ../set/rust-platform.nix {
-      inherit lib crateEdits;
-      pkgsCross = rustCrossPkgs;
-      cargo = nativePkgs.cargo;
-      inherit (toolchain) wasixRustToolchain wasixcc cargoWasix binaryen;
-    };
-    mkWasixStdenv = import ../set/stdenv.nix {
-      inherit lib toolchain referenceScanner;
-      snapshotZstd = nativePkgs.zstd;
-    };
-    wasixInfrastructureOverlay = import ../set/wasix-overlay.nix {
-      inherit toolchain wasixRustPlatform;
-      wasixRunStub = rawWasm.unbound;
+        inherit ghcWasm;
+      };
+      rustCrossPkgs = importNixpkgs {
+        localSystem = {inherit system;};
+        crossSystem = {
+          config = "wasm32-unknown-wasi";
+          useLLVM = true;
+          isWasix = true;
+          rust.rustcTarget = "wasm32-wasmer-wasi";
+        };
+        config.allowUnsupportedSystem = true;
+        overlays = [];
+      };
+      crateEdits =
+        import ../lib/crate-edits.nix {
+          pkgs = nativePkgs;
+          pins = builtins.fromJSON (builtins.readFile ../cargo-registry/crates.json);
+        }
+        ../lib/wasix-crate-patches;
+      wasixRustPlatform = import ../set/rust-platform.nix {
+        inherit lib crateEdits;
+        pkgsCross = rustCrossPkgs;
+        cargo = nativePkgs.cargo;
+        inherit (toolchain) wasixRustToolchain wasixcc cargoWasix binaryen;
+      };
+      mkWasixStdenv = import ../set/stdenv.nix {
+        inherit lib toolchain referenceScanner;
+        snapshotZstd = nativePkgs.zstd;
+      };
+      wasixInfrastructureOverlay = import ../set/wasix-overlay.nix {
+        inherit toolchain wasixRustPlatform;
+        wasixRunStub = rawWasm.unbound;
+      };
+    in {
+      inherit mkWasixStdenv wasixInfrastructureOverlay;
+      runners.rawWasm = {
+        inherit (rawWasm) unbound;
+        withRuntime = rawWasm.withRuntime runtime;
+      };
     };
 
     projectApi = import ./default.nix {
@@ -86,25 +78,42 @@ in {
           isWasix = true;
         }
         // spec;
-      configFor = scope: _variant:
+      configFor = {
+        scope,
+        nativeRaw,
+        ...
+      }:
         lib.optionalAttrs (scope == "wasix") {
           allowUnsupportedSystem = true;
-          replaceCrossStdenv = mkWasixStdenv;
+          replaceCrossStdenv = (constructionFor nativeRaw).mkWasixStdenv;
         };
-      nativePackageInterfacesFor = project': {
+      setOverlaysFor = {
+        scope,
+        nativeRaw,
+        ...
+      }:
+        lib.optionals (scope == "wasix") [
+          (nativePackageRecipes.overlay {nativeNixUpdateScript = nativeRaw.nix-update-script;})
+          (constructionFor nativeRaw).wasixInfrastructureOverlay
+        ];
+      nativePackageInterfacesFor = {
+        nativeRaw,
+        wasixRaw,
+        ...
+      }: {
         wasixcc.profiles =
           lib.mapAttrs (profile: _spec: {
-            stdenv = project'.internals.packageSets.wasixRaw.${profile}.stdenv;
+            stdenv = wasixRaw.${profile}.stdenv;
           })
           profiles.profiles;
         "wasix-rust".profiles =
           lib.mapAttrs (profile: _spec: {
-            rustPlatform = project'.internals.packageSets.wasixRaw.${profile}.rustPlatform;
+            rustPlatform = wasixRaw.${profile}.rustPlatform;
           })
           profiles.profiles;
         "wasix-sysroot".profiles =
           lib.mapAttrs (profile: _spec: {
-            inherit (project'.internals.packageSets.nativeRaw."wasix-sysroot".passthru.variants.${profile}) sysroot;
+            inherit (nativeRaw."wasix-sysroot".passthru.variants.${profile}) sysroot;
           })
           profiles.profiles;
       };
@@ -118,12 +127,7 @@ in {
           packageSet = wasixRaw.exnrefEhpic.python314.pkgs;
         };
       };
-      runnersFor = _project: {
-        rawWasm = {
-          inherit (rawWasm) unbound;
-          withRuntime = rawWasm.withRuntime runtime;
-        };
-      };
+      runnersFor = {nativeRaw, ...}: (constructionFor nativeRaw).runners;
     };
   in
     project;

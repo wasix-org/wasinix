@@ -154,9 +154,9 @@
     file,
     name,
     previous ? null,
+    previousRegistered ? previous != null && ((packageMetadata previous).source or null) != null,
   }: let
     function = import file;
-    previousRegistered = previous != null && ((packageMetadata previous).source or null) != null;
     exposePackage = package: {
       ${name} =
         if previousRegistered
@@ -340,14 +340,21 @@ in rec {
     contextFor,
     dir,
   }: final: prev: let
-    instantiate = unit: final': prev':
+    instantiate = unit: final': prev': let
+      formals = builtins.functionArgs (import unit.file);
+      requestsPrevious = formals ? package || formals ? exposeExtendedPackage;
+    in
       unitResult {
         inherit (unit) file name;
         context = contextFor {
           final = final';
           prev = prev';
         };
-        previous = prev'.${unit.name} or null;
+        previous =
+          if requestsPrevious
+          then prev'.${unit.name} or null
+          else null;
+        previousRegistered = builtins.hasAttr unit.name (prev'.${registryAttr} or {});
       };
     units = discoverUnits dir;
     results =
