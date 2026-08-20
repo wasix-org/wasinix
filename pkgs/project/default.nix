@@ -131,47 +131,50 @@
 
   projectionsFor = context: entry: let
     namespaces = ["artifacts" "commands" "tests"];
-    empty = lib.genAttrs namespaces (_: {});
-    merge = state: ruleName: rule: let
+    resultFor = ruleName: rule: let
       result = projectLib.callWith (context // {inherit entry;}) rule;
       unknown = lib.subtractLists namespaces (lib.attrNames result);
-      invalidNamespaces = lib.filter (name: !lib.isAttrs (result.${name} or {})) namespaces;
-      invalidArtifacts = lib.filterAttrs (_: artifact: !lib.isDerivation artifact) (result.artifacts or {});
-      invalidTests = lib.filterAttrs (_: test: !lib.isDerivation test) (result.tests or {});
-      validCommand = name: command:
-        lib.isAttrs command
-        && builtins.isString (command.name or null)
-        && command.name == name
-        && lib.isDerivation (command.artifact or null)
-        && builtins.isString (command.entrypoint or null);
-      invalidCommands = lib.filterAttrs (name: command: !validCommand name command) (result.commands or {});
-      duplicates = lib.concatMap (namespace:
-        map (name: "${namespace}.${name}")
-        (lib.intersectLists (lib.attrNames state.${namespace}) (lib.attrNames (result.${namespace} or {}))))
-      namespaces;
-      merged = lib.mapAttrs (namespace: values: values // (result.${namespace} or {})) state;
-      error =
-        if !lib.isAttrs result
-        then "must return an attribute set"
-        else if unknown != []
-        then "returned unknown namespace(s): ${lib.concatStringsSep ", " unknown}"
-        else if invalidNamespaces != []
-        then "returned non-attribute namespace(s): ${lib.concatStringsSep ", " invalidNamespaces}"
-        else if invalidArtifacts != {}
-        then "returned non-derivation artifact(s): ${lib.concatStringsSep ", " (lib.attrNames invalidArtifacts)}"
-        else if invalidCommands != {}
-        then "returned invalid command(s): ${lib.concatStringsSep ", " (lib.attrNames invalidCommands)}"
-        else if invalidTests != {}
-        then "returned non-derivation test(s): ${lib.concatStringsSep ", " (lib.attrNames invalidTests)}"
-        else if duplicates != []
-        then "returned duplicate output(s) for ${entry.address}: ${lib.concatStringsSep ", " duplicates}"
-        else null;
     in
-      lib.throwIf (error != null)
-      "projection rule '${ruleName}' ${error}"
-      merged;
+      lib.throwIf (!lib.isAttrs result)
+      "projection rule '${ruleName}' must return an attribute set"
+      (lib.throwIf (unknown != [])
+        "projection rule '${ruleName}' returned unknown namespace(s): ${lib.concatStringsSep ", " unknown}"
+        result);
+    results = lib.mapAttrs resultFor projectionRules;
+    validCommand = name: command:
+      lib.isAttrs command
+      && builtins.isString (command.name or null)
+      && command.name == name
+      && lib.isDerivation (command.artifact or null)
+      && builtins.isString (command.entrypoint or null);
+    invalidFor = namespace: values:
+      if namespace == "artifacts"
+      then lib.filterAttrs (_: artifact: !lib.isDerivation artifact) values
+      else if namespace == "commands"
+      then lib.filterAttrs (name: command: !validCommand name command) values
+      else lib.filterAttrs (_: test: !lib.isDerivation test) values;
+    mergeNamespace = namespace: state: ruleName: result: let
+      values = result.${namespace} or {};
+      invalid = invalidFor namespace values;
+      duplicates = lib.intersectLists (lib.attrNames state) (lib.attrNames values);
+      singular =
+        if namespace == "artifacts"
+        then "artifact"
+        else if namespace == "commands"
+        then "command"
+        else "test";
+    in
+      lib.throwIf (!lib.isAttrs values)
+      "projection rule '${ruleName}' returned non-attribute namespace '${namespace}'"
+      (lib.throwIf (invalid != {})
+        "projection rule '${ruleName}' returned invalid ${singular}(s): ${lib.concatStringsSep ", " (lib.attrNames invalid)}"
+        (lib.throwIf (duplicates != [])
+          "projection rule '${ruleName}' returned duplicate output(s) for ${entry.address}: ${lib.concatStringsSep ", " (map (name: "${namespace}.${name}") duplicates)}"
+          (state // values)));
+    namespaceFor = namespace:
+      lib.foldlAttrs (mergeNamespace namespace) {} results;
   in
-    lib.foldlAttrs merge empty projectionRules;
+    lib.genAttrs namespaces namespaceFor;
 
   validateVariantShapes = label: extensionIds: packageSets: let
     variants = lib.attrNames packageSets;
@@ -476,7 +479,8 @@ in rec {
             enclosing = pythonSpecs.${entry.variant.interpreter}.pkgs;
           };
       in
-        contextFor entry.scope entry.variant selected.enclosing {inherit (selected) final;};
+        contextFor entry.scope entry.variant selected.enclosing {inherit (selected) final;}
+        // {pkgs = nativeRaw;};
 
       nativeEntries = lib.mapAttrs' (name: package: let
         address = projectLib.address "packages" ["native" name];
