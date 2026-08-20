@@ -6,14 +6,14 @@
 }:
 pyfinal.buildPythonPackage rec {
   pname = "langflow";
-  version = "1.11.2";
+  version = "1.12.0.dev33";
   pyproject = true;
 
   src = final.fetchFromGitHub {
     owner = "langflow-ai";
     repo = "langflow";
     tag = "v${version}";
-    hash = "sha256-ebDaUsVbAKZOkoY3SkJbUOJqFY/3U/tjT9yR9FUcsSg=";
+    hash = "sha256-ESHxVhvNyICM5Z8kfxFt1mobabupDNy2jVecjkPBehw=";
   };
 
   postPatch = ''
