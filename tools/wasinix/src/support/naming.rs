@@ -287,7 +287,11 @@ impl Domain {
         }
         scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
         scored.dedup_by(|a, b| a.1 == b.1);
-        scored.into_iter().take(3).map(|(_, identity)| identity).collect()
+        scored
+            .into_iter()
+            .take(3)
+            .map(|(_, identity)| identity)
+            .collect()
     }
 
     /// Every entry the spec names. A glob fans out; an exact address that names

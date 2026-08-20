@@ -157,7 +157,8 @@ pub fn read_from(path: &Path, offset: u64) -> Result<(Vec<Event>, u64)> {
         }
         Err(error) => return Err(io(path, error)),
     };
-    file.seek(SeekFrom::Start(offset)).map_err(|e| io(path, e))?;
+    file.seek(SeekFrom::Start(offset))
+        .map_err(|e| io(path, e))?;
     // Read bytes, not a string: a remote observer mirrors `tail -c` chunks
     // that can end mid-multibyte-sequence, and a torn tail is an in-flight
     // append, never corruption. Only complete lines are decoded and consumed.
@@ -326,7 +327,12 @@ pub fn fold_snapshot(events: &[Event]) -> Snapshot {
                     }
                 }
             }
-            Event::JobFinished { job, status, cached, .. } => {
+            Event::JobFinished {
+                job,
+                status,
+                cached,
+                ..
+            } => {
                 snapshot.building.retain(|started| started != job);
                 snapshot.completed_jobs += 1;
                 if *cached {

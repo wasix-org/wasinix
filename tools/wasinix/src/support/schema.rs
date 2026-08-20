@@ -46,9 +46,17 @@ fn open<T: Document>(mut value: Value, origin: &str) -> Result<T> {
     match object.remove("kind") {
         Some(Value::String(kind)) if kind == T::KIND => {}
         Some(Value::String(kind)) => {
-            return request_error(format!("{origin}: is a {kind} document, expected {}", T::KIND))
+            return request_error(format!(
+                "{origin}: is a {kind} document, expected {}",
+                T::KIND
+            ))
         }
-        _ => return request_error(format!("{origin}: has no document kind, expected {}", T::KIND)),
+        _ => {
+            return request_error(format!(
+                "{origin}: has no document kind, expected {}",
+                T::KIND
+            ))
+        }
     }
     match object.remove("schema") {
         Some(Value::Number(schema)) if schema.as_u64() == Some(u64::from(T::SCHEMA)) => {}

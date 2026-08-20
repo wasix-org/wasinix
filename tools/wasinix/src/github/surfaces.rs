@@ -16,8 +16,8 @@ pub const BOT_AUTHOR: &str = "github-actions[bot]";
 /// The commit identity paired with [`BOT_AUTHOR`].
 pub const BOT_EMAIL: &str = "41898282+github-actions[bot]@users.noreply.github.com";
 
-use crate::support::error::{Error, Result};
 use crate::github::client::Client;
+use crate::support::error::{Error, Result};
 
 /// The GitHub coordinates every publishing arm shares, resolved one way.
 #[derive(clap::Args)]

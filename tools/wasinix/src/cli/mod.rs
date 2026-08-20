@@ -8,8 +8,8 @@ pub(crate) mod remote;
 pub(crate) mod render;
 pub(crate) mod request;
 pub(crate) mod timings;
-pub(crate) mod update;
 pub mod untrusted;
+pub(crate) mod update;
 
 use std::path::PathBuf;
 
@@ -648,7 +648,10 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
             map
         }
         None => {
-            ui::fact("evaluation", "none recorded for this tree; evaluating locally");
+            ui::fact(
+                "evaluation",
+                "none recorded for this tree; evaluating locally",
+            );
             let scratch = crate::support::env::temp_dir()
                 .join(format!("wasinix-cache-push-{}", std::process::id()));
             crate::support::fs::create_dir_all(&scratch)?;
@@ -670,16 +673,18 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
                     "evaluation failed: {error}"
                 )));
             }
-            let jobs = crate::nix::evaljobs::parse_file(&crate::support::fs::read_to_string(
-                &jobs_path,
-            )?)?;
+            let jobs =
+                crate::nix::evaljobs::parse_file(&crate::support::fs::read_to_string(&jobs_path)?)?;
             crate::ci::evalmap::EvalMap::from_jobs(rev, &jobs)
         }
     };
     drop(worktree);
 
     let jobs: Vec<String> = if selectors.is_empty() {
-        map.jobs.keys().map(|job| job.as_str().to_string()).collect()
+        map.jobs
+            .keys()
+            .map(|job| job.as_str().to_string())
+            .collect()
     } else {
         map.resolve_jobs(&selectors)?
     };
@@ -857,8 +862,7 @@ fn run_command(command: RunCommand) -> Result<CommandStatus> {
             #[serde(rename_all = "camelCase")]
             struct Failures {
                 #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
-                failures:
-                    std::collections::BTreeMap<String, Vec<crate::ci::facts::Failure>>,
+                failures: std::collections::BTreeMap<String, Vec<crate::ci::facts::Failure>>,
                 #[serde(default, skip_serializing_if = "Vec::is_empty")]
                 recent_failures: Vec<String>,
             }
@@ -907,9 +911,9 @@ fn run_command(command: RunCommand) -> Result<CommandStatus> {
                             // archive lives under the target's log dir.
                             let (case, target) =
                                 task.split_once('.').unwrap_or((task.as_str(), ""));
-                            let logs = crate::ci::prepare::logs_dir(
-                                &crate::ci::prepare::case_dir(&run_dir, case),
-                            )
+                            let logs = crate::ci::prepare::logs_dir(&crate::ci::prepare::case_dir(
+                                &run_dir, case,
+                            ))
                             .join(target);
                             match crate::ci::facts::logs::read_archived(&logs, log, 4_000) {
                                 Ok(tail) => {
@@ -1145,19 +1149,14 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
         } => {
             let builder = crate::nix::builder::load(&repo, on.as_deref())?;
             let mut renderer = crate::cli::render::LineRenderer::new();
-            let status = crate::runs::remote::observe(
-                &builder,
-                &remote_run_dir,
-                &run_dir,
-                &mut |event| renderer.event(event),
-            );
+            let status =
+                crate::runs::remote::observe(&builder, &remote_run_dir, &run_dir, &mut |event| {
+                    renderer.event(event)
+                });
             renderer.finish();
             status
         }
-        CiCommand::Prepare {
-            request,
-            run_dir,
-        } => {
+        CiCommand::Prepare { request, run_dir } => {
             let request: crate::ci::types::ResolvedRequest = schema::read(&request)?;
             crate::ci::prepare::prepare_all(&repo, &request, &run_dir)?;
             Ok(CommandStatus::SUCCESS)
@@ -1284,17 +1283,14 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                         "--failure-logs needs --sha to name the log prefix".into(),
                     )
                 })?;
-                target.log_base =
-                    crate::github::publish::publish_failure_logs(&run_dir, &rendered, &sha, effects)?;
+                target.log_base = crate::github::publish::publish_failure_logs(
+                    &run_dir, &rendered, &sha, effects,
+                )?;
             }
             if comment {
-                if let Some(id) = crate::github::publish::comment(
-                    &client,
-                    &rendered,
-                    &target,
-                    reply_to,
-                    effects,
-                )? {
+                if let Some(id) =
+                    crate::github::publish::comment(&client, &rendered, &target, reply_to, effects)?
+                {
                     ui::fact("report comment", id);
                 }
             }
@@ -1336,8 +1332,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                     format!("pullRequest={}", command.origin.pull_request),
                     format!("headSha={}", command.origin.head_sha),
                 ] {
-                    writeln!(file, "{line}")
-                        .map_err(|e| crate::support::error::io(&path, e))?;
+                    writeln!(file, "{line}").map_err(|e| crate::support::error::io(&path, e))?;
                 }
             }
             ui::fact(
@@ -1450,15 +1445,13 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
         } => {
             let run_id = match run_id {
                 Some(run_id) => Some(run_id),
-                None => crate::support::env::github_run_id()?
-                    .and_then(|value| value.parse().ok()),
+                None => crate::support::env::github_run_id()?.and_then(|value| value.parse().ok()),
             };
-            let run_id = run_id
-                .ok_or_else(|| {
-                    crate::support::error::Error::Request(
-                        "step timings need --run-id or GITHUB_RUN_ID".into(),
-                    )
-                })?;
+            let run_id = run_id.ok_or_else(|| {
+                crate::support::error::Error::Request(
+                    "step timings need --run-id or GITHUB_RUN_ID".into(),
+                )
+            })?;
             let repository =
                 crate::github::surfaces::resolve_repository(repository.as_deref(), &repo)?;
             let rev = match rev {
@@ -1494,11 +1487,8 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 crate::support::error::Error::Request("a reply needs --pull-request".into())
             })?;
             let repository = surface.repository(&repo)?;
-            let origin = crate::github::surfaces::origin_comment_url(
-                &repository,
-                pull_request,
-                comment_id,
-            );
+            let origin =
+                crate::github::surfaces::origin_comment_url(&repository, pull_request, comment_id);
             let body = crate::github::markdown::failure_reply(
                 &failure_tail(&failures),
                 surface.run_url.as_deref(),
@@ -1570,7 +1560,13 @@ fn run(command: CommandTree) -> Result<CommandStatus> {
                 ));
             };
             completer
-                .write_registration("COMPLETE", "wasinix", "wasinix", "wasinix", &mut std::io::stdout())
+                .write_registration(
+                    "COMPLETE",
+                    "wasinix",
+                    "wasinix",
+                    "wasinix",
+                    &mut std::io::stdout(),
+                )
                 .map_err(|e| crate::support::error::io(std::path::Path::new("<stdout>"), e))?;
             Ok(CommandStatus::SUCCESS)
         }
@@ -1586,9 +1582,9 @@ fn run(command: CommandTree) -> Result<CommandStatus> {
         CommandTree::Cargo(command) => registries::run_cargo(command),
         CommandTree::Wasmer(command) => registries::run_wasmer(command),
         CommandTree::Python(command) => registries::run_python(command),
-        CommandTree::Publish { dry_run } => registries::run_meta_publish(
-            crate::support::effects::Effects::from_dry_run(dry_run),
-        ),
+        CommandTree::Publish { dry_run } => {
+            registries::run_meta_publish(crate::support::effects::Effects::from_dry_run(dry_run))
+        }
         CommandTree::Preview(args) => preview::run(args),
         CommandTree::Serve {
             mint,

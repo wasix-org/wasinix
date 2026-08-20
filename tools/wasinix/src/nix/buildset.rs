@@ -55,7 +55,9 @@ pub enum StreamEvent {
     Activity,
     /// The most recently announced dependency builds, so the ticker can say
     /// what the run is doing when no job derivation is in flight.
-    Heartbeat { recent_deps: Vec<String> },
+    Heartbeat {
+        recent_deps: Vec<String>,
+    },
     Output(String),
 }
 
@@ -146,10 +148,7 @@ fn drv_outputs(drv: &str) -> Result<Vec<String>> {
 
 /// Push the tracked build-time dependencies whose outputs became valid, so a
 /// cancel or timeout keeps the dependency builds already done.
-fn settle_deps(
-    dep_pending: &mut BTreeMap<String, Vec<String>>,
-    uploader: &Uploader,
-) -> Result<()> {
+fn settle_deps(dep_pending: &mut BTreeMap<String, Vec<String>>, uploader: &Uploader) -> Result<()> {
     if dep_pending.is_empty() {
         return Ok(());
     }
@@ -440,9 +439,9 @@ impl Uploader {
             .captured_status()
         {
             Ok((status, _)) if status.is_success() => {}
-            Ok((_, detail)) => crate::support::ui::warning(format!(
-                "cache push failed (non-fatal): {detail}"
-            )),
+            Ok((_, detail)) => {
+                crate::support::ui::warning(format!("cache push failed (non-fatal): {detail}"))
+            }
             Err(error) => {
                 crate::support::ui::warning(format!("cache push failed (non-fatal): {error}"))
             }
@@ -588,7 +587,12 @@ pub fn build_union(
         case.duration = value["duration"].as_f64().unwrap_or_default();
         case.drv = value["drv"].as_str().map(str::to_string);
         if !value["success"].as_bool().unwrap_or(false) {
-            case.message = Some(value["error"].as_str().unwrap_or("build failed").to_string());
+            case.message = Some(
+                value["error"]
+                    .as_str()
+                    .unwrap_or("build failed")
+                    .to_string(),
+            );
         }
         cases.push(case);
         on_event(StreamEvent::Result(value))
@@ -665,7 +669,11 @@ pub fn build_union(
     for (drv, spec) in &jobs {
         let planned = if to_build.contains(drv) {
             Planned::Build
-        } else if spec.outputs.iter().any(|output| plan.fetched.contains(output)) {
+        } else if spec
+            .outputs
+            .iter()
+            .any(|output| plan.fetched.contains(output))
+        {
             Planned::Fetch
         } else {
             Planned::Present
@@ -784,10 +792,7 @@ pub fn build_union(
                             }
                         } else {
                             // `/nix/store/<32-char hash>-name.drv`, name only.
-                            let name = drv
-                                .get(44..)
-                                .unwrap_or(drv)
-                                .trim_end_matches(".drv");
+                            let name = drv.get(44..).unwrap_or(drv).trim_end_matches(".drv");
                             if recent_deps.back().map(String::as_str) != Some(name) {
                                 recent_deps.push_back(name.to_string());
                                 if recent_deps.len() > 4 {

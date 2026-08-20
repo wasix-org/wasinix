@@ -91,8 +91,7 @@ pub fn current_versions(repo: &Path) -> Result<Versions> {
     result.insert("wheel".into(), BTreeMap::new());
     result.insert("cli".into(), BTreeMap::new());
 
-    let history: Value =
-        crate::support::json::read(&crate::update::history::wheel_history(repo))?;
+    let history: Value = crate::support::json::read(&crate::update::history::wheel_history(repo))?;
     let history_keys: std::collections::BTreeSet<String> = history
         .as_object()
         .into_iter()
@@ -262,9 +261,7 @@ pub struct Note {
     pub version: Option<String>,
 }
 
-impl Note {
-
-}
+impl Note {}
 
 /// Versions of the packages carrying update notes, from before the run: the
 /// `prior` side of each note's predicate.
@@ -289,11 +286,9 @@ fn fired_notes_once(repo: &Path, priors: &Value) -> Result<Value> {
     if !output.status.is_success() {
         return request_error(format!("note check failed: {}", output.stderr.trim()));
     }
-    serde_json::from_slice(&output.stdout).map_err(|source| {
-        crate::support::error::Error::Json {
-            path: "<updateNotes.fired>".into(),
-            source,
-        }
+    serde_json::from_slice(&output.stdout).map_err(|source| crate::support::error::Error::Json {
+        path: "<updateNotes.fired>".into(),
+        source,
     })
 }
 

@@ -195,7 +195,6 @@ impl EvalMap {
         }
     }
 
-
     /// The map an evaluation's job lines describe. Errors keep their first
     /// line; the full text stays in the evaluation log.
     pub fn from_jobs(rev: Rev, jobs: &[crate::nix::evaljobs::EvalJob]) -> EvalMap {

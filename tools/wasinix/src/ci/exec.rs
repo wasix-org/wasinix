@@ -93,8 +93,7 @@ fn run_logged(cmd: &mut Command, log_path: &Path) -> Result<CommandStatus> {
             Box::new(stderr),
         ] {
             let log = Arc::clone(&log);
-            let echo =
-                crate::support::ui::verbosity() == crate::support::ui::Verbosity::Verbose;
+            let echo = crate::support::ui::verbosity() == crate::support::ui::Verbosity::Verbose;
             scope.spawn(move || {
                 let mut reader = BufReader::new(stream);
                 let mut buffer = Vec::new();
@@ -197,15 +196,9 @@ fn treefmt(worktree: &Path, case_id: &str, route: &Route, log: &Path) -> Result<
 
 /// Warm the evaluation's fixed-output inputs so the offline evaluation and
 /// the build behind it never fetch.
-fn eval_inputs(
-    ctx: &Context,
-    worktree: &Path,
-    case_id: &str,
-    route: &Route,
-) -> Result<Fragment> {
+fn eval_inputs(ctx: &Context, worktree: &Path, case_id: &str, route: &Route) -> Result<Fragment> {
     let _lease = route.acquire()?;
-    let logs =
-        crate::ci::prepare::logs_dir(&case_dir(ctx.run_dir, case_id)).join("eval-inputs");
+    let logs = crate::ci::prepare::logs_dir(&case_dir(ctx.run_dir, case_id)).join("eval-inputs");
     let attr = format!(
         ".#legacyPackages.{}.ciSets.all",
         crate::support::nix::SYSTEM
@@ -304,10 +297,7 @@ fn eval_inputs(
     Ok(fragment)
 }
 
-fn selector_catalog(
-    worktree: &Path,
-    route: &Route,
-) -> Result<crate::ci::evalmap::SelectorCatalog> {
+fn selector_catalog(worktree: &Path, route: &Route) -> Result<crate::ci::evalmap::SelectorCatalog> {
     let bytes = crate::support::nix::Invocation::flake(
         "eval",
         format!(
@@ -372,7 +362,10 @@ fn evaluate(
     mapping.info = catalog.info;
     mapping.sets = catalog.sets;
     mapping.groups = catalog.groups;
-    schema::write(&crate::ci::prepare::eval_map_path(&case_dir(ctx.run_dir, case_id)), &mapping)?;
+    schema::write(
+        &crate::ci::prepare::eval_map_path(&case_dir(ctx.run_dir, case_id)),
+        &mapping,
+    )?;
     mapping.record_completions();
 
     let omitted_by_tags: BTreeMap<String, usize> = mapping
@@ -609,8 +602,12 @@ pub(crate) fn record_result(
         let job = jobs.get_mut(&key).expect("key was just collected");
         job.status = Some(status);
         job.duration = value["duration"].as_f64();
-        job.error =
-            (!success).then(|| value["error"].as_str().unwrap_or("build failed").to_string());
+        job.error = (!success).then(|| {
+            value["error"]
+                .as_str()
+                .unwrap_or("build failed")
+                .to_string()
+        });
         tracker.record(Event::JobFinished {
             at: unix_secs(),
             job: JobAddr(key),
@@ -825,7 +822,10 @@ fn run_build_tasks(
         }
         let case = find_build_case(request, &task.case)?;
         if !maps.contains_key(&task.case) {
-            maps.insert(task.case.clone(), load_map(&case_dir(ctx.run_dir, &task.case))?);
+            maps.insert(
+                task.case.clone(),
+                load_map(&case_dir(ctx.run_dir, &task.case))?,
+            );
         }
         let mapping = &maps[&task.case];
         specs.push(BuildSpec {
@@ -891,8 +891,7 @@ fn run_build_tasks(
         }
     }
     let hard_timeout = crate::support::env::build_timeout()?;
-    let stall_after = crate::support::env::stall_timeout()?
-        .unwrap_or(Duration::from_secs(300));
+    let stall_after = crate::support::env::stall_timeout()?.unwrap_or(Duration::from_secs(300));
     let cutoff = std::time::SystemTime::now();
 
     let mut worst = CommandStatus::SUCCESS;
@@ -949,9 +948,7 @@ fn run_build_tasks(
                 crate::nix::buildset::StreamEvent::Result(value) => {
                     liveness.activity();
                     record_result(&value, &mut jobs, tracker)?;
-                    building.retain(|attr| {
-                        jobs.get(attr).is_none_or(|job| job.status.is_none())
-                    });
+                    building.retain(|attr| jobs.get(attr).is_none_or(|job| job.status.is_none()));
                     Ok(())
                 }
                 crate::nix::buildset::StreamEvent::Plan(census) => {
@@ -1004,8 +1001,8 @@ fn run_build_tasks(
         .collect();
     for spec in specs {
         let paths = case_dir(ctx.run_dir, &spec.case);
-        let junit = crate::ci::prepare::junit_dir(&paths)
-            .join(format!("{}.xml", spec.target.as_str()));
+        let junit =
+            crate::ci::prepare::junit_dir(&paths).join(format!("{}.xml", spec.target.as_str()));
         let source = results
             .get(&spec.case)
             .ok_or_else(|| Error::Failure(format!("{}: no union results", spec.case)))?;
@@ -1078,36 +1075,29 @@ fn run_build_tasks(
             failed,
             blocked,
         });
-        let headline = crate::support::ui::counts(
-            &build_facts
-                .census
-                .as_ref()
-                .expect("just set")
-                .parts(),
+        let headline =
+            crate::support::ui::counts(&build_facts.census.as_ref().expect("just set").parts());
+        worst = worst.max(
+            finish_task(
+                ctx,
+                tracker,
+                Fragment::new(
+                    spec.task_id.clone(),
+                    spec.label.clone(),
+                    spec.kind,
+                    status,
+                    headline,
+                )
+                .with_data(FragmentData::Build(build_facts)),
+                Some((union_started.elapsed(), 0)),
+            )?
+            .exit(),
         );
-        worst = worst.max(finish_task(
-            ctx,
-            tracker,
-            Fragment::new(
-                spec.task_id.clone(),
-                spec.label.clone(),
-                spec.kind,
-                status,
-                headline,
-            )
-            .with_data(FragmentData::Build(build_facts)),
-            Some((union_started.elapsed(), 0)),
-        )?
-        .exit());
     }
     Ok(worst)
 }
 
-fn content(
-    ctx: &Context,
-    request: &ResolvedRequest,
-    candidate_id: &str,
-) -> Result<Fragment> {
+fn content(ctx: &Context, request: &ResolvedRequest, candidate_id: &str) -> Result<Fragment> {
     let Request::Diff(diff) = request else {
         return request_error("content requires a diff request");
     };
@@ -1123,8 +1113,7 @@ fn content(
     let head_paths = case_dir(ctx.run_dir, candidate_id);
     let head_map = load_map(&head_paths)?;
     let base_map = load_map(&case_dir(ctx.run_dir, &diff.baseline))?;
-    let mut junits: Vec<PathBuf> =
-        std::fs::read_dir(crate::ci::prepare::junit_dir(&head_paths))
+    let mut junits: Vec<PathBuf> = std::fs::read_dir(crate::ci::prepare::junit_dir(&head_paths))
         .map(|entries| {
             entries
                 .flatten()
@@ -1264,7 +1253,11 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
         .collect();
     if !unknown.is_empty() {
         let named: Vec<&str> = unknown.iter().map(|id| id.as_str()).collect();
-        let known: Vec<&str> = plan.tasks.iter().map(|task| task.task_id.as_str()).collect();
+        let known: Vec<&str> = plan
+            .tasks
+            .iter()
+            .map(|task| task.task_id.as_str())
+            .collect();
         return request_error(format!(
             "unknown task(s) {}; this run plans {}",
             named.join(", "),

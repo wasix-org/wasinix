@@ -183,8 +183,7 @@ fn doctor(repo: &Path, remote: Option<&str>, ifd: bool) -> Result<CommandStatus>
                 .workdir(repo)
                 .route(&route)?
                 .probe("the round trip is judged by the evaluated value")?;
-            if !output.status.is_success()
-                || String::from_utf8_lossy(&output.stdout).trim() != "ok"
+            if !output.status.is_success() || String::from_utf8_lossy(&output.stdout).trim() != "ok"
             {
                 return request_error(format!(
                     "IFD store round trip failed: {}",
@@ -251,7 +250,10 @@ pub(crate) fn run(command: RemoteCommand) -> Result<CommandStatus> {
         RemoteCommand::List { json } => list(&repo_root()?, json),
         RemoteCommand::Status { remote } => status(&repo_root()?, remote.as_deref()),
         RemoteCommand::Doctor { remote, ifd } => doctor(&repo_root()?, remote.as_deref(), ifd),
-        RemoteCommand::Field { field: name, remote } => field(&repo_root()?, remote.as_deref(), name),
+        RemoteCommand::Field {
+            field: name,
+            remote,
+        } => field(&repo_root()?, remote.as_deref(), name),
         RemoteCommand::Init => init(),
     }
 }

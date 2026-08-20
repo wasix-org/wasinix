@@ -48,7 +48,9 @@ pub fn git_logged(repo: &Path, args: &[&str]) -> Result<String> {
     if !output.status.success() {
         return request_error(failed(&output));
     }
-    Ok(String::from_utf8_lossy(&output.stdout).trim_end().to_string())
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .trim_end()
+        .to_string())
 }
 
 /// `git` fed on stdin, for apply and friends; newline-exact.
@@ -88,7 +90,9 @@ pub fn git_global(args: &[&str]) -> Result<String> {
     if !output.status.success() {
         return request_error(failed(&output));
     }
-    Ok(String::from_utf8_lossy(&output.stdout).trim_end().to_string())
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .trim_end()
+        .to_string())
 }
 
 /// The checkout being worked on. `nix run` puts the caller in the store, but

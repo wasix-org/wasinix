@@ -75,10 +75,7 @@ pub fn marker(state: &State) -> Result<String> {
 pub fn with_state(body: &str, state: &State) -> Result<String> {
     let marker = marker(state)?;
     let mut lines: Vec<&str> = body.lines().collect();
-    match lines
-        .iter()
-        .position(|line| line.starts_with(DATA_PREFIX))
-    {
+    match lines.iter().position(|line| line.starts_with(DATA_PREFIX)) {
         Some(index) => lines[index] = &marker,
         None => {
             lines.push("");
@@ -93,8 +90,7 @@ pub fn with_state(body: &str, state: &State) -> Result<String> {
 /// Whether automated refreshes are paused: the bot recorded a head and the
 /// branch has moved past it, so a refresh would replace someone's commits.
 pub fn paused(state: &State, head_sha: &str) -> bool {
-    !state.rewrite_safe_head.is_empty()
-        && !state.rewrite_safe_head.eq_ignore_ascii_case(head_sha)
+    !state.rewrite_safe_head.is_empty() && !state.rewrite_safe_head.eq_ignore_ascii_case(head_sha)
 }
 
 /// A bare `update` or a `regenerate` replays the recorded recipe; refuse

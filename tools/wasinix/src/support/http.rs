@@ -51,10 +51,12 @@ pub fn put_json(url: &str, body: &Value, auth: Option<&str>) -> Result<Value> {
     if let Some(token) = auth {
         request = request.set("authorization", token);
     }
-    let response = request.send_json(body.clone()).map_err(|error| Error::Http {
-        context: format!("PUT {url}"),
-        source: Box::new(error),
-    })?;
+    let response = request
+        .send_json(body.clone())
+        .map_err(|error| Error::Http {
+            context: format!("PUT {url}"),
+            source: Box::new(error),
+        })?;
     response.into_json().map_err(|source| Error::Io {
         path: url.into(),
         source,
@@ -65,7 +67,10 @@ pub fn put_json(url: &str, body: &Value, auth: Option<&str>) -> Result<Value> {
 /// (an overlay mirror answers for its own content and redirects the rest to
 /// its upstream, so a redirect means "not served here"). Never follows one.
 pub fn get_text_optional(url: &str) -> Result<Option<String>> {
-    let agent = ureq::AgentBuilder::new().timeout(TIMEOUT).redirects(0).build();
+    let agent = ureq::AgentBuilder::new()
+        .timeout(TIMEOUT)
+        .redirects(0)
+        .build();
     let response = agent.get(url).set("User-Agent", USER_AGENT).call();
     match response {
         Ok(response) => response

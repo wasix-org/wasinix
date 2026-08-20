@@ -64,14 +64,10 @@ pub fn parse(raw: &str, expected_target: Option<&str>) -> Result<Request> {
     }
     match request.mode {
         Mode::Release if request.value.is_empty() => {
-            request_error(format!(
-                "{REQUEST_ENV} release request has no value"
-            ))
+            request_error(format!("{REQUEST_ENV} release request has no value"))
         }
         Mode::Revision if request.source.is_none() => {
-            request_error(format!(
-                "{REQUEST_ENV} revision request has no source"
-            ))
+            request_error(format!("{REQUEST_ENV} revision request has no source"))
         }
         _ => Ok(request),
     }
@@ -118,4 +114,3 @@ pub fn nix_update_argv(argv: &[String], request: Option<&Request>) -> Result<Vec
     out.push(requested);
     Ok(out)
 }
-

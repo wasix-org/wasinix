@@ -11,8 +11,6 @@ use crate::ci::types::{Build, RevSource};
 use crate::support::atoms::JobAddr;
 use crate::support::error::Result;
 
-
-
 /// A published baseline, or `None` with the reason surfaced: an absent or
 /// incompatible baseline degrades to building the base side, never to a red
 /// run and never silently.
@@ -56,7 +54,10 @@ pub fn fetch(tree: &str, url_template: &str, label: Option<&str>) -> Option<Eval
     // complete baseline. A status map alone cannot: it may contain just the
     // jobs that happened to finish before cancellation.
     if published.status.is_none() || published.coverage.is_empty() {
-        reason(label, "off (published map carries no status coverage)".into());
+        reason(
+            label,
+            "off (published map carries no status coverage)".into(),
+        );
         return None;
     }
     Some(published)
@@ -102,11 +103,8 @@ pub fn missing_status(
 }
 
 pub fn covers(case: &Build<RevSource>, published: &EvalMap) -> bool {
-    let covered: std::collections::BTreeSet<&str> = published
-        .coverage
-        .iter()
-        .map(JobAddr::as_str)
-        .collect();
+    let covered: std::collections::BTreeSet<&str> =
+        published.coverage.iter().map(JobAddr::as_str).collect();
     expected_jobs(case, published)
         .map(|jobs| jobs.iter().all(|job| covered.contains(job.as_str())))
         .unwrap_or(false)
@@ -125,13 +123,13 @@ pub fn publish_from_run(
     // can never claim a commit's.
     let manifest: crate::ci::workspace::Materialization =
         crate::support::schema::read(&paths.join("prepared/materialization.json"))?;
-    let mapping: EvalMap = crate::support::schema::read(&crate::ci::prepare::eval_map_path(&paths))?;
-    let rev = mapping
-        .rev
-        .clone()
-        .ok_or_else(|| crate::support::error::Error::Failure(
+    let mapping: EvalMap =
+        crate::support::schema::read(&crate::ci::prepare::eval_map_path(&paths))?;
+    let rev = mapping.rev.clone().ok_or_else(|| {
+        crate::support::error::Error::Failure(
             "the eval map names no revision to publish under".into(),
-        ))?;
+        )
+    })?;
     let status = crate::ci::compare::case_status(&paths);
     if status.is_empty() {
         // A cancelled or eval-only case has nothing usable: a baseline
@@ -142,15 +140,16 @@ pub fn publish_from_run(
         );
         return Ok(());
     }
-    let mut junits: Vec<std::path::PathBuf> = std::fs::read_dir(crate::ci::prepare::junit_dir(&paths))
-        .map(|entries| {
-            entries
-                .flatten()
-                .map(|entry| entry.path())
-                .filter(|path| path.extension().is_some_and(|ext| ext == "xml"))
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut junits: Vec<std::path::PathBuf> =
+        std::fs::read_dir(crate::ci::prepare::junit_dir(&paths))
+            .map(|entries| {
+                entries
+                    .flatten()
+                    .map(|entry| entry.path())
+                    .filter(|path| path.extension().is_some_and(|ext| ext == "xml"))
+                    .collect()
+            })
+            .unwrap_or_default();
     junits.sort();
     let coverage: Vec<JobAddr> = status.keys().cloned().collect();
     let document = publish_document(
@@ -190,9 +189,8 @@ pub fn publish_from_run(
 /// This case's task wall times, from the fragments the run left behind. A
 /// task that never finished has no fragment and no time to report.
 fn task_timings(run_dir: &Path, case_id: &str) -> Vec<crate::ci::evalmap::TaskTiming> {
-    let fragments =
-        crate::ci::report::fragments_under(&crate::ci::prepare::fragments_dir(run_dir))
-            .unwrap_or_default();
+    let fragments = crate::ci::report::fragments_under(&crate::ci::prepare::fragments_dir(run_dir))
+        .unwrap_or_default();
     fragments
         .values()
         .filter(|fragment| fragment.task_id.starts_with(&format!("{case_id}.")))

@@ -22,8 +22,6 @@ impl Client {
         }
     }
 
-
-
     fn send(&self, method: &str, path: &str, body: Option<&Value>) -> Result<Value> {
         let mut request = ureq::request(method, &format!("{API}/{path}"))
             .set("Accept", "application/vnd.github+json")
@@ -55,7 +53,12 @@ impl Client {
                 let body = response.into_string().unwrap_or_default();
                 let detail = serde_json::from_str::<Value>(&body)
                     .ok()
-                    .and_then(|value| value.get("message").and_then(Value::as_str).map(str::to_string))
+                    .and_then(|value| {
+                        value
+                            .get("message")
+                            .and_then(Value::as_str)
+                            .map(str::to_string)
+                    })
                     .unwrap_or_else(|| crate::support::error::tail(&body, 200));
                 Err(Error::Failure(format!(
                     "GitHub rejected {method} {path} with {code}: {detail}"

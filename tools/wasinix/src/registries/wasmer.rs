@@ -73,11 +73,7 @@ fn webc_domain() -> Result<Domain> {
     let apply = crate::support::nix::canonical_webcs_apply(
         "_: p: { overlay = p.overlayName; aliases = p.passthru.wasmer.aliases or []; }",
     );
-    let named = crate::support::nix::eval(
-        &Flake::default(),
-        "wasmerPackages",
-        Some(&apply),
-    )?;
+    let named = crate::support::nix::eval(&Flake::default(), "wasmerPackages", Some(&apply))?;
     let mut domain = Domain::new(".#wasmerPackages");
     for (webc, info) in named.as_object().into_iter().flatten() {
         let mut aliases = vec![info["overlay"].as_str().unwrap_or_default().to_string()];
@@ -477,7 +473,8 @@ struct Scratch(PathBuf);
 
 impl Scratch {
     fn new(name: &str) -> Result<Scratch> {
-        let path = crate::support::env::temp_dir().join(format!("publish-webc-{}-{name}", std::process::id()));
+        let path = crate::support::env::temp_dir()
+            .join(format!("publish-webc-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&path);
         crate::support::fs::create_dir_all(&path)?;
         Ok(Scratch(path))
@@ -701,12 +698,7 @@ pub fn stage(pkg: &Package, rev: &str, into: &Path, as_: &Staged) -> Result<Path
     Ok(dst)
 }
 
-fn staged_sha256(
-    pkg: &Package,
-    rev: &str,
-    pub_name: &str,
-    pub_version: &str,
-) -> Result<String> {
+fn staged_sha256(pkg: &Package, rev: &str, pub_name: &str, pub_version: &str) -> Result<String> {
     let scratch = Scratch::new("restage")?;
     let batch = BTreeSet::new();
     let staged = stage(
@@ -891,7 +883,10 @@ pub fn publish(options: Options) -> Result<crate::support::process::CommandStatu
     crate::support::ui::fact("packages", ordered.len());
     crate::support::ui::fact(
         "registry",
-        format!("{} (graphql: {graphql_url}, publish: {publish_host})", options.registry),
+        format!(
+            "{} (graphql: {graphql_url}, publish: {publish_host})",
+            options.registry
+        ),
     );
     if options.effects.is_dry_run() {
         crate::support::ui::fact("mode", "dry run; nothing publishes");
@@ -1089,10 +1084,11 @@ pub fn merge_webcs(from: &Path, into: &Path) -> Result<()> {
     }
     let mut pending = vec![from.to_path_buf()];
     while let Some(dir) = pending.pop() {
-        let entries =
-            std::fs::read_dir(&dir).map_err(|e| crate::support::error::io(&dir, e))?;
+        let entries = std::fs::read_dir(&dir).map_err(|e| crate::support::error::io(&dir, e))?;
         for entry in entries {
-            let path = entry.map_err(|e| crate::support::error::io(&dir, e))?.path();
+            let path = entry
+                .map_err(|e| crate::support::error::io(&dir, e))?
+                .path();
             if path.is_dir() {
                 pending.push(path);
                 continue;
@@ -1109,10 +1105,11 @@ fn tree_references(tree: &Path) -> Result<Vec<String>> {
     let mut references = Vec::new();
     let mut pending = vec![tree.to_path_buf()];
     while let Some(dir) = pending.pop() {
-        let entries =
-            std::fs::read_dir(&dir).map_err(|e| crate::support::error::io(&dir, e))?;
+        let entries = std::fs::read_dir(&dir).map_err(|e| crate::support::error::io(&dir, e))?;
         for entry in entries {
-            let path = entry.map_err(|e| crate::support::error::io(&dir, e))?.path();
+            let path = entry
+                .map_err(|e| crate::support::error::io(&dir, e))?
+                .path();
             if path.is_dir() {
                 pending.push(path);
                 continue;
@@ -1126,10 +1123,9 @@ fn tree_references(tree: &Path) -> Result<Vec<String>> {
                 .map(|part| part.as_os_str().to_string_lossy().to_string())
                 .collect();
             references.push(match parts.as_slice() {
-                [owner, name, version] => format!(
-                    "{owner}/{name}@{}",
-                    version.trim_end_matches(".webc")
-                ),
+                [owner, name, version] => {
+                    format!("{owner}/{name}@{}", version.trim_end_matches(".webc"))
+                }
                 _ => relative.display().to_string(),
             });
         }
@@ -1188,8 +1184,7 @@ pub fn materialize(options: ServeOptions) -> Result<PathBuf> {
         // One eval answers both what exists and which packages carry a
         // dependency tree (depTree is null for the leaf packages).
         let apply = crate::support::nix::canonical_webcs_apply("_: p: p.pkg.depTree != null");
-        let deps =
-            crate::support::nix::eval(&Flake::default(), "wasmerPackages", Some(&apply))?;
+        let deps = crate::support::nix::eval(&Flake::default(), "wasmerPackages", Some(&apply))?;
         let names: Vec<String> = if build_all {
             deps.as_object()
                 .into_iter()

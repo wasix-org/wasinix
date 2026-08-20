@@ -18,7 +18,14 @@ pub fn unix_nanos() -> u128 {
 /// shape, so anything else is None rather than a guess at what was meant.
 pub fn parse_utc(text: &str) -> Option<u64> {
     let bytes = text.as_bytes();
-    let punctuation = [(4, b'-'), (7, b'-'), (10, b'T'), (13, b':'), (16, b':'), (19, b'Z')];
+    let punctuation = [
+        (4, b'-'),
+        (7, b'-'),
+        (10, b'T'),
+        (13, b':'),
+        (16, b':'),
+        (19, b'Z'),
+    ];
     if bytes.len() != 20 || punctuation.iter().any(|&(at, sep)| bytes[at] != sep) {
         return None;
     }

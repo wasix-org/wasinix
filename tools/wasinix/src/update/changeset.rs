@@ -97,7 +97,10 @@ impl ChangeSet {
             EntryKind::Retain => "pkgs: retain outgoing versions in registry history".into(),
             EntryKind::Rel => match (&entry.from, &entry.to) {
                 (Some(from), Some(to)) => {
-                    format!("pkgs: bump {} rel wasix.{from} to wasix.{to}", entry.subject)
+                    format!(
+                        "pkgs: bump {} rel wasix.{from} to wasix.{to}",
+                        entry.subject
+                    )
                 }
                 _ => format!("pkgs: bump {} rel", entry.subject),
             },

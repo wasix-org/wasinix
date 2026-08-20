@@ -121,7 +121,10 @@ fn ran_revisions(repository: &str, workflow: &str, limit: usize) -> Result<Vec<R
         let value = client.get(&format!(
             "repos/{repository}/actions/workflows/{workflow}/runs?per_page=100&page={page}"
         ))?;
-        let Some(runs) = value["workflow_runs"].as_array().filter(|runs| !runs.is_empty()) else {
+        let Some(runs) = value["workflow_runs"]
+            .as_array()
+            .filter(|runs| !runs.is_empty())
+        else {
             break;
         };
         for run in runs {
@@ -175,13 +178,15 @@ fn published(repo: &std::path::Path, repository: Option<&str>, ran: &[Ran]) -> V
 
 /// The revisions a commit range names, oldest first.
 fn ranged(repo: &std::path::Path, range: &str) -> Result<Vec<Ran>> {
-    Ok(crate::support::git::git(repo, &["rev-list", "--reverse", range])?
-        .lines()
-        .map(|rev| Ran {
-            rev: rev.to_string(),
-            event: None,
-        })
-        .collect())
+    Ok(
+        crate::support::git::git(repo, &["rev-list", "--reverse", range])?
+            .lines()
+            .map(|rev| Ran {
+                rev: rev.to_string(),
+                event: None,
+            })
+            .collect(),
+    )
 }
 
 fn series(published: &[Published], by: By) -> BTreeMap<String, Series> {

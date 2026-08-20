@@ -52,4 +52,3 @@ pub fn command(text: impl std::fmt::Display) -> String {
 pub fn error(text: impl std::fmt::Display) -> String {
     paint("1;31", text)
 }
-

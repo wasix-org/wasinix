@@ -324,7 +324,9 @@ fn host_lease() -> Result<Option<crate::nix::builder::Lease>> {
         return Ok(None);
     };
     let capacity = crate::support::env::host_lease_capacity()?.ok_or_else(|| {
-        Error::Request("$WASINIX_HOST_LEASE_ROOT is set without $WASINIX_HOST_LEASE_CAPACITY".into())
+        Error::Request(
+            "$WASINIX_HOST_LEASE_ROOT is set without $WASINIX_HOST_LEASE_CAPACITY".into(),
+        )
     })?;
     let lease = crate::nix::builder::acquire_slots(Path::new(&root), capacity, "this host")?;
     Ok(Some(lease))
@@ -457,7 +459,8 @@ pub fn follow_logs(run_dir: &Path, follow: bool) -> Result<()> {
         }
         if len > offset {
             let mut file = std::fs::File::open(&path).map_err(|e| io(&path, e))?;
-            file.seek(SeekFrom::Start(offset)).map_err(|e| io(&path, e))?;
+            file.seek(SeekFrom::Start(offset))
+                .map_err(|e| io(&path, e))?;
             let mut chunk = Vec::new();
             file.read_to_end(&mut chunk).map_err(|e| io(&path, e))?;
             stdout.write_all(&chunk).map_err(|e| io(&path, e))?;

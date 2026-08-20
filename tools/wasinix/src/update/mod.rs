@@ -8,9 +8,9 @@ pub mod drive;
 pub mod history;
 pub mod managed;
 pub mod rels;
+pub mod request;
 pub mod retention;
 pub mod select;
-pub mod request;
 pub mod targets;
 
 pub use request::{Mode, Request, REQUEST_ENV};

@@ -78,12 +78,11 @@ fn crates_io_releases(name: &str) -> Result<Vec<String>> {
     let body = crate::support::http::get_text(&url)?;
     let mut versions = Vec::new();
     for line in body.lines().filter(|line| !line.trim().is_empty()) {
-        let entry: serde_json::Value = serde_json::from_str(line).map_err(|source| {
-            crate::support::error::Error::Json {
+        let entry: serde_json::Value =
+            serde_json::from_str(line).map_err(|source| crate::support::error::Error::Json {
                 path: format!("<crates.io index for {name}>").into(),
                 source,
-            }
-        })?;
+            })?;
         if entry["yanked"].as_bool().unwrap_or(false) {
             continue;
         }
@@ -144,12 +143,12 @@ pub fn run(repo: &Path, refresh: bool) -> Result<String> {
     // Only a genuinely absent file starts empty; an unreadable or corrupt one
     // must not read as "no pins" and rewrite the world.
     let current: Pins = match std::fs::read_to_string(&path) {
-        Ok(text) => serde_json::from_str(&text).map_err(|source| {
-            crate::support::error::Error::Json {
+        Ok(text) => {
+            serde_json::from_str(&text).map_err(|source| crate::support::error::Error::Json {
                 path: path.clone(),
                 source,
-            }
-        })?,
+            })?
+        }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Pins::new(),
         Err(error) => return Err(crate::support::error::io(&path, error)),
     };

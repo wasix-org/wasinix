@@ -41,15 +41,20 @@ pub fn cache_push_store() -> String {
     format!("s3://{CACHE_BUCKET}?region=auto&endpoint={CACHE_ENDPOINT}&compression=zstd")
 }
 
-
 /// Whether a stderr line is nix transfer chatter rather than a message: an
 /// error excerpt taking the tail of a stream must not let hundreds of
 /// `copying path` lines push the actual failure out of the window.
 pub fn progress_noise(line: &str) -> bool {
     let line = line.trim_start();
-    ["copying path '", "building '", "unpacking '", "querying info about", "downloading '"]
-        .iter()
-        .any(|prefix| line.starts_with(prefix))
+    [
+        "copying path '",
+        "building '",
+        "unpacking '",
+        "querying info about",
+        "downloading '",
+    ]
+    .iter()
+    .any(|prefix| line.starts_with(prefix))
 }
 
 /// The nix config block workflows install, from the same constants the
@@ -263,8 +268,7 @@ impl Invocation {
             cmd.env(name, value);
         }
         if let Some(path) = &self.stdin {
-            let file =
-                std::fs::File::open(path).map_err(|e| crate::support::error::io(path, e))?;
+            let file = std::fs::File::open(path).map_err(|e| crate::support::error::io(path, e))?;
             cmd.stdin(file);
         }
         cmd.args(&self.subcommand);
@@ -385,7 +389,10 @@ pub fn eval_installable(installable: &str, apply: Option<&str>) -> Result<Value>
 
 /// Evaluate `legacyPackages.<system>.<attr>`, optionally through `--apply`.
 pub fn eval(flake: &Flake<'_>, attr: &str, apply: Option<&str>) -> Result<Value> {
-    eval_installable(&format!("{}#legacyPackages.{SYSTEM}.{attr}", flake.0), apply)
+    eval_installable(
+        &format!("{}#legacyPackages.{SYSTEM}.{attr}", flake.0),
+        apply,
+    )
 }
 
 #[cfg(test)]

@@ -5,12 +5,12 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::github::client;
 use crate::github::sanitize::Markdown;
 use crate::github::surfaces::{Registry, Surface};
 use crate::registries::{cargo, python, wasmer};
 use crate::support::error::{Error, Result};
 use crate::support::process::CommandStatus;
-use crate::github::client;
 use crate::support::ui;
 
 #[derive(Clone, Copy, PartialEq, clap::ValueEnum)]
@@ -179,9 +179,7 @@ fn published_body(
             body,
             Markdown::constant("\nWheel overlay "),
             Markdown::link("index", url),
-            Markdown::constant(
-                ", preferred over the published wheels by version:\n",
-            ),
+            Markdown::constant(", preferred over the published wheels by version:\n"),
             Markdown::fenced(
                 &format!(
                     "pip install --index-url {url}/all/simple --extra-index-url {}/all/simple <pkg>",
@@ -225,14 +223,16 @@ fn published_body(
 }
 
 fn publish(args: &PreviewArgs, repo: &Path) -> Result<()> {
-    let base = args.base.as_ref().ok_or_else(|| {
-        Error::Request("a preview needs --base to diff against".into())
-    })?;
+    let base = args
+        .base
+        .as_ref()
+        .ok_or_else(|| Error::Request("a preview needs --base to diff against".into()))?;
     // Checked before the diff, which builds both plans: the namespace is
     // wanted by every step below, and wasmer::publish refuses without it.
-    let namespace = args.namespace.clone().ok_or_else(|| {
-        Error::Request("a preview needs --namespace to publish into".into())
-    })?;
+    let namespace = args
+        .namespace
+        .clone()
+        .ok_or_else(|| Error::Request("a preview needs --namespace to publish into".into()))?;
     let plan = python::plan_diff(&base.to_string_lossy())?;
     ui::fact("changed webcs", plan.webcs.len());
     ui::fact("changed wheels", plan.wheels.len());
@@ -318,8 +318,7 @@ pub fn run(args: PreviewArgs) -> Result<CommandStatus> {
             // shows a stale "building" claim for a run that already died.
             if args.comment {
                 if let Ok(Some(comment)) = Comment::open(&args, &repo) {
-                    let _ =
-                        comment.upsert(status_body(&args, Status::Failed), args.rev.as_deref());
+                    let _ = comment.upsert(status_body(&args, Status::Failed), args.rev.as_deref());
                 }
             }
             Err(error)

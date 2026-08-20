@@ -14,8 +14,8 @@ use crate::ci::types::{
 };
 use crate::support::error::{request_error, Error, Result};
 use crate::support::process::CommandStatus;
-use crate::support::ui::{self, JsonArg};
 use crate::support::schema;
+use crate::support::ui::{self, JsonArg};
 
 /// The default spot source cut: the toolchain group, since a toolchain edit
 /// is what spot exists to test.
@@ -140,7 +140,11 @@ pub struct DiffArgs {
     /// The cases, as complete build or spot commands separated by --vs; the
     /// first case is the baseline. None means the pull-request shape:
     /// `build all --at <merge-base with main> --vs build all`
-    #[arg(trailing_var_arg = true, allow_hyphen_values = true, value_name = "CASE")]
+    #[arg(
+        trailing_var_arg = true,
+        allow_hyphen_values = true,
+        value_name = "CASE"
+    )]
     pub words: Vec<String>,
 }
 
@@ -178,7 +182,9 @@ fn parse_override(spec: &str) -> Result<Override> {
         ));
     };
     if target.is_empty() || value.is_empty() {
-        return request_error(format!("--with {spec:?}: target and source must be non-empty"));
+        return request_error(format!(
+            "--with {spec:?}: target and source must be non-empty"
+        ));
     }
     let (kind, value) = match crate::support::naming::source_spec(value)? {
         crate::support::naming::SourceSpec::Revision(rev) => (OverrideKind::Revision, rev),
@@ -263,8 +269,8 @@ pub(crate) fn spot_case(
 /// One trusted build or spot command as a case; the parser diff cases and
 /// bisect predicates share.
 pub(crate) fn parse_case(words: &[String], case_id: Option<String>) -> Result<Case<RefSource>> {
-    let parsed = CaseCommand::try_parse_from(words)
-        .map_err(|error| Error::Request(error.to_string()))?;
+    let parsed =
+        CaseCommand::try_parse_from(words).map_err(|error| Error::Request(error.to_string()))?;
     Ok(match &parsed {
         CaseCommand::Build(case) => Case::Build(build_case(
             &case.request,
@@ -478,7 +484,10 @@ fn export_junit(run_dir: &Path, out: &Path) -> Result<()> {
             merged.push(case);
         }
     }
-    crate::support::fs::write(out, crate::ci::facts::junit::write_junit(&merged).as_bytes())
+    crate::support::fs::write(
+        out,
+        crate::ci::facts::junit::write_junit(&merged).as_bytes(),
+    )
 }
 
 /// Whether this request's placement is a host route, which ships the whole
@@ -487,8 +496,11 @@ fn host_builder(
     repo: &Path,
     resolved: &ResolvedRequest,
 ) -> Result<Option<crate::nix::builder::Builder>> {
-    let mut placements: Vec<Option<&str>> =
-        resolved.cases().iter().map(|case| case.placement()).collect();
+    let mut placements: Vec<Option<&str>> = resolved
+        .cases()
+        .iter()
+        .map(|case| case.placement())
+        .collect();
     placements.dedup();
     let mut host = None;
     for on in &placements {
@@ -499,9 +511,7 @@ fn host_builder(
         }
     }
     if host.is_some() && placements.len() > 1 {
-        return request_error(
-            "a host-routed case cannot mix with other placements in one run",
-        );
+        return request_error("a host-routed case cannot mix with other placements in one run");
     }
     Ok(host)
 }
@@ -714,13 +724,7 @@ fn drive_terminal(repo: &Path, request: ParsedRequest, mode: &ModeArgs) -> Resul
     if let Some(builder) = host_builder(repo, &resolved)? {
         case_facts(&resolved);
         let run_dir = run_directory(&mode.run_dir)?;
-        let status = run_on_host(
-            repo,
-            &builder,
-            resolved,
-            &run_dir,
-            cache,
-        )?;
+        let status = run_on_host(repo, &builder, resolved, &run_dir, cache)?;
         if let Some(out) = &mode.junit_out {
             export_junit(&run_dir, out)?;
         }

@@ -162,7 +162,10 @@ pub fn warning(text: impl std::fmt::Display) {
 }
 
 pub fn error(text: impl std::fmt::Display) {
-    eprintln!("{}", crate::support::terminal::error(format!("error: {text}")));
+    eprintln!(
+        "{}",
+        crate::support::terminal::error(format!("error: {text}"))
+    );
 }
 
 /// Facts joined with the shared separator: `5213 jobs · 39 failed · 3h 06m`.

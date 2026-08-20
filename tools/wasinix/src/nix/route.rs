@@ -87,9 +87,7 @@ impl Route {
             },
         };
         if requested == Some(RouteKind::Local) {
-            return request_error(
-                "a remote cannot route local; pass `--on local` to run here",
-            );
+            return request_error("a remote cannot route local; pass `--on local` to run here");
         }
         let builder = builder::load(repo, selected)?;
         let kind = requested
@@ -121,8 +119,6 @@ impl Route {
         })
     }
 
-
-
     pub fn limits(&self) -> Result<EvaluationLimits> {
         match self {
             Route::Local(limits) => Ok(*limits),
@@ -138,9 +134,7 @@ impl Route {
     pub fn builder(&self) -> Option<&Builder> {
         match self {
             Route::Local(_) => None,
-            Route::Builder(builder) | Route::Store(builder) | Route::Host(builder) => {
-                Some(builder)
-            }
+            Route::Builder(builder) | Route::Store(builder) | Route::Host(builder) => Some(builder),
         }
     }
 
