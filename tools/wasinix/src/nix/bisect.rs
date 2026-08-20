@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::support::error::{request_error, require, Result};
+use crate::support::error::{Result, request_error, require};
 use crate::update::select as updateselect;
 use crate::update::targets::{self as updatetargets, Backend, Target};
 
@@ -431,7 +431,7 @@ fn duration_seconds(duration: Duration) -> f64 {
 #[cfg(test)]
 mod tests {
 
-    use super::{completed, Budget, Dependency, Duration, Options, Outcome};
+    use super::{Budget, Dependency, Duration, Options, Outcome, completed};
 
     #[test]
     fn reads_first_bad_commit() {

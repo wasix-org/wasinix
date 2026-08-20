@@ -8,12 +8,12 @@ use std::sync::LazyLock;
 use regex::Regex;
 use serde_json::Value;
 
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 use crate::support::format::short_rev;
 use crate::support::nix::eval_installable;
 use crate::support::ui;
 use crate::update::targets::{Backend, Target};
-use crate::update::{Mode, Request, REQUEST_ENV};
+use crate::update::{Mode, REQUEST_ENV, Request};
 
 /// The crate-pins backend reports its state rather than a version.
 static CRATE_STATE: LazyLock<Regex> =
@@ -279,7 +279,7 @@ fn update_flake_input(
     let override_ref = match request {
         None => None,
         Some(request) if request.mode != Mode::Revision => {
-            return request_error(format!("{} only accepts revision requests", target.name))
+            return request_error(format!("{} only accepts revision requests", target.name));
         }
         Some(request) => {
             let source = request.source.as_ref().unwrap_or(&Value::Null);

@@ -5,7 +5,7 @@
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 
-use crate::support::error::{request_error, require, Result};
+use crate::support::error::{Result, request_error, require};
 
 const DATA_PREFIX: &str = "<!-- wasinix:changeset data=";
 

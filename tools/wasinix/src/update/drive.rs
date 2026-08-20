@@ -5,14 +5,14 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 use crate::support::process::CommandStatus;
 use crate::support::ui;
 use crate::update::backends;
 use crate::update::changeset::{ChangeSet, Entry, EntryKind, FailedStep, Unchanged};
 use crate::update::retention::{self, Versions};
 use crate::update::targets::{self, PostUpdateHook, Target};
-use crate::update::{select, Mode};
+use crate::update::{Mode, select};
 
 pub struct Options {
     /// Run the package-declared re-syncs and nothing else. They normally run

@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::support::atoms::{DurationSecs, Rev};
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 use crate::support::schema::Document;
 
 /// Steps shorter than this are runner bookkeeping, not signal, and there are

@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 use crate::support::format;
 
 /// A resolved git revision: 40 hex characters on the wire, 12 on display.

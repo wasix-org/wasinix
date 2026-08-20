@@ -1,6 +1,6 @@
 diff -ruN a/src/sys/wasi/mod.rs b/src/sys/wasi/mod.rs
---- a/src/sys/wasi/mod.rs	2026-08-11 00:13:31.926442354 +0200
-+++ b/src/sys/wasi/mod.rs	2026-08-11 00:13:32.015440845 +0200
+--- a/src/sys/wasi/mod.rs	2026-08-20 23:24:29.014223138 +0200
++++ b/src/sys/wasi/mod.rs	2026-08-21 11:41:57.016349848 +0200
 @@ -12,7 +12,6 @@
  //! work. However this could be implemented by use of an `Arc`.
  //!
@@ -10,9 +10,9 @@ diff -ruN a/src/sys/wasi/mod.rs b/src/sys/wasi/mod.rs
  
  #[cfg(all(feature = "net", target_vendor = "unknown"))]
 diff -ruN a/src/sys/wasi/poll.rs b/src/sys/wasi/poll.rs
---- a/src/sys/wasi/poll.rs	2026-08-11 00:13:31.945442031 +0200
-+++ b/src/sys/wasi/poll.rs	2026-08-11 00:13:32.037440472 +0200
-@@ -275,7 +275,7 @@
+--- a/src/sys/wasi/poll.rs	2026-08-20 23:24:29.014223138 +0200
++++ b/src/sys/wasi/poll.rs	2026-08-21 11:41:57.024349690 +0200
+@@ -264,7 +264,7 @@
                      // Return the events
                      check_errors(&events)
                  }
@@ -21,7 +21,7 @@ diff -ruN a/src/sys/wasi/poll.rs b/src/sys/wasi/poll.rs
              };
          }
      }
-@@ -446,7 +446,7 @@
+@@ -429,7 +429,7 @@
  fn check_errors(events: &[Event]) -> io::Result<()> {
      for event in events {
          if event.error.raw() != wasi::ERRNO_SUCCESS.raw() {

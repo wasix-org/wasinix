@@ -8,7 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 
 pub const REQUEST_ENV: &str = "WASINIX_UPDATE_REQUEST";
 

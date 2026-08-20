@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 
 fn text(name: &str) -> Result<Option<String>> {
     match std::env::var(name) {

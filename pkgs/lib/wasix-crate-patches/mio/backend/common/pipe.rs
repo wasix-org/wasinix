@@ -3,30 +3,27 @@
 //!
 //! See the [`new`] function for documentation.
 
+#[cfg(target_vendor = "wasmer")]
+use ::wasix as wasi;
 use std::fs::File;
 use std::io::{self, IoSlice, IoSliceMut, Read, Write};
 use std::os::wasi::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
-#[cfg(target_vendor = "wasmer")]
-use ::wasix as wasi;
 
 use super::net::set_nonblocking;
 use crate::io_source::IoSource;
-use crate::{event, Interest, Registry, Token};
+use crate::{Interest, Registry, Token, event};
 
 /// Create a new non-blocking WASI pipe.
 ///
 pub fn new() -> io::Result<(Sender, Receiver)> {
     #[cfg(target_vendor = "wasmer")]
     let (fd1, fd2) = unsafe {
-        wasi::fd_pipe()
-            .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
+        wasi::fd_pipe().map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
     };
 
     #[cfg(not(target_vendor = "wasmer"))]
-    let (fd1, fd2) = unsafe {
-        wasi::pipe()
-            .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
-    };
+    let (fd1, fd2) =
+        unsafe { wasi::pipe().map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))? };
 
     let r = unsafe { Receiver::from_raw_fd(fd1 as RawFd) };
     let w = unsafe { Sender::from_raw_fd(fd2 as RawFd) };

@@ -7,9 +7,9 @@ use std::path::Path;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 use crate::support::naming::{self, Domain};
-use crate::support::nix::{eval, Flake, SYSTEM};
+use crate::support::nix::{Flake, SYSTEM, eval};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Backend {

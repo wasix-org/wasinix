@@ -7,7 +7,7 @@ use std::path::Path;
 use serde::Deserialize;
 
 use crate::nix::route::Route;
-use crate::support::error::{request_error, Error, Result};
+use crate::support::error::{Error, Result, request_error};
 use crate::support::nix::Invocation;
 use crate::support::process::CommandStatus;
 

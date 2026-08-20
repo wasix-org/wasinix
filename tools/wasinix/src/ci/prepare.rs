@@ -7,10 +7,10 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use crate::ci::plan::{plan_of, Plan};
+use crate::ci::plan::{Plan, plan_of};
 use crate::ci::types::{Preparation, Request, ResolvedRequest};
 use crate::ci::workspace::write_materialization;
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 
 // The run directory's layout, stated here rather than by each module that
 // reaches into it.

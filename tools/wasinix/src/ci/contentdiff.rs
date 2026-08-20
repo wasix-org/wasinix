@@ -209,7 +209,7 @@ fn normalize_pair(old: &str, new: &str, store: Option<&str>) -> (Option<bool>, O
             return (
                 None,
                 Some(format!("realise failed: {}", tail(&output.stderr))),
-            )
+            );
         }
         Err(error) => return (None, Some(format!("realise failed: {error}"))),
     }
@@ -223,7 +223,7 @@ fn normalize_pair(old: &str, new: &str, store: Option<&str>) -> (Option<bool>, O
             return (
                 None,
                 Some(format!("normalize failed: {}", tail(&output.stderr))),
-            )
+            );
         }
         Err(error) => return (None, Some(format!("normalize failed: {error}"))),
     };

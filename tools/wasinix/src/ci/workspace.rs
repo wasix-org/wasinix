@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::ci::types::{CaseRef, Override, OverrideKind, RevSource};
-use crate::support::error::{io, request_error, Result};
+use crate::support::error::{Result, io, request_error};
 use crate::support::git::{git, git_raw};
 use crate::support::schema::Document;
 

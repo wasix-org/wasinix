@@ -9,9 +9,9 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::support::error::{request_error, require, Result};
+use crate::support::error::{Result, request_error, require};
 use crate::support::naming::{self, Domain};
-use crate::support::nix::{eval, Flake};
+use crate::support::nix::{Flake, eval};
 
 /// The roots `relVersions` is assembled from. A key is one of these plus a
 /// package name, and that name may itself hold a dot (`python3.14`), so the

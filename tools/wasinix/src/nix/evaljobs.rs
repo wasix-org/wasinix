@@ -7,7 +7,7 @@ use std::process::Stdio;
 use serde::Deserialize;
 
 use crate::nix::route::Route;
-use crate::support::error::{io, Error, Result};
+use crate::support::error::{Error, Result, io};
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]

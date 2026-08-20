@@ -11,7 +11,7 @@ use serde_json::Value;
 
 use crate::github::client;
 use crate::support::atoms::Rev;
-use crate::support::error::{request_error, require, Error, Result};
+use crate::support::error::{Error, Result, request_error, require};
 use crate::support::schema::{self, Document};
 
 pub const PREFIX: &str = "/wasinix";

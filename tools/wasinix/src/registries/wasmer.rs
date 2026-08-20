@@ -14,10 +14,10 @@ use std::process::Command;
 use std::sync::LazyLock;
 
 use regex::Regex;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-use crate::support::error::{request_error, Error, Result};
+use crate::support::error::{Error, Result, request_error};
 use crate::support::naming::{self, Domain};
 use crate::support::nix::{Flake, SYSTEM};
 
@@ -197,7 +197,10 @@ fn resolved_graph() -> Result<ResolvedGraph> {
             }
         }
         graph.keys_by_attr.insert(attr.clone(), key.clone());
-        if graph.attrs_by_key.insert(key.clone(), attr.clone()).is_some()
+        if graph
+            .attrs_by_key
+            .insert(key.clone(), attr.clone())
+            .is_some()
             || graph
                 .dependencies
                 .insert(key.clone(), package_dependencies)
@@ -238,9 +241,7 @@ pub(crate) fn include_unpublished_dependencies(
                 continue;
             }
             let Some(attr) = graph.attrs_by_key.get(&dependency) else {
-                return request_error(format!(
-                    "no wasmerPackages attribute for {name}@{version}"
-                ));
+                return request_error(format!("no wasmerPackages attribute for {name}@{version}"));
             };
             attrs.insert(attr.clone());
             pending.push(dependency);
@@ -606,7 +607,9 @@ pub fn provenance(pkg: &Package, rev: &str) -> String {
     let origin = match &pkg.source {
         Some(source) => {
             let (file, line) = source.rsplit_once(':').unwrap_or((source.as_str(), "1"));
-            format!("Built from [{file}](https://github.com/wasix-org/wasinix/blob/{rev}/{file}#L{line})")
+            format!(
+                "Built from [{file}](https://github.com/wasix-org/wasinix/blob/{rev}/{file}#L{line})"
+            )
         }
         None => "Built by [wasinix](https://github.com/wasix-org/wasinix)".to_string(),
     };

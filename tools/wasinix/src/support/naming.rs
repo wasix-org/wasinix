@@ -21,7 +21,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 
 /// Split an address into segments, honouring the quoting Nix itself uses for a
 /// segment that holds a dot (`wasmerPackages."python3.14"`).

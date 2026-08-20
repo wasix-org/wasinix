@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-use crate::support::error::{io, request_error, Result};
+use crate::support::error::{Result, io, request_error};
 use crate::support::process::CommandStatus;
 
 pub struct UnionCase {

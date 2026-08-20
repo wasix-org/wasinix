@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::support::atoms::{JobAddr, JobStatus, Rev};
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 use crate::support::naming::{self, Domain};
 use crate::support::schema::Document;
 

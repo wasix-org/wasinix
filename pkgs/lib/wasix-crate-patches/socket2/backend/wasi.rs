@@ -2,11 +2,11 @@
 use std::cmp::min;
 use std::io::IoSlice;
 use std::marker::PhantomData;
-use std::mem::{self, size_of, MaybeUninit};
+use std::mem::{self, MaybeUninit, size_of};
 use std::net::Shutdown;
 use std::net::{Ipv4Addr, Ipv6Addr};
-use std::num::NonZeroUsize;
 use std::num::NonZeroU32;
+use std::num::NonZeroUsize;
 use std::os::wasi::io::RawFd;
 use std::os::wasi::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd};
 use std::path::Path;
@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use std::{io, slice};
 
 use libc::ssize_t;
-use libc::{c_void, in6_addr, in_addr};
+use libc::{c_void, in_addr, in6_addr};
 
 use std::os::wasi::ffi::OsStrExt;
 
@@ -44,14 +44,14 @@ pub(crate) use libc::IP_RECVTOS;
 pub(crate) use libc::IP_TOS;
 pub(crate) use libc::SO_LINGER;
 pub(crate) use libc::{
-    ip_mreq as IpMreq, ipv6_mreq as Ipv6Mreq, linger, IPPROTO_IP, IPPROTO_IPV6,
-    IPV6_MULTICAST_HOPS, IPV6_MULTICAST_IF, IPV6_MULTICAST_LOOP, IPV6_UNICAST_HOPS, IPV6_V6ONLY,
     IP_ADD_MEMBERSHIP, IP_DROP_MEMBERSHIP, IP_MULTICAST_IF, IP_MULTICAST_LOOP, IP_MULTICAST_TTL,
-    IP_TTL, MSG_OOB, MSG_PEEK, SOL_SOCKET, SO_BROADCAST, SO_ERROR, SO_KEEPALIVE, SO_RCVBUF,
-    SO_RCVTIMEO, SO_REUSEADDR, SO_SNDBUF, SO_SNDTIMEO, SO_TYPE, TCP_NODELAY,
+    IP_TTL, IPPROTO_IP, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, IPV6_MULTICAST_IF, IPV6_MULTICAST_LOOP,
+    IPV6_UNICAST_HOPS, IPV6_V6ONLY, MSG_OOB, MSG_PEEK, SO_BROADCAST, SO_ERROR, SO_KEEPALIVE,
+    SO_RCVBUF, SO_RCVTIMEO, SO_REUSEADDR, SO_SNDBUF, SO_SNDTIMEO, SO_TYPE, SOL_SOCKET, TCP_NODELAY,
+    ip_mreq as IpMreq, ipv6_mreq as Ipv6Mreq, linger,
 };
 pub(crate) use libc::{
-    ip_mreq_source as IpMreqSource, IP_ADD_SOURCE_MEMBERSHIP, IP_DROP_SOURCE_MEMBERSHIP,
+    IP_ADD_SOURCE_MEMBERSHIP, IP_DROP_SOURCE_MEMBERSHIP, ip_mreq_source as IpMreqSource,
 };
 pub(crate) use libc::{IPV6_ADD_MEMBERSHIP, IPV6_DROP_MEMBERSHIP};
 pub(crate) use libc::{TCP_KEEPCNT, TCP_KEEPINTVL};
@@ -102,12 +102,7 @@ impl Type {
     }
 }
 
-impl_debug!(
-    Type,
-    libc::SOCK_STREAM,
-    libc::SOCK_DGRAM,
-    libc::SOCK_RAW,
-);
+impl_debug!(Type, libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_RAW,);
 
 impl_debug!(
     Protocol,
@@ -213,7 +208,6 @@ impl SockAddr {
     }
 }
 
-
 pub(crate) type Socket = c_int;
 
 pub(crate) unsafe fn socket_from_raw(socket: Socket) -> crate::socket::Inner {
@@ -275,7 +269,7 @@ pub(crate) fn poll_connect(socket: &crate::Socket, timeout: Duration) -> io::Res
                             return Err(io::Error::new(
                                 io::ErrorKind::Other,
                                 "no error set after POLLHUP",
-                            ))
+                            ));
                         }
                         Err(err) => return Err(err),
                     }

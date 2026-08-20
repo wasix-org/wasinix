@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// GitHub caps issue comments at 65536 bytes; this leaves generous headroom
 /// while keeping reports scannable, with the step summary as overflow.

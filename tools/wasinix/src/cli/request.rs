@@ -12,7 +12,7 @@ use crate::ci::types::{
     Build, Case, Diff, Override, OverrideKind, ParsedRequest, RefSource, Request, ResolvedRequest,
     Selector, SelectorKind, Spot,
 };
-use crate::support::error::{request_error, Error, Result};
+use crate::support::error::{Error, Result, request_error};
 use crate::support::process::CommandStatus;
 use crate::support::schema;
 use crate::support::ui::{self, JsonArg};
@@ -803,7 +803,9 @@ pub(crate) fn pr_base(repo: &Path) -> Result<String> {
             return crate::support::git::git(repo, &["merge-base", reference, "HEAD"]);
         }
     }
-    request_error("no main ref to diff against (tried upstream/main, origin/main, main); name the cases explicitly")
+    request_error(
+        "no main ref to diff against (tried upstream/main, origin/main, main); name the cases explicitly",
+    )
 }
 
 pub(crate) fn run_diff(repo: &Path, mut args: super::DiffArgs) -> Result<CommandStatus> {

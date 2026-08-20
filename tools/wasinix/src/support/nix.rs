@@ -397,7 +397,7 @@ pub fn eval(flake: &Flake<'_>, attr: &str, apply: Option<&str>) -> Result<Value>
 
 #[cfg(test)]
 mod tests {
-    use super::{canonical_webcs_apply, Invocation};
+    use super::{Invocation, canonical_webcs_apply};
 
     #[test]
     fn canonical_webc_filter_runs_in_nix() {

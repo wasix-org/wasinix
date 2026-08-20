@@ -1,12 +1,12 @@
 use crate::{Interest, Token};
 
 use log::error;
+use std::os::fd::AsRawFd;
+use std::os::fd::RawFd;
 #[cfg(debug_assertions)]
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 use std::{i32, io, ptr};
-use std::os::fd::RawFd;
-use std::os::fd::AsRawFd;
 
 use ::wasix as wasi;
 
@@ -25,34 +25,26 @@ pub struct Selector {
 
 impl Selector {
     pub fn new() -> io::Result<Selector> {
-        let ep = unsafe {
-            wasi::epoll_create()
-        }.map_err(io_err)?;
-        Ok(
-            Selector {
-                #[cfg(debug_assertions)]
-                id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
-                ep,
-                #[cfg(debug_assertions)]
-                has_waker: AtomicBool::new(false),
-            }
-        )
+        let ep = unsafe { wasi::epoll_create() }.map_err(io_err)?;
+        Ok(Selector {
+            #[cfg(debug_assertions)]
+            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
+            ep,
+            #[cfg(debug_assertions)]
+            has_waker: AtomicBool::new(false),
+        })
     }
 
     pub fn try_clone(&self) -> io::Result<Selector> {
-        let ep = unsafe {
-            wasi::fd_dup(self.ep)
-        }.map_err(io_err)?;
-        Ok(
-            Selector {
-                // It's the same selector, so we use the same id.
-                #[cfg(debug_assertions)]
-                id: self.id,
-                ep,
-                #[cfg(debug_assertions)]
-                has_waker: AtomicBool::new(self.has_waker.load(Ordering::Acquire)),
-            }
-        )
+        let ep = unsafe { wasi::fd_dup(self.ep) }.map_err(io_err)?;
+        Ok(Selector {
+            // It's the same selector, so we use the same id.
+            #[cfg(debug_assertions)]
+            id: self.id,
+            ep,
+            #[cfg(debug_assertions)]
+            has_waker: AtomicBool::new(self.has_waker.load(Ordering::Acquire)),
+        })
     }
 
     pub fn select(&self, events: &mut Events, timeout: Option<Duration>) -> io::Result<()> {
@@ -61,20 +53,13 @@ impl Selector {
             .unwrap_or(wasi::Timestamp::MAX);
 
         events.clear();
-        unsafe {
-            wasi::epoll_wait(
-                self.ep,
-                events.as_mut_ptr(),
-                events.capacity(),
-                timeout
-            )
-        }
-        .map_err(io_err)
-        .map(|n_events| {
-            // This is safe because `epoll_wait` ensures that `n_events` are
-            // assigned.
-            unsafe { events.set_len(n_events as usize) };
-        })
+        unsafe { wasi::epoll_wait(self.ep, events.as_mut_ptr(), events.capacity(), timeout) }
+            .map_err(io_err)
+            .map(|n_events| {
+                // This is safe because `epoll_wait` ensures that `n_events` are
+                // assigned.
+                unsafe { events.set_len(n_events as usize) };
+            })
     }
 
     pub fn register(&self, fd: wasi::Fd, token: Token, interests: Interest) -> io::Result<()> {
@@ -85,19 +70,11 @@ impl Selector {
                 fd: fd,
                 data1: 0,
                 data2: usize::from(token) as u64,
-            }   
+            },
         };
 
-        unsafe {
-            wasi::epoll_ctl(
-                self.ep,
-                wasi::EPOLL_CTL_ADD,
-                fd,
-                &mut event
-            )
-            .map(|_| ())
-        }
-        .map_err(io_err)
+        unsafe { wasi::epoll_ctl(self.ep, wasi::EPOLL_CTL_ADD, fd, &mut event).map(|_| ()) }
+            .map_err(io_err)
     }
 
     pub fn reregister(&self, fd: wasi::Fd, token: Token, interests: Interest) -> io::Result<()> {
@@ -108,32 +85,16 @@ impl Selector {
                 fd: fd,
                 data1: 0,
                 data2: usize::from(token) as u64,
-            }
+            },
         };
 
-        unsafe {
-            wasi::epoll_ctl(
-                self.ep,
-                wasi::EPOLL_CTL_MOD,
-                fd,
-                &mut event
-            )
-            .map(|_| ())
-        }
-        .map_err(io_err)
+        unsafe { wasi::epoll_ctl(self.ep, wasi::EPOLL_CTL_MOD, fd, &mut event).map(|_| ()) }
+            .map_err(io_err)
     }
 
     pub fn deregister(&self, fd: wasi::Fd) -> io::Result<()> {
-        unsafe {
-            wasi::epoll_ctl(
-                self.ep,
-                wasi::EPOLL_CTL_DEL,
-                fd,
-                ptr::null_mut()
-            )
-            .map(|_| ())
-        }
-        .map_err(io_err)
+        unsafe { wasi::epoll_ctl(self.ep, wasi::EPOLL_CTL_DEL, fd, ptr::null_mut()).map(|_| ()) }
+            .map_err(io_err)
     }
 
     #[cfg(debug_assertions)]
@@ -159,12 +120,7 @@ impl AsRawFd for Selector {
 
 impl Drop for Selector {
     fn drop(&mut self) {
-        if let Err(err) = unsafe {
-            wasi::fd_close(
-                self.ep,
-            )
-            .map(|_| ())
-        } {
+        if let Err(err) = unsafe { wasi::fd_close(self.ep).map(|_| ()) } {
             error!("error closing epoll: {}", err);
         }
     }
@@ -189,19 +145,19 @@ pub(crate) type Events = Vec<Event>;
 pub(crate) type Event = wasi::EpollEvent;
 
 pub(crate) mod event {
-    use std::fmt;
     use ::wasix as wasi;
+    use std::fmt;
 
-    use crate::sys::Event;
     use crate::Token;
+    use crate::sys::Event;
 
     pub(crate) fn token(event: &Event) -> Token {
         Token(event.data.data2 as usize)
     }
 
     pub(crate) fn is_readable(event: &Event) -> bool {
-        (event.events & wasi::EPOLL_TYPE_EPOLLIN) != 0 ||
-        (event.events & wasi::EPOLL_TYPE_EPOLLPRI) != 0
+        (event.events & wasi::EPOLL_TYPE_EPOLLIN) != 0
+            || (event.events & wasi::EPOLL_TYPE_EPOLLPRI) != 0
     }
 
     pub(crate) fn is_writable(event: &Event) -> bool {
@@ -245,9 +201,7 @@ pub(crate) mod event {
     }
 
     pub(crate) fn debug_details(f: &mut fmt::Formatter<'_>, event: &Event) -> fmt::Result {
-        f.debug_struct("Event")
-            .field("fd", &event.data.fd)
-            .finish()
+        f.debug_struct("Event").field("fd", &event.data.fd).finish()
     }
 }
 

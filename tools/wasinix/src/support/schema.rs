@@ -5,11 +5,11 @@
 
 use std::path::Path;
 
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-use crate::support::error::{request_error, Error, Result};
+use crate::support::error::{Error, Result, request_error};
 
 pub trait Document: Serialize + DeserializeOwned {
     const KIND: &'static str;
@@ -49,13 +49,13 @@ fn open<T: Document>(mut value: Value, origin: &str) -> Result<T> {
             return request_error(format!(
                 "{origin}: is a {kind} document, expected {}",
                 T::KIND
-            ))
+            ));
         }
         _ => {
             return request_error(format!(
                 "{origin}: has no document kind, expected {}",
                 T::KIND
-            ))
+            ));
         }
     }
     match object.remove("schema") {
@@ -65,14 +65,14 @@ fn open<T: Document>(mut value: Value, origin: &str) -> Result<T> {
                 "{origin}: {} document schema {schema} is not the supported {}",
                 T::KIND,
                 T::SCHEMA
-            ))
+            ));
         }
         None => {
             return request_error(format!(
                 "{origin}: {} document carries no schema (expected {})",
                 T::KIND,
                 T::SCHEMA
-            ))
+            ));
         }
     }
     serde_json::from_value(value).map_err(|source| Error::Json {
