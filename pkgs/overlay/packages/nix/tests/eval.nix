@@ -15,9 +15,9 @@
   #  - the native run is sandboxed and reports itself offline, while the wasi
   #    build has no getifaddrs and always assumes it is online.
   normalizeLog = pkgs.writeShellScript "normalize-nix-log" ''
-    ${pkgs.gnused}/bin/sed -e 's/\r//g' -e 's/\x1b\[[0-9;]*[A-Za-z]//g' \
+    ${pkgs.lib.getExe pkgs.gnused} -e 's/\r//g' -e 's/\x1b\[[0-9;]*[A-Za-z]//g' \
       -e "s|copying '[^']*' to the store||" \
-      | ${pkgs.gnugrep}/bin/grep -v "you don't have Internet access" || true
+      | ${pkgs.lib.getExe pkgs.gnugrep} -v "you don't have Internet access" || true
   '';
 
   # nix-command is experimental in a release build, and the store has to be one

@@ -136,7 +136,7 @@ in
         # curl's transitive deps (brotli/zstd/openssl/zlib). curl-config is a target buildInput
         # (not on $PATH), referenced by store path; it's a build-platform script emitting the
         # target flags, including libcurl.a's Libs.private.
-        export CURL_LDFLAGS="$(${final.curl.dev}/bin/curl-config --static-libs)"
+        export CURL_LDFLAGS="$(${lib.getExe' final.curl.dev "curl-config"} --static-libs)"
       '';
     postInstall =
       (lib.replaceStrings [''rm "$out/$prog"''] [''rm -f "$out/$prog"''] (old.postInstall or ""))

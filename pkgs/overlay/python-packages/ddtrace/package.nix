@@ -173,7 +173,8 @@ in
     passthru.updateScript = {
       command =
         [
-          "${updateWrapper}/bin/ddtrace-update"
+          lib.getExe
+          updateWrapper
         ]
         ++ nix-update-script {extraArgs = ["--flake"];};
       accepts = [

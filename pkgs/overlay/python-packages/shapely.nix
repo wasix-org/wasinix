@@ -12,7 +12,7 @@
   ...
 }:
 helpers.libTweaks {
-  env.GEOS_CONFIG = "${final.geos}/bin/geos-config";
+  env.GEOS_CONFIG = final.lib.getExe' final.geos "geos-config";
   env.NIX_LDFLAGS = "-lc++ -lc++abi -lunwind";
   # Replaces nixpkgs' preCheck: its `cd $out` breaks in the run-only check
   # derivation, where $out is unwritten; resolve the installed tree off the

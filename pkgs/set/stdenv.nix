@@ -57,7 +57,7 @@
     buildPackages.writeShellScriptBin binName ''
       ${shimEnv}
       ${stripNoExceptions}
-      exec ${toolchain.wasixcc}/bin/${tool} "$@"
+      exec ${lib.getExe' toolchain.wasixcc tool} "$@"
     '';
 
   wasixShim = buildPackages.symlinkJoin {

@@ -86,10 +86,10 @@ in rec {
   # stdin. The native/wasix argument is ignored (both sides get the same cleanup).
   normalizers = {
     stripAnsi = pkgs.writeShellScript "normalize-strip-ansi" ''
-      ${pkgs.gnused}/bin/sed -e 's/\r//' -e 's/\x1b\[[0-9;]*m//g'
+      ${lib.getExe pkgs.gnused} -e 's/\r//' -e 's/\x1b\[[0-9;]*m//g'
     '';
     stripStorePaths = pkgs.writeShellScript "normalize-strip-store-paths" ''
-      ${pkgs.gnused}/bin/sed -E 's#/nix/store/[a-z0-9]{32}-#/nix/store/HASH-#g'
+      ${lib.getExe pkgs.gnused} -E 's#/nix/store/[a-z0-9]{32}-#/nix/store/HASH-#g'
     '';
   };
   # Run a bash script with the given packages in PATH.
@@ -112,7 +112,7 @@ in rec {
       export HOME=$TMPDIR/home
       mkdir -p "$HOME"
       cd "$(mktemp -d)"
-      if ${pkgs.coreutils}/bin/timeout ${toString timeout} ${pkgs.bash}/bin/bash -euo pipefail ${scriptFile} >"$out" 2>&1; then
+      if ${lib.getExe' pkgs.coreutils "timeout"} ${toString timeout} ${lib.getExe pkgs.bash} -euo pipefail ${scriptFile} >"$out" 2>&1; then
         :
       else
         rc=$?
@@ -164,33 +164,33 @@ in rec {
       # backtrace in $out. Set on the host process, not the forwarded guest env.
       // lib.optionalAttrs (localBacktrace != "") {RUST_BACKTRACE = localBacktrace;}) ''
             export HOME=$TMPDIR/home
-            ${pkgs.coreutils}/bin/mkdir -p "$HOME"
+            ${lib.getExe' pkgs.coreutils "mkdir"} -p "$HOME"
 
             # The harness and the shims call their own tools by store path: a
             # wasixPkgs entry can put wasm builds of the same names on PATH
             # (coreutils), and those run in the guest.
-            shim_dir=$(${pkgs.coreutils}/bin/mktemp -d)
+            shim_dir=$(${lib.getExe' pkgs.coreutils "mktemp"} -d)
             for pkg_bin_dir in ${wasixBinDirs}; do
               [ -d "$pkg_bin_dir" ] || continue
               for original_bin in "$pkg_bin_dir/"*; do
                 [ -f "$original_bin" ] || continue
-                bin_name=$(${pkgs.coreutils}/bin/basename "$original_bin")
-                ${pkgs.coreutils}/bin/cat > "$shim_dir/$bin_name" <<SHIMEOF
+                bin_name=$(${lib.getExe' pkgs.coreutils "basename"} "$original_bin")
+                ${lib.getExe' pkgs.coreutils "cat"} > "$shim_dir/$bin_name" <<SHIMEOF
       #!/bin/sh
       env_flags=""
       for _v in ${forwardEnvNames}; do
-        _val=\$(${pkgs.coreutils}/bin/printenv "\$_v" 2>/dev/null) && env_flags="\$env_flags --env \$_v=\$_val"
+        _val=\$(${lib.getExe' pkgs.coreutils "printenv"} "\$_v" 2>/dev/null) && env_flags="\$env_flags --env \$_v=\$_val"
       done
-      export WASMER_FLAGS="--volume \$HOME:\$HOME --volume \$WASIX_TEST_ROOT:\$WASIX_TEST_ROOT --cwd \$(${pkgs.coreutils}/bin/pwd)\$env_flags ${extraFlags}"
+      export WASMER_FLAGS="--volume \$HOME:\$HOME --volume \$WASIX_TEST_ROOT:\$WASIX_TEST_ROOT --cwd \$(${lib.getExe' pkgs.coreutils "pwd"})\$env_flags ${extraFlags}"
       exec "$original_bin" "\$@"
       SHIMEOF
-                ${pkgs.coreutils}/bin/chmod +x "$shim_dir/$bin_name"
+                ${lib.getExe' pkgs.coreutils "chmod"} +x "$shim_dir/$bin_name"
               done
             done
 
-            export WASIX_TEST_ROOT="$(${pkgs.coreutils}/bin/mktemp -d)"
+            export WASIX_TEST_ROOT="$(${lib.getExe' pkgs.coreutils "mktemp"} -d)"
             cd "$WASIX_TEST_ROOT"
-            if PATH="$shim_dir:$PATH" ${pkgs.coreutils}/bin/timeout ${toString timeout} ${pkgs.bash}/bin/bash -euo pipefail ${scriptFile} >"$out" 2>&1; then
+            if PATH="$shim_dir:$PATH" ${lib.getExe' pkgs.coreutils "timeout"} ${toString timeout} ${lib.getExe pkgs.bash} -euo pipefail ${scriptFile} >"$out" 2>&1; then
               ${verdict.onCheckPass}
             else
               rc=$?
@@ -268,13 +268,13 @@ in rec {
     verdict = xverdict {
       inherit name expectFail broken;
       succeed = "touch $out";
-      failHard = ''${pkgs.diffutils}/bin/diff ${nat} ${was} >&2; exit 1'';
+      failHard = ''${lib.getExe' pkgs.diffutils "diff"} ${nat} ${was} >&2; exit 1'';
     };
   in
     pkgs.runCommand "wasix-compare-${name}" {
       passthru.wasix.testExpectation = testExpectation expectFail broken;
     } ''
-      if ${pkgs.diffutils}/bin/diff -q ${nat} ${was} >/dev/null 2>&1; then
+      if ${lib.getExe' pkgs.diffutils "diff"} -q ${nat} ${was} >/dev/null 2>&1; then
         ${verdict.onCheckPass}
       else
         ${verdict.onCheckFail}

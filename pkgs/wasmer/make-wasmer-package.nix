@@ -393,7 +393,7 @@ in
 
               cp -f "$wasm_path" "$bin_dir/$output_file"
               append_command "$command_name" "$module_name" "$output_file" "${defaultRunner}" "null" "\"$module_name\"" "''${command_env[$command_name]:-$package_env}"
-            done < <(${pkgs.findutils}/bin/find "${package}/bin" -maxdepth 1 -type f -name '*.wasm' -print0)
+            done < <(${lib.getExe pkgs.findutils} "${package}/bin" -maxdepth 1 -type f -name '*.wasm' -print0)
           fi
 
           if [ "$found_any" -eq 0 ]; then
@@ -434,7 +434,7 @@ in
           ensure_fs_header
           target="$pkg_dir/fs$virt"
           mkdir -p "$(dirname "$target")"
-          ${pkgs.coreutils}/bin/cp -R --no-preserve=mode,ownership "$src" "$target"
+          ${lib.getExe' pkgs.coreutils "cp"} -R --no-preserve=mode,ownership "$src" "$target"
           chmod -R u+w "$(dirname "$target")"
           printf '"%s" = "fs%s"\n' "$virt" "$virt" >> "$pkg_dir/wasmer.toml"
         }
@@ -454,9 +454,9 @@ in
         # Split on NUL first: store-path strings in the wasm are NUL-terminated, and a bare
         # `grep -a` would glue a path to the next string (e.g. <prefix>argument), yielding a
         # non-existent path that gets skipped.
-        done < <(${pkgs.coreutils}/bin/cat "$bin_dir"/*.wasm 2>/dev/null | ${pkgs.coreutils}/bin/tr '\0' '\n' \
-          | ${pkgs.gnugrep}/bin/grep -ohE '/nix/store/[a-z0-9]{32}-[^"'"'"' ]*' \
-          | ${pkgs.gnused}/bin/sed -E 's#(/nix/store/[a-z0-9]{32}-[^/]*).*#\1#' \
+        done < <(${lib.getExe' pkgs.coreutils "cat"} "$bin_dir"/*.wasm 2>/dev/null | ${lib.getExe' pkgs.coreutils "tr"} '\0' '\n' \
+          | ${lib.getExe pkgs.gnugrep} -ohE '/nix/store/[a-z0-9]{32}-[^"'"'"' ]*' \
+          | ${lib.getExe pkgs.gnused} -E 's#(/nix/store/[a-z0-9]{32}-[^/]*).*#\1#' \
           | LC_ALL=C sort -u)
       ''}
     '';

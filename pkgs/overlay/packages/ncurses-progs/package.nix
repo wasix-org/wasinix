@@ -6,7 +6,7 @@
   helpers,
   ...
 }: let
-  buildCc = "${final.buildPackages.stdenv.cc}/bin/cc";
+  buildCc = final.lib.getExe' final.buildPackages.stdenv.cc "cc";
 in
   helpers.libTweaks {
     passthru.wasix.shipped = true;

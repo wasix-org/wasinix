@@ -9,7 +9,8 @@ pyfinal.buildPythonPackage (finalAttrs: {
   format = "wheel";
 
   src = pyfinal.fetchPypi {
-    inherit (finalAttrs) pname version format;
+    inherit (finalAttrs) pname version;
+    format = "wheel";
     dist = "py3";
     python = "py3";
     hash = "sha256-E+GV5mu03+h6qyngnYfguvXieB/uosxjysa0CrKSnWE=";

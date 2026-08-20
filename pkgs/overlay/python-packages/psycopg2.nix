@@ -9,7 +9,7 @@
   helpers,
   ...
 }: let
-  nativePgConfig = "${final.buildPackages.libpq.pg_config}/bin/pg_config";
+  nativePgConfig = lib.getExe' final.buildPackages.libpq.pg_config "pg_config";
   wasixDev = lib.getDev final.libpq;
   wasixLib = lib.getLib final.libpq;
   pgConfigWrapper = final.buildPackages.writeShellScriptBin "pg_config" ''
@@ -29,7 +29,7 @@ in
       postPatch = _: ''
         substituteInPlace setup.py \
           --replace-fail "self.pg_config_exe = self.build_ext.pg_config" \
-                         'self.pg_config_exe = "${pgConfigWrapper}/bin/pg_config"'
+                         'self.pg_config_exe = "${lib.getExe pgConfigWrapper}"'
       '';
     }
   )

@@ -52,7 +52,7 @@
       # the wrappers we keep are dev scripts (freetype-config), never run on
       # wasm, and wrapProgram keeps working for nano/gzip/etc.
       makeShellWrapper = prev.makeShellWrapper.overrideAttrs (_: {
-        shell = "${final.buildPackages.bash}/bin/bash";
+        shell = lib.getExe final.buildPackages.bash;
       });
 
       # nixpkgs' emulatorAvailable check evaluates `${pkgs.wasmtime}`, which in

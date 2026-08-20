@@ -5,13 +5,13 @@
   ...
 }:
 helpers.wasmRename {wasmName = "anew";} (
-  final.buildGoModule {
+  final.buildGoModule (finalAttrs: {
     pname = "anew";
     version = "0.2";
     src = final.fetchFromGitHub {
       owner = "tomnomnom";
       repo = "anew";
-      tag = "v0.2";
+      tag = "v${finalAttrs.version}";
       hash = "sha256-NQSs99/2GPOtXkO7k+ar16G4Ecu4CPGMd/CTwEhcyto=";
     };
     vendorHash = null;
@@ -28,5 +28,5 @@ helpers.wasmRename {wasmName = "anew";} (
       mainProgram = "anew";
       license = final.lib.licenses.mit;
     };
-  }
+  })
 )

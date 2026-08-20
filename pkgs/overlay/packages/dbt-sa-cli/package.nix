@@ -47,7 +47,7 @@ final.rustPlatform.buildRustPackage (finalAttrs: {
   # dbt-state's build script generates prost bindings, so protoc runs on the
   # build host; prost-build looks it up by env before PATH.
   nativeBuildInputs = [final.buildPackages.protobuf];
-  env.PROTOC = "${final.buildPackages.protobuf}/bin/protoc";
+  env.PROTOC = final.lib.getExe' final.buildPackages.protobuf "protoc";
 
   doCheck = false;
 

@@ -1,5 +1,5 @@
 # garage: S3-compatible object store for self-hosted geo-distributed
-# deployments, built to WASIX. Nixpkgs owns the source, vendoring, and native
+# deployments. Nixpkgs owns the source, vendoring, and native
 # packaging; this override carries only the WASIX compatibility changes.
 {
   final,

@@ -134,7 +134,7 @@
           stdenv = nixpkgsByProfile.${profileName}.stdenv;
           rustPlatform = nixpkgsByProfile.${profileName}.rustPlatform;
           host = "wasm32-wasix";
-          buildCc = "${pkgs.buildPackages.stdenv.cc}/bin/cc";
+          buildCc = lib.getExe' pkgs.buildPackages.stdenv.cc "cc";
         }
     )
     profilesCfg.profiles;

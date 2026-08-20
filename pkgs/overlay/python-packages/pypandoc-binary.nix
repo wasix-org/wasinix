@@ -20,7 +20,7 @@ helpers.libTweaks {
     # cross-build); drop the check.
     substituteInPlace setup.py \
       --replace-fail "setup_requires=pypandoc.__setup_requires__," ""
-    install -Dm755 ${preferredProfilePackages.pandoc}/bin/pandoc.wasm pypandoc/files/pandoc
+    install -Dm755 ${pyfinal.lib.getExe' preferredProfilePackages.pandoc "pandoc.wasm"} pypandoc/files/pandoc
   '';
 }
 pyfinal.pypandoc

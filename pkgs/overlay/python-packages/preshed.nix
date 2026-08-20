@@ -17,9 +17,9 @@ helpers.libTweaks {
       case "$_path" in *-preshed-*/lib/python*/site-packages) _site="$_path"; break ;; esac
     done
     [ -n "$_site" ] || exit 1
-    ${final.buildPackages.coreutils}/bin/cp -r "$_site/preshed" "$NIX_BUILD_TOP/preshed"
-    ${final.buildPackages.coreutils}/bin/chmod -R u+w "$NIX_BUILD_TOP/preshed"
-    ${final.buildPackages.coreutils}/bin/cp -r "$_source_tests/." "$NIX_BUILD_TOP/preshed/tests/"
+    ${final.lib.getExe' final.buildPackages.coreutils "cp"} -r "$_site/preshed" "$NIX_BUILD_TOP/preshed"
+    ${final.lib.getExe' final.buildPackages.coreutils "chmod"} -R u+w "$NIX_BUILD_TOP/preshed"
+    ${final.lib.getExe' final.buildPackages.coreutils "cp"} -r "$_source_tests/." "$NIX_BUILD_TOP/preshed/tests/"
     export PYTHONPATH="$NIX_BUILD_TOP:$PYTHONPATH"
     pytestFlagsArray=("$NIX_BUILD_TOP/preshed/tests")
     cd "$NIX_BUILD_TOP"

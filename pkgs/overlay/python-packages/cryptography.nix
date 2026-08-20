@@ -28,7 +28,7 @@
 in
   helpers.libTweaks ({
       env = {
-        CC = "${final.stdenv.cc}/bin/${final.stdenv.cc.targetPrefix}cc";
+        CC = lib.getExe' final.stdenv.cc "${final.stdenv.cc.targetPrefix}cc";
         OPENSSL_NO_VENDOR = "1";
         CFLAGS = "-fwasm-exceptions";
         # The extension links through rustc's own wasm rust-lld, which keeps

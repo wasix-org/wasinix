@@ -109,7 +109,7 @@ in
     while read -r base; do
       echo "running $base under wasmer"
       log="$NIX_BUILD_TOP/$base.log"
-      if wasix-run "${testBuild}/bin/$base" --nocapture >"$log" 2>&1; then :; else
+      if wasix-run "${lib.getExe' testBuild "$base"}" --nocapture >"$log" 2>&1; then :; else
         echo "FAIL: $base exited nonzero" >&2
         fail=1
       fi
