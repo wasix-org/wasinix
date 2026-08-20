@@ -3545,6 +3545,50 @@ mod webc_tree {
     }
 }
 
+mod overrides {
+    /// A real nonzero exit; `ExitStatus` has no portable constructor.
+    fn failed_status() -> std::process::ExitStatus {
+        std::process::Command::new("sh")
+            .args(["-c", "exit 1"])
+            .status()
+            .unwrap()
+    }
+
+    /// `update wasixcc@rev:...` failed and the report showed nix-update's
+    /// chatter: the verdict is a document on stdout, and the stream a
+    /// failing tool usually speaks through carried only what it ran.
+    #[test]
+    fn an_update_failure_is_read_from_the_document_not_the_stream() {
+        use crate::update::changeset::{ChangeSet, FailedStep};
+        let changes = ChangeSet {
+            failures: vec![FailedStep {
+                subject: "wasixcc".into(),
+                message: "hash mint failed for cargoDeps.vendorStaging".into(),
+            }],
+            ..ChangeSet::default()
+        };
+        let document = crate::support::schema::to_value(&changes).unwrap();
+        let stdout = serde_json::to_vec(&document).unwrap();
+        let output = std::process::Output {
+            status: failed_status(),
+            stdout,
+            stderr: b"  $ nix-build --expr '...'\n  took 2s\n".to_vec(),
+        };
+        let stated = crate::ci::workspace::update_failure(&output);
+        assert_eq!(
+            stated,
+            "wasixcc: hash mint failed for cargoDeps.vendorStaging"
+        );
+        // Nothing said: the streams are all that is left.
+        let mute = std::process::Output {
+            status: failed_status(),
+            stdout: Vec::new(),
+            stderr: b"  took 2s\n".to_vec(),
+        };
+        assert!(crate::ci::workspace::update_failure(&mute).contains("took 2s"));
+    }
+}
+
 mod webc_identity {
     use std::collections::{BTreeMap, BTreeSet};
 

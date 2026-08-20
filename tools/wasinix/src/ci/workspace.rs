@@ -64,10 +64,42 @@ fn materialize_overrides(worktree: &Path, overrides: &[Override]) -> Result<()> 
         let mut cmd = Command::new(exe);
         cmd.arg("update")
             .arg(format!("{}@{source}", value.target))
+            .arg("--json")
             .current_dir(worktree);
-        crate::support::tools::checked_output(&mut cmd, &format!("update {}", value.target))?;
+        let output = crate::support::tools::output(&mut cmd)?;
+        if !output.status.success() {
+            return request_error(format!(
+                "update {}: {}",
+                value.target,
+                update_failure(&output)
+            ));
+        }
     }
     Ok(())
+}
+
+/// Why an update failed, in its own words. It reports each step's outcome in
+/// the document on stdout, so the stream a failing tool usually speaks
+/// through carries only the chatter of whatever it ran.
+pub(crate) fn update_failure(output: &std::process::Output) -> String {
+    let changes: Option<crate::update::changeset::ChangeSet> =
+        serde_json::from_slice::<serde_json::Value>(&output.stdout)
+            .ok()
+            .and_then(|value| crate::support::schema::from_value(value, "update --json").ok());
+    let stated = changes
+        .map(|changes| {
+            changes
+                .failures
+                .iter()
+                .map(|failure| format!("{}: {}", failure.subject, failure.message))
+                .collect::<Vec<_>>()
+                .join("; ")
+        })
+        .filter(|stated| !stated.is_empty());
+    // A child that died before it could state anything still has streams.
+    stated.unwrap_or_else(|| {
+        crate::support::tools::diagnostics_tail(&String::from_utf8_lossy(&output.stderr))
+    })
 }
 
 /// A worktree at a revision, in its own private parent directory, removed
