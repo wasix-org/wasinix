@@ -290,7 +290,7 @@ in
         package_env=${lib.escapeShellArg (envJson packageEnv)}
         ${commandEnvDecl}
 
-        cat > "$pkg_dir/wasmer.toml" <<EOF
+        cat > "$pkg_dir/wasmer.toml" <<'EOF'
       [package]
       name = ${builtins.toJSON "${owner}/${name}"}
       version = ${builtins.toJSON version}
@@ -315,7 +315,7 @@ in
         if metadata == {}
         then ""
         else ''
-                cat >> "$pkg_dir/wasmer.toml" <<EOF
+                cat >> "$pkg_dir/wasmer.toml" <<'EOF'
 
           [package.metadata]
           ${extraMetadataLines}
@@ -324,7 +324,7 @@ in
       }
 
         ${lib.optionalString (dependencySpecs != []) ''
-              cat >> "$pkg_dir/wasmer.toml" <<EOF
+              cat >> "$pkg_dir/wasmer.toml" <<'EOF'
 
         [dependencies]
         ${dependencyLines}
@@ -358,7 +358,7 @@ in
       EOF
 
           if [ "$main_args_json" != "null" ] || [ "$atom_json" != "null" ] || [ "$env_json" != "null" ]; then
-            cat >> "$pkg_dir/wasmer.toml" <<EOF
+            cat >> "$pkg_dir/wasmer.toml" <<'EOF'
       [command.annotations.wasi]
       EOF
             if [ "$atom_json" != "null" ]; then
