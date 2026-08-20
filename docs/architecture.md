@@ -3,6 +3,10 @@
 `pkgs/default.nix` composes the repository from toolchains, profile package
 sets, overlays, products, and publishable outputs.
 
+The agreed replacement for this composition and its public extension API is
+specified in [`project-api.md`](project-api.md). That document describes a
+design not yet implemented; this page continues to describe the current tree.
+
 ## Toolchains and package sets
 
 `pkgs/toolchain/` builds the language toolchains. `pkgs/profiles.nix` defines
