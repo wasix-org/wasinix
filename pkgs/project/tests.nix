@@ -72,7 +72,7 @@
   };
   force = value: builtins.tryEval (builtins.deepSeq value value);
 
-  projectApi = import ./default.nix {
+  projectApiArgs = {
     inherit lib;
     profiles = {
       profiles = {
@@ -92,6 +92,13 @@
     };
     crossSystemFor = profile: _spec: {wasinixProfile = profile;};
   };
+  projectApi = import ./default.nix (projectApiArgs
+    // {
+      checkRules.probe = {entry, ...}:
+        lib.optionalAttrs (entry.policy.checks.probe or false) {
+          probe = mkPackage {name = "probe-${entry.package.name}";};
+        };
+    });
   fakeImportNixpkgs = args: let
     base = {
       inherited = mkPackage {name = "inherited";};
@@ -107,6 +114,7 @@
       };
       consumer = mkPackage {
         name = "consumer-${final.profile}";
+        passthru.wasinix.checks.probe = true;
       };
       "dot.name" = mkPackage {name = "dot-name";};
       helper = "not-a-package";
@@ -138,6 +146,25 @@
     system = "test-system";
     importNixpkgs = fakeImportNixpkgs;
     extensions = [consumerExtension consumerExtension];
+  };
+  duplicateCheckProject = (import ./default.nix (projectApiArgs
+    // {
+      checkRules = {
+        first = {entry, ...}: lib.optionalAttrs (entry.policy.checks.probe or false) {same = mkPackage {};};
+        second = {entry, ...}: lib.optionalAttrs (entry.policy.checks.probe or false) {same = mkPackage {};};
+      };
+    })).mkProject {
+    system = "test-system";
+    importNixpkgs = fakeImportNixpkgs;
+    extensions = [consumerExtension];
+  };
+  invalidCheckProject = (import ./default.nix (projectApiArgs
+    // {
+      checkRules.invalid = {entry, ...}: lib.optionalAttrs (entry.policy.checks.probe or false) {invalid = "not a derivation";};
+    })).mkProject {
+    system = "test-system";
+    importNixpkgs = fakeImportNixpkgs;
+    extensions = [consumerExtension];
   };
 in {
   packageUnits = {
@@ -185,8 +212,12 @@ in {
       ciSources = project.ci.sources;
       ciJobNames = lib.attrNames project.ci.jobs;
       catalogJobNames = lib.attrNames project.ci.catalog.jobs;
+      testNames = lib.attrNames project.tests;
+      testSubject = project.ci.catalog.jobs."tests.packages.wasix.default.consumer.probe".subject;
       unknownCiSourceFails = !(force unknownCiSource).success;
       duplicateExtensionFails = !(force duplicateExtension).success;
+      duplicateCheckFails = !(force duplicateCheckProject.tests).success;
+      invalidCheckFails = !(force invalidCheckProject.tests).success;
     };
     expected = {
       schemaVersion = 1;
@@ -205,6 +236,8 @@ in {
         "packages.wasix.default.consumer"
         "packages.wasix.default.core"
         ''packages.wasix.default["dot.name"]''
+        "tests.packages.wasix.alternate.consumer.probe"
+        "tests.packages.wasix.default.consumer.probe"
       ];
       catalogJobNames = [
         "packages.wasix.alternate.consumer"
@@ -213,9 +246,18 @@ in {
         "packages.wasix.default.consumer"
         "packages.wasix.default.core"
         ''packages.wasix.default["dot.name"]''
+        "tests.packages.wasix.alternate.consumer.probe"
+        "tests.packages.wasix.default.consumer.probe"
       ];
+      testNames = [
+        "tests.packages.wasix.alternate.consumer.probe"
+        "tests.packages.wasix.default.consumer.probe"
+      ];
+      testSubject = "packages.wasix.default.consumer";
       unknownCiSourceFails = true;
       duplicateExtensionFails = true;
+      duplicateCheckFails = true;
+      invalidCheckFails = true;
     };
   };
 }

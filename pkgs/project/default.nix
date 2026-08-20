@@ -8,6 +8,7 @@
   commandsFor ? _project: {},
   artifactsFor ? _project: {},
   harnessesFor ? _project: {},
+  checkRules ? {},
 }: let
   projectLib = import ./lib.nix {inherit lib;};
   schema = builtins.fromJSON (builtins.readFile ../../schema/project.json);
@@ -71,15 +72,33 @@
     policy = builtins.removeAttrs metadata ["source" "lineage" "instance"];
   };
 
-  serializableEntry = entry: {
-    inherit (entry) kind address source lineage scope variant instance;
-    policy = {
-      aliases = entry.policy.aliases or [];
-      shipped = entry.policy.shipped or false;
-      ci = entry.policy.ci or {};
-      retention = entry.policy.retention or null;
-    };
-  };
+  serializableEntry = entry:
+    {
+      inherit (entry) kind address source lineage scope variant instance;
+      policy = {
+        aliases = entry.policy.aliases or [];
+        shipped = entry.policy.shipped or false;
+        ci = entry.policy.ci or {};
+        retention = entry.policy.retention or null;
+      };
+    }
+    // lib.optionalAttrs (entry ? subject) {inherit (entry) subject;};
+
+  checksFor = context: entry: let
+    merge = state: ruleName: rule: let
+      result = projectLib.callWith (context // {inherit entry;}) rule;
+      invalid = lib.filterAttrs (_: check: !lib.isDerivation check) result;
+      duplicates = lib.intersectLists (lib.attrNames state) (lib.attrNames result);
+    in
+      lib.throwIf (!lib.isAttrs result)
+      "check rule '${ruleName}' must return an attribute set"
+      (lib.throwIf (invalid != {})
+        "check rule '${ruleName}' returned non-derivation check(s): ${lib.concatStringsSep ", " (lib.attrNames invalid)}"
+        (lib.throwIf (duplicates != [])
+          "check rules returned duplicate check(s) for ${entry.address}: ${lib.concatStringsSep ", " duplicates}"
+          (state // result)));
+  in
+    lib.foldlAttrs merge {} checkRules;
 in rec {
   inherit (projectLib) extendPackage;
 
@@ -178,8 +197,27 @@ in rec {
           }))
         packages)
       wasix;
-      entries = nativeEntries // wasixEntries;
+      packageEntries = nativeEntries // wasixEntries;
+      testEntries = lib.concatMapAttrs (_: entry:
+        lib.mapAttrs' (name: check: let
+          address = "tests.${entry.address}${projectLib.addressSegment name}";
+          metadata = projectLib.packageMetadata check;
+        in
+          lib.nameValuePair address {
+            kind = "test";
+            inherit address check;
+            inherit (entry) source lineage scope variant instance;
+            subject = entry.address;
+            policy = builtins.removeAttrs metadata ["source" "lineage" "instance"];
+          })
+        (checksFor project.context entry))
+      packageEntries;
+      entries = packageEntries // testEntries;
       ciEntries = lib.filterAttrs (_: entry: builtins.elem entry.source requestedCiSources) entries;
+      derivationOf = entry:
+        if entry.kind == "package"
+        then entry.package
+        else entry.check;
     in {
       schemaVersion = schema.version;
       packages = {
@@ -191,11 +229,11 @@ in rec {
       commands = commandsFor project;
       artifacts = artifactsFor project;
       harnesses = harnessesFor project;
-      tests = {};
+      tests = lib.mapAttrs (_: entry: entry.check) testEntries;
       catalog = {inherit entries;};
       ci = {
         sources = requestedCiSources;
-        jobs = lib.mapAttrs (_: entry: entry.package) ciEntries;
+        jobs = lib.mapAttrs (_: derivationOf) ciEntries;
         catalog = {
           schemaVersion = project.schemaVersion;
           jobs = lib.mapAttrs (_: serializableEntry) ciEntries;
