@@ -1,6 +1,6 @@
 {
   exposePackage,
-  nix-update-script,
   packages,
+  pkgs,
 }:
-exposePackage (packages.sameProfile.callPackage ./recipe.nix {inherit nix-update-script;})
+exposePackage (packages.sameProfile.callPackage ./recipe.nix {inherit (pkgs) nix-update-script;})
