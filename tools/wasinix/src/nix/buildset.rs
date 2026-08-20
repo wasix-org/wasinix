@@ -33,15 +33,20 @@ pub struct UnionRequest<'a> {
     pub push: bool,
 }
 
-/// The dry run's prediction for the selected jobs, counted in job
-/// addresses: several addresses share one derivation, so this is not the
-/// derivation count the uploader works in.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct PlanCensus {
-    pub to_build: usize,
-    pub to_fetch: usize,
-    pub present: usize,
+/// What the dry run expects to do with one job address. Several addresses
+/// share one derivation, so this is per address, not the derivation count
+/// the uploader works in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Planned {
+    Build,
+    Fetch,
+    Present,
 }
+
+/// The dry run's prediction, per job address. Keyed rather than counted:
+/// several tasks share one union, and a count could only be the union's,
+/// which is not any one task's answer.
+pub type PlanCensus = BTreeMap<String, Planned>;
 
 pub enum StreamEvent {
     Result(Value),
@@ -597,17 +602,21 @@ pub fn build_union(
     // pushed them. They go to the uploader, which skips whatever the remote
     // already has.
     let mut local_only: Vec<String> = Vec::new();
-    let mut census = PlanCensus::default();
+    let mut census = PlanCensus::new();
     for (drv, spec) in &jobs {
-        if to_build.contains(drv) {
-            pending.insert(drv.clone());
-            census.to_build += spec.attrs.len();
-            continue;
-        }
-        if spec.outputs.iter().any(|output| plan.fetched.contains(output)) {
-            census.to_fetch += spec.attrs.len();
+        let planned = if to_build.contains(drv) {
+            Planned::Build
+        } else if spec.outputs.iter().any(|output| plan.fetched.contains(output)) {
+            Planned::Fetch
         } else {
-            census.present += spec.attrs.len();
+            Planned::Present
+        };
+        for attr in &spec.attrs {
+            census.insert(attr.clone(), planned);
+        }
+        if planned == Planned::Build {
+            pending.insert(drv.clone());
+            continue;
         }
         local_only.extend(
             spec.outputs
@@ -628,11 +637,14 @@ pub fn build_union(
             )?;
         }
     }
+    let count = |want: Planned| census.values().filter(|planned| **planned == want).count();
     crate::support::ui::fact(
         "build plan",
         format!(
             "{} to build · {} to fetch · {} present",
-            census.to_build, census.to_fetch, census.present
+            count(Planned::Build),
+            count(Planned::Fetch),
+            count(Planned::Present)
         ),
     );
     on_event(StreamEvent::Plan(census))?;

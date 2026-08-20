@@ -897,8 +897,8 @@ fn run_build_tasks(
 
     let mut worst = CommandStatus::SUCCESS;
     let mut results: BTreeMap<String, PathBuf> = BTreeMap::new();
-    // Summed across placement groups: one task's jobs can span builders.
-    let mut plan = crate::nix::buildset::PlanCensus::default();
+    // Merged across placement groups: one task's jobs can span builders.
+    let mut plan = crate::nix::buildset::PlanCensus::new();
     let union_started = Instant::now();
     for (on, cases) in groups {
         let route = Route::from_on(ctx.runner_root, on.as_deref())?;
@@ -953,9 +953,7 @@ fn run_build_tasks(
                     Ok(())
                 }
                 crate::nix::buildset::StreamEvent::Plan(census) => {
-                    plan.to_build += census.to_build;
-                    plan.to_fetch += census.to_fetch;
-                    plan.present += census.present;
+                    plan.extend(census);
                     Ok(())
                 }
                 crate::nix::buildset::StreamEvent::Activity => {
@@ -1046,13 +1044,26 @@ fn run_build_tasks(
                     .is_some_and(|job| job.drv.is_empty())
             })
             .count();
+        // This task's own share of the plan. The three sets build as one
+        // union, so the union's totals are nobody's answer: reporting them
+        // per task read as "1007 selected · 1266 built".
+        let planned = |want: crate::nix::buildset::Planned| {
+            spec.jobs
+                .iter()
+                .filter(|name| {
+                    plan.get(&format!("{}::{name}", spec.case))
+                        .is_some_and(|planned| *planned == want)
+                })
+                .count()
+        };
+        let to_build = planned(crate::nix::buildset::Planned::Build);
         build_facts.census = Some(facts::JobCensus {
             selected: spec.jobs.len(),
             reused,
-            to_build: plan.to_build,
-            to_fetch: plan.to_fetch,
-            present: plan.present,
-            built: plan.to_build.saturating_sub(failed + blocked),
+            to_build,
+            to_fetch: planned(crate::nix::buildset::Planned::Fetch),
+            present: planned(crate::nix::buildset::Planned::Present),
+            built: to_build.saturating_sub(failed + blocked),
             failed,
             blocked,
         });
