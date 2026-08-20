@@ -10,6 +10,7 @@ lockfiles keep resolving.
 
 Volume layout (= the web root served by the app):
   index.html, simple/...     as in the nix output
+  all/simple/...             the same listing over every wheel published
   packages.json              flat list of everything published so far
   manifests/<wheel>.json     {project, sha256, metadata_sha256, requires_python,
                               size, published (UTC date, frozen at first publish),
@@ -152,6 +153,7 @@ def main():
     projects: dict[str, dict[str, dict]] = {}
     for fname, m in manifests.items():
         projects.setdefault(m["project"], {})[fname] = m
+    pages = {}
     for project, wheels in sorted(projects.items()):
         pdir = staging / "simple" / project
         pdir.mkdir(parents=True, exist_ok=True)
@@ -169,11 +171,8 @@ def main():
             )
             for f, m in sorted(wheels.items())
         ]
-        (pdir / "index.html").write_text(make_index.project_page(project, files))
-    root = [f'    <a href="{p}/">{p}</a><br/>' for p in sorted(projects)]
-    (staging / "simple" / "index.html").write_text(
-        make_index.page("Simple index", root)
-    )
+        pages[project] = files
+    make_index.write_views(staging, pages)
     (staging / "index.html").write_text(make_index.landing(projects))
     make_index.write_packages_json(
         staging / "packages.json",

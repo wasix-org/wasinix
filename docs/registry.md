@@ -123,7 +123,7 @@ PEP 503 "simple" index: `.#pythonRegistry` (`pkgs/python-registry/`). Serve the
 output from any static file host, or install directly:
 
 ```sh
-pip install --index-url file://$(readlink -f result)/simple <pkg>
+pip install --index-url file://$(readlink -f result)/all/simple <pkg>
 ```
 
 A new `wheels.nix` entry lands in the registry automatically. Its test suite
@@ -143,21 +143,25 @@ Alongside `simple/`, the index root carries `packages.json`: one JSON object per
 line naming a published wheel, which is how `wasmerio/wasmer-compat` decides
 which projects the index covers.
 
-`native/simple/` is the same index over the projects that ship a platform-tagged
-wheel, which are the ones nothing else can supply. Point a resolver at that as
-its priority index and PyPI as the primary one:
+`simple/` lists the projects PyPI cannot supply: those shipping a
+platform-tagged wheel, and those with an overlay entry here, whose build differs
+from upstream's. Point a resolver at it as the priority index beside PyPI:
 
 ```sh
 uv pip compile pyproject.toml --universal \
-  --extra-index-url <index>/native/simple --index-url https://pypi.org/simple
+  --extra-index-url <index>/simple --index-url https://pypi.org/simple
 pip install -r requirements.txt --platform wasix_wasm32 --only-binary :all: --target site
 ```
 
-uv binds a package to the first index that carries it, so listing the pure
-dependencies too would pin them to our versions and reject whatever version the
-consuming project asks for. The native view carries no wheels of its own; its
-pages link to the copies under `simple/`, which keeps serving the full closure
-for use as a standalone index.
+uv binds a package to the first index that carries it, so listing a project PyPI
+could have supplied pins it to our version and rejects whatever version the
+consuming project asks for. Listing one we patched too narrowly is the opposite
+defect: the resolver takes upstream's build and drops the patch.
+
+`all/simple/` lists every wheel published here, for installing the closure from
+this index alone with no PyPI at all. It carries no wheels of its own; its pages
+link to the copies under `simple/<project>/`, where every wheel lives whether or
+not its project is listed in `simple/`.
 
 Cross-installing for wasix from a host needs pip. `pip --platform wasix_wasm32`
 selects the tagged wheels, while uv's `--python-platform` is a closed enum with
@@ -242,7 +246,7 @@ explicitly or already released. Changed wheels become an ephemeral per-PR Edge
 app serving an overlay index:
 
 ```sh
-pip install --index-url <preview>/simple --extra-index-url <prod>/simple
+pip install --index-url <preview>/all/simple --extra-index-url <prod>/all/simple
 ```
 
 which prefers the preview wheels by their longer local version. The app is

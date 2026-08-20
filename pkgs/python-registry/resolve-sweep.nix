@@ -35,7 +35,7 @@ in {
             --quiet --no-cache-dir --disable-pip-version-check \
             --platform wasix_wasm32 --implementation cp \
             --python-version "$py" --abi "cp''${py//./}" \
-            --only-binary :all: --index-url file://${registry}/simple \
+            --only-binary :all: --index-url file://${registry}/all/simple \
             --dry-run --report /dev/null "$project" >/dev/null 2>&1; then
             return 0
           fi
