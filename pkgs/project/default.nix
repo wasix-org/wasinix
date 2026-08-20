@@ -4,7 +4,7 @@
   builtInExtension,
   crossSystemFor,
   configFor ? _scope: _variant: {},
-  toolchainFor ? _project: {},
+  nativePackageInterfacesFor ? _project: {},
   commandsFor ? _project: {},
   artifactsFor ? _project: {},
   harnessesFor ? _project: {},
@@ -345,7 +345,6 @@ in rec {
         {
           packages = {
             inherit native wasix python preferred;
-            toolchain = {};
             sameProfile = final // packageSetProjection scope final;
           };
           commands = commandsView;
@@ -394,7 +393,15 @@ in rec {
       wasixHistoryValid = lib.all (packageSet: validateHistory "wasix" packageSet) (lib.attrValues wasixRaw);
       pythonHistoryValid = lib.all (packageSet: validateHistory "python" packageSet) (lib.attrValues pythonRaw);
 
-      native = packageSetView "native" nativeRaw;
+      nativePackageInterfaces = nativePackageInterfacesFor project;
+      unknownInterfacePackages = lib.subtractLists (projectLib.registeredNames nativeRaw) (lib.attrNames nativePackageInterfaces);
+      nativeInterfacesValid =
+        lib.throwIf (unknownInterfacePackages != [])
+        "native package interfaces target unknown package(s): ${lib.concatStringsSep ", " unknownInterfacePackages}"
+        true;
+      native = lib.mapAttrs (name: package:
+        package // (nativePackageInterfaces.${name} or {}))
+      (packageSetView "native" nativeRaw);
       wasix = lib.mapAttrs (profile: packageSet:
         lib.filterAttrs (_: package: builtins.elem profile (supportedProfilesFor package))
         (packageSetView "wasix" packageSet))
@@ -414,9 +421,7 @@ in rec {
 
       packageViews = {
         inherit native wasix python preferred;
-        toolchain = {};
       };
-      toolchainView = toolchainFor project;
       commandsView = commandsFor project;
       artifactsView = artifactsFor project;
       harnessesView = harnessesFor project;
@@ -528,10 +533,10 @@ in rec {
       assert wasixShapesValid;
       assert pythonShapesValid;
       assert wasixHistoryValid;
-      assert pythonHistoryValid; {
+      assert pythonHistoryValid;
+      assert nativeInterfacesValid; {
         schemaVersion = schema.version;
         packages = packageViews;
-        toolchain = toolchainView;
         commands = commandsView;
         artifacts = artifactsView;
         harnesses = harnessesView;
