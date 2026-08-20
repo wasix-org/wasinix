@@ -519,7 +519,7 @@ pub(crate) fn bump_rels(repo: &Path, request: BumpRequest<'_>) -> Result<ChangeS
             to: Some(bump.after.to_string()),
             detail: Some(format!("kind: {}", bump.kind)),
             changelog: bump.changelog.clone(),
-            files: vec!["rels.json".into()],
+            files: vec!["release-revisions.json".into()],
         });
     }
     if request.commit && changes.changed() {
@@ -534,7 +534,7 @@ pub(crate) fn bump_rels(repo: &Path, request: BumpRequest<'_>) -> Result<ChangeS
         };
         crate::support::git::commit(
             repo,
-            crate::support::git::Stage::Paths(&["rels.json"]),
+            crate::support::git::Stage::Paths(&["release-revisions.json"]),
             &message,
             request.committer.as_ref(),
         )?;

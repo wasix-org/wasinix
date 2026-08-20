@@ -10,7 +10,7 @@
   pkgs,
   lib,
 }: let
-  rels = builtins.fromJSON (builtins.readFile ../rels.json);
+  rels = builtins.fromJSON (builtins.readFile ../release-revisions.json);
 
   interpreters = {
     py313 = "3.13";

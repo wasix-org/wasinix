@@ -8627,9 +8627,17 @@ mod git_support {
     #[test]
     fn commit_stages_only_the_named_paths() {
         let (_scratch, repo) = repo();
-        std::fs::write(repo.join("rels.json"), "after\n").unwrap();
+        std::fs::write(repo.join("release-revisions.json"), "after\n").unwrap();
         std::fs::write(repo.join("other"), "after\n").unwrap();
-        assert!(commit(&repo, Stage::Paths(&["rels.json"]), "rels only", None).unwrap());
+        assert!(
+            commit(
+                &repo,
+                Stage::Paths(&["release-revisions.json"]),
+                "rels only",
+                None,
+            )
+            .unwrap()
+        );
         assert_eq!(
             git(&repo, &["log", "-1", "--format=%s"]).unwrap(),
             "rels only"

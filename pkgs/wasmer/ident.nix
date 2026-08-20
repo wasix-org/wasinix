@@ -25,11 +25,11 @@
       ''
     else lib.concatStringsSep "." (lib.take 3 (canonical ++ ["0" "0" "0"]));
 
-  # Publication release numbers (rels.json at the repo root): keyed by attr
-  # path then upstream version, so an upstream bump resets to 1 by key miss.
+  # Publication release numbers are keyed by attr path then upstream version,
+  # so an upstream bump resets to 1 by key miss.
   # Bump to republish a changed build of the same version; registry versions
   # are immutable.
-  rels = builtins.fromJSON (builtins.readFile ../../rels.json);
+  rels = builtins.fromJSON (builtins.readFile ../../release-revisions.json);
 
   # Published webc identity (owner/name/semver) of a wasix package. Used for
   # this package and its dependencies, so a [dependencies] reference always

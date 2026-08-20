@@ -18,9 +18,9 @@
   pythonWebc,
   mkTestGroup,
 }: let
-  # The wheels carry their own release (pkgs/python-publish.nix); this reads
-  # rels.json only to report keys no served version claims.
-  rels = builtins.fromJSON (builtins.readFile ../../rels.json);
+  # The wheels carry their own release (pkgs/python-publish.nix). Revision
+  # state is read only to report keys no served version claims.
+  rels = builtins.fromJSON (builtins.readFile ../../release-revisions.json);
   relPrefix = "pythonRegistry.wheels.";
   inherit (import ../python-publish.nix {inherit pkgs lib;}) publishOf interpreters;
 
@@ -108,12 +108,12 @@
     )
     perVersion;
 
-  # name -> served upstream versions (current + history; same across py versions); read by
-  # the update driver to prune rels.json.
+  # name -> served upstream versions (current + history; same across py
+  # versions), read by the update driver to prune revision state.
   wheelVersions = lib.mapAttrs (_: ds: lib.unique (map (d: d.version) ds)) (lib.groupBy (d: d.name) wheelDists);
-  # rels.json keys no served wheel carries: left behind by an upstream bump, or a dropped
-  # history entry. The update driver drops them (regen hook on nixpkgs), this note covers bumps
-  # made by hand. Only this registry's key prefix; webc keys get the same note per package.
+  # Revision keys no served wheel carries are left by an upstream bump or a
+  # dropped history entry. The update driver drops them; this note covers hand
+  # bumps. Only this registry's prefix; WebC keys get a note per package.
   staleRels = lib.concatMap (
     key: let
       name = lib.removePrefix relPrefix key;
@@ -157,7 +157,7 @@ in
         tests = mkTestGroup "python-registry" {behavior = tests;};
         inherit indexer wheelVersions wheels published;
         wasix.updateNotes = lib.optional (staleRels != []) {
-          message = "rels.json has stale keys (${lib.concatStringsSep ", " staleRels}); nix run .#update -- nixpkgs drops them";
+          message = "release-revisions.json has stale keys (${lib.concatStringsSep ", " staleRels}); nix run .#update -- nixpkgs drops them";
           when = _: _: true;
         };
       };

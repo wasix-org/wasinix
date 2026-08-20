@@ -456,7 +456,7 @@
   # Shipped Python wheels (overlay/python-packages/wheels.nix). cpython needs PIC
   # (ctypes/dl) and the exnref EH encoding wasmer accepts, so the wheels are one set
   # anchored at exnrefEhpic. noarch builds once, everything else per interpreter.
-  publicationRels = builtins.fromJSON (builtins.readFile ../rels.json);
+  publicationRels = builtins.fromJSON (builtins.readFile ../release-revisions.json);
   mkPythonWheels = pyKey: pyAttr: select: let
     wheels = import ./python-wheels.nix {
       inherit pkgs lib mkTestGroup select pyKey emulatedChecks;

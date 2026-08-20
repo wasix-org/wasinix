@@ -13,7 +13,7 @@
   mkTestGroup,
 }: let
   relPrefix = "cargoRegistry.crates.";
-  rels = builtins.fromJSON (builtins.readFile ../../rels.json);
+  rels = builtins.fromJSON (builtins.readFile ../../release-revisions.json);
   relOf = crate: version: (rels."${relPrefix}${crate}" or {}).${version} or 1;
 
   pins = builtins.fromJSON (builtins.readFile ./crates.json);
@@ -148,7 +148,7 @@
     lib.mapAttrs (_: ds: lib.unique (map (d: d.passthru.version) ds))
     (lib.groupBy (d: d.passthru.crate) minted);
 
-  # rels.json keys under this prefix that no minted crate carries, left by an
+  # Revision keys under this prefix that no minted crate carries after an
   # upstream bump. The update driver drops them; this surfaces hand bumps.
   staleRels = lib.concatMap (
     key: let
@@ -179,7 +179,7 @@ in
           (lib.groupBy (d: d.passthru.crate) minted);
         tests = mkTestGroup "cargo-registry" {behavior = tests;};
         wasix.updateNotes = lib.optional (staleRels != []) {
-          message = "rels.json has stale keys (${lib.concatStringsSep ", " staleRels}); nix run .#update -- nixpkgs drops them";
+          message = "release-revisions.json has stale keys (${lib.concatStringsSep ", " staleRels}); nix run .#update -- nixpkgs drops them";
           when = _: _: true;
         };
       };
