@@ -298,10 +298,47 @@ fn selector_catalog(worktree: &Path, route: &Route) -> Result<crate::ci::evalmap
     .timeout(route.limits()?.timeout)
     .route(route)?
     .checked_output("the CI selector catalog")?;
-    serde_json::from_slice(&bytes).map_err(|source| Error::Json {
+    let catalog: crate::ci::evalmap::SelectorCatalog =
+        serde_json::from_slice(&bytes).map_err(|source| Error::Json {
         path: "<ciSelectorCatalog>".into(),
         source,
-    })
+    })?;
+    let expected = crate::support::schema::project_version();
+    if catalog.schema_version != expected {
+        return request_error(format!(
+            "CI catalog uses Wasinix project schema {}; this wasinix supports schema {expected}",
+            catalog.schema_version
+        ));
+    }
+    Ok(catalog)
+}
+
+fn require_project_schema(worktree: &Path, route: &Route) -> Result<()> {
+    let bytes = crate::support::nix::Invocation::flake(
+        "eval",
+        format!(
+            ".#legacyPackages.{}.schemaVersion",
+            crate::support::nix::SYSTEM
+        ),
+    )
+    .json()
+    .offline()
+    .workdir(worktree)
+    .timeout(route.limits()?.timeout)
+    .route(route)?
+    .checked_output("the Wasinix project schema version")?;
+    let found: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|source| Error::Json {
+            path: "<schemaVersion>".into(),
+            source,
+        })?;
+    let expected = crate::support::schema::project_version();
+    if found.as_u64() != Some(expected) {
+        return request_error(format!(
+            "unsupported Wasinix project schema {found}; this wasinix supports schema {expected}"
+        ));
+    }
+    Ok(())
 }
 
 fn evaluate(
@@ -312,6 +349,7 @@ fn evaluate(
     artifacts: &mut Artifacts,
 ) -> Result<Fragment> {
     let _lease = route.acquire()?;
+    require_project_schema(worktree, route)?;
     let case_id = case.case_id();
     let maps = crate::ci::prepare::maps_dir(&case_dir(ctx.run_dir, case_id));
     let attr = format!(

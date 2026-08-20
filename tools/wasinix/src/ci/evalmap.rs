@@ -84,6 +84,7 @@ pub struct SelectorGroup {
 /// payload, not one of this tool's documents, so it carries no envelope.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct SelectorCatalog {
+    pub schema_version: u64,
     #[serde(default)]
     pub jobs: Vec<String>,
     #[serde(default)]
