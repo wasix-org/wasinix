@@ -230,10 +230,12 @@ namespace keeps prereleases off them. `wasinix preview` requires `--namespace`
 and refuses one holding released packages.
 
 Webcs publish there as `<version>-pr<N>.g<sha7>` prereleases: distinct versions
-per iteration, hidden from `latest`, not deletable, so they accumulate. A
-dependency the same preview publishes is repinned to the namespace and the tag;
-one that is already released keeps its name and version. Changed wheels become
-an ephemeral per-PR Edge app serving an overlay index:
+per iteration, hidden from `latest`, not deletable, so they accumulate. Nix's
+resolved dependency graph decides which dependencies the same preview publishes,
+independently of whether the manifest requirement is exact, a range, or `*`.
+Those dependencies and their qualified command references are repinned to the
+namespace and tag; one that is already released keeps its name and requirement.
+Changed wheels become an ephemeral per-PR Edge app serving an overlay index:
 
 ```sh
 pip install --index-url <preview>/simple --extra-index-url <prod>/simple

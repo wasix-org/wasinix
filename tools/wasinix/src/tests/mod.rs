@@ -3676,7 +3676,7 @@ mod overrides {
 mod webc_identity {
     use std::collections::{BTreeMap, BTreeSet};
 
-    use crate::registries::wasmer::{parse_publish_as, stage, Package, Staged};
+    use crate::registries::wasmer::{order_packages, parse_publish_as, stage, Package, Staged};
     use crate::support::fs::Scratch;
 
     fn package(path: &std::path::Path) -> Package {
@@ -3685,6 +3685,7 @@ mod webc_identity {
             version: "3.13.7".into(),
             path: path.to_path_buf(),
             dependencies: BTreeMap::new(),
+            resolved_dependencies: BTreeMap::new(),
             source: None,
         }
     }
@@ -3764,7 +3765,7 @@ mod webc_identity {
     }
 
     #[test]
-    fn a_preview_namespace_carries_its_batch_internal_pins() {
+    fn a_cli_preview_carries_resolved_ranges_and_commands() {
         let scratch = Scratch::create("wasinix-test").unwrap();
         let src = scratch.path().join("src");
         crate::support::fs::create_dir_all(&src).unwrap();
@@ -3772,31 +3773,40 @@ mod webc_identity {
             &src.join("wasmer.toml"),
             concat!(
                 "[package]\n",
-                "name = \"wasmer/curl\"\n",
-                "version = \"8.21.0\"\n",
+                "name = \"wasmer/cli\"\n",
+                "version = \"0.1.4\"\n",
                 "\n[dependencies]\n",
-                "\"wasmer/bash\" = \"5.3.15\"\n",
-                "\"wasmer/jq\" = \"1.8.2\"\n",
+                "\"wasmer/bash\" = \"*\"\n",
+                "\"wasmer/curl\" = \"*\"\n",
+                "\n[[command]]\n",
+                "name = \"bash\"\n",
+                "module = \"wasmer/bash:bash\"\n",
+                "[command.annotations.wasi]\n",
+                "atom = \"wasmer/bash:bash\"\n",
             )
             .as_bytes(),
         )
         .unwrap();
         let mut pkg = package(&src);
-        pkg.full_name = "wasmer/curl".into();
-        pkg.version = "8.21.0".into();
+        pkg.full_name = "wasmer/cli".into();
+        pkg.version = "0.1.4".into();
         pkg.dependencies = BTreeMap::from([
-            ("wasmer/bash".to_string(), "5.3.15".to_string()),
-            ("wasmer/jq".to_string(), "1.8.2".to_string()),
+            ("wasmer/bash".to_string(), "*".to_string()),
+            ("wasmer/curl".to_string(), "*".to_string()),
         ]);
-        // Only bash is in the batch; jq is published elsewhere.
+        pkg.resolved_dependencies = BTreeMap::from([
+            ("wasmer/bash".to_string(), "5.3.15".to_string()),
+            ("wasmer/curl".to_string(), "8.21.0".to_string()),
+        ]);
+        // Only bash is in the batch; curl is published elsewhere.
         let batch = BTreeSet::from([("wasmer/bash".to_string(), "5.3.15".to_string())]);
         let staged = stage(
             &pkg,
             "abc",
             &scratch.path().join("staged"),
             &Staged {
-                name: "kilyanni/curl",
-                version: "8.21.0-pr1.gabc",
+                name: "kilyanni/cli",
+                version: "0.1.4-pr1.gabc",
                 namespace: Some("kilyanni"),
                 preview_tag: Some("pr1.gabc"),
                 batch: &batch,
@@ -3804,12 +3814,38 @@ mod webc_identity {
         )
         .unwrap();
         let text = crate::support::fs::read_to_string(&staged.join("wasmer.toml")).unwrap();
-        assert!(text.contains("name = \"kilyanni/curl\""), "{text}");
+        assert!(text.contains("name = \"kilyanni/cli\""), "{text}");
         assert!(
             text.contains("\"kilyanni/bash\" = \"5.3.15-pr1.gabc\""),
             "{text}"
         );
-        assert!(text.contains("\"wasmer/jq\" = \"1.8.2\""), "{text}");
+        assert!(text.contains("module = \"kilyanni/bash:bash\""), "{text}");
+        assert!(text.contains("atom = \"kilyanni/bash:bash\""), "{text}");
+        assert!(text.contains("\"wasmer/curl\" = \"*\""), "{text}");
+    }
+
+    #[test]
+    fn resolved_dependencies_order_wildcard_edges() {
+        let mut bash = package(std::path::Path::new("/nonexistent/bash"));
+        bash.full_name = "wasmer/bash".into();
+        bash.version = "5.3.15".into();
+        let mut cli = package(std::path::Path::new("/nonexistent/cli"));
+        cli.full_name = "wasmer/cli".into();
+        cli.version = "0.1.4".into();
+        cli.dependencies = BTreeMap::from([("wasmer/bash".into(), "*".into())]);
+        cli.resolved_dependencies =
+            BTreeMap::from([("wasmer/bash".into(), "5.3.15".into())]);
+        let packages = BTreeMap::from([
+            (("wasmer/cli".into(), "0.1.4".into()), cli),
+            (("wasmer/bash".into(), "5.3.15".into()), bash),
+        ]);
+
+        let names: Vec<String> = order_packages(&packages)
+            .unwrap()
+            .into_iter()
+            .map(|pkg| pkg.full_name)
+            .collect();
+        assert_eq!(names, ["wasmer/bash", "wasmer/cli"]);
     }
 }
 

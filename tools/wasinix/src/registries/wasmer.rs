@@ -33,8 +33,11 @@ pub struct Package {
     pub full_name: String,
     pub version: String,
     pub path: PathBuf,
-    /// webc `[dependencies]`: full name -> version.
+    /// webc `[dependencies]`: full name -> version requirement.
     pub dependencies: BTreeMap<String, String>,
+    /// The package derivations those requirements resolved to in this
+    /// checkout: full name -> exact published version.
+    pub resolved_dependencies: BTreeMap<String, String>,
     /// Repo-relative "path:line" of the package definition, for the published
     /// README's pinned source link.
     pub source: Option<String>,
@@ -140,6 +143,84 @@ fn build_pkg_roots(selected: &[String]) -> Result<Vec<PathBuf>> {
     Ok(paths.into_iter().map(|path| path.join("pkg")).collect())
 }
 
+type PackageKey = (String, String);
+
+fn resolved_dependencies() -> Result<BTreeMap<PackageKey, BTreeMap<String, String>>> {
+    let apply = crate::support::nix::canonical_webcs_apply(
+        r#"_: p: {
+          name = "${p.pkg.id.owner}/${p.pkg.id.name}";
+          version = p.pkg.id.version;
+          dependencies = map (d: {
+            name = "${d.id.owner}/${d.id.name}";
+            version = d.id.version;
+          }) p.pkg.depWebcs;
+        }"#,
+    );
+    let values = crate::support::nix::eval(&Flake::default(), "wasmerPackages", Some(&apply))?;
+    let Some(values) = values.as_object() else {
+        return request_error("wasmerPackages dependency map is not an object");
+    };
+    let mut resolved = BTreeMap::new();
+    for (attr, value) in values {
+        let identity = |value: &Value| -> Result<PackageKey> {
+            let Some(name) = value["name"].as_str() else {
+                return request_error(format!("wasmerPackages.{attr}: dependency name is missing"));
+            };
+            let Some(version) = value["version"].as_str() else {
+                return request_error(format!(
+                    "wasmerPackages.{attr}: dependency version is missing"
+                ));
+            };
+            Ok((name.to_string(), version.to_string()))
+        };
+        let key = identity(value)?;
+        let Some(dependencies) = value["dependencies"].as_array() else {
+            return request_error(format!(
+                "wasmerPackages.{attr}: dependencies is not an array"
+            ));
+        };
+        let mut package_dependencies = BTreeMap::new();
+        for dependency in dependencies {
+            let (name, version) = identity(dependency)?;
+            if let Some(existing) = package_dependencies.insert(name.clone(), version.clone()) {
+                if existing != version {
+                    return request_error(format!(
+                        "wasmerPackages.{attr}: {name} resolves to both {existing} and {version}"
+                    ));
+                }
+            }
+        }
+        if resolved.insert(key.clone(), package_dependencies).is_some() {
+            return request_error(format!(
+                "wasmerPackages has duplicate identity {}@{}",
+                key.0, key.1
+            ));
+        }
+    }
+    Ok(resolved)
+}
+
+fn attach_resolved_dependencies(
+    packages: &mut BTreeMap<PackageKey, Package>,
+    resolved: &BTreeMap<PackageKey, BTreeMap<String, String>>,
+) -> Result<()> {
+    for (key, pkg) in packages {
+        let Some(dependencies) = resolved.get(key) else {
+            return request_error(format!("no resolved dependencies for {}@{}", key.0, key.1));
+        };
+        let declared: BTreeSet<&String> = pkg.dependencies.keys().collect();
+        let resolved_names: BTreeSet<&String> = dependencies.keys().collect();
+        if declared != resolved_names {
+            return request_error(format!(
+                "{}@{}: manifest dependencies do not match the Nix dependency graph",
+                key.0, key.1
+            ));
+        }
+        pkg.resolved_dependencies = dependencies.clone();
+    }
+    Ok(())
+}
+
 fn normalize_registry(registry: &str) -> String {
     let registry = registry.trim().trim_end_matches('/');
     if registry.starts_with("http://") || registry.starts_with("https://") {
@@ -240,6 +321,7 @@ pub fn read_packages(roots: &[PathBuf]) -> Result<BTreeMap<(String, String), Pac
                     version: version.to_string(),
                     path: manifest.parent().unwrap_or(root).to_path_buf(),
                     dependencies,
+                    resolved_dependencies: BTreeMap::new(),
                     source: metadata
                         .and_then(|m| m.get("wasix-source"))
                         .and_then(toml::Value::as_str)
@@ -298,7 +380,7 @@ pub fn order_packages(packages: &BTreeMap<(String, String), Package>) -> Result<
             return request_error(format!("Dependency cycle: {}", pretty.join(" -> ")));
         }
         chain.push(key.clone());
-        for (name, version) in &packages[key].dependencies {
+        for (name, version) in &packages[key].resolved_dependencies {
             let dep = (name.clone(), version.clone());
             if packages.contains_key(&dep) {
                 visit(&dep, packages, done, ordered, chain)?;
@@ -532,19 +614,28 @@ pub fn stage(pkg: &Package, rev: &str, into: &Path, as_: &Staged) -> Result<Path
             ));
         }
         // Only pins the batch resolves: a dependency published elsewhere
-        // keeps its released name and version.
+        // keeps its released name and requirement.
         if let Some(tag) = as_.preview_tag {
-            for (dep, version) in &pkg.dependencies {
-                if as_.batch.contains(&(dep.clone(), version.clone())) {
+            for (dep, resolved_version) in &pkg.resolved_dependencies {
+                if as_.batch.contains(&(dep.clone(), resolved_version.clone())) {
+                    let requirement = &pkg.dependencies[dep];
                     let moved = match as_.namespace {
                         Some(namespace) => renamespace(dep, namespace),
                         None => dep.clone(),
                     };
-                    text = text.replacen(
-                        &format!("\"{dep}\" = \"{version}\""),
-                        &format!("\"{moved}\" = \"{version}-{tag}\""),
+                    let rewritten = text.replacen(
+                        &format!("\"{dep}\" = \"{requirement}\""),
+                        &format!("\"{moved}\" = \"{resolved_version}-{tag}\""),
                         1,
                     );
+                    if rewritten == text {
+                        return package_error(format!(
+                            "{}: no dependency line to rewrite for {dep}@{requirement}",
+                            manifest.display()
+                        ));
+                    }
+                    text = rewritten;
+                    text = text.replace(&format!("\"{dep}:"), &format!("\"{moved}:"));
                 }
             }
         }
@@ -723,7 +814,8 @@ pub fn publish(options: Options) -> Result<crate::support::process::CommandStatu
             ));
         }
     }
-    let packages = read_packages(&build_pkg_roots(&selected_packages(&options.packages)?)?)?;
+    let mut packages = read_packages(&build_pkg_roots(&selected_packages(&options.packages)?)?)?;
+    attach_resolved_dependencies(&mut packages, &resolved_dependencies()?)?;
     let ordered = order_packages(&packages)?;
     // One identity cannot name several packages, and a renamed dependency
     // would leave its dependents pinned to a name the registry lacks.
@@ -852,7 +944,7 @@ fn publish_one(
     // Batch dependencies publish earlier; the rest must already be in the
     // registry or the published webc cannot resolve them. Keyed by
     // (name, version): a dependent needs its exact pin.
-    for (dep_name, dep_version) in &pkg.dependencies {
+    for (dep_name, dep_version) in &pkg.resolved_dependencies {
         let dep = (dep_name.clone(), dep_version.clone());
         if available.contains(&dep) {
             continue;
