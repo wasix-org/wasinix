@@ -254,6 +254,7 @@
             hello = pkgs.callPackage ./toolchain/tests/rust-test.nix {
               rustPlatform = wasixRustPlatform;
               wasmer = wasmerRuntime;
+              inherit (toolchain) binaryen;
             };
             cargo-test = pkgs.callPackage ./toolchain/tests/rust-cargo-test.nix {
               rustPlatform = wasixRustPlatform;

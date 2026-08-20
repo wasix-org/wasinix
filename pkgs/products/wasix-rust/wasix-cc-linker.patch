@@ -6,7 +6,7 @@ diff --git a/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs b/comp
 +use crate::spec::{
 +    add_link_args, base, crt_objects, Arch, Cc, LinkSelfContainedDefault, LinkerFlavor, Os, Target,
 +};
-@@ -111,0 +114,24 @@
+@@ -111,0 +114,27 @@
 +
 +    // rustc passes -nodefaultlibs to the C compiler driver, so provide the
 +    // WASIX runtime archives after Rust and dependency libraries.
@@ -31,3 +31,13 @@ diff --git a/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs b/comp
 +            "-lclang_rt.builtins-wasm32",
 +        ],
 +    );
++
++    // WASIX side modules expose symbols that are not in rustc's export list.
++    options.limit_rdylib_exports = false;
+diff --git a/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi_dl.rs b/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi_dl.rs
+--- a/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi_dl.rs
++++ b/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi_dl.rs
+@@ -6,0 +7,3 @@ pub(crate) fn target() -> Target {
++    // Side modules resolve the C runtime through the main module.
++    target.options.late_link_args.clear();
++
