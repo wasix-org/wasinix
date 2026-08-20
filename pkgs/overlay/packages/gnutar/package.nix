@@ -14,7 +14,7 @@ helpers.wasmRename {
     patches = [./patches/wasi-opendirat.patch];
     # The autotest suite depends on POSIX permissions, sparse files, and symlinks.
     doCheck = false;
-    passthru.wasix.shipped = true;
+    passthru.wasinix.shipped = true;
     # tar spawns its compression programs with fork, which the off profile
     # asyncifies for; binaryen cannot asyncify the EH instructions the others
     # emit.

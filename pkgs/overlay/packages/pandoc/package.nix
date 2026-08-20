@@ -25,7 +25,7 @@
 in
   # the standard ghc-wasm post-link wasm-opt pass.
   helpers.libTweaks {
-    passthru.wasix.shipped = true;
+    passthru.wasinix.shipped = true;
     passthru.wasmer.version = pvpToSemver;
   } (
     final.buildPackages.runCommand "pandoc" {

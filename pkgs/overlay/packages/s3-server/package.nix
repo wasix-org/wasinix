@@ -4,6 +4,6 @@
   ...
 }:
 helpers.libTweaks {
-  passthru.wasix.shipped = true;
+  passthru.wasinix.shipped = true;
 }
 prev.s3-server

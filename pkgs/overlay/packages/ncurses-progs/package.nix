@@ -9,7 +9,7 @@
   buildCc = final.lib.getExe' final.buildPackages.stdenv.cc "cc";
 in
   helpers.libTweaks {
-    passthru.wasix.shipped = true;
+    passthru.wasinix.shipped = true;
     # clear/reset/tput take -V, not --version.
     passthru.wasmer.smokeArgs = ["-V"];
     # Replace configureFlags (not append): the override drops withCxx=false's flag,

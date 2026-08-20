@@ -9,7 +9,7 @@
   ...
 }:
 helpers.wasmRename {wasmName = "curl";} (helpers.libTweaks {
-    passthru.wasix.shipped = true;
+    passthru.wasinix.shipped = true;
     # wcurl is a target-side wrapper script; it execs /bin/bash, mounted from the
     # bash webc dependency at load (like git's SHELL_PATH=/bin/bash). curl-config
     # stays a build-host dev script in -dev (git's build runs it for link flags).

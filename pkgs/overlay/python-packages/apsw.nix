@@ -6,6 +6,6 @@
   ...
 }:
 helpers.libTweaks {
-  passthru.wasix.installCheck = false;
+  passthru.wasinix.checks.captured.install = false;
 }
 pyprev.apsw

@@ -1,7 +1,4 @@
-# Helpers for wasix package files, and the optional passthru.wasix declaration:
-# supportedProfiles, preferredProfile, ciProfiles, ciTags, shipped, broken,
-# retention, retentionHook, postUpdateHook (old/new version arguments),
-# emulatedCheck, updateNotes (docs/packaging.md, docs/updating.md).
+# Helpers for package files and their WASIX compatibility declarations.
 # applyWasixMeta below is the only writer of meta.badPlatforms/meta.broken.
 {
   lib,
@@ -73,9 +70,10 @@ in rec {
   profileTraitsOf = hp: profilesCfg.sysrootEncodings.${profileOf hp};
 
   wasixMetaOf = drv: (drv.passthru or {}).wasix or {};
+  wasinixMetaOf = drv: (drv.passthru or {}).wasinix or {};
 
   ciTagsOf = drv: let
-    tags = (wasixMetaOf drv).ciTags or [];
+    tags = (wasinixMetaOf drv).ci.tags or [];
     invalid =
       builtins.filter (
         tag: !(builtins.isString tag) || builtins.match "[a-z0-9]+(-[a-z0-9]+)*" tag == null
@@ -89,8 +87,9 @@ in rec {
       (lib.unique tags));
 
   ciInfoOf = drv: let
-    publication = (wasixMetaOf drv).publication or {};
-    testExpectation = (wasixMetaOf drv).testExpectation or null;
+    wasinix = wasinixMetaOf drv;
+    publication = wasinix.publication or {};
+    testExpectation = wasinix.check.expectation or null;
     changelog = builtins.tryEval (drv.meta.changelog or null);
     version = publication.version or drv.version or null;
     rel = publication.rel or null;
@@ -157,7 +156,7 @@ in rec {
   supportedIn = profileName: drv:
     builtins.elem profileName ((wasixMetaOf drv).supportedProfiles or profiles.all);
 
-  shippedOf = drv: (wasixMetaOf drv).shipped or false;
+  shippedOf = drv: (wasinixMetaOf drv).shipped or false;
 
   preferredProfileOf = drv: let
     w = wasixMetaOf drv;
@@ -178,9 +177,10 @@ in rec {
   # likewise opts into one canonical profile unless ciProfiles says otherwise.
   ciProfilesOf = drv: let
     w = wasixMetaOf drv;
+    ci = (wasinixMetaOf drv).ci or {};
     supported = w.supportedProfiles or profiles.all;
     selected =
-      w.ciProfiles
+      ci.profiles
       or (
         if w ? preferredProfile || shippedOf drv
         then [(preferredProfileOf drv)]

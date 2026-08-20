@@ -62,7 +62,7 @@ in
     # The perl modules are XS, so they load through dlopen like perl itself, and
     # apr's DSO check wants the same dlfcn.h.
     passthru.wasix.supportedProfiles = helpers.profiles.pic;
-    passthru.wasix.shipped = true;
+    passthru.wasinix.shipped = true;
     passthru.wasmer.selfMounts = runtimeTools;
     passthru.wasmer.version = v: let
       d = builtins.match ".*-unstable-([0-9]{4})-([0-9]{2})-([0-9]{2})" v;

@@ -9,7 +9,7 @@ helpers.wasmRename {
   posixAlias = true;
 } (
   helpers.libTweaks {
-    passthru.wasix.shipped = true;
+    passthru.wasinix.shipped = true;
     meta.platforms = _: final.lib.platforms.all;
     # sed's build compiles the bundled gnulib-tests, whose
     # getlocalename_l-unsafe.c #errors on unknown platforms (wasix). Return the

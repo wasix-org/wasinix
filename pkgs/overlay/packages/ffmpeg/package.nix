@@ -41,7 +41,7 @@
   };
 in
   helpers.wasmRename {wasmName = "ffmpeg";} (helpers.libTweaks {
-      passthru.wasix.shipped = true;
+      passthru.wasinix.shipped = true;
       passthru.wasix.updateNotes = [
         {message = "recheck wasi-target.patch; upstream FFmpeg configure should recognize wasi/wasip1 targets";}
       ];

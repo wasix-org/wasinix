@@ -24,7 +24,7 @@ in
           # No suite: the codec paths trip the shared-library GOT/export
           # defect at a different symbol each run, killing the session
           # (WASIX-TODO.md).
-          wasix = (old.wasix or {}) // {installCheck = false;};
+          wasinix = (old.wasinix or {}) // {checks.captured.install = false;};
         };
       # lib.const replaces upstream's preConfigure (drops its AVIF/IMAGEQUANT/libxcb roots),
       # keeping only the openjpeg (JPEG2K) root.

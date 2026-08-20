@@ -18,7 +18,7 @@ final.rustPlatform.buildRustPackage (finalAttrs: {
   cargoHash = "sha256-bLGQmYdPMMaVPzpvotqiCxr4QTZ/U7cX9kmm2b6ncwQ=";
 
   passthru = {
-    wasix.shipped = true;
+    wasinix.shipped = true;
     wasmer = {
       owner = "sendmail";
       name = "sendmail";

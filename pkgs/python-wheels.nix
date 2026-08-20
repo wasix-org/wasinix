@@ -246,9 +246,9 @@
       != null
       && (nativeWheel.drvAttrs.installCheckPhase or null) != null;
     hasCheckHook = lib.any (d: lib.hasInfix "check-hook" (lib.getName d)) selectedCheckInputs;
-    # passthru.wasix.installCheck overrides per package; true is the only way
-    # to run a suite nixpkgs does not run.
-    declaredHere = ((wheel.passthru or {}).wasix or {}).installCheck or null;
+    # The package policy overrides detection. True is the only way to run a
+    # suite nixpkgs does not run.
+    declaredHere = ((wheel.passthru or {}).wasinix or {}).checks.captured.install or null;
     wantsInstallCheck =
       if declaredHere != null
       then declaredHere
@@ -271,7 +271,7 @@
             disallowedReferences = (old.disallowedReferences or []) ++ (checks.disallowedReferences or []);
           });
       });
-    checkSpec = ((wheel.passthru or {}).wasix or {}).emulatedCheck or {};
+    checkSpec = ((wheel.passthru or {}).wasinix or {}).checks.captured or {};
     shardCount = checkSpec.shards or 1;
     mkDerivedUpstream = shard:
       emulatedChecks.checkFor {
@@ -309,7 +309,7 @@
       };
     derivedUpstream =
       lib.throwIf (!(builtins.isInt shardCount && shardCount > 0))
-      "wheel-${name}: emulatedCheck.shards must be a positive integer"
+      "wheel-${name}: checks.captured.shards must be a positive integer"
       (
         if !(withCheck ? check)
         then {}

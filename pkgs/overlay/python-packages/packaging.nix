@@ -9,7 +9,7 @@ pyprev.packaging.overridePythonAttrs (old: {
   passthru =
     (old.passthru or {})
     // {
-      wasix = ((old.passthru or {}).wasix or {}) // {installCheck = true;};
+      wasinix = ((old.passthru or {}).wasinix or {}) // {checks.captured.install = true;};
       wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.pretend pyfinal.tomli-w pyfinal.hypothesis];
     };
   disabledTestPaths = (old.disabledTestPaths or []) ++ ["tests/property"];

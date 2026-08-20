@@ -294,7 +294,11 @@
             );
 
           passthru = {
-            wasix.shipped = true;
+            wasinix.shipped = true;
+            wasinix.aliases =
+              if pyVer == current.pythonVersion
+              then ["python3" "python314"]
+              else ["python313"];
             # dlfcn.h and dlopen/dlsym, needed by ctypes, ship only in the PIC sysroots.
             wasix.supportedProfiles = ["ehpic"];
             # PYO3_CROSS_LIB_DIR and setuptools-rust's pyLibDir, so a 3.13 wheel targets 3.13.
@@ -306,10 +310,6 @@
               owner = "python";
               name = "python";
               history = pyVer != current.pythonVersion;
-              aliases =
-                if pyVer == current.pythonVersion
-                then ["python3" "python314"]
-                else ["python313"];
               entrypoint = "python${pyVer}";
               # Consumers address the atom as <package>:python; each command
               # shares it while Wasmer exposes the usual names under /bin.

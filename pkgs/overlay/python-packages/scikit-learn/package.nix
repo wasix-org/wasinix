@@ -18,7 +18,7 @@
 in
   helpers.libTweaks {
     # The full estimator matrix takes roughly 35 minutes under emulation.
-    passthru.wasix.emulatedCheck = {
+    passthru.wasinix.checks.captured = {
       shards = 8;
       timeout = 3600;
     };

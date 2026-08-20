@@ -26,7 +26,7 @@ helpers.libTweaks {
   passthru = old:
     old
     // {
-      wasix = (old.wasix or {}) // {installCheck = true;};
+      wasinix = (old.wasinix or {}) // {checks.captured.install = true;};
       wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook];
     };
 }

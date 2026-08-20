@@ -18,6 +18,6 @@ helpers.libTweaks {
       --replace-fail "t-printf\$(EXEEXT) t-scanf\$(EXEEXT) t-locale\$(EXEEXT)" \
                      "t-printf\$(EXEEXT) t-scanf\$(EXEEXT)"
   '';
-  passthru.wasix.emulatedCheck.timeout = 3600;
+  passthru.wasinix.checks.captured.timeout = 3600;
 }
 prev.gmp

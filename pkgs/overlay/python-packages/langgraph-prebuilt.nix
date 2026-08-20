@@ -4,6 +4,6 @@
   ...
 }:
 helpers.libTweaks {
-  passthru.wasix.emulatedCheck.broken = "the suite cannot import langgraph.checkpoint.sqlite";
+  passthru.wasinix.checks.captured.broken = "the suite cannot import langgraph.checkpoint.sqlite";
 }
 pyprev.langgraph-prebuilt

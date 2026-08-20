@@ -6,7 +6,7 @@
   ...
 }:
 (helpers.libTweaks {
-    passthru.wasix.shipped = true;
+    passthru.wasinix.shipped = true;
     # The backend loads extensions with dlopen, and only the PIC sysroots ship
     # <dlfcn.h>.
     passthru.wasix.supportedProfiles = helpers.profiles.pic;

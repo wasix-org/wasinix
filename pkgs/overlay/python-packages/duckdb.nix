@@ -25,7 +25,7 @@ in
     dontCheckPythonMetadata = true;
     # The Python suite pulls optional native extension and service stacks. The
     # dedicated wheel check exercises the enabled DuckDB extensions instead.
-    passthru.wasix.installCheck = false;
+    passthru.wasinix.checks.captured.install = false;
     cmakeFlags = [
       "-DPython_INCLUDE_DIR=${py.crossIncludeDir}"
       "-DBUILD_EXTENSIONS=core_functions;parquet;json;icu"

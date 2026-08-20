@@ -7,6 +7,6 @@ helpers.libTweaks {
   preCheck = ''
     rm -r lmdb
   '';
-  passthru.wasix.emulatedCheck.broken = "POSIX advisory record locking is not implemented";
+  passthru.wasinix.checks.captured.broken = "POSIX advisory record locking is not implemented";
 }
 pyprev.lmdb

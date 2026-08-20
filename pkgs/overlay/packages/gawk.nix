@@ -11,7 +11,7 @@ helpers.wasmRename {
   posixAlias = true;
 } (
   helpers.libTweaks {
-    passthru.wasix.shipped = true;
+    passthru.wasinix.shipped = true;
     passthru.wasix.supportedProfiles = ["off"];
     # The bundled extensions are dlopen'd, which a static wasm build cannot do,
     # and filefuncs wants major()/minor() from a header WASIX lacks.

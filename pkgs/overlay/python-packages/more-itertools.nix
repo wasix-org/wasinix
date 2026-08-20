@@ -4,6 +4,6 @@
   ...
 }:
 helpers.libTweaks {
-  passthru.wasix.emulatedCheck.timeout = 3600;
+  passthru.wasinix.checks.captured.timeout = 3600;
 }
 pyprev.more-itertools

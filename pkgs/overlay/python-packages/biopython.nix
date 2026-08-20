@@ -4,6 +4,6 @@
   ...
 }:
 helpers.libTweaks {
-  passthru.wasix.emulatedCheck.broken = "the custom suite requires undeclared NumPy";
+  passthru.wasinix.checks.captured.broken = "the custom suite requires undeclared NumPy";
 }
 pyprev.biopython

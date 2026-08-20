@@ -15,7 +15,7 @@ helpers.libTweaks {
     // {
       # pytest-timeout owns the `timeout` ini option aiohttp sets
       wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.pytest-mock pyfinal.freezegun pyfinal.multidict pyfinal.yarl pyfinal.pytest-timeout];
-      wasix = (old.wasix or {}) // {installCheck = false;};
+      wasinix = (old.wasinix or {}) // {checks.captured.install = false;};
     };
 }
 pyprev.aiohttp

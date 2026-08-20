@@ -14,6 +14,6 @@ helpers.libTweaks {
     pyfinal.wurlitzer
   ];
   # The suite takes about 18 minutes under emulation.
-  passthru.wasix.emulatedCheck.ciTags = ["slow-tests"];
+  passthru.wasinix.checks.captured.tags = ["slow-tests"];
 }
 pyprev.contourpy

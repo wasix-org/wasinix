@@ -38,7 +38,7 @@ helpers.libTweaks {
       CARGO_PROFILE_RELEASE_OPT_LEVEL = "1";
     };
 
-  passthru.wasix.shipped = true;
+  passthru.wasinix.shipped = true;
 
   # RustFS ships prereleases (1.0.0-rc.1), which semver expresses directly, so
   # publish the upstream version as it stands; the default coercion would read

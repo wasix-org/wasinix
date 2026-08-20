@@ -24,11 +24,9 @@
   ciTags =
     lib.unique
     (lib.concatMap
-      (test: ((test.passthru or {}).wasix or {}).ciTags or [])
+      (test: ((test.passthru or {}).wasinix or {}).ci.tags or [])
       (builtins.attrValues leaves));
-  groupMeta =
-    {testCases = leaves;}
-    // lib.optionalAttrs (ciTags != []) {inherit ciTags;};
+  groupMeta = {testCases = leaves;};
   firstPos = let
     names = builtins.attrNames leaves;
   in
@@ -41,7 +39,7 @@
       // {
         __structuredAttrs = true;
         wasixTestDependencies = builtins.attrValues leaves;
-        passthru.wasix = groupMeta;
+        passthru.wasinix = {ci.tags = ciTags;} // groupMeta;
       }
     ) ''
       ${lib.concatMapStringsSep "\n" (n: "test -e ${leaves.${n}}") (builtins.attrNames leaves)}
@@ -51,5 +49,5 @@ in
   tests
   // {
     inherit all;
-    passthru.wasix = groupMeta;
+    passthru.wasinix = {ci.tags = ciTags;} // groupMeta;
   }

@@ -41,7 +41,7 @@ in
                        '#if !defined (HAVE_MKFIFO) && defined (PROCESS_SUBSTITUTION) && !defined(__wasi__)'
     '';
     passthru.wasix.supportedProfiles = ["off"];
-    passthru.wasix.shipped = true;
+    passthru.wasinix.shipped = true;
     # Both commands share the one module, so dependents get /bin/sh as well as
     # /bin/bash and the webc still carries a single wasm. A second command means
     # wasmer no longer infers one, hence the explicit entrypoint.

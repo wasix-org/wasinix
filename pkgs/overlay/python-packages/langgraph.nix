@@ -14,6 +14,6 @@ helpers.libTweaks (
       langgraph-sdk = pyfinal.langgraph-sdk_0_3_0;
     };
   }
-  // {passthru.wasix.installCheck = false;}
+  // {passthru.wasinix.checks.captured.install = false;}
 )
 pyprev.langgraph

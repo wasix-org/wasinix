@@ -6,7 +6,7 @@
   ...
 }:
 helpers.libTweaks {
-  passthru.wasix.shipped = true;
+  passthru.wasinix.shipped = true;
   passthru.wasmer = {
     entrypoint = "anybuild";
     dependencies = [(wasmerDependencies.any preferredProfilePackages.bash)];

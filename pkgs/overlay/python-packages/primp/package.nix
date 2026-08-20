@@ -31,6 +31,6 @@ helpers.libTweaks {
   # No suite: the tests open real network connections, which block forever in
   # the no-route sandbox; signals cannot interrupt blocked reads
   # (WASIX-TODO.md).
-  passthru.wasix.installCheck = false;
+  passthru.wasinix.checks.captured.install = false;
 }
 pyprev.primp

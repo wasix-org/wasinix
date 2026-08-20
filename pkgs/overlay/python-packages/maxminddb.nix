@@ -4,6 +4,6 @@
   ...
 }:
 helpers.libTweaks {
-  passthru.wasix.emulatedCheck.broken = "multiprocessing has no fork context";
+  passthru.wasinix.checks.captured.broken = "multiprocessing has no fork context";
 }
 pyprev.maxminddb

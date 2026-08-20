@@ -39,8 +39,10 @@ Packages declare support through `passthru.wasix`:
 
 - `supportedProfiles`: profiles the package supports
 - `preferredProfile`: its default profile
-- `ciProfiles`: the supported subset built continuously
 - `broken`: a defect and its reason
+
+CI policy is separate under `passthru.wasinix.ci`; `profiles` selects the
+supported subset built continuously.
 
 `packagesByProfile` exposes every supported build. CI uses the transposed
 `ciPackagesByProfile`; it does not define another package taxonomy.

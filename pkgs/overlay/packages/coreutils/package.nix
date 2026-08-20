@@ -118,7 +118,7 @@
   ];
 in
   helpers.libTweaks {
-    passthru.wasix.shipped = true;
+    passthru.wasinix.shipped = true;
     passthru.wasix.supportedProfiles = ["off"];
     passthru.wasmer.entrypoint = "coreutils";
     passthru.wasmer.commands =

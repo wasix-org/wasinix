@@ -158,7 +158,7 @@ in rec {
   in
     pkgs.runCommand "script-run-${name}" ({
         nativeBuildInputs = [wasmer] ++ nativePkgs ++ wasixPkgs;
-        passthru.wasix.testExpectation = testExpectation expectFail broken;
+        passthru.wasinix.check.expectation = testExpectation expectFail broken;
       }
       # WASMER_RUST_BACKTRACE=full (with --impure) surfaces a wasmer panic
       # backtrace in $out. Set on the host process, not the forwarded guest env.
@@ -272,7 +272,7 @@ in rec {
     };
   in
     pkgs.runCommand "wasix-compare-${name}" {
-      passthru.wasix.testExpectation = testExpectation expectFail broken;
+      passthru.wasinix.check.expectation = testExpectation expectFail broken;
     } ''
       if ${lib.getExe' pkgs.diffutils "diff"} -q ${nat} ${was} >/dev/null 2>&1; then
         ${verdict.onCheckPass}

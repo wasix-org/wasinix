@@ -21,7 +21,7 @@
 in
   helpers.wasmRename {wasmName = "jq";} (
     helpers.libTweaks ({
-        passthru.wasix.shipped = true;
+        passthru.wasinix.shipped = true;
         # jq's postFixup strips $dev/$man/$doc refs from the binary to break a
         # bin<->dev output cycle; retarget it at jq.wasm, since wasmRename's
         # postInstall renamed $bin/bin/jq before fixup runs.

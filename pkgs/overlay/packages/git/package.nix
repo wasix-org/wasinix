@@ -40,7 +40,7 @@ in
       (old.passthru or {})
       // {
         inherit bash;
-        wasix.shipped = true;
+        wasinix.shipped = true;
         wasmer = {
           # certs for HTTPS clones, mounted where git/openssl look for them.
           fs."/etc/ssl" = "${final.cacert}/etc/ssl";
