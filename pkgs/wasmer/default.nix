@@ -1,5 +1,5 @@
 # The wasmer (webc) layer: each shipped CLI is its wasm cross build plus .pkg
-# (the wasmer package) and .tests (from overlay/packages/<name>/tests/).
+# (the wasmer package) and .tests (from wasix/<name>/tests/).
 {
   lib,
   pkgs,
@@ -14,7 +14,7 @@
   crossPkgsPic,
   # overlay attr names of the CLIs to ship, resolved at their preferred profile.
   shippedCommands,
-  # overlay/packages dir, used to locate each package's tests/.
+  # WASIX package lane, used to locate each package's tests/.
   packagesDir,
   # the served wheel index, for tests that resolve against it. Forced only by a
   # test, and it reads preferredProfilePackages.python3.shim, which never forces

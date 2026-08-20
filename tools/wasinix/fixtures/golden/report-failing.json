@@ -3,7 +3,7 @@
     {
       "line": 12,
       "message": "builder failed with exit code 1",
-      "path": "pkgs/overlay/packages/zlib.nix",
+      "path": "pkgs/wasix/zlib.nix",
       "title": "checks.zlib"
     }
   ],
@@ -22,7 +22,7 @@
           "truncated": false
         },
         "message": "builder failed with exit code 1",
-        "position": "pkgs/overlay/packages/zlib.nix:12"
+        "position": "pkgs/wasix/zlib.nix:12"
       },
       {
         "cause": "transitive",

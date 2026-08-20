@@ -1,7 +1,7 @@
 # Architecture
 
 `pkgs/default.nix` composes the repository from toolchains, profile package
-sets, overlays, products, and publishable outputs.
+sets, package lanes, and publishable outputs.
 
 The agreed replacement for this composition and its public extension API is
 specified in [`project-api.md`](project-api.md). That document describes a
@@ -22,18 +22,20 @@ details live in:
   cargo registry
 - [`python.md`](python.md): CPython, Python package overlays, and wheels
 
-## Products and overlays
+## Package lanes
 
-`pkgs/products/<name>/package.nix` is the shared recipe for a product built both
+`pkgs/shared/<name>/package.nix` is the shared recipe for a package built both
 natively and with a WASIX host. Its overlay is applied to the native set and,
 before the WASIX overlay, to every profile set. The same recipe receives the
 appropriate `stdenv`, `rustPlatform`, and dependency splice from its scope.
 
-WASIX-specific policy lives in `pkgs/overlay/`: patches, flags, runtime
+WASIX-specific policy lives in `pkgs/wasix/`: patches, flags, runtime
 dependencies, wasm command names, webc configuration, and tests. An entry
 normally adapts `prev.<name>` rather than duplicating its recipe. Entries are
 loaded from `trivial.nix`, a flat `<name>.nix`, or `<name>/package.nix` by
 `pkgs/lib/load-packages.nix`.
+
+Python package adaptations and their history live in `pkgs/python/`.
 
 Packages declare support through `passthru.wasix`:
 

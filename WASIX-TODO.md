@@ -246,7 +246,7 @@ current toolchain before relying on it.
 
 - There is no `/proc` and no process-query call, so `psutil.Process()` raises
   `NoSuchProcess process PID not found (pid=1)` for the calling process itself
-  (verified under wasmer; `overlay/python-packages/psutil/tests/basic.nix`).
+  (verified under wasmer; `python/psutil/tests/basic.nix`).
   `os.sched_getaffinity` does not answer either.
 - Joblib currently masks this limitation: its semaphore probe gets `ENOTSUP`
   first and disables multiprocessing, so scikit-learn's
@@ -254,7 +254,7 @@ current toolchain before relying on it.
   If semaphores become available before process introspection does, joblib will
   reach the `psutil.Process()` failure again. OpenMP-parallel estimators need
   `OMP_NUM_THREADS` to use more than one thread on WASIX; both directions are
-  pinned by `overlay/python-packages/scikit-learn/tests/basic.nix`.
+  pinned by `python/scikit-learn/tests/basic.nix`.
 - Fix: answer self-inspection in wasmer (pid 1 exists, so `Process()` should
   resolve it), which also gets loky off the fallback path.
 
@@ -268,8 +268,7 @@ current toolchain before relying on it.
   and `CalledProcessError`, neither of which is a `NotImplementedError`, so code
   that degrades gracefully everywhere else raises at import instead. optree's
   `version.py` shells out to `git describe` for a dev version and dies this way;
-  `overlay/python-packages/optree.nix` marks the tree as a release so the block
-  is skipped.
+  `python/optree.nix` marks the tree as a release so the block is skipped.
 - Fix: honor `cwd` by chdir'ing in the spawned child (wasix has `chdir`, and
   posix_spawn has an addchdir file action), then let CPython stop rejecting it.
 
@@ -449,10 +448,10 @@ current toolchain before relying on it.
   HDF5's `H5T__init_native_float_types` masks FP exceptions around NaN "don't
   care" bit probing with `feholdexcept`/`feclearexcept(FE_INVALID)`/
   `feupdateenv` and won't compile (`FE_INVALID` undeclared).
-- Workaround: `overlay/python-packages/scipy.nix` drops the `_test_internal`
-  module (test-only, `install_tag 'tests'`, not imported by normal scipy);
-  `overlay/packages/hdf5/patches/hdf5-wasi-fenv.patch` guards the fe\* dance for
-  `__wasi__` (nothing to mask on wasm).
+- Workaround: `python/scipy.nix` drops the `_test_internal` module (test-only,
+  `install_tag 'tests'`, not imported by normal scipy);
+  `wasix/hdf5/patches/hdf5-wasi-fenv.patch` guards the fe\* dance for `__wasi__`
+  (nothing to mask on wasm).
 - Fix: define the missing rounding-mode and exception-flag macros in wasix-libc
   (distinct int values), have `fesetround` return nonzero for anything but
   `FE_TONEAREST`, and keep `feclearexcept`/`fetestexcept` as no-ops, matching
@@ -547,11 +546,10 @@ current toolchain before relying on it.
 - Consequence: onnxruntime's `Env::GetRuntimePath` calls `dladdr` to find the
   directory of its own binary (to locate provider shared libraries beside it);
   `import onnxruntime` traps.
-- Workaround:
-  `overlay/packages/onnxruntime/patches/onnxruntime-wasi-no-dladdr.patch` guards
-  the `dladdr` path on `__wasi__` (as onnxruntime already does for AIX), taking
-  the non-`dladdr` fallback. Fine for a static single-EP build that loads no
-  provider `.so`.
+- Workaround: `wasix/onnxruntime/patches/onnxruntime-wasi-no-dladdr.patch`
+  guards the `dladdr` path on `__wasi__` (as onnxruntime already does for AIX),
+  taking the non-`dladdr` fallback. Fine for a static single-EP build that loads
+  no provider `.so`.
 - Fix: implement `dladdr` in wasix's dyld (fill `Dl_info` from the module
   table), or at least export a weak stub returning 0 so consumers take their own
   fallback instead of failing to import.
@@ -655,9 +653,9 @@ current toolchain before relying on it.
   fails with `posix_spawn failed: Exec format error`, the same shape as find's
   `-exec` and xargs. Declaring `wasmer/clang` as a webc dependency does not make
   it resolvable.
-- Workaround: `pkgs/overlay/packages/flang` is `passthru.wasix.broken` and not
-  shipped. The host flang (`products/wasix-flang`) is unaffected and is what
-  builds Fortran for scipy.
+- Workaround: `pkgs/wasix/flang` is `passthru.wasix.broken` and not shipped. The
+  host flang (`shared/wasix-flang`) is unaffected and is what builds Fortran for
+  scipy.
 - Fix: make a dependency's command resolvable to a spawning guest, or give flang
   the in-process frontend dispatch clang has for `cc1`.
 
@@ -778,10 +776,10 @@ current toolchain before relying on it.
   the py313 wheel's PYTHONPATH, which shadowed py313's build tools, so the
   `packaging`/`installer` failures seen then were that pollution, not a real
   py313 provisioning gap.)
-- Workaround: `overlay/python-packages/onnx.nix` repackages only the abi3 wheel
-  FILE from the top-level (native) py314 C++ onnx and drops the onnx package
-  from build/propagated inputs, so no per-interpreter C++ onnx is built and no
-  py314 python leaks. Both py313 and py314 wheels import green.
+- Workaround: `python/onnx.nix` repackages only the abi3 wheel FILE from the
+  top-level (native) py314 C++ onnx and drops the onnx package from
+  build/propagated inputs, so no per-interpreter C++ onnx is built and no py314
+  python leaks. Both py313 and py314 wheels import green.
 - Fix: make the non-default python's package set splice `build` (and peer pypa
   tools) to `pythonOnBuildForHost` in nativeBuildInputs, matching the default,
   so a package that must genuinely build a wheel on py313 works.
@@ -896,8 +894,7 @@ current toolchain before relying on it.
   C and uses no abseil. `api_implementation` catches the ImportError and falls
   back to the pure-python backend, so `import google.protobuf` still works, one
   order of magnitude slower and with none of the C++ descriptor pool semantics.
-- Workaround: the `wheel-py313-protobuf4` entry in
-  `overlay/python-packages/wheels.nix` imports
+- Workaround: the `wheel-py313-protobuf4` entry in `python/wheels.nix` imports
   `google.protobuf.internal._api_implementation`, nixpkgs' own check that
   `--cpp_implementation` took effect, instead of the extension the other
   protobuf entries import. The wheel ships and degrades quietly, so nothing
@@ -1078,8 +1075,8 @@ current toolchain before relying on it.
   cargo-wasix need no workaround. Some python wheels pulling getrandom 0.3
   (bcrypt, pydantic-core) still pin `wasix-org/getrandom`; its backend adds a
   dependency on the `wasix` crate, which a vendor patch can't introduce (see
-  `overlay/python-packages/lib/rust.nix`). The dependency-free vendor patch
-  below is preferred and has replaced that source override for jiter.
+  `python/lib/rust.nix`). The dependency-free vendor patch below is preferred
+  and has replaced that source override for jiter.
 
 ### getrandom 0.3/0.4 fixed by selecting the p1 backend 🟡
 

@@ -10,7 +10,7 @@
   # are built. Empty in every normal eval; nothing that ships may set it.
   spotOverlays ? {},
 }: let
-  products = import ./products;
+  sharedPackages = import ./shared;
   pkgs = import nixpkgs {
     inherit system;
     overlays = [
@@ -32,7 +32,7 @@
           patches = (old.patches or []) ++ [./binaryen-irbuilder-wrapper-block-spans.patch];
         });
       })
-      (products.overlay {})
+      (sharedPackages.overlay {})
     ];
   };
   inherit (pkgs) lib;
@@ -100,11 +100,12 @@
 
   # Enumerated eval-only through the same loader and history table the overlay
   # builds from, so the two can't drift.
-  packagesHistory = builtins.fromJSON (builtins.readFile ./overlay/packages/history.json);
+  packagesHistory = builtins.fromJSON (builtins.readFile ./wasix/history.json);
   wasixPkgNames =
     (wasixLib.loadPackageDir {
-      dir = ./overlay/packages;
-      trivial = import ./overlay/trivial.nix;
+      dir = ./wasix;
+      trivial = import ./wasix/trivial.nix;
+      exclude = ["trivial"];
       history = packagesHistory;
     }).names;
 
@@ -114,14 +115,14 @@
     wasixLib.preferredProfileOf nixpkgsByProfile.${defaultProfileName}.${name};
   preferredProfilePackages = lib.genAttrs wasixPkgNames (name: nixpkgsByProfile.${preferredProfileOf name}.${name});
 
-  wasixOverlay = import ./overlay {
+  wasixOverlay = import ./wasix {
     inherit toolchain nixpkgs preferredProfilePackages wasixRustPlatform wasmerDependencies;
     wasixRunStub = wasixRun.stub;
     inherit (pkgs) nix-update-script;
   };
-  productsOverlay = products.overlay {nativeNixUpdateScript = pkgs.nix-update-script;};
+  sharedOverlay = sharedPackages.overlay {nativeNixUpdateScript = pkgs.nix-update-script;};
   mkWasixPkgs = import ./set/mk-pkgs.nix {
-    inherit system nixpkgs mkWasixStdenv productsOverlay wasixOverlay;
+    inherit system nixpkgs mkWasixStdenv sharedOverlay wasixOverlay;
   };
   nixpkgsByProfile = lib.mapAttrs (name: spec: mkWasixPkgs (spotOverlays.${name} or []) spec) profilesCfg.profiles;
 
@@ -151,7 +152,7 @@
 
   # Shared product recipes built independently for the native host, never taken
   # from a cross set's buildPackages splice.
-  nativePackages = lib.genAttrs products.names (name: pkgs.${name});
+  nativePackages = lib.genAttrs sharedPackages.names (name: pkgs.${name});
 
   # Profiles whose executables wasmer can execute, for the compile+link+run tests:
   # everything except legacy EH, whose `try` opcode wasmer has no feature flag for.
@@ -452,7 +453,7 @@
     wasixPkgNames;
 
   # ── python wheels ────────────────────────────────────────────────────────────
-  # Shipped Python wheels (overlay/python-packages/wheels.nix). cpython needs PIC
+  # Shipped Python wheels (python/wheels.nix). cpython needs PIC
   # (ctypes/dl) and the exnref EH encoding wasmer accepts, so the wheels are one set
   # anchored at exnrefEhpic. noarch builds once, everything else per interpreter.
   publicationRels = builtins.fromJSON (builtins.readFile ../release-revisions.json);
@@ -495,13 +496,13 @@
         pythonWebc = wasmerLayer.wasmerPackages.python314.webc;
         wasmer = wasmerRuntime;
       };
-      wheelList = import ./overlay/python-packages/wheels.nix;
+      wheelList = import ./python/wheels.nix;
     };
 
   isNoarch = e: e.noarch or false;
   publishOnceWheelNames =
     map (e: e.attr)
-    (lib.filter (e: e.publishOnce or false) (import ./overlay/python-packages/wheels.nix));
+    (lib.filter (e: e.publishOnce or false) (import ./python/wheels.nix));
   pythonWheels = {
     noarch = mkPythonWheels "noarch" "python314" isNoarch;
     py313 = mkPythonWheels "py313" "python313" (e: !isNoarch e);
@@ -511,7 +512,7 @@
   # The overlay cargo registry: the minted +wasix.N payload and its checks. The
   # server itself ships as the overlay package wasmerPackages.wasix-cargo-registry
   # (only ever wasm on Edge); its end-to-end serve check lives with that package
-  # (overlay/packages/cargo-registry/tests), and the serve app runs the same wasm.
+  # (wasix/cargo-registry/tests), and the serve app runs the same wasm.
   cargoRegistry = import ./cargo-registry {
     inherit pkgs lib mkTestGroup crateEdits cargoRegistryWire;
   };
@@ -531,7 +532,7 @@
     # for tests whose subject is PIC-only
     crossPkgsPic = nixpkgsByProfile.exnrefEhpic;
     wasmer = wasmerRuntime;
-    packagesDir = ./overlay/packages;
+    packagesDir = ./wasix;
     inherit pythonRegistry;
     emulatedCheckFor = drv: emulatedChecks.checkFor {inherit drv;};
     # Shipped CLIs run only a declared captured suite, never an auto-detected

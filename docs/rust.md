@@ -12,7 +12,7 @@ so Rust packages are limited to those profiles.
 
 A nixpkgs CLI usually needs only `{ prev, ... }: prev.foo`. For a crate nixpkgs
 does not carry, use `final.rustPlatform.buildRustPackage`; see
-`pkgs/overlay/packages/crabsay.nix`. Python wheels use the shared maturin and
+`pkgs/wasix/crabsay.nix`. Python wheels use the shared maturin and
 setuptools-rust hooks.
 
 ## Crate edits

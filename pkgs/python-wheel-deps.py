@@ -17,7 +17,7 @@ from pathlib import Path
 from packaging.markers import UndefinedEnvironmentName
 from packaging.requirements import InvalidRequirement, Requirement
 
-# What the shipped interpreter reports (overlay/packages/python3 sets
+# What the shipped interpreter reports (wasix/python3 sets
 # MACHDEP=wasix); a requirement gated on another platform is not ours to serve.
 ENV = {
     "sys_platform": "wasix",

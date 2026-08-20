@@ -67,11 +67,11 @@ pub struct Target {
 }
 
 pub fn wheel_history(repo: &Path) -> PathBuf {
-    repo.join("pkgs/overlay/python-packages/history.json")
+    repo.join("pkgs/python/history.json")
 }
 
 fn cli_history(repo: &Path) -> PathBuf {
-    repo.join("pkgs/overlay/packages/history.json")
+    repo.join("pkgs/wasix/history.json")
 }
 
 /// wheels.nix is pure data; keyed by normalized attr for lockfile matching.
@@ -80,7 +80,7 @@ fn wheel_worklist(repo: &Path) -> Result<BTreeMap<String, String>> {
         "eval",
         format!(
             "import {}",
-            repo.join("pkgs/overlay/python-packages/wheels.nix")
+            repo.join("pkgs/python/wheels.nix")
                 .display()
         ),
     )

@@ -123,7 +123,7 @@
         inherit system nixpkgs spotOverlays;
         # runs the behavioural passthru.tests on the webc packages.
         inherit wasmerRuntime;
-        # bindist GHC for toolchain.haskell; overlay/packages/pandoc builds against it
+        # bindist GHC for toolchain.haskell; wasix/pandoc builds against it
         ghcWasm = ghc-wasm-meta.packages.${system};
       };
     wasix = mkWasix {};
