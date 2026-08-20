@@ -67,8 +67,8 @@ let
       owner = "tree-sitter-grammars";
     };
     php = {
-      version = "0.24.1";
-      hash = "sha256-SUoWvPnNpgg5QMxbTw7XfXEoxyOkqnNFPnrMZnoiJH0=";
+      version = "0.24.2";
+      hash = "sha256-jI7yzcoHS/tNxUqJI4aD1rdEZV3jMn1GZD0J+81Dyf0=";
       owner = "tree-sitter";
     };
     powershell = {
