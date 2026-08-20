@@ -23,6 +23,7 @@ in {
   # traversal works: the save-cwd patch routes cwd restore through getcwd+chdir
   # (wasix has no working fchdir), so find no longer errors on exit.
   traverse = cmp "find-traverse" ''
+    find /tmp -maxdepth 0
     mkdir -p t/sub
     : > t/a.txt
     : > t/sub/b.txt

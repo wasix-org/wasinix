@@ -142,6 +142,19 @@ nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
    wasm. More than one command means wasmer no longer infers an entrypoint, so
    set one.
 
+   A metapackage can re-export a command from one of its dependencies without
+   embedding that module. The command adds the dependency itself and derives the
+   qualified module and atom from its published identity:
+
+   ```nix
+   passthru.wasmer.commands = [
+     {
+       name = "bash";
+       dependency = wasmerDependencies.any preferredProfilePackages.bash;
+     }
+   ];
+   ```
+
    Runtime webc dependencies accept a derivation or an attrset containing
    `package` and `version`. The helpers derive requirements from the package's
    published webc version:

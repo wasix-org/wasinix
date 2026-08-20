@@ -8,6 +8,7 @@
 #   license     ? meta.license (spdxId/shortName)
 #   owner       ? "wasmer"
 #   commands    ? null  => one command per bin/*.wasm (auto-globbed at build)
+#                 a command with `dependency` re-exports that dependency's command
 #   env         ? {}     => { ENV = "val"; } set on every command
 #   commandEnv  ? {}     => { <command> = { ENV = "val"; }; } merged onto a command
 #   dependencies ? [] => derivations, or { package = drv; version = requirement; }
@@ -124,7 +125,21 @@
   # at /bin/<cmd> and /usr/bin/<cmd> in this package's fs, so e.g. /bin/bash
   # resolves from the dependency instead of a bundled copy.
   dependencies = w.dependencies or [];
-  dependencySpecs = map wasmerDependencies.normalize dependencies;
+  dependencyCommands =
+    if commands == null
+    then []
+    else lib.filter (cmd: cmd ? dependency) commands;
+  allDependencySpecs =
+    map wasmerDependencies.normalize dependencies
+    ++ map (cmd: wasmerDependencies.normalize cmd.dependency) dependencyCommands;
+  dependencyGroups = lib.groupBy (dep: (webcIdent dep.package).fullName) allDependencySpecs;
+  conflictingDependencies = lib.attrNames (lib.filterAttrs (_: deps:
+    lib.length (lib.unique (map (dep: dep.version) deps)) > 1)
+  dependencyGroups);
+  dependencySpecs =
+    lib.throwIf (conflictingDependencies != [])
+    "${name}: conflicting requirements for ${lib.concatStringsSep ", " conflictingDependencies}"
+    (map builtins.head (lib.attrValues dependencyGroups));
   dependencyLines =
     lib.concatMapStringsSep "\n" (
       dep: let
@@ -155,14 +170,31 @@
       lib.concatMapStringsSep "\n" (
         cmd: let
           commandName = cmd.name;
-          moduleName = cmd.module or commandName;
-          wasmFile = cmd.wasm or "${commandName}.wasm";
-          outputFile = cmd.output or "${commandName}.wasm";
+          fromDependency = cmd ? dependency;
+          invalidDependencyFields = lib.filter (field: builtins.hasAttr field cmd) ["module" "wasm" "output" "atom"];
+          dependencyCommand = cmd.dependencyCommand or commandName;
+          dependencySpec = wasmerDependencies.normalize cmd.dependency;
+          dependencyId = webcIdent dependencySpec.package;
+          moduleName =
+            if fromDependency
+            then "${dependencyId.fullName}:${dependencyCommand}"
+            else cmd.module or commandName;
+          wasmFile =
+            if fromDependency
+            then ""
+            else cmd.wasm or "${commandName}.wasm";
+          outputFile =
+            if fromDependency
+            then ""
+            else cmd.output or "${commandName}.wasm";
           runner = cmd.runner or defaultRunner;
           mainArgs = builtins.toJSON (cmd.mainArgs or null);
           atom = builtins.toJSON (cmd.atom or moduleName);
           env = envJson (packageEnv // (cmd.env or {}));
-        in "${commandName}|${moduleName}|${wasmFile}|${outputFile}|${runner}|${mainArgs}|${atom}|${env}"
+        in
+          lib.throwIf (fromDependency && invalidDependencyFields != [])
+          "${name}: dependency command ${commandName} cannot set ${lib.concatStringsSep ", " invalidDependencyFields}"
+          "${commandName}|${moduleName}|${wasmFile}|${outputFile}|${runner}|${mainArgs}|${atom}|${env}"
       )
       commands;
 
@@ -291,7 +323,7 @@ in
         ''
       }
 
-        ${lib.optionalString (dependencies != []) ''
+        ${lib.optionalString (dependencySpecs != []) ''
               cat >> "$pkg_dir/wasmer.toml" <<EOF
 
         [dependencies]
@@ -308,7 +340,7 @@ in
           atom_json="$6"
           env_json="$7"
 
-          if [ -z "''${module_seen[$module_name]+x}" ]; then
+          if [ -n "$module_file" ] && [ -z "''${module_seen[$module_name]+x}" ]; then
             module_seen["$module_name"]=1
             cat >> "$pkg_dir/wasmer.toml" <<EOF
 
@@ -372,13 +404,15 @@ in
         else ''
               while IFS='|' read -r command_name module_name wasm_file output_file runner main_args_json atom_json env_json; do
                 [ -n "$command_name" ] || continue
-                source_path="${package}/bin/$wasm_file"
-                if [ ! -f "$source_path" ]; then
-                  echo "Missing declared wasm binary: $source_path" >&2
-                  exit 1
-                fi
+                if [ -n "$wasm_file" ]; then
+                  source_path="${package}/bin/$wasm_file"
+                  if [ ! -f "$source_path" ]; then
+                    echo "Missing declared wasm binary: $source_path" >&2
+                    exit 1
+                  fi
 
-                cp -f "$source_path" "$bin_dir/$output_file"
+                  cp -f "$source_path" "$bin_dir/$output_file"
+                fi
                 append_command "$command_name" "$module_name" "$output_file" "$runner" "$main_args_json" "$atom_json" "$env_json"
               done <<'EOF'
           ${commandLines}
