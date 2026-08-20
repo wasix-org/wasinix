@@ -4,7 +4,7 @@
   pyfinal,
   ...
 }:
-pyfinal.buildPythonPackage rec {
+pyfinal.buildPythonPackage (finalAttrs: {
   pname = "langflow";
   version = "1.11.2";
   pyproject = true;
@@ -12,7 +12,7 @@ pyfinal.buildPythonPackage rec {
   src = final.fetchFromGitHub {
     owner = "langflow-ai";
     repo = "langflow";
-    tag = "v${version}";
+    tag = "v${finalAttrs.version}";
     hash = "sha256-ebDaUsVbAKZOkoY3SkJbUOJqFY/3U/tjT9yR9FUcsSg=";
   };
 
@@ -53,4 +53,4 @@ pyfinal.buildPythonPackage rec {
     {message = "langflow: coordinate langflow, langflow-base, and lfx versions when updating.";}
     {message = "langflow: recheck the removed lfx provider bundles on bump.";}
   ];
-}
+})

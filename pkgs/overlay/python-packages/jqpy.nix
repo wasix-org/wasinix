@@ -9,17 +9,17 @@
   nix-update-script,
   ...
 }:
-pyfinal.buildPythonPackage rec {
+pyfinal.buildPythonPackage (finalAttrs: {
   pname = "jqpy";
   version = "1.0.0";
   pyproject = true;
 
   src = pyfinal.fetchPypi {
-    inherit pname version;
+    inherit (finalAttrs) pname version;
     hash = "sha256-Cnhpuu3AgeEJnzhyeqfnbZJk+XLeZcdmGztnyCHQMh0=";
   };
 
   build-system = [pyfinal.flit-core];
 
   passthru.updateScript = nix-update-script {extraArgs = ["--flake"];};
-}
+})

@@ -3,20 +3,23 @@
 # distribution names). Python dbt-core 1.12 requires the parser distribution, so
 # the wheel needs this.
 {final, ...}:
-final.rustPlatform.buildRustPackage rec {
+final.rustPlatform.buildRustPackage (finalAttrs: {
   pname = "dbt-sa-cli";
   version = "2.0.0-alpha.5";
 
   src = final.fetchFromGitHub {
     owner = "dbt-labs";
     repo = "dbt-core";
-    tag = "v${version}";
+    tag = "v${finalAttrs.version}";
     hash = "sha256-ewetmvf31eVLFw5v7N/nGYxkO5TrA5eRxt2vi8puVAM=";
   };
 
   cargoHash = "sha256-UvOdffMzoUHL6Etyw4CX8PxrA7ioIKf0gX5n9vH3oVw=";
 
-  cargoBuildFlags = ["-p" "dbt-sa-cli"];
+  cargoBuildFlags = [
+    "-p"
+    "dbt-sa-cli"
+  ];
 
   # driver_parameters() names the prebuilt ADBC driver to fetch and defines its
   # OS only for linux/macos/windows. No wasm driver is published, and claiming a
@@ -58,4 +61,4 @@ final.rustPlatform.buildRustPackage rec {
     homepage = "https://github.com/dbt-labs/dbt-core";
     mainProgram = "dbt-sa-cli";
   };
-}
+})

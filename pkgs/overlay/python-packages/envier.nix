@@ -5,13 +5,13 @@
   nix-update-script,
   ...
 }:
-pyfinal.buildPythonPackage rec {
+pyfinal.buildPythonPackage (finalAttrs: {
   pname = "envier";
   version = "0.6.1";
   pyproject = true;
 
   src = pyfinal.fetchPypi {
-    inherit pname version;
+    inherit (finalAttrs) pname version;
     hash = "sha256-MwmgG7PYhQyeejGlFm1ag2hG2y+uy3m5yzJlTdUMqfk=";
   };
 
@@ -21,4 +21,4 @@ pyfinal.buildPythonPackage rec {
   ];
 
   passthru.updateScript = nix-update-script {extraArgs = ["--flake"];};
-}
+})

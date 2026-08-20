@@ -3,14 +3,14 @@
   pyfinal,
   ...
 }:
-pyfinal.buildPythonPackage rec {
+pyfinal.buildPythonPackage (finalAttrs: {
   pname = "ag-ui-protocol";
   version = "0.1.18";
   format = "wheel";
 
   src = pyfinal.fetchPypi {
     pname = "ag_ui_protocol";
-    inherit version format;
+    inherit (finalAttrs) version format;
     dist = "py3";
     python = "py3";
     hash = "sha256-0VHA8KNBYGR/FXEWP3GFdG9DJrFaVtFWDeUIKnoOehI=";
@@ -20,4 +20,4 @@ pyfinal.buildPythonPackage rec {
   pythonImportsCheck = ["ag_ui_protocol"];
 
   passthru.updateScript = nix-update-script {extraArgs = ["--flake"];};
-}
+})

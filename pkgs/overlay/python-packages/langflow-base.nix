@@ -4,7 +4,7 @@
   wasixPython,
   ...
 }:
-pyfinal.buildPythonPackage rec {
+pyfinal.buildPythonPackage (finalAttrs: {
   pname = "langflow-base";
   version = "0.11.2";
   format = "wheel";
@@ -14,7 +14,7 @@ pyfinal.buildPythonPackage rec {
   # wheel's cross build.
   src = pyfinal.fetchPypi {
     pname = "langflow_base";
-    inherit version format;
+    inherit (finalAttrs) version format;
     dist = "py3";
     python = "py3";
     hash = "sha256-q05pC6+nXy7U5NKj261xrX37PdAvmhlJqTsBNfdzqD0=";
@@ -27,7 +27,7 @@ pyfinal.buildPythonPackage rec {
     unpacked=$TMPDIR/langflow-a2a-patch
     mkdir "$unpacked"
     ${wasixPython.pythonOnBuildForHost.pkgs.wheel}/bin/wheel unpack --dest "$unpacked" "$wheelFile"
-    packageRoot="$unpacked/langflow_base-${version}"
+    packageRoot="$unpacked/langflow_base-${finalAttrs.version}"
     patch -d "$packageRoot" -p1 < ${./langflow-base-optional-routes.patch}
     mv "$wheelFile" "$TMPDIR/langflow-base-original.whl"
     ${wasixPython.pythonOnBuildForHost.pkgs.wheel}/bin/wheel pack --dest dist "$packageRoot"
@@ -142,4 +142,4 @@ pyfinal.buildPythonPackage rec {
     {message = "langflow-base: recheck the removed provider integrations on bump.";}
     {message = "langflow-base: recheck the optional A2A, knowledge-base, and memory routes on bump.";}
   ];
-}
+})
