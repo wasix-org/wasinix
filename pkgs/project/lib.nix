@@ -4,7 +4,7 @@
   unitOverlaysAttr = "__wasinixUnitOverlays";
   historyBaseAttr = "__wasinixHistoryBase";
   historyOverlaysAttr = "__wasinixHistoryOverlays";
-  machineMetadata = ["source" "lineage" "instance" historyBaseAttr historyOverlaysAttr];
+  machineMetadata = ["source" "lineage" "instance" "definition" historyBaseAttr historyOverlaysAttr];
 
   scriptAttrs = [
     "preUnpack"
@@ -128,6 +128,7 @@
     files =
       map (name: {
         inherit name;
+        directory = null;
         file = dir + "/${name}.nix";
       })
       (lib.filter (name: name != "default" && name != "history")
@@ -136,6 +137,7 @@
     directories =
       map (name: {
         inherit name;
+        directory = dir + "/${name}";
         file = dir + "/${name}/package.nix";
       })
       (lib.filter (name: builtins.pathExists (dir + "/${name}/package.nix"))
@@ -168,6 +170,7 @@
     directories;
 
   stampPackage = {
+    definition ? null,
     name,
     package,
     previous ? null,
@@ -187,6 +190,7 @@
     previousSource = previousMetadata.source or null;
     previousLineage = previousMetadata.lineage or (lib.optional (previousSource != null) previousSource);
     previousInstance = previousMetadata.instance or null;
+    previousDefinition = previousMetadata.definition or null;
     previousHistoryBase = previousMetadata.${historyBaseAttr} or null;
     previousHistoryOverlays = previousMetadata.${historyOverlaysAttr} or [];
     declaredOverride = metadata.overrides or null;
@@ -196,13 +200,15 @@
         metadata ? source
         || metadata ? lineage
         || metadata ? instance
+        || metadata ? definition
         || builtins.hasAttr historyBaseAttr metadata
         || builtins.hasAttr historyOverlaysAttr metadata
       else
         (metadata.source or previousSource)
         != previousSource
         || (metadata.lineage or previousLineage) != previousLineage
-        || (metadata.instance or previousInstance) != previousInstance;
+        || (metadata.instance or previousInstance) != previousInstance
+        || (metadata.definition or previousDefinition) != previousDefinition;
     lineage =
       if previousSource == null
       then [source]
@@ -213,10 +219,11 @@
       if previousSource == source
       then previousHistoryBase
       else previousSet;
+    historyLayer = {inherit definition overlay;};
     historyOverlays =
       if previousSource == source
-      then previousHistoryOverlays ++ [overlay]
-      else [overlay];
+      then previousHistoryOverlays ++ [historyLayer]
+      else [historyLayer];
     overrideError =
       if previousSource == null && declaredOverride != null
       then "declares an override of '${declaredOverride}', but has no preceding registered owner"
@@ -240,6 +247,7 @@
                 builtins.removeAttrs metadata machineMetadata
                 // {
                   inherit source lineage instance;
+                  inherit definition;
                   ${historyBaseAttr} = historyBase;
                   ${historyOverlaysAttr} = historyOverlays;
                 };
@@ -267,6 +275,9 @@ in rec {
     units = discoverUnits dir;
     results =
       map (unit: {
+        definition = {
+          inherit (unit) directory file;
+        };
         result = instantiate unit final prev;
         replay = instantiate unit;
       })
@@ -274,12 +285,16 @@ in rec {
     packages = builtins.foldl' mergeDisjoint {} (map (item: item.result) results);
     unitOverlays = builtins.foldl' (state: item:
       state
-      // lib.genAttrs (lib.attrNames item.result) (_: item.replay)) {}
+      // lib.genAttrs (lib.attrNames item.result) (_: {
+        inherit (item) definition;
+        overlay = item.replay;
+      })) {}
     results;
   in
     packages // {${unitOverlaysAttr} = unitOverlays;};
 
   registerOverlay = {
+    definition ? null,
     overlay,
     source,
     instanceFor ? _name: package: {
@@ -299,13 +314,22 @@ in rec {
         lib.mapAttrs (
           name: value:
             if lib.isDerivation value
-            then
+            then let
+              unit = unitOverlays.${name} or null;
+            in
               stampPackage {
                 inherit name source;
+                definition =
+                  if unit == null
+                  then definition
+                  else unit.definition;
                 package = value;
                 previous = prev.${name} or null;
                 previousSet = prev;
-                overlay = unitOverlays.${name} or overlay;
+                overlay =
+                  if unit == null
+                  then overlay
+                  else unit.overlay;
                 instance = instanceFor name value;
               }
             else value

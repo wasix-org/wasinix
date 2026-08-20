@@ -113,7 +113,7 @@
   in {
     kind = "package";
     inherit address name package preferred projectionPath scope variant;
-    inherit (metadata) source lineage instance;
+    inherit (metadata) definition source lineage instance;
     inherit policy;
   };
 
@@ -290,10 +290,11 @@ in rec {
           "${source}.${name}: history requires a preceding package to rebase"
           (rebasePackage version spec baseSet.${name});
         initial = baseSet // {${name} = rebased;};
-        replayed = lib.foldl' (previous: overlay:
+        replayed = lib.foldl' (previous: layer:
           previous
           // (projectLib.registerOverlay {
-              inherit overlay source;
+              inherit (layer) definition overlay;
+              inherit source;
               instanceFor = resultName: result:
                 if resultName == name
                 then {
@@ -562,7 +563,7 @@ in rec {
             address = projectLib.address "artifacts" ([kind] ++ baseEntry.projectionPath);
             artifactKind = kind;
             inherit artifact;
-            inherit (baseEntry) name preferred projectionPath source lineage scope variant instance;
+            inherit (baseEntry) name preferred projectionPath definition source lineage scope variant instance;
             subject = baseEntry.address;
             packageSubject = baseEntry.packageSubject or baseEntry.address;
             policy = inheritedPolicy baseEntry artifact;
@@ -601,7 +602,7 @@ in rec {
           lib.nameValuePair address {
             kind = "command";
             inherit address command;
-            inherit (baseEntry) source lineage scope variant instance;
+            inherit (baseEntry) definition source lineage scope variant instance;
             subject = baseEntry.address;
             packageSubject = baseEntry.packageSubject or baseEntry.address;
             policy = baseEntry.policy;
@@ -613,7 +614,7 @@ in rec {
           lib.nameValuePair address {
             kind = "test";
             inherit address check;
-            inherit (baseEntry) source lineage scope variant instance;
+            inherit (baseEntry) definition source lineage scope variant instance;
             subject = baseEntry.address;
             packageSubject = baseEntry.packageSubject or baseEntry.address;
             policy = inheritedPolicy baseEntry check;
