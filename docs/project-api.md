@@ -268,7 +268,9 @@ directly. Narrow helpers such as script concatenation and input filtering remain
 available directly as `mergeScript`, `dropInputsByName`,
 `dropInputsByNameInfix`, `replaceInputsByName`, `linkInputs`,
 `dropPatchesByNameInfix`, and `dropFlagsByPrefix`. There is no `libTweaks` or
-generic `helpers` compatibility name in the v1 package-unit API.
+generic `helpers` compatibility name in the v1 package-unit API. Profile-aware
+units request `profileOf` or `profileTraitsOf` directly, and `wasmRename`
+normalizes command filenames before WebC projection.
 
 A new package can retain a normal nixpkgs recipe:
 
