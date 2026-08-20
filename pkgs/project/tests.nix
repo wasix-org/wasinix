@@ -116,10 +116,17 @@
       };
     };
   };
+  unitExtension = {
+    id = "unit-consumer";
+    overlays = projectApi.loadPackageOverlays {
+      wasix = ./tests/project-units;
+    };
+  };
   project = projectApi.mkProject {
     system = "test-system";
     importNixpkgs = fakeImportNixpkgs;
-    extensions = [consumerExtension];
+    extensions = [consumerExtension unitExtension];
+    ci.sources = ["consumer"];
   };
   unknownCiSource = projectApi.mkProject {
     system = "test-system";
@@ -174,6 +181,7 @@ in {
       coreLineage = project.packages.wasix.default.core.passthru.wasinix.lineage;
       preferredProfile = project.packages.preferred.core.name;
       consumerName = project.packages.wasix.alternate.consumer.name;
+      inheritedDependencyName = project.packages.wasix.default.uses-inherited.name;
       ciSources = project.ci.sources;
       ciJobNames = lib.attrNames project.ci.jobs;
       catalogJobNames = lib.attrNames project.ci.catalog.jobs;
@@ -188,6 +196,7 @@ in {
       coreLineage = ["wasinix" "consumer"];
       preferredProfile = "core";
       consumerName = "consumer-alternate";
+      inheritedDependencyName = "uses-inherited";
       ciSources = ["consumer"];
       ciJobNames = [
         "packages.wasix.alternate.consumer"
