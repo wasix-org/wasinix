@@ -64,6 +64,11 @@ pub struct Index {
     pub effects: crate::support::effects::Effects,
     /// The checkout, which holds the app config and the publisher.
     pub repo: PathBuf,
+    /// Upload the pages even when no wheel is new: they answer to the index
+    /// generator rather than to the wheel set.
+    pub refresh_listings: bool,
+    /// Withdraw the pages of projects that no longer belong in simple/.
+    pub withdraw_stale: bool,
 }
 
 /// The rclone config section the credentials come as. A volume without an S3
@@ -164,6 +169,12 @@ pub fn publish_index(request: Index) -> Result<CommandStatus> {
         .args(["--rev", &request.rev]);
     if request.effects.is_dry_run() {
         publish.arg("--dry-run");
+    }
+    if request.refresh_listings {
+        publish.arg("--refresh-listings");
+    }
+    if request.withdraw_stale {
+        publish.arg("--withdraw-stale");
     }
     publish
         .env("RCLONE_CONFIG", &config)
