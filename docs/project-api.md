@@ -6,9 +6,8 @@ for replacing it; until that work lands, its attribute paths are not available
 from the flake.
 
 Wasinix constructs one structured project for one evaluation system. A project
-contains package sets, toolchain integration, artifacts, commands, tests, and a
-CI catalog. Other flakes use the same constructor and add packages through
-registered overlays.
+contains package sets, artifacts, commands, tests, and a CI catalog. Other
+flakes use the same constructor and add packages through registered overlays.
 
 ## Constructor
 
@@ -58,7 +57,6 @@ The result starts with:
 {
   schemaVersion = 1;
   packages = ...;
-  toolchain = ...;
   commands = ...;
   artifacts = ...;
   tests = ...;
@@ -325,36 +323,33 @@ constructs every profile. Packages declare their supported profiles and an
 optional preferred profile; the project constructor does not carry a second
 profile selection mechanism.
 
-Toolchain is a package role, not a separate kind of build result. LLVM, Rust,
-wasixcc, sysroots, cargo-registry, anybuild, and similar buildable values are
-packages and may be used directly in development shells. Toolchain profile
-integration is separate because an stdenv or language platform is package-set
-plumbing rather than a distributable compiler artifact.
+LLVM, Rust, wasixcc, sysroots, cargo-registry, anybuild, and similar buildable
+values are packages and may be used directly in development shells. Their
+profile-specific construction interfaces are projections on the native package
+that owns them rather than a separate toolchain category.
 
 The structured views are:
 
 ```nix
 {
   packages = {
-    toolchain = ...;
     native = ...;
     wasix.<profile> = ...;
     python.<interpreter> = ...;
     preferred = ...;
   };
 
-  toolchain.profiles.<profile>.integration = {
-    stdenv = ...;
-    rustPlatform = ...;
-    # Other profile-specific builders.
-  };
+  packages.native.wasixcc.profiles.<profile>.stdenv = ...;
+  packages.native.wasix-rust.profiles.<profile>.rustPlatform = ...;
+  packages.native.wasix-sysroot.profiles.<profile>.sysroot = ...;
 }
 ```
 
-There is no `toolchain.artifacts` namespace. Buildable toolchain artifacts are
-already packages. There is also no architectural product category: a shared
-recipe is a package supplied through the `shared` overlay lane, and shipping is
-an independent package policy.
+There is no `packages.toolchain` or top-level `toolchain` namespace. Buildable
+toolchain artifacts are ordinary native packages. Profile-specific construction
+interfaces are lazy package projections, like retained versions. There is also
+no architectural product category: a shared recipe is a package supplied through
+the `shared` overlay lane, and shipping is an independent package policy.
 
 The standard `packages.<system>` flake output remains small, normally exposing
 only `wasinix` and a default. The complete structured project belongs under
@@ -446,7 +441,7 @@ Addresses are canonical structured-project paths. Examples include:
 ```text
 packages.wasix.exnrefEh.zlib
 packages.python.py314.numpy
-packages.toolchain.llvm
+packages.native.wasix-llvm
 tests.packages.wasix.exnrefEh.zlib.abi
 artifacts.webc.git
 ```

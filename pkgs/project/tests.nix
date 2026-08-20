@@ -116,6 +116,9 @@
         packageSet = mkPythonSet [];
       };
     };
+    nativePackageInterfacesFor = project': {
+      core.profiles.default.package = project'.packages.wasix.default.core;
+    };
     rebasePackage = version: _spec: package:
       package.overrideAttrs (_: {
         inherit version;
@@ -266,6 +269,15 @@
       }
     ];
   };
+  invalidNativeInterfaceProject = (import ./default.nix (projectApiArgs
+    // {
+      nativePackageInterfacesFor = _project: {
+        missing.profiles = {};
+      };
+    })).mkProject {
+    system = "test-system";
+    importNixpkgs = fakeImportNixpkgs;
+  };
   duplicateCheckProject = (import ./default.nix (projectApiArgs
     // {
       checkRules = {
@@ -326,6 +338,7 @@ in {
     expr = {
       schemaVersion = project.schemaVersion;
       nativeNames = lib.attrNames project.packages.native;
+      nativeInterfaceName = project.packages.native.core.profiles.default.package.name;
       defaultNames = lib.attrNames project.packages.wasix.default;
       alternateNames = lib.attrNames project.packages.wasix.alternate;
       coreSource = project.packages.wasix.default.core.passthru.wasinix.source;
@@ -357,10 +370,12 @@ in {
       staleHistoryFails = !(force staleHistoryProject).success;
       invalidProfileFails = !(force invalidProfileProject).success;
       invalidCiProfileFails = !(force invalidCiProfileProject.ci).success;
+      invalidNativeInterfaceFails = !(force invalidNativeInterfaceProject).success;
     };
     expected = {
       schemaVersion = 1;
       nativeNames = ["core"];
+      nativeInterfaceName = "core";
       defaultNames = ["ciNarrow" "consumer" "core" "dot.name" "topOwned" "uses-inherited"];
       alternateNames = ["ciNarrow" "consumer" "core" "dot.name" "limited" "topOwned" "uses-inherited"];
       coreSource = "consumer";
@@ -439,6 +454,7 @@ in {
       staleHistoryFails = true;
       invalidProfileFails = true;
       invalidCiProfileFails = true;
+      invalidNativeInterfaceFails = true;
     };
   };
 }
