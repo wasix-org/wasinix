@@ -1,0 +1,5 @@
+--- a/src/apprentice.c
++++ b/src/apprentice.c
+@@ -3368 +3368 @@ apprentice_map(struct magic_set *ms, const char *fn)
+-	if (read(fd, map->p, map->len) != (ssize_t)map->len) {
++	if (sread(fd, map->p, map->len, 0) != (ssize_t)map->len) {

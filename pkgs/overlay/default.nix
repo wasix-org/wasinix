@@ -172,13 +172,18 @@
       toolchain = profileToolchain;
     };
   });
+
+  perlPackages = final.perl.pkgs.overrideScope (import ./perl-packages {
+    inherit final helpers wasixRunStub;
+  });
 in
   packages
   // rustSupport
   // goSupport
   // wrapperFix
   // lib.optionalAttrs isWasixHost {
-    inherit haskellPackages;
+    inherit haskellPackages perlPackages;
+    perl5Packages = perlPackages;
     # nixpkgs builds this by calling bash's expression again rather than
     # overriding the `bash` attr, so it would miss every wasix tweak and fail to
     # compile. It backs `runtimeShellPackage`, which any package wanting a

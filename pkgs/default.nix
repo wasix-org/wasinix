@@ -524,6 +524,7 @@
     wasmer = wasmerRuntime;
     packagesDir = ./overlay/packages;
     inherit pythonRegistry;
+    emulatedCheckFor = drv: emulatedChecks.checkFor {inherit drv;};
     # Shipped CLIs run only a declared emulatedCheck, never an auto-detected
     # one: they already carry curated suites or the liveness smoke, and their
     # build layouts do not fit the generic runner. Libraries keep the
