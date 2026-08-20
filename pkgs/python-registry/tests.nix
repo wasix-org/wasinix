@@ -32,7 +32,7 @@
     "--abi cp${lib.replaceStrings ["."] [""] pyVersion}"
     "--only-binary :all:"
   ];
-  pipFlags = "${pipResolveFlags} --index-url file://${registry}/simple";
+  pipFlags = "${pipResolveFlags} --index-url file://${registry}/all/simple";
 
   # PYTHONPATH is how the pip --target tree reaches the guest interpreter.
   forwardEnv = testLib.defaultForwardEnv ++ ["PYTHONPATH"];
@@ -93,9 +93,9 @@ in {
     script = ''
       ${hostPythonExe} -m http.server 8080 --bind 127.0.0.1 --directory ${registry} &
       sleep 1
-      ${hostPythonExe} -m pip install ${pipResolveFlags} --index-url http://127.0.0.1:8080/simple --target site requests
+      ${hostPythonExe} -m pip install ${pipResolveFlags} --index-url http://127.0.0.1:8080/all/simple --target site requests
       export PYTHONPATH="$PWD/site"
-      ${guestPython} -c 'import requests; r = requests.get("http://127.0.0.1:8080/simple/", timeout=30); assert r.ok and "requests" in r.text; print("REGISTRY_HTTP_OK")' | tee net.log
+      ${guestPython} -c 'import requests; r = requests.get("http://127.0.0.1:8080/all/simple/", timeout=30); assert r.ok and "requests" in r.text; print("REGISTRY_HTTP_OK")' | tee net.log
       grep -q REGISTRY_HTTP_OK net.log
     '';
   };

@@ -67,42 +67,43 @@ def anchors(page: str) -> dict[str, str]:
     return {unquote(href): digest for href, digest, _ in ANCHOR.findall(page)}
 
 
-def check_native_view(root: Path, wheels: list[tuple[str, Path]]) -> None:
-    """The native view must list exactly the projects with a platform-tagged
-    wheel, and reach the copies simple/ holds rather than carrying its own.
+def check_views(root: Path, wheels: list[tuple[str, Path]]) -> None:
+    """simple/ must list exactly what PyPI cannot supply, and reach the wheels
+    all/simple/ lists rather than carrying copies of its own.
 
-    Being the priority index is what binds a resolver to our versions, so a pure
-    project listed here would block PyPI from supplying the version a consuming
-    project asks for."""
+    Being the priority index is what binds a resolver to our versions, so a
+    project listed here that PyPI could have supplied blocks the version a
+    consuming project asks for. A project missing here is the opposite defect:
+    the resolver silently takes upstream's build of something we patched."""
     simple = root / "simple"
-    native_dir = root / "native" / "simple"
+    provenance = json.loads((root / "provenance.json").read_text())
     expected = {
-        project
-        for project, path in wheels
-        if path.name[: -len(".whl")].rsplit("-", 1)[-1] != "any"
+        m["name"]
+        for fname, m in provenance.items()
+        if fname[: -len(".whl")].rsplit("-", 1)[-1] != "any" or m.get("source")
     }
-    listed = set(PROJECT_LINK.findall((native_dir / "index.html").read_text()))
-    on_disk = {d.name for d in native_dir.iterdir() if d.is_dir()}
-    if listed != on_disk:
-        fail(f"native root index vs project dirs differ: {sorted(listed ^ on_disk)}")
+    listed = set(PROJECT_LINK.findall((simple / "index.html").read_text()))
+    paged = {
+        d.name for d in simple.iterdir() if d.is_dir() and (d / "index.html").is_file()
+    }
+    if listed != paged:
+        fail(f"simple root index vs project pages differ: {sorted(listed ^ paged)}")
     if listed != expected:
         fail(
-            "native view lists the wrong projects; a pure one here blocks PyPI: "
-            f"{sorted(listed ^ expected)}"
+            "simple/ lists the wrong projects; one PyPI could supply blocks the "
+            f"version a consumer asks for, and a missing one hides our patch: {sorted(listed ^ expected)}"
         )
 
+    served = {}
+    for project, path in wheels:
+        served.setdefault(project, set()).add(path.name)
     for project in sorted(listed):
-        page = (native_dir / project / "index.html").read_text()
-        # the native anchors are relative to simple/, so compare by filename
-        anchored = {href.rsplit("/", 1)[-1]: d for href, d in anchors(page).items()}
-        served = anchors((simple / project / "index.html").read_text())
-        if anchored != served:
+        page = (simple / project / "index.html").read_text()
+        anchored = {unquote(href) for href, _, _ in ANCHOR.findall(page)}
+        if anchored != served[project]:
             fail(
-                f"native/{project}: files differ from simple/: {sorted(set(anchored) ^ set(served))}"
+                f"simple/{project}: anchors vs wheels differ: {sorted(anchored ^ served[project])}"
             )
-        for href in re.findall(r'<a href="([^"#]+)#sha256=', page):
-            if not (native_dir / project / unquote(href)).resolve().is_file():
-                fail(f"native/{project}: {href} does not resolve into simple/")
 
 
 def parse_metadata(path: Path) -> tuple[SpecifierSet | None, list[Requirement]]:
@@ -219,21 +220,23 @@ def main() -> None:
     root = Path(sys.argv[1])
     wheel_deps = load_module(sys.argv[2])
     simple = root / "simple"
-    listed = set(
-        re.findall(r'<a href="([^"]+)/">', (simple / "index.html").read_text())
-    )
+    every = root / "all" / "simple"
+    # all/simple lists every wheel published; simple/ is the subset a resolver
+    # should see beside PyPI, so the exhaustive walk reads the former
+    listed = set(re.findall(r'<a href="([^"]+)/">', (every / "index.html").read_text()))
     on_disk = {d.name for d in simple.iterdir() if d.is_dir()}
     if listed != on_disk:
-        fail(f"root index vs project dirs differ: {sorted(listed ^ on_disk)}")
+        fail(f"all/simple index vs project dirs differ: {sorted(listed ^ on_disk)}")
 
     wheels = []
     for pdir in sorted(simple.iterdir()):
         if not pdir.is_dir():
             continue
-        page = (pdir / "index.html").read_text()
+        # its anchors point back into simple/, so hrefs are compared by filename
+        page = (every / pdir.name / "index.html").read_text()
         anchored = set()
         for href, digest, attrs in ANCHOR.findall(page):
-            fname = unquote(href)
+            fname = unquote(href).rsplit("/", 1)[-1]
             if "+wasix." not in fname:
                 fail(f"{pdir.name}: {fname} lacks the +wasix.N publication release")
             wheel = pdir / fname
@@ -258,7 +261,7 @@ def main() -> None:
     if not wheels:
         fail("no wheels indexed at all")
     check_packages_json(root, wheels)
-    check_native_view(root, wheels)
+    check_views(root, wheels)
     check_requirements(wheels, wheel_deps)
     print(f"registry OK: {len(on_disk)} projects, {len(wheels)} wheels")
 

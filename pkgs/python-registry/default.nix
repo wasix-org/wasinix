@@ -3,7 +3,7 @@
 # and a resolver picks the file matching the running interpreter.
 #
 #   nix build .#pythonRegistry
-#   pip install --index-url file://$(readlink -f result)/simple numpy
+#   pip install --index-url file://$(readlink -f result)/all/simple numpy
 {
   pkgs,
   lib,

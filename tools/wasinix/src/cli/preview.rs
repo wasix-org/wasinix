@@ -184,7 +184,7 @@ fn published_body(
             ),
             Markdown::fenced(
                 &format!(
-                    "pip install --index-url {url}/simple --extra-index-url {}/simple <pkg>",
+                    "pip install --index-url {url}/all/simple --extra-index-url {}/all/simple <pkg>",
                     prod.as_deref().unwrap_or("<prod index>")
                 ),
                 "",

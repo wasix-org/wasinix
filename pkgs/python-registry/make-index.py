@@ -8,12 +8,12 @@ bound; each is produced by its own derivation (publish-wheel.py), so this only
 indexes what it is given.
 
 Emits, per PEP 503 (+ PEP 629 version meta, PEP 658/714 metadata files):
-  <out>/simple/index.html               project list
+  <out>/simple/index.html               project list, what PyPI cannot supply
   <out>/simple/<project>/index.html     file list with #sha256= anchors
   <out>/simple/<project>/<wheel>        the wheel itself (relative hrefs)
   <out>/simple/<project>/<wheel>.metadata   its core metadata, for resolvers
   <out>/packages.json                   flat wheel list, for wasmer-compat
-  <out>/native/simple/...               the same index over native projects only
+  <out>/all/simple/...                  the same listing over every wheel here
 """
 
 import argparse
@@ -404,6 +404,49 @@ def write_packages_json(dest: Path, served) -> None:
     )
 
 
+def is_primary(files: list[tuple]) -> bool:
+    """Whether PyPI cannot correctly supply this project.
+
+    Either a wheel is platform-tagged, so PyPI has nothing that loads under
+    wasix, or the package has an overlay entry here, so our build differs from
+    upstream's and taking PyPI's copy would silently drop that difference.
+    """
+    return any(
+        is_native(fname) or source
+        for fname, _digest, _md, _rp, _rev, _attr, _size, _published, source in files
+    )
+
+
+def write_views(out: Path, pages: dict[str, list[tuple]]) -> dict:
+    """Write both PEP 503 listings over the wheels under simple/<project>/.
+
+    simple/ lists what PyPI cannot supply, so a resolver takes it as the
+    priority index beside PyPI and gets our wheel for exactly those, leaving
+    every other dependency to PyPI at the version the consuming project asks
+    for. all/simple/ lists everything published, for installing the closure
+    from here alone (docs/registry.md). Both point at one copy of each wheel.
+    """
+    primary = {project: files for project, files in pages.items() if is_primary(files)}
+    for project, files in sorted(primary.items()):
+        pdir = out / "simple" / project
+        pdir.mkdir(parents=True, exist_ok=True)
+        (pdir / "index.html").write_text(project_page(project, files))
+    proot = [f'    <a href="{p}/">{p}</a><br/>' for p in sorted(primary)]
+    (out / "simple" / "index.html").write_text(page("Simple index", proot))
+
+    for project, files in sorted(pages.items()):
+        adir = out / "all" / "simple" / project
+        adir.mkdir(parents=True, exist_ok=True)
+        (adir / "index.html").write_text(
+            project_page(
+                project, files, href_prefix=f"../../../simple/{quote(project)}/"
+            )
+        )
+    aroot = [f'    <a href="{p}/">{p}</a><br/>' for p in sorted(pages)]
+    (out / "all" / "simple" / "index.html").write_text(page("Simple index", aroot))
+    return primary
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("dists", type=Path)
@@ -468,9 +511,9 @@ def main() -> None:
             md_digest = hashlib.sha256(metadata).hexdigest()
             digest = hashlib.sha256(src.read_bytes()).hexdigest()
             served.append((fname, digest))
-            # rev/attr/published/source are publish-time facts (publish.py
-            # fills them from the manifest); size is intrinsic, so shown here
-            # already.
+            # rev/attr/published are publish-time facts (publish.py fills them
+            # from the manifest); size is intrinsic and source decides which
+            # listing the project lands in, so both are known here already.
             files.append(
                 (
                     fname,
@@ -481,34 +524,12 @@ def main() -> None:
                     None,
                     src.stat().st_size,
                     None,
-                    None,
+                    provenance[fname].get("source"),
                 )
             )
-        (pdir / "index.html").write_text(project_page(project, files))
         pages[project] = files
 
-    root = [f'    <a href="{p}/">{p}</a><br/>' for p in sorted(projects)]
-    (out / "simple" / "index.html").write_text(page("Simple index", root))
-
-    # A second PEP 503 view over the projects we are the only possible source
-    # for. Pointed at as the priority index, it binds a resolver to our versions
-    # for exactly those, leaving every pure dependency to PyPI at whatever
-    # version the consuming project asks for (docs/registry.md).
-    native = {
-        project: files
-        for project, files in pages.items()
-        if any(is_native(fname) for fname, *_ in files)
-    }
-    for project, files in sorted(native.items()):
-        ndir = out / "native" / "simple" / project
-        ndir.mkdir(parents=True)
-        (ndir / "index.html").write_text(
-            project_page(
-                project, files, href_prefix=f"../../../simple/{quote(project)}/"
-            )
-        )
-    nroot = [f'    <a href="{p}/">{p}</a><br/>' for p in sorted(native)]
-    (out / "native" / "simple" / "index.html").write_text(page("Simple index", nroot))
+    primary = write_views(out, pages)
 
     (out / "index.html").write_text(landing(projects))
     (out / "provenance.json").write_text(
@@ -517,7 +538,7 @@ def main() -> None:
     write_packages_json(out / "packages.json", served)
     print(
         f"indexed {sum(map(len, projects.values()))} wheels across {len(projects)} projects"
-        f" ({len(native)} of them native)"
+        f" ({len(primary)} of them served to a resolver beside PyPI)"
     )
 
 
