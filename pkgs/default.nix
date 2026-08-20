@@ -117,11 +117,18 @@
     wasixLib.preferredProfileOf nixpkgsByProfile.${defaultProfileName}.${name};
   preferredProfilePackages = lib.genAttrs wasixPkgNames (name: nixpkgsByProfile.${preferredProfileOf name}.${name});
 
-  wasixOverlay = import ./wasix {
-    inherit toolchain nixpkgs preferredProfilePackages wasixRustPlatform wasmerDependencies;
+  wasixPackageOverlay = import ./wasix {
+    inherit toolchain nixpkgs preferredProfilePackages wasmerDependencies;
     wasixRunStub = wasixRun.stub;
     inherit (pkgs) nix-update-script;
   };
+  wasixInfrastructureOverlay = import ./set/wasix-overlay.nix {
+    inherit toolchain wasixRustPlatform;
+    wasixRunStub = wasixRun.stub;
+  };
+  wasixOverlay = final: previous:
+    (wasixPackageOverlay final previous)
+    // (wasixInfrastructureOverlay final previous);
   infrastructureOverlays = [
     (nativePackageRecipes.overlay {nativeNixUpdateScript = pkgs.nix-update-script;})
     (sharedPackages.overlay {nativeNixUpdateScript = pkgs.nix-update-script;})
