@@ -68,18 +68,21 @@ pub fn selected_case(case: CaseRef<'_, RevSource>, map: &EvalMap) -> Result<BTre
 /// Read per-job status from a case directory: a published baseline carries its
 /// status directly, a case built here has junit instead.
 pub fn case_status(paths: &Path) -> StatusMap {
-    if let Ok(statuses) = crate::support::schema::read::<JobStatuses>(&crate::ci::prepare::status_path(paths)) {
+    if let Ok(statuses) =
+        crate::support::schema::read::<JobStatuses>(&crate::ci::prepare::status_path(paths))
+    {
         return statuses.statuses;
     }
-    let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(crate::ci::prepare::junit_dir(paths))
-        .map(|entries| {
-            entries
-                .flatten()
-                .map(|entry| entry.path())
-                .filter(|path| path.extension().is_some_and(|ext| ext == "xml"))
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut files: Vec<std::path::PathBuf> =
+        std::fs::read_dir(crate::ci::prepare::junit_dir(paths))
+            .map(|entries| {
+                entries
+                    .flatten()
+                    .map(|entry| entry.path())
+                    .filter(|path| path.extension().is_some_and(|ext| ext == "xml"))
+                    .collect()
+            })
+            .unwrap_or_default();
     files.sort();
     junit_status(&files)
 }
@@ -138,7 +141,6 @@ pub fn junit_status(paths: &[std::path::PathBuf]) -> StatusMap {
     status
 }
 
-
 /// The eval-time half of a comparison: what two evaluations say changed.
 /// Computable the moment both maps exist, long before anything builds.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -191,9 +193,7 @@ pub struct BuildDiff {
 
 impl BuildDiff {
     pub fn regression_count(&self) -> usize {
-        self.regressions.len()
-            + self.new_failures.len()
-            + usize::from(self.case_failure)
+        self.regressions.len() + self.new_failures.len() + usize::from(self.case_failure)
     }
 }
 
@@ -457,10 +457,9 @@ pub fn compare_loaded(
 ) -> Result<(EvalDiff, Option<BuildDiff>)> {
     let coverage = coverage(base_case, base_map, head_case, head_map)?;
     let eval = eval_diff(&coverage, base_map, head_map);
-    let builds = statuses
-        .map(|(base_status, head_status)| {
-            build_diff(&coverage, &eval, head_map, base_status, head_status)
-        });
+    let builds = statuses.map(|(base_status, head_status)| {
+        build_diff(&coverage, &eval, head_map, base_status, head_status)
+    });
     Ok((eval, builds))
 }
 
@@ -539,7 +538,15 @@ pub fn project(
             // A candidate whose selection cannot resolve against its own map
             // is that case's failure, already reported by its tasks; it must
             // not take down the fold deriving everyone else's comparison.
-            match candidate_halves(baseline.as_ref(), base_map, &base_paths, candidate.as_ref(), head_map, &head_paths, finished) {
+            match candidate_halves(
+                baseline.as_ref(),
+                base_map,
+                &base_paths,
+                candidate.as_ref(),
+                head_map,
+                &head_paths,
+                finished,
+            ) {
                 Ok((eval, builds)) => {
                     comparison.eval = Some(eval);
                     comparison.builds = builds;

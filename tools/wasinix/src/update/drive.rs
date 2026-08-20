@@ -116,9 +116,7 @@ fn hook_stage(
 ) -> Result<()> {
     for (hook, prior) in hooks {
         let before = repo_status(repo)?;
-        let versions = prior
-            .as_deref()
-            .map(|prior| (prior, hook.version.as_str()));
+        let versions = prior.as_deref().map(|prior| (prior, hook.version.as_str()));
         match run_post_update_hook(repo, &hook, versions) {
             Ok(outcome) => {
                 let after = repo_status(repo)?;

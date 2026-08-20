@@ -141,11 +141,7 @@ fn cli_map() -> Result<BTreeMap<String, (String, String)>> {
          aliases = p.passthru.wasmer.aliases or []; \
          history = p.passthru.wasmer.history or false; }",
     );
-    let packages = eval(
-        &Flake::default(),
-        "wasmerPackages",
-        Some(&apply),
-    )?;
+    let packages = eval(&Flake::default(), "wasmerPackages", Some(&apply))?;
     let mut map = BTreeMap::new();
     for (webc, info) in packages.as_object().into_iter().flatten() {
         if info["history"].as_bool().unwrap_or(false) {
@@ -340,10 +336,8 @@ fn github_tags(owner: &str, repo: &str) -> Result<Vec<String>> {
     // 1000 tags is plenty to cover every major.
     for page in 1..=10 {
         let path = format!("repos/{owner}/{repo}/tags?per_page=100&page={page}");
-        let data = crate::github::client::Client::new(
-            crate::github::client::token().as_deref(),
-        )
-        .get(&path)?;
+        let data = crate::github::client::Client::new(crate::github::client::token().as_deref())
+            .get(&path)?;
         let Some(items) = data.as_array() else { break };
         tags.extend(
             items
@@ -505,7 +499,10 @@ pub fn substitute_version(
                     continue;
                 }
             }
-            let ch = haystack[index..].chars().next().expect("index is on a boundary");
+            let ch = haystack[index..]
+                .chars()
+                .next()
+                .expect("index is on a boundary");
             out.push(ch);
             index += ch.len_utf8();
         }
@@ -563,13 +560,11 @@ fn hash_field(repo: &Path, target: &Target) -> Result<&'static str> {
         .apply("d: d.outputHash")
         .workdir(repo)
         .probe("the field name is judged from the eval's own complaint")?;
-    Ok(
-        if output.stderr.contains("multiple hashes passed") {
-            "sha256"
-        } else {
-            "hash"
-        },
-    )
+    Ok(if output.stderr.contains("multiple hashes passed") {
+        "sha256"
+    } else {
+        "hash"
+    })
 }
 
 fn concrete_url(repo: &Path, url: &str) -> Result<String> {
@@ -591,10 +586,7 @@ fn concrete_url(repo: &Path, url: &str) -> Result<String> {
         .workdir(repo)
         .probe("a failed mirror resolve names the url")?;
     if !output.status.is_success() {
-        return request_error(format!(
-            "could not resolve {url}: {}",
-            output.stderr.trim()
-        ));
+        return request_error(format!("could not resolve {url}: {}", output.stderr.trim()));
     }
     let mirrors: Vec<String> = serde_json::from_slice(&output.stdout).map_err(|source| {
         crate::support::error::Error::Json {
@@ -955,18 +947,13 @@ pub fn add_version(
     if let Some(note) = &options.note {
         entry.insert("note".into(), Value::String(note.clone()));
     }
-    history
-        .entry(target.attr.clone())
-        .or_default()
-        .insert(
-            version.to_string(),
-            serde_json::to_value(entry).map_err(|source| {
-                crate::support::error::Error::Json {
-                    path: "<history entry>".into(),
-                    source,
-                }
-            })?,
-        );
+    history.entry(target.attr.clone()).or_default().insert(
+        version.to_string(),
+        serde_json::to_value(entry).map_err(|source| crate::support::error::Error::Json {
+            path: "<history entry>".into(),
+            source,
+        })?,
+    );
 
     let tail = match &chosen {
         Some(picked) if !picked.is_empty() => {
@@ -1190,7 +1177,10 @@ pub fn from_lockfile(repo: &Path, path: &Path, dry_run: bool) -> Result<Backfill
     let mut files: Vec<PathBuf> = if dry_run {
         Vec::new()
     } else {
-        touched.iter().map(|(target, _)| target.history.clone()).collect()
+        touched
+            .iter()
+            .map(|(target, _)| target.history.clone())
+            .collect()
     };
     files.sort();
     files.dedup();

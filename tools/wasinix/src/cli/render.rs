@@ -54,8 +54,7 @@ impl LineRenderer {
     pub(crate) fn with_spinner(spinner: bool) -> LineRenderer {
         let bar = spinner.then(|| {
             let bar = ProgressBar::new_spinner().with_style(
-                ProgressStyle::with_template("{spinner} {msg}")
-                    .expect("the template is static"),
+                ProgressStyle::with_template("{spinner} {msg}").expect("the template is static"),
             );
             bar.enable_steady_tick(Duration::from_millis(120));
             bar
@@ -168,7 +167,10 @@ impl LineRenderer {
                     .phase_started
                     .remove(task_id)
                     .map(|started| {
-                        format!(" · took {}", format::duration(at.saturating_sub(started) as f64))
+                        format!(
+                            " · took {}",
+                            format::duration(at.saturating_sub(started) as f64)
+                        )
                     })
                     .unwrap_or_default();
                 vec![format!(
@@ -313,7 +315,10 @@ pub fn finished_report(report: &Report) {
     if let Some(line) = test_summary("upstream", &upstream) {
         crate::support::ui::result(line);
     }
-    for (family, label) in [("library", "upstream libraries"), ("wheel", "upstream wheels")] {
+    for (family, label) in [
+        ("library", "upstream libraries"),
+        ("wheel", "upstream wheels"),
+    ] {
         let family_tests: Vec<&TestResult> = upstream
             .iter()
             .copied()

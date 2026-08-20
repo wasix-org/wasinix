@@ -128,7 +128,6 @@ pub fn drive(repo: &Path, request: Bisect) -> Result<bisect::Report> {
     )
 }
 
-
 pub fn run_bisect(repo: &Path, args: BisectArgs) -> Result<CommandStatus> {
     let dependency = bisect::dependency(repo, &args.target)?;
     let words: Vec<String> = args

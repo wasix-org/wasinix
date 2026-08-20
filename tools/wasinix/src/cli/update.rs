@@ -235,7 +235,10 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
                             ]
                         })
                         .collect();
-                    ui::output(table::render(Some(&["target", "backend", "command"]), &rows));
+                    ui::output(table::render(
+                        Some(&["target", "backend", "command"]),
+                        &rows,
+                    ));
                 },
             )?;
             Ok(CommandStatus::SUCCESS)

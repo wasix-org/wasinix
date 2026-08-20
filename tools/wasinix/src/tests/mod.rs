@@ -67,7 +67,10 @@ mod naming {
     #[test]
     fn a_declared_name_outranks_a_structural_suffix() {
         assert_eq!(resolve("cargo-registry").unwrap(), ["crate-pins"]);
-        assert_eq!(resolve("cargo-registry-server").unwrap(), ["registry-server"]);
+        assert_eq!(
+            resolve("cargo-registry-server").unwrap(),
+            ["registry-server"]
+        );
         assert_eq!(
             resolve("nativePackages.cargo-registry").unwrap(),
             ["registry-server"]
@@ -198,9 +201,7 @@ mod naming {
 
 mod plan {
     use crate::ci::plan::{plan_of, BuildTarget, Phase};
-    use crate::ci::types::{
-        Build, Case, Diff, Request, RevSource, Selector, SelectorKind, Spot,
-    };
+    use crate::ci::types::{Build, Case, Diff, Request, RevSource, Selector, SelectorKind, Spot};
     use crate::support::atoms::Rev;
 
     fn source() -> RevSource {
@@ -265,9 +266,15 @@ mod plan {
         assert!(!gate("baseline.eval"));
         assert!(gate("candidate-1.treefmt"));
         // The baseline is not the submitted tree, so it is never format-checked.
-        assert!(!plan.tasks.iter().any(|task| task.task_id == "baseline.treefmt"));
+        assert!(!plan
+            .tasks
+            .iter()
+            .any(|task| task.task_id == "baseline.treefmt"));
         // The comparison is a fold-time projection, never a task.
-        assert!(!plan.tasks.iter().any(|task| task.task_id.starts_with("compare.")));
+        assert!(!plan
+            .tasks
+            .iter()
+            .any(|task| task.task_id.starts_with("compare.")));
     }
 
     #[test]
@@ -312,7 +319,11 @@ mod plan {
     #[test]
     fn a_reused_baseline_drops_its_own_work() {
         let plan = plan_of(&core_diff(), None, &["baseline".to_string()]);
-        let ids: Vec<&str> = plan.tasks.iter().map(|task| task.task_id.as_str()).collect();
+        let ids: Vec<&str> = plan
+            .tasks
+            .iter()
+            .map(|task| task.task_id.as_str())
+            .collect();
         assert!(!ids.contains(&"baseline.eval-inputs"));
         assert!(!ids.contains(&"baseline.eval"));
         assert!(!ids.contains(&"baseline.core"));
@@ -370,8 +381,7 @@ mod plan {
         assert_eq!(value["kind"], "request");
         assert_eq!(value["action"], "build");
         assert!(value.get("overrides").is_none(), "empty lists stay absent");
-        let back: crate::ci::types::ResolvedRequest =
-            schema::from_value(value, "test").unwrap();
+        let back: crate::ci::types::ResolvedRequest = schema::from_value(value, "test").unwrap();
         assert_eq!(back, request);
     }
 }
@@ -387,7 +397,8 @@ mod evalmap {
             ("packagesByProfile.exnrefEh.zlib", vec![]),
             ("checks.bench-heavy", vec!["benchmark".to_string()]),
         ] {
-            map.jobs.insert(JobAddr(name.into()), format!("/nix/store/{name}.drv"));
+            map.jobs
+                .insert(JobAddr(name.into()), format!("/nix/store/{name}.drv"));
             map.info.insert(
                 JobAddr(name.into()),
                 JobInfo {
@@ -403,10 +414,15 @@ mod evalmap {
 
     #[test]
     fn an_axis_free_address_selects_every_build() {
-        let jobs = map().resolve_jobs(&["packagesByProfile.zlib".into()]).unwrap();
+        let jobs = map()
+            .resolve_jobs(&["packagesByProfile.zlib".into()])
+            .unwrap();
         assert_eq!(
             jobs,
-            ["packagesByProfile.eh.zlib", "packagesByProfile.exnrefEh.zlib"]
+            [
+                "packagesByProfile.eh.zlib",
+                "packagesByProfile.exnrefEh.zlib"
+            ]
         );
     }
 
@@ -444,8 +460,7 @@ mod evalmap {
 
 mod authorization {
     use crate::ci::origin::{
-        authorize, extract_command, validate, verify, Api, Classifier, CommandKind,
-        Origin,
+        authorize, extract_command, validate, verify, Api, Classifier, CommandKind, Origin,
     };
     use crate::support::error::{request_error, Result};
     use crate::support::schema;
@@ -672,8 +687,6 @@ mod authorization {
         let twice = "/wasinix build core\n/wasinix build packages";
         assert!(extract_command(twice).is_err());
     }
-
-
 }
 
 mod compare {
@@ -783,7 +796,10 @@ mod compare {
         )
         .unwrap();
         let builds = builds.expect("statuses were given");
-        assert_eq!(builds.regressions, addrs(&["packagesByProfile.exnrefEh.zlib"]));
+        assert_eq!(
+            builds.regressions,
+            addrs(&["packagesByProfile.exnrefEh.zlib"])
+        );
         assert!(eval.removed.is_empty());
         assert_eq!(eval.selected_count, 1);
     }
@@ -843,10 +859,7 @@ mod compare {
     #[test]
     fn an_alias_preserves_a_renamed_job_without_hiding_a_failed_replacement() {
         let base = map(&[("wasmerPackages.python313", "/nix/store/old.drv")]);
-        let mut head = map(&[(
-            "wasmerPackages.python-3.13.15",
-            "/nix/store/new.drv",
-        )]);
+        let mut head = map(&[("wasmerPackages.python-3.13.15", "/nix/store/new.drv")]);
         head.info.insert(
             JobAddr("wasmerPackages.python-3.13.15".into()),
             JobInfo {
@@ -864,16 +877,10 @@ mod compare {
             &base_status,
             &head_case,
             &head,
-            &status(&[(
-                "wasmerPackages.python-3.13.15",
-                JobStatus::Success,
-            )]),
+            &status(&[("wasmerPackages.python-3.13.15", JobStatus::Success)]),
         )
         .unwrap();
-        assert_eq!(
-            eval.added,
-            addrs(&["wasmerPackages.python-3.13.15"])
-        );
+        assert_eq!(eval.added, addrs(&["wasmerPackages.python-3.13.15"]));
         assert_eq!(eval.removed, addrs(&["wasmerPackages.python313"]));
         assert!(builds.dropped_successes.is_empty());
 
@@ -883,10 +890,7 @@ mod compare {
             &base_status,
             &head_case,
             &head,
-            &status(&[(
-                "wasmerPackages.python-3.13.15",
-                JobStatus::Failure,
-            )]),
+            &status(&[("wasmerPackages.python-3.13.15", JobStatus::Failure)]),
         )
         .unwrap();
         assert_eq!(
@@ -949,9 +953,11 @@ mod compare {
             ..Default::default()
         };
         let mut base = map(&[("changed", "/nix/store/a.drv")]);
-        base.info.insert(JobAddr("changed".into()), info("1.2.3", 1));
+        base.info
+            .insert(JobAddr("changed".into()), info("1.2.3", 1));
         let mut head = map(&[("changed", "/nix/store/a.drv")]);
-        head.info.insert(JobAddr("changed".into()), info("1.2.3", 2));
+        head.info
+            .insert(JobAddr("changed".into()), info("1.2.3", 2));
         let (eval, _) = compare_cases(
             &case(&["changed"]),
             &base,
@@ -982,8 +988,10 @@ mod compare {
             (jobs[0], "/nix/store/old-default.drv"),
             (jobs[1], "/nix/store/old-pic.drv"),
         ]);
-        base.info.insert(JobAddr(jobs[0].into()), info("1.2.13", None));
-        base.info.insert(JobAddr(jobs[1].into()), info("1.2.13", None));
+        base.info
+            .insert(JobAddr(jobs[0].into()), info("1.2.13", None));
+        base.info
+            .insert(JobAddr(jobs[1].into()), info("1.2.13", None));
         let mut head = map(&[
             (jobs[0], "/nix/store/new-default.drv"),
             (jobs[1], "/nix/store/new-pic.drv"),
@@ -1032,7 +1040,10 @@ mod compare {
             version: Some(serde_json::Value::String("3.9".into())),
             ..Default::default()
         };
-        let jobs = ["packagesByProfile.eh.protobuf", "pythonWheels.py313.protobuf"];
+        let jobs = [
+            "packagesByProfile.eh.protobuf",
+            "pythonWheels.py313.protobuf",
+        ];
         let mut base = map(&[(jobs[0], "/a.drv"), (jobs[1], "/b.drv")]);
         base.info.insert(JobAddr(jobs[0].into()), old(""));
         base.info.insert(JobAddr(jobs[1].into()), old(""));
@@ -1117,7 +1128,10 @@ mod compare {
 
         write_map("candidate-1", "/nix/store/b.drv");
         let evaluated = crate::ci::compare::project(run_dir, &request, false).unwrap();
-        assert!(evaluated[0].eval.is_some(), "eval half appears with both maps");
+        assert!(
+            evaluated[0].eval.is_some(),
+            "eval half appears with both maps"
+        );
         assert!(evaluated[0].builds.is_none(), "no statuses yet");
 
         write_status("baseline", JobStatus::Success);
@@ -1186,7 +1200,11 @@ mod route {
         drop(reacquired);
 
         // A slot whose recorded holder is dead is reclaimed, not respected.
-        std::fs::write(root.join("0.json"), "{\"pid\": 4294967294, \"startedAt\": 1}").unwrap();
+        std::fs::write(
+            root.join("0.json"),
+            "{\"pid\": 4294967294, \"startedAt\": 1}",
+        )
+        .unwrap();
         let reclaimed = crate::nix::builder::acquire_slots(&root, 1, "test host").unwrap();
         drop(reclaimed);
 
@@ -1267,10 +1285,7 @@ mod route {
     #[test]
     fn a_local_route_pins_builds_to_this_machine() {
         let route = Route::Local(EvaluationLimits::local().unwrap());
-        assert_eq!(
-            route.build_nix_options(),
-            ["--option", "builders", ""]
-        );
+        assert_eq!(route.build_nix_options(), ["--option", "builders", ""]);
     }
 
     #[test]
@@ -1308,7 +1323,12 @@ mod runs {
     #[test]
     fn the_supervisor_records_the_payloads_exit_and_log() {
         let scratch = Scratch::create("wasinix-test").unwrap();
-        seed(scratch.path(), &["sh", "-c", "echo tee-me; exit 0"], 0, unix_secs());
+        seed(
+            scratch.path(),
+            &["sh", "-c", "echo tee-me; exit 0"],
+            0,
+            unix_secs(),
+        );
         supervise(
             scratch.path(),
             &["sh".into(), "-c".into(), "echo tee-me; exit 0".into()],
@@ -1320,7 +1340,13 @@ mod runs {
         let log = std::fs::read_to_string(scratch.path().join(LOG_FILE)).unwrap();
         assert!(log.contains("tee-me"), "{log}");
         let events = crate::ci::events::read_all(scratch.path()).unwrap();
-        assert!(matches!(events.last(), Some(crate::ci::events::Event::RunFinished { state: RunState::Complete, .. })));
+        assert!(matches!(
+            events.last(),
+            Some(crate::ci::events::Event::RunFinished {
+                state: RunState::Complete,
+                ..
+            })
+        ));
     }
 
     #[test]
@@ -1352,7 +1378,11 @@ mod runs {
         )
         .unwrap();
         let args = std::fs::read_to_string(&sink).unwrap();
-        assert!(args.trim().ends_with(&format!("--run-dir {}", scratch.path().display())), "{args}");
+        assert!(
+            args.trim()
+                .ends_with(&format!("--run-dir {}", scratch.path().display())),
+            "{args}"
+        );
     }
 
     #[test]
@@ -1410,9 +1440,7 @@ mod runs {
 }
 
 mod events {
-    use crate::ci::events::{
-        append, fold_snapshot, read_all, read_from, Event, Tracker, FILE,
-    };
+    use crate::ci::events::{append, fold_snapshot, read_all, read_from, Event, Tracker, FILE};
     use crate::support::atoms::{JobAddr, JobStatus, RunState, TaskStatus};
     use crate::support::fs::Scratch;
 
@@ -1431,10 +1459,18 @@ mod events {
     fn a_stream_round_trips_and_resumes_from_an_offset() {
         let scratch = Scratch::create("wasinix-test").unwrap();
         append(scratch.path(), &Event::RunStarted { at: 1, pid: 42 }).unwrap();
-        append(scratch.path(), &job(2, "checks.zlib", JobStatus::Success, true)).unwrap();
+        append(
+            scratch.path(),
+            &job(2, "checks.zlib", JobStatus::Success, true),
+        )
+        .unwrap();
         let (events, offset) = read_from(&scratch.path().join(FILE), 0).unwrap();
         assert_eq!(events.len(), 2);
-        append(scratch.path(), &job(3, "checks.git", JobStatus::Failure, false)).unwrap();
+        append(
+            scratch.path(),
+            &job(3, "checks.git", JobStatus::Failure, false),
+        )
+        .unwrap();
         let (tail, _) = read_from(&scratch.path().join(FILE), offset).unwrap();
         assert_eq!(tail.len(), 1);
         assert!(matches!(&tail[0], Event::JobFinished { job, .. } if job.as_str() == "checks.git"));
@@ -1443,7 +1479,14 @@ mod events {
     #[test]
     fn a_torn_tail_line_waits_and_a_torn_middle_line_fails() {
         let scratch = Scratch::create("wasinix-test").unwrap();
-        append(scratch.path(), &Event::Heartbeat { at: 1, detail: None }).unwrap();
+        append(
+            scratch.path(),
+            &Event::Heartbeat {
+                at: 1,
+                detail: None,
+            },
+        )
+        .unwrap();
         let path = scratch.path().join(FILE);
         let mut text = std::fs::read_to_string(&path).unwrap();
         text.push_str("{\"schema\":1,\"event\":\"heartbeat\"");
@@ -1458,7 +1501,11 @@ mod events {
     fn the_tail_stops_on_run_finished_without_consulting_drained() {
         let scratch = Scratch::create("wasinix-test").unwrap();
         append(scratch.path(), &Event::RunStarted { at: 1, pid: 42 }).unwrap();
-        append(scratch.path(), &job(2, "checks.zlib", JobStatus::Success, false)).unwrap();
+        append(
+            scratch.path(),
+            &job(2, "checks.zlib", JobStatus::Success, false),
+        )
+        .unwrap();
         append(
             scratch.path(),
             &Event::RunFinished {
@@ -1485,7 +1532,14 @@ mod events {
     #[test]
     fn the_tail_ends_when_drained_and_the_run_is_over() {
         let scratch = Scratch::create("wasinix-test").unwrap();
-        append(scratch.path(), &Event::Heartbeat { at: 1, detail: None }).unwrap();
+        append(
+            scratch.path(),
+            &Event::Heartbeat {
+                at: 1,
+                detail: None,
+            },
+        )
+        .unwrap();
         let mut seen = 0;
         crate::ci::events::tail(
             scratch.path(),
@@ -1776,10 +1830,7 @@ mod exec {
             Some("/nix/store/z.drv")
         );
         assert_eq!(map.errors.get("bad.job").map(String::as_str), Some("boom"));
-        assert_eq!(
-            map.outputs["packagesByProfile.zlib"]["out"],
-            "/nix/store/z"
-        );
+        assert_eq!(map.outputs["packagesByProfile.zlib"]["out"], "/nix/store/z");
     }
 }
 
@@ -1905,7 +1956,8 @@ mod cli {
         assert_eq!(request.targets, ["packagesByProfile.zlib"]);
         assert_eq!(request.from_source, ["toolchain"]);
 
-        let CommandTree::Spot(args) = parse(&["spot", "packagesByProfile.zlib", "--target-only"]) else {
+        let CommandTree::Spot(args) = parse(&["spot", "packagesByProfile.zlib", "--target-only"])
+        else {
             panic!("expected spot");
         };
         let request =
@@ -2218,16 +2270,21 @@ mod markdown {
     fn the_source_grammar_is_one_spelling_everywhere() {
         use crate::support::naming::{source_spec, SourceSpec};
         assert_eq!(source_spec("1.2.3").unwrap(), SourceSpec::Release("1.2.3"));
-        assert_eq!(source_spec("rev:abc123").unwrap(), SourceSpec::Revision("abc123"));
-        assert_eq!(source_spec("tag:v1.2.3").unwrap(), SourceSpec::Tag("v1.2.3"));
+        assert_eq!(
+            source_spec("rev:abc123").unwrap(),
+            SourceSpec::Revision("abc123")
+        );
+        assert_eq!(
+            source_spec("tag:v1.2.3").unwrap(),
+            SourceSpec::Tag("v1.2.3")
+        );
         // A scheme naming nothing is an error, never an empty pin.
         assert!(source_spec("rev:").is_err());
         assert!(source_spec("tag:").is_err());
         // `--with` carries the tag through to the update grammar that
         // resolves it, rather than inventing a second kind of pin.
         use crate::ci::types::OverrideKind;
-        let parsed = crate::cli::request::parse_overrides(&["wasixcc@tag:v0.4.3".into()])
-            .unwrap();
+        let parsed = crate::cli::request::parse_overrides(&["wasixcc@tag:v0.4.3".into()]).unwrap();
         assert_eq!(parsed[0].kind, OverrideKind::Tag);
         assert_eq!(parsed[0].value, "v0.4.3");
     }
@@ -2353,12 +2410,16 @@ mod markdown {
         // Help replies and is done: routing it through the run machinery
         // manufactures a report-less run every publisher chokes on.
         assert_eq!(
-            crate::cli::untrusted::ClapClassifier.classify("help").unwrap(),
+            crate::cli::untrusted::ClapClassifier
+                .classify("help")
+                .unwrap(),
             CommandKind::Help
         );
         // fmt rewrites the branch, so it serializes with the other mutations.
         assert_eq!(
-            crate::cli::untrusted::ClapClassifier.classify("fmt").unwrap(),
+            crate::cli::untrusted::ClapClassifier
+                .classify("fmt")
+                .unwrap(),
             CommandKind::Mutation
         );
         // A bisect only builds and replies; it takes the build job's shape.
@@ -2489,10 +2550,16 @@ mod markdown {
             "  (probe: a failed note check reports its own stderr)\n",
         );
         let fragment = crate::ci::report::run_log_fragment(tail);
-        assert_eq!(fragment.headline, "error: update s3-server: no such version");
+        assert_eq!(
+            fragment.headline,
+            "error: update s3-server: no such version"
+        );
         // With no error line at all, the last real line still beats a note.
         let quiet = "materializing: case\n  took 11s\n  (probe: something)\n";
-        assert_eq!(crate::ci::report::run_log_fragment(quiet).headline, "took 11s");
+        assert_eq!(
+            crate::ci::report::run_log_fragment(quiet).headline,
+            "took 11s"
+        );
     }
 
     /// A build spends minutes materializing a worktree and resolving
@@ -2506,7 +2573,10 @@ mod markdown {
         assert!(report.conclusion.is_none(), "a starting run has no verdict");
         let body = comment(&report, &Default::default(), None, &links()).into_string();
         assert!(body.contains("⏳"), "{body}");
-        assert!(body.contains("materializing: case at 0d1eb9677bc7"), "{body}");
+        assert!(
+            body.contains("materializing: case at 0d1eb9677bc7"),
+            "{body}"
+        );
     }
 
     /// A bisect that died mid-range had tested three candidates and the
@@ -2561,8 +2631,12 @@ mod markdown {
         use crate::github::markdown::bisect_progress;
         let opening = bisect_progress("wasixcc", 0).into_string();
         assert!(opening.contains("resolving the range"), "{opening}");
-        assert!(bisect_progress("wasixcc", 1).into_string().contains("1 candidate tested"));
-        assert!(bisect_progress("wasixcc", 3).into_string().contains("3 candidates tested"));
+        assert!(bisect_progress("wasixcc", 1)
+            .into_string()
+            .contains("1 candidate tested"));
+        assert!(bisect_progress("wasixcc", 3)
+            .into_string()
+            .contains("3 candidates tested"));
     }
 
     /// The synthesized task and the log fragment made the same choice in two
@@ -2643,7 +2717,10 @@ mod markdown {
         assert!(body.contains("**Command**"), "{body}");
         assert!(body.contains("--with s3-server@0.1.10"), "{body}");
         // And the error still leads, rather than the narration below it.
-        assert!(body.contains("error: update s3-server: no such version"), "{body}");
+        assert!(
+            body.contains("error: update s3-server: no such version"),
+            "{body}"
+        );
     }
 
     #[test]
@@ -2690,7 +2767,10 @@ mod markdown {
             [(fragment.task_id.clone(), fragment)].into();
         let report = fold(&plan, &fragments, FoldContext::default());
         let body = comment(&report, &fragments, None, &links()).into_string();
-        assert!(body.contains(detail), "the union's error is missing:\n{body}");
+        assert!(
+            body.contains(detail),
+            "the union's error is missing:\n{body}"
+        );
     }
 
     #[test]
@@ -2702,7 +2782,10 @@ mod markdown {
             ("comment-infra-neutral.md", scenarios::infra_neutral()),
         ] {
             let (report, fragments) = scenario;
-            check_text(name, &comment(&report, &fragments, None, &links()).into_string());
+            check_text(
+                name,
+                &comment(&report, &fragments, None, &links()).into_string(),
+            );
         }
         let (report, fragments) = scenarios::diff_in_progress();
         assert_eq!(report.conclusion, None, "a mid-run diff stays open");
@@ -2739,7 +2822,11 @@ mod markdown {
     fn the_check_run_names_failing_jobs_and_stays_short() {
         let (report, fragments) = scenarios::failing();
         let projected = check(&report, &fragments, &links());
-        assert!(projected.title.contains("checks.zlib"), "{}", projected.title);
+        assert!(
+            projected.title.contains("checks.zlib"),
+            "{}",
+            projected.title
+        );
         assert!(projected.title.len() <= crate::github::markdown::CHECK_TITLE_BUDGET);
         assert!(projected.summary.len() <= crate::github::markdown::CHECK_SUMMARY_BUDGET);
         assert!(
@@ -2855,7 +2942,6 @@ mod changeset_markdown {
         assert!(body.contains("> [!NOTE]"));
         assert!(body.contains("Retention, prune, and hooks (1)"));
     }
-
 }
 
 mod repository_names {
@@ -2962,17 +3048,31 @@ mod surfaces {
         );
         let attrs = [("run", "1755-1".to_string())];
         let first = registry
-            .upsert(&Surface::CiReport, &attrs, crate::github::sanitize::Markdown::constant("running"))
+            .upsert(
+                &Surface::CiReport,
+                &attrs,
+                crate::github::sanitize::Markdown::constant("running"),
+            )
             .unwrap();
         let second = registry
-            .upsert(&Surface::CiReport, &attrs, crate::github::sanitize::Markdown::constant("final"))
+            .upsert(
+                &Surface::CiReport,
+                &attrs,
+                crate::github::sanitize::Markdown::constant("final"),
+            )
             .unwrap();
         assert_eq!(first, second);
         let first = first.expect("apply upserts return the comment id");
         assert_eq!(fake.comments.borrow().len(), 1);
         assert_eq!(*fake.patched.borrow(), [first]);
-        let body = fake.comments.borrow()[0]["body"].as_str().unwrap().to_string();
-        assert!(body.starts_with("<!-- wasinix:ci-report run=1755-1 -->\n"), "{body}");
+        let body = fake.comments.borrow()[0]["body"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(
+            body.starts_with("<!-- wasinix:ci-report run=1755-1 -->\n"),
+            "{body}"
+        );
     }
 
     #[test]
@@ -2999,15 +3099,18 @@ mod surfaces {
                 crate::github::sanitize::Markdown::constant("migrated"),
             )
             .unwrap();
-        assert_eq!(id, Some(2), "the legacy-marker comment is adopted, not duplicated");
+        assert_eq!(
+            id,
+            Some(2),
+            "the legacy-marker comment is adopted, not duplicated"
+        );
         assert_eq!(*fake.patched.borrow(), [2]);
     }
 
     #[test]
     fn replies_are_keyed_and_the_sticky_set_is_closed() {
         // A reply's marker is not adopted as the sticky report.
-        let reply = Surface::CiReportReply { comment_id: 42 }
-            .marker(&[("sha", "abc".into())]);
+        let reply = Surface::CiReportReply { comment_id: 42 }.marker(&[("sha", "abc".into())]);
         assert!(reply.starts_with("<!-- wasinix:ci-report:42 "));
         assert!(!reply.starts_with("<!-- wasinix:ci-report "));
     }
@@ -3121,7 +3224,10 @@ mod render {
         );
         // A heartbeat in a quiet stretch repeats the progress line.
         assert_eq!(
-            renderer.lines_for(&Event::Heartbeat { at: 460, detail: None }),
+            renderer.lines_for(&Event::Heartbeat {
+                at: 460,
+                detail: None
+            }),
             ["[+6m 0s] 50/100 jobs · building checks.curl, checks.zlib"]
         );
         // With no job in flight the heartbeat says what the run is doing.
@@ -3171,7 +3277,10 @@ mod bisect {
         git(&source, &["config", "user.email", "test@example.invalid"]);
         let mut revisions = Vec::new();
         for index in 0..6 {
-            git(&source, &["commit", "--allow-empty", "-m", &format!("commit {index}")]);
+            git(
+                &source,
+                &["commit", "--allow-empty", "-m", &format!("commit {index}")],
+            );
             revisions.push(git(&source, &["rev-parse", "HEAD"]));
         }
         let report = run(
@@ -3279,7 +3388,10 @@ mod update {
         assert!(retention_crossed("1.9.0", "2.0.0", 1));
         assert!(!retention_crossed("1.8.0", "1.9.0", 1));
         assert!(retention_crossed("1.8.0", "1.9.0", 2));
-        assert!(!retention_crossed("5.3p9", "5.4", 1), "non-releases never fire");
+        assert!(
+            !retention_crossed("5.3p9", "5.4", 1),
+            "non-releases never fire"
+        );
         assert!(!retention_crossed("1.9.0", "2.0.0", 0));
     }
 
@@ -3321,8 +3433,14 @@ mod update {
             "a lone bump titles its PR with the commit message"
         );
         let receipt = changes.receipt();
-        assert!(receipt[0].contains("2026-07-03.1 → 2026-08-01.1"), "{receipt:?}");
-        assert!(receipt.last().unwrap().contains("1 updated · 1 failed · tree modified"));
+        assert!(
+            receipt[0].contains("2026-07-03.1 → 2026-08-01.1"),
+            "{receipt:?}"
+        );
+        assert!(receipt
+            .last()
+            .unwrap()
+            .contains("1 updated · 1 failed · tree modified"));
         let _ = BTreeMap::from([(1, 2)]);
     }
 
@@ -3342,11 +3460,27 @@ mod update {
         };
         let deduped = crate::update::targets::dedupe(vec![
             // A wrapper and its unwrapped package: same file, same command.
-            target("cargo-wasix", "pkgs/cargo-wasix.nix", &["nix-update", "--flake"]),
-            target("cargo-wasix-unwrapped", "pkgs/cargo-wasix.nix", &["nix-update", "--flake"]),
+            target(
+                "cargo-wasix",
+                "pkgs/cargo-wasix.nix",
+                &["nix-update", "--flake"],
+            ),
+            target(
+                "cargo-wasix-unwrapped",
+                "pkgs/cargo-wasix.nix",
+                &["nix-update", "--flake"],
+            ),
             // Grammars share a file but each command names its language.
-            target("tree-sitter-c", "pkgs/grammars.nix", &["update-grammars", "c"]),
-            target("tree-sitter-go", "pkgs/grammars.nix", &["update-grammars", "go"]),
+            target(
+                "tree-sitter-c",
+                "pkgs/grammars.nix",
+                &["update-grammars", "c"],
+            ),
+            target(
+                "tree-sitter-go",
+                "pkgs/grammars.nix",
+                &["update-grammars", "go"],
+            ),
         ]);
         let names: Vec<&str> = deduped.iter().map(|target| target.name.as_str()).collect();
         assert_eq!(names, ["cargo-wasix", "tree-sitter-c", "tree-sitter-go"]);
@@ -3375,7 +3509,11 @@ mod update {
             "commandDrvPaths must survive deserialization; an empty list makes \
              every store-path command unrealisable in CI"
         );
-        assert!(target.attr.ends_with("toolchain.libc-unwrapped"), "{}", target.attr);
+        assert!(
+            target.attr.ends_with("toolchain.libc-unwrapped"),
+            "{}",
+            target.attr
+        );
         assert_eq!(target.file, "pkgs/products/wasix-sysroot/libc.nix");
     }
 
@@ -3391,16 +3529,22 @@ mod update {
 
         // A spot case's map has no set catalog and offers nothing to record.
         let narrow = crate::ci::evalmap::EvalMap {
-            jobs: [(crate::support::atoms::JobAddr("packagesByProfile.zlib".into()), String::new())]
-                .into_iter()
-                .collect(),
+            jobs: [(
+                crate::support::atoms::JobAddr("packagesByProfile.zlib".into()),
+                String::new(),
+            )]
+            .into_iter()
+            .collect(),
             ..Default::default()
         };
         assert!(narrow.selector_names().is_none());
         let full = crate::ci::evalmap::EvalMap {
-            jobs: [(crate::support::atoms::JobAddr("checks.zlib".into()), String::new())]
-                .into_iter()
-                .collect(),
+            jobs: [(
+                crate::support::atoms::JobAddr("checks.zlib".into()),
+                String::new(),
+            )]
+            .into_iter()
+            .collect(),
             sets: [("core".to_string(), vec!["checks.zlib".to_string()])]
                 .into_iter()
                 .collect(),
@@ -3415,19 +3559,37 @@ mod update {
         use crate::update::request::parse;
         let release = r#"{"schema":1,"mode":"release","target":"wasix-libc","value":"1.2"}"#;
         assert_eq!(parse(release, None).unwrap().value, "1.2");
-        assert_eq!(parse(release, Some("wasix-libc")).unwrap().target, "wasix-libc");
-        assert!(parse(release, Some("other")).is_err(), "--expect mismatch refuses");
+        assert_eq!(
+            parse(release, Some("wasix-libc")).unwrap().target,
+            "wasix-libc"
+        );
+        assert!(
+            parse(release, Some("other")).is_err(),
+            "--expect mismatch refuses"
+        );
         assert!(parse("{not json", None).is_err());
         assert!(
-            parse(r#"{"schema":2,"mode":"release","target":"x","value":"1"}"#, None).is_err(),
+            parse(
+                r#"{"schema":2,"mode":"release","target":"x","value":"1"}"#,
+                None
+            )
+            .is_err(),
             "unknown schema refuses"
         );
         assert!(
-            parse(r#"{"schema":1,"mode":"release","target":"x","value":""}"#, None).is_err(),
+            parse(
+                r#"{"schema":1,"mode":"release","target":"x","value":""}"#,
+                None
+            )
+            .is_err(),
             "a release request needs a value"
         );
         assert!(
-            parse(r#"{"schema":1,"mode":"revision","target":"x","value":"abc"}"#, None).is_err(),
+            parse(
+                r#"{"schema":1,"mode":"revision","target":"x","value":"abc"}"#,
+                None
+            )
+            .is_err(),
             "a revision request needs a source"
         );
     }
@@ -3445,10 +3607,7 @@ mod managed {
         let updated = State::new("update wasmer".into(), "b".repeat(40)).unwrap();
         let body = with_state(&body, &updated).unwrap();
         assert_eq!(decode(&body).unwrap(), Some(updated));
-        assert_eq!(
-            body.matches("<!-- wasinix:changeset data=").count(),
-            1
-        );
+        assert_eq!(body.matches("<!-- wasinix:changeset data=").count(), 1);
     }
 
     #[test]
@@ -3563,8 +3722,7 @@ mod mutation_gates {
             },
         )
         .unwrap();
-        let back: crate::github::mutation::Context =
-            crate::support::schema::read(&path).unwrap();
+        let back: crate::github::mutation::Context = crate::support::schema::read(&path).unwrap();
         assert_eq!(back.command, "update wasmer");
 
         let result = scratch.path().join("result.json");
@@ -3598,8 +3756,7 @@ mod mutation_gates {
     #[test]
     fn a_bare_update_replays_the_recipe_from_the_current_head() {
         let state = State::new("update wasmer".into(), "b".repeat(40)).unwrap();
-        let Resolved::Run(resolution) =
-            resolve(update(&[], false), Some(state), &pull()).unwrap()
+        let Resolved::Run(resolution) = resolve(update(&[], false), Some(state), &pull()).unwrap()
         else {
             panic!("expected a run");
         };
@@ -3640,8 +3797,7 @@ mod mutation_gates {
 
     #[test]
     fn explicit_targets_run_as_spelled_without_state() {
-        let Resolved::Run(resolution) =
-            resolve(update(&["wasmer"], false), None, &pull()).unwrap()
+        let Resolved::Run(resolution) = resolve(update(&["wasmer"], false), None, &pull()).unwrap()
         else {
             panic!("expected a run");
         };
@@ -3818,7 +3974,10 @@ mod webc_identity {
         )
         .unwrap_err()
         .to_string();
-        assert!(error.contains("no `name`/`version` line to rewrite"), "{error}");
+        assert!(
+            error.contains("no `name`/`version` line to rewrite"),
+            "{error}"
+        );
     }
 
     #[test]
@@ -4006,7 +4165,11 @@ mod timings {
         let template = format!("{}/{{key}}", scratch.path().display());
         let read = crate::ci::steps::fetch(&rev, &template).unwrap();
         assert_eq!(read.jobs[0].steps[0].name, "Set up Nix");
-        assert!(read.summary().contains("| Set up Nix | 30s |"), "{}", read.summary());
+        assert!(
+            read.summary().contains("| Set up Nix | 30s |"),
+            "{}",
+            read.summary()
+        );
         assert!(crate::ci::steps::fetch(&"b".repeat(40), &template).is_none());
     }
 }
@@ -4059,12 +4222,7 @@ mod corpus {
     /// is classified.
     #[test]
     fn every_leaf_is_classified_and_mutating_leaves_carry_mutation_mode() {
-        const MUTATING: &[&str] = &[
-            "update",
-            "versions add",
-            "versions import",
-            "versions bump",
-        ];
+        const MUTATING: &[&str] = &["update", "versions add", "versions import", "versions bump"];
         const READONLY: &[&str] = &[
             "build",
             "spot",
@@ -4292,18 +4450,18 @@ mod corpus {
                 if path.extension().is_none_or(|ext| ext != "rs") {
                     continue;
                 }
-                let relative = path.strip_prefix(&root).unwrap().to_string_lossy().to_string();
+                let relative = path
+                    .strip_prefix(&root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string();
                 found.push((relative, std::fs::read_to_string(&path).unwrap()));
             }
         }
         found
     }
 
-    fn offenders(
-        include_tests: bool,
-        allowed: &[&str],
-        banned: &[&str],
-    ) -> Vec<String> {
+    fn offenders(include_tests: bool, allowed: &[&str], banned: &[&str]) -> Vec<String> {
         let mut offenders = Vec::new();
         for (relative, text) in sources(include_tests) {
             if allowed.contains(&relative.as_str()) {
@@ -4349,10 +4507,16 @@ mod corpus {
     /// the test tree is exempt.
     #[test]
     fn nix_runs_only_through_invocation() {
-        let banned: Vec<String> = ["nix\"", "nix-store\"", "nix-eval-jobs\"", "nix-fast-build\"", "nix-prefetch-url\""]
-            .iter()
-            .map(|name| ["Command::", "new(\"", name].concat())
-            .collect();
+        let banned: Vec<String> = [
+            "nix\"",
+            "nix-store\"",
+            "nix-eval-jobs\"",
+            "nix-fast-build\"",
+            "nix-prefetch-url\"",
+        ]
+        .iter()
+        .map(|name| ["Command::", "new(\"", name].concat())
+        .collect();
         let banned: Vec<&str> = banned.iter().map(String::as_str).collect();
         let found = offenders(false, &["support/nix.rs"], &banned);
         assert!(found.is_empty(), "{}", found.join("\n"));
@@ -4451,7 +4615,12 @@ mod corpus {
         // reading is not emitting.
         let found = offenders(
             false,
-            &["ci/exec.rs", "ci/events.rs", "ci/report.rs", "cli/render.rs"],
+            &[
+                "ci/exec.rs",
+                "ci/events.rs",
+                "ci/report.rs",
+                "cli/render.rs",
+            ],
             &[&emit, &write, &write_method],
         );
         assert!(found.is_empty(), "{}", found.join("\n"));
@@ -4525,10 +4694,16 @@ mod corpus {
     /// ended.
     #[test]
     fn the_run_layout_is_spelled_once() {
-        let banned: Vec<String> = ["\"cases\")", "\"maps\")", "\"junit\")", "\"status.json\")", "\"eval-jobs.jsonl\")"]
-            .iter()
-            .map(|name| ["join(", name].concat())
-            .collect();
+        let banned: Vec<String> = [
+            "\"cases\")",
+            "\"maps\")",
+            "\"junit\")",
+            "\"status.json\")",
+            "\"eval-jobs.jsonl\")",
+        ]
+        .iter()
+        .map(|name| ["join(", name].concat())
+        .collect();
         let banned: Vec<&str> = banned.iter().map(String::as_str).collect();
         let found = offenders(false, &["ci/prepare.rs"], &banned);
         assert!(found.is_empty(), "{}", found.join("\n"));
@@ -4546,9 +4721,7 @@ mod corpus {
         if !root.is_dir() {
             return;
         }
-        let read = |name: &str| {
-            std::fs::read_to_string(root.join("workflows").join(name)).unwrap()
-        };
+        let read = |name: &str| std::fs::read_to_string(root.join("workflows").join(name)).unwrap();
         let ci_command = read("ci-command-run.yml");
         for kind in [
             crate::ci::origin::CommandKind::Build,
@@ -4573,7 +4746,10 @@ mod corpus {
         );
         for output in ["kind=", "commentId=", "pullRequest=", "headSha="] {
             assert!(
-                ci_command.contains(&format!("steps.authorize.outputs.{}", output.trim_end_matches('='))),
+                ci_command.contains(&format!(
+                    "steps.authorize.outputs.{}",
+                    output.trim_end_matches('=')
+                )),
                 "ci-command-run.yml does not consume authorize output {output}"
             );
         }
@@ -4651,7 +4827,10 @@ mod corpus {
                     pending.push(path);
                     continue;
                 }
-                if path.extension().is_none_or(|ext| ext != "yml" && ext != "yaml") {
+                if path
+                    .extension()
+                    .is_none_or(|ext| ext != "yml" && ext != "yaml")
+                {
                     continue;
                 }
                 let text = std::fs::read_to_string(&path).unwrap();
@@ -4670,12 +4849,7 @@ mod corpus {
                     {
                         continue;
                     }
-                    found.push(format!(
-                        "{}:{}: {}",
-                        path.display(),
-                        index + 1,
-                        line.trim()
-                    ));
+                    found.push(format!("{}:{}: {}", path.display(), index + 1, line.trim()));
                 }
             }
         }
@@ -4751,8 +4925,11 @@ mod builder {
         use crate::nix::builder::parse_registry;
         let path = std::path::Path::new("builders.toml");
         let base = "default = \"ec2\"\n[remotes.ec2]\nhost = \"h\"\nkey = \"k\"\ncapabilities = [\"builder\"]\n";
-        let registry =
-            parse_registry(&format!("{base}[local]\nmax_jobs = 8\ncapacity = 1\n"), path).unwrap();
+        let registry = parse_registry(
+            &format!("{base}[local]\nmax_jobs = 8\ncapacity = 1\n"),
+            path,
+        )
+        .unwrap();
         let local = registry.local.unwrap();
         assert_eq!(local.max_jobs, Some(8));
         assert_eq!(local.capacity, Some(1));
@@ -4858,7 +5035,10 @@ mod remote_runs {
 
         let young = parse_poll(b"dead\n===WASINIX-RUN===\n\n===WASINIX-EVENTS===\n").unwrap();
         assert!(!young.alive);
-        assert!(young.run.is_none(), "a not-yet-written record is not an error");
+        assert!(
+            young.run.is_none(),
+            "a not-yet-written record is not an error"
+        );
         assert!(young.events_chunk.is_empty());
     }
 
@@ -4866,10 +5046,7 @@ mod remote_runs {
     fn observed_exits_follow_the_recorded_run() {
         let exit = |state: RunState, code: Option<u8>| run(state, code).state.exit(code);
         assert_eq!(exit(RunState::Complete, Some(0)), CommandStatus::SUCCESS);
-        assert_eq!(
-            exit(RunState::Failed, Some(3)),
-            CommandStatus::from_code(3)
-        );
+        assert_eq!(exit(RunState::Failed, Some(3)), CommandStatus::from_code(3));
         assert_eq!(exit(RunState::Cancelled, None), CommandStatus::FAILURE);
     }
 }
@@ -4944,7 +5121,11 @@ mod content {
         let jobs = ["packagesByProfile.zlib".to_string()];
         let pairs = pairs_of(&base, &head, &jobs, &BTreeSet::new());
         let outputs: Vec<&str> = pairs.iter().map(|pair| pair.output.as_str()).collect();
-        assert_eq!(outputs, ["dev", "out"], "one-sided outputs pair with nothing");
+        assert_eq!(
+            outputs,
+            ["dev", "out"],
+            "one-sided outputs pair with nothing"
+        );
 
         let failed: BTreeSet<String> = jobs.iter().cloned().collect();
         assert!(
@@ -4972,7 +5153,9 @@ mod fold {
 
     use crate::ci::facts::{BuildFacts, Failure, FailureCause};
     use crate::ci::plan::{plan_of, TaskKind};
-    use crate::ci::report::{fold, fragments_under, Conclusion, FoldContext, Fragment, FragmentData};
+    use crate::ci::report::{
+        fold, fragments_under, Conclusion, FoldContext, Fragment, FragmentData,
+    };
     use crate::ci::types::{Build, Case, Diff, Request, RevSource, Selector, SelectorKind};
     use crate::support::atoms::{JobAddr, Rev, TaskStatus};
 
@@ -5035,7 +5218,12 @@ mod fold {
         let mut fragments = BTreeMap::new();
         fragments.insert(
             "case.treefmt".to_string(),
-            fragment("case.treefmt", TaskKind::Validation, TaskStatus::Success, "ok"),
+            fragment(
+                "case.treefmt",
+                TaskKind::Validation,
+                TaskStatus::Success,
+                "ok",
+            ),
         );
         fragments.insert(
             "case.eval-inputs".to_string(),
@@ -5090,8 +5278,17 @@ mod fold {
                 ..FoldContext::default()
             },
         );
-        assert_eq!(report.conclusion, Some(Conclusion::Neutral), "{}", report.title);
-        assert!(report.title.contains("could not compare"), "{}", report.title);
+        assert_eq!(
+            report.conclusion,
+            Some(Conclusion::Neutral),
+            "{}",
+            report.title
+        );
+        assert!(
+            report.title.contains("could not compare"),
+            "{}",
+            report.title
+        );
     }
 
     fn all_green(plan: &crate::ci::plan::Plan) -> BTreeMap<String, Fragment> {
@@ -5188,7 +5385,12 @@ mod fold {
                 ..FoldContext::default()
             },
         );
-        assert_eq!(report.conclusion, Some(Conclusion::Success), "{}", report.title);
+        assert_eq!(
+            report.conclusion,
+            Some(Conclusion::Success),
+            "{}",
+            report.title
+        );
         assert_eq!(report.comparisons[0].regression_count(), 0);
         assert_eq!(
             report.comparisons[0]
@@ -5216,7 +5418,12 @@ mod fold {
                 ..FoldContext::default()
             },
         );
-        assert_eq!(report.conclusion, Some(Conclusion::Success), "{}", report.title);
+        assert_eq!(
+            report.conclusion,
+            Some(Conclusion::Success),
+            "{}",
+            report.title
+        );
     }
 
     #[test]
@@ -5238,8 +5445,17 @@ mod fold {
                 ..FoldContext::default()
             },
         );
-        assert_eq!(report.conclusion, Some(Conclusion::Failure), "{}", report.title);
-        assert!(report.title.contains("could not compare"), "{}", report.title);
+        assert_eq!(
+            report.conclusion,
+            Some(Conclusion::Failure),
+            "{}",
+            report.title
+        );
+        assert!(
+            report.title.contains("could not compare"),
+            "{}",
+            report.title
+        );
     }
 
     #[test]
@@ -5289,8 +5505,13 @@ mod fold {
         };
         fragments.insert(
             "case.core".to_string(),
-            fragment("case.core", TaskKind::Build, TaskStatus::Failure, "1 failed")
-                .with_data(FragmentData::Build(facts)),
+            fragment(
+                "case.core",
+                TaskKind::Build,
+                TaskStatus::Failure,
+                "1 failed",
+            )
+            .with_data(FragmentData::Build(facts)),
         );
         let report = fold(&plan, &fragments, FoldContext::default());
         assert_eq!(report.failures["case.core"][0].job.as_str(), "checks.zlib");
@@ -5324,8 +5545,13 @@ mod fold {
         };
         fragments.insert(
             "case.core".to_string(),
-            fragment("case.core", TaskKind::Build, TaskStatus::Failure, "1 failed")
-                .with_data(FragmentData::Build(facts)),
+            fragment(
+                "case.core",
+                TaskKind::Build,
+                TaskStatus::Failure,
+                "1 failed",
+            )
+            .with_data(FragmentData::Build(facts)),
         );
         let report = fold(&plan, &fragments, FoldContext::default());
         assert_eq!(report.annotations.len(), 1);
@@ -5597,7 +5823,13 @@ mod scenarios {
             if matches!(task.kind, TaskKind::Eval | TaskKind::Validation) {
                 fragments.insert(
                     task.task_id.clone(),
-                    Fragment::new(&task.task_id, &task.label, task.kind, TaskStatus::Success, "ok"),
+                    Fragment::new(
+                        &task.task_id,
+                        &task.label,
+                        task.kind,
+                        TaskStatus::Success,
+                        "ok",
+                    ),
                 );
             }
         }
@@ -5638,7 +5870,13 @@ mod scenarios {
         for task in plan.tasks.iter().take(2) {
             fragments.insert(
                 task.task_id.clone(),
-                Fragment::new(&task.task_id, &task.label, task.kind, TaskStatus::Success, "ok"),
+                Fragment::new(
+                    &task.task_id,
+                    &task.label,
+                    task.kind,
+                    TaskStatus::Success,
+                    "ok",
+                ),
             );
         }
         let report = fold(
@@ -5725,8 +5963,12 @@ mod golden {
             std::fs::write(&path, rendered).unwrap();
             return;
         }
-        let expected = std::fs::read_to_string(&path)
-            .unwrap_or_else(|e| panic!("{}: {e}; author with WASINIX_UPDATE_GOLDENS=1", path.display()));
+        let expected = std::fs::read_to_string(&path).unwrap_or_else(|e| {
+            panic!(
+                "{}: {e}; author with WASINIX_UPDATE_GOLDENS=1",
+                path.display()
+            )
+        });
         assert_eq!(rendered, expected, "{} drifted from its golden", name);
     }
 
@@ -5791,10 +6033,17 @@ mod wire_format {
             if path.extension().is_some_and(|ext| ext == "json") {
                 let value: serde_json::Value =
                     serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-                walk(&value, path.file_name().unwrap().to_str().unwrap(), &mut offenders);
+                walk(
+                    &value,
+                    path.file_name().unwrap().to_str().unwrap(),
+                    &mut offenders,
+                );
             }
         }
-        assert!(offenders.is_empty(), "snake keys on the wire: {offenders:?}");
+        assert!(
+            offenders.is_empty(),
+            "snake keys on the wire: {offenders:?}"
+        );
     }
 }
 
@@ -5982,14 +6231,8 @@ mod facts {
             position: None,
             log: None,
         }];
-        let manifest = logs::archive(
-            &logs_dir,
-            &[],
-            &[root],
-            &BTreeMap::new(),
-            &mut failures,
-        )
-        .unwrap();
+        let manifest =
+            logs::archive(&logs_dir, &[], &[root], &BTreeMap::new(), &mut failures).unwrap();
         assert_eq!(manifest.logs.len(), 1);
         let log_ref = failures[0].log.as_ref().expect("log bound to failure");
         let tail = logs::read_archived(&logs_dir, log_ref, 4096).unwrap();
@@ -6042,7 +6285,9 @@ mod tools {
     fn a_failing_tool_reports_its_context_and_diagnostics() {
         let mut command = Command::new("sh");
         command.args(["-c", "echo the-detail >&2; exit 1"]);
-        let error = checked_text(&mut command, "probing").unwrap_err().to_string();
+        let error = checked_text(&mut command, "probing")
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("probing"), "{error}");
         assert!(error.contains("the-detail"), "{error}");
     }
@@ -6051,7 +6296,9 @@ mod tools {
     fn a_tool_reporting_on_stdout_is_still_heard() {
         let mut command = Command::new("sh");
         command.args(["-c", "echo stdout-detail; exit 1"]);
-        let error = checked_text(&mut command, "probing").unwrap_err().to_string();
+        let error = checked_text(&mut command, "probing")
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("stdout-detail"), "{error}");
     }
 
@@ -6061,7 +6308,10 @@ mod tools {
         let cut = crate::support::error::tail(&text, 100);
         assert_eq!(cut, "the last line");
         // Nothing to cut: the text survives whole.
-        assert_eq!(crate::support::error::tail("short\nenough", 100), "short\nenough");
+        assert_eq!(
+            crate::support::error::tail("short\nenough", 100),
+            "short\nenough"
+        );
     }
 
     #[test]
@@ -6091,7 +6341,10 @@ mod format {
 
     #[test]
     fn short_revs_never_panic_on_short_input() {
-        assert_eq!(short_rev("d2d8fa99c1b0aabbccdd00112233445566778899"), "d2d8fa99c1b0");
+        assert_eq!(
+            short_rev("d2d8fa99c1b0aabbccdd00112233445566778899"),
+            "d2d8fa99c1b0"
+        );
         assert_eq!(short_rev("abc"), "abc");
         assert_eq!(short_rev(""), "");
     }
@@ -6214,7 +6467,6 @@ mod table {
     }
 }
 
-
 mod buildset {
     use crate::nix::buildset::{
         dry_run_plan, failure_excerpt_from_log, prebuilt_partition, realise_building_drv,
@@ -6240,9 +6492,18 @@ mod buildset {
         )
         .unwrap();
         let outputs: std::collections::BTreeMap<String, Vec<String>> = [
-            ("/nix/store/a.drv".to_string(), vec!["/nix/store/a-out".into()]),
-            ("/nix/store/b.drv".to_string(), vec!["/nix/store/b-out".into()]),
-            ("/nix/store/c.drv".to_string(), vec!["/nix/store/c-out".into()]),
+            (
+                "/nix/store/a.drv".to_string(),
+                vec!["/nix/store/a-out".into()],
+            ),
+            (
+                "/nix/store/b.drv".to_string(),
+                vec!["/nix/store/b-out".into()],
+            ),
+            (
+                "/nix/store/c.drv".to_string(),
+                vec!["/nix/store/c-out".into()],
+            ),
         ]
         .into();
         let report = prebuilt_partition(&outputs, &plan);
@@ -6274,8 +6535,7 @@ mod buildset {
             \x20      error: attribute 'passthru.wasmer.name' already defined at pkgs/p.nix:24:13\n\
             \x20      at pkgs/p.nix:268:15:";
         let excerpt = evaljobs::error_excerpt(trace);
-        assert!(excerpt
-            .starts_with("error: attribute 'passthru.wasmer.name' already defined"));
+        assert!(excerpt.starts_with("error: attribute 'passthru.wasmer.name' already defined"));
         assert!(!excerpt.contains("worker error"));
         assert_eq!(
             evaljobs::error_excerpt("plain failure\nwith no error line"),
@@ -6417,8 +6677,8 @@ mod buildset {
 }
 
 mod git_support {
-    use crate::support::git::{commit, Stage, git, is_ancestor, resolve_rev};
     use crate::support::fs::Scratch;
+    use crate::support::git::{commit, git, is_ancestor, resolve_rev, Stage};
 
     fn repo() -> (Scratch, std::path::PathBuf) {
         let scratch = Scratch::create("wasinix-test").unwrap();
@@ -6449,7 +6709,10 @@ mod git_support {
         std::fs::write(repo.join("rels.json"), "after\n").unwrap();
         std::fs::write(repo.join("other"), "after\n").unwrap();
         assert!(commit(&repo, Stage::Paths(&["rels.json"]), "rels only", None).unwrap());
-        assert_eq!(git(&repo, &["log", "-1", "--format=%s"]).unwrap(), "rels only");
+        assert_eq!(
+            git(&repo, &["log", "-1", "--format=%s"]).unwrap(),
+            "rels only"
+        );
         assert_eq!(git(&repo, &["status", "--short"]).unwrap(), "?? other");
     }
 
@@ -6488,7 +6751,9 @@ mod git_support {
         );
         let absolute = crate::support::fs::absolute(&bundle).unwrap();
         git(&elsewhere, &["fetch", &absolute.to_string_lossy(), "HEAD"]).unwrap();
-        assert!(!git(&elsewhere, &["rev-parse", "FETCH_HEAD"]).unwrap().is_empty());
+        assert!(!git(&elsewhere, &["rev-parse", "FETCH_HEAD"])
+            .unwrap()
+            .is_empty());
     }
 }
 
@@ -6567,8 +6832,7 @@ mod workspace {
 
         let mut pinned = case.source.clone();
         pinned.patch = Some(manifest.patch_hash.clone());
-        let reproduced =
-            reproduced_worktree(&repo, &pinned, &out.join(PATCH_FILE)).unwrap();
+        let reproduced = reproduced_worktree(&repo, &pinned, &out.join(PATCH_FILE)).unwrap();
         assert_eq!(
             std::fs::read_to_string(reproduced.path().join("pin")).unwrap(),
             "new\n"
@@ -6714,21 +6978,26 @@ mod prepare {
         });
         let run_dir = scratch.path().join("run");
         let prepared = prepare_all(&repo, &request, &run_dir).unwrap();
-        assert!(prepared.plan().tasks.iter().any(|t| t.task_id == "case.core"));
+        assert!(prepared
+            .plan()
+            .tasks
+            .iter()
+            .any(|t| t.task_id == "case.core"));
 
         let loaded = load(&run_dir).unwrap();
         assert_eq!(loaded.plan().tasks.len(), prepared.plan().tasks.len());
         // The recorded case carries its materialization digest.
-        let value: serde_json::Value =
-            crate::support::json::read(&request_path(&run_dir)).unwrap();
+        let value: serde_json::Value = crate::support::json::read(&request_path(&run_dir)).unwrap();
         assert!(value["source"]["patch"].is_string());
         // A clean case's recorded tree is the commit's own tree, so any
         // commit with identical content shares its published baseline.
-        let manifest: crate::ci::workspace::Materialization = crate::support::schema::read(
-            &run_dir.join("cases/case/prepared/materialization.json"),
-        )
-        .unwrap();
-        assert_eq!(manifest.tree, git(&repo, &["rev-parse", "HEAD^{tree}"]).unwrap());
+        let manifest: crate::ci::workspace::Materialization =
+            crate::support::schema::read(&run_dir.join("cases/case/prepared/materialization.json"))
+                .unwrap();
+        assert_eq!(
+            manifest.tree,
+            git(&repo, &["rev-parse", "HEAD^{tree}"]).unwrap()
+        );
 
         // A second prepare into the same directory refuses.
         assert!(prepare_all(&repo, &request, &run_dir).is_err());
@@ -6902,13 +7171,15 @@ mod prepare {
         });
         let run_dir = scratch.path().join("run");
         prepare_all(&repo, &request, &run_dir).unwrap();
-        let manifest: crate::ci::workspace::Materialization = crate::support::schema::read(
-            &run_dir.join("cases/case/prepared/materialization.json"),
-        )
-        .unwrap();
+        let manifest: crate::ci::workspace::Materialization =
+            crate::support::schema::read(&run_dir.join("cases/case/prepared/materialization.json"))
+                .unwrap();
         // The uncommitted edit is part of the materialized tree, so the
         // recorded key differs from the commit's and a baseline published
         // under it can never be mistaken for the commit's.
-        assert_ne!(manifest.tree, git(&repo, &["rev-parse", "HEAD^{tree}"]).unwrap());
+        assert_ne!(
+            manifest.tree,
+            git(&repo, &["rev-parse", "HEAD^{tree}"]).unwrap()
+        );
     }
 }

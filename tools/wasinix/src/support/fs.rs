@@ -136,7 +136,8 @@ pub fn tail(path: &Path, limit: u64) -> Result<String> {
     let mut file = std::fs::File::open(path).map_err(|e| io(path, e))?;
     let len = file.metadata().map_err(|e| io(path, e))?.len();
     if len > limit {
-        file.seek(SeekFrom::Start(len - limit)).map_err(|e| io(path, e))?;
+        file.seek(SeekFrom::Start(len - limit))
+            .map_err(|e| io(path, e))?;
     }
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).map_err(|e| io(path, e))?;

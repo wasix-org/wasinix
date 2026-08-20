@@ -70,7 +70,9 @@ pub fn load_jobs(
                 is_test: info
                     .get(name.as_str())
                     .is_some_and(|job| job.role.as_deref() == Some("check")),
-                test_name: info.get(name.as_str()).and_then(|job| job.test_name.clone()),
+                test_name: info
+                    .get(name.as_str())
+                    .and_then(|job| job.test_name.clone()),
                 test_family: info
                     .get(name.as_str())
                     .and_then(|job| job.test_family.clone()),

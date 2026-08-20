@@ -129,7 +129,10 @@ impl StepTimings {
         let file = scratch.path().join("step-timings.json");
         crate::support::schema::write(&file, self)?;
         if effects.is_dry_run() {
-            crate::support::ui::fact("step timings", format!("skipped (dry run), {}", key(rev.full())));
+            crate::support::ui::fact(
+                "step timings",
+                format!("skipped (dry run), {}", key(rev.full())),
+            );
             return Ok(());
         }
         let mut cmd = std::process::Command::new("aws");

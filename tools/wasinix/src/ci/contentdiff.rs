@@ -72,11 +72,7 @@ fn basename(path: &str) -> &str {
 /// whole invocation when any queried path is absent, so a failed chunk
 /// bisects until each missing path costs only itself, never its chunkmates.
 fn path_infos(paths: &[String], store: Option<&str>) -> BTreeMap<String, Option<Value>> {
-    fn query(
-        chunk: &[String],
-        store: Option<&str>,
-        infos: &mut BTreeMap<String, Option<Value>>,
-    ) {
+    fn query(chunk: &[String], store: Option<&str>, infos: &mut BTreeMap<String, Option<Value>>) {
         let mut invocation = Invocation::plain("path-info")
             .json()
             .args(["--json-format", "2"])
@@ -109,8 +105,15 @@ fn path_infos(paths: &[String], store: Option<&str>) -> BTreeMap<String, Option<
                     crate::support::ui::warning(format!(
                         "path-info: {}: {}",
                         basename(&chunk[0]),
-                        output.stderr.trim().lines().last().unwrap_or_default()
-                            .chars().take(160).collect::<String>()
+                        output
+                            .stderr
+                            .trim()
+                            .lines()
+                            .last()
+                            .unwrap_or_default()
+                            .chars()
+                            .take(160)
+                            .collect::<String>()
                     ));
                 }
                 infos.insert(basename(&chunk[0]).to_string(), None);
@@ -136,7 +139,10 @@ fn available_infos(paths: &[String], store: Option<&str>) -> BTreeMap<String, Op
     if missing.is_empty() {
         return local;
     }
-    let mut remote = path_infos(&missing, Some(store.unwrap_or(crate::support::nix::CACHE_SUBSTITUTER)));
+    let mut remote = path_infos(
+        &missing,
+        Some(store.unwrap_or(crate::support::nix::CACHE_SUBSTITUTER)),
+    );
     if store.is_some() {
         let still: Vec<String> = missing
             .iter()
@@ -144,7 +150,10 @@ fn available_infos(paths: &[String], store: Option<&str>) -> BTreeMap<String, Op
             .cloned()
             .collect();
         if !still.is_empty() {
-            remote.extend(path_infos(&still, Some(crate::support::nix::CACHE_SUBSTITUTER)));
+            remote.extend(path_infos(
+                &still,
+                Some(crate::support::nix::CACHE_SUBSTITUTER),
+            ));
         }
     }
     for (key, value) in remote {
@@ -186,10 +195,7 @@ fn normalize_pair(old: &str, new: &str, store: Option<&str>) -> (Option<bool>, O
             .operands([old, new]),
         None => Invocation::tool("nix-store")
             .arg("--realise")
-            .option(
-                "extra-substituters",
-                crate::support::nix::CACHE_SUBSTITUTER,
-            )
+            .option("extra-substituters", crate::support::nix::CACHE_SUBSTITUTER)
             .option(
                 "extra-trusted-public-keys",
                 crate::support::nix::CACHE_PUBLIC_KEY,
@@ -199,7 +205,12 @@ fn normalize_pair(old: &str, new: &str, store: Option<&str>) -> (Option<bool>, O
     .probe("a failed realise fails this pair, not the diff");
     match realised {
         Ok(output) if output.status.is_success() => {}
-        Ok(output) => return (None, Some(format!("realise failed: {}", tail(&output.stderr)))),
+        Ok(output) => {
+            return (
+                None,
+                Some(format!("realise failed: {}", tail(&output.stderr))),
+            )
+        }
         Err(error) => return (None, Some(format!("realise failed: {error}"))),
     }
     let output = match Invocation::plain("store make-content-addressed")
@@ -211,10 +222,7 @@ fn normalize_pair(old: &str, new: &str, store: Option<&str>) -> (Option<bool>, O
         Ok(output) => {
             return (
                 None,
-                Some(format!(
-                    "normalize failed: {}",
-                    tail(&output.stderr)
-                )),
+                Some(format!("normalize failed: {}", tail(&output.stderr))),
             )
         }
         Err(error) => return (None, Some(format!("normalize failed: {error}"))),
@@ -264,8 +272,7 @@ fn compare_all(pairs: Vec<Pair>, store: Option<&str>) -> ContentSummary {
         };
         if old_info["narHash"] == new_info["narHash"] {
             result.identical.push(pair.clone());
-        } else if !self_referential(&pair.old, old_info) && !self_referential(&pair.new, new_info)
-        {
+        } else if !self_referential(&pair.old, old_info) && !self_referential(&pair.new, new_info) {
             result.changed.push(pair.clone());
         } else if old_info["narSize"]
             .as_u64()
@@ -378,7 +385,10 @@ fn failed_attrs(junit: &[std::path::PathBuf]) -> BTreeSet<String> {
 pub fn run(request: &Request<'_>) -> ContentSummary {
     let (jobs, excluded) = content_jobs(request.base_map, request.head_map, request.allowed_jobs);
     let failed = failed_attrs(request.junit);
-    let not_built = jobs.iter().filter(|attr| failed.contains(attr.as_str())).count();
+    let not_built = jobs
+        .iter()
+        .filter(|attr| failed.contains(attr.as_str()))
+        .count();
     let pairs = pairs_of(request.base_map, request.head_map, &jobs, &failed);
     let mut summary = if pairs.is_empty() {
         ContentSummary::default()

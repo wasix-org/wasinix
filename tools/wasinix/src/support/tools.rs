@@ -98,7 +98,11 @@ pub fn checked_output(cmd: &mut Command, context: &str) -> Result<Vec<u8>> {
     };
     let detail = diagnostics_tail(&diagnostics);
     if detail.is_empty() {
-        Err(Error::Failure(format!("{context}: {} failed with {}", rendered(cmd), output.status)))
+        Err(Error::Failure(format!(
+            "{context}: {} failed with {}",
+            rendered(cmd),
+            output.status
+        )))
     } else {
         Err(Error::Failure(format!("{context}: {detail}")))
     }

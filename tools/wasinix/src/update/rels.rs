@@ -204,4 +204,3 @@ pub fn bump(repo: &Path, specs: &[String], all_versions: bool) -> Result<Vec<Bum
     store(repo, &rels)?;
     Ok(lines)
 }
-

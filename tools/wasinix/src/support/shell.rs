@@ -4,7 +4,11 @@ use crate::support::error::{request_error, Result};
 
 /// Single-quote a string for a POSIX shell.
 pub fn quote(text: &str) -> String {
-    if !text.is_empty() && text.bytes().all(|b| b.is_ascii_alphanumeric() || b"._-/=:@+".contains(&b)) {
+    if !text.is_empty()
+        && text
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._-/=:@+".contains(&b))
+    {
         return text.to_string();
     }
     format!("'{}'", text.replace('\'', r"'\''"))

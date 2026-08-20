@@ -182,7 +182,10 @@ enum UntrustedCli {
 /// A parsed mutation, replayable from the recorded recipe text.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MutationCommand {
-    Update { targets: Vec<String>, all: bool },
+    Update {
+        targets: Vec<String>,
+        all: bool,
+    },
     Bump {
         specs: Vec<String>,
         all_versions: bool,

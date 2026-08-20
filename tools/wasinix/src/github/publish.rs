@@ -8,10 +8,10 @@ use serde_json::json;
 
 use crate::ci::events::Snapshot;
 use crate::ci::report::{Fragment, Report};
+use crate::github::client::Client;
 use crate::github::markdown::{self, Links};
 use crate::github::surfaces::{Registry, Surface};
 use crate::support::error::Result;
-use crate::github::client::Client;
 
 pub struct Target {
     pub repository: String,
@@ -33,7 +33,10 @@ const UNTRUSTED_NOTICE: &str = "> [!NOTE]\n> This result was produced by this \
 
 /// Every published body passes here, so an untrusted report cannot reach any
 /// surface without its advisory notice.
-fn with_notice(body: crate::github::sanitize::Markdown, target: &Target) -> crate::github::sanitize::Markdown {
+fn with_notice(
+    body: crate::github::sanitize::Markdown,
+    target: &Target,
+) -> crate::github::sanitize::Markdown {
     if target.untrusted {
         crate::github::sanitize::Markdown::constant(UNTRUSTED_NOTICE).push(body)
     } else {
@@ -150,13 +153,13 @@ fn links(_rendered: &Rendered, target: &Target, reply_to: Option<u64>) -> Links 
             .and_then(|sha| crate::support::atoms::Rev::parse(sha).ok()),
         log_base: target.log_base.clone(),
         origin: match (reply_to, target.pull_request) {
-            (Some(comment_id), Some(pull_request)) => Some(
-                crate::github::surfaces::origin_comment_url(
+            (Some(comment_id), Some(pull_request)) => {
+                Some(crate::github::surfaces::origin_comment_url(
                     &target.repository,
                     pull_request,
                     comment_id,
-                ),
-            ),
+                ))
+            }
             _ => None,
         },
     }
@@ -214,12 +217,12 @@ pub fn publish_failure_logs(
     if published == 0 {
         return Ok(None);
     }
-    let base = format!(
-        "{}/logs/{sha}",
-        crate::support::nix::CACHE_SUBSTITUTER
-    );
+    let base = format!("{}/logs/{sha}", crate::support::nix::CACHE_SUBSTITUTER);
     if effects.is_dry_run() {
-        crate::support::ui::fact("failure logs", format!("skipped (dry run), {published} logs"));
+        crate::support::ui::fact(
+            "failure logs",
+            format!("skipped (dry run), {published} logs"),
+        );
         return Ok(Some(base));
     }
     let mut cmd = std::process::Command::new("aws");
@@ -353,7 +356,10 @@ pub fn check(
         .as_array()
         .and_then(|runs| runs.iter().filter_map(|run| run["id"].as_u64()).max());
     match existing {
-        Some(id) => client.patch(&format!("repos/{}/check-runs/{id}", target.repository), &body)?,
+        Some(id) => client.patch(
+            &format!("repos/{}/check-runs/{id}", target.repository),
+            &body,
+        )?,
         None => client.post(&format!("repos/{}/check-runs", target.repository), &body)?,
     };
     Ok(())

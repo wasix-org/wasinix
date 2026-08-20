@@ -7,8 +7,8 @@ use std::path::Path;
 use serde::Deserialize;
 
 use crate::nix::route::Route;
-use crate::support::nix::Invocation;
 use crate::support::error::{request_error, Error, Result};
+use crate::support::nix::Invocation;
 use crate::support::process::CommandStatus;
 
 pub struct Options {
@@ -89,12 +89,7 @@ fn splice(workdir: &Path, subcommand: &str, args: &[String]) -> Invocation {
 /// How many derivations a plan would build. Nix says "these N derivations
 /// will be built" for N > 1 and "this derivation will be built" for exactly
 /// one, so a one-build plan would otherwise report zero.
-fn planned_builds(
-    workdir: &Path,
-    args: &[String],
-    attr: &str,
-    route: &Route,
-) -> Result<usize> {
+fn planned_builds(workdir: &Path, args: &[String], attr: &str, route: &Route) -> Result<usize> {
     let probe = splice(workdir, "build", args)
         .arg("--dry-run")
         .operand(attr)
@@ -137,17 +132,13 @@ fn planned_builds(
 /// `repo` holds spot.nix; `workdir` is the tree to build from, which is a
 /// materialized worktree when CI drives this and the checkout itself
 /// otherwise.
-pub fn build(
-    repo: &Path,
-    workdir: &Path,
-    options: &Options,
-    route: &Route,
-) -> Result<BuildResult> {
+pub fn build(repo: &Path, workdir: &Path, options: &Options, route: &Route) -> Result<BuildResult> {
     if options.targets.is_empty() {
         return request_error("spot needs at least one <profile>.<attr> target");
     }
-    let rev = crate::support::git::resolve_rev(workdir, &options.base)
-        .map_err(|_| Error::Request(format!("{}: not a commit in this repository", options.base)))?;
+    let rev = crate::support::git::resolve_rev(workdir, &options.base).map_err(|_| {
+        Error::Request(format!("{}: not a commit in this repository", options.base))
+    })?;
     let args = splice_args(repo, workdir, rev.full(), options)?;
     let _lease = route.acquire()?;
     crate::support::ui::fact("spot targets", options.targets.join(" "));

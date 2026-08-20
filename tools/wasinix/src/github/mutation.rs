@@ -7,9 +7,9 @@ use std::path::Path;
 use serde_json::json;
 
 use crate::github::changeset;
+use crate::github::client::Client;
 use crate::support::error::{request_error, Error, Result};
 use crate::support::git::git;
-use crate::github::client::Client;
 use crate::update::changeset::ChangeSet;
 
 pub struct PrOptions {
@@ -83,11 +83,7 @@ pub fn open_pr(repo: &Path, changes: &ChangeSet, options: &PrOptions) -> Result<
 }
 
 fn existing_pr(client: &Client, options: &PrOptions) -> Result<Option<u64>> {
-    let owner = options
-        .repository
-        .split('/')
-        .next()
-        .unwrap_or_default();
+    let owner = options.repository.split('/').next().unwrap_or_default();
     let pulls = client.paginate(&format!(
         "repos/{}/pulls?state=open&head={owner}:{}",
         options.repository, options.branch
@@ -253,8 +249,10 @@ fn paused_reply(
 ) -> crate::github::sanitize::Markdown {
     use crate::github::sanitize::Markdown;
     let mut body = Markdown::concat([
-        Markdown::constant("### ⛔ Automated refresh blocked\n\nThe branch moved past the \
-            recorded head "),
+        Markdown::constant(
+            "### ⛔ Automated refresh blocked\n\nThe branch moved past the \
+            recorded head ",
+        ),
         Markdown::code(&state.rewrite_safe_head),
         Markdown::constant(", so a refresh would replace commits the bot did not write.\n"),
     ]);
@@ -264,7 +262,12 @@ fn paused_reply(
     ));
     if let Ok(compared) = compared {
         for commit in compared["commits"].as_array().into_iter().flatten() {
-            let sha: String = commit["sha"].as_str().unwrap_or_default().chars().take(12).collect();
+            let sha: String = commit["sha"]
+                .as_str()
+                .unwrap_or_default()
+                .chars()
+                .take(12)
+                .collect();
             let title = commit["commit"]["message"]
                 .as_str()
                 .unwrap_or_default()
@@ -384,12 +387,14 @@ pub fn mutate(repo: &Path, origin_doc: &Path, out_dir: &Path) -> Result<()> {
     };
     let current = crate::github::surfaces::detected_repository(repo).unwrap_or_default();
     if !command.origin.repository.eq_ignore_ascii_case(&current) {
-        return request_error(format!(
-            "mutation comments are accepted only on {current}"
-        ));
+        return request_error(format!("mutation comments are accepted only on {current}"));
     }
     let client = Client::new(crate::github::client::token().as_deref());
-    let pull = pull(&client, &command.origin.repository, command.origin.pull_request)?;
+    let pull = pull(
+        &client,
+        &command.origin.repository,
+        command.origin.pull_request,
+    )?;
     if !pull
         .head_repository
         .eq_ignore_ascii_case(&command.origin.repository)
@@ -412,8 +417,12 @@ pub fn mutate(repo: &Path, origin_doc: &Path, out_dir: &Path) -> Result<()> {
             registry.upsert(
                 &reply_surface(&command.origin),
                 &[],
-                reply_origin_line(&command.origin)
-                    .push(paused_reply(&state, &pull, &client, &command.origin)),
+                reply_origin_line(&command.origin).push(paused_reply(
+                    &state,
+                    &pull,
+                    &client,
+                    &command.origin,
+                )),
             )?;
             return request_error(
                 "automated refreshes are paused: the branch moved past the recorded head",
@@ -451,7 +460,10 @@ pub fn mutate(repo: &Path, origin_doc: &Path, out_dir: &Path) -> Result<()> {
         MutationCommand::Format => format_tree(worktree.path())?,
         MutationCommand::Regenerate => unreachable!("resolved to its recipe above"),
     };
-    if !git(worktree.path(), &["status", "--porcelain"])?.trim().is_empty() {
+    if !git(worktree.path(), &["status", "--porcelain"])?
+        .trim()
+        .is_empty()
+    {
         return request_error("the mutation left uncommitted changes");
     }
     let head = git(worktree.path(), &["rev-parse", "HEAD"])?;
@@ -515,13 +527,10 @@ pub fn mutate_publish(repo: &Path, out_dir: &Path) -> Result<()> {
     }
     let current = crate::github::surfaces::detected_repository(repo).unwrap_or_default();
     if !context.origin.repository.eq_ignore_ascii_case(&current) {
-        return request_error(format!(
-            "mutation publishes are accepted only on {current}"
-        ));
+        return request_error(format!("mutation publishes are accepted only on {current}"));
     }
-    let token = crate::github::client::token().ok_or_else(|| {
-        Error::Request("publishing a mutation needs GITHUB_TOKEN".into())
-    })?;
+    let token = crate::github::client::token()
+        .ok_or_else(|| Error::Request("publishing a mutation needs GITHUB_TOKEN".into()))?;
     let api = crate::ci::origin::Rest {
         token: Some(token.clone()),
     };
@@ -586,9 +595,7 @@ pub fn mutate_publish(repo: &Path, out_dir: &Path) -> Result<()> {
             )?;
         } else {
             if !crate::support::git::is_ancestor(work, &context.pull.head_sha, &result)? {
-                return request_error(
-                    "the mutation result does not extend the pull request head",
-                );
+                return request_error("the mutation result does not extend the pull request head");
             }
             git(
                 work,
@@ -600,7 +607,10 @@ pub fn mutate_publish(repo: &Path, out_dir: &Path) -> Result<()> {
             )?;
         }
         new_head = result;
-    } else if !generated.head_sha.eq_ignore_ascii_case(&context.pull.head_sha) {
+    } else if !generated
+        .head_sha
+        .eq_ignore_ascii_case(&context.pull.head_sha)
+    {
         return request_error("an unchanged mutation result does not match the pull request head");
     }
 
@@ -629,12 +639,17 @@ pub fn mutate_publish(repo: &Path, out_dir: &Path) -> Result<()> {
     )?;
 
     if context.record_state {
-        let recipe = context.recipe.clone().ok_or_else(|| {
-            Error::Failure("a state-recording mutation carries no recipe".into())
-        })?;
+        let recipe = context
+            .recipe
+            .clone()
+            .ok_or_else(|| Error::Failure("a state-recording mutation carries no recipe".into()))?;
         let state = crate::update::managed::State::new(recipe, new_head)?;
         // The body may have moved since mutate ran; record into the fresh one.
-        let fresh = pull(&client, &context.origin.repository, context.origin.pull_request)?;
+        let fresh = pull(
+            &client,
+            &context.origin.repository,
+            context.origin.pull_request,
+        )?;
         let rendered = crate::update::managed::with_state(&fresh.body, &state)?;
         client.patch(
             &format!(

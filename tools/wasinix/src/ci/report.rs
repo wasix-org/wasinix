@@ -280,11 +280,7 @@ fn failed(status: TaskStatus) -> bool {
 }
 
 /// Fold plan and fragments into the one verdict.
-pub fn fold(
-    plan: &Plan,
-    fragments: &BTreeMap<String, Fragment>,
-    context: FoldContext,
-) -> Report {
+pub fn fold(plan: &Plan, fragments: &BTreeMap<String, Fragment>, context: FoldContext) -> Report {
     struct View<'a> {
         task: &'a Task,
         fragment: Option<&'a Fragment>,
@@ -333,9 +329,7 @@ pub fn fold(
         .count();
     let pending_gates = views
         .iter()
-        .filter(|view| {
-            view.task.enabled && view.task.gate && view.status == TaskStatus::Pending
-        })
+        .filter(|view| view.task.enabled && view.task.gate && view.status == TaskStatus::Pending)
         .count();
     let advisory_failures = views
         .iter()
@@ -348,9 +342,9 @@ pub fn fold(
     // A gate that ended neither passed nor failed: its work did not happen,
     // so the run answered nothing. Counting it nowhere concluded success and
     // reported a build whose jobs never ran as green.
-    let neutral_gate = views.iter().find(|view| {
-        view.task.enabled && view.task.gate && view.status == TaskStatus::Neutral
-    });
+    let neutral_gate = views
+        .iter()
+        .find(|view| view.task.enabled && view.task.gate && view.status == TaskStatus::Neutral);
     let active_failures = views
         .iter()
         .filter(|view| view.task.enabled && failed(view.status))
@@ -555,12 +549,12 @@ pub fn union_failure_fragment(
         .map(str::trim)
         .find(|line| !line.is_empty())
         .unwrap_or("build union failed");
-    Fragment::new(task_id, label, kind, TaskStatus::Failure, headline).with_data(
-        FragmentData::Log(LogExcerpt {
+    Fragment::new(task_id, label, kind, TaskStatus::Failure, headline).with_data(FragmentData::Log(
+        LogExcerpt {
             lines: detail.lines().map(str::to_string).collect(),
             truncated: false,
-        }),
-    )
+        },
+    ))
 }
 
 /// The report before a run has a plan: materializing a worktree and

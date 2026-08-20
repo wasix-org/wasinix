@@ -134,9 +134,7 @@ pub fn github_run_url() -> Result<Option<String>> {
     ) else {
         return Ok(None);
     };
-    Ok(Some(format!(
-        "{server}/{repository}/actions/runs/{run_id}"
-    )))
+    Ok(Some(format!("{server}/{repository}/actions/runs/{run_id}")))
 }
 
 pub fn github_token() -> Option<String> {

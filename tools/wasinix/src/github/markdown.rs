@@ -197,10 +197,9 @@ fn blocked_jobs(report: &Report) -> Markdown {
             Markdown::constant("- "),
             Markdown::code(failure.job.as_str()),
             match &failure.message {
-                Some(message) => Markdown::concat([
-                    Markdown::constant(" · "),
-                    headline_cell(message),
-                ]),
+                Some(message) => {
+                    Markdown::concat([Markdown::constant(" · "), headline_cell(message)])
+                }
                 None => Markdown::new(),
             },
             Markdown::constant("\n"),
@@ -765,7 +764,9 @@ fn neutral(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
     // The pipeline table is what says which task stopped; the compared case
     // keeps its established shape.
     if !compared {
-        text = text.push(Markdown::constant("\n")).push(details(report, fragments));
+        text = text
+            .push(Markdown::constant("\n"))
+            .push(details(report, fragments));
     }
     text
 }
@@ -836,10 +837,7 @@ fn in_progress(report: &Report, snapshot: Option<&Snapshot>, links: &Links) -> M
     Markdown::concat([
         text,
         comparison_block(report),
-        ladder(
-            report.tasks.iter().filter(|task| task.enabled),
-            trailing,
-        ),
+        ladder(report.tasks.iter().filter(|task| task.enabled), trailing),
     ])
 }
 

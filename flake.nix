@@ -115,6 +115,7 @@
           enable = true;
           includes = ["*.js" "*.yml" "*.yaml" "*.md"];
         };
+        rustfmt.enable = true;
       };
     };
 

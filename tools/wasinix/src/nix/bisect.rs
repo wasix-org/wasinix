@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::support::error::{request_error, require, Result};
-use crate::update::targets::{self as updatetargets, Backend, Target};
 use crate::update::select as updateselect;
+use crate::update::targets::{self as updatetargets, Backend, Target};
 
 /// The report the run leaves beside its candidate dirs.
 pub const REPORT_FILE: &str = "bisect.json";
@@ -93,7 +93,8 @@ fn source_repository(source: &Value) -> Option<String> {
 /// Resolve the same target names accepted by `update` and `--with`.
 pub fn dependency(repo: &Path, spec: &str) -> Result<Dependency> {
     let targets = updatetargets::all_targets(repo)?;
-    let names = updateselect::selected_names(&updatetargets::domain(&targets), &[spec.to_string()])?;
+    let names =
+        updateselect::selected_names(&updatetargets::domain(&targets), &[spec.to_string()])?;
     require(
         names.len() == 1,
         format!("bisect target {spec:?} is ambiguous"),
@@ -327,7 +328,10 @@ where
             return Ok(*outcome);
         }
         let candidate_dir = options.run_dir.join("candidates").join(rev);
-        crate::support::ui::fact(&options.dependency.target, crate::support::format::short_rev(rev));
+        crate::support::ui::fact(
+            &options.dependency.target,
+            crate::support::format::short_rev(rev),
+        );
         let started = Instant::now();
         let outcome = test(rev, &candidate_dir)?;
         let result = TestResult {
@@ -674,8 +678,14 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(stopped.first_bad.is_none(), "one candidate cannot decide 16");
-        assert!(stopped.revisions_left.is_some(), "the range was not narrowed");
+        assert!(
+            stopped.first_bad.is_none(),
+            "one candidate cannot decide 16"
+        );
+        assert!(
+            stopped.revisions_left.is_some(),
+            "the range was not narrowed"
+        );
 
         // Resuming reuses the recorded outcomes: the good and bad ends are
         // not retested, and the run finishes.

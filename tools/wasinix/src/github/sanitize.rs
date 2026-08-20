@@ -160,8 +160,7 @@ impl Markdown {
         if url_is_plain(url) {
             Markdown(format!("[{label}]({url})"))
         } else {
-            Markdown(format!("{label} "))
-                .push(Markdown::cell_code(url))
+            Markdown(format!("{label} ")).push(Markdown::cell_code(url))
         }
     }
 
@@ -173,7 +172,6 @@ impl Markdown {
             Markdown(format!("{label} {}", code_span(url)))
         }
     }
-
 
     pub fn push(mut self, other: Markdown) -> Markdown {
         self.0.push_str(&other.0);

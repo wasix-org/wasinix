@@ -20,10 +20,10 @@ use crate::support::ui;
 /// deliberate choice: wasmer.io is production, wasmer.fun staging,
 /// wasmer.wtf dev.
 pub fn registry(flag: Option<&str>) -> String {
-    flag.map(str::to_string)
-        .unwrap_or_else(|| crate::support::env::wasmer_registry().expect("a set registry is unicode"))
+    flag.map(str::to_string).unwrap_or_else(|| {
+        crate::support::env::wasmer_registry().expect("a set registry is unicode")
+    })
 }
-
 
 /// The built index, or a fresh one when the caller named none.
 fn registry_path(given: Option<PathBuf>) -> Result<PathBuf> {
@@ -33,7 +33,10 @@ fn registry_path(given: Option<PathBuf>) -> Result<PathBuf> {
     let paths = crate::support::nix::Invocation::flake("build", ".#pythonRegistry")
         .arg("--no-link")
         .out_paths("building the index")?;
-    Ok(paths.into_iter().next_back().expect("out_paths is non-empty"))
+    Ok(paths
+        .into_iter()
+        .next_back()
+        .expect("out_paths is non-empty"))
 }
 
 pub struct Preview {
@@ -230,9 +233,7 @@ pub fn start(given: Option<PathBuf>, port: u16) -> Result<Running> {
     let url = format!("http://127.0.0.1:{port}/simple");
     ui::result(format!("serving the built index at {}", root.display()));
     ui::result(format!("  url:   {url}"));
-    ui::result(format!(
-        "  use:   pip install --index-url {url} <package>"
-    ));
+    ui::result(format!("  use:   pip install --index-url {url} <package>"));
     let mut cmd = Command::new("python3");
     cmd.args(["-m", "http.server", &port.to_string(), "--directory"])
         .arg(&root);
@@ -398,12 +399,12 @@ fn dists(flake: &Flake<'_>) -> Result<BTreeMap<String, Value>> {
     // consumers outside nix.
     let raw = eval(flake, "pythonRegistry.distsJson", None)?;
     let parsed: Value = match raw.as_str() {
-        Some(text) => serde_json::from_str(text).map_err(|source| {
-            crate::support::error::Error::Json {
+        Some(text) => {
+            serde_json::from_str(text).map_err(|source| crate::support::error::Error::Json {
                 path: "<pythonRegistry.distsJson>".into(),
                 source,
-            }
-        })?,
+            })?
+        }
         None => raw,
     };
     Ok(parsed

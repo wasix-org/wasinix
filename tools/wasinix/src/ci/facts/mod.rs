@@ -130,9 +130,7 @@ impl BuildMetrics {
             .iter()
             .filter(|case| case.class == "Build" && case.duration > 0.0)
         {
-            *build_seconds
-                .entry(JobAddr(case.attr.clone()))
-                .or_default() += case.duration;
+            *build_seconds.entry(JobAddr(case.attr.clone())).or_default() += case.duration;
             build_seconds_by_drv
                 .entry(case.drv.clone().unwrap_or_else(|| case.attr.clone()))
                 .or_insert(case.duration);
@@ -300,8 +298,10 @@ pub fn ingest(
     // directory, which answers nothing when either is unreadable, and then
     // a blocked job's report says only "build failed before producing a
     // log".
-    let claimed: std::collections::BTreeSet<&str> = roots.iter().map(|root| root.drv.as_str()).collect();
-    let job_drvs: std::collections::BTreeSet<&str> = index.values().map(|job| job.drv.as_str()).collect();
+    let claimed: std::collections::BTreeSet<&str> =
+        roots.iter().map(|root| root.drv.as_str()).collect();
+    let job_drvs: std::collections::BTreeSet<&str> =
+        index.values().map(|job| job.drv.as_str()).collect();
     for reported in builder_failures {
         if claimed.contains(reported.drv.as_str()) || job_drvs.contains(reported.drv.as_str()) {
             continue;

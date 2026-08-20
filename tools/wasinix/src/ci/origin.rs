@@ -3,7 +3,6 @@
 //! validation is not enough. The fields that grant anything are read back from
 //! the API.
 
-
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -217,11 +216,7 @@ pub fn extract_command(body: &str) -> Result<String> {
     }
     let command = match found {
         Some(command) => command,
-        None => {
-            return request_error(format!(
-                "invalid CI comment: no {PREFIX} directive found"
-            ))
-        }
+        None => return request_error(format!("invalid CI comment: no {PREFIX} directive found")),
     };
     require(
         !command.is_empty(),
@@ -234,10 +229,7 @@ pub fn extract_command(body: &str) -> Result<String> {
     Ok(command)
 }
 
-pub fn command_from_body(
-    body: &str,
-    classifier: &dyn Classifier,
-) -> Result<(String, CommandKind)> {
+pub fn command_from_body(body: &str, classifier: &dyn Classifier) -> Result<(String, CommandKind)> {
     let command = extract_command(body)?;
     let kind = classifier.classify(&command)?;
     Ok((command, kind))
@@ -278,8 +270,10 @@ pub fn authorize(
     )?;
     let comment_id = event["comment"]["id"].as_u64().unwrap_or_default();
     require(comment_id > 0, "invalid CI comment: comment id is invalid")?;
-    let (command, kind) =
-        command_from_body(event["comment"]["body"].as_str().unwrap_or_default(), classifier)?;
+    let (command, kind) = command_from_body(
+        event["comment"]["body"].as_str().unwrap_or_default(),
+        classifier,
+    )?;
 
     require_write_permission(repository, actor, api)?;
 

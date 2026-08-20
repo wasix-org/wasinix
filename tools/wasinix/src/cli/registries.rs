@@ -5,9 +5,9 @@
 use std::path::PathBuf;
 
 use crate::registries::{cargo, python, wasmer};
+use crate::support::effects::Effects;
 use crate::support::error::Result;
 use crate::support::process::CommandStatus;
-use crate::support::effects::Effects;
 use crate::support::ui;
 
 #[derive(clap::Subcommand)]

@@ -67,12 +67,11 @@ pub fn index_path(name: &str) -> String {
 /// entry lines. A malformed line is an error, never "not published".
 pub fn index_cksum(index_text: &str, version: &str) -> Result<Option<String>> {
     for line in index_text.lines().filter(|line| !line.trim().is_empty()) {
-        let entry: Value = serde_json::from_str(line).map_err(|source| {
-            crate::support::error::Error::Json {
+        let entry: Value =
+            serde_json::from_str(line).map_err(|source| crate::support::error::Error::Json {
                 path: "<index line>".into(),
                 source,
-            }
-        })?;
+            })?;
         if entry["vers"].as_str() == Some(version) {
             return Ok(entry["cksum"].as_str().map(str::to_string));
         }
@@ -182,10 +181,12 @@ pub struct PublishOptions {
 pub fn publish(options: PublishOptions) -> Result<(PublishReport, CommandStatus)> {
     let mint = mint_path(options.mint)?;
     let manifest: Value = crate::support::json::read(&mint.join("manifest.json"))?;
-    let entries: Vec<MintCrate> = serde_json::from_value(manifest["crates"].clone())
-        .map_err(|source| crate::support::error::Error::Json {
-            path: mint.join("manifest.json").display().to_string().into(),
-            source,
+    let entries: Vec<MintCrate> =
+        serde_json::from_value(manifest["crates"].clone()).map_err(|source| {
+            crate::support::error::Error::Json {
+                path: mint.join("manifest.json").display().to_string().into(),
+                source,
+            }
         })?;
     let selected = select(&entries, &options.crates)?;
     if selected.is_empty() {
@@ -226,9 +227,11 @@ pub fn publish(options: PublishOptions) -> Result<(PublishReport, CommandStatus)
                     false,
                 )
             }
-            Action::Publish if options.effects.is_dry_run() => {
-                (Action::Publish, "would publish (dry run)".to_string(), false)
-            }
+            Action::Publish if options.effects.is_dry_run() => (
+                Action::Publish,
+                "would publish (dry run)".to_string(),
+                false,
+            ),
             Action::Publish => {
                 if token.is_none() {
                     token = Some(crate::support::env::wasix_cargo_token()?.ok_or_else(|| {
@@ -511,10 +514,12 @@ fn sparse_site(mint: &Path, site: &Path, base_url: &str, only: &[String]) -> Res
 pub fn preview(options: PreviewOptions) -> Result<Option<(String, Vec<String>)>> {
     let mint = mint_path(options.mint)?;
     let manifest: Value = crate::support::json::read(&mint.join("manifest.json"))?;
-    let entries: Vec<MintCrate> = serde_json::from_value(manifest["crates"].clone())
-        .map_err(|source| crate::support::error::Error::Json {
-            path: mint.join("manifest.json").display().to_string().into(),
-            source,
+    let entries: Vec<MintCrate> =
+        serde_json::from_value(manifest["crates"].clone()).map_err(|source| {
+            crate::support::error::Error::Json {
+                path: mint.join("manifest.json").display().to_string().into(),
+                source,
+            }
         })?;
     // Minted tarballs are byte-reproducible, so bytes against the base mint
     // are the change signal: they fold the pin, the patches, and the rel

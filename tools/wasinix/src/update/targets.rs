@@ -186,8 +186,7 @@ pub(crate) fn dedupe(declared: Vec<Target>) -> Vec<Target> {
     let mut pins: std::collections::BTreeSet<(String, Vec<String>)> =
         std::collections::BTreeSet::new();
     for target in declared {
-        if !target.file.is_empty() && !pins.insert((target.file.clone(), target.command.clone()))
-        {
+        if !target.file.is_empty() && !pins.insert((target.file.clone(), target.command.clone())) {
             continue;
         }
         if !names.insert(target.name.clone()) {
@@ -212,10 +211,8 @@ pub fn discovered_post_update_hooks() -> Result<Vec<PostUpdateHook>> {
     let declared = eval(&Flake::default(), "postUpdateHooks", None)?;
     let mut hooks: BTreeMap<String, PostUpdateHook> = BTreeMap::new();
     for (attr, value) in declared.as_object().into_iter().flatten() {
-        let declaration: PostUpdateDeclaration = crate::support::json::from_value(
-            value.clone(),
-            &format!("postUpdateHooks.{attr}"),
-        )?;
+        let declaration: PostUpdateDeclaration =
+            crate::support::json::from_value(value.clone(), &format!("postUpdateHooks.{attr}"))?;
         let name = attr.rsplit('.').next().unwrap_or(attr).to_string();
         let hook = PostUpdateHook {
             name: name.clone(),

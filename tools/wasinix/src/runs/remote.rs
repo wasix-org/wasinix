@@ -213,9 +213,7 @@ fn fetch_run(builder: &Builder, run_dir: &str, fetch_to: &Path) -> Result<()> {
     // run.json, run.log, and events.jsonl belong to the local lifecycle;
     // the remote copies must not replace them. A fresh directory takes
     // everything, so a fetched remote run stays self-describing.
-    for entry in
-        std::fs::read_dir(scratch.path()).map_err(|e| io(scratch.path(), e))?
-    {
+    for entry in std::fs::read_dir(scratch.path()).map_err(|e| io(scratch.path(), e))? {
         let entry = entry.map_err(|e| io(scratch.path(), e))?;
         let name = entry.file_name();
         let target = fetch_to.join(&name);
@@ -434,7 +432,12 @@ pub fn run(request: Request<'_>) -> Result<CommandStatus> {
         .ok_or_else(|| Error::Failure("remote launch reported no run directory".into()))?;
     crate::support::ui::fact("remote run", format!("{}:{run_dir}", request.builder.host));
 
-    observe(request.builder, &run_dir, request.fetch_to, request.progress)
+    observe(
+        request.builder,
+        &run_dir,
+        request.fetch_to,
+        request.progress,
+    )
 }
 
 /// Ask the remote supervisor to stop its payload, through the same marker a

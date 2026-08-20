@@ -155,9 +155,7 @@ pub fn config_path() -> Result<PathBuf> {
 pub fn runtime_dir() -> Result<PathBuf> {
     Ok(match crate::support::env::xdg_runtime_dir() {
         Some(path) => path.join("wasinix"),
-        None => {
-            or_home(crate::support::env::xdg_state_home(), ".local/state")?.join("wasinix/run")
-        }
+        None => or_home(crate::support::env::xdg_state_home(), ".local/state")?.join("wasinix/run"),
     })
 }
 
@@ -199,8 +197,13 @@ pub(crate) fn parse_registry(text: &str, path: &Path) -> Result<Registry> {
         ));
     }
     if let Some(local) = &registry.local {
-        if [local.max_jobs, local.eval_workers, local.eval_memory, local.capacity]
-            .contains(&Some(0))
+        if [
+            local.max_jobs,
+            local.eval_workers,
+            local.eval_memory,
+            local.capacity,
+        ]
+        .contains(&Some(0))
         {
             return request_error(format!(
                 "{}: [local] limits must be positive integers",
@@ -614,14 +617,19 @@ fn process_alive(pid: u32) -> bool {
 /// the process is gone. The comm field may contain spaces, so fields count
 /// from after its closing parenthesis (starttime is the 22nd overall).
 fn process_start_ticks(pid: u32) -> Option<u64> {
-    let stat = std::fs::read_to_string(Path::new("/proc").join(pid.to_string()).join("stat")).ok()?;
+    let stat =
+        std::fs::read_to_string(Path::new("/proc").join(pid.to_string()).join("stat")).ok()?;
     let after_comm = stat.rsplit_once(')')?.1;
     after_comm.split_whitespace().nth(19)?.parse().ok()
 }
 
 pub fn acquire(builder: &Builder) -> Result<Lease> {
     let root = runtime_dir()?.join("leases").join(&builder.name);
-    acquire_slots(&root, builder.capacity, &format!("remote {:?}", builder.name))
+    acquire_slots(
+        &root,
+        builder.capacity,
+        &format!("remote {:?}", builder.name),
+    )
 }
 
 /// A slot against the `[local]` capacity, so concurrent local runs cannot

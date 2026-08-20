@@ -111,11 +111,10 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
     }
     let jobs_file =
         std::fs::File::create(request.jobs_path).map_err(|e| io(request.jobs_path, e))?;
-    let output = crate::support::tools::spawn(
-        cmd.stdout(Stdio::from(jobs_file)).stderr(Stdio::piped()),
-    )?
-    .wait_with_output()
-    .map_err(|e| io(request.jobs_path, e))?;
+    let output =
+        crate::support::tools::spawn(cmd.stdout(Stdio::from(jobs_file)).stderr(Stdio::piped()))?
+            .wait_with_output()
+            .map_err(|e| io(request.jobs_path, e))?;
     crate::support::fs::write(request.stderr_log, &output.stderr)?;
     if output.status.success() {
         return Ok(None);
