@@ -897,6 +897,7 @@ fn run_build_tasks(
 
     let mut worst = CommandStatus::SUCCESS;
     let mut results: BTreeMap<String, PathBuf> = BTreeMap::new();
+    let mut union_logs: Vec<PathBuf> = Vec::new();
     // Merged across placement groups: one task's jobs can span builders.
     let mut plan = crate::nix::buildset::PlanCensus::new();
     let union_started = Instant::now();
@@ -921,6 +922,7 @@ fn run_build_tasks(
             });
         }
         let build_dir = ctx.run_dir.join("build").join(group_dir(on.as_deref()));
+        union_logs.push(build_dir.join("build-union.log"));
         for case in &union_cases {
             results.insert(case.id.clone(), build_dir.join("results.xml"));
         }
@@ -992,6 +994,14 @@ fn run_build_tasks(
         }
     }
 
+    // What nix itself said failed, from the realise output. It names the
+    // derivation, the reason and the tail of its log, which is the only
+    // account a job blocked behind it can carry.
+    let reported: Vec<crate::nix::buildset::BuilderFailure> = union_logs
+        .iter()
+        .filter_map(|path| std::fs::read_to_string(path).ok())
+        .flat_map(|text| crate::nix::buildset::builder_failures(&text))
+        .collect();
     for spec in specs {
         let paths = case_dir(ctx.run_dir, &spec.case);
         let junit = crate::ci::prepare::junit_dir(&paths)
@@ -1007,6 +1017,7 @@ fn run_build_tasks(
             &mapping.info,
             cutoff,
             &crate::ci::prepare::logs_dir(&paths).join(spec.target.as_str()),
+            &reported,
         )?;
         // The ingest classifies each failure: jobs that never ran because
         // something below them failed first are blocked, not failing, so a

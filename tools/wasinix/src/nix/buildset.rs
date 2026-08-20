@@ -269,6 +269,65 @@ pub(crate) fn dry_run_plan(plan: &str) -> Result<DryRunPlan> {
     Ok(DryRunPlan { to_build, fetched })
 }
 
+/// A derivation whose builder failed, as nix reported it. The realise
+/// output carries the name, the reason and the tail of the build log, which
+/// is the whole explanation for every job that never ran behind it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BuilderFailure {
+    pub drv: String,
+    pub reason: String,
+    pub log: Vec<String>,
+}
+
+/// Parse the builder failures out of a realise log. Blocks whose reason is a
+/// failed dependency are victims of another block, not causes, and are left
+/// to whatever failed under them.
+pub fn builder_failures(output: &str) -> Vec<BuilderFailure> {
+    let mut found: Vec<BuilderFailure> = Vec::new();
+    let mut lines = output.lines().peekable();
+    while let Some(line) = lines.next() {
+        let Some(drv) = line
+            .strip_prefix("error: Cannot build '")
+            .and_then(|rest| rest.split_once('\'').map(|(drv, _)| drv))
+        else {
+            continue;
+        };
+        let Some(reason) = lines
+            .peek()
+            .and_then(|next| next.trim().strip_prefix("Reason: "))
+            .map(|reason| reason.trim_end_matches('.').to_string())
+        else {
+            continue;
+        };
+        if reason.contains("dependency failed") {
+            continue;
+        }
+        let mut log = Vec::new();
+        let mut in_log = false;
+        for line in lines.by_ref() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("Last ") && trimmed.ends_with("log lines:") {
+                in_log = true;
+                continue;
+            }
+            match trimmed.strip_prefix("> ") {
+                Some(text) if in_log => log.push(text.to_string()),
+                _ if in_log => break,
+                _ if trimmed.starts_with("error: ") => break,
+                _ => {}
+            }
+        }
+        if !found.iter().any(|seen| seen.drv == drv) {
+            found.push(BuilderFailure {
+                drv: drv.to_string(),
+                reason,
+                log,
+            });
+        }
+    }
+    found
+}
+
 /// The derivation a realise progress line announces, e.g.
 /// `building '/nix/store/xxx-foo.drv'...`.
 pub(crate) fn realise_building_drv(line: &str) -> Option<&str> {

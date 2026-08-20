@@ -227,6 +227,16 @@ fn test_results(cases: &[junit::Case]) -> Vec<TestResult> {
         .collect()
 }
 
+/// The readable half of a store path: `…-wasmer-package-tar.drv` is
+/// `wasmer-package-tar`.
+fn drv_name(drv: &str) -> String {
+    drv.rsplit('/')
+        .next()
+        .and_then(|base| base.split_once('-'))
+        .map(|(_, rest)| rest.trim_end_matches(".drv").to_string())
+        .unwrap_or_else(|| drv.to_string())
+}
+
 fn failures_of(failed: &[junit::Case], roots: &[logs::RootCause]) -> Vec<Failure> {
     let mut failures: Vec<Failure> = failed
         .iter()
@@ -264,12 +274,14 @@ fn failures_of(failed: &[junit::Case], roots: &[logs::RootCause]) -> Vec<Failure
 /// Ingest one build task's junit files against its jobs index: classify each
 /// failure, find dependency root causes, archive their logs, and return the
 /// facts every renderer shares.
+#[allow(clippy::too_many_arguments)]
 pub fn ingest(
     junits: &[PathBuf],
     jobs_index: Option<&Path>,
     info: &BTreeMap<JobAddr, JobInfo>,
     cutoff: std::time::SystemTime,
     logs_dir: &Path,
+    builder_failures: &[crate::nix::buildset::BuilderFailure],
 ) -> Result<BuildFacts> {
     let Some(mut cases) = junit::parse_junits(junits, true) else {
         return Ok(BuildFacts::default());
@@ -283,6 +295,31 @@ pub fn ingest(
         .collect();
     let roots = logs::dependency_root_causes(&failed, &index, cutoff);
     let mut failures = failures_of(&failed, &roots);
+    // The realise output already named what failed and why. The walk above
+    // finds the same thing by querying the store and probing the log
+    // directory, which answers nothing when either is unreadable, and then
+    // a blocked job's report says only "build failed before producing a
+    // log".
+    let claimed: std::collections::BTreeSet<&str> = roots.iter().map(|root| root.drv.as_str()).collect();
+    let job_drvs: std::collections::BTreeSet<&str> = index.values().map(|job| job.drv.as_str()).collect();
+    for reported in builder_failures {
+        if claimed.contains(reported.drv.as_str()) || job_drvs.contains(reported.drv.as_str()) {
+            continue;
+        }
+        let mut message = reported.reason.clone();
+        if let Some(last) = reported.log.last() {
+            message.push_str(&format!(": {last}"));
+        }
+        failures.push(Failure {
+            job: JobAddr(drv_name(&reported.drv)),
+            cause: FailureCause::Dependency,
+            class: None,
+            message: Some(message),
+            jobs: Vec::new(),
+            position: None,
+            log: None,
+        });
+    }
     logs::archive(logs_dir, &failed, &roots, &index, &mut failures)?;
     let metrics = BuildMetrics::from_cases(&cases);
     Ok(BuildFacts {

@@ -5660,6 +5660,40 @@ mod facts {
         assert!(cases[1].message.is_none());
     }
 
+    /// A blocked job reported "build failed before producing a log" and
+    /// nothing named `wasmer-package-tar`, which nix had already described
+    /// in the realise output the run keeps.
+    #[test]
+    fn nix_names_the_derivation_whose_builder_failed() {
+        use crate::nix::buildset::builder_failures;
+        let output = concat!(
+            "building '/nix/store/6j-wasmer-package-tar.drv'...\n",
+            "error: Cannot build '/nix/store/6j-wasmer-package-tar.drv'.\n",
+            "       Reason: builder failed with exit code 1.\n",
+            "       Output paths:\n",
+            "         /nix/store/yg-wasmer-package-tar\n",
+            "       Last 3 log lines:\n",
+            "       > tar: You must specify one of the '-Acdtrux' options\n",
+            "       > Try 'tar --help' for more information.\n",
+            "       > No .wasm binaries found in /nix/store/rr-gnutar/bin for tar\n",
+            "       For full logs, run:\n",
+            "         nix log /nix/store/6j-wasmer-package-tar.drv\n",
+            // a victim of the above, not a cause
+            "error: Cannot build '/nix/store/cg-webc-wasmer-tar-1.35.0.drv'.\n",
+            "       Reason: 1 dependency failed.\n",
+            "       Output paths:\n",
+            "         /nix/store/p1-webc-wasmer-tar-1.35.0\n",
+        );
+        let found = builder_failures(output);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].drv, "/nix/store/6j-wasmer-package-tar.drv");
+        assert_eq!(found[0].reason, "builder failed with exit code 1");
+        assert_eq!(
+            found[0].log.last().map(String::as_str),
+            Some("No .wasm binaries found in /nix/store/rr-gnutar/bin for tar")
+        );
+    }
+
     #[test]
     fn a_missing_junit_is_incomplete_never_clean() {
         let scratch = Scratch::create("wasinix-test").unwrap();
@@ -5669,6 +5703,7 @@ mod facts {
             &BTreeMap::new(),
             std::time::SystemTime::now(),
             &scratch.path().join("logs"),
+            &[],
         )
         .unwrap();
         assert!(!facts.complete);
