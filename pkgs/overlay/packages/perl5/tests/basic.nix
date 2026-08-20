@@ -3,6 +3,7 @@
 {
   testLib,
   crossPkgsPic,
+  emulatedCheckFor,
   makeWasmerPackage,
   ...
 }: let
@@ -14,6 +15,8 @@
       inherit script;
     };
 in {
+  module-upstream = emulatedCheckFor crossPkgsPic.perlPackages.SubIdentify;
+
   version = run "version" "perl -v";
 
   print = run "print" ''

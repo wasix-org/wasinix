@@ -22,6 +22,7 @@
   pythonRegistry,
   # drv -> its declared emulated build-system checks (pkgs/emulated-check.nix).
   emulatedChecksFor ? (_: {}),
+  emulatedCheckFor,
 }: let
   testLib = import ./test-lib.nix {inherit pkgs wasmer;};
   mkTestGroup = import ../lib/test-group.nix {inherit pkgs lib posOf;};
@@ -46,7 +47,7 @@
         then import (dir + "/helpers.nix") {inherit pkgs;}
         else {};
       scope = {
-        inherit pkgs testLib helpers crossPkgs crossPkgsPic makeWasmerPackage pythonRegistry;
+        inherit pkgs testLib helpers crossPkgs crossPkgsPic makeWasmerPackage pythonRegistry emulatedCheckFor;
         preferredProfilePackages = preferredProfilePackagesWithWebc;
         # Shims, for putting another package's commands on PATH. .shim drives the
         # packed .webc, .pkg.shim the source dir.
