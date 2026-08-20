@@ -40,8 +40,10 @@ in
         assert lib.assertMsg (d != null) "crabsay: version ${v} is not <ver>-unstable-YYYY-MM-DD"; "0.0.${lib.concatStrings d}";
     };
     meta = {
-      description = "ferris-says clone, built to WASIX";
+      description = "ferris-says clone";
+      longDescription = "A small Rust command-line program that renders messages as an ASCII crab.";
       homepage = "https://github.com/Zaechus/crabsay";
+      license = with lib.licenses; [mit asl20];
       mainProgram = "crabsay";
     };
   }

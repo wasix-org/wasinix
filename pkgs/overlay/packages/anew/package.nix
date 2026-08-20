@@ -24,7 +24,10 @@ helpers.wasmRename {wasmName = "anew";} (
 
     meta = {
       description = "Tool for adding new lines to files while skipping duplicates";
+      longDescription = "A command-line tool that appends lines to a file while ignoring lines that are already present.";
       homepage = "https://github.com/tomnomnom/anew";
+      changelog = "https://github.com/tomnomnom/anew/tree/v${finalAttrs.version}";
+      platforms = final.lib.platforms.all;
       mainProgram = "anew";
       license = final.lib.licenses.mit;
     };

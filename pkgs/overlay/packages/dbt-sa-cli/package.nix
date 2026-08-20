@@ -57,8 +57,11 @@ final.rustPlatform.buildRustPackage (finalAttrs: {
   passthru.wasix.smokeTest = false;
 
   meta = {
-    description = "dbt Fusion engine CLI, built to WASIX";
+    description = "dbt Fusion engine CLI";
+    longDescription = "The dbt Fusion command-line engine for parsing, compiling, and running dbt projects.";
     homepage = "https://github.com/dbt-labs/dbt-core";
+    changelog = "https://github.com/dbt-labs/dbt-core/releases/tag/v${finalAttrs.version}";
+    license = final.lib.licenses.asl20;
     mainProgram = "dbt-sa-cli";
   };
 })

@@ -121,6 +121,15 @@ in
   # One derivation for the products loader; the per-variant pieces ride along as
   # passthru. The undecorated component attrs are the `off` variant.
   sysroot.overrideAttrs (old: {
+    meta =
+      (old.meta or {})
+      // {
+        description = "WASIX C/C++ sysroot";
+        longDescription = "The combined WASIX libc, compiler-rt, libc++, and libc++abi sysroot for the repository's toolchain profiles.";
+        homepage = "https://github.com/wasix-org/wasix-libc";
+        license = pkgs.lib.unique (pkgs.lib.flatten [variants.off.libc.meta.license variants.off.compiler-rt.meta.license variants.off.libcxx.meta.license]);
+        platforms = ["x86_64-linux"];
+      };
     passthru =
       (old.passthru or {})
       // {inherit variants tests;}

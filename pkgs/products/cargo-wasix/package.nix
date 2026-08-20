@@ -84,7 +84,9 @@ in
 
     meta = {
       description = "cargo subcommand driving WASIX builds, wrapped with the from-source wasix toolchain";
+      longDescription = "A Cargo subcommand that builds Rust projects for WASIX using the repository's from-source compiler and runtime toolchain.";
       homepage = "https://github.com/wasix-org/cargo-wasix";
+      changelog = "https://github.com/wasix-org/cargo-wasix/releases/tag/v${version}";
       license = with lib.licenses; [mit asl20];
       # The wrapped toolchain (LLVM fork, rust fork) is only built for x86_64-linux.
       platforms = ["x86_64-linux"];

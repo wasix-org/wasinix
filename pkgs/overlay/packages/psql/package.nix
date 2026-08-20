@@ -23,6 +23,7 @@ helpers.wasmRename {wasmName = "psql";} (
     meta = {
       mainProgram = "psql";
       description = "PostgreSQL interactive terminal";
+      longDescription = "A terminal-based front end for PostgreSQL that runs queries interactively or from scripts.";
     };
     postBuild = ''
       make -C src/bin/psql

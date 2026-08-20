@@ -211,7 +211,9 @@ in
 
     meta = with lib; {
       description = "WASIX libc (${variant} variant), built from source";
+      longDescription = "The WASIX C standard library for the ${variant} ABI variant, built from the WASIX libc source tree.";
       homepage = "https://github.com/wasix-org/wasix-libc";
+      changelog = "https://github.com/wasix-org/wasix-libc/releases/tag/v${version}";
       license = with licenses; [asl20 mit];
       platforms = platforms.unix;
     };

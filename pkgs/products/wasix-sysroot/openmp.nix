@@ -79,7 +79,9 @@ stdenvNoCC.mkDerivation {
 
   meta = with lib; {
     description = "LLVM OpenMP host runtime (libomp) for WASIX (${name} variant), built from source";
+    longDescription = "The LLVM OpenMP host runtime for WASIX ${name} targets, built from the WASIX LLVM source tree.";
     homepage = "https://github.com/wasix-org/llvm-project";
+    changelog = "https://github.com/wasix-org/llvm-project/releases/tag/${version}";
     license = with licenses; [mit ncsa];
     platforms = platforms.unix;
   };

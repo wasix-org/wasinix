@@ -69,7 +69,9 @@ rustPlatform.buildRustPackage (finalAttrs: {
 
   meta = {
     description = "Detect, build, and run projects";
+    longDescription = "A command-line tool that detects project types, builds them with the appropriate toolchain, and runs the resulting programs.";
     homepage = "https://github.com/wasmerio/anybuild";
+    changelog = "https://github.com/wasmerio/anybuild/releases/tag/v${finalAttrs.version}";
     license = lib.licenses.mit;
     mainProgram = "anybuild";
   };

@@ -15,4 +15,13 @@ wasix-llvm.passthru.llvm.flang-unwrapped.overrideAttrs (old: {
       ./flang-wasm32-common-linkage.patch
     ];
   doCheck = false;
+  meta =
+    (old.meta or {})
+    // {
+      description = "WASIX LLVM Flang frontend";
+      longDescription = "The LLVM Flang frontend from the WASIX LLVM fork, configured to emit WebAssembly objects for the WASIX toolchain.";
+      homepage = "https://github.com/wasix-org/llvm-project";
+      changelog = "https://github.com/wasix-org/llvm-project/releases/tag/${wasix-llvm.passthru.version}";
+      license = wasix-llvm.meta.license;
+    };
 })

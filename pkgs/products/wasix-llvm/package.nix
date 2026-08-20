@@ -128,6 +128,16 @@ in
   # One derivation so the products loader can carry it; the pieces the toolchain
   # and the overlay need ride along as passthru.
   llvmTree.overrideAttrs (old: {
+    meta =
+      (old.meta or {})
+      // {
+        description = "WASIX LLVM toolchain";
+        longDescription = "The WASIX LLVM, Clang, LLD, and LLVM utility toolchain built from the wasix-org LLVM fork.";
+        homepage = "https://github.com/wasix-org/llvm-project";
+        changelog = "https://github.com/wasix-org/llvm-project/releases/tag/${version}";
+        license = llvm.clang-unwrapped.meta.license;
+        platforms = ["x86_64-linux"];
+      };
     passthru =
       (old.passthru or {})
       // {
