@@ -3,7 +3,7 @@
   makeWasmerPackage,
   webcIdent,
 }: {
-  wasmer = {
+  wasmerArtifacts = {
     entry,
     packages,
     ...
@@ -22,8 +22,26 @@
         package = entry.package;
         inherit servedVersions;
       };
-      manifest = entry.package.passthru.wasmer or {};
-      identity = webcIdent entry.package;
+    in {
+      artifacts = {
+        pkg = package;
+        webc = package.webc;
+      };
+    });
+
+  wasmerCommands = {
+    entry,
+    packages,
+    ...
+  }:
+    lib.optionalAttrs (entry.kind == "artifact" && entry.artifactKind == "webc") (let
+      current = packages.sameProfile.${entry.name};
+      subjectPackage =
+        if entry.instance.kind == "history"
+        then current.versions.${entry.instance.version}
+        else current;
+      manifest = subjectPackage.passthru.wasmer or {};
+      identity = webcIdent subjectPackage;
       declaredCommands = manifest.commands or null;
       commandSpecs =
         if declaredCommands == null
@@ -52,16 +70,12 @@
         || !builtins.isString command.entrypoint)
       commandSpecs;
       duplicateCommands = lib.attrNames (lib.filterAttrs (_: commands: lib.length commands > 1) (lib.groupBy (command: command.name) commandSpecs));
-      commands =
-        if entry.instance.kind == "current"
-        then
-          lib.listToAttrs (map (command:
-            lib.nameValuePair command.name {
-              inherit (command) name entrypoint;
-              artifact = package.webc;
-            })
-          commandSpecs)
-        else {};
+      commands = lib.listToAttrs (map (command:
+        lib.nameValuePair command.name {
+          inherit (command) name entrypoint;
+          artifact = entry.artifact;
+        })
+      commandSpecs);
     in
       lib.throwIf (declaredCommands != null && !builtins.isList declaredCommands)
       "${entry.address}: passthru.wasmer.commands must be a list or null"
@@ -69,11 +83,5 @@
         "${entry.address}: passthru.wasmer.commands contains a command without a string name"
         (lib.throwIf (duplicateCommands != [])
           "${entry.address}: passthru.wasmer.commands contains duplicate name(s): ${lib.concatStringsSep ", " duplicateCommands}"
-          {
-            artifacts = {
-              pkg = package;
-              webc = package.webc;
-            };
-            inherit commands;
-          })));
+          {inherit commands;})));
 }

@@ -134,7 +134,10 @@
       overlays.shared = _final: _previous: {
         core = mkPackage {
           name = "core";
-          passthru.wasix.preferredProfile = "alternate";
+          passthru = {
+            wasix.preferredProfile = "alternate";
+            wasmer.name = "core";
+          };
         };
       };
       overlays.python = _final: _previous: _pyfinal: _pyprevious: {
@@ -611,9 +614,11 @@ in {
       historyArtifact = wasmerProject.artifacts.webc.core.versions."0.9".name;
       servedVersions = wasmerProject.artifacts.pkg.core.passthru.servedVersions;
       commands = lib.attrNames wasmerProject.commands;
-      autoCommand = wasmerProject.packages.wasix.default.auto.commands.auto.entrypoint;
+      autoCommand = wasmerProject.packages.wasix.default.auto.artifacts.webc.commands.auto.entrypoint;
       explicitCommand = wasmerProject.commands.second.entrypoint;
-      dataCommands = wasmerProject.packages.wasix.default.data.commands;
+      historyCommands = lib.attrNames wasmerProject.artifacts.webc.core.versions."0.9".commands;
+      commandAddresses = builtins.filter (name: lib.hasPrefix "commands." name) (lib.attrNames wasmerProject.catalog.entries);
+      dataCommands = wasmerProject.packages.wasix.default.data.artifacts.webc.commands;
       unshippedArtifacts = wasmerProject.packages.wasix.default.unshipped.artifacts;
       alternateArtifacts = wasmerProject.packages.wasix.alternate.auto.artifacts;
       artifactKind = wasmerProject.catalog.entries."artifacts.webc.auto".kind;
@@ -629,6 +634,14 @@ in {
       commands = ["auto" "core" "first" "second"];
       autoCommand = "launch";
       explicitCommand = "second";
+      historyCommands = ["core"];
+      commandAddresses = [
+        "commands.auto"
+        "commands.core"
+        ''commands.core.versions["0.9"]''
+        "commands.first"
+        "commands.second"
+      ];
       dataCommands = {};
       unshippedArtifacts = {};
       alternateArtifacts = {};
