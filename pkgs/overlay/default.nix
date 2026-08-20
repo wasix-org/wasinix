@@ -67,7 +67,7 @@
       # fast-moving wasmer input into package build closures.
       wasmtime = final.buildPackages.runCommand "wasmtime-wasix-run" {} ''
         mkdir -p "$out/bin"
-        ln -s ${wasixRunStub}/bin/wasix-run "$out/bin/wasmtime"
+        ln -s ${lib.getExe wasixRunStub} "$out/bin/wasmtime"
       '';
 
       # Do NOT wire an exe_wrapper into meson's cross file: the stock

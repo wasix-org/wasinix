@@ -31,12 +31,12 @@
     fi
     shift
 
-    _magic_at() { ${coreutils}/bin/od -An -tx1 -N4 -j "$1" "$prog" 2>/dev/null | ${coreutils}/bin/tr -d ' \n'; }
+    _magic_at() { ${pkgs.lib.getExe' coreutils "od"} -An -tx1 -N4 -j "$1" "$prog" 2>/dev/null | ${pkgs.lib.getExe' coreutils "tr"} -d ' \n'; }
     is_wasm=no
     if [ "$(_magic_at 0)" = "0061736d" ]; then
       is_wasm=yes
-    elif [ "$(${coreutils}/bin/od -An -tx1 -N2 "$prog" 2>/dev/null | ${coreutils}/bin/tr -d ' \n')" = "2321" ]; then
-      _sl=$(${coreutils}/bin/head -1 "$prog" 2>/dev/null | ${coreutils}/bin/wc -c)
+    elif [ "$(${pkgs.lib.getExe' coreutils "od"} -An -tx1 -N2 "$prog" 2>/dev/null | ${pkgs.lib.getExe' coreutils "tr"} -d ' \n')" = "2321" ]; then
+      _sl=$(${pkgs.lib.getExe' coreutils "head"} -1 "$prog" 2>/dev/null | ${pkgs.lib.getExe' coreutils "wc"} -c)
       [ "$(_magic_at "$_sl")" = "0061736d" ] && is_wasm=yes
     fi
     if [ "$is_wasm" != yes ]; then
@@ -74,10 +74,10 @@
         case "$_v" in "" | [0-9]* | *[!A-Za-z0-9_]*) continue ;; esac
         case "''${_kv#*=}" in *[![:space:]]*) ;; *) continue ;; esac
         flags+=(--env "$_kv")
-      done < <(${coreutils}/bin/env -0)
+      done < <(${pkgs.lib.getExe' coreutils "env"} -0)
     else
       for v in HOME TMPDIR TERM TZ LANG LC_ALL ''${WASIX_RUN_ENV-}; do
-        val=$(${coreutils}/bin/printenv "$v") || continue
+        val=$(${pkgs.lib.getExe' coreutils "printenv"} "$v") || continue
         case "$val" in *[![:space:]]*) ;; *) continue ;; esac
         flags+=(--env "$v=$val")
       done
@@ -92,8 +92,8 @@
       nativeBuildInputs = [pkgs.buildPackages.makeWrapper];
       passthru = {inherit stub wasmer;};
     } ''
-      makeWrapper ${stub}/bin/wasix-run "$out/bin/wasix-run" \
-        --set WASIX_WASMER ${wasmer}/bin/wasmer
+      makeWrapper ${pkgs.lib.getExe stub} "$out/bin/wasix-run" \
+        --set WASIX_WASMER ${pkgs.lib.getExe wasmer}
     '';
 in {
   inherit stub run;

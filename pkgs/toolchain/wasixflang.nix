@@ -27,7 +27,7 @@ in
   # rejects both; it resolves archives fully, so the grouping says nothing.
   (writeShellScriptBin "flang" ''
     for _a in "$@"; do case "$_a" in -c | -E | -S | -fsyntax-only | --version | -dumpversion | -dumpmachine | --help | -help)
-      exec ${flang}/bin/flang ${compileFlags} "$@" ;;
+      exec ${lib.getExe flang} ${compileFlags} "$@" ;;
     esac; done
 
     _srcs=()
@@ -44,7 +44,7 @@ in
     _objs=()
     for _s in "''${_srcs[@]}"; do
       _o="$_tmp/$(basename "$_s").o"
-      ${flang}/bin/flang ${compileFlags} -c "$_s" -o "$_o" || exit 1
+      ${lib.getExe flang} ${compileFlags} -c "$_s" -o "$_o" || exit 1
       _objs+=("$_o")
     done
     ${wasixccEnv}

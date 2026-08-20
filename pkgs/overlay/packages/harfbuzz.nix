@@ -25,7 +25,7 @@
   # WASIX_WASMER. Keep it local to avoid set-wide target execution.
   wasixExeWrapper = final.buildPackages.writeText "wasix-exe-wrapper-cross.ini" ''
     [binaries]
-    exe_wrapper = '${wasixRunStub}/bin/wasix-run'
+    exe_wrapper = '${lib.getExe wasixRunStub}'
 
     [properties]
     skip_sanity_check = true

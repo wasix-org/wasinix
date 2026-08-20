@@ -51,7 +51,7 @@ in
         then ''
           export HOME="$TMPDIR"
           export WASMER_DIR="$TMPDIR/.wasmer"
-          ${wasmer}/bin/wasmer run --quiet main.wasm
+          ${lib.getExe wasmer} run --quiet main.wasm
           echo "ran OK under wasmer"
         ''
         else ''echo "link-only (legacy-EH: wasmer can't execute the legacy try opcode)"''

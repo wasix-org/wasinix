@@ -1,5 +1,6 @@
 # End-to-end Fortran test through the profile's compile+link driver, then wasmer.
 {
+  lib,
   stdenvNoCC,
   wasmer,
   toolchain,
@@ -24,7 +25,7 @@ stdenvNoCC.mkDerivation {
     end program hello
     F90
 
-    ${wasixflang}/bin/flang hello.f90 -o hello.wasm
+    ${lib.getExe wasixflang} hello.f90 -o hello.wasm
     runHook postBuild
   '';
 
@@ -35,7 +36,7 @@ stdenvNoCC.mkDerivation {
 
     export HOME="$TMPDIR"
     export WASMER_DIR="$TMPDIR/.wasmer"
-    out_text="$(${wasmer}/bin/wasmer run --quiet hello.wasm)"
+    out_text="$(${lib.getExe wasmer} run --quiet hello.wasm)"
     echo "program output: $out_text"
     case "$out_text" in
       *"Hello from Fortran on WASIX"*"15"*) echo "ran OK under wasmer" ;;

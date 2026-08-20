@@ -48,13 +48,13 @@ in {
     } ''
       export HOME=$TMPDIR/home
       mkdir -p "$HOME"
-      webc=$(${pkgs.findutils}/bin/find ${pythonWebc} -name '*.webc' | head -1)
+      webc=$(${pkgs.lib.getExe' pkgs.findutils "find"} ${pythonWebc} -name '*.webc' | head -1)
 
       site=$TMPDIR/site
       mkdir -p "$site"
       IFS=: read -ra _paths <<< ${lib.escapeShellArg pythonPath}
       for p in "''${_paths[@]}"; do
-        [ -d "$p" ] && ${pkgs.rsync}/bin/rsync -a --chmod=u+w "$p"/ "$site"/
+        [ -d "$p" ] && ${pkgs.lib.getExe pkgs.rsync} -a --chmod=u+w "$p"/ "$site"/
       done
       cp ${file} "$site/__pyrun__.py"
 
@@ -67,7 +67,7 @@ in {
         --env PYTHONPATH=/site \
         "$webc" -- /site/__pyrun__.py >"$log" 2>&1 </dev/null || rc=$?
 
-      if ${pkgs.gnugrep}/bin/grep -q ${lib.escapeShellArg marker} "$log" && [ "$rc" -eq 0 ]; then
+      if ${pkgs.lib.getExe' pkgs.gnugrep "grep"} -q ${lib.escapeShellArg marker} "$log" && [ "$rc" -eq 0 ]; then
         cp "$log" "$out"
       else
         echo "python test '${name}' failed (no /nix/store, pip-like):" >&2

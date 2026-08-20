@@ -81,9 +81,9 @@
     #!/bin/sh
     if [ "\$1" = run ]; then
       shift
-      exec ${testLib.wasmer}/bin/wasmer run --quiet --offline --include-webc ${runtimeWebcs interpreter} "\$@"
+      exec ${lib.getExe testLib.wasmer} run --quiet --offline --include-webc ${runtimeWebcs interpreter} "\$@"
     fi
-    exec ${testLib.wasmer}/bin/wasmer "\$@"
+    exec ${lib.getExe testLib.wasmer} "\$@"
     EOF
     chmod +x wasmer-local
     wasmer_local="$PWD/wasmer-local"

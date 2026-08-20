@@ -258,7 +258,7 @@
             # bundles is pure python, so unpack that instead.
             whl=$(echo "$out"/lib/python${pyVer}/ensurepip/_bundled/pip-*.whl)
             [ -f "$whl" ] || { echo "no bundled pip wheel in $out" >&2; exit 1; }
-            ${final.buildPackages.python3}/bin/python3 -m zipfile -e "$whl" \
+            ${final.lib.getExe final.buildPackages.python3} -m zipfile -e "$whl" \
               "$out/lib/python${pyVer}/site-packages"
 
             for f in \

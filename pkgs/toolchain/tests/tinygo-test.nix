@@ -1,4 +1,5 @@
 {
+  lib,
   stdenvNoCC,
   tinygo,
   wasix-llvm,
@@ -12,7 +13,7 @@ stdenvNoCC.mkDerivation {
     runHook preBuild
     export HOME="$TMPDIR"
 
-    version="$(${tinygo}/bin/tinygo version)"
+    version="$(${lib.getExe tinygo} version)"
     echo "$version"
     case "$version" in
       *"LLVM version ${wasix-llvm.passthru.llvmVersion}"*) ;;
@@ -28,7 +29,7 @@ stdenvNoCC.mkDerivation {
         fmt.Println("hello from tinygo")
     }
     GO
-    ${tinygo}/bin/tinygo build -target=wasip1 -o hello.wasm hello.go
+    ${lib.getExe tinygo} build -target=wasip1 -o hello.wasm hello.go
     runHook postBuild
   '';
 
@@ -38,7 +39,7 @@ stdenvNoCC.mkDerivation {
     [ "$magic" = "0061736d" ] || { echo "not a wasm module (magic=$magic)"; exit 1; }
 
     export WASMER_DIR="$TMPDIR/.wasmer"
-    output="$(${wasmer}/bin/wasmer run hello.wasm)"
+    output="$(${lib.getExe wasmer} run hello.wasm)"
     echo "program output: $output"
     [ "$output" = "hello from tinygo" ]
 

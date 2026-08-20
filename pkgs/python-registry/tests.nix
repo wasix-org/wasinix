@@ -13,7 +13,7 @@
   testLib,
 }: let
   hostPython = pkgs.python3.withPackages (ps: [ps.pip]);
-  hostPythonExe = "${hostPython}/bin/python3";
+  hostPythonExe = lib.getExe hostPython;
   pyVersion = python3.pythonVersion;
   guestPython = "python${pyVersion}";
 
@@ -75,7 +75,12 @@ in {
   # pure wheel with a pure dep chain.
   resolve-requests = resolveTest {
     attr = "requests";
-    expectDeps = ["urllib3" "idna" "certifi" "charset_normalizer"];
+    expectDeps = [
+      "urllib3"
+      "idna"
+      "certifi"
+      "charset_normalizer"
+    ];
   };
   # C-extension wheel: pip must pick the cp/wasi-tagged wheel and its .so must
   # dynamically load under wasmer.

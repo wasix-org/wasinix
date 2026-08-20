@@ -259,7 +259,7 @@ in
           // pkgs.lib.optionalAttrs (packagePos != null) {pos = packagePos;}) ''
           d="$out/${owner}/${name}"
           mkdir -p "$d"
-          ${wasmer}/bin/wasmer package build --quiet "${finalAttrs.finalPackage}/pkg/${name}" -o "$d/${version}.webc"
+          ${lib.getExe wasmer} package build --quiet "${finalAttrs.finalPackage}/pkg/${name}" -o "$d/${version}.webc"
         '';
       in
         built

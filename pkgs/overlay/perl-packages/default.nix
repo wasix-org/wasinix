@@ -22,7 +22,7 @@
         *) args+=("$arg") ;;
       esac
     done
-    exec ${wasixRunStub}/bin/wasix-run ${final.perl}/bin/perl "''${args[@]}"
+    exec ${final.lib.getExe wasixRunStub} ${final.lib.getExe final.perl} "''${args[@]}"
   '';
 in {
   buildPerlPackage = args:
