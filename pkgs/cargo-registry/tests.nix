@@ -1,6 +1,6 @@
 # Checks on the minted registry payload: what a publish would actually upload.
 # The wasm server serving it back to cargo end to end is the server package's
-# own test, overlay/packages/cargo-registry/tests/serve.nix.
+# own test, wasix/cargo-registry/tests/serve.nix.
 {
   pkgs,
   lib,

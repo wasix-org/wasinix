@@ -1,5 +1,5 @@
 # The shipped Python wheels + import smoke-tests. Exposes each wheel in
-# overlay/python-packages/wheels.nix as pythonWheels.<attr> (the wasm cross build) and
+# python/wheels.nix as pythonWheels.<attr> (the wasm cross build) and
 # `.tests` (named leaves plus `.all`) for targeted builds and flat
 # `checks.wheel-<py>-<attr>-<test>` CI projections.
 {
@@ -25,10 +25,10 @@
 }: let
   testLib = import ./python-test-lib.nix {inherit pkgs lib python3 pythonWebc wasmer;};
 
-  wheelList = import ./overlay/python-packages/wheels.nix;
+  wheelList = import ./python/wheels.nix;
   # Older releases also served (registry history), keyed by worklist attr then version;
   # JSON so scripts/history.py and update.py can edit it (schema: see wheels.nix header).
-  historyTable = builtins.fromJSON (builtins.readFile ./overlay/python-packages/history.json);
+  historyTable = builtins.fromJSON (builtins.readFile ./python/history.json);
   unknownHistory = lib.filter (n: !(lib.elem n (map (e: e.attr) wheelList))) (lib.attrNames historyTable);
   # A noarch entry builds once on the default python, so its history versions
   # would be gated out by every `variants` value and silently never ship.
@@ -71,7 +71,7 @@
       if [ -n "$hits" ]; then
         echo "wheel '${name}' embeds runtime /nix/store paths (breaks pip on a bare wasix target):" >&2
         echo "$hits" >&2
-        echo "-> bundle the artifact into the wheel, see overlay/python-packages/lib/bundle.nix" >&2
+        echo "-> bundle the artifact into the wheel, see python/lib/bundle.nix" >&2
         exit 1
       fi
       echo "OK ${name}" > "$out"
@@ -158,9 +158,9 @@
       echo "OK ${name}: artifact is $got" > "$out"
     '';
 
-  # Package tests follow overlay/python-packages/<attr>/tests/*.nix and return
+  # Package tests follow python/<attr>/tests/*.nix and return
   # named derivations from the supplied scope.
-  pkgTestsDir = attr: ./overlay/python-packages + "/${attr}/tests";
+  pkgTestsDir = attr: ./python + "/${attr}/tests";
   pkgTests = e: let
     dir = pkgTestsDir e.attr;
     scope = {
@@ -366,7 +366,7 @@
 
   # History wheels (<attr>-<version>): the entry's older releases, minted in the
   # python set as <attr>_<version> by rebasing the src (load-packages.nix history,
-  # driven by python-packages/history.json). Never noarch. `spec.variants` is the
+  # driven by python/history.json). Never noarch. `spec.variants` is the
   # generic history gate (see load-packages.nix): the build variants an entry is
   # limited to; for this set a variant IS an interpreter (pyKey), default both.
   # A worklist entry reads the same `variants` gate as a history entry, for a

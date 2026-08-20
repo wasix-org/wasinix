@@ -85,8 +85,8 @@ rebuild when unrelated orchestration code changes.
 Both registries are append-only. History entries also keep selected older
 versions rebuildable, using one table per package set:
 
-- wheels: `pkgs/overlay/python-packages/history.json`
-- CLIs / libraries: `pkgs/overlay/packages/history.json`
+- wheels: `pkgs/python/history.json`
+- CLIs / libraries: `pkgs/wasix/history.json`
 
 Tables are keyed `{<attr>: {<version>: <spec>}}`. A spec contains the fields for
 the package's existing source fetcher: `{version, hash}`, `{tag|rev, hash}`, or
@@ -175,8 +175,8 @@ selects the tagged wheels, while uv's `--python-platform` is a closed enum with
 no wasix entry. uv does resolve the index in universal mode
 (`uv pip compile --universal`), which commits to no platform, and installs the
 pure-python wheels directly. anybuild's template suite
-(`pkgs/overlay/packages/anybuild/tests/python-templates.nix`) covers that path
-end to end, serving this index over loopback.
+(`pkgs/wasix/anybuild/tests/python-templates.nix`) covers that path end to end,
+serving this index over loopback.
 
 ## Rels
 

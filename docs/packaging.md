@@ -5,15 +5,14 @@ keeping older versions rebuildable, is `docs/registry.md`.
 
 ## A package provided natively and for WASIX
 
-Put its standard nixpkgs-style recipe in `pkgs/products/<name>/package.nix`. The
+Put its standard nixpkgs-style recipe in `pkgs/shared/<name>/package.nix`. The
 directory is enumerated automatically and the recipe is called in both the
 native package set and every WASIX profile set. Use ordinary function arguments
 such as `stdenv`, `rustPlatform`, and named dependencies; do not take a native
 build from a cross set's `buildPackages`.
 
 Keep the matching overlay entry. Put only WASIX-specific adaptation in
-`pkgs/overlay/packages/<name>/package.nix`, deriving from the preceding shared
-recipe:
+`pkgs/wasix/<name>/package.nix`, deriving from the preceding shared recipe:
 
 ```nix
 {prev, helpers, ...}:
@@ -34,14 +33,12 @@ the convenient canonical WASIX build.
 
 Lightest form that works (the loader finds all of these):
 
-- No changes: name in `pkgs/overlay/trivial.nix`.
-- Changes, no extra files: `pkgs/overlay/packages/<name>.nix`.
-- Patches/tests: `pkgs/overlay/packages/<name>/` with `package.nix`, `patches/`,
-  `tests/`.
+- No changes: name in `pkgs/wasix/trivial.nix`.
+- Changes, no extra files: `pkgs/wasix/<name>.nix`.
+- Patches/tests: `pkgs/wasix/<name>/` with `package.nix`, `patches/`, `tests/`.
 - Version families: one dir whose `package.nix` evaluates to `{names, packages}`
   instead of a function; `names` is the static attr list it provides,
-  `packages = callArgs: {<name> = drv;}`. See `pkgs/overlay/packages/icu/` for
-  an example.
+  `packages = callArgs: {<name> = drv;}`. See `pkgs/wasix/icu/` for an example.
 
 A package file is a function over one argument set:
 
@@ -178,27 +175,27 @@ nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
 ## A Python package or wheel
 
 - Ship a wheel: add `{attr = "<python3.pkgs name>";}` to
-  `pkgs/overlay/python-packages/wheels.nix` (`pyImport` if the module name
-  differs). Most need nothing else; test phases are already skipped by cross.
-- Fix a build: `pkgs/overlay/python-packages/<attr>.nix`, same form as top-level
-  plus `pyfinal`/`pyprev` for Python-set deps. Patches live in
-  `pkgs/overlay/python-packages/patches/`; Rust-wheel helpers live in
-  `pkgs/overlay/python-packages/lib/`.
+  `pkgs/python/wheels.nix` (`pyImport` if the module name differs). Most need no
+  adaptation; compatible package suites run through the emulated check
+  machinery.
+- Fix a build: `pkgs/python/<attr>.nix`, same form as top-level plus
+  `pyfinal`/`pyprev` for Python-set deps. Patches live in
+  `pkgs/python/patches/`; Rust-wheel helpers live in `pkgs/python/lib/`.
 - Ship an older release too (a version consumers pin): see
   [Registry history](registry.md#registry-history).
 - Which wheel to add next, and what it unblocks: `python-coverage.md`.
 
 ## Tests
 
-`pkgs/overlay/packages/<name>/tests/*.nix`, each returning an attrset of
-derivations built with `pkgs/wasmer/test-lib.nix` (a `helpers.nix` is shared
-setup). They attach as `passthru.tests` and appear under
-`checks.<system>.<name>`. Besides `pkgs`/`testLib`/`wasmerPkgs`, test files can
-take `preferredProfilePackages`, `crossPkgs` (the default-profile cross set),
-and `makeWasmerPackage` to cross-build and package a consumer program. See
-icu-data's smoke test for an example. `mkScriptComparison` diffs against the
-native tool; `expectFail` marks a must-fail test; `broken "reason"` tolerates a
-known failure and fails loudly once it starts passing.
+`pkgs/wasix/<name>/tests/*.nix`, each returning an attrset of derivations built
+with `pkgs/wasmer/test-lib.nix` (a `helpers.nix` is shared setup). They attach
+as `passthru.tests` and appear under `checks.<system>.<name>`. Besides
+`pkgs`/`testLib`/`wasmerPkgs`, test files can take `preferredProfilePackages`,
+`crossPkgs` (the default-profile cross set), and `makeWasmerPackage` to
+cross-build and package a consumer program. See icu-data's smoke test for an
+example. `mkScriptComparison` diffs against the native tool; `expectFail` marks
+a must-fail test; `broken "reason"` tolerates a known failure and fails loudly
+once it starts passing.
 
 Every wheel also gets the guards in `pkgs/python-wheels.nix`: `import` runs the
 module on the shipped python, `self-contained` rejects a baked `/nix/store`

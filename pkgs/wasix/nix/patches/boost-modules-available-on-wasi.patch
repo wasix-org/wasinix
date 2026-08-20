@@ -1,0 +1,40 @@
+Ask Meson only for Boost modules that exist on WASI.
+
+Meson resolves every listed module to a library file. Boost.Context and
+Boost.URL are compiled for WASIX (see pkgs/wasix/boost); Coroutine2
+and Container are header-only here, and the WASI file-system path avoids
+Boost.Iostreams.
+
+--- a/src/libstore/meson.build
++++ b/src/libstore/meson.build
+@@ -108,7 +108,7 @@
+
+ boost = dependency(
+   'boost',
+-  modules : [
++  modules : host_machine.system() in ['wasi', 'wasip1'] ? ['url'] : [
+     'container',
+     # Shouldn't list, because can header-only, and Meson currently looks for libs
+     #'regex',
+--- a/src/libexpr/meson.build
++++ b/src/libexpr/meson.build
+@@ -40,7 +40,7 @@
+
+ boost = dependency(
+   'boost',
+-  modules : [
++  modules : host_machine.system() in ['wasi', 'wasip1'] ? ['context'] : [
+     'container',
+     'context',
+   ],
+--- a/src/libutil/meson.build
++++ b/src/libutil/meson.build
+@@ -65,7 +65,7 @@
+
+ boost = dependency(
+   'boost',
+-  modules : [
++  modules : host_machine.system() in ['wasi', 'wasip1'] ? ['context', 'url'] : [
+     'context',
+     'coroutine',
+     'iostreams',

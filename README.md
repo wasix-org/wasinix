@@ -33,10 +33,10 @@ by the `wasinix` CLI in `tools/wasinix`). A job's dotted name is its build path.
 
 `pkgs/toolchain/` builds the toolchain from source; `pkgs/profiles.nix` +
 `pkgs/set/` turn it into five ABI profiles, each a full nixpkgs cross package
-set; `pkgs/products/` holds product recipes instantiated for both the native
-host and WASIX, while `pkgs/overlay/` holds WASIX adaptations and small
-overrides of nixpkgs packages; `pkgs/wasmer/` packages CLIs as webc and tests
-them under Wasmer. Details: [`docs/architecture.md`](docs/architecture.md).
+set; `pkgs/shared/` holds recipes instantiated for both the native host and
+WASIX, while `pkgs/wasix/` and `pkgs/python/` hold target-specific adaptations;
+`pkgs/wasmer/` packages CLIs as webc and tests them under Wasmer. Details:
+[`docs/architecture.md`](docs/architecture.md).
 
 ## Documentation
 

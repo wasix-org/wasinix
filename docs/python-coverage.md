@@ -8,11 +8,11 @@ tables, cross-referenced against the wheels this repo publishes.
 
 ## The model
 
-Pure-python packages cost nothing per package:
+Pure-Python packages generally need no adaptation:
 
-- Cross builds skip the run-only phases, so a pure wheel builds through the
-  nixpkgs cross stdenv untouched. A `python-packages/<attr>.nix` is only ever a
-  build fix, never a prerequisite.
+- A pure wheel builds through the nixpkgs cross stdenv unchanged, while
+  compatible package suites run later under emulation. A
+  `pkgs/python/<attr>.nix` is a build adaptation, not a prerequisite.
 - The registry publishes every shipped wheel plus its transitive python deps
   (`packaging.md`), so shipping one app lands its whole pure closure.
 
@@ -40,8 +40,8 @@ Out-of-scope packages are excluded from the denominator; see below.
 
 The shipped native set is the registry closure, not `wheels.nix`: transitive
 dependencies publish without a worklist entry. Per-package build details live in
-each `pkgs/overlay/packages/<pkg>.nix` /
-`pkgs/overlay/python-packages/<pkg>.nix` and the commit that added it.
+each `pkgs/wasix/<pkg>.nix` / `pkgs/python/<pkg>.nix` and the commit that added
+it.
 
 ## Decide what to add
 

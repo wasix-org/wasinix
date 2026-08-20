@@ -7,7 +7,7 @@
   system,
   nixpkgs,
   mkWasixStdenv,
-  productsOverlay,
+  sharedOverlay,
   wasixOverlay,
 }:
 # extraOverlays is the spot-override seam (see spot.nix): empty in every normal
@@ -25,12 +25,12 @@ import nixpkgs {
       isWasix = true;
       # hostPlatform.emulator needs no override: selectEmulator maps isWasi to
       # wasmtime, which the overlay shadows with the wasmer-free wasix-run shim
-      # (overlay/default.nix).
+      # (wasix/default.nix).
     }
     // profileSpec;
   config.allowUnsupportedSystem = true;
   config.replaceCrossStdenv = mkWasixStdenv;
   # Shared recipes come first. wasixOverlay layers target/product adaptations
   # over them and remains the only writer of WASIX support meta.
-  overlays = [productsOverlay wasixOverlay] ++ extraOverlays;
+  overlays = [sharedOverlay wasixOverlay] ++ extraOverlays;
 }
