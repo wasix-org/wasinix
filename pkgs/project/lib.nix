@@ -1,5 +1,6 @@
 {lib}: let
   registryAttr = "__wasinixRegisteredPackages";
+  extensionContextsAttr = "__wasinixExtensionContexts";
 
   scriptAttrs = [
     "preUnpack"
@@ -181,7 +182,7 @@
           };
       })));
 in rec {
-  inherit address addressSegment callWith discoverUnits extendAttrs mergeScript packageMetadata registryAttr stampPackage unitResult;
+  inherit address addressSegment callWith discoverUnits extendAttrs extensionContextsAttr mergeScript packageMetadata registryAttr stampPackage unitResult;
 
   extendPackage = package: attrs:
     package.overrideAttrs (old: extendAttrs old attrs);
