@@ -24,7 +24,7 @@
     flang,
     version ? flang.version,
   }: [
-    (lib.cmakeFeature "CMAKE_Fortran_COMPILER" "${flang}/bin/flang")
+    (lib.cmakeFeature "CMAKE_Fortran_COMPILER" (lib.getExe flang))
     (lib.cmakeFeature "CMAKE_Fortran_COMPILER_ID" "LLVMFlang")
     (lib.cmakeFeature "CMAKE_Fortran_COMPILER_VERSION" version)
     (lib.cmakeFeature "CMAKE_Fortran_COMPILER_TARGET" "wasm32-wasi")

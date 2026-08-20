@@ -62,7 +62,7 @@ in
       install -Dm644 "$wasm" "$out/bin/hello.wasm"
 
       export HOME="$TMPDIR" WASMER_DIR="$TMPDIR/.wasmer"
-      got="$(${wasmer}/bin/wasmer run --quiet "$out/bin/hello.wasm")"
+      got="$(${lib.getExe wasmer} run --quiet "$out/bin/hello.wasm")"
       echo "wasmer output: [$got]"
       [ "$got" = "hello from wasix rust" ] || {
         echo "FAIL: unexpected output (Rust wasm didn't run correctly)"

@@ -79,7 +79,7 @@
       found=0
       for w in target/wasm32-wasmer-wasi/release/deps/*.wasm; do
         base=$(basename "$w")
-        ${binaryen}/bin/wasm-opt "$w" \
+        ${lib.getExe' binaryen "wasm-opt"} "$w" \
           --enable-bulk-memory --enable-threads --enable-reference-types \
           --enable-exception-handling --no-validation --translate-to-exnref \
           -o "$out/bin/$base"
@@ -95,9 +95,11 @@
     meta.description = "wasix cargo-test binary, built + exnref-translated, for the run-only handoff check";
   };
 in
-  runCommand "wasix-cargo-test" {
+  runCommand "wasix-cargo-test"
+  {
     nativeBuildInputs = [wasixRun.run];
-  } ''
+  }
+  ''
     export HOME="$NIX_BUILD_TOP/home"
     mkdir -p "$HOME"
     export WASIX_CARGO_PROOF=${proof}

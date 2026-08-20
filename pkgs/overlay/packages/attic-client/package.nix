@@ -35,7 +35,7 @@ helpers.libTweaks {
     cp Cargo.lock "$cargoDepsCopy/Cargo.lock"
   '';
   postInstall = ''
-    ${final.buildPackages.binaryen}/bin/wasm-opt "$out/bin/attic.wasm" \
+    ${final.lib.getExe' final.buildPackages.binaryen "wasm-opt"} "$out/bin/attic.wasm" \
       --enable-bulk-memory --enable-threads --enable-reference-types \
       --enable-exception-handling --no-validation --translate-to-exnref \
       -o "$out/bin/attic.wasm.exnref"

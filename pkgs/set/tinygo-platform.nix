@@ -56,7 +56,7 @@ lib.extendMkDerivation {
         else
           name="''${package##*/}"
         fi
-        ${tinygo}/bin/tinygo build -target=wasip1 -no-debug \
+        ${lib.getExe tinygo} build -target=wasip1 -no-debug \
           "''${tinygoFlags[@]}" -o "$GOPATH/bin/$name" "$package"
       done
 

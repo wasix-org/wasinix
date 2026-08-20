@@ -59,7 +59,7 @@ in
           CARGO_WASIX_NO_REGISTRY_CONFIG = "1";
         }
       )} \
-        --set-default WASM_OPT "${binaryen}/bin/wasm-opt" \
+        --set-default WASM_OPT "${lib.getExe' binaryen "wasm-opt"}" \
         --run ${lib.escapeShellArg rustupLink}
       runHook postInstall
     '';

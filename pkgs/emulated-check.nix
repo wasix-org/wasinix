@@ -8,7 +8,7 @@
   wasixRun,
 }: let
   xverdict = import ./lib/xverdict.nix;
-  stub = "${wasixRun.stub}/bin/wasix-run";
+  stub = lib.getExe wasixRun.stub;
   wasmer = wasixRun.run.wasmer;
 
   # Test suites execute wasm programs by filename. Keep the wasm bytes in a
@@ -46,7 +46,7 @@
       export PATH="$PATH:$_wasix_runner_path"
       _build_rel="$(cat ${checkOut}/.builddir)"
       _src_rel="''${_build_rel%%/*}"
-      ${pkgs.zstd}/bin/zstd -dc "${checkOut}/tree.tar.zst" | tar -C "$NIX_BUILD_TOP" -xf -
+      ${lib.getExe pkgs.zstd} -dc "${checkOut}/tree.tar.zst" | tar -C "$NIX_BUILD_TOP" -xf -
       chmod -R u+w "$NIX_BUILD_TOP/$_src_rel"
       cd "$NIX_BUILD_TOP/$_build_rel"
     ''
@@ -205,7 +205,7 @@ in {
       wasixRestorePhase =
         restore drv.check
         + ''
-          export WASIX_WASMER=${lib.escapeShellArg "${wasmer}/bin/wasmer"}
+          export WASIX_WASMER=${lib.escapeShellArg (lib.getExe wasmer)}
           export WASIX_RUN_FLAGS=--net
           export WASIX_RUN_ENV_ALL=1
           export PYTHON_BASIC_REPL=1

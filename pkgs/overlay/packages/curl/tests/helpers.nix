@@ -41,7 +41,7 @@
     printf "Status: 301 Moved Permanently\r\nLocation: /hello.txt\r\nContent-Type: text/plain\r\n\r\n"
     CGI
         chmod +x docroot/echo.cgi docroot/redirect.cgi
-        ${pkgs.openssl}/bin/openssl req -x509 -newkey rsa:2048 \
+        ${pkgs.lib.getExe pkgs.openssl} req -x509 -newkey rsa:2048 \
           -keyout server.key -out server.crt -days 1 -nodes \
           -subj "/CN=127.0.0.1" 2>/dev/null
         cat > lighttpd.conf << EOF

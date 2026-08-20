@@ -29,7 +29,7 @@ in {
     wasixPkgs = [wasmerPkgs.git];
     script = ''
       ${gitSetup}
-      ${pkgs.git}/bin/git init --bare --initial-branch=main remote.git
+      ${pkgs.lib.getExe pkgs.git} init --bare --initial-branch=main remote.git
       mkdir work && cd work
       git init
       git remote add origin "$WASIX_TEST_ROOT/remote.git"

@@ -115,7 +115,7 @@
       need
       + ''
         _l=$(find "$out" -maxdepth 2 -name Cargo.lock -print -quit)
-        [ -n "$_l" ] && { ${hostPkgs.python3}/bin/python3 ${amendLockPy} "$_l" ${addsJson} > "$_l.w"; mv "$_l.w" "$_l"; }
+        [ -n "$_l" ] && { ${hostPkgs.lib.getExe hostPkgs.python3} ${amendLockPy} "$_l" ${addsJson} > "$_l.w"; mv "$_l.w" "$_l"; }
       ''
     );
 
@@ -164,7 +164,7 @@ in {
       _wasixAmendSourceLock() {
         local l="''${cargoRoot:+$cargoRoot/}Cargo.lock"
         [ -f "$l" ] || return 0
-        ${hostPkgs.python3}/bin/python3 ${amendLockPy} "$l" ${addsJson} > "$l.wasix"
+        ${hostPkgs.lib.getExe hostPkgs.python3} ${amendLockPy} "$l" ${addsJson} > "$l.wasix"
         mv "$l.wasix" "$l"
       }
       postPatchHooks=(_wasixAmendSourceLock ''${postPatchHooks[@]+"''${postPatchHooks[@]}"})

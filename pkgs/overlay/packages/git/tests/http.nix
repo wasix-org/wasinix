@@ -31,9 +31,9 @@ in {
       ${startLighttpdHttp {}}
       git clone http://127.0.0.1:8765/git-http-backend/remote.git cloned
       echo "world" >> source/hello.txt
-      ${pkgs.git}/bin/git -C source add .
-      ${pkgs.git}/bin/git -C source commit -m "second commit"
-      ${pkgs.git}/bin/git -C source push ../repos/remote.git HEAD:main
+      ${pkgs.lib.getExe pkgs.git} -C source add .
+      ${pkgs.lib.getExe pkgs.git} -C source commit -m "second commit"
+      ${pkgs.lib.getExe pkgs.git} -C source push ../repos/remote.git HEAD:main
       cd cloned
       git fetch origin
       git --no-pager log --oneline origin/main
@@ -55,7 +55,7 @@ in {
       git add .
       git commit -m "second commit"
       git push origin main
-      ${pkgs.git}/bin/git -C ../repos/remote.git log --oneline
+      ${pkgs.lib.getExe pkgs.git} -C ../repos/remote.git log --oneline
     '';
   };
 
@@ -84,9 +84,9 @@ in {
       ${startLighttpdHttps {}}
       git clone https://127.0.0.1:8766/git-http-backend/remote.git cloned
       echo "world" >> source/hello.txt
-      ${pkgs.git}/bin/git -C source add .
-      ${pkgs.git}/bin/git -C source commit -m "second commit"
-      ${pkgs.git}/bin/git -C source push ../repos/remote.git HEAD:main
+      ${pkgs.lib.getExe pkgs.git} -C source add .
+      ${pkgs.lib.getExe pkgs.git} -C source commit -m "second commit"
+      ${pkgs.lib.getExe pkgs.git} -C source push ../repos/remote.git HEAD:main
       cd cloned
       git fetch origin
       git --no-pager log --oneline origin/main
@@ -108,7 +108,7 @@ in {
       git add .
       git commit -m "second commit"
       git push origin main
-      ${pkgs.git}/bin/git -C ../repos/remote.git log --oneline
+      ${pkgs.lib.getExe pkgs.git} -C ../repos/remote.git log --oneline
     '';
   };
 }

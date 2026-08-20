@@ -19,7 +19,7 @@ in {
       git add .
       git commit -m "initial commit"
       cd ..
-      ${pkgs.git}/bin/git daemon --base-path=. --export-all --reuseaddr --port=9418 &
+      ${pkgs.lib.getExe pkgs.git} daemon --base-path=. --export-all --reuseaddr --port=9418 &
       sleep 1
       git clone git://127.0.0.1:9418/source cloned
       cat cloned/hello.txt
@@ -39,12 +39,12 @@ in {
       git add .
       git commit -m "initial commit"
       cd ..
-      ${pkgs.git}/bin/git daemon --base-path=. --export-all --reuseaddr --port=9418 &
+      ${pkgs.lib.getExe pkgs.git} daemon --base-path=. --export-all --reuseaddr --port=9418 &
       sleep 1
       git clone git://127.0.0.1:9418/source cloned
       echo "world" >> source/hello.txt
-      ${pkgs.git}/bin/git -C source add .
-      ${pkgs.git}/bin/git -C source commit -m "second commit"
+      ${pkgs.lib.getExe pkgs.git} -C source add .
+      ${pkgs.lib.getExe pkgs.git} -C source commit -m "second commit"
       cd cloned
       git fetch origin
       git --no-pager log --oneline origin/main
@@ -58,8 +58,8 @@ in {
     wasmerArgs = ["--net"];
     script = ''
       ${gitSetup}
-      ${pkgs.git}/bin/git init --bare remote.git
-      ${pkgs.git}/bin/git daemon --base-path=. --enable=receive-pack \
+      ${pkgs.lib.getExe pkgs.git} init --bare remote.git
+      ${pkgs.lib.getExe pkgs.git} daemon --base-path=. --enable=receive-pack \
         --export-all --reuseaddr --port=9418 &
       sleep 1
       mkdir work && cd work
@@ -88,13 +88,13 @@ in {
       git add .
       git commit -m "initial commit"
       cd ..
-      ${pkgs.git}/bin/git daemon --base-path=. --export-all --reuseaddr --port=9418 &
+      ${pkgs.lib.getExe pkgs.git} daemon --base-path=. --export-all --reuseaddr --port=9418 &
       sleep 1
       git clone git://127.0.0.1:9418/source cloned
       cat cloned/hello.txt
       echo "world" >> source/hello.txt
-      ${pkgs.git}/bin/git -C source add .
-      ${pkgs.git}/bin/git -C source commit -m "second commit"
+      ${pkgs.lib.getExe pkgs.git} -C source add .
+      ${pkgs.lib.getExe pkgs.git} -C source commit -m "second commit"
       cd cloned
       git pull
       cat hello.txt

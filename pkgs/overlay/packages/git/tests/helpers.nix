@@ -33,12 +33,12 @@
   # Create repos/remote.git (bare, one "hello" commit) and docroot/ via native git.
   setupNativeRemote = ''
     mkdir -p repos source docroot
-    ${pkgs.git}/bin/git -C source init --initial-branch=main
+    ${pkgs.lib.getExe pkgs.git} -C source init --initial-branch=main
     echo "hello" > source/hello.txt
-    ${pkgs.git}/bin/git -C source add .
-    ${pkgs.git}/bin/git -C source commit -m "initial commit"
-    ${pkgs.git}/bin/git init --bare --initial-branch=main repos/remote.git
-    ${pkgs.git}/bin/git -C source push ../repos/remote.git HEAD:main
+    ${pkgs.lib.getExe pkgs.git} -C source add .
+    ${pkgs.lib.getExe pkgs.git} -C source commit -m "initial commit"
+    ${pkgs.lib.getExe pkgs.git} init --bare --initial-branch=main repos/remote.git
+    ${pkgs.lib.getExe pkgs.git} -C source push ../repos/remote.git HEAD:main
   '';
 
   # Write docroot/git-http-backend wrapper that bakes the env vars in.
@@ -60,7 +60,7 @@
         chmod +x docroot/git-http-backend
         ${
       if receivePack
-      then "${pkgs.git}/bin/git -C repos/remote.git config http.receivepack true"
+      then "${pkgs.lib.getExe pkgs.git} -C repos/remote.git config http.receivepack true"
       else ""
     }
   '';
@@ -86,7 +86,7 @@
   startLighttpdHttps = {receivePack ? false}: ''
         mkdir -p docroot
         ${makeGitHttpBackendWrapper {inherit receivePack;}}
-        ${pkgs.openssl}/bin/openssl req -x509 -newkey rsa:2048 \
+        ${pkgs.lib.getExe pkgs.openssl} req -x509 -newkey rsa:2048 \
           -keyout server.key -out server.crt -days 1 -nodes \
           -subj "/CN=127.0.0.1"
         cat > lighttpd.conf << EOF
