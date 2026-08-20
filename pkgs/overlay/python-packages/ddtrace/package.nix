@@ -25,13 +25,19 @@
   '';
   updateWrapper = final.buildPackages.writeShellApplication {
     name = "ddtrace-update";
-    runtimeInputs = with final.buildPackages; [curl git gnugrep gnused jq];
+    runtimeInputs = with final.buildPackages; [
+      curl
+      git
+      gnugrep
+      gnused
+      jq
+    ];
     text = ''
       exec bash "$(git rev-parse --show-toplevel)/pkgs/overlay/python-packages/ddtrace/update.sh" "$@"
     '';
   };
 in
-  pyfinal.buildPythonPackage rec {
+  pyfinal.buildPythonPackage (finalAttrs: {
     pname = "ddtrace";
     version = "4.13.1";
     pyproject = true;
@@ -39,15 +45,15 @@ in
     src = final.fetchFromGitHub {
       owner = "DataDog";
       repo = "dd-trace-py";
-      tag = "v${version}";
+      tag = "v${finalAttrs.version}";
       hash = "sha256-ffqJADnc+PRCRGNYXjUlEMX15Bzxd4HzdyFGIcaZgMw=";
     };
 
     cargoRoot = "src/native";
     cargoDeps = final.rustPlatform.fetchCargoVendor {
-      inherit src;
-      name = "${pname}-${version}-cargo-deps";
-      sourceRoot = "${src.name}/src/native";
+      inherit (finalAttrs) src;
+      name = "${finalAttrs.pname}-${finalAttrs.version}-cargo-deps";
+      sourceRoot = "${finalAttrs.src.name}/src/native";
       hash = "sha256-/R6AyuNQEQVo0hPMfieTU+7RUlpcuwvZlPU7JyuM3SI=";
     };
 
@@ -146,9 +152,8 @@ in
     ];
 
     # setuptools-scm has no git tree to read here. Exported from the build
-    # environment rather than set in `env`, where the rec-bound version above
-    # would freeze the current release's number into a rebased build and its
-    # METADATA would then disagree with the derivation.
+    # environment rather than set in `env`, where a rebased build could leave
+    # its METADATA version out of sync with the derivation.
     preBuild = ''
       export SETUPTOOLS_SCM_PRETEND_VERSION="$version"
     '';
@@ -167,13 +172,18 @@ in
     # (the nix-update command is passed through as its argv)
     passthru.updateScript = {
       command =
-        ["${updateWrapper}/bin/ddtrace-update"]
+        [
+          "${updateWrapper}/bin/ddtrace-update"
+        ]
         ++ nix-update-script {extraArgs = ["--flake"];};
-      accepts = ["release" "revision"];
+      accepts = [
+        "release"
+        "revision"
+      ];
       source = {
         kind = "github";
         owner = "DataDog";
         repo = "dd-trace-py";
       };
     };
-  }
+  })

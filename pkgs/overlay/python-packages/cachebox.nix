@@ -5,7 +5,7 @@
   final,
   ...
 }:
-pyfinal.buildPythonPackage rec {
+pyfinal.buildPythonPackage (finalAttrs: {
   pname = "cachebox";
   version = "6.2.1";
   pyproject = true;
@@ -13,12 +13,12 @@ pyfinal.buildPythonPackage rec {
   src = final.fetchFromGitHub {
     owner = "awolverp";
     repo = "cachebox";
-    tag = "v${version}";
+    tag = "v${finalAttrs.version}";
     hash = "sha256-kUrBegGA5z4WvaCoJ83jGxuHUWB8ZP1Z9SKi4rK0uoc=";
   };
 
   cargoDeps = final.rustPlatform.fetchCargoVendor {
-    inherit src;
+    inherit (finalAttrs) src;
     hash = "sha256-JNo0Qagoh1PZNh18xZzF0NWg1l7l/RDu/Bw10jMdFaw=";
   };
 
@@ -28,4 +28,4 @@ pyfinal.buildPythonPackage rec {
     final.pkgsBuildHost.rustPlatform.cargoSetupHook
     final.rustPlatform.maturinBuildHook
   ];
-}
+})

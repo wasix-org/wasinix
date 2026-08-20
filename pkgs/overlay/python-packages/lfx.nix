@@ -3,13 +3,13 @@
   pyfinal,
   ...
 }:
-pyfinal.buildPythonPackage rec {
+pyfinal.buildPythonPackage (finalAttrs: {
   pname = "lfx";
   version = "1.11.2";
   format = "wheel";
 
   src = pyfinal.fetchPypi {
-    inherit pname version format;
+    inherit (finalAttrs) pname version format;
     dist = "py3";
     python = "py3";
     hash = "sha256-E+GV5mu03+h6qyngnYfguvXieB/uosxjysa0CrKSnWE=";
@@ -76,4 +76,4 @@ pyfinal.buildPythonPackage rec {
   passthru.wasix.updateNotes = [
     {message = "lfx: recheck markitdown once pypdfium2 supports WASIX source builds.";}
   ];
-}
+})
