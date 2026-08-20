@@ -1,8 +1,8 @@
 //! Publication release numbers.
 //!
 //! A package republished at the same upstream version needs a new release
-//! number, because both registries refuse to overwrite. `rels.json` is keyed by
-//! attribute path then upstream version, and an absent entry means 1.
+//! number, because both registries refuse to overwrite. The state file is
+//! keyed by attribute path then upstream version, and an absent entry means 1.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -47,7 +47,7 @@ pub struct Bump {
 }
 
 pub fn path(repo: &Path) -> PathBuf {
-    repo.join("rels.json")
+    repo.join("release-revisions.json")
 }
 
 pub fn load(repo: &Path) -> Result<Rels> {

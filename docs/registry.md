@@ -181,9 +181,9 @@ end to end, serving this index over loopback.
 
 Every wheel is published as `<version>+wasix.<rel>`, a PEP 440 local version.
 `rel` counts our builds of one upstream version and comes from the root
-`rels.json`, keyed by attr path (`pythonRegistry.wheels.<pname>`, or
-`wasmerPackages.<name>` for webcs) then version, default 1. It is shared across
-python versions, since the cp tag already keeps filenames distinct.
+`release-revisions.json`, keyed by attr path (`pythonRegistry.wheels.<pname>`,
+or `wasmerPackages.<name>` for webcs) then version, default 1. It is shared
+across python versions, since the cp tag already keeps filenames distinct.
 
 Bump it to republish a changed build, with `wasinix versions bump` or the manual
 `bump-rel.yml` workflow, which takes a list of packages and opens a PR. An

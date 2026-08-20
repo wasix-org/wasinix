@@ -5,7 +5,7 @@ Copies new wheels from a freshly built registry (nix build .#pythonRegistry)
 into the S3-compatible volume behind the index app and regenerates the index
 HTML over everything published so far. Published wheel filenames are
 immutable: a changed build with an existing filename stays unpublished until a
-rels.json bump gives it a new name, and nothing is ever deleted, so old
+release-revisions.json bump gives it a new name, and nothing is ever deleted, so old
 lockfiles keep resolving.
 
 Volume layout (= the web root served by the app):
@@ -155,7 +155,8 @@ def main():
         )
 
     # A registry rebuild can change existing wheel bytes through a nixpkgs,
-    # toolchain, or runtime update. Those are not releases unless rels.json gave
+    # toolchain, or runtime update. Those are not releases unless
+    # release-revisions.json gave
     # them a new filename, so nothing is uploaded when nothing is new: the pages
     # are regenerated over every published wheel, and pushing all of them costs
     # a transfer each. The listings answer to make-index rather than to the

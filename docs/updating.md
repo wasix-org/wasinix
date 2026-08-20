@@ -42,7 +42,7 @@ commit messages (`<target>: <old> -> <new>`), the PR title, and the PR body, so
 a PR and its CI comment agree by construction. The repo-wide steps are
 registry-history retention (keep the outgoing version rebuildable when a bump
 crosses a major, or per `passthru.wasix.retention`: `minor` for
-latest-per-minor, `none` to opt out), the rels.json prune (drop keys nothing
+latest-per-minor, `none` to opt out), the release-revisions.json prune (drop keys nothing
 serves), and finally the `passthru.wasix.postUpdateHook`s, which re-sync state
 derived from pins. Hooks run only when their package version changes;
 `wasinix update hooks` requests an unconditional repair. A command hook receives

@@ -47,9 +47,8 @@
     inherit rel;
   };
 
-  # rels.json keys no served version carries: left behind by an upstream bump;
-  # the update driver drops them (regen hook on nixpkgs), this note covers
-  # bumps made by hand.
+  # Revision keys no served version carries are left by an upstream bump. The
+  # update driver drops them; this note covers bumps made by hand.
   staleRels = lib.filter (v:
     !(lib.elem v (
       if servedVersions != null
@@ -251,7 +250,7 @@ in
               ciWasix
               // {
                 updateNotes = lib.optional (staleRels != []) {
-                  message = "rels.json has stale keys (${lib.concatMapStringsSep ", " (v: "wasmerPackages.${name} ${v}") staleRels}); nix run .#update -- nixpkgs drops them";
+                  message = "release-revisions.json has stale keys (${lib.concatMapStringsSep ", " (v: "wasmerPackages.${name} ${v}") staleRels}); nix run .#update -- nixpkgs drops them";
                   when = _: _: true;
                 };
               };
