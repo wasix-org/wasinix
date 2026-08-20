@@ -168,7 +168,10 @@
     package,
     servedVersions,
   }: let
-    webc = mkPackage {name = "webc-${package.name}";};
+    webc = mkPackage {
+      name = "webc-${package.name}";
+      shim = mkPackage {name = "shim-${package.name}";};
+    };
   in
     mkPackage {
       name = "pkg-${package.name}";
@@ -179,6 +182,35 @@
     inherit lib;
     makeWasmerPackage = fakeMakeWasmerPackage;
     webcIdent = fakeWebcIdent;
+  };
+  behaviorProjectionRules = import ../checks/behavior.nix {
+    inherit lib projectLib;
+  };
+  fakeTestLib = {
+    defaultForwardEnv = ["HOME"];
+    defaultWasixTimeout = 600;
+    mkWasixRun = args:
+      mkPackage {
+        name = "host-shell-${args.name}";
+        passthru.harnessArgs = args;
+      };
+  };
+  fakeHarnesses = import ../harnesses {
+    inherit lib;
+    pkgs.runCommand = name: attrs: script:
+      mkPackage {
+        inherit name script;
+        passthru.runCommandAttrs = attrs;
+      };
+    testLib = fakeTestLib;
+  };
+  duplicateHarnessCommand = {
+    name = "duplicate";
+    entrypoint = "duplicate";
+    artifact = mkPackage {
+      name = "duplicate-webc";
+      shim = mkPackage {name = "duplicate-shim";};
+    };
   };
   projectApi = import ./default.nix (projectApiArgs
     // {
@@ -219,6 +251,10 @@
   fakeImportNixpkgs = args: let
     base = {
       inherit dependency newRecipe familyA familyB;
+      behavior = mkPackage {
+        name = "behavior";
+        version = "1.0";
+      };
       existing = previous;
       inherited = mkPackage {name = "inherited";};
       profile = args.crossSystem.wasinixProfile or "native";
@@ -301,6 +337,11 @@
     extensions = [definitionExtension];
   };
   wasmerProjectApi = import ./default.nix (projectApiArgs // {projectionRules = wasmerProjectionRules;});
+  behaviorProjectApi = import ./default.nix (projectApiArgs
+    // {
+      harnessesFor = _project: fakeHarnesses;
+      projectionRules = wasmerProjectionRules // behaviorProjectionRules;
+    });
   wasmerExtension = {
     id = "wasmer-fixture";
     history.wasix = ./tests/wasix-history.json;
@@ -344,10 +385,23 @@
       unshipped = mkPackage {name = "unshipped-${final.profile}";};
     };
   };
+  behaviorExtension = {
+    id = "behavior-fixture";
+    history.wasix = ./tests/behavior-history.json;
+    overlays = projectApi.loadPackageOverlays {
+      wasix = ./tests/behavior-units;
+    };
+  };
   wasmerProject = wasmerProjectApi.mkProject {
     system = "test-system";
     importNixpkgs = fakeImportNixpkgs;
     extensions = [wasmerExtension];
+  };
+  behaviorProject = behaviorProjectApi.mkProject {
+    system = "test-system";
+    importNixpkgs = fakeImportNixpkgs;
+    extensions = [behaviorExtension];
+    ci.sources = ["behavior-fixture"];
   };
   wasmerValidationProject = id: commands:
     wasmerProjectApi.mkProject {
@@ -604,6 +658,45 @@ in {
       directory = toString ./tests/units/family;
       historyFile = toString ./tests/units/existing.nix;
       rawOverlay = null;
+    };
+  };
+
+  behaviorChecks = {
+    expr = {
+      current = behaviorProject.tests."tests.artifacts.webc.behavior.packaged".name;
+      history = behaviorProject.tests.${''tests.artifacts.webc.behavior.versions["0.9"].packaged''}.name;
+      currentCommand = map (package: package.name) behaviorProject.artifacts.webc.behavior.tests.packaged.passthru.harnessArgs.wasixPkgs;
+      historyCommand = map (package: package.name) behaviorProject.artifacts.webc.behavior.versions."0.9".tests.packaged.passthru.harnessArgs.wasixPkgs;
+      script = behaviorProject.artifacts.webc.behavior.tests.packaged.passthru.harnessArgs.script;
+      historyTags = behaviorProject.ci.catalog.jobs.${''tests.artifacts.webc.behavior.versions["0.9"].packaged''}.policy.ci.tags;
+      definition = toString behaviorProject.catalog.entries."artifacts.webc.behavior".definition.directory;
+      nonDerivationFails =
+        !(force (projectLib.loadTestDirectory {
+          context = {};
+          dir = ./tests/invalid-tests/non-derivation;
+        })).success;
+      duplicateTestFails =
+        !(force (projectLib.loadTestDirectory {
+          context = {};
+          dir = ./tests/invalid-tests/duplicate;
+        })).success;
+      duplicateCommandFails =
+        !(force (fakeHarnesses.hostShell {
+          script = "true";
+          wasixCommands = [duplicateHarnessCommand duplicateHarnessCommand];
+        })).success;
+    };
+    expected = {
+      current = "host-shell-behavior-1.0";
+      history = "host-shell-behavior-0.9";
+      currentCommand = ["wasinix-command-behavior"];
+      historyCommand = ["wasinix-command-behavior"];
+      script = "behavior --version # native";
+      historyTags = ["history-tests"];
+      definition = toString ./tests/behavior-units/behavior;
+      nonDerivationFails = true;
+      duplicateTestFails = true;
+      duplicateCommandFails = true;
     };
   };
 

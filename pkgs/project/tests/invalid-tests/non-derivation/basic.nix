@@ -1,0 +1,3 @@
+{}: {
+  invalid = "not a derivation";
+}

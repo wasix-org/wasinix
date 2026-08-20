@@ -1,0 +1,5 @@
+{}: {
+  same = {
+    type = "derivation";
+  };
+}

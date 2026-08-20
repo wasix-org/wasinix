@@ -177,6 +177,7 @@ pkgs/
 │   └── history.json
 ├── checks/
 ├── artifacts/
+├── harnesses/
 └── toolchain/
 ```
 
@@ -530,10 +531,9 @@ machinery. History is not a special artifact or test class.
 The general construction operation maps a catalog entry to typed projections:
 
 ```nix
-projectionRules.wasmer = {
+projectionRules.wasmerArtifacts = {
   entry,
   artifacts,
-  commands,
   ...
 }:
   lib.optionalAttrs (entry.policy.shipped or false) {
@@ -541,13 +541,19 @@ projectionRules.wasmer = {
       pkg = pkgDerivation;
       webc = webcDerivation;
     };
+  };
 
+projectionRules.wasmerCommands = {entry, ...}:
+  lib.optionalAttrs (entry.kind == "artifact" && entry.artifactKind == "webc") {
     commands.git = {
       name = "git";
-      artifact = webcDerivation;
+      artifact = entry.artifact;
       entrypoint = "git";
     };
+  };
 
+projectionRules.packagedBehavior = {entry, harnesses, ...}:
+  lib.optionalAttrs (entry.kind == "artifact" && entry.artifactKind == "webc") {
     tests.packaged = packagedBehaviorCheck;
   };
 ```
@@ -574,6 +580,10 @@ commands.git = {
   entrypoint = "git";
 };
 ```
+
+A retained artifact exposes its commands through its own `commands` projection.
+The global view retains the current command at `commands.git` and older command
+instances at `commands.git.versions.<version>`.
 
 A command record does not store several executable wrappers. Test harnesses
 project it according to the execution environment:
@@ -608,6 +618,7 @@ Every projection rule destructures the same lazy recursive context:
   commands,
   artifacts,
   harnesses,
+  pkgs,
 }
 ```
 
@@ -619,7 +630,8 @@ common projection dependencies, not a test-owned API:
   each package's `versions`;
 - `commands`;
 - entry-relative and global `artifacts` views;
-- `harnesses`.
+- `harnesses`;
+- `pkgs`, the native package set for host-side fixtures.
 
 The package-unit argument `package` remains distinct: it is the preceding
 derivation being adapted. A projection rule's `entry` is the completed canonical
@@ -641,9 +653,14 @@ Separate profile witnesses establish positive profile capabilities, such as
 support for PIC relocations, because no individual package necessarily exercises
 every capability.
 
-Package-specific behavior checks are colocated with the package unit and named
-through `passthru.wasinix.checks`. Cross-cutting rules and profile witnesses
-live under the extension's central `checks/` area. Generated tests belong to the
+Package-specific behavior checks live in `tests/*.nix` beside a directory-form
+package unit. Each file receives the same projection arguments and returns a
+possibly empty attrset of named test derivations. A sibling `tests/helpers.nix`
+may return shared values, available to test files as `helpers`; duplicate names
+and non-derivation results are errors. The packaged-behavior rule discovers this
+directory from the preserved package definition, so current and historical WebC
+artifacts use the same files. Cross-cutting rules and profile witnesses live
+under the extension's central `checks/` area. Generated tests belong to the
 project test catalog; they are not attached back to packages as an authoritative
 `passthru.tests` tree.
 

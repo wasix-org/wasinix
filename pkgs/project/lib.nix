@@ -64,13 +64,61 @@
   extendPackage = package: attrs:
     package.overrideAttrs (old: extendAttrs old attrs);
 
-  callWith = available: function: let
+  callWithLabel = label: available: function: let
     formals = builtins.functionArgs function;
     missing = lib.filter (name: !formals.${name} && !(builtins.hasAttr name available)) (lib.attrNames formals);
   in
     lib.throwIf (missing != [])
-    "missing required package-unit argument(s): ${lib.concatStringsSep ", " missing}"
+    "missing required ${label} argument(s): ${lib.concatStringsSep ", " missing}"
     (function (builtins.intersectAttrs formals available));
+
+  callWith = callWithLabel "package-unit";
+
+  loadTestDirectory = {
+    context,
+    dir,
+  }: let
+    entries = builtins.readDir dir;
+    helperFile = dir + "/helpers.nix";
+    helpers =
+      if builtins.pathExists helperFile
+      then let
+        function = import helperFile;
+        result =
+          lib.throwIf (!builtins.isFunction function)
+          "test helpers ${toString helperFile} must be a function"
+          (callWithLabel "test-helper" context function);
+      in
+        lib.throwIf (!lib.isAttrs result || lib.isDerivation result)
+        "test helpers ${toString helperFile} must return an attribute set"
+        result
+      else null;
+    files =
+      map (name: dir + "/${name}")
+      (lib.filter (name: name != "helpers.nix" && name != "default.nix")
+        (lib.attrNames (lib.filterAttrs (name: type: type == "regular" && lib.hasSuffix ".nix" name) entries)));
+    load = file: let
+      function = import file;
+      result =
+        lib.throwIf (!builtins.isFunction function)
+        "test file ${toString file} must be a function"
+        (callWithLabel "test" (context // lib.optionalAttrs (helpers != null) {inherit helpers;}) function);
+      invalid = lib.filterAttrs (_: test: !lib.isDerivation test) result;
+    in
+      lib.throwIf (!lib.isAttrs result || lib.isDerivation result)
+      "test file ${toString file} must return an attribute set"
+      (lib.throwIf (invalid != {})
+        "test file ${toString file} returned non-derivation test(s): ${lib.concatStringsSep ", " (lib.attrNames invalid)}"
+        result);
+    merge = state: file: let
+      loaded = load file;
+      duplicates = lib.intersectLists (lib.attrNames state) (lib.attrNames loaded);
+    in
+      lib.throwIf (duplicates != [])
+      "test directory ${toString dir} defines duplicate test(s): ${lib.concatStringsSep ", " duplicates}"
+      (state // loaded);
+  in
+    lib.foldl' merge {} files;
 
   unitResult = {
     context,
@@ -255,7 +303,7 @@
         })
         // {versions = {};}));
 in rec {
-  inherit address addressSegment callWith discoverUnits extendAttrs extensionContextsAttr historyBaseAttr historyOverlaysAttr loadPackageOverlays machineMetadata mergeScript packageMetadata registryAttr stampPackage unitOverlaysAttr unitResult;
+  inherit address addressSegment callWith callWithLabel discoverUnits extendAttrs extensionContextsAttr historyBaseAttr historyOverlaysAttr loadPackageOverlays loadTestDirectory machineMetadata mergeScript packageMetadata registryAttr stampPackage unitOverlaysAttr unitResult;
 
   inherit extendPackage;
 
