@@ -199,6 +199,7 @@
           entries.${n}
           == "directory"
           && !(lib.elem n shippedCommands)
+          && !(preferredProfilePackages.${n}.meta.broken or false)
           && builtins.pathExists (packagesDir + "/${n}/tests")
       )
       (lib.attrNames entries);
