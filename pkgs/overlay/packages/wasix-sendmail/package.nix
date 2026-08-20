@@ -23,7 +23,15 @@ final.rustPlatform.buildRustPackage (finalAttrs: {
       owner = "sendmail";
       name = "sendmail";
     };
-    updateScript = nix-update-script {extraArgs = ["--flake"];};
+    updateScript = {
+      command = nix-update-script {extraArgs = ["--flake"];};
+      accepts = ["release" "revision"];
+      source = {
+        kind = "github";
+        owner = "wasix-org";
+        repo = "wasix-sendmail";
+      };
+    };
   };
 
   meta = {

@@ -106,14 +106,11 @@ pub fn resolve_pull_request(spec: &str, context: &Context<'_>) -> Result<PullReq
 /// Which update target a repository maps to, discovered from the flake rather
 /// than hardcoded, so a new pinned dependency needs no change here.
 pub fn update_sources(repo: &Path) -> Result<HashMap<String, Vec<String>>> {
-    let declarations = crate::support::nix::eval(
-        &crate::support::nix::Flake(&repo.display().to_string()),
-        "updateScripts",
-        None,
-    )?;
     let mut sources: HashMap<String, Vec<String>> = Default::default();
-    for (attr, declaration) in declarations.as_object().into_iter().flatten() {
-        let source = &declaration["source"];
+    for target in crate::update::targets::all_targets(repo)? {
+        let Some(source) = target.source else {
+            continue;
+        };
         if source["kind"].as_str() != Some("github") {
             continue;
         }
@@ -123,11 +120,7 @@ pub fn update_sources(repo: &Path) -> Result<HashMap<String, Vec<String>>> {
             source["repo"].as_str().unwrap_or_default()
         )
         .to_lowercase();
-        let name = declaration["name"]
-            .as_str()
-            .map(str::to_string)
-            .unwrap_or_else(|| attr.rsplit('.').next().unwrap_or(attr).to_string());
-        sources.entry(key).or_default().push(name);
+        sources.entry(key).or_default().push(target.name);
     }
     Ok(sources)
 }
