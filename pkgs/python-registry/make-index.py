@@ -404,29 +404,22 @@ def write_packages_json(dest: Path, served) -> None:
     )
 
 
-def is_primary(files: list[tuple]) -> bool:
-    """Whether PyPI cannot correctly supply this project.
-
-    Either a wheel is platform-tagged, so PyPI has nothing that loads under
-    wasix, or the package has an overlay entry here, so our build differs from
-    upstream's and taking PyPI's copy would silently drop that difference.
-    """
-    return any(
-        is_native(fname) or source
-        for fname, _digest, _md, _rp, _rev, _attr, _size, _published, source in files
-    )
-
-
-def write_views(out: Path, pages: dict[str, list[tuple]]) -> dict:
+def write_views(out: Path, pages: dict[str, list[tuple]], supersedes: set[str]) -> dict:
     """Write both PEP 503 listings over the wheels under simple/<project>/.
 
-    simple/ lists what PyPI cannot supply, so a resolver takes it as the
+    simple/ lists what PyPI cannot supply: a platform-tagged wheel, or a project
+    in `supersedes`, whose build here differs from upstream's. A resolver takes
+    it as the
     priority index beside PyPI and gets our wheel for exactly those, leaving
     every other dependency to PyPI at the version the consuming project asks
     for. all/simple/ lists everything published, for installing the closure
     from here alone (docs/registry.md). Both point at one copy of each wheel.
     """
-    primary = {project: files for project, files in pages.items() if is_primary(files)}
+    primary = {
+        project: files
+        for project, files in pages.items()
+        if project in supersedes or any(is_native(fname) for fname, *_ in files)
+    }
     for project, files in sorted(primary.items()):
         pdir = out / "simple" / project
         pdir.mkdir(parents=True, exist_ok=True)
@@ -483,6 +476,7 @@ def main() -> None:
                 "attr": entry["attr"],
                 "drv_path": entry["drvPath"],
                 **({"source": entry["source"]} if entry.get("source") else {}),
+                **({"supersedes": True} if entry.get("supersedes") else {}),
             }
 
     if conflicts:
@@ -529,7 +523,10 @@ def main() -> None:
             )
         pages[project] = files
 
-    primary = write_views(out, pages)
+    supersedes = {
+        normalize(entry["name"]) for entry in dists if entry.get("supersedes")
+    }
+    primary = write_views(out, pages, supersedes)
 
     (out / "index.html").write_text(landing(projects))
     (out / "provenance.json").write_text(

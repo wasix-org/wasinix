@@ -66,6 +66,8 @@
       attr = ''pythonRegistry.published.${pv}.${name}."${version}"'';
       drvPath = builtins.unsafeDiscardStringContext drv.drvPath;
       source = sourceOf drv;
+      # our build differs from upstream's, so PyPI cannot stand in for it
+      supersedes = drv.passthru.wasix.supersedesPyPI or false;
       inherit drv;
     })
     (lib.filter
