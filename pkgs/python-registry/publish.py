@@ -20,7 +20,7 @@ downloads a wheel. Provenance lets `nix build
 github:wasix-org/wasinix/<wasinix_rev>#<attr>` rebuild a given wheel.
 
 Usage: publish.py --registry <path> --remote <rclone-remote:bucket>
-                  [--rev <wasinix git rev>] [--dry-run]
+                  [--rev <wasinix git rev>] [--dry-run] [--withdraw-stale]
 Credentials come from rclone env vars (RCLONE_CONFIG_<NAME>_*).
 """
 
@@ -65,6 +65,19 @@ def main():
     ap.add_argument("--remote", required=True)
     ap.add_argument("--rev", help="wasinix git rev that built this registry")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument(
+        "--refresh-listings",
+        action="store_true",
+        help="regenerate and upload the index pages even when no wheel is new, "
+        "for a change in how make-index lists a project",
+    )
+    ap.add_argument(
+        "--withdraw-stale",
+        action="store_true",
+        help="delete the listing of a project that no longer belongs in simple/, "
+        "so it stops shadowing PyPI. Run by hand: a published URL that stops "
+        "resolving breaks whoever resolved against it.",
+    )
     args = ap.parse_args()
 
     # published filename -> release selector + provenance, emitted by make-index.py
@@ -142,10 +155,13 @@ def main():
         )
 
     # A registry rebuild can change existing wheel bytes through a nixpkgs,
-    # toolchain, or runtime update. Those are not releases unless rels.json
-    # gave them a new filename. Do not rewrite the stable index when nothing
-    # new is being added; GitHub Pages publishes the fresh build separately.
-    if not new:
+    # toolchain, or runtime update. Those are not releases unless rels.json gave
+    # them a new filename, so nothing is uploaded when nothing is new: the pages
+    # are regenerated over every published wheel, and pushing all of them costs
+    # a transfer each. The listings answer to make-index rather than to the
+    # wheel set, though, so a change in how a project is listed reaches the
+    # volume through --refresh-listings without waiting for a new wheel.
+    if not new and not args.refresh_listings and not args.withdraw_stale:
         print("no new immutable wheels to publish")
         return
 
@@ -175,7 +191,7 @@ def main():
     # a manifest predating the field has no flag, so a project last published
     # before it existed stays out of simple/ until its next publish
     supersedes = {m["project"] for m in manifests.values() if m.get("supersedes")}
-    make_index.write_views(staging, pages, supersedes)
+    primary = make_index.write_views(staging, pages, supersedes)
     (staging / "index.html").write_text(make_index.landing(projects))
     make_index.write_packages_json(
         staging / "packages.json",
@@ -184,7 +200,8 @@ def main():
 
     print(
         f"publishing {len(new)} new wheels "
-        f"({len(manifests)} total across {len(projects)} projects)"
+        f"({len(manifests)} total across {len(projects)} projects, "
+        f"{len(primary)} listed in simple/)"
     )
     for n in new:
         print(f"  + {n}")
@@ -193,6 +210,28 @@ def main():
     flags = ["--dry-run"] if args.dry_run else []
     if rclone("copy", "--ignore-times", *flags, staging, args.remote).returncode != 0:
         sys.exit("upload failed")
+
+    # Published URLs are meant to keep resolving, so withdrawing one is a
+    # deliberate act, not a step of every publish: a project that leaves simple/
+    # keeps serving its old page until someone asks for it to go.
+    if not args.withdraw_stale:
+        return
+    # The manifests name every project ever published, so the pages to withdraw
+    # follow from them. The volume cannot enumerate simple/ anyway: rclone finds
+    # no directories under it, though the objects are there and served.
+    stale = sorted(set(projects) - set(primary))
+    if not stale:
+        print("no listings to withdraw")
+        return
+    withdrawn = []
+    for project in stale:
+        # a project that was never listed has no page, and deleting a missing
+        # object reports failure, so one miss must not stop the rest
+        page = f"{args.remote}/simple/{project}/index.html"
+        if rclone("deletefile", *flags, page).returncode == 0:
+            withdrawn.append(project)
+            print(f"  - simple/{project}/index.html")
+    print(f"withdrew {len(withdrawn)} of {len(stale)} listing(s) PyPI can supply")
 
 
 if __name__ == "__main__":
