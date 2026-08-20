@@ -39,6 +39,35 @@
   mergeScript = fragments:
     lib.concatStringsSep "\n" (lib.filter (fragment: fragment != null && fragment != "") fragments);
 
+  orEmpty = values:
+    if values == null
+    then []
+    else values;
+
+  dropInputsByName = names: values:
+    builtins.filter (value: value != null && !(builtins.elem (lib.getName value) names)) (orEmpty values);
+
+  dropInputsByNameInfix = names: values:
+    builtins.filter (value: value != null && !(lib.any (name: lib.hasInfix name (lib.getName value)) names)) (orEmpty values);
+
+  replaceInputsByName = replacements: values:
+    map (value:
+      if value == null
+      then value
+      else replacements.${lib.getName value} or value)
+    (orEmpty values);
+
+  linkInputs = update: {
+    buildInputs = update;
+    propagatedBuildInputs = update;
+  };
+
+  dropPatchesByNameInfix = names:
+    builtins.filter (patch: !(lib.any (name: lib.hasInfix name (baseNameOf (toString patch))) names));
+
+  dropFlagsByPrefix = prefixes:
+    builtins.filter (flag: !(lib.any (prefix: lib.hasPrefix prefix flag) prefixes));
+
   extendAttrs = old:
     lib.mapAttrs (
       name: value: let
@@ -303,7 +332,7 @@
         })
         // {versions = {};}));
 in rec {
-  inherit address addressSegment callWith callWithLabel discoverUnits extendAttrs extensionContextsAttr historyBaseAttr historyOverlaysAttr loadPackageOverlays loadTestDirectory machineMetadata mergeScript packageMetadata registryAttr stampPackage unitOverlaysAttr unitResult;
+  inherit address addressSegment callWith callWithLabel discoverUnits dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix extendAttrs extensionContextsAttr historyBaseAttr historyOverlaysAttr linkInputs loadPackageOverlays loadTestDirectory machineMetadata mergeScript packageMetadata registryAttr replaceInputsByName stampPackage unitOverlaysAttr unitResult;
 
   inherit extendPackage;
 

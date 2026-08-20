@@ -9,6 +9,17 @@
   projectionRules ? {},
   pythonSetsFor ? _args: {},
   extendPythonSet ? packageSet: overlay: packageSet.overrideScope overlay,
+  repairPythonPackage ? package:
+    if package ? pythonModule
+    then
+      package.overrideAttrs (old: {
+        passthru =
+          (old.passthru or {})
+          // {
+            requiredPythonModules = package.pythonModule.pkgs.requiredPythonModules (old.propagatedBuildInputs or []);
+          };
+      })
+    else package,
   rebasePackage ? (import ./history.nix {inherit lib;}).rebasePackage,
 }: let
   projectLib = import ./lib.nix {inherit lib;};
@@ -73,7 +84,7 @@
   }: let
     declared = (extension.overlays or {}).python;
     enclosingContext = enclosingPkgs.${projectLib.extensionContextsAttr}.${extension.id};
-    overlay =
+    rawOverlay =
       if builtins.isFunction declared
       then declared enclosingContext.final enclosingContext.prev
       else if lib.isAttrs declared && declared.__wasinixPackageDirectory or false
@@ -83,6 +94,12 @@
           dir = declared.directory;
         }
       else throw "Wasinix extension '${extension.id}' Python lane is not an overlay";
+    overlay = final: previous:
+      lib.mapAttrs (_: value:
+        if lib.isDerivation value
+        then repairPythonPackage value
+        else value)
+      (rawOverlay final previous);
   in
     projectLib.registerOverlay {
       inherit overlay;
@@ -393,7 +410,7 @@ in rec {
           commands = commandsView;
           artifacts = artifactsView;
           harnesses = harnessesView;
-          inherit (projectLib) extendPackage mergeScript;
+          inherit (projectLib) dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix extendPackage linkInputs mergeScript replaceInputsByName;
         }
         // lib.optionalAttrs (enclosingPkgs != null) {pkgs = enclosingPkgs;};
 
