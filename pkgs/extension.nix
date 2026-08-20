@@ -3,6 +3,7 @@
 
   overlays = loadPackageOverlays {
     shared = ./shared;
+    native = ./native;
     wasix = ./wasix;
     python = ./python;
   };

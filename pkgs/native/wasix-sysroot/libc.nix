@@ -32,7 +32,7 @@
     name = "wasix-libc-update";
     runtimeInputs = with buildPackages; [curl git gnused jq];
     text = ''
-      exec bash "$(git rev-parse --show-toplevel)/pkgs/shared/wasix-sysroot/update.sh" "$@"
+      exec bash "$(git rev-parse --show-toplevel)/pkgs/native/wasix-sysroot/update.sh" "$@"
     '';
   };
 

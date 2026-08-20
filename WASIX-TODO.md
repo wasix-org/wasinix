@@ -654,7 +654,7 @@ current toolchain before relying on it.
   `-exec` and xargs. Declaring `wasmer/clang` as a webc dependency does not make
   it resolvable.
 - Workaround: `pkgs/wasix/flang` is `passthru.wasix.broken` and not shipped. The
-  host flang (`shared/wasix-flang`) is unaffected and is what builds Fortran for
+  host flang (`native/wasix-flang`) is unaffected and is what builds Fortran for
   scipy.
 - Fix: make a dependency's command resolvable to a spawning guest, or give flang
   the in-process frontend dispatch clang has for `cc1`.

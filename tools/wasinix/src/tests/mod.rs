@@ -4629,7 +4629,7 @@ mod update {
             "name": "wasix-libc",
             "version": "2026-07-30.1",
             "attrPath": "toolchain.libc-unwrapped",
-            "position": "/nix/store/aaa-source/pkgs/shared/wasix-sysroot/libc.nix:22",
+            "position": "/nix/store/aaa-source/pkgs/native/wasix-sysroot/libc.nix:22",
             "command": ["/nix/store/bbb-wasix-libc-update/bin/wasix-libc-update"],
             "commandDrvPaths": ["/nix/store/ccc-wasix-libc-update.drv"],
             "accepts": ["release"],
@@ -4651,7 +4651,7 @@ mod update {
             "{}",
             target.attr
         );
-        assert_eq!(target.file, "pkgs/shared/wasix-sysroot/libc.nix");
+        assert_eq!(target.file, "pkgs/native/wasix-sysroot/libc.nix");
     }
 
     #[test]
