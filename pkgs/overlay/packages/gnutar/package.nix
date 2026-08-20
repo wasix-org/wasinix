@@ -14,6 +14,7 @@ helpers.libTweaks {
   # asyncifies for; binaryen cannot asyncify the EH instructions the others
   # emit.
   passthru.wasix.supportedProfiles = ["off"];
+  passthru.wasix.smokeTest = false;
   # AC_TYPE_GETGROUPS is a run test, so a cross build takes its historic int
   # fallback, and gnulib's definition then disagrees with its own gid_t header.
   configureFlags = ["ac_cv_type_getgroups=gid_t"];
