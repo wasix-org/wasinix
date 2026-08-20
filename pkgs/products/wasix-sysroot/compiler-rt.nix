@@ -82,7 +82,9 @@ stdenvNoCC.mkDerivation {
 
   meta = with lib; {
     description = "compiler-rt builtins for WASIX (${name} variant), built from source";
-    homepage = "https://github.com/wasix-org/wasix-libc";
+    longDescription = "Compiler-rt builtins and profiling support for WASIX ${name} targets, built from the WASIX LLVM source tree.";
+    homepage = "https://github.com/wasix-org/llvm-project";
+    changelog = "https://github.com/wasix-org/llvm-project/releases/tag/${version}";
     license = with licenses; [asl20 mit];
     platforms = platforms.unix;
   };

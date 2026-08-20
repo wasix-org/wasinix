@@ -36,7 +36,9 @@ final.rustPlatform.buildRustPackage (finalAttrs: {
 
   meta = {
     description = "Sendmail-compatible email sender with multiple backends";
+    longDescription = "A sendmail-compatible command-line email sender with configurable delivery backends.";
     homepage = "https://github.com/wasix-org/wasix-sendmail";
+    changelog = "https://github.com/wasix-org/wasix-sendmail/releases/tag/v${finalAttrs.version}";
     license = final.lib.licenses.agpl3Only;
     mainProgram = "sendmail";
   };

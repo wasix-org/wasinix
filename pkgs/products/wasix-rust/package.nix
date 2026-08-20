@@ -417,7 +417,9 @@ in
         if hostedOnWasix
         then "WASIX-hosted Rust toolchain (rustc + cargo + WASIX std), built from source"
         else "WASIX Rust toolchain (rustc + cargo + wasix std), built from source";
+      longDescription = "A Rust compiler and Cargo toolchain with WASIX standard libraries, built from the WASIX Rust fork.";
       homepage = "https://github.com/wasix-org/rust";
+      changelog = "https://github.com/wasix-org/rust/tree/v${version}";
       license = with licenses; [mit asl20];
       platforms = ["x86_64-linux"];
     };

@@ -59,6 +59,7 @@ in
 
     meta = {
       description = "Overlay cargo registry server";
+      longDescription = "A Cargo registry server that serves the repository's WASIX crate index and package artifacts.";
       homepage = "https://github.com/wasix-org/cargo-registry";
       license = lib.licenses.mit;
       mainProgram = "wasix-cargo-registry";

@@ -32,7 +32,9 @@ rustPlatform.buildRustPackage (finalAttrs: {
 
   meta = {
     description = "Generic S3 server";
+    longDescription = "An S3-compatible object storage server backed by a local filesystem.";
     homepage = "https://github.com/wasix-org/s3-server";
+    changelog = "https://github.com/wasix-org/s3-server/releases/tag/${finalAttrs.version}";
     license = lib.licenses.mit;
     mainProgram = "s3-server";
   };

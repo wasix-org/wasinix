@@ -3,6 +3,7 @@
 # The recipe lives here so the WASIX build carries the same fixes as the native
 # one the cross sets compile with.
 {
+  lib,
   rustPlatform,
   fetchFromGitHub,
 }:
@@ -42,4 +43,12 @@ rustPlatform.buildRustPackage (finalAttrs: {
     cp "$(find target -type f -path '*/release/wasixccenv' | head -n 1)" "$out/libexec/wasixccenv"
     runHook postInstall
   '';
+
+  meta = {
+    description = "Unwrapped WASIX C/C++ compiler driver";
+    longDescription = "The unwrapped WASIX C and C++ compiler driver used by the repository's relocatable toolchain.";
+    homepage = "https://github.com/wasix-org/wasixcc";
+    changelog = "https://github.com/wasix-org/wasixcc/releases/tag/v${finalAttrs.version}";
+    license = with lib.licenses; [mit asl20];
+  };
 })

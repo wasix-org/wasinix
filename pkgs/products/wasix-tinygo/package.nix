@@ -18,4 +18,11 @@
       patch -p1 < ${./llvm-21-c-api.patch}
       patch -p1 < ${./llvm-21-nocapture.patch}
     '';
+  meta =
+    (oldAttrs.meta or {})
+    // {
+      longDescription = "The TinyGo compiler configured with the WASIX LLVM fork for producing WebAssembly programs.";
+      changelog = "https://github.com/tinygo-org/tinygo/releases/tag/v${oldAttrs.version}";
+      mainProgram = "tinygo";
+    };
 })

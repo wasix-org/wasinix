@@ -2,6 +2,7 @@
 # this with the compiler env and the rustup linking it expects; the recipe lives
 # here so a WASIX build of the subcommand is the same program as the native one.
 {
+  lib,
   rustPlatform,
   fetchFromGitHub,
 }:
@@ -23,4 +24,13 @@ rustPlatform.buildRustPackage (finalAttrs: {
   # contacts GitHub. Keep the remaining offline library unit tests.
   cargoTestFlags = ["--lib"];
   checkFlags = ["--skip" "toolchain::tests::test_download_toolchain"];
+
+  meta = {
+    description = "Cargo subcommand for building Rust projects for WASIX";
+    longDescription = "A Cargo subcommand that builds Rust projects for WASIX using the repository's compiler and runtime toolchain.";
+    homepage = "https://github.com/wasix-org/cargo-wasix";
+    changelog = "https://github.com/wasix-org/cargo-wasix/releases/tag/v${finalAttrs.version}";
+    license = with lib.licenses; [mit asl20];
+    mainProgram = "cargo-wasix";
+  };
 })
