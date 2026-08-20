@@ -1012,7 +1012,10 @@ mod compare {
         assert_eq!(update.subject, "zlib");
         assert_eq!(update.before, "1.2.13");
         assert_eq!(update.after, "1.3.1");
-        assert_eq!(update.changelogs, ["https://example.com/zlib-1.3.1"]);
+        assert_eq!(
+            update.changelog.as_deref(),
+            Some("https://example.com/zlib-1.3.1")
+        );
         assert_eq!(update.jobs, addrs(&jobs));
     }
 
@@ -1052,13 +1055,10 @@ mod compare {
         let all_changelogs: Vec<&str> = eval
             .version_updates
             .iter()
-            .flat_map(|u| u.changelogs.iter().map(String::as_str))
+            .filter_map(|update| update.changelog.as_deref())
             .collect();
         assert!(all_changelogs.contains(&"https://example.com/cpp"));
         assert!(all_changelogs.contains(&"https://example.com/py"));
-        for update in &eval.version_updates {
-            assert_eq!(update.changelogs.len(), 1, "no unioned changelog rows");
-        }
     }
 
     #[test]
@@ -5397,7 +5397,7 @@ mod scenarios {
                     subject: "zlib".into(),
                     before: "1.3.1".into(),
                     after: "1.3.2".into(),
-                    changelogs: Vec::new(),
+                    changelog: Some("https://github.com/madler/zlib/releases/tag/v1.3.2".into()),
                     jobs: vec![JobAddr("packagesByProfile.eh.zlib".into())],
                 }],
                 added: vec![JobAddr("checks.brotli".into())],

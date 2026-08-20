@@ -141,6 +141,18 @@ impl Markdown {
         }
     }
 
+    /// A link labelled with runtime text, such as a version move. A bracket
+    /// in the label would close the link early and spill the url as prose, so
+    /// the label escapes brackets on top of [`Markdown::text`].
+    pub fn text_link(label: &str, url: &str) -> Markdown {
+        let label = escape_html(label).replace('[', "\\[").replace(']', "\\]");
+        if url_is_plain(url) {
+            Markdown(format!("[{label}]({url})"))
+        } else {
+            Markdown(format!("{label} {}", code_span(url)))
+        }
+    }
+
     /// A link inside a table cell: the degraded form must also keep the
     /// cell's pipes flattened, since a pipe breaks the row even inside a
     /// code span.

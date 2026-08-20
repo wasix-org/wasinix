@@ -34,8 +34,8 @@ pub struct VersionUpdate {
     pub subject: String,
     pub before: String,
     pub after: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub changelogs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changelog: Option<String>,
     pub jobs: Vec<JobAddr>,
 }
 
@@ -287,7 +287,7 @@ fn eval_diff(coverage: &Coverage, base_map: &EvalMap, head_map: &EvalMap) -> Eva
         .collect();
     // Keyed by the package's own changelog as well as its subject: two
     // different packages can share a display subject and a version move, and
-    // must not merge into one row with unioned changelogs.
+    // must not merge into one row pointing at whichever changelog won.
     type UpdateKey = (String, String, String, Option<String>);
     let mut version_updates: BTreeMap<UpdateKey, VersionUpdate> = BTreeMap::new();
     for job in &coverage.both {
@@ -313,7 +313,7 @@ fn eval_diff(coverage: &Coverage, base_map: &EvalMap, head_map: &EvalMap) -> Eva
                 subject,
                 before,
                 after,
-                changelogs: changelog.into_iter().collect(),
+                changelog,
                 jobs: Vec::new(),
             });
         update.jobs.push(JobAddr(job.clone()));

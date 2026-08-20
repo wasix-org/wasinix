@@ -385,14 +385,17 @@ fn details(report: &Report, fragments: &BTreeMap<String, Fragment>) -> Markdown 
             Markdown::constant(")**\n\n"),
         ]);
         for update in updates.iter().take(20) {
+            let moved = format!("{} → {}", update.before, update.after);
+            let moved = match update.changelog.as_deref() {
+                Some(url) => Markdown::text_link(&moved, url),
+                None => Markdown::text(&moved),
+            };
             body = Markdown::concat([
                 body,
                 Markdown::constant("- **"),
                 Markdown::cell(&update.subject),
                 Markdown::constant("** "),
-                Markdown::cell(&update.before),
-                Markdown::constant(" → "),
-                Markdown::cell(&update.after),
+                moved,
                 Markdown::constant("\n"),
             ]);
         }
