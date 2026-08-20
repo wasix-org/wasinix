@@ -38,6 +38,7 @@
     ...
   }: let
     system = "x86_64-linux";
+    projectSchemaVersion = (builtins.fromJSON (builtins.readFile ./schema/project.json)).version;
     wasmerPatches = [
       # proc_fork must inherit the parent's signal dispositions; see WASIX-TODO.md
       ./patches/wasmer-signal-inherit-on-fork.patch
@@ -799,6 +800,7 @@
         // (spotJobInfo.${name} or {}))
       ciSets.all;
       ciSelectorCatalog = {
+        schemaVersion = projectSchemaVersion;
         jobs = ciJobNames;
         groups = ciGroups;
         info = ciJobInfo;
@@ -817,6 +819,7 @@
     in
       buildable
       // {
+        schemaVersion = projectSchemaVersion;
         # Escape hatches / aggregates: reachable via `.#`, but not ci jobs.
         inherit (wasix) nixpkgsByProfile toolchainByProfile defaultProfileName;
 
