@@ -231,11 +231,15 @@ and refuses one holding released packages.
 
 Webcs publish there as `<version>-pr<N>.g<sha7>` prereleases: distinct versions
 per iteration, hidden from `latest`, not deletable, so they accumulate. Nix's
-resolved dependency graph decides which dependencies the same preview publishes,
-independently of whether the manifest requirement is exact, a range, or `*`.
-Those dependencies and their qualified command references are repinned to the
-namespace and tag; one that is already released keeps its name and requirement.
-Changed wheels become an ephemeral per-PR Edge app serving an overlay index:
+resolved dependency graph decides which dependencies selected in the same
+preview are repinned, independently of whether the manifest requirement is
+exact, a range, or `*`. Those dependencies and their qualified command
+references are repinned to the namespace and tag; one that is already released
+keeps its name and requirement. The standalone `wasinix wasmer preview` expands
+the selected packages to their missing dependency closure only with
+`--with-dependencies`; without it, every package in the batch must be selected
+explicitly or already released. Changed wheels become an ephemeral per-PR Edge
+app serving an overlay index:
 
 ```sh
 pip install --index-url <preview>/simple --extra-index-url <prod>/simple
