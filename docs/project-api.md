@@ -205,17 +205,17 @@ extensions, or maintain a parallel package-name list.
 
 ### Package units
 
-A single-package unit returns a derivation. Its file or directory name supplies
-the overlay attribute:
+Every package unit returns an attrset of derivations. For the common
+single-package case, `exposePackage` and `exposeExtendedPackage` use the file or
+directory name as that attribute without repeating it in the recipe:
 
 ```nix
 # wasix/zlib.nix
 {
-  package,
+  exposeExtendedPackage,
   packages,
-  extendPackage,
 }:
-extendPackage package {
+exposeExtendedPackage {
   buildInputs = [packages.sameProfile.someDependency];
 }
 ```
@@ -232,10 +232,20 @@ uses. The context includes:
 - `extendPackage` and the other focused package helpers.
 
 A package-unit invocation additionally supplies `package`, the preceding value
-of the attribute being defined. A unit that defines a new attribute does not
-request it; requesting it when no preceding attribute exists is an error. Raw
+of the attribute being defined, when one exists. It also supplies two helpers
+closed over the discovered name: `exposePackage derivation` returns the lazy
+singleton result, while `exposeExtendedPackage attrs` combines that operation
+with `extendPackage package attrs`. A unit that defines a new attribute does not
+request `package` or `exposeExtendedPackage`; doing so is an error. Raw
 extension overlays retain the standard `final: prev:` interface; the discovered
 unit API does not duplicate those names.
+
+The singleton helpers preserve the overlay fixpoint: the loader can discover the
+result attribute without forcing the derivation, so that derivation may depend
+on `packages.sameProfile`. Returning a bare derivation is an error. When
+`exposePackage` gives a derivation a new registered identity, it drops machine
+provenance inherited from another package before the loader stamps the new
+identity. Extending an existing registered attribute preserves its lineage.
 
 There is no staged context that withholds later projections from package
 construction. Nix evaluates fields lazily, so a unit may reference any final
@@ -262,8 +272,11 @@ A new package can retain a normal nixpkgs recipe:
 
 ```nix
 # shared/my-tool/package.nix
-{packages}:
-packages.sameProfile.callPackage ./recipe.nix {}
+{
+  exposePackage,
+  packages,
+}:
+exposePackage (packages.sameProfile.callPackage ./recipe.nix {})
 ```
 
 A unit that genuinely owns several attributes returns an attrset of derivations:
@@ -742,7 +755,8 @@ introduces them:
 - `ci.jobs` and `ci.catalog.jobs` have identical keys;
 - every serialized catalog carries the project schema version.
 
-Before the directory loader is adopted, an eval-only prototype must confirm that
-deriving multi-package unit names from their result does not introduce a Nix
-fixpoint cycle. If it does, the unit constructor must derive the names and
-overlay from one declaration; callers must not maintain duplicate lists.
+The directory loader derives names and values from the unit's returned attrset.
+Its eval-only tests must cover a singleton package depending on the immediate
+recursive set, a multi-package unit, and rejection of a bare derivation. This
+pins the lazy result shape that prevents package-name discovery from collapsing
+the Nix fixpoint.

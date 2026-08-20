@@ -1,1 +1,5 @@
-{packages}: packages.sameProfile.newRecipe
+{
+  exposePackage,
+  packages,
+}:
+exposePackage packages.sameProfile.newRecipe

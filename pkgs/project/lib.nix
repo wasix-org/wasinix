@@ -1,6 +1,10 @@
 {lib}: let
   registryAttr = "__wasinixRegisteredPackages";
   extensionContextsAttr = "__wasinixExtensionContexts";
+  unitOverlaysAttr = "__wasinixUnitOverlays";
+  historyBaseAttr = "__wasinixHistoryBase";
+  historyOverlaysAttr = "__wasinixHistoryOverlays";
+  machineMetadata = ["source" "lineage" "instance" historyBaseAttr historyOverlaysAttr];
 
   scriptAttrs = [
     "preUnpack"
@@ -57,6 +61,9 @@
         else value
     );
 
+  extendPackage = package: attrs:
+    package.overrideAttrs (old: extendAttrs old attrs);
+
   callWith = available: function: let
     formals = builtins.functionArgs function;
     missing = lib.filter (name: !formals.${name} && !(builtins.hasAttr name available)) (lib.attrNames formals);
@@ -72,19 +79,48 @@
     previous ? null,
   }: let
     function = import file;
-    value = callWith (context // lib.optionalAttrs (previous != null) {package = previous;}) function;
+    previousRegistered = previous != null && ((packageMetadata previous).source or null) != null;
+    exposePackage = package: {
+      ${name} =
+        if previousRegistered
+        then package
+        else
+          package.overrideAttrs (old: {
+            passthru =
+              (old.passthru or {})
+              // {
+                wasinix = builtins.removeAttrs ((old.passthru or {}).wasinix or {}) machineMetadata;
+              };
+          });
+    };
+    exposeExtendedPackage = attrs:
+      if previous == null
+      then throw "${name}: exposeExtendedPackage requires a preceding package"
+      else exposePackage (extendPackage previous attrs);
+    value =
+      callWith (
+        context
+        // {
+          inherit exposeExtendedPackage exposePackage;
+        }
+        // lib.optionalAttrs (previous != null) {package = previous;}
+      )
+      function;
     packages =
-      if lib.isDerivation value
-      then {${name} = value;}
-      else value;
-    invalid = lib.filterAttrs (_: package: !lib.isDerivation package) packages;
+      lib.mapAttrs (
+        resultName: package:
+          lib.throwIf (!lib.isDerivation package)
+          "package unit ${toString file} returned non-derivation attribute '${resultName}'"
+          package
+      )
+      value;
   in
     lib.throwIf (!builtins.isFunction function)
     "package unit ${toString file} must be a function"
-    (lib.throwIf (!lib.isAttrs packages)
-      "package unit ${toString file} must return a derivation or an attribute set of derivations"
-      (lib.throwIf (invalid != {})
-        "package unit ${toString file} returned non-derivation attribute(s): ${lib.concatStringsSep ", " (lib.attrNames invalid)}"
+    (lib.throwIf (lib.isDerivation value)
+      "package unit ${toString file} returned a bare derivation; use exposePackage"
+      (lib.throwIf (!lib.isAttrs value)
+        "package unit ${toString file} must return an attribute set of derivations"
         packages));
 
   discoverUnits = dir: let
@@ -128,6 +164,8 @@
     name,
     package,
     previous ? null,
+    previousSet,
+    overlay,
     source,
     instance ? {
       kind = "current";
@@ -140,12 +178,19 @@
       then {}
       else packageMetadata previous;
     previousSource = previousMetadata.source or null;
-    previousLineage = previousMetadata.lineage or lib.optional (previousSource != null) previousSource;
+    previousLineage = previousMetadata.lineage or (lib.optional (previousSource != null) previousSource);
     previousInstance = previousMetadata.instance or null;
+    previousHistoryBase = previousMetadata.${historyBaseAttr} or null;
+    previousHistoryOverlays = previousMetadata.${historyOverlaysAttr} or [];
     declaredOverride = metadata.overrides or null;
     reservedChanged =
       if previousSource == null
-      then metadata ? source || metadata ? lineage || metadata ? instance
+      then
+        metadata ? source
+        || metadata ? lineage
+        || metadata ? instance
+        || builtins.hasAttr historyBaseAttr metadata
+        || builtins.hasAttr historyOverlaysAttr metadata
       else
         (metadata.source or previousSource)
         != previousSource
@@ -157,6 +202,14 @@
       else if previousSource == source
       then previousLineage
       else previousLineage ++ [source];
+    historyBase =
+      if previousSource == source
+      then previousHistoryBase
+      else previousSet;
+    historyOverlays =
+      if previousSource == source
+      then previousHistoryOverlays ++ [overlay]
+      else [overlay];
     overrideError =
       if previousSource == null && declaredOverride != null
       then "declares an override of '${declaredOverride}', but has no preceding registered owner"
@@ -173,43 +226,68 @@
     (lib.throwIf (overrideError != null)
       "${source}.${name} ${overrideError}"
       (package.overrideAttrs (old: {
-        passthru =
-          (old.passthru or {})
-          // {
-            wasinix =
-              builtins.removeAttrs metadata ["source" "lineage" "instance"]
-              // {inherit source lineage instance;};
-          };
-      })));
+          passthru =
+            (old.passthru or {})
+            // {
+              wasinix =
+                builtins.removeAttrs metadata machineMetadata
+                // {
+                  inherit source lineage instance;
+                  ${historyBaseAttr} = historyBase;
+                  ${historyOverlaysAttr} = historyOverlays;
+                };
+            };
+        })
+        // {versions = {};}));
 in rec {
-  inherit address addressSegment callWith discoverUnits extendAttrs extensionContextsAttr mergeScript packageMetadata registryAttr stampPackage unitResult;
+  inherit address addressSegment callWith discoverUnits extendAttrs extensionContextsAttr historyBaseAttr historyOverlaysAttr machineMetadata mergeScript packageMetadata registryAttr stampPackage unitOverlaysAttr unitResult;
 
-  extendPackage = package: attrs:
-    package.overrideAttrs (old: extendAttrs old attrs);
+  inherit extendPackage;
 
   loadPackageOverlay = {
     contextFor,
     dir,
   }: final: prev: let
-    context = contextFor {inherit final prev;};
-    instantiate = unit:
+    instantiate = unit: final': prev':
       unitResult {
         inherit (unit) file name;
-        inherit context;
-        previous = prev.${unit.name} or null;
+        context = contextFor {
+          final = final';
+          prev = prev';
+        };
+        previous = prev'.${unit.name} or null;
       };
+    units = discoverUnits dir;
+    results =
+      map (unit: {
+        result = instantiate unit final prev;
+        replay = instantiate unit;
+      })
+      units;
+    packages = builtins.foldl' mergeDisjoint {} (map (item: item.result) results);
+    unitOverlays = builtins.foldl' (state: item:
+      state
+      // lib.genAttrs (lib.attrNames item.result) (_: item.replay)) {}
+    results;
   in
-    builtins.foldl' mergeDisjoint {} (map instantiate (discoverUnits dir));
+    packages // {${unitOverlaysAttr} = unitOverlays;};
 
   registerOverlay = {
     overlay,
     source,
+    instanceFor ? _name: package: {
+      kind = "current";
+      version = toString (package.version or package.name);
+    },
   }:
     lib.throwIf (builtins.match "[a-z0-9][a-z0-9._-]*" source == null)
     "invalid Wasinix extension ID '${source}'"
     (final: prev: let
       result = overlay final prev;
-      names = builtins.removeAttrs (lib.genAttrs (lib.attrNames result) (_: true)) [registryAttr];
+      unitOverlays = result.${unitOverlaysAttr} or {};
+      visibleResult = builtins.removeAttrs result [unitOverlaysAttr];
+      reserved = lib.intersectLists (lib.attrNames result) [registryAttr extensionContextsAttr];
+      names = builtins.removeAttrs (lib.genAttrs (lib.attrNames visibleResult) (_: true)) [registryAttr extensionContextsAttr];
       stamped =
         lib.mapAttrs (
           name: value:
@@ -219,20 +297,26 @@ in rec {
                 inherit name source;
                 package = value;
                 previous = prev.${name} or null;
+                previousSet = prev;
+                overlay = unitOverlays.${name} or overlay;
+                instance = instanceFor name value;
               }
             else value
         )
-        result;
+        visibleResult;
     in
-      lib.throwIf (result ? ${registryAttr})
-      "registered overlay '${source}' sets reserved attribute '${registryAttr}'"
+      lib.throwIf (reserved != [])
+      "registered overlay '${source}' sets reserved attribute(s): ${lib.concatStringsSep ", " reserved}"
       (stamped
         // {
           ${registryAttr} = (prev.${registryAttr} or {}) // names;
         }));
 
+  registeredNames = packageSet:
+    lib.attrNames (packageSet.${registryAttr} or {});
+
   registeredPackages = packageSet: let
-    names = lib.attrNames (packageSet.${registryAttr} or {});
+    names = registeredNames packageSet;
     registered = lib.genAttrs names (name: packageSet.${name});
   in
     lib.filterAttrs (
