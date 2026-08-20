@@ -325,6 +325,17 @@
       };
     };
   };
+  pythonRepairExtension = {
+    id = "python-repair";
+    overlays.python = _final: _previous: _pyfinal: _pyprevious: {
+      repairPython = mkPackage {
+        name = "repair-python";
+        propagatedBuildInputs = [dependency];
+        pythonModule.pkgs.requiredPythonModules = inputs: map (package: package.name) inputs;
+        passthru.requiredPythonModules = ["stale"];
+      };
+    };
+  };
   project = projectApi.mkProject {
     system = "test-system";
     importNixpkgs = fakeImportNixpkgs;
@@ -335,6 +346,11 @@
     system = "test-system";
     importNixpkgs = fakeImportNixpkgs;
     extensions = [definitionExtension];
+  };
+  pythonRepairProject = projectApi.mkProject {
+    system = "test-system";
+    importNixpkgs = fakeImportNixpkgs;
+    extensions = [pythonRepairExtension];
   };
   wasmerProjectApi = import ./default.nix (projectApiArgs // {projectionRules = wasmerProjectionRules;});
   behaviorProjectApi = import ./default.nix (projectApiArgs
@@ -758,9 +774,11 @@ in {
       limitedPreferred = project.packages.preferred.limited.name;
       consumerName = project.packages.wasix.alternate.consumer.name;
       inheritedDependencyName = project.packages.wasix.default.uses-inherited.name;
+      focusedHelper = project.packages.wasix.default.uses-inherited.passthru.usedFocusedHelper;
       pythonNames = lib.attrNames project.packages.python.py;
       pythonSource = project.packages.python.py.uses-python.passthru.wasinix.source;
       pythonContextName = project.packages.python.py.contextProof.name;
+      repairedPythonModules = pythonRepairProject.packages.python.py.repairPython.passthru.requiredPythonModules;
       wasixHistoryVersion = project.packages.wasix.default.core.versions."0.9".version;
       preferredHistoryVersion = project.packages.preferred.core.versions."0.9".version;
       pythonHistoryVersion = project.packages.python.py.inheritedPython.versions."0.8".version;
@@ -817,9 +835,11 @@ in {
       limitedPreferred = "limited-alternate";
       consumerName = "consumer-alternate";
       inheritedDependencyName = "uses-inherited";
+      focusedHelper = true;
       pythonNames = ["contextProof" "corePython" "inheritedPython" "uses-python"];
       pythonSource = "consumer";
       pythonContextName = "top-owned-";
+      repairedPythonModules = ["dependency"];
       wasixHistoryVersion = "0.9";
       preferredHistoryVersion = "0.9";
       pythonHistoryVersion = "0.8";

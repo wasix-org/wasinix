@@ -264,8 +264,10 @@ overlays have been applied.
 
 An override that does not want additive merging uses `package.overrideAttrs`
 directly. Narrow helpers such as script concatenation and input filtering remain
-available for explicit overrides; there is no `libTweaks` compatibility name in
-the v1 API.
+available directly as `mergeScript`, `dropInputsByName`,
+`dropInputsByNameInfix`, `replaceInputsByName`, `linkInputs`,
+`dropPatchesByNameInfix`, and `dropFlagsByPrefix`. There is no `libTweaks` or
+generic `helpers` compatibility name in the v1 package-unit API.
 
 A new package can retain a normal nixpkgs recipe:
 
