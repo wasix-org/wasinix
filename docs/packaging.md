@@ -277,9 +277,12 @@ C and C++ packages use their nixpkgs `checkPhase`. Python wheels use the native
 nixpkgs custom `installCheckPhase` or check hook. Override that choice with
 `passthru.wasinix.checks.captured.install`; configure the run with
 `passthru.wasinix.checks.captured` (`timeout`, `expectFail`, `broken`, or
-`tags`). Large Python suites can set `shards = N`; pytest checks partition
-collected node IDs deterministically, while custom phases consume
-`WASIX_CHECK_SHARD_COUNT` and `WASIX_CHECK_SHARD_NUM` themselves.
+`tags`).
+`guestInputs` adds WASIX packages to the guest PATH and exposes their commands
+under `/bin`; `postRestore` adjusts a captured tree before its phase runs. Large
+suites can set `shards = N`; pytest checks partition collected node IDs
+deterministically, while custom phases consume `WASIX_CHECK_SHARD_COUNT` and
+`WASIX_CHECK_SHARD_NUM` themselves.
 
 Captured checks appear as catalog tests named `captured`; shards add their
 number to that name. Handwritten package tests remain appropriate for focused
