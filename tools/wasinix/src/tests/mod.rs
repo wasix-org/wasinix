@@ -2858,6 +2858,37 @@ mod changeset_markdown {
 
 }
 
+mod repository_names {
+    use crate::github::surfaces::resolve_repository;
+
+    /// `--repository github.com/wasix-org/wasinix` went verbatim into an api
+    /// path and came back a 404 naming the path, not the mistake.
+    #[test]
+    fn a_named_repository_is_owner_and_repo_however_it_is_written() {
+        let here = std::path::Path::new(".");
+        for spelling in [
+            "wasix-org/wasinix",
+            "github.com/wasix-org/wasinix",
+            "https://github.com/wasix-org/wasinix",
+            "https://github.com/wasix-org/wasinix.git",
+            "git@github.com:wasix-org/wasinix.git",
+            "WASIX-ORG/WASINIX",
+        ] {
+            assert_eq!(
+                resolve_repository(Some(spelling), here).unwrap(),
+                "wasix-org/wasinix",
+                "{spelling}"
+            );
+        }
+        for refused in ["not-a-repo", "", "a/b/c", "/wasinix", "wasix-org/"] {
+            let error = resolve_repository(Some(refused), here)
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("expected OWNER/REPO"), "{refused}: {error}");
+        }
+    }
+}
+
 mod surfaces {
     use std::cell::RefCell;
 

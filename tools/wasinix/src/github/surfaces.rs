@@ -50,14 +50,46 @@ static GITHUB_REMOTE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::n
 /// every equality check in the tool runs on this value.
 pub fn resolve_repository(flag: Option<&str>, repo: &std::path::Path) -> Result<String> {
     if let Some(repository) = flag {
-        return Ok(repository.to_lowercase());
+        // Taken verbatim, a url went straight into an api path and came back
+        // as a 404 naming the path rather than the mistake.
+        return named_repository(repository).ok_or_else(|| {
+            Error::Request(format!(
+                "--repository {repository:?}: expected OWNER/REPO, or a github.com url for it"
+            ))
+        });
     }
-    detected_repository(repo).ok_or_else(|| {
-        Error::Request(
-            "no repository: pass --repository, set GITHUB_REPOSITORY, \
-             or add a github.com origin remote"
-                .into(),
-        )
+    detected_repository(repo)
+        .or_else(|| github_remote(repo))
+        .ok_or_else(|| {
+            Error::Request(
+                "no repository: pass --repository, set GITHUB_REPOSITORY, \
+                 or add a github.com remote"
+                    .into(),
+            )
+        })
+}
+
+/// `OWNER/REPO`, however it was spelled: a bare pair, or any of the urls a
+/// github remote is written as.
+fn named_repository(value: &str) -> Option<String> {
+    if let Some(captures) = GITHUB_REMOTE.captures(value) {
+        return Some(format!("{}/{}", &captures[1], &captures[2]).to_lowercase());
+    }
+    let (owner, name) = value.split_once('/')?;
+    let named = !owner.is_empty() && !name.is_empty() && !name.contains('/');
+    named.then(|| value.to_lowercase())
+}
+
+/// Any remote naming a github repository, for a checkout whose remote is not
+/// called origin. Read-only callers only: the identity a mutation checks
+/// against stays the origin's.
+fn github_remote(repo: &std::path::Path) -> Option<String> {
+    let remotes = crate::support::git::git(repo, &["remote"]).ok()?;
+    remotes.lines().find_map(|name| {
+        let url = crate::support::git::git(repo, &["remote", "get-url", name]).ok()?;
+        GITHUB_REMOTE
+            .captures(&url)
+            .map(|captures| format!("{}/{}", &captures[1], &captures[2]).to_lowercase())
     })
 }
 
