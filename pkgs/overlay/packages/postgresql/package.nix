@@ -61,7 +61,7 @@
     # nixpkgs sets libuuid null off Linux; the overlay util-linux ships libuuid only.
     libuuid = final.util-linux;
     tzdata = final.buildPackages.tzdata;
-    # nixpkgs bakes `${stdenv.cc.libc}/bin/locale` into pg_import_system_collations,
+    # nixpkgs bakes the libc locale executable's store path into pg_import_system_collations,
     # and the wasix stdenv has cc.libc = null. No wasm locale binary exists.
     stdenv =
       final.stdenv

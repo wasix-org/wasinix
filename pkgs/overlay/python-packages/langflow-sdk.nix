@@ -10,7 +10,8 @@ pyfinal.buildPythonPackage (finalAttrs: {
 
   src = pyfinal.fetchPypi {
     pname = "langflow_sdk";
-    inherit (finalAttrs) version format;
+    inherit (finalAttrs) version;
+    format = "wheel";
     dist = "py3";
     python = "py3";
     hash = "sha256-N22F5iy+J157WUHlqMlFByY1KFprSPUQKVtFCjWrzz0=";

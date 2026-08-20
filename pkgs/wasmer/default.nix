@@ -185,7 +185,7 @@
     ${lib.concatMapStringsSep "\n" (n: ''
         if [ -d "${wasmerPackageInventory.${n}.pkg}/pkg" ]; then
           mkdir -p "$out/pkg/${n}"
-          ${pkgs.coreutils}/bin/cp -R --no-preserve=mode,ownership "${wasmerPackageInventory.${n}.pkg}/pkg/." "$out/pkg/${n}/"
+          ${lib.getExe' pkgs.coreutils "cp"} -R --no-preserve=mode,ownership "${wasmerPackageInventory.${n}.pkg}/pkg/." "$out/pkg/${n}/"
         fi
       '')
       (builtins.attrNames wasmerPackageInventory)}

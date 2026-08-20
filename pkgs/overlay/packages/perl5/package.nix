@@ -23,7 +23,7 @@
           ./patches/cross-perl-stubs.patch
         ];
         postPatch = ''
-          ${final.buildPackages.perl}/bin/perl -Icnf/stub -MList::Util=pairs,reduce -e '
+          ${final.lib.getExe final.buildPackages.perl} -Icnf/stub -MList::Util=pairs,reduce -e '
             my ($pair) = pairs(key => "value");
             my $reduced = reduce { (defined $a ? $a : "x") . $b } undef, "y";
             die "List::Util stub mismatch\n"
@@ -54,7 +54,7 @@
           ];
       }
       (prev.perl5.override {
-        # ${coreutils}/bin/pwd is a runtime path baked into Cwd, and coreutils
+        # The coreutils pwd executable is a runtime path baked into Cwd, and coreutils
         # builds at the off profile only.
         coreutils = preferredProfilePackages.coreutils;
         # the module set is built against `self`, so without this every perl module

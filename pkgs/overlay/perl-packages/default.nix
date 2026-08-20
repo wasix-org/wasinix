@@ -32,15 +32,15 @@ in {
       preCheck = helpers.mergeScript [
         (old.preCheck or "")
         ''
-          export PATH=${buildPerl}/bin:$PATH
-          export HARNESS_PERL=${checkPerl}/bin/perl
+          export PATH=${final.lib.makeBinPath [buildPerl]}:$PATH
+          export HARNESS_PERL=${final.lib.getExe checkPerl}
           checkFlagsArray+=(
-            "PERL=${buildPerl}/bin/perl"
-            "FULLPERL=${buildPerl}/bin/perl"
-            "PERLRUN=${buildPerl}/bin/perl"
-            "FULLPERLRUN=${buildPerl}/bin/perl"
-            "ABSPERLRUN=${buildPerl}/bin/perl"
-            "FULLPERLRUNINST=${buildPerl}/bin/perl"
+            "PERL=${final.lib.getExe buildPerl}"
+            "FULLPERL=${final.lib.getExe buildPerl}"
+            "PERLRUN=${final.lib.getExe buildPerl}"
+            "FULLPERLRUN=${final.lib.getExe buildPerl}"
+            "ABSPERLRUN=${final.lib.getExe buildPerl}"
+            "FULLPERLRUNINST=${final.lib.getExe buildPerl}"
           )
         ''
       ];

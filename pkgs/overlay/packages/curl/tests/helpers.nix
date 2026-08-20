@@ -7,7 +7,7 @@
         cat > docroot/echo.cgi << 'CGI'
     #!/bin/sh
     printf "Content-Type: text/plain\r\n\r\n"
-    ${pkgs.coreutils}/bin/cat
+    ${pkgs.lib.getExe' pkgs.coreutils "cat"}
     CGI
         cat > docroot/redirect.cgi << 'CGI'
     #!/bin/sh
@@ -34,7 +34,7 @@
         cat > docroot/echo.cgi << 'CGI'
     #!/bin/sh
     printf "Content-Type: text/plain\r\n\r\n"
-    ${pkgs.coreutils}/bin/cat
+    ${pkgs.lib.getExe' pkgs.coreutils "cat"}
     CGI
         cat > docroot/redirect.cgi << 'CGI'
     #!/bin/sh

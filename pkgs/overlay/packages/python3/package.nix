@@ -29,7 +29,7 @@
           SSL_CERT_DIR = "/etc/ssl/certs";
           # getpath can't resolve argv0 (no PATH in the guest), leaving sys.executable
           # empty, which breaks subprocess([sys.executable, ..]) and spawn.
-          PYTHONEXECUTABLE = "${py}/bin/python${pyVer}.wasm";
+          PYTHONEXECUTABLE = lib.getExe' py "python${pyVer}.wasm";
         };
       };
       py =
@@ -186,7 +186,7 @@
           # ac_sys_system stays WASI. Setup.local forces the modules configure marks n/a.
           postPatch = ''
                     substituteInPlace Lib/subprocess.py \
-                      --replace-fail '${final.buildPackages.bashNonInteractive}/bin/sh' '${preferredProfilePackages.bash}/bin/sh'
+                      --replace-fail '${lib.getExe' final.buildPackages.bashNonInteractive "sh"}' '${lib.getExe' preferredProfilePackages.bash "sh"}'
 
                     substituteInPlace configure.ac \
                       --replace-fail ' -lwasi-emulated-signal -lwasi-emulated-getpid -lwasi-emulated-process-clocks' \

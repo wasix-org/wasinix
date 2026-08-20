@@ -10,7 +10,8 @@ pyfinal.buildPythonPackage (finalAttrs: {
 
   src = pyfinal.fetchPypi {
     pname = "ag_ui_protocol";
-    inherit (finalAttrs) version format;
+    inherit (finalAttrs) version;
+    format = "wheel";
     dist = "py3";
     python = "py3";
     hash = "sha256-0VHA8KNBYGR/FXEWP3GFdG9DJrFaVtFWDeUIKnoOehI=";

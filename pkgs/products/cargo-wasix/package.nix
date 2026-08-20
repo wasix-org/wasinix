@@ -26,11 +26,11 @@
   # cargo-wasix resolves its toolchain through rustup; before exec, (re-)link
   # ours under the names it looks for. Idempotent, quiet on the happy path.
   rustupLink = ''
-    "${rustup}/bin/rustup" toolchain remove wasix >/dev/null 2>&1 || true
-    "${rustup}/bin/rustup" toolchain link wasix "${wasixRustToolchain}" >/dev/null || exit 1
-    "${rustup}/bin/rustup" toolchain remove wasix-default >/dev/null 2>&1 || true
-    "${rustup}/bin/rustup" toolchain link wasix-default "${wasixRustToolchain}" >/dev/null || exit 1
-    "${rustup}/bin/rustup" default wasix-default >/dev/null || exit 1
+    "${lib.getExe rustup}" toolchain remove wasix >/dev/null 2>&1 || true
+    "${lib.getExe rustup}" toolchain link wasix "${wasixRustToolchain}" >/dev/null || exit 1
+    "${lib.getExe rustup}" toolchain remove wasix-default >/dev/null 2>&1 || true
+    "${lib.getExe rustup}" toolchain link wasix-default "${wasixRustToolchain}" >/dev/null || exit 1
+    "${lib.getExe rustup}" default wasix-default >/dev/null || exit 1
   '';
 in
   stdenvNoCC.mkDerivation {
@@ -42,7 +42,7 @@ in
 
     installPhase = ''
       runHook preInstall
-      install -Dm755 "${cargoWasixUnwrapped}/bin/cargo-wasix" "$out/libexec/cargo-wasix"
+      install -Dm755 "${lib.getExe cargoWasixUnwrapped}" "$out/libexec/cargo-wasix"
       makeWrapper "$out/libexec/cargo-wasix" "$out/bin/cargo-wasix" \
         --prefix PATH : "${lib.makeBinPath [rustup wasixcc]}" \
         ${env.makeWrapperFlagsOf (

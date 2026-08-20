@@ -14,7 +14,7 @@ helpers.forEachPython preferredProfilePackages ({
     wasixPkgs = [python];
     script = ''
       for command in python python3 python${pyVer}; do
-        "${python}/bin/$command" -c \
+        "${pkgs.lib.getExe' python "$command"}" -c \
           'import os; expected = {"python", "python3", "python${pyVer}"}; assert expected <= set(os.listdir("/bin"))'
       done
     '';

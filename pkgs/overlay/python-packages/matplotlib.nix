@@ -76,13 +76,13 @@ in
           case "$_path" in *-matplotlib-*/lib/python*/site-packages) _site="$_path"; break ;; esac
         done
         [ -n "$_site" ] || exit 1
-        ${final.buildPackages.coreutils}/bin/cp -r "$_site/matplotlib" "$NIX_BUILD_TOP/matplotlib"
-        ${final.buildPackages.coreutils}/bin/chmod -R u+w "$NIX_BUILD_TOP/matplotlib"
-        ${final.buildPackages.coreutils}/bin/cp -r \
+        ${lib.getExe' final.buildPackages.coreutils "cp"} -r "$_site/matplotlib" "$NIX_BUILD_TOP/matplotlib"
+        ${lib.getExe' final.buildPackages.coreutils "chmod"} -R u+w "$NIX_BUILD_TOP/matplotlib"
+        ${lib.getExe' final.buildPackages.coreutils "cp"} -r \
           "$_source/lib/matplotlib/tests/." "$NIX_BUILD_TOP/matplotlib/tests/"
         export PYTHONPATH="$NIX_BUILD_TOP:$PYTHONPATH"
         pytestFlagsArray+=("$NIX_BUILD_TOP/matplotlib/tests")
-        ${final.buildPackages.coreutils}/bin/mkdir "$NIX_BUILD_TOP/check"
+        ${lib.getExe' final.buildPackages.coreutils "mkdir"} "$NIX_BUILD_TOP/check"
         cd "$NIX_BUILD_TOP/check"
       '';
     }

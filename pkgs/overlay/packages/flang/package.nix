@@ -30,7 +30,7 @@
       # it EXCLUDE_FROM_ALL, yet add_mlir_tool still installs it, so the install
       # phase looks for a binary nothing built. The wasm copy is never executed.
       cmakeFlags = [
-        "-DMLIR_LINALG_ODS_YAML_GEN=${nativeOdsYamlGen}/bin/mlir-linalg-ods-yaml-gen"
+        "-DMLIR_LINALG_ODS_YAML_GEN=${final.lib.getExe' nativeOdsYamlGen "mlir-linalg-ods-yaml-gen"}"
         "-DLLVM_BUILD_UTILS=ON"
       ];
     }

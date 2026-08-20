@@ -40,7 +40,7 @@
     chmod u+w "$out" "$out/bin" "$out/lib"
     rm "$out/lib/settings"
     substitute ${baseGhc}/lib/settings "$out/lib/settings" \
-      --replace-fail '"${wasiSdk}/bin/llvm-ranlib"' '"${pkgs.buildPackages.coreutils}/bin/true"'
+      --replace-fail '"${pkgs.lib.getExe' wasiSdk "llvm-ranlib"}"' '"${pkgs.lib.getExe' pkgs.buildPackages.coreutils "true"}"'
     for name in $(cd "$out/bin" && echo wasm32-wasi-ghc wasm32-wasi-ghc-9.*); do
       rm "$out/bin/$name"
       substitute ${baseGhc}/bin/"$name" "$out/bin/$name" \
@@ -98,9 +98,9 @@
             ++ [
               # Use the bindist's LLVM-19 toolchain, not nixpkgs' cross LLVM-21
               # (version-skewed objects -> "malformed uleb128" when TH links).
-              "--with-gcc=${wasiSdk}/bin/clang"
-              "--with-ld=${wasiSdk}/bin/wasm-ld"
-              "--with-ar=${wasiSdk}/bin/llvm-ar"
+              "--with-gcc=${pkgs.lib.getExe' wasiSdk "clang"}"
+              "--with-ld=${pkgs.lib.getExe' wasiSdk "wasm-ld"}"
+              "--with-ar=${pkgs.lib.getExe' wasiSdk "llvm-ar"}"
               "--disable-library-stripping"
               "--disable-executable-stripping"
               # text (via simdutf) needs wasi-sdk's libc++ (LLVM-19, std::__2::);

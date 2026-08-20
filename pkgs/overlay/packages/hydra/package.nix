@@ -22,7 +22,7 @@
     pkg.overrideAttrs (o: {
       preConfigure =
         (o.preConfigure or "")
-        + "\nexport PATH=${final.buildPackages.perl}/bin:$PATH\n";
+        + "\nexport PATH=${final.lib.makeBinPath [final.buildPackages.perl]}:$PATH\n";
     });
 
   underWasmer = substitution: pkg:
@@ -114,7 +114,7 @@ in
       # cmmg.pl writes pure perl sources, but MakeMaker's $(PERL) is the cross
       # build's miniperl, which cannot load the XS List::Util the generator wants.
       ClassMethodMaker = pprev.ClassMethodMaker.overrideAttrs (o: {
-        makeFlags = (o.makeFlags or []) ++ ["PERL=${final.buildPackages.perl}/bin/perl"];
+        makeFlags = (o.makeFlags or []) ++ ["PERL=${final.lib.getExe final.buildPackages.perl}"];
       });
       # Makefile.PL loads Text::CSV to read its version and Text::CSV_PP reaches
       # for the XS module B. Class::MethodMaker above ships XS and cannot take

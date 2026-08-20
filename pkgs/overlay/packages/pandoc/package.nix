@@ -33,7 +33,7 @@ in
       nativeBuildInputs = [toolchain.haskell.binaryen];
     } ''
       wasm-opt --experimental-new-eh --low-memory-unused --converge --gufa \
-        --flatten --rereloop -Oz ${pandoc-cli}/bin/pandoc.wasm -o pandoc.opt.wasm
+        --flatten --rereloop -Oz ${lib.getExe' pandoc-cli "pandoc.wasm"} -o pandoc.opt.wasm
       install -Dm755 pandoc.opt.wasm "$out/bin/pandoc.wasm"
     ''
   )

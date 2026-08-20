@@ -16,7 +16,7 @@ in {
   domains = cmp "unfurl-domains" "domains" {};
   keys = cmp "unfurl-keys" "keys" {
     normalize = pkgs.writeShellScript "normalize-unfurl-keys" ''
-      ${pkgs.coreutils}/bin/sort
+      ${pkgs.lib.getExe' pkgs.coreutils "sort"}
     '';
   };
 }

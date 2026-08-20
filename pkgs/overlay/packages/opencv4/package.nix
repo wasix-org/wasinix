@@ -1,4 +1,4 @@
-# OpenCV cross-built to wasix, core plus the opencv_contrib modules.
+# OpenCV core plus the opencv_contrib modules.
 # python-packages/opencv4.nix layers the python bindings on this.
 {
   prev,

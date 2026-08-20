@@ -94,7 +94,7 @@ in
     passthru.updateScript = {
       name = "wasix-libc"; # the attr tail is `libc`
       # Wraps nix-update (passed through as argv) to re-derive the witx pins from the new source.
-      command = ["${updateWrapper}/bin/wasix-libc-update"] ++ nix-update-script {extraArgs = ["--flake"];};
+      command = [lib.getExe updateWrapper] ++ nix-update-script {extraArgs = ["--flake"];};
       accepts = ["release" "revision"];
       source = {
         kind = "github";

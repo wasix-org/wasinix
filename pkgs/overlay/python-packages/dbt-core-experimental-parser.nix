@@ -23,7 +23,7 @@
       info="$stage/${escaped}-${version}.dist-info"
       scripts="$stage/${escaped}-${version}.data/scripts"
       mkdir -p "$info" "$scripts"
-      install -Dm755 ${engine}/bin/dbt-sa-cli.wasm "$scripts/${pname}"
+      install -Dm755 ${final.lib.getExe' engine "dbt-sa-cli.wasm"} "$scripts/${pname}"
 
       cat > "$info/METADATA" <<EOF
       Metadata-Version: 2.1

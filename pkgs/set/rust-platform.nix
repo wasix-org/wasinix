@@ -56,7 +56,7 @@
             *) args+=("$a") ;;
           esac
         done
-        exec ${wasixcc}/bin/${tool} "''${args[@]}"
+        exec ${lib.getExe' wasixcc tool} "''${args[@]}"
       '';
   in
     pkgsCross.buildPackages.symlinkJoin {
@@ -73,10 +73,10 @@
   wasixDepCcHook =
     pkgsCross.makeSetupHook {name = "wasix-dep-cc-hook";}
     (pkgsCross.buildPackages.writeText "wasix-dep-cc-hook.sh" ''
-      export CC_wasm32_wasmer_wasi=${depCc}/bin/cc
-      export CXX_wasm32_wasmer_wasi=${depCc}/bin/c++
-      export CC_wasm32_wasmer_wasi_dl=${depCcDl}/bin/cc
-      export CXX_wasm32_wasmer_wasi_dl=${depCcDl}/bin/c++
+      export CC_wasm32_wasmer_wasi=${lib.getExe' depCc "cc"}
+      export CXX_wasm32_wasmer_wasi=${lib.getExe' depCc "c++"}
+      export CC_wasm32_wasmer_wasi_dl=${lib.getExe' depCcDl "cc"}
+      export CXX_wasm32_wasmer_wasi_dl=${lib.getExe' depCcDl "c++"}
     '');
 
   # `cargo build`/`cargo test` go through cargo-wasix, everything else
@@ -92,10 +92,10 @@
         export HOME="$PWD/.home"
         export RUSTUP_HOME="$HOME/.rustup"
         mkdir -p "$HOME" "$RUSTUP_HOME"
-        exec ${cargoWasix}/bin/cargo-wasix wasix "$sub" "$@"
+        exec ${lib.getExe cargoWasix} wasix "$sub" "$@"
         ;;
     esac
-    exec ${cargo}/bin/cargo "$@"
+    exec ${lib.getExe cargo} "$@"
   '';
 
   base = pkgsCross.makeRustPlatform {

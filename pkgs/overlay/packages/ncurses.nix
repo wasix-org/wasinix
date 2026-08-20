@@ -8,7 +8,7 @@
   helpers,
   ...
 }: let
-  buildCc = "${final.buildPackages.stdenv.cc}/bin/cc";
+  buildCc = final.lib.getExe' final.buildPackages.stdenv.cc "cc";
 in
   helpers.libTweaks {
     # The link smoke fails without diagnostics, likely on the alias symlink

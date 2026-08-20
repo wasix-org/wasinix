@@ -13,7 +13,7 @@ stdenvNoCC.mkDerivation {
     runHook preBuild
     export HOME="$TMPDIR"
 
-    version="$(${lib.getExe tinygo} version)"
+    version="$(${lib.getExe' tinygo "tinygo"} version)"
     echo "$version"
     case "$version" in
       *"LLVM version ${wasix-llvm.passthru.llvmVersion}"*) ;;
@@ -29,7 +29,7 @@ stdenvNoCC.mkDerivation {
         fmt.Println("hello from tinygo")
     }
     GO
-    ${lib.getExe tinygo} build -target=wasip1 -o hello.wasm hello.go
+    ${lib.getExe' tinygo "tinygo"} build -target=wasip1 -o hello.wasm hello.go
     runHook postBuild
   '';
 

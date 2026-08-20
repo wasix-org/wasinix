@@ -48,7 +48,7 @@ in
     # "cargo-registry" is the crate-pin set; this target bumps the server.
     passthru.updateScript = {
       name = "cargo-registry-server";
-      command = ["${updateScript}/bin/wasix-cargo-registry-update"] ++ updateArgs;
+      command = [lib.getExe updateScript] ++ updateArgs;
       accepts = ["revision"];
       source = {
         kind = "github";

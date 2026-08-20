@@ -88,7 +88,7 @@ in
     };
     # mkbuiltins et al. run on the build host: native cc, same gnu17 pin.
     preBuild = ''
-      makeFlagsArray+=("CC_FOR_BUILD=${final.buildPackages.stdenv.cc}/bin/cc -std=gnu17")
+      makeFlagsArray+=("CC_FOR_BUILD=${final.lib.getExe' final.buildPackages.stdenv.cc "cc"} -std=gnu17")
     '';
     # Ship as *.wasm (already asyncified at link) and repoint bin/sh at the
     # renamed wasm. Done by hand, not via the wasmRename helper, because sh

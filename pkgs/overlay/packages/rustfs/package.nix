@@ -1,4 +1,4 @@
-# rustfs: MinIO-class distributed S3 object store, built to WASIX.
+# rustfs: MinIO-class distributed S3 object store.
 # Nixpkgs owns the source, vendoring, and native packaging;
 # this override carries only the WASIX compatibility changes.
 {

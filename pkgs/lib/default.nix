@@ -323,7 +323,7 @@ in rec {
 
   # The webc packaging derives one command per bin/*.wasm. posixAlias also keeps
   # the unsuffixed name as a symlink, for consumers that exec it by store path
-  # (git's shell subcommands run ${gnused}/bin/sed).
+  # (git's shell subcommands run sed by its store path).
   wasmRename = {
     wasmName,
     posixAlias ? false,

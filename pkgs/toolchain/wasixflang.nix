@@ -48,7 +48,7 @@ in
       _objs+=("$_o")
     done
     ${wasixccEnv}
-    ${wasixcc}/bin/wasixcc "''${_objs[@]}" "''${_rest[@]}" \
+    ${lib.getExe wasixcc} "''${_objs[@]}" "''${_rest[@]}" \
       -L${flangRt}/lib/wasm32-wasi -lflang_rt.runtime
   '')
   # What cc-wrapper reads to wrap this as a Fortran-only compiler: langFortran

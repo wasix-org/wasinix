@@ -17,7 +17,7 @@ in
       "-DPython_EXECUTABLE=${py.pythonOnBuildForHost.interpreter}"
       # under CMP0190 FindPython refuses Interpreter + Development.Module together
       # when cross-compiling unless an emulator is set; `env` is the identity one.
-      "-DCMAKE_CROSSCOMPILING_EMULATOR=${final.buildPackages.coreutils}/bin/env"
+      "-DCMAKE_CROSSCOMPILING_EMULATOR=${final.lib.getExe' final.buildPackages.coreutils "env"}"
     ];
     # libzmq.a is C++ but the extension links with the C driver.
     env.NIX_LDFLAGS = "-lc++ -lc++abi -lunwind";

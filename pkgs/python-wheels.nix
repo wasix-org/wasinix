@@ -64,10 +64,10 @@
   selfContainedTest = name: wheel:
     pkgs.runCommand "wheel-selfcontained-${name}" {} ''
       site="${wheel}/${python3.sitePackages}"
-      hits=$(${pkgs.gnugrep}/bin/grep -rnaE '/nix/store/[a-z0-9]{32}-' "$site" --include='*.py' \
-        | ${pkgs.gnugrep}/bin/grep -vE '\.dist-info/' \
-        | ${pkgs.gnugrep}/bin/grep -vE ':1:#!' \
-        | ${pkgs.gnugrep}/bin/grep -v 'eeeeeeeeeeeeeeee' || true)
+      hits=$(${lib.getExe pkgs.gnugrep} -rnaE '/nix/store/[a-z0-9]{32}-' "$site" --include='*.py' \
+        | ${lib.getExe pkgs.gnugrep} -vE '\.dist-info/' \
+        | ${lib.getExe pkgs.gnugrep} -vE ':1:#!' \
+        | ${lib.getExe pkgs.gnugrep} -v 'eeeeeeeeeeeeeeee' || true)
       if [ -n "$hits" ]; then
         echo "wheel '${name}' embeds runtime /nix/store paths (breaks pip on a bare wasix target):" >&2
         echo "$hits" >&2
@@ -112,7 +112,7 @@
   in
     pkgs.runCommand "wheel-dynamic-${name}" {} ''
       ${pkgs.python3.interpreter} ${./python-wheel-dyn.py} \
-        ${python3}/bin/python${python3.pythonVersion}.wasm \
+        ${lib.getExe' python3 "python${python3.pythonVersion}.wasm"} \
         ${lib.escapeShellArgs sites} > "$out"
     '';
 
@@ -126,7 +126,7 @@
     pkgs.runCommand "wheel-noarch-closure-${name}" {} ''
       fail=
       for dist in ${lib.escapeShellArgs (map (m: "${m.dist}") members)}; do
-        whl=$(${pkgs.findutils}/bin/find "$dist" -name '*.whl' | head -1)
+        whl=$(${lib.getExe pkgs.findutils} "$dist" -name '*.whl' | head -1)
         case "$(basename "$whl")" in
           *-py3-none-any.whl | *-py2.py3-none-any.whl) ;;
           *)
@@ -146,7 +146,7 @@
   # filename, which some build systems derive independently from src.
   versionTest = name: version: wheel:
     pkgs.runCommand "wheel-version-${name}" {} ''
-      whl=$(${pkgs.findutils}/bin/find "${wheel.dist}" -name '*.whl' | head -1)
+      whl=$(${lib.getExe pkgs.findutils} "${wheel.dist}" -name '*.whl' | head -1)
       base=$(basename "$whl")
       got=''${base#*-}
       got=''${got%%-*}

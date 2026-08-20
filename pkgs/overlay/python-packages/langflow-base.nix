@@ -14,7 +14,8 @@ pyfinal.buildPythonPackage (finalAttrs: {
   # wheel's cross build.
   src = pyfinal.fetchPypi {
     pname = "langflow_base";
-    inherit (finalAttrs) version format;
+    inherit (finalAttrs) version;
+    format = "wheel";
     dist = "py3";
     python = "py3";
     hash = "sha256-q05pC6+nXy7U5NKj261xrX37PdAvmhlJqTsBNfdzqD0=";
@@ -26,11 +27,11 @@ pyfinal.buildPythonPackage (finalAttrs: {
     wheelFile=$(find dist -name '*.whl' -print -quit)
     unpacked=$TMPDIR/langflow-a2a-patch
     mkdir "$unpacked"
-    ${wasixPython.pythonOnBuildForHost.pkgs.wheel}/bin/wheel unpack --dest "$unpacked" "$wheelFile"
+    ${pyfinal.lib.getExe wasixPython.pythonOnBuildForHost.pkgs.wheel} unpack --dest "$unpacked" "$wheelFile"
     packageRoot="$unpacked/langflow_base-${finalAttrs.version}"
     patch -d "$packageRoot" -p1 < ${./langflow-base-optional-routes.patch}
     mv "$wheelFile" "$TMPDIR/langflow-base-original.whl"
-    ${wasixPython.pythonOnBuildForHost.pkgs.wheel}/bin/wheel pack --dest dist "$packageRoot"
+    ${pyfinal.lib.getExe wasixPython.pythonOnBuildForHost.pkgs.wheel} pack --dest dist "$packageRoot"
   '';
 
   pythonRelaxDeps = true;

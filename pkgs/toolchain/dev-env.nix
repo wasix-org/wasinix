@@ -17,7 +17,7 @@
   );
   ccEnv = env.exportsOf env.ccEnv;
   commonPreConfigure = ''
-    export PATH="${toolchain.wasixcc}/bin:$PATH"
+    export PATH="${pkgs.lib.makeBinPath [toolchain.wasixcc]}:$PATH"
     ${toolchainEnv}
     ${ccEnv}
   '';

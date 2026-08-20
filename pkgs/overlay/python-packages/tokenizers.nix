@@ -9,8 +9,8 @@
   helpers,
   ...
 }: let
-  cc = "${final.stdenv.cc}/bin/${final.stdenv.cc.targetPrefix}cc";
-  cxx = "${final.stdenv.cc}/bin/${final.stdenv.cc.targetPrefix}c++";
+  cc = final.lib.getExe' final.stdenv.cc "${final.stdenv.cc.targetPrefix}cc";
+  cxx = final.lib.getExe' final.stdenv.cc "${final.stdenv.cc.targetPrefix}c++";
 in
   helpers.libTweaks {
     # tokio's rt-multi-thread + signal are unsupported on wasm (compile_error!); sync
