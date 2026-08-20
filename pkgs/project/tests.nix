@@ -37,6 +37,7 @@
     final
     prev;
   loaded = builtins.removeAttrs loadedRaw [projectLib.unitOverlaysAttr];
+  discoveredUnits = projectLib.discoverUnits ./tests/units;
   bareUnit =
     projectLib.loadPackageOverlay {
       inherit contextFor;
@@ -76,6 +77,37 @@
         name = "orphan";
         passthru.wasinix.overrides = "wasinix";
       };
+    };
+  };
+  authoredDefinition = projectLib.registerOverlay {
+    source = "my-project";
+    overlay = _final: _previous: {
+      authored = mkPackage {
+        passthru.wasinix.definition = {
+          file = "authored.nix";
+          directory = null;
+        };
+      };
+    };
+  };
+  changedDefinition = projectLib.registerOverlay {
+    source = "my-project";
+    overlay = _final: previous': {
+      owned = previous'.owned.overrideAttrs (old: {
+        passthru =
+          old.passthru
+          // {
+            wasinix =
+              old.passthru.wasinix
+              // {
+                definition = {
+                  file = "changed.nix";
+                  directory = null;
+                };
+                overrides = "wasinix";
+              };
+          };
+      });
     };
   };
   force = value: builtins.tryEval (builtins.deepSeq value value);
@@ -183,6 +215,8 @@
     });
   fakeImportNixpkgs = args: let
     base = {
+      inherit dependency newRecipe familyA familyB;
+      existing = previous;
       inherited = mkPackage {name = "inherited";};
       profile = args.crossSystem.wasinixProfile or "native";
     };
@@ -232,6 +266,13 @@
       wasix = ./tests/project-units;
     };
   };
+  definitionExtension = {
+    id = "definition-consumer";
+    history.wasix = ./tests/unit-history.json;
+    overlays = projectApi.loadPackageOverlays {
+      wasix = ./tests/units;
+    };
+  };
   pythonContextExtension = {
     id = "python-context";
     overlays = {
@@ -250,6 +291,11 @@
     importNixpkgs = fakeImportNixpkgs;
     extensions = [consumerExtension unitExtension pythonContextExtension];
     ci.sources = ["consumer"];
+  };
+  definitionProject = projectApi.mkProject {
+    system = "test-system";
+    importNixpkgs = fakeImportNixpkgs;
+    extensions = [definitionExtension];
   };
   wasmerProjectApi = import ./default.nix (projectApiArgs // {projectionRules = wasmerProjectionRules;});
   wasmerExtension = {
@@ -505,6 +551,8 @@ in {
       existingInputs = map (package: package.name) loaded.existing.buildInputs;
       existingPolicy = loaded.existing.passthru.wasinix.test;
       replayNames = lib.attrNames loadedRaw.${projectLib.unitOverlaysAttr};
+      fileUnitDirectory = (lib.findFirst (unit: unit.name == "existing") null discoveredUnits).directory;
+      directoryUnitDirectory = toString (lib.findFirst (unit: unit.name == "family") null discoveredUnits).directory;
       bareUnitFails = !(force bareUnit).success;
     };
     expected = {
@@ -512,6 +560,8 @@ in {
       existingInputs = ["dependency"];
       existingPolicy = true;
       replayNames = ["existing" "family-a" "family-b" "new"];
+      fileUnitDirectory = null;
+      directoryUnitDirectory = toString ./tests/units/family;
       bareUnitFails = true;
     };
   };
@@ -524,6 +574,8 @@ in {
       extensionLineage = extension.owned.passthru.wasinix.lineage;
       missingDeclarationFails = !(force (missingDeclaration {} core)).success;
       orphanDeclarationFails = !(force (orphanDeclaration {} {})).success;
+      authoredDefinitionFails = !(force (authoredDefinition {} {})).success;
+      changedDefinitionFails = !(force (changedDefinition {} core)).success;
     };
     expected = {
       coreSource = "wasinix";
@@ -532,6 +584,23 @@ in {
       extensionLineage = ["wasinix" "my-project"];
       missingDeclarationFails = true;
       orphanDeclarationFails = true;
+      authoredDefinitionFails = true;
+      changedDefinitionFails = true;
+    };
+  };
+
+  definitions = {
+    expr = {
+      file = toString definitionProject.catalog.entries."packages.wasix.default.existing".definition.file;
+      directory = toString definitionProject.catalog.entries."packages.wasix.default.family-a".definition.directory;
+      historyFile = toString definitionProject.catalog.entries.${''packages.wasix.default.existing.versions["0.1"]''}.definition.file;
+      rawOverlay = project.catalog.entries."packages.wasix.default.core".definition;
+    };
+    expected = {
+      file = toString ./tests/units/existing.nix;
+      directory = toString ./tests/units/family;
+      historyFile = toString ./tests/units/existing.nix;
+      rawOverlay = null;
     };
   };
 
