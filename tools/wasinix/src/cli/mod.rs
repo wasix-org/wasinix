@@ -1374,7 +1374,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 untrusted::UntrustedCommand::Mutation(_) => {
                     return crate::support::error::request_error(
                         "mutation commands run through ci mutate, not ci command",
-                    )
+                    );
                 }
                 // Help is a command like any other: it replies to the comment
                 // that asked, rather than erroring into the failure path.

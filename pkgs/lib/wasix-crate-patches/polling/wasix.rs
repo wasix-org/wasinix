@@ -37,10 +37,7 @@ impl Poller {
             }
         };
         if let Err(errno) = unsafe {
-            wasi::fd_fdstat_set_flags(
-                notifier_fd,
-                fdstat.fs_flags | wasi::FDFLAGS_NONBLOCK,
-            )
+            wasi::fd_fdstat_set_flags(notifier_fd, fdstat.fs_flags | wasi::FDFLAGS_NONBLOCK)
         } {
             let _ = unsafe { wasi::fd_close(epoll_fd) };
             let _ = unsafe { wasi::fd_close(notifier_fd) };
@@ -108,7 +105,11 @@ impl Poller {
     /// Waits for I/O events with an optional deadline.
     pub fn wait_deadline(&self, events: &mut Events, deadline: Option<Instant>) -> io::Result<()> {
         let timeout = deadline
-            .map(|deadline| deadline.saturating_duration_since(Instant::now()).as_nanos())
+            .map(|deadline| {
+                deadline
+                    .saturating_duration_since(Instant::now())
+                    .as_nanos()
+            })
             .map(|nanos| nanos.try_into().unwrap_or(wasi::Timestamp::MAX))
             .unwrap_or(wasi::Timestamp::MAX);
         let start = events.list.len();

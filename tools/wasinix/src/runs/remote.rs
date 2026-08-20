@@ -7,9 +7,9 @@ use std::path::{Path, PathBuf};
 
 use crate::ci::events::{self, Event};
 use crate::nix::builder::{self, Builder, Deadline};
-use crate::nix::route::{default_eval_workers, EvaluationLimits};
-use crate::runs::{Run, RUN_FILE};
-use crate::support::error::{io, request_error, Error, Result};
+use crate::nix::route::{EvaluationLimits, default_eval_workers};
+use crate::runs::{RUN_FILE, Run};
+use crate::support::error::{Error, Result, io, request_error};
 use crate::support::process::CommandStatus;
 use crate::support::shell::quote;
 use crate::support::{git, schema, tools};

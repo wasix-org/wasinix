@@ -6,7 +6,7 @@ use std::process::Command;
 
 use serde_json::Value;
 
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 
 pub struct Site<'a> {
     /// The built directory to serve as the app's public root.

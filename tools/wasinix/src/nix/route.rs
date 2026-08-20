@@ -7,7 +7,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use crate::nix::builder::{self, Builder, Capability, Lease, RouteKind};
-use crate::support::error::{request_error, Error, Result};
+use crate::support::error::{Error, Result, request_error};
 
 pub const DEFAULT_LOCAL_EVAL_WORKERS: usize = 2;
 pub const DEFAULT_REMOTE_EVAL_WORKERS: usize = 4;
@@ -101,7 +101,7 @@ impl Route {
                 return request_error(format!(
                     "remote {:?} cannot use local as its route",
                     builder.name
-                ))
+                ));
             }
         };
         if !builder.supports(capability) {

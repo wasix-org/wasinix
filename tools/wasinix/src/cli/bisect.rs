@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use crate::ci::types::{Case, ParsedRequest, Request};
 use crate::nix::bisect::{self, Outcome};
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 use crate::support::process::CommandStatus;
 use crate::support::ui;
 

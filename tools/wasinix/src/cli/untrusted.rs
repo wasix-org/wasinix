@@ -7,7 +7,7 @@ use clap::Parser;
 
 use crate::ci::origin::{Classifier, CommandKind};
 use crate::ci::types::{Case, ParsedRequest, RefSource, Request};
-use crate::support::error::{request_error, Error, Result};
+use crate::support::error::{Error, Result, request_error};
 
 const MAX_WORDS: usize = 64;
 

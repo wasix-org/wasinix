@@ -26,18 +26,12 @@ impl SelectorState {
                 },
                 _ => false,
             }
-        };    
+        };
         while let Some(index) = self.subscriptions.iter().position(predicate) {
             self.subscriptions.swap_remove(index);
         }
     }
-    fn add_fd(
-        &mut self, 
-        fd: wasi::Fd,
-        token: crate::Token,
-        interests: crate::Interest
-    )
-    {
+    fn add_fd(&mut self, fd: wasi::Fd, token: crate::Token, interests: crate::Interest) {
         if interests.is_writable() {
             let subscription = wasi::Subscription {
                 userdata: token.0 as wasi::Userdata,
@@ -74,24 +68,25 @@ struct SelectorStall<'a> {
     guard: Option<std::sync::MutexGuard<'a, SelectorState>>,
     condvar: &'a Condvar,
 }
-impl<'a> SelectorStall<'a>
-{
+impl<'a> SelectorStall<'a> {
     fn new(selector: &'a Selector) -> Self {
         Self {
             guard: Some(selector.state.0.lock().unwrap()),
-            condvar: &selector.state.1
+            condvar: &selector.state.1,
         }
     }
 
-    fn new_from_guard(selector: &'a Selector, guard: std::sync::MutexGuard<'a, SelectorState>) -> Self {
+    fn new_from_guard(
+        selector: &'a Selector,
+        guard: std::sync::MutexGuard<'a, SelectorState>,
+    ) -> Self {
         Self {
             guard: Some(guard),
-            condvar: &selector.state.1
+            condvar: &selector.state.1,
         }
     }
 }
-impl<'a> Drop
-for SelectorStall<'a> {
+impl<'a> Drop for SelectorStall<'a> {
     fn drop(&mut self) {
         if let Some(mut guard) = self.guard.take() {
             let start = guard.loop_cnt;
@@ -112,17 +107,13 @@ for SelectorStall<'a> {
         }
     }
 }
-impl<'a> Deref
-for SelectorStall<'a>
-{
+impl<'a> Deref for SelectorStall<'a> {
     type Target = SelectorState;
     fn deref(&self) -> &Self::Target {
         self.guard.as_ref().unwrap().deref()
     }
 }
-impl<'a> DerefMut
-for SelectorStall<'a>
-{
+impl<'a> DerefMut for SelectorStall<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.guard.as_mut().unwrap().deref_mut()
     }
@@ -141,8 +132,7 @@ pub struct Selector {
     state: Arc<(Mutex<SelectorState>, Condvar)>,
 }
 
-impl fmt::Debug
-for Selector {
+impl fmt::Debug for Selector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "selector")
     }
@@ -158,7 +148,7 @@ impl Selector {
             wasi::fd_fdstat_get(fd)
                 .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
         };
-    
+
         let mut flags = fdstat.fs_flags;
         flags |= wasi::FDFLAGS_NONBLOCK;
         unsafe {
@@ -167,29 +157,28 @@ impl Selector {
         }
         let file = unsafe { File::from_raw_fd(fd.try_into().unwrap()) };
 
-        let subscriptions = vec![
-            wasi::Subscription {
-                userdata: u64::MAX,
-                u: wasi::SubscriptionU {
-                    tag: wasi::EVENTTYPE_FD_READ.raw(),
-                    u: wasi::SubscriptionUU {
-                        fd_read: wasi::SubscriptionFdReadwrite {
-                            file_descriptor: fd,
-                        },
+        let subscriptions = vec![wasi::Subscription {
+            userdata: u64::MAX,
+            u: wasi::SubscriptionU {
+                tag: wasi::EVENTTYPE_FD_READ.raw(),
+                u: wasi::SubscriptionUU {
+                    fd_read: wasi::SubscriptionFdReadwrite {
+                        file_descriptor: fd,
                     },
                 },
-            }
-        ];
+            },
+        }];
 
         Ok(Selector {
             #[cfg(all(debug_assertions, feature = "net"))]
             id: NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
-            state: Arc::new((Mutex::new(SelectorState {
+            state: Arc::new((
+                Mutex::new(SelectorState {
                     subscriptions,
                     stall: file,
                     loop_cnt: 0,
                 }),
-                Condvar::new()
+                Condvar::new(),
             )),
             #[cfg(debug_assertions)]
             has_waker: std::sync::atomic::AtomicBool::new(false),
@@ -197,16 +186,15 @@ impl Selector {
     }
 
     pub fn try_clone(&self) -> io::Result<Selector> {
-        Ok(
-            Selector {
-                #[cfg(all(debug_assertions, feature = "net"))]
-                id: self.id,
-                state: Arc::clone(&self.state),
-                #[cfg(debug_assertions)]
-                has_waker: std::sync::atomic::AtomicBool::new(self.has_waker.load(
-                    std::sync::atomic::Ordering::Acquire)),
-            }
-        )
+        Ok(Selector {
+            #[cfg(all(debug_assertions, feature = "net"))]
+            id: self.id,
+            state: Arc::clone(&self.state),
+            #[cfg(debug_assertions)]
+            has_waker: std::sync::atomic::AtomicBool::new(
+                self.has_waker.load(std::sync::atomic::Ordering::Acquire),
+            ),
+        })
     }
 
     #[cfg(all(debug_assertions, feature = "net"))]
@@ -218,13 +206,14 @@ impl Selector {
         events.clear();
 
         let mut loop_cnt = 1u64;
-        loop
-        {
+        loop {
             // If we want to a use a timeout in the `wasi_poll_oneoff()` function
             // we need another subscription to the list.
             let mut subscriptions = {
                 let mut state = self.state.0.lock().unwrap();
-                state.subscriptions.retain(|sub| sub.u.tag != wasi::EVENTTYPE_CLOCK.raw());
+                state
+                    .subscriptions
+                    .retain(|sub| sub.u.tag != wasi::EVENTTYPE_CLOCK.raw());
                 state.loop_cnt = loop_cnt;
                 loop_cnt += 1;
                 self.state.1.notify_all();
@@ -284,7 +273,10 @@ impl Selector {
         SelectorStall::new(self)
     }
 
-    fn stall_from_guard<'a>(&'a self, guard: std::sync::MutexGuard<'a, SelectorState>) -> SelectorStall<'a> {
+    fn stall_from_guard<'a>(
+        &'a self,
+        guard: std::sync::MutexGuard<'a, SelectorState>,
+    ) -> SelectorStall<'a> {
         SelectorStall::new_from_guard(self, guard)
     }
 
@@ -329,30 +321,25 @@ impl Selector {
     fn is_registered_correctly<'a>(
         state: &std::sync::MutexGuard<'a, SelectorState>,
         fd: wasi::Fd,
-        interests: crate::Interest
+        interests: crate::Interest,
     ) -> bool {
-        let predicate_readable = |subscription: &wasi::Subscription| {
-            match subscription.u.tag {
-                t if t == wasi::EVENTTYPE_FD_READ.raw() => unsafe {
-                    subscription.u.u.fd_read.file_descriptor == fd
-                },
-                _ => false,
-            }
+        let predicate_readable = |subscription: &wasi::Subscription| match subscription.u.tag {
+            t if t == wasi::EVENTTYPE_FD_READ.raw() => unsafe {
+                subscription.u.u.fd_read.file_descriptor == fd
+            },
+            _ => false,
         };
-        let predicate_writable = |subscription: &wasi::Subscription| {
-            match subscription.u.tag {
-                t if t == wasi::EVENTTYPE_FD_WRITE.raw() => unsafe {
-                    subscription.u.u.fd_write.file_descriptor == fd
-                },
-                _ => false,
-            }
+        let predicate_writable = |subscription: &wasi::Subscription| match subscription.u.tag {
+            t if t == wasi::EVENTTYPE_FD_WRITE.raw() => unsafe {
+                subscription.u.u.fd_write.file_descriptor == fd
+            },
+            _ => false,
         };
 
         let is_readable = state.subscriptions.iter().any(predicate_readable);
         let is_writable = state.subscriptions.iter().any(predicate_writable);
 
-        return is_readable == interests.is_readable() &&
-               is_writable == interests.is_writable();
+        return is_readable == interests.is_readable() && is_writable == interests.is_writable();
     }
 
     #[cfg(any(feature = "net", feature = "os-poll"))]
@@ -362,10 +349,9 @@ impl Selector {
         token: crate::Token,
         interests: crate::Interest,
     ) -> io::Result<()> {
-
         let state = self.state.0.lock().unwrap();
         if Self::is_registered_correctly(&state, fd, interests) {
-            return Ok(())
+            return Ok(());
         }
 
         log::trace!(
@@ -390,10 +376,7 @@ impl Selector {
 
     #[cfg(any(feature = "net", feature = "os-poll"))]
     fn deregister_internal<'a>(stall: &mut SelectorStall<'a>, fd: wasi::Fd) -> io::Result<()> {
-        log::trace!(
-            "select::deregister: fd={:?}",
-            fd,
-        );
+        log::trace!("select::deregister: fd={:?}", fd,);
 
         // we stall the select and wake it up so that it can process
         // the removed subscriptions
@@ -403,7 +386,8 @@ impl Selector {
 
     #[cfg(debug_assertions)]
     pub fn register_waker(&self) -> bool {
-        self.has_waker.swap(true, std::sync::atomic::Ordering::AcqRel)
+        self.has_waker
+            .swap(true, std::sync::atomic::Ordering::AcqRel)
     }
 }
 
@@ -424,8 +408,7 @@ fn timeout_subscription_nanos(timeout: u128) -> wasi::Subscription {
                 clock: wasi::SubscriptionClock {
                     id: wasi::CLOCKID_MONOTONIC,
                     // Timestamp is in nanoseconds.
-                    timeout: min(wasi::Timestamp::MAX as u128, timeout)
-                        as wasi::Timestamp,
+                    timeout: min(wasi::Timestamp::MAX as u128, timeout) as wasi::Timestamp,
                     // Give the implementation another millisecond to coalesce
                     // events.
                     precision: Duration::from_millis(1).as_nanos() as wasi::Timestamp,
@@ -459,8 +442,8 @@ pub(crate) type Event = wasi::Event;
 pub(crate) mod event {
     use std::fmt;
 
-    use crate::sys::Event;
     use crate::Token;
+    use crate::sys::Event;
 
     pub(crate) fn token(event: &Event) -> Token {
         Token(event.userdata as usize)

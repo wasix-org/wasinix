@@ -8,8 +8,8 @@ use std::path::Path;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::support::error::{request_error, Result};
-use crate::support::nix::{eval, Flake, SYSTEM};
+use crate::support::error::{Result, request_error};
+use crate::support::nix::{Flake, SYSTEM, eval};
 use crate::support::ui;
 use crate::update::history::AddOutcome;
 

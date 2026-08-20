@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::support::error::{io, Result};
+use crate::support::error::{Result, io};
 
 pub fn read_to_string(path: &Path) -> Result<String> {
     std::fs::read_to_string(path).map_err(|e| io(path, e))

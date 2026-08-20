@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 
 /// Single-quote a string for a POSIX shell.
 pub fn quote(text: &str) -> String {

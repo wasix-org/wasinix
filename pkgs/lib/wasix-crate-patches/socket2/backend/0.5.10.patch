@@ -1,39 +1,17 @@
---- a/src/sys/wasi.rs
-+++ b/src/sys/wasi.rs
-@@ -5,8 +5,8 @@
- use std::mem::{self, size_of, MaybeUninit};
- use std::net::Shutdown;
- use std::net::{Ipv4Addr, Ipv6Addr};
--use std::num::NonZeroUsize;
- use std::num::NonZeroU32;
-+use std::num::NonZeroUsize;
- use std::os::wasi::io::RawFd;
- use std::os::wasi::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd};
- use std::path::Path;
-@@ -40,6 +40,8 @@
+--- a/src/sys/wasi.rs	2026-08-21 11:42:14.363006827 +0200
++++ b/src/sys/wasi.rs	2026-08-21 11:42:14.365006787 +0200
+@@ -40,8 +40,10 @@
  // Used in `RecvFlags`.
  pub(crate) use libc::{MSG_TRUNC, SO_OOBINLINE};
  // Used in `Socket`.
-+pub(crate) use libc::IPV6_RECVHOPLIMIT;
 +pub(crate) use libc::IP_HDRINCL;
  pub(crate) use libc::IP_RECVTOS;
  pub(crate) use libc::IP_TOS;
++pub(crate) use libc::IPV6_RECVHOPLIMIT;
  pub(crate) use libc::SO_LINGER;
-@@ -102,12 +104,7 @@
-     }
- }
- 
--impl_debug!(
--    Type,
--    libc::SOCK_STREAM,
--    libc::SOCK_DGRAM,
--    libc::SOCK_RAW,
--);
-+impl_debug!(Type, libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_RAW,);
- 
- impl_debug!(
-     Protocol,
-@@ -127,6 +124,14 @@
+ pub(crate) use libc::{
+     IP_ADD_MEMBERSHIP, IP_DROP_MEMBERSHIP, IP_MULTICAST_IF, IP_MULTICAST_LOOP, IP_MULTICAST_TTL,
+@@ -122,6 +124,14 @@
  
  unsafe impl<'a> Sync for MaybeUninitSlice<'a> {}
  
@@ -48,7 +26,7 @@
  impl<'a> MaybeUninitSlice<'a> {
      pub(crate) fn new(buf: &'a mut [MaybeUninit<u8>]) -> MaybeUninitSlice<'a> {
          MaybeUninitSlice {
-@@ -147,6 +152,37 @@
+@@ -142,6 +152,37 @@
      }
  }
  
@@ -86,20 +64,16 @@
  /// Unix only API.
  impl SockAddr {
      /// Constructs a `SockAddr` with the family `AF_UNIX` and the provided path.
-@@ -213,9 +249,11 @@
-     }
- }
+@@ -210,6 +251,8 @@
  
--
  pub(crate) type Socket = c_int;
  
 +pub(crate) type RawSocket = c_int;
 +
-+
  pub(crate) unsafe fn socket_from_raw(socket: Socket) -> crate::socket::Inner {
      crate::socket::Inner::from_raw_fd(socket)
  }
-@@ -228,22 +266,22 @@
+@@ -222,22 +265,22 @@
      socket.into_raw_fd()
  }
  
@@ -128,7 +102,7 @@
  }
  
  pub(crate) fn poll_connect(socket: &crate::Socket, timeout: Duration) -> io::Result<()> {
-@@ -303,32 +341,32 @@
+@@ -297,32 +340,32 @@
      }
  }
  
@@ -167,7 +141,7 @@
      if nonblocking {
          fcntl_add(fd, libc::F_GETFL, libc::F_SETFL, libc::O_NONBLOCK)
      } else {
-@@ -336,7 +374,7 @@
+@@ -330,7 +373,7 @@
      }
  }
  
@@ -176,7 +150,7 @@
      let how = match how {
          Shutdown::Write => libc::SHUT_WR,
          Shutdown::Read => libc::SHUT_RD,
-@@ -345,7 +383,7 @@
+@@ -339,7 +382,7 @@
      syscall!(shutdown(fd, how)).map(|_| ())
  }
  
@@ -185,7 +159,7 @@
      syscall!(recv(
          fd,
          buf.as_mut_ptr().cast(),
-@@ -356,7 +394,7 @@
+@@ -350,7 +393,7 @@
  }
  
  pub(crate) fn recv_from(
@@ -194,7 +168,7 @@
      buf: &mut [MaybeUninit<u8>],
      flags: c_int,
  ) -> io::Result<(usize, SockAddr)> {
-@@ -376,8 +414,17 @@
+@@ -370,8 +413,17 @@
      }
  }
  
@@ -213,7 +187,7 @@
      bufs: &mut [crate::MaybeUninitSlice<'_>],
      flags: c_int,
  ) -> io::Result<(usize, RecvFlags)> {
-@@ -385,7 +432,7 @@
+@@ -379,7 +431,7 @@
  }
  
  pub(crate) fn recv_from_vectored(
@@ -222,7 +196,7 @@
      bufs: &mut [crate::MaybeUninitSlice<'_>],
      flags: c_int,
  ) -> io::Result<(usize, RecvFlags, SockAddr)> {
-@@ -393,7 +440,7 @@
+@@ -387,7 +439,7 @@
      // manually.
      unsafe {
          SockAddr::try_init(|storage, len| {
@@ -231,7 +205,7 @@
                  // Set the correct address length.
                  *len = addrlen;
                  (n, recv_flags)
-@@ -404,8 +451,8 @@
+@@ -398,8 +450,8 @@
  }
  
  /// Returns the (bytes received, sending address len, `RecvFlags`).
@@ -242,7 +216,7 @@
      msg_name: *mut sockaddr_storage,
      bufs: &mut [crate::MaybeUninitSlice<'_>],
      flags: c_int,
-@@ -425,7 +472,7 @@
+@@ -419,7 +471,7 @@
          .map(|n| (n as usize, msg.msg_namelen, RecvFlags(msg.msg_flags)))
  }
  
@@ -251,7 +225,7 @@
      syscall!(send(
          fd,
          buf.as_ptr().cast(),
-@@ -435,34 +482,52 @@
+@@ -429,34 +481,52 @@
      .map(|n| n as usize)
  }
  
@@ -312,7 +286,7 @@
      msg_name: *const sockaddr_storage,
      msg_namelen: socklen_t,
      bufs: &[IoSlice<'_>],
-@@ -482,7 +547,7 @@
+@@ -476,7 +546,7 @@
  }
  
  /// Wrapper around `getsockopt` to deal with platform specific timeouts.
@@ -321,7 +295,7 @@
      unsafe { getsockopt(fd, opt, val).map(from_timeval) }
  }
  
-@@ -498,7 +563,7 @@
+@@ -492,7 +562,7 @@
  
  /// Wrapper around `setsockopt` to deal with platform specific timeouts.
  pub(crate) fn set_timeout_opt(
@@ -330,7 +304,7 @@
      opt: c_int,
      val: c_int,
      duration: Option<Duration>,
-@@ -522,17 +587,19 @@
+@@ -516,17 +586,19 @@
      }
  }
  
@@ -354,7 +328,7 @@
      #[cfg(not(any(target_os = "haiku", target_os = "openbsd")))]
      if let Some(time) = keepalive.time {
          let secs = into_secs(time);
-@@ -558,7 +625,7 @@
+@@ -552,7 +624,7 @@
  }
  
  /// Add `flag` to the current set flags of `F_GETFD`.
@@ -363,7 +337,7 @@
      let previous = syscall!(fcntl(fd, get_cmd))?;
      let new = previous | flag;
      if new != previous {
-@@ -570,7 +637,7 @@
+@@ -564,7 +636,7 @@
  }
  
  /// Remove `flag` to the current set flags of `F_GETFD`.
@@ -372,7 +346,7 @@
      let previous = syscall!(fcntl(fd, get_cmd))?;
      let new = previous & !flag;
      if new != previous {
-@@ -582,7 +649,7 @@
+@@ -576,7 +648,7 @@
  }
  
  /// Caller must ensure `T` is the correct type for `opt` and `val`.
@@ -381,7 +355,7 @@
      let mut payload: MaybeUninit<T> = MaybeUninit::uninit();
      let mut len = size_of::<T>() as libc::socklen_t;
      syscall!(getsockopt(
-@@ -601,7 +668,7 @@
+@@ -595,7 +667,7 @@
  
  /// Caller must ensure `T` is the correct type for `opt` and `val`.
  pub(crate) unsafe fn setsockopt<T>(

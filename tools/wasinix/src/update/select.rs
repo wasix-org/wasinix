@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use serde_json::Value;
 
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 use crate::support::naming::{self, Domain};
 use crate::update::targets::{Backend, Target};
 use crate::update::{Mode, Request};

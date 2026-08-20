@@ -5,7 +5,7 @@ use std::path::Path;
 
 use crate::nix::builder::{self, Builder, Capability};
 use crate::nix::route::Route;
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 use crate::support::process::CommandStatus;
 use crate::support::{schema, table, ui};
 

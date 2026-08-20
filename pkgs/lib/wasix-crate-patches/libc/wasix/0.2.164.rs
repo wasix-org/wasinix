@@ -756,19 +756,36 @@ extern "C" {
     pub fn dup(fd: crate::c_int) -> crate::c_int;
     pub fn dup2(src: crate::c_int, dst: crate::c_int) -> crate::c_int;
 
-    pub fn accept(socket: crate::c_int, addr: *mut sockaddr, addrlen: *mut socklen_t) -> crate::c_int;
+    pub fn accept(
+        socket: crate::c_int,
+        addr: *mut sockaddr,
+        addrlen: *mut socklen_t,
+    ) -> crate::c_int;
     pub fn accept4(
         socket: crate::c_int,
         addr: *mut sockaddr,
         addrlen: *mut socklen_t,
         flags: crate::c_int,
     ) -> crate::c_int;
-    pub fn bind(socket: crate::c_int, addr: *const crate::sockaddr, addrlen: crate::socklen_t) -> crate::c_int;
-    pub fn connect(socket: crate::c_int, addr: *const sockaddr, addrlen: socklen_t) -> crate::c_int;
+    pub fn bind(
+        socket: crate::c_int,
+        addr: *const crate::sockaddr,
+        addrlen: crate::socklen_t,
+    ) -> crate::c_int;
+    pub fn connect(socket: crate::c_int, addr: *const sockaddr, addrlen: socklen_t)
+    -> crate::c_int;
     pub fn freeifaddrs(ifa: *mut crate::ifaddrs);
     pub fn getifaddrs(ifap: *mut *mut crate::ifaddrs) -> crate::c_int;
-    pub fn getpeername(socket: crate::c_int, addr: *mut sockaddr, addrlen: *mut socklen_t) -> crate::c_int;
-    pub fn getsockname(socket: crate::c_int, addr: *mut sockaddr, addrlen: *mut socklen_t) -> crate::c_int;
+    pub fn getpeername(
+        socket: crate::c_int,
+        addr: *mut sockaddr,
+        addrlen: *mut socklen_t,
+    ) -> crate::c_int;
+    pub fn getsockname(
+        socket: crate::c_int,
+        addr: *mut sockaddr,
+        addrlen: *mut socklen_t,
+    ) -> crate::c_int;
     pub fn getsockopt(
         sockfd: crate::c_int,
         level: crate::c_int,
@@ -785,14 +802,22 @@ extern "C" {
         addr: *mut crate::sockaddr,
         addrlen: *mut crate::socklen_t,
     ) -> crate::ssize_t;
-    pub fn recvmsg(socket: crate::c_int, msg: *mut crate::msghdr, flags: crate::c_int) -> crate::ssize_t;
+    pub fn recvmsg(
+        socket: crate::c_int,
+        msg: *mut crate::msghdr,
+        flags: crate::c_int,
+    ) -> crate::ssize_t;
     pub fn sendfile(
         socket: crate::c_int,
         in_fd: crate::c_int,
         ofs: *const crate::off_t,
         count: crate::size_t,
     ) -> crate::ssize_t;
-    pub fn sendmsg(socket: crate::c_int, msg: *const crate::msghdr, flags: crate::c_int) -> crate::ssize_t;
+    pub fn sendmsg(
+        socket: crate::c_int,
+        msg: *const crate::msghdr,
+        flags: crate::c_int,
+    ) -> crate::ssize_t;
     pub fn sendto(
         socket: crate::c_int,
         buffer: *const crate::c_void,
@@ -879,17 +904,26 @@ extern "C" {
         attr: *const posix_spawnattr_t,
         flags: *mut crate::c_short,
     ) -> crate::c_int;
-    pub fn posix_spawnattr_setflags(attr: *mut posix_spawnattr_t, flags: crate::c_short) -> crate::c_int;
+    pub fn posix_spawnattr_setflags(
+        attr: *mut posix_spawnattr_t,
+        flags: crate::c_short,
+    ) -> crate::c_int;
     pub fn posix_spawnattr_getpgroup(
         attr: *const posix_spawnattr_t,
         flags: *mut crate::pid_t,
     ) -> crate::c_int;
-    pub fn posix_spawnattr_setpgroup(attr: *mut posix_spawnattr_t, flags: crate::pid_t) -> crate::c_int;
+    pub fn posix_spawnattr_setpgroup(
+        attr: *mut posix_spawnattr_t,
+        flags: crate::pid_t,
+    ) -> crate::c_int;
     pub fn posix_spawnattr_getschedpolicy(
         attr: *const posix_spawnattr_t,
         flags: *mut crate::c_int,
     ) -> crate::c_int;
-    pub fn posix_spawnattr_setschedpolicy(attr: *mut posix_spawnattr_t, flags: crate::c_int) -> crate::c_int;
+    pub fn posix_spawnattr_setschedpolicy(
+        attr: *mut posix_spawnattr_t,
+        flags: crate::c_int,
+    ) -> crate::c_int;
     pub fn posix_spawnattr_getschedparam(
         attr: *const posix_spawnattr_t,
         param: *mut crate::sched_param,
@@ -900,7 +934,9 @@ extern "C" {
     ) -> crate::c_int;
 
     pub fn posix_spawn_file_actions_init(actions: *mut posix_spawn_file_actions_t) -> crate::c_int;
-    pub fn posix_spawn_file_actions_destroy(actions: *mut posix_spawn_file_actions_t) -> crate::c_int;
+    pub fn posix_spawn_file_actions_destroy(
+        actions: *mut posix_spawn_file_actions_t,
+    ) -> crate::c_int;
     pub fn posix_spawn_file_actions_addopen(
         actions: *mut posix_spawn_file_actions_t,
         fd: crate::c_int,
@@ -919,7 +955,11 @@ extern "C" {
     ) -> crate::c_int;
 
     pub fn wait(status: *mut crate::c_int) -> crate::pid_t;
-    pub fn waitpid(pid: crate::pid_t, status: *mut crate::c_int, options: crate::c_int) -> crate::pid_t;
+    pub fn waitpid(
+        pid: crate::pid_t,
+        status: *mut crate::c_int,
+        options: crate::c_int,
+    ) -> crate::pid_t;
     pub fn kill(pid: crate::pid_t, sig: crate::c_int) -> crate::c_int;
 
     pub fn sigemptyset(set: *mut sigset_t) -> crate::c_int;
@@ -928,7 +968,11 @@ extern "C" {
     pub fn sigdelset(set: *mut sigset_t, signum: crate::c_int) -> crate::c_int;
     pub fn sigismember(set: *const sigset_t, signum: crate::c_int) -> crate::c_int;
 
-    pub fn sigprocmask(how: crate::c_int, set: *const sigset_t, oldset: *mut sigset_t) -> crate::c_int;
+    pub fn sigprocmask(
+        how: crate::c_int,
+        set: *const sigset_t,
+        oldset: *mut sigset_t,
+    ) -> crate::c_int;
     pub fn sigpending(set: *mut sigset_t) -> crate::c_int;
 
     pub fn pthread_self() -> crate::pthread_t;
@@ -936,8 +980,14 @@ extern "C" {
     pub fn pthread_exit(value: *mut crate::c_void) -> !;
     pub fn pthread_attr_init(attr: *mut crate::pthread_attr_t) -> crate::c_int;
     pub fn pthread_attr_destroy(attr: *mut crate::pthread_attr_t) -> crate::c_int;
-    pub fn pthread_attr_setstacksize(attr: *mut crate::pthread_attr_t, stack_size: crate::size_t) -> crate::c_int;
-    pub fn pthread_attr_setdetachstate(attr: *mut crate::pthread_attr_t, state: crate::c_int) -> crate::c_int;
+    pub fn pthread_attr_setstacksize(
+        attr: *mut crate::pthread_attr_t,
+        stack_size: crate::size_t,
+    ) -> crate::c_int;
+    pub fn pthread_attr_setdetachstate(
+        attr: *mut crate::pthread_attr_t,
+        state: crate::c_int,
+    ) -> crate::c_int;
     pub fn pthread_detach(thread: crate::pthread_t) -> crate::c_int;
     pub fn pthread_create(
         native: *mut crate::pthread_t,
@@ -963,7 +1013,11 @@ extern "C" {
     fn __wasm_signal(signum: crate::c_int);
 }
 
-pub unsafe fn sigaction(sig: crate::c_int, sa: *const sigaction, old: *mut sigaction) -> crate::c_int {
+pub unsafe fn sigaction(
+    sig: crate::c_int,
+    sa: *const sigaction,
+    old: *mut sigaction,
+) -> crate::c_int {
     sigaction_external_default(sig, sa, old, Option::Some(default_handler))
 }
 

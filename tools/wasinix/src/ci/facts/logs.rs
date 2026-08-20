@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 
 use crate::ci::evalmap::JobInfo;
 use crate::support::atoms::Bytes;
-use crate::support::error::{io, Result};
+use crate::support::error::{Result, io};
 use crate::support::schema::Document;
 
 use super::junit::Case;

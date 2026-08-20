@@ -1,10 +1,10 @@
 diff -ruN a/src/sys/wasi/epoll.rs b/src/sys/wasi/epoll.rs
---- a/src/sys/wasi/epoll.rs	2026-08-11 00:13:31.920442455 +0200
-+++ b/src/sys/wasi/epoll.rs	2026-08-11 00:13:32.111439217 +0200
+--- a/src/sys/wasi/epoll.rs	2026-08-20 23:24:29.014223138 +0200
++++ b/src/sys/wasi/epoll.rs	2026-08-21 11:41:57.108348029 +0200
 @@ -1,6 +1,5 @@
  use crate::{Interest, Token};
  
 -use log::error;
+ use std::os::fd::AsRawFd;
+ use std::os::fd::RawFd;
  #[cfg(debug_assertions)]
- use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
- use std::time::Duration;

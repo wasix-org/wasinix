@@ -7,7 +7,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 
 fn command(repo: &Path, args: &[&str]) -> Command {
     let mut cmd = Command::new("git");

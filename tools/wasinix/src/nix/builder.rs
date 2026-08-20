@@ -11,7 +11,7 @@ use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 
-use crate::support::error::{io, request_error, Error, Result};
+use crate::support::error::{Error, Result, io, request_error};
 use crate::support::shell::expand_home;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, clap::ValueEnum)]

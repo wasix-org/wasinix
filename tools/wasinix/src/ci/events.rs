@@ -11,7 +11,7 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 
 use crate::support::atoms::{DurationSecs, JobAddr, JobStatus, RunState, TaskStatus};
-use crate::support::error::{io, Error, Result};
+use crate::support::error::{Error, Result, io};
 use crate::support::schema::Document;
 
 pub const SCHEMA: u32 = 1;
@@ -153,7 +153,7 @@ pub fn read_from(path: &Path, offset: u64) -> Result<(Vec<Event>, u64)> {
     let mut file = match std::fs::File::open(path) {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok((Vec::new(), offset))
+            return Ok((Vec::new(), offset));
         }
         Err(error) => return Err(io(path, error)),
     };

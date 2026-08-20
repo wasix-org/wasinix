@@ -13,4 +13,4 @@ pub mod retention;
 pub mod select;
 pub mod targets;
 
-pub use request::{Mode, Request, REQUEST_ENV};
+pub use request::{Mode, REQUEST_ENV, Request};

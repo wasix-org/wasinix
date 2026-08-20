@@ -11,8 +11,8 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use crate::support::error::{request_error, Result};
-use crate::support::nix::{eval, Flake};
+use crate::support::error::{Result, request_error};
+use crate::support::nix::{Flake, eval};
 
 static SEMVER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^(\d+)\.(\d+)\.(\d+)(?:\+[0-9A-Za-z.-]+)?$").unwrap());

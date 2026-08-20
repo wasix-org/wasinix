@@ -1,5 +1,5 @@
 mod naming {
-    use crate::support::naming::{axis_of, parse, render, resolve_all, split, Domain};
+    use crate::support::naming::{Domain, axis_of, parse, render, resolve_all, split};
 
     #[test]
     fn a_near_miss_suggests_the_closest_addresses() {
@@ -200,7 +200,7 @@ mod naming {
 }
 
 mod plan {
-    use crate::ci::plan::{plan_of, BuildTarget, Phase};
+    use crate::ci::plan::{BuildTarget, Phase, plan_of};
     use crate::ci::types::{Build, Case, Diff, Request, RevSource, Selector, SelectorKind, Spot};
     use crate::support::atoms::Rev;
 
@@ -266,15 +266,19 @@ mod plan {
         assert!(!gate("baseline.eval"));
         assert!(gate("candidate-1.treefmt"));
         // The baseline is not the submitted tree, so it is never format-checked.
-        assert!(!plan
-            .tasks
-            .iter()
-            .any(|task| task.task_id == "baseline.treefmt"));
+        assert!(
+            !plan
+                .tasks
+                .iter()
+                .any(|task| task.task_id == "baseline.treefmt")
+        );
         // The comparison is a fold-time projection, never a task.
-        assert!(!plan
-            .tasks
-            .iter()
-            .any(|task| task.task_id.starts_with("compare.")));
+        assert!(
+            !plan
+                .tasks
+                .iter()
+                .any(|task| task.task_id.starts_with("compare."))
+        );
     }
 
     #[test]
@@ -460,11 +464,11 @@ mod evalmap {
 
 mod authorization {
     use crate::ci::origin::{
-        authorize, extract_command, validate, verify, Api, Classifier, CommandKind, Origin,
+        Api, Classifier, CommandKind, Origin, authorize, extract_command, validate, verify,
     };
-    use crate::support::error::{request_error, Result};
+    use crate::support::error::{Result, request_error};
     use crate::support::schema;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
 
     struct Fake(Value);
 
@@ -626,13 +630,15 @@ mod authorization {
 
     #[test]
     fn read_permission_cannot_start_a_run() {
-        assert!(authorize(
-            &event("/wasinix build core"),
-            &api(json!({"permission": {"role_name": "triage"}})),
-            &Grammar,
-            Some("wasix-org"),
-        )
-        .is_err());
+        assert!(
+            authorize(
+                &event("/wasinix build core"),
+                &api(json!({"permission": {"role_name": "triage"}})),
+                &Grammar,
+                Some("wasix-org"),
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -665,13 +671,15 @@ mod authorization {
 
     #[test]
     fn a_closed_pull_request_is_refused() {
-        assert!(authorize(
-            &event("/wasinix build core"),
-            &api(json!({"pull": {"state": "closed"}})),
-            &Grammar,
-            Some("wasix-org"),
-        )
-        .is_err());
+        assert!(
+            authorize(
+                &event("/wasinix build core"),
+                &api(json!({"pull": {"state": "closed"}})),
+                &Grammar,
+                Some("wasix-org"),
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -690,7 +698,7 @@ mod authorization {
 }
 
 mod compare {
-    use crate::ci::compare::{compare_loaded, BuildDiff, Comparison, EvalDiff};
+    use crate::ci::compare::{BuildDiff, Comparison, EvalDiff, compare_loaded};
     use crate::ci::evalmap::{EvalMap, JobInfo, StatusMap};
     use crate::ci::types::{Build, CaseRef, RevSource, Selector, SelectorKind, Spot};
     use crate::support::atoms::{JobAddr, JobStatus, Rev};
@@ -1151,8 +1159,8 @@ mod route {
 
     use crate::nix::builder::{Builder, Capability};
     use crate::nix::route::{
-        EvaluationLimits, Route, DEFAULT_EVAL_MEMORY, DEFAULT_EVAL_TIMEOUT_SECONDS,
-        DEFAULT_LOCAL_EVAL_WORKERS, DEFAULT_REMOTE_EVAL_WORKERS,
+        DEFAULT_EVAL_MEMORY, DEFAULT_EVAL_TIMEOUT_SECONDS, DEFAULT_LOCAL_EVAL_WORKERS,
+        DEFAULT_REMOTE_EVAL_WORKERS, EvaluationLimits, Route,
     };
 
     pub(super) fn builder() -> Builder {
@@ -1298,7 +1306,7 @@ mod route {
 }
 
 mod runs {
-    use crate::runs::{observed, supervise, Run, LOG_FILE, RUN_FILE};
+    use crate::runs::{LOG_FILE, RUN_FILE, Run, observed, supervise};
     use crate::support::atoms::RunState;
     use crate::support::fs::Scratch;
     use crate::support::schema;
@@ -1440,7 +1448,7 @@ mod runs {
 }
 
 mod events {
-    use crate::ci::events::{append, fold_snapshot, read_all, read_from, Event, Tracker, FILE};
+    use crate::ci::events::{Event, FILE, Tracker, append, fold_snapshot, read_all, read_from};
     use crate::support::atoms::{JobAddr, JobStatus, RunState, TaskStatus};
     use crate::support::fs::Scratch;
 
@@ -1647,10 +1655,10 @@ mod exec {
 
     use serde_json::json;
 
-    use crate::ci::events::{read_all, Event, Tracker};
+    use crate::ci::events::{Event, Tracker, read_all};
     use crate::ci::exec::{
-        blocked_by_case_failure, cached_jobs, fatal, fixed_output_derivations, project_junit,
-        record_result, JobState,
+        JobState, blocked_by_case_failure, cached_jobs, fatal, fixed_output_derivations,
+        project_junit, record_result,
     };
     use crate::ci::plan::{BuildTarget, Phase};
     use crate::support::atoms::JobStatus;
@@ -1880,10 +1888,12 @@ mod cli {
 
     #[test]
     fn start_refuses_wait_and_follow_together() {
-        assert!(Cli::try_parse_from([
-            "wasinix", "run", "start", "--wait", "--follow", "--", "true"
-        ])
-        .is_err());
+        assert!(
+            Cli::try_parse_from([
+                "wasinix", "run", "start", "--wait", "--follow", "--", "true"
+            ])
+            .is_err()
+        );
     }
 
     #[test]
@@ -1964,15 +1974,17 @@ mod cli {
             crate::cli::request::spot_case(&args.request, &args.spot, None, None).unwrap();
         assert!(request.from_source.is_empty());
 
-        assert!(Cli::try_parse_from([
-            "wasinix",
-            "spot",
-            "packagesByProfile.zlib",
-            "--target-only",
-            "--from-source",
-            "rust",
-        ])
-        .is_err());
+        assert!(
+            Cli::try_parse_from([
+                "wasinix",
+                "spot",
+                "packagesByProfile.zlib",
+                "--target-only",
+                "--from-source",
+                "rust",
+            ])
+            .is_err()
+        );
     }
 
     #[test]
@@ -2008,7 +2020,7 @@ mod cli {
 
 mod markdown {
     use super::{golden::check_text, scenarios};
-    use crate::github::markdown::{check, comment, step_summary, truncate_sections, Links};
+    use crate::github::markdown::{Links, check, comment, step_summary, truncate_sections};
     use crate::github::sanitize::{code_span, escape_html, fence, table_cell};
     use crate::support::atoms::Rev;
 
@@ -2175,9 +2187,9 @@ mod markdown {
     #[test]
     fn a_blocked_gate_is_never_green() {
         use crate::ci::facts::{BuildFacts, Failure, FailureCause};
-        use crate::ci::plan::{plan_of, TaskKind};
-        use crate::ci::report::{fold, FoldContext, Fragment, FragmentData};
-        use crate::cli::untrusted::{parse, UntrustedCommand};
+        use crate::ci::plan::{TaskKind, plan_of};
+        use crate::ci::report::{FoldContext, Fragment, FragmentData, fold};
+        use crate::cli::untrusted::{UntrustedCommand, parse};
         use crate::support::atoms::{JobAddr, TaskStatus};
         let UntrustedCommand::Request(request) = parse("build checks.gzip-roundtrip").unwrap()
         else {
@@ -2268,7 +2280,7 @@ mod markdown {
 
     #[test]
     fn the_source_grammar_is_one_spelling_everywhere() {
-        use crate::support::naming::{source_spec, SourceSpec};
+        use crate::support::naming::{SourceSpec, source_spec};
         assert_eq!(source_spec("1.2.3").unwrap(), SourceSpec::Release("1.2.3"));
         assert_eq!(
             source_spec("rev:abc123").unwrap(),
@@ -2313,7 +2325,7 @@ mod markdown {
 
     #[test]
     fn a_comment_bisect_pins_its_predicate_and_owns_the_override() {
-        use crate::cli::untrusted::{parse, UntrustedCommand};
+        use crate::cli::untrusted::{UntrustedCommand, parse};
         let UntrustedCommand::Bisect(bisect) =
             parse("bisect wasmer --good pinned --bad main -- build checks.zlib").unwrap()
         else {
@@ -2341,7 +2353,7 @@ mod markdown {
 
     #[test]
     fn comment_commands_pin_every_case_to_the_runner() {
-        use crate::cli::untrusted::{parse, UntrustedCommand};
+        use crate::cli::untrusted::{UntrustedCommand, parse};
         let parsed = parse("build checks.zlib --with wasixcc@0.4.3").unwrap();
         let UntrustedCommand::Request(crate::ci::types::Request::Build(case)) = parsed else {
             panic!("expected a build request");
@@ -2362,7 +2374,7 @@ mod markdown {
 
     #[test]
     fn mutation_comments_classify_as_mutations_and_parse_structurally() {
-        use crate::cli::untrusted::{parse, MutationCommand, UntrustedCommand};
+        use crate::cli::untrusted::{MutationCommand, UntrustedCommand, parse};
         let UntrustedCommand::Mutation(MutationCommand::Update { targets, all }) =
             parse("update wasmer wasix-libc").unwrap()
         else {
@@ -2631,12 +2643,16 @@ mod markdown {
         use crate::github::markdown::bisect_progress;
         let opening = bisect_progress("wasixcc", 0).into_string();
         assert!(opening.contains("resolving the range"), "{opening}");
-        assert!(bisect_progress("wasixcc", 1)
-            .into_string()
-            .contains("1 candidate tested"));
-        assert!(bisect_progress("wasixcc", 3)
-            .into_string()
-            .contains("3 candidates tested"));
+        assert!(
+            bisect_progress("wasixcc", 1)
+                .into_string()
+                .contains("1 candidate tested")
+        );
+        assert!(
+            bisect_progress("wasixcc", 3)
+                .into_string()
+                .contains("3 candidates tested")
+        );
     }
 
     /// The synthesized task and the log fragment made the same choice in two
@@ -2748,9 +2764,9 @@ mod markdown {
 
     #[test]
     fn a_failed_build_union_states_its_error() {
-        use crate::ci::plan::{plan_of, TaskKind};
-        use crate::ci::report::{fold, union_failure_fragment, FoldContext};
-        use crate::cli::untrusted::{parse, UntrustedCommand};
+        use crate::ci::plan::{TaskKind, plan_of};
+        use crate::ci::report::{FoldContext, fold, union_failure_fragment};
+        use crate::cli::untrusted::{UntrustedCommand, parse};
         let UntrustedCommand::Request(request) = parse("build checks.zlib").unwrap() else {
             panic!("expected a build request");
         };
@@ -2927,12 +2943,16 @@ mod changeset_markdown {
     #[test]
     fn the_managed_footer_is_bot_only() {
         let changes = sample();
-        assert!(pr_body(&changes, true)
-            .into_string()
-            .contains("Managed by wasinix"));
-        assert!(!pr_body(&changes, false)
-            .into_string()
-            .contains("Managed by wasinix"));
+        assert!(
+            pr_body(&changes, true)
+                .into_string()
+                .contains("Managed by wasinix")
+        );
+        assert!(
+            !pr_body(&changes, false)
+                .into_string()
+                .contains("Managed by wasinix")
+        );
     }
 
     #[test]
@@ -2978,7 +2998,7 @@ mod repository_names {
 mod surfaces {
     use std::cell::RefCell;
 
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
 
     use crate::github::surfaces::{CommentApi, Registry, Surface};
     use crate::support::error::Result;
@@ -3119,7 +3139,7 @@ mod surfaces {
 mod render {
     use crate::ci::events::Event;
     use crate::ci::facts::{TestOutcome, TestResult};
-    use crate::cli::render::{test_summary, LineRenderer};
+    use crate::cli::render::{LineRenderer, test_summary};
     use crate::support::atoms::{DurationSecs, JobAddr, JobStatus, RunState, TaskStatus};
 
     #[test]
@@ -3236,13 +3256,15 @@ mod render {
                 at: 520,
                 detail: Some("dependencies: llvm, wasix-libc +2".into()),
             }),
-            ["[+7m 0s] 50/100 jobs · building checks.curl, checks.zlib · dependencies: llvm, wasix-libc +2"]
+            [
+                "[+7m 0s] 50/100 jobs · building checks.curl, checks.zlib · dependencies: llvm, wasix-libc +2"
+            ]
         );
     }
 }
 
 mod bisect {
-    use crate::nix::bisect::{completed, run, Dependency, Options, Outcome};
+    use crate::nix::bisect::{Dependency, Options, Outcome, completed, run};
     use crate::support::fs::Scratch;
 
     #[test]
@@ -3314,12 +3336,12 @@ mod bisect {
 mod update {
     use std::collections::BTreeMap;
 
+    use crate::update::Mode;
     use crate::update::changeset::{ChangeSet, Entry, EntryKind, FailedStep};
     use crate::update::history::substitute_version;
     use crate::update::retention::retention_crossed;
     use crate::update::select::target_requests;
-    use crate::update::targets::{domain, Backend, Target};
-    use crate::update::Mode;
+    use crate::update::targets::{Backend, Target, domain};
 
     fn flake_target(name: &str) -> Target {
         Target {
@@ -3437,10 +3459,12 @@ mod update {
             receipt[0].contains("2026-07-03.1 → 2026-08-01.1"),
             "{receipt:?}"
         );
-        assert!(receipt
-            .last()
-            .unwrap()
-            .contains("1 updated · 1 failed · tree modified"));
+        assert!(
+            receipt
+                .last()
+                .unwrap()
+                .contains("1 updated · 1 failed · tree modified")
+        );
         let _ = BTreeMap::from([(1, 2)]);
     }
 
@@ -3596,7 +3620,7 @@ mod update {
 }
 
 mod managed {
-    use crate::update::managed::{decode, paused, with_state, State};
+    use crate::update::managed::{State, decode, paused, with_state};
 
     #[test]
     fn state_round_trips_through_the_pr_body() {
@@ -3683,7 +3707,7 @@ mod managed {
 
 mod mutation_gates {
     use crate::cli::untrusted::MutationCommand;
-    use crate::github::mutation::{resolve, Pull, Resolved};
+    use crate::github::mutation::{Pull, Resolved, resolve};
     use crate::update::managed::State;
 
     fn pull() -> Pull {
@@ -3887,8 +3911,8 @@ mod webc_identity {
     use std::collections::{BTreeMap, BTreeSet};
 
     use crate::registries::wasmer::{
-        include_unpublished_dependencies, order_packages, parse_publish_as, stage, Package,
-        ResolvedGraph, Staged,
+        Package, ResolvedGraph, Staged, include_unpublished_dependencies, order_packages,
+        parse_publish_as, stage,
     };
     use crate::support::fs::Scratch;
 
@@ -4049,8 +4073,7 @@ mod webc_identity {
         cli.full_name = "wasmer/cli".into();
         cli.version = "0.1.4".into();
         cli.dependencies = BTreeMap::from([("wasmer/bash".into(), "*".into())]);
-        cli.resolved_dependencies =
-            BTreeMap::from([("wasmer/bash".into(), "5.3.15".into())]);
+        cli.resolved_dependencies = BTreeMap::from([("wasmer/bash".into(), "5.3.15".into())]);
         let packages = BTreeMap::from([
             (("wasmer/cli".into(), "0.1.4".into()), cli),
             (("wasmer/bash".into(), "5.3.15".into()), bash),
@@ -4085,10 +4108,7 @@ mod webc_identity {
                     bash.clone(),
                     BTreeMap::from([(coreutils.0.clone(), coreutils.1.clone())]),
                 ),
-                (
-                    curl.clone(),
-                    BTreeMap::from([(ca.0.clone(), ca.1.clone())]),
-                ),
+                (curl.clone(), BTreeMap::from([(ca.0.clone(), ca.1.clone())])),
                 (coreutils.clone(), BTreeMap::new()),
                 (ca.clone(), BTreeMap::new()),
             ]),
@@ -4175,7 +4195,7 @@ mod timings {
 }
 
 mod cargo_publish {
-    use crate::registries::cargo::{classify, index_cksum, index_path, Action};
+    use crate::registries::cargo::{Action, classify, index_cksum, index_path};
 
     /// Cargo's sparse-index layout: 1/, 2/, 3/<first>/, then two two-char
     /// shards, lowercased.
@@ -4860,7 +4880,7 @@ mod corpus {
 mod untrusted {
     use crate::ci::origin::{Classifier, CommandKind};
     use crate::ci::types::Request;
-    use crate::cli::untrusted::{parse, split_words, ClapClassifier, UntrustedCommand};
+    use crate::cli::untrusted::{ClapClassifier, UntrustedCommand, parse, split_words};
 
     #[test]
     fn words_split_shell_style_and_unbalanced_quotes_fail() {
@@ -4969,8 +4989,8 @@ mod remote_runs {
     use std::time::Duration;
 
     use crate::nix::route::EvaluationLimits;
-    use crate::runs::remote::{launch_script, parse_poll};
     use crate::runs::Run;
+    use crate::runs::remote::{launch_script, parse_poll};
     use crate::support::atoms::RunState;
     use crate::support::process::CommandStatus;
 
@@ -5152,9 +5172,9 @@ mod fold {
     use std::collections::BTreeMap;
 
     use crate::ci::facts::{BuildFacts, Failure, FailureCause};
-    use crate::ci::plan::{plan_of, TaskKind};
+    use crate::ci::plan::{TaskKind, plan_of};
     use crate::ci::report::{
-        fold, fragments_under, Conclusion, FoldContext, Fragment, FragmentData,
+        Conclusion, FoldContext, Fragment, FragmentData, fold, fragments_under,
     };
     use crate::ci::types::{Build, Case, Diff, Request, RevSource, Selector, SelectorKind};
     use crate::support::atoms::{JobAddr, Rev, TaskStatus};
@@ -5471,10 +5491,12 @@ mod fold {
         );
         assert!(report.complete);
         assert_eq!(report.conclusion, Some(Conclusion::Failure));
-        assert!(report
-            .tasks
-            .iter()
-            .all(|task| task.status == TaskStatus::Cancelled));
+        assert!(
+            report
+                .tasks
+                .iter()
+                .all(|task| task.status == TaskStatus::Cancelled)
+        );
     }
 
     #[test]
@@ -5580,8 +5602,8 @@ mod scenarios {
     use std::collections::BTreeMap;
 
     use crate::ci::facts::{BuildFacts, Failure, FailureCause, LogRef};
-    use crate::ci::plan::{plan_of, TaskKind};
-    use crate::ci::report::{fold, FoldContext, Fragment, FragmentData, Report};
+    use crate::ci::plan::{TaskKind, plan_of};
+    use crate::ci::report::{FoldContext, Fragment, FragmentData, Report, fold};
     use crate::ci::types::{Build, Case, Diff, Request, RevSource, Selector, SelectorKind};
     use crate::support::atoms::{Bytes, DurationSecs, JobAddr, Rev, TaskStatus};
 
@@ -6051,7 +6073,7 @@ mod facts {
     use std::collections::BTreeMap;
     use std::path::PathBuf;
 
-    use crate::ci::facts::{self, junit, logs, Failure, FailureCause, TestOutcome};
+    use crate::ci::facts::{self, Failure, FailureCause, TestOutcome, junit, logs};
     use crate::support::atoms::JobAddr;
     use crate::support::fs::Scratch;
 
@@ -6065,7 +6087,9 @@ mod facts {
         let inner = failure
             .map(|log| format!("<failure message=\"failed\">{log}</failure>"))
             .unwrap_or_default();
-        format!("<testcase name=\"&quot;{attr}&quot;\" classname=\"{class}\" time=\"{seconds}\">{inner}</testcase>")
+        format!(
+            "<testcase name=\"&quot;{attr}&quot;\" classname=\"{class}\" time=\"{seconds}\">{inner}</testcase>"
+        )
     }
 
     #[test]
@@ -6568,7 +6592,7 @@ mod buildset {
     #[test]
     #[ignore = "needs a nix daemon"]
     fn the_driver_builds_reports_and_marks_cached_on_rerun() {
-        use crate::nix::buildset::{build_union, StreamEvent, UnionCase, UnionRequest};
+        use crate::nix::buildset::{StreamEvent, UnionCase, UnionRequest, build_union};
         use crate::nix::route::{EvaluationLimits, Route};
         let scratch = crate::support::fs::Scratch::create("wasinix-driver").unwrap();
         let instantiate = |expr: &str| -> (String, String) {
@@ -6678,7 +6702,7 @@ mod buildset {
 
 mod git_support {
     use crate::support::fs::Scratch;
-    use crate::support::git::{commit, git, is_ancestor, resolve_rev, Stage};
+    use crate::support::git::{Stage, commit, git, is_ancestor, resolve_rev};
 
     fn repo() -> (Scratch, std::path::PathBuf) {
         let scratch = Scratch::create("wasinix-test").unwrap();
@@ -6689,13 +6713,15 @@ mod git_support {
             vec!["config", "user.name", "Test"],
             vec!["config", "user.email", "test@example.com"],
         ] {
-            assert!(std::process::Command::new("git")
-                .arg("-C")
-                .arg(&repo)
-                .args(&args)
-                .status()
-                .unwrap()
-                .success());
+            assert!(
+                std::process::Command::new("git")
+                    .arg("-C")
+                    .arg(&repo)
+                    .args(&args)
+                    .status()
+                    .unwrap()
+                    .success()
+            );
         }
         std::fs::write(repo.join("file"), "one\n").unwrap();
         git(&repo, &["add", "-A"]).unwrap();
@@ -6751,16 +6777,18 @@ mod git_support {
         );
         let absolute = crate::support::fs::absolute(&bundle).unwrap();
         git(&elsewhere, &["fetch", &absolute.to_string_lossy(), "HEAD"]).unwrap();
-        assert!(!git(&elsewhere, &["rev-parse", "FETCH_HEAD"])
-            .unwrap()
-            .is_empty());
+        assert!(
+            !git(&elsewhere, &["rev-parse", "FETCH_HEAD"])
+                .unwrap()
+                .is_empty()
+        );
     }
 }
 
 mod workspace {
     use crate::ci::types::{Build, CaseRef, RevSource, Selector, SelectorKind};
     use crate::ci::workspace::{
-        reproduced_worktree, working_patch, write_materialization, PATCH_FILE,
+        PATCH_FILE, reproduced_worktree, working_patch, write_materialization,
     };
     use crate::support::fs::Scratch;
     use crate::support::git::{git, resolve_rev};
@@ -6774,13 +6802,15 @@ mod workspace {
             vec!["config", "user.name", "Test"],
             vec!["config", "user.email", "test@example.com"],
         ] {
-            assert!(std::process::Command::new("git")
-                .arg("-C")
-                .arg(&repo)
-                .args(&args)
-                .status()
-                .unwrap()
-                .success());
+            assert!(
+                std::process::Command::new("git")
+                    .arg("-C")
+                    .arg(&repo)
+                    .args(&args)
+                    .status()
+                    .unwrap()
+                    .success()
+            );
         }
         std::fs::write(repo.join("pin"), "old\n").unwrap();
         git(&repo, &["add", "-A"]).unwrap();
@@ -6943,13 +6973,15 @@ mod prepare {
             vec!["config", "user.name", "Test"],
             vec!["config", "user.email", "test@example.com"],
         ] {
-            assert!(std::process::Command::new("git")
-                .arg("-C")
-                .arg(&repo)
-                .args(&args)
-                .status()
-                .unwrap()
-                .success());
+            assert!(
+                std::process::Command::new("git")
+                    .arg("-C")
+                    .arg(&repo)
+                    .args(&args)
+                    .status()
+                    .unwrap()
+                    .success()
+            );
         }
         std::fs::write(repo.join("file"), "one\n").unwrap();
         git(&repo, &["add", "-A"]).unwrap();
@@ -6978,11 +7010,13 @@ mod prepare {
         });
         let run_dir = scratch.path().join("run");
         let prepared = prepare_all(&repo, &request, &run_dir).unwrap();
-        assert!(prepared
-            .plan()
-            .tasks
-            .iter()
-            .any(|t| t.task_id == "case.core"));
+        assert!(
+            prepared
+                .plan()
+                .tasks
+                .iter()
+                .any(|t| t.task_id == "case.core")
+        );
 
         let loaded = load(&run_dir).unwrap();
         assert_eq!(loaded.plan().tasks.len(), prepared.plan().tasks.len());
@@ -7084,11 +7118,13 @@ mod prepare {
         let loaded =
             crate::ci::prepare::prepare_all_with(&repo, &request, &cold, &template).unwrap();
         assert!(loaded.preparation.reused.is_empty());
-        assert!(loaded
-            .plan()
-            .tasks
-            .iter()
-            .any(|task| task.task_id == "case.core"));
+        assert!(
+            loaded
+                .plan()
+                .tasks
+                .iter()
+                .any(|task| task.task_id == "case.core")
+        );
     }
 
     #[test]
@@ -7130,11 +7166,13 @@ mod prepare {
             .expect("a prepared run renders");
         assert_eq!(rendered.report.conclusion, None);
         assert!(!rendered.report.complete);
-        assert!(rendered
-            .report
-            .tasks
-            .iter()
-            .any(|task| task.task_id == "case.core" && task.status == TaskStatus::Pending));
+        assert!(
+            rendered
+                .report
+                .tasks
+                .iter()
+                .any(|task| task.task_id == "case.core" && task.status == TaskStatus::Pending)
+        );
         assert_eq!(rendered.snapshot.unwrap().state, RunState::Running);
     }
 

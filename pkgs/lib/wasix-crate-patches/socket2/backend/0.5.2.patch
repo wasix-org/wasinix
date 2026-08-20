@@ -1,6 +1,6 @@
---- a/src/sys/wasi.rs
-+++ b/src/sys/wasi.rs
-@@ -127,6 +127,14 @@
+--- a/src/sys/wasi.rs	2026-08-21 11:42:14.334007400 +0200
++++ b/src/sys/wasi.rs	2026-08-21 11:42:14.337007341 +0200
+@@ -122,6 +122,14 @@
  
  unsafe impl<'a> Sync for MaybeUninitSlice<'a> {}
  

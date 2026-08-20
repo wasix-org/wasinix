@@ -8,7 +8,7 @@ use serde_json::json;
 
 use crate::github::changeset;
 use crate::github::client::Client;
-use crate::support::error::{request_error, Error, Result};
+use crate::support::error::{Error, Result, request_error};
 use crate::support::git::git;
 use crate::update::changeset::ChangeSet;
 

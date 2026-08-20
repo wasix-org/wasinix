@@ -1,15 +1,5 @@
---- a/src/sys/wasi.rs
-+++ b/src/sys/wasi.rs
-@@ -5,8 +5,8 @@
- use std::mem::{self, size_of, MaybeUninit};
- use std::net::Shutdown;
- use std::net::{Ipv4Addr, Ipv6Addr};
--use std::num::NonZeroUsize;
- use std::num::NonZeroU32;
-+use std::num::NonZeroUsize;
- use std::os::wasi::io::RawFd;
- use std::os::wasi::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd};
- use std::path::Path;
+--- a/src/sys/wasi.rs	2026-08-21 11:42:14.344007202 +0200
++++ b/src/sys/wasi.rs	2026-08-21 11:42:14.347007143 +0200
 @@ -40,6 +40,7 @@
  // Used in `RecvFlags`.
  pub(crate) use libc::{MSG_TRUNC, SO_OOBINLINE};
@@ -18,21 +8,7 @@
  pub(crate) use libc::IP_RECVTOS;
  pub(crate) use libc::IP_TOS;
  pub(crate) use libc::SO_LINGER;
-@@ -102,12 +103,7 @@
-     }
- }
- 
--impl_debug!(
--    Type,
--    libc::SOCK_STREAM,
--    libc::SOCK_DGRAM,
--    libc::SOCK_RAW,
--);
-+impl_debug!(Type, libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_RAW,);
- 
- impl_debug!(
-     Protocol,
-@@ -127,6 +123,14 @@
+@@ -122,6 +123,14 @@
  
  unsafe impl<'a> Sync for MaybeUninitSlice<'a> {}
  
@@ -47,11 +23,3 @@
  impl<'a> MaybeUninitSlice<'a> {
      pub(crate) fn new(buf: &'a mut [MaybeUninit<u8>]) -> MaybeUninitSlice<'a> {
          MaybeUninitSlice {
-@@ -213,7 +217,6 @@
-     }
- }
- 
--
- pub(crate) type Socket = c_int;
- 
- pub(crate) unsafe fn socket_from_raw(socket: Socket) -> crate::socket::Inner {

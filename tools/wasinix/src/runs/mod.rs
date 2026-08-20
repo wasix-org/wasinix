@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ci::events::{self, Event};
 use crate::support::atoms::RunState;
-use crate::support::error::{io, missing, Error, Result};
+use crate::support::error::{Error, Result, io, missing};
 use crate::support::schema::{self, Document};
 use crate::support::time::unix_secs;
 

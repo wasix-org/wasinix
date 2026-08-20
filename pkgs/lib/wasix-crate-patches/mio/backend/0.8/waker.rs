@@ -1,12 +1,12 @@
 mod eventfd {
-    use std::io;
     use crate::sys::Selector;
     use crate::{Interest, Token};
     use std::fs::File;
+    use std::io;
 
-    use std::io::{Write, Read};
-    use std::os::wasi::io::FromRawFd;
     use std::convert::TryInto;
+    use std::io::{Read, Write};
+    use std::os::wasi::io::FromRawFd;
 
     #[cfg(target_vendor = "wasmer")]
     use ::wasix as wasi;
@@ -27,7 +27,7 @@ mod eventfd {
                 wasi::fd_fdstat_get(fd)
                     .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
             };
-        
+
             let mut flags = fdstat.fs_flags;
             flags |= wasi::FDFLAGS_NONBLOCK;
             unsafe {

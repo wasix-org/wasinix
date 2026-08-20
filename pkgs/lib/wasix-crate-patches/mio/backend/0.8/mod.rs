@@ -36,7 +36,7 @@ cfg_net! {
 cfg_os_poll! {
     pub(crate) mod sourcefd;
     pub use self::sourcefd::SourceFd;
-    
+
     pub(crate) mod waker;
     pub(crate) use self::waker::Waker;
 

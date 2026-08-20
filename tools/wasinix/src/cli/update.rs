@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 use crate::support::process::CommandStatus;
 use crate::support::{schema, table, ui};
 use crate::update::changeset::{ChangeSet, Entry, EntryKind, Unchanged};

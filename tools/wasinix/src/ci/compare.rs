@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::ci::evalmap::{EvalMap, StatusMap};
 use crate::ci::types::{Build, CaseRef, RevSource};
 use crate::support::atoms::{JobAddr, JobStatus};
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 use crate::support::schema::Document;
 
 /// Per-job outcomes as a case directory document.

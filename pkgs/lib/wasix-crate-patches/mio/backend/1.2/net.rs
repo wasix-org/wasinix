@@ -1,9 +1,9 @@
 #![allow(dead_code)]
+#[cfg(target_vendor = "wasmer")]
+use ::wasix as wasi;
 use std::io;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::os::wasi::io::RawFd;
-#[cfg(target_vendor = "wasmer")]
-use ::wasix as wasi;
 
 pub(crate) fn new_ip_socket(addr: SocketAddr, socket_type: libc::c_int) -> io::Result<libc::c_int> {
     let domain = match addr {
@@ -15,30 +15,30 @@ pub(crate) fn new_ip_socket(addr: SocketAddr, socket_type: libc::c_int) -> io::R
 }
 
 pub(crate) fn wasi_address_type(domain: libc::c_int) -> io::Result<wasi::AddressFamily> {
-    Ok(
-        match domain {
-            libc::AF_INET => wasi::ADDRESS_FAMILY_INET4,
-            libc::AF_INET6 => wasi::ADDRESS_FAMILY_INET6,
-            libc::AF_UNSPEC => wasi::ADDRESS_FAMILY_UNSPEC,
-            _ => return Err(io::Error::new(
+    Ok(match domain {
+        libc::AF_INET => wasi::ADDRESS_FAMILY_INET4,
+        libc::AF_INET6 => wasi::ADDRESS_FAMILY_INET6,
+        libc::AF_UNSPEC => wasi::ADDRESS_FAMILY_UNSPEC,
+        _ => {
+            return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "address family is unknown",
-            ))
+            ));
         }
-    )
+    })
 }
 
 pub(crate) fn wasi_socket_type(socket_type: libc::c_int) -> io::Result<wasi::SockType> {
-    Ok(
-        match socket_type {
-            libc::SOCK_STREAM => wasi::SOCK_TYPE_SOCKET_STREAM,
-            libc::SOCK_DGRAM => wasi::SOCK_TYPE_SOCKET_DGRAM,
-            _ => return Err(io::Error::new(
+    Ok(match socket_type {
+        libc::SOCK_STREAM => wasi::SOCK_TYPE_SOCKET_STREAM,
+        libc::SOCK_DGRAM => wasi::SOCK_TYPE_SOCKET_DGRAM,
+        _ => {
+            return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "socket type is unknown",
-            ))
+            ));
         }
-    )
+    })
 }
 
 /// Create a new non-blocking socket.
@@ -46,18 +46,21 @@ pub(crate) fn new_socket(domain: libc::c_int, socket_type: libc::c_int) -> io::R
     let proto = match socket_type {
         libc::SOCK_STREAM => wasi::SOCK_PROTO_TCP,
         libc::SOCK_DGRAM => wasi::SOCK_PROTO_UDP,
-        _ => return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "unsupported socket protocol",
-        ))
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "unsupported socket protocol",
+            ));
+        }
     };
 
     let socket = unsafe {
         wasi::sock_open(
             wasi_address_type(domain)?,
             wasi_socket_type(socket_type)?,
-            proto
-        ).map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
+            proto,
+        )
+        .map_err(|errno| io::Error::from_raw_os_error(errno.raw() as i32))?
     };
 
     // sock_open returns a blocking socket, unlike the FDFLAGS_NONBLOCK that
@@ -65,9 +68,7 @@ pub(crate) fn new_socket(domain: libc::c_int, socket_type: libc::c_int) -> io::R
     // socket until wasmer's read timeout, stalling a concurrent send on it.
     set_nonblocking(socket as RawFd, true)?;
 
-    Ok(
-        socket as libc::c_int
-    )
+    Ok(socket as libc::c_int)
 }
 
 /// A type with the same memory layout as `libc::sockaddr`. Used in converting Rust level
@@ -101,9 +102,9 @@ pub(crate) fn socket_addr(addr: &SocketAddr) -> wasi::AddrPort {
                             n1: o[1],
                             h0: o[2],
                             h1: o[3],
-                        }
-                    }
-                }
+                        },
+                    },
+                },
             }
         }
         SocketAddr::V6(ref addr) => {
@@ -127,8 +128,8 @@ pub(crate) fn socket_addr(addr: &SocketAddr) -> wasi::AddrPort {
                             scope_id0: 0,
                             scope_id1: 0,
                         },
-                    }
-                }
+                    },
+                },
             }
         }
     }
@@ -144,32 +145,18 @@ pub(crate) fn to_socket_addr(addr: &wasi::AddrPort) -> io::Result<SocketAddr> {
                 let port = addr.u.inet4.port;
                 let ip = addr.u.inet4.addr;
                 Ok(SocketAddr::V4(SocketAddrV4::new(
-                    Ipv4Addr::new(
-                        ip.n0,
-                        ip.n1,
-                        ip.h0,
-                        ip.h1
-                    ),
-                    port
+                    Ipv4Addr::new(ip.n0, ip.n1, ip.h0, ip.h1),
+                    port,
                 )))
             }
             a if a == wasi::ADDRESS_FAMILY_INET6.raw() => {
                 let port = addr.u.inet6.port;
                 let ip = addr.u.inet6.addr;
                 Ok(SocketAddr::V6(SocketAddrV6::new(
-                    Ipv6Addr::new(
-                        ip.n0,
-                        ip.n1,
-                        ip.n2,
-                        ip.n3,
-                        ip.h0,
-                        ip.h1,
-                        ip.h2,
-                        ip.h3
-                    ),
+                    Ipv6Addr::new(ip.n0, ip.n1, ip.n2, ip.n3, ip.h0, ip.h1, ip.h2, ip.h3),
                     port,
                     0,
-                    0
+                    0,
                 )))
             }
             _ => Err(io::ErrorKind::InvalidInput.into()),

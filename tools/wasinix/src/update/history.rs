@@ -9,11 +9,11 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use regex::Regex;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 use crate::support::naming::{self, Domain, Resolved};
-use crate::support::nix::{eval, Flake, SYSTEM};
+use crate::support::nix::{Flake, SYSTEM, eval};
 
 /// The interpreters the wheel set ships.
 const INTERPRETERS: [&str; 2] = ["py313", "py314"];
@@ -880,7 +880,7 @@ pub fn add_version(
         Err(error) if options.skip_unsupported => {
             return Ok(AddOutcome::Skipped {
                 reason: error.to_string(),
-            })
+            });
         }
         Err(error) => return Err(error),
     };
