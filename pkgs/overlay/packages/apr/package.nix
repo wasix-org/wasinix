@@ -15,6 +15,7 @@ helpers.libTweaks {
   wasixCheckPrebuild = "make -C test -j1 all";
   # its DSO support needs dlopen, so the PIC sysroots
   passthru.wasix.supportedProfiles = helpers.profiles.pic;
+  passthru.wasix.emulatedCheck.broken = "the suite hangs in testpoll after DSO, file, locking, subprocess, pipe, and poll failures";
   configureFlags = [
     "ac_cv_func_sendfile=no"
     # a run test, so cross builds take its fallback; wasi's strerror_r is the
