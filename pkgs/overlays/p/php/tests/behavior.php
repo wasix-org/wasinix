@@ -131,6 +131,8 @@ $imagick->newImage(3, 2, "rgb(12,34,56)");
 $imagick->setImageFormat("png");
 check_value(strlen($imagick->getImagesBlob()) > 20, "ImageMagick PNG encode failed");
 check_value(Normalizer::normalize("e\u{0301}", Normalizer::FORM_C) === "é", "intl normalization failed");
+$numberFormatter = new NumberFormatter("en_US", NumberFormatter::DECIMAL);
+check_value($numberFormatter->format(1234.5) === "1,234.5", "intl locale data failed");
 check_value(igbinary_unserialize(igbinary_serialize(["value" => 42]))["value"] === 42, "igbinary round trip failed");
 
 $key = str_repeat("k", 32);
@@ -149,8 +151,11 @@ $zipPath = $work . "/archive.zip";
 $zip = new ZipArchive();
 check_value($zip->open($zipPath, ZipArchive::CREATE) === true, "ZIP create failed");
 $zip->addFromString("value.txt", "42");
+check_value($zip->setEncryptionName("value.txt", ZipArchive::EM_AES_256, "wasix"), "ZIP encryption failed");
 $zip->close();
-check_value($zip->open($zipPath) === true && $zip->getFromName("value.txt") === "42", "ZIP round trip failed");
+check_value($zip->open($zipPath) === true, "ZIP reopen failed");
+$zip->setPassword("wasix");
+check_value($zip->getFromName("value.txt") === "42", "ZIP round trip failed");
 $zip->close();
 
 $pharPath = $work . "/archive.phar";

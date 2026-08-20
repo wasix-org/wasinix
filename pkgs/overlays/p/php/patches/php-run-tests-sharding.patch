@@ -1,0 +1,48 @@
+diff --git a/run-tests.php b/run-tests.php
+index 1e9c8dab6c..d031854098 100755
+--- a/run-tests.php
++++ b/run-tests.php
+@@ -134,3 +134,30 @@ Options:
+ }
+-
++
++function wasix_filter_test_shard(array $test_files): array
++{
++    $count = getenv('WASIX_CHECK_SHARD_COUNT');
++    if ($count === false) {
++        return $test_files;
++    }
++
++    $shard = getenv('WASIX_CHECK_SHARD_NUM');
++    if ($shard === false
++            || !preg_match('/^[0-9]+$/D', $count)
++            || !preg_match('/^[0-9]+$/D', $shard)
++            || (int) $count === 0 || (int) $shard >= (int) $count) {
++        error("invalid WASIX PHP test shard $shard of $count");
++    }
++
++    return array_values(array_filter(
++        $test_files,
++        static function ($test) use ($count, $shard): bool {
++            $test = is_array($test) ? $test[0] . ':' . $test[1] : $test;
++            $prefix = TEST_PHP_SRCDIR . DIRECTORY_SEPARATOR;
++            $path = str_starts_with($test, $prefix) ? substr($test, strlen($prefix)) : $test;
++            $bucket = hexdec(substr(hash('sha256', $path), 0, 6)) % (int) $count;
++            return $bucket === (int) $shard;
++        }
++    ));
++}
++
+ /**
+@@ -692,3 +719,4 @@ function main(): void
+     $test_files = array_merge($test_files, $redir_tests);
+-
++    $test_files = wasix_filter_test_shard($test_files);
++
+     // Run selected tests.
+@@ -754,3 +782,4 @@ function main(): void
+         usort($test_files, "test_sort");
+-
++        $test_files = wasix_filter_test_shard($test_files);
++
+         $start_timestamp = time();

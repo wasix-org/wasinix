@@ -278,6 +278,9 @@ in {
           '';
 
         enableParallelBuilding = true;
+        doCheck = !int64 && spec.version == versions.php85.version;
+        checkTarget = "test";
+        wasixCheckPrebuild = ":";
 
         env =
           {
@@ -339,6 +342,24 @@ in {
               all = extensionPackages;
             });
           wasix = {
+            emulatedCheck = {
+              broken = "the upstream suite exercises unsupported WASIX filesystem metadata, signals, socket options, and process limits";
+              ciTags = ["slow-tests"];
+              guestInputs = [
+                preferredProfilePackages.bash
+                preferredProfilePackages.coreutils
+              ];
+              postRestore = ''
+                export NO_INTERACTION=1
+                export WASIX_RUN_FLAGS="$WASIX_RUN_FLAGS --volume ${preferredProfilePackages.icu-data}/share/icu/${final.icu.version}:/share/icu/${final.icu.version}"
+                patch -p1 < ${./patches/php-run-tests-sharding.patch}
+                substituteInPlace Makefile \
+                  --replace-fail 'TEST_PHP_EXECUTABLE=$(PHP_EXECUTABLE)' \
+                  'TEST_PHP_EXECUTABLE=$(PHP_EXECUTABLE).wasm'
+              '';
+              shards = 8;
+              timeout = 3600;
+            };
             shipped = true;
             supportedProfiles =
               if lib.versionOlder spec.version "8.0"
@@ -366,6 +387,7 @@ in {
             fs."/etc/ssl" = "${final.cacert}/etc/ssl";
             dependencies = [
               preferredProfilePackages.bash
+              preferredProfilePackages.icu-data
               preferredProfilePackages.wasix-sendmail
             ];
           };
