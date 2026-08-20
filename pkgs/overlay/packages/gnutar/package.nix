@@ -6,17 +6,42 @@
   helpers,
   ...
 }:
-helpers.libTweaks {
-  patches = [./patches/wasi-opendirat.patch];
-  # The autotest suite depends on POSIX permissions, sparse files, and symlinks.
-  doCheck = false;
-  # tar spawns its compression programs with fork, which the off profile
-  # asyncifies for; binaryen cannot asyncify the EH instructions the others
-  # emit.
-  passthru.wasix.supportedProfiles = ["off"];
-  passthru.wasix.smokeTest = false;
-  # AC_TYPE_GETGROUPS is a run test, so a cross build takes its historic int
-  # fallback, and gnulib's definition then disagrees with its own gid_t header.
-  configureFlags = ["ac_cv_type_getgroups=gid_t"];
-}
-prev.gnutar
+helpers.wasmRename {
+  wasmName = "tar";
+  posixAlias = true;
+} (
+  helpers.libTweaks {
+    patches = [./patches/wasi-opendirat.patch];
+    # The autotest suite depends on POSIX permissions, sparse files, and symlinks.
+    doCheck = false;
+    passthru.wasix.shipped = true;
+    # tar spawns its compression programs with fork, which the off profile
+    # asyncifies for; binaryen cannot asyncify the EH instructions the others
+    # emit.
+    passthru.wasix.supportedProfiles = ["off"];
+    passthru.wasix.smokeTest = false;
+    passthru.wasmer.name = "tar";
+    configureFlags = [
+      # AC_TYPE_GETGROUPS is a run test, so a cross build takes its historic int
+      # fallback, and gnulib's definition then disagrees with its own gid_t header.
+      "ac_cv_type_getgroups=gid_t"
+      "--disable-rmt"
+      "--with-gzip=gzip"
+    ];
+    postPatch = ''
+      substituteInPlace gnu/getgroups.c \
+        --replace-fail 'getgroups (_GL_UNUSED int n, _GL_UNUSED GETGROUPS_T *groups)' \
+                       'getgroups (_GL_UNUSED int n, _GL_UNUSED gid_t *groups)'
+      substituteInPlace lib/rtapelib.c \
+        --replace-fail '    status = fork ();' '    errno = ENOSYS; status = -1;'
+      substituteInPlace src/misc.c \
+        --replace-fail '  pid_t p = fork ();' '  errno = ENOSYS; pid_t p = -1;'
+      substituteInPlace tests/genfile.c \
+        --replace-fail '  pid = fork ();' '  errno = ENOSYS; pid = -1;'
+    '';
+    postInstall = ''
+      rm -f "$out/bin/rmt"
+    '';
+  }
+  prev.gnutar
+)
