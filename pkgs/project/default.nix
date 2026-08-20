@@ -6,6 +6,7 @@
   configFor ? _scope: _variant: {},
   nativePackageInterfacesFor ? _project: {},
   harnessesFor ? _project: {},
+  runnersFor ? _project: {},
   projectionRules ? {},
   pythonSetsFor ? _args: {},
   extendPythonSet ? packageSet: overlay: packageSet.overrideScope overlay,
@@ -401,18 +402,21 @@ in rec {
           "${scope} history does not match its current package owner: ${lib.concatStringsSep ", " (map (declaration: "${declaration.source}.${declaration.name}") invalid)}"
           true);
 
-      contextFor = scope: variant: enclosingPkgs: {final, ...}:
-        {
-          packages = {
-            inherit native wasix python preferred;
-            sameProfile = final // projectedPackageSet scope variant final;
-          };
-          commands = commandsView;
-          artifacts = artifactsView;
-          harnesses = harnessesView;
-          inherit (projectLib) dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix extendPackage linkInputs mergeScript replaceInputsByName;
-        }
-        // lib.optionalAttrs (enclosingPkgs != null) {pkgs = enclosingPkgs;};
+      contextFor = scope: variant: enclosingPkgs: {final, ...}: {
+        packages = {
+          inherit native wasix python preferred;
+          sameProfile = final // projectedPackageSet scope variant final;
+        };
+        commands = commandsView;
+        artifacts = artifactsView;
+        harnesses = harnessesView;
+        runners = runnersView;
+        pkgs =
+          if enclosingPkgs == null
+          then nativeRaw
+          else enclosingPkgs;
+        inherit (projectLib) dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix extendPackage linkInputs mergeScript replaceInputsByName;
+      };
 
       nativeRaw = importNixpkgs {
         localSystem = {inherit system;};
@@ -479,6 +483,7 @@ in rec {
           "${name}: preferred WASIX profile '${declaredProfile}' is unavailable"
           declaredProfile);
       harnessesView = harnessesFor project;
+      runnersView = runnersFor project;
       contextForEntry = entry: let
         selected =
           if entry.scope == "native"
@@ -496,8 +501,7 @@ in rec {
             enclosing = pythonSpecs.${entry.variant.interpreter}.pkgs;
           };
       in
-        contextFor entry.scope entry.variant selected.enclosing {inherit (selected) final;}
-        // {pkgs = nativeRaw;};
+        contextFor entry.scope entry.variant selected.enclosing {inherit (selected) final;};
 
       nativeEntries = lib.mapAttrs' (name: package: let
         address = projectLib.address "packages" ["native" name];
@@ -718,6 +722,7 @@ in rec {
         commands = commandsView;
         artifacts = artifactsView;
         harnesses = harnessesView;
+        runners = runnersView;
         tests = lib.mapAttrs (_: entry: entry.check) testEntries;
         catalog = {inherit entries;};
         ci = {
