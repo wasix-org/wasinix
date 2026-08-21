@@ -45,8 +45,9 @@ pub fn predicate(
     words: &[String],
     dependency_target: &str,
     blocked: BlockedPolicy,
+    surface: super::Surface,
 ) -> Result<ParsedRequest> {
-    let request = match super::request::parse_case(words, None, super::Surface::Terminal)? {
+    let request = match super::request::parse_case(words, None, surface)? {
         Case::Build(build) => Request::build(build, blocked),
         Case::Spot(spot) => Request::spot(spot, blocked),
     };
@@ -161,7 +162,12 @@ pub fn run_bisect(repo: &Path, args: BisectArgs) -> Result<CommandStatus> {
         .collect();
     // Parse once up front so a broken predicate fails before the first
     // candidate builds.
-    let predicate = predicate(&words, &dependency.target, args.outcome.blocked)?;
+    let predicate = predicate(
+        &words,
+        &dependency.target,
+        args.outcome.blocked,
+        super::Surface::Terminal,
+    )?;
 
     let run_dir = match &args.run_dir {
         Some(dir) => dir.clone(),
