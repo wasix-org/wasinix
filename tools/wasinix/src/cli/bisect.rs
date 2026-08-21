@@ -3,8 +3,10 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::ci::report::Conclusion;
 use crate::ci::types::{Case, ParsedRequest, Request};
 use crate::nix::bisect::{self, Outcome};
+use crate::support::atoms::BlockedPolicy;
 use crate::support::error::{Result, request_error};
 use crate::support::process::CommandStatus;
 use crate::support::ui;
@@ -29,6 +31,8 @@ pub struct BisectArgs {
     /// Keep bisect state and candidate runs here
     #[arg(long)]
     pub run_dir: Option<PathBuf>,
+    #[command(flatten)]
+    pub outcome: super::OutcomeArgs,
     /// The build or spot command used as the pass/fail predicate
     #[arg(required = true, trailing_var_arg = true, value_name = "PREDICATE")]
     pub command: Vec<String>,
@@ -37,10 +41,14 @@ pub struct BisectArgs {
 /// The predicate as a request. It re-enters the trusted case grammar (the
 /// same parser diff cases use), so bisect grows no second command language
 /// and a predicate may name a placement.
-pub fn predicate(words: &[String], dependency_target: &str) -> Result<ParsedRequest> {
+pub fn predicate(
+    words: &[String],
+    dependency_target: &str,
+    blocked: BlockedPolicy,
+) -> Result<ParsedRequest> {
     let request = match super::request::parse_case(words, None)? {
-        Case::Build(build) => Request::Build(build),
-        Case::Spot(spot) => Request::Spot(spot),
+        Case::Build(build) => Request::build(build, blocked),
+        Case::Spot(spot) => Request::spot(spot, blocked),
     };
     reject_own_override(&request, dependency_target)?;
     Ok(request)
@@ -79,6 +87,22 @@ pub struct Bisect<'a> {
     pub progress: Option<&'a mut dyn FnMut(usize) -> Result<()>>,
 }
 
+pub(crate) fn candidate_outcome(report: &crate::ci::report::Report) -> Result<Outcome> {
+    let conclusion = report.conclusion.ok_or_else(|| {
+        crate::support::error::Error::Failure("bisect candidate produced no conclusion".into())
+    })?;
+    Ok(match conclusion {
+        Conclusion::Success => Outcome::Good,
+        Conclusion::Failure => Outcome::Bad,
+        Conclusion::Neutral => Outcome::Skip,
+        Conclusion::Blocked => match report.blocked_policy() {
+            BlockedPolicy::Fail => Outcome::Bad,
+            BlockedPolicy::Skip => Outcome::Skip,
+            BlockedPolicy::Good => Outcome::Good,
+        },
+    })
+}
+
 /// Walk the candidates, building the predicate against each. The report is
 /// written after every candidate, so an interrupted or budgeted run resumes
 /// from what it already knows.
@@ -107,7 +131,7 @@ pub fn drive(repo: &Path, request: Bisect) -> Result<bisect::Report> {
             let mut predicate = request.predicate.clone();
             super::request::with_override(&mut predicate, &target, rev);
             crate::support::fs::create_dir_all(candidate_dir)?;
-            let status = super::request::drive(super::request::Drive {
+            super::request::drive(super::request::Drive {
                 repo,
                 source: super::request::Source::Parse {
                     request: predicate,
@@ -119,11 +143,10 @@ pub fn drive(repo: &Path, request: Bisect) -> Result<bisect::Report> {
                 follow: false,
                 finish: super::request::Finish::Silent,
             })?;
-            Ok(if status.is_success() {
-                Outcome::Good
-            } else {
-                Outcome::Bad
-            })
+            let report: crate::ci::report::Report = crate::support::schema::read(
+                &crate::ci::prepare::report_path(candidate_dir),
+            )?;
+            candidate_outcome(&report)
         },
     )
 }
@@ -138,7 +161,7 @@ pub fn run_bisect(repo: &Path, args: BisectArgs) -> Result<CommandStatus> {
         .collect();
     // Parse once up front so a broken predicate fails before the first
     // candidate builds.
-    let predicate = predicate(&words, &dependency.target)?;
+    let predicate = predicate(&words, &dependency.target, args.outcome.blocked)?;
 
     let run_dir = match &args.run_dir {
         Some(dir) => dir.clone(),

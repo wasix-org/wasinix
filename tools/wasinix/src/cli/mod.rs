@@ -20,7 +20,7 @@ use crate::support::error::Result;
 use crate::support::process::CommandStatus;
 use crate::support::{schema, ui};
 
-pub use request::{DiffArgs, ModeArgs, RequestArgs, SpotExtras};
+pub use request::{DiffArgs, ModeArgs, OutcomeArgs, RequestArgs, SpotExtras};
 
 #[derive(Parser)]
 #[command(
@@ -144,6 +144,8 @@ pub struct BuildArgs {
     pub placement: request::PlacementArg,
     #[command(flatten)]
     pub mode: ModeArgs,
+    #[command(flatten)]
+    pub outcome: OutcomeArgs,
 }
 
 #[derive(clap::Args)]
@@ -156,6 +158,8 @@ pub struct SpotArgs {
     pub placement: request::PlacementArg,
     #[command(flatten)]
     pub mode: ModeArgs,
+    #[command(flatten)]
+    pub outcome: OutcomeArgs,
 }
 
 #[derive(clap::Subcommand)]

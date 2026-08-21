@@ -77,7 +77,7 @@ fn glyph(status: TaskStatus) -> Markdown {
     Markdown::constant(match status {
         TaskStatus::Success => "✅",
         TaskStatus::Failure | TaskStatus::Cancelled => "❌",
-        TaskStatus::Neutral => "⚠️",
+        TaskStatus::Blocked => "⚠️",
         TaskStatus::Pending => "⏳",
         TaskStatus::Skipped => "⏭",
         TaskStatus::Deferred => "⏸",
@@ -567,7 +567,8 @@ pub fn comment(
         None => in_progress(report, snapshot, links),
         Some(Conclusion::Success) => green(report, fragments, links),
         Some(Conclusion::Failure) => failing(report, fragments, links),
-        Some(Conclusion::Neutral) => neutral(report, fragments, links),
+        Some(Conclusion::Neutral) => inconclusive(report, fragments, links, true),
+        Some(Conclusion::Blocked) => inconclusive(report, fragments, links, false),
     };
     origin_line(links).push(body)
 }
@@ -679,7 +680,7 @@ fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
         for task in &report.tasks {
             if matches!(
                 task.status,
-                TaskStatus::Failure | TaskStatus::Cancelled | TaskStatus::Neutral
+                TaskStatus::Failure | TaskStatus::Cancelled | TaskStatus::Blocked
             ) {
                 text = Markdown::concat([
                     text,
@@ -720,21 +721,30 @@ fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
     ])
 }
 
-fn neutral(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Links) -> Markdown {
-    // Two ways to end neutral: a diff whose base never evaluated, and a run
-    // whose work was blocked before it could pass or fail. Only the first is
-    // "not your change".
-    let compared = !report.comparisons.is_empty();
-    let (heading, lead) = if compared {
+fn inconclusive(
+    report: &Report,
+    fragments: &BTreeMap<String, Fragment>,
+    links: &Links,
+    comparison: bool,
+) -> Markdown {
+    let (heading, lead) = if comparison {
         (
             "### ⚠️ Wasinix CI could not compare · ",
             "> The base did not produce results to compare against. This is not caused by your change.\n\n",
         )
     } else {
-        (
-            "### ⚠️ Wasinix CI · ",
-            "> Nothing the request selected finished, so the run neither passed nor failed. The failures below are why.\n\n",
-        )
+        let lead = match report.blocked_policy() {
+            crate::support::atoms::BlockedPolicy::Fail => {
+                "> Nothing selected finished; blocked work fails under --blocked=fail.\n\n"
+            }
+            crate::support::atoms::BlockedPolicy::Skip => {
+                "> Nothing selected finished; this result was skipped under --blocked=skip.\n\n"
+            }
+            crate::support::atoms::BlockedPolicy::Good => {
+                "> Nothing selected finished; this result was accepted as good under --blocked=good.\n\n"
+            }
+        };
+        ("### ⚠️ Wasinix CI blocked · ", lead)
     };
     let mut text = Markdown::concat([
         Markdown::constant(heading),
@@ -745,7 +755,7 @@ fn neutral(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
     ]);
     let all = failures(report);
     if !all.is_empty() {
-        let summary = if compared {
+        let summary = if comparison {
             format!("Failures on this branch, baseline unknown ({})", all.len())
         } else {
             format!("What blocked it ({})", all.len())
@@ -763,10 +773,8 @@ fn neutral(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
     text = text.push(footer(report, fragments, links));
     // The pipeline table is what says which task stopped; the compared case
     // keeps its established shape.
-    if !compared {
-        text = text
-            .push(Markdown::constant("\n"))
-            .push(details(report, fragments));
+    if !comparison {
+        text = text.push(Markdown::constant("\n")).push(details(report, fragments));
     }
     text
 }

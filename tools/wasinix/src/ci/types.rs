@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::support::atoms::Rev;
+use crate::support::atoms::{BlockedPolicy, Rev};
 use crate::support::schema::Document;
 
 /// A case as written by the caller: a ref that still has to be resolved.
@@ -195,18 +195,29 @@ impl<'de, S: serde::de::DeserializeOwned> Deserialize<'de> for Case<S> {
     }
 }
 
-/// A whole request. Intent is structural: `action` is the discriminant, and
-/// no case carries a mode flag restating its own shape.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "lowercase")]
 #[serde(bound(
     serialize = "S: Serialize",
     deserialize = "S: serde::de::DeserializeOwned"
 ))]
-pub enum Request<S> {
+pub enum RequestAction<S> {
     Build(Build<S>),
     Spot(Spot<S>),
     Diff(Diff<S>),
+}
+
+/// A whole request. Policy sits outside the cases so the cases in a diff
+/// cannot disagree about the run's outcome.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound(
+    serialize = "S: Serialize",
+    deserialize = "S: serde::de::DeserializeOwned"
+))]
+pub struct Request<S> {
+    pub blocked: BlockedPolicy,
+    #[serde(flatten)]
+    pub action: RequestAction<S>,
 }
 
 pub type ParsedRequest = Request<RefSource>;
@@ -214,26 +225,47 @@ pub type ResolvedRequest = Request<RevSource>;
 
 impl Document for ParsedRequest {
     const KIND: &'static str = "request";
-    const SCHEMA: u32 = 1;
+    const SCHEMA: u32 = 2;
 }
 
 impl Document for ResolvedRequest {
     const KIND: &'static str = "request";
-    const SCHEMA: u32 = 1;
+    const SCHEMA: u32 = 2;
 }
 
 impl<S> Request<S> {
+    pub fn build(build: Build<S>, blocked: BlockedPolicy) -> Request<S> {
+        Request {
+            blocked,
+            action: RequestAction::Build(build),
+        }
+    }
+
+    pub fn spot(spot: Spot<S>, blocked: BlockedPolicy) -> Request<S> {
+        Request {
+            blocked,
+            action: RequestAction::Spot(spot),
+        }
+    }
+
+    pub fn diff(diff: Diff<S>, blocked: BlockedPolicy) -> Request<S> {
+        Request {
+            blocked,
+            action: RequestAction::Diff(diff),
+        }
+    }
+
     pub fn is_diff(&self) -> bool {
-        matches!(self, Request::Diff(_))
+        matches!(self.action, RequestAction::Diff(_))
     }
 
     /// Rewrite every case's placement. Shipping a request to a host consumes
     /// the placement axis, and placement never contributes to identity.
     pub fn set_placement(&mut self, on: Option<String>) {
-        let cases: Vec<&mut Option<String>> = match self {
-            Request::Build(build) => vec![&mut build.on],
-            Request::Spot(spot) => vec![&mut spot.on],
-            Request::Diff(diff) => diff
+        let cases: Vec<&mut Option<String>> = match &mut self.action {
+            RequestAction::Build(build) => vec![&mut build.on],
+            RequestAction::Spot(spot) => vec![&mut spot.on],
+            RequestAction::Diff(diff) => diff
                 .cases
                 .iter_mut()
                 .map(|case| match case {
@@ -250,10 +282,10 @@ impl<S> Request<S> {
     /// Fill an unset `--from-pr`: in a pull-request context a bare command
     /// means "this PR", never the default branch.
     pub fn default_from_pr(&mut self) {
-        let cases: Vec<&mut Option<String>> = match self {
-            Request::Build(build) => vec![&mut build.from_pr],
-            Request::Spot(spot) => vec![&mut spot.from_pr],
-            Request::Diff(diff) => diff
+        let cases: Vec<&mut Option<String>> = match &mut self.action {
+            RequestAction::Build(build) => vec![&mut build.from_pr],
+            RequestAction::Spot(spot) => vec![&mut spot.from_pr],
+            RequestAction::Diff(diff) => diff
                 .cases
                 .iter_mut()
                 .map(|case| match case {
@@ -271,10 +303,10 @@ impl<S> Request<S> {
 
     /// Every case, in scheduling order. A build or spot request is one case.
     pub fn cases(&self) -> Vec<CaseRef<'_, S>> {
-        match self {
-            Request::Build(build) => vec![CaseRef::Build(build)],
-            Request::Spot(spot) => vec![CaseRef::Spot(spot)],
-            Request::Diff(diff) => diff.cases.iter().map(Case::as_ref).collect(),
+        match &self.action {
+            RequestAction::Build(build) => vec![CaseRef::Build(build)],
+            RequestAction::Spot(spot) => vec![CaseRef::Spot(spot)],
+            RequestAction::Diff(diff) => diff.cases.iter().map(Case::as_ref).collect(),
         }
     }
 }

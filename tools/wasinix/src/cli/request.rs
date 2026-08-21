@@ -9,9 +9,10 @@ use clap::Parser;
 use crate::ci::normalize;
 use crate::ci::plan::Phase;
 use crate::ci::types::{
-    Build, Case, Diff, Override, OverrideKind, ParsedRequest, RefSource, Request, ResolvedRequest,
-    Selector, SelectorKind, Spot,
+    Build, Case, Diff, Override, OverrideKind, ParsedRequest, RefSource, Request, RequestAction,
+    ResolvedRequest, Selector, SelectorKind, Spot,
 };
+use crate::support::atoms::BlockedPolicy;
 use crate::support::error::{Error, Result, request_error};
 use crate::support::process::CommandStatus;
 use crate::support::schema;
@@ -67,6 +68,13 @@ pub struct PlacementArg {
         add = clap_complete::ArgValueCandidates::new(placement_candidates)
     )]
     pub on: Option<String>,
+}
+
+#[derive(Debug, Default, clap::Args)]
+pub struct OutcomeArgs {
+    /// How a selection whose jobs were all blocked by dependencies concludes
+    #[arg(long, value_enum, default_value_t)]
+    pub blocked: BlockedPolicy,
 }
 
 /// Completion values for selectors: sets, groups, and every job address,
@@ -137,6 +145,8 @@ pub struct DiffArgs {
     pub content_diff: bool,
     #[command(flatten)]
     pub mode: ModeArgs,
+    #[command(flatten)]
+    pub outcome: OutcomeArgs,
     /// The cases, as complete build or spot commands separated by --vs; the
     /// first case is the baseline. None means the pull-request shape:
     /// `build all --at <merge-base with main> --vs build all`
@@ -306,15 +316,22 @@ pub(crate) fn split_cases(words: &[String]) -> Vec<(String, &[String])> {
 
 /// Assemble a diff from parsed cases; both frontends share the shape, only
 /// the case parser differs.
-pub(crate) fn diff_of(cases: Vec<Case<RefSource>>, content_diff: bool) -> Result<ParsedRequest> {
+pub(crate) fn diff_of(
+    cases: Vec<Case<RefSource>>,
+    content_diff: bool,
+    blocked: BlockedPolicy,
+) -> Result<ParsedRequest> {
     if cases.len() < 2 {
         return request_error("diff needs at least two cases separated by --vs");
     }
-    Ok(Request::Diff(Diff {
-        baseline: "base".to_string(),
-        content_diff,
-        cases,
-    }))
+    Ok(Request::diff(
+        Diff {
+            baseline: "base".to_string(),
+            content_diff,
+            cases,
+        },
+        blocked,
+    ))
 }
 
 pub(crate) fn diff_request(args: &DiffArgs) -> Result<ParsedRequest> {
@@ -325,7 +342,7 @@ pub(crate) fn diff_request(args: &DiffArgs) -> Result<ParsedRequest> {
                 .map_err(|error| Error::Request(format!("diff case {case_id}: {error}")))?,
         );
     }
-    diff_of(cases, args.content_diff)
+    diff_of(cases, args.content_diff, args.outcome.blocked)
 }
 
 /// A run keeps its state and artifacts in one directory. Without one named, a
@@ -412,13 +429,13 @@ fn plan(repo: &Path, resolved: &ResolvedRequest, mode: &ModeArgs) -> Result<Comm
             }
         },
     )?;
-    if matches!(resolved, Request::Spot(_)) && !mode.json.wants() {
+    if matches!(resolved.action, RequestAction::Spot(_)) && !mode.json.wants() {
         let run_dir = run_directory(&mode.run_dir)?;
         // The probe reproduces the prepared case, whose source carries the
         // recorded materialization-patch hash; the pre-prepare request does
         // not, and a dirty tree would trip the reproduction guard.
         let loaded = crate::ci::prepare::prepare_all(repo, resolved, &run_dir)?;
-        if let Request::Spot(spot) = &loaded.request {
+        if let RequestAction::Spot(spot) = &loaded.request.action {
             crate::ci::exec::spot_probe(
                 &crate::ci::exec::Context {
                     runner_root: repo,
@@ -759,10 +776,10 @@ pub(crate) fn with_override(request: &mut ParsedRequest, target: &str, rev: &str
         repository: None,
         origin: None,
     };
-    let cases: Vec<&mut Vec<Override>> = match request {
-        Request::Build(build) => vec![&mut build.overrides],
-        Request::Spot(spot) => vec![&mut spot.overrides],
-        Request::Diff(diff) => diff
+    let cases: Vec<&mut Vec<Override>> = match &mut request.action {
+        RequestAction::Build(build) => vec![&mut build.overrides],
+        RequestAction::Spot(spot) => vec![&mut spot.overrides],
+        RequestAction::Diff(diff) => diff
             .cases
             .iter_mut()
             .map(|case| match case {
@@ -777,7 +794,10 @@ pub(crate) fn with_override(request: &mut ParsedRequest, target: &str, rev: &str
 }
 
 pub(crate) fn run_build(repo: &Path, args: super::BuildArgs) -> Result<CommandStatus> {
-    let request = Request::Build(build_case(&args.request, args.placement.on.clone(), None)?);
+    let request = Request::build(
+        build_case(&args.request, args.placement.on.clone(), None)?,
+        args.outcome.blocked,
+    );
     drive_terminal(repo, request, &args.mode)
 }
 
@@ -785,12 +805,15 @@ pub(crate) fn run_spot(repo: &Path, args: super::SpotArgs) -> Result<CommandStat
     if args.mode.inputs_only {
         return request_error("--inputs-only applies to build, not spot");
     }
-    let request = Request::Spot(spot_case(
-        &args.request,
-        &args.spot,
-        args.placement.on.clone(),
-        None,
-    )?);
+    let request = Request::spot(
+        spot_case(
+            &args.request,
+            &args.spot,
+            args.placement.on.clone(),
+            None,
+        )?,
+        args.outcome.blocked,
+    );
     drive_terminal(repo, request, &args.mode)
 }
 

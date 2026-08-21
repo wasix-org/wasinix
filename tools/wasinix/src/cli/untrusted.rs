@@ -72,6 +72,14 @@ struct UntrustedBuild {
 }
 
 #[derive(clap::Args)]
+struct UntrustedRequest<T: clap::Args> {
+    #[command(flatten)]
+    request: T,
+    #[command(flatten)]
+    outcome: super::OutcomeArgs,
+}
+
+#[derive(clap::Args)]
 struct UntrustedSpot {
     #[command(flatten)]
     request: super::RequestArgs,
@@ -84,6 +92,8 @@ struct UntrustedDiff {
     /// Also compare the built contents of moved outputs
     #[arg(long)]
     content_diff: bool,
+    #[command(flatten)]
+    outcome: super::OutcomeArgs,
     /// The cases, as build or spot commands separated by --vs
     #[arg(
         required = true,
@@ -122,6 +132,8 @@ struct UntrustedBisect {
     /// Find where the predicate started passing instead
     #[arg(long)]
     reverse: bool,
+    #[command(flatten)]
+    outcome: super::OutcomeArgs,
     /// The build or spot command used as the pass/fail predicate
     #[arg(required = true, trailing_var_arg = true, value_name = "PREDICATE")]
     command: Vec<String>,
@@ -164,8 +176,8 @@ enum UntrustedVersions {
     disable_help_subcommand = true
 )]
 enum UntrustedCli {
-    Build(UntrustedBuild),
-    Spot(UntrustedSpot),
+    Build(UntrustedRequest<UntrustedBuild>),
+    Spot(UntrustedRequest<UntrustedSpot>),
     Diff(UntrustedDiff),
     Bisect(UntrustedBisect),
     Update(UntrustedUpdate),
@@ -325,18 +337,33 @@ pub fn parse(command: &str) -> Result<UntrustedCommand> {
         // Comment commands execute on the workflow runner itself, and the
         // untrusted grammar rightly cannot spell --on, so every case is
         // pinned local; a runner has no builders.toml to default from.
-        UntrustedCli::Build(args) => UntrustedCommand::Request(Request::Build(
-            super::request::build_case(&args.request, Some("local".to_string()), None)?,
+        UntrustedCli::Build(args) => UntrustedCommand::Request(Request::build(
+            super::request::build_case(
+                &args.request.request,
+                Some("local".to_string()),
+                None,
+            )?,
+            args.outcome.blocked,
         )),
-        UntrustedCli::Spot(args) => UntrustedCommand::Request(Request::Spot(
-            super::request::spot_case(&args.request, &args.spot, Some("local".to_string()), None)?,
+        UntrustedCli::Spot(args) => UntrustedCommand::Request(Request::spot(
+            super::request::spot_case(
+                &args.request.request,
+                &args.request.spot,
+                Some("local".to_string()),
+                None,
+            )?,
+            args.outcome.blocked,
         )),
         UntrustedCli::Diff(args) => {
             let mut cases = Vec::new();
             for (case_id, case_words) in super::request::split_cases(&args.words) {
                 cases.push(untrusted_case(case_words, case_id)?);
             }
-            UntrustedCommand::Request(super::request::diff_of(cases, args.content_diff)?)
+            UntrustedCommand::Request(super::request::diff_of(
+                cases,
+                args.content_diff,
+                args.outcome.blocked,
+            )?)
         }
         UntrustedCli::Bisect(args) => {
             let words: Vec<String> = args
@@ -348,8 +375,8 @@ pub fn parse(command: &str) -> Result<UntrustedCommand> {
             // The predicate is a case like any other, so it arrives pinned
             // and a bisect grows no way to name a builder.
             let predicate = match untrusted_case(&words, "predicate".to_string())? {
-                Case::Build(build) => Request::Build(build),
-                Case::Spot(spot) => Request::Spot(spot),
+                Case::Build(build) => Request::build(build, args.outcome.blocked),
+                Case::Spot(spot) => Request::spot(spot, args.outcome.blocked),
             };
             UntrustedCommand::Bisect(BisectCommand {
                 target: args.target,

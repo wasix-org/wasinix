@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ci::types::{Build, CaseRef, Request, SetName};
+use crate::ci::types::{Build, CaseRef, Request, RequestAction, SetName};
 use crate::support::schema::Document;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -189,8 +189,8 @@ pub fn plan_of<S>(request: &Request<S>, request_id: Option<&str>, reused: &[Stri
     // evaluation gates; a broken baseline is the base's condition and
     // concludes neutral, so nothing on the baseline gates.
     let gate_builds = !request.is_diff();
-    let baseline = match request {
-        Request::Diff(diff) => Some(diff.baseline.as_str()),
+    let baseline = match &request.action {
+        RequestAction::Diff(diff) => Some(diff.baseline.as_str()),
         _ => None,
     };
 
@@ -240,7 +240,7 @@ pub fn plan_of<S>(request: &Request<S>, request_id: Option<&str>, reused: &[Stri
         }
     }
 
-    if let Request::Diff(diff) = request {
+    if let RequestAction::Diff(diff) = &request.action {
         for case in diff.cases.iter().skip(1) {
             let id = case.case_id().to_string();
             if diff.content_diff {

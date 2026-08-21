@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 use crate::ci::plan::{Plan, plan_of};
-use crate::ci::types::{Preparation, Request, ResolvedRequest};
+use crate::ci::types::{Preparation, RequestAction, ResolvedRequest};
 use crate::ci::workspace::write_materialization;
 use crate::support::error::{Result, request_error};
 
@@ -87,8 +87,8 @@ impl Loaded {
     }
 
     pub fn baseline_case(&self) -> Option<String> {
-        match &self.request {
-            Request::Diff(diff) => Some(diff.baseline.clone()),
+        match &self.request.action {
+            RequestAction::Diff(diff) => Some(diff.baseline.clone()),
             _ => None,
         }
     }
@@ -185,8 +185,8 @@ pub fn prepare_all_with(
     let mut prepared_cases = Vec::new();
     for (index, case) in cases.iter().enumerate() {
         let case_id = case.case_id().to_string();
-        let mut case_value = match request {
-            Request::Diff(_) => request_value["cases"][index].clone(),
+        let mut case_value = match &request.action {
+            RequestAction::Diff(_) => request_value["cases"][index].clone(),
             _ => request_value.clone(),
         };
         // The prepared document carries the case id so a phase task can find
@@ -203,8 +203,8 @@ pub fn prepare_all_with(
         )?);
         if !crate::support::env::no_baseline_reuse()? {
             if let crate::ci::types::CaseRef::Build(build) = case {
-                let baseline = match request {
-                    Request::Diff(diff) => diff.baseline == case_id,
+                let baseline = match &request.action {
+                    RequestAction::Diff(diff) => diff.baseline == case_id,
                     _ => false,
                 };
                 if reuse_case(
@@ -221,8 +221,8 @@ pub fn prepare_all_with(
     }
 
     let mut document = request_value;
-    match request {
-        Request::Diff(_) => {
+    match &request.action {
+        RequestAction::Diff(_) => {
             document["cases"] = Value::Array(prepared_cases);
         }
         _ => {
