@@ -57,7 +57,7 @@
     lane,
   }: let
     declared = (extension.overlays or {}).${lane} or (_final: _prev: {});
-    overlay =
+    rawOverlay =
       if builtins.isFunction declared
       then declared
       else if lib.isAttrs declared && declared.__wasinixPackageDirectory or false
@@ -67,6 +67,12 @@
           dir = declared.directory;
         }
       else throw "Wasinix extension '${extension.id}' overlay lane '${lane}' is not an overlay";
+    overlay = final: previous:
+      lib.optionalAttrs (
+        lane
+        != "wasix"
+        || previous.stdenv.hostPlatform.isWasix or false
+      ) (rawOverlay final previous);
   in
     projectLib.registerOverlay {
       inherit overlay;
@@ -97,11 +103,12 @@
         }
       else throw "Wasinix extension '${extension.id}' Python lane is not an overlay";
     overlay = final: previous:
-      lib.mapAttrs (_: value:
+      lib.optionalAttrs (previous.python.stdenv.hostPlatform.isWasix or false)
+      (lib.mapAttrs (_: value:
         if lib.isDerivation value
         then repairPythonPackage value
         else value)
-      (rawOverlay final previous);
+      (rawOverlay final previous));
   in
     projectLib.registerOverlay {
       inherit overlay;
@@ -198,9 +205,8 @@
   validateVariantShapes = label: extensionIds: packageSets: let
     variants = lib.attrNames packageSets;
     namesFor = source: variant:
-      lib.attrNames (lib.filterAttrs (_: package:
-        (projectLib.packageMetadata package).source or null == source)
-      (projectLib.registeredPackages packageSets.${variant}));
+      lib.attrNames (lib.filterAttrs (_: owner: owner == source)
+        (packageSets.${variant}.${projectLib.registryAttr} or {}));
     mismatches = lib.concatMap (source: let
       expected = namesFor source (builtins.head variants);
     in
@@ -247,6 +253,13 @@ in rec {
 
     project = let
       profileNames = lib.attrNames profiles.profiles;
+      profileSets = {
+        table = profiles.profiles;
+        all = profileNames;
+        pic = lib.filter (name: profiles.profiles.${name}.wasmPic or false) profileNames;
+        withoutPic = lib.filter (name: !(profiles.profiles.${name}.wasmPic or false)) profileNames;
+        withEh = lib.filter (name: (profiles.profiles.${name}.wasmExceptions or "no") != "no") profileNames;
+      };
 
       supportedProfilesFor = package: let
         declared = ((package.passthru or {}).wasix or {}).supportedProfiles or profileNames;
@@ -355,26 +368,32 @@ in rec {
         lib.mapAttrs (name: package: packageViewFor scope finalSet name package)
         (projectLib.registeredPackages finalSet);
 
+      projectedPackageFor = scope: variant: finalSet: name: rawPackage: let
+        package = packageViewFor scope finalSet name rawPackage;
+        address =
+          if scope == "native"
+          then projectLib.address "packages" ["native" name]
+          else if scope == "wasix"
+          then projectLib.address "packages" ["wasix" variant.profile name]
+          else projectLib.address "packages" ["python" variant.interpreter name];
+        cataloged = (projectLib.packageMetadata package).catalog or true;
+        supported = scope != "wasix" || builtins.elem variant.profile (supportedProfilesFor package);
+      in
+        if cataloged && supported
+        then
+          (projectEntry (packageEntry {
+            inherit address name package scope variant;
+            preferred = scope == "wasix" && preferredProfileFor package == variant.profile;
+            projectionPath = [name];
+          })).value
+        else package;
+
       projectedPackageSet = scope: variant: finalSet:
-        lib.genAttrs (projectLib.registeredNames finalSet) (name: let
-          package = packageViewFor scope finalSet name finalSet.${name};
-          address =
-            if scope == "native"
-            then projectLib.address "packages" ["native" name]
-            else if scope == "wasix"
-            then projectLib.address "packages" ["wasix" variant.profile name]
-            else projectLib.address "packages" ["python" variant.interpreter name];
-          cataloged = (projectLib.packageMetadata package).catalog or true;
-          supported = scope != "wasix" || builtins.elem variant.profile (supportedProfilesFor package);
-        in
-          if cataloged && supported
-          then
-            (projectEntry (packageEntry {
-              inherit address name package scope variant;
-              preferred = scope == "wasix" && preferredProfileFor package == variant.profile;
-              projectionPath = [name];
-            })).value
-          else package);
+        lib.mapAttrs (name: package:
+          if lib.isDerivation package && ((projectLib.packageMetadata package).source or null) != null
+          then projectedPackageFor scope variant finalSet name package
+          else package)
+        finalSet;
 
       historyDeclarationsFor = scope:
         lib.concatMap (extension:
@@ -404,14 +423,16 @@ in rec {
           true);
 
       contextFor = scope: variant: enclosingPkgs: {final, ...}: {
+        inherit lib;
         packages = {
           inherit native wasix python preferred;
-          sameProfile = final // projectedPackageSet scope variant final;
+          sameProfile = projectedPackageSet scope variant final;
         };
         commands = commandsView;
         artifacts = artifactsView;
         harnesses = harnessesView;
         runners = runnersView;
+        inherit profileSets;
         inherit (profiles) profileOf;
         profileTraitsOf = platform: profiles.sysrootEncodings.${profiles.profileOf platform};
         pkgs =
@@ -420,7 +441,7 @@ in rec {
           else if scope == "wasix"
           then nativeRaw
           else final;
-        inherit (projectLib) dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix extendPackage linkInputs mergeScript replaceInputsByName wasmRename;
+        inherit (projectLib) buildHostPypaTools dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix dropSphinxDocs extendPackage linkInputs mergeScript replaceInputsByName wasmRename;
       };
 
       nativeRaw = importNixpkgs {
@@ -500,7 +521,7 @@ in rec {
         (packageSetView "wasix" packageSet))
       wasixRaw;
       basePython = lib.mapAttrs (_: packageSet: packageSetView "python" packageSet) pythonRaw;
-      allWasixNames = lib.unique (lib.concatMap lib.attrNames (lib.attrValues baseWasix));
+      allWasixNames = lib.unique (lib.concatMap projectLib.registeredNames (lib.attrValues wasixRaw));
       preferredProfileNameFor = name: let
         defaultProfile = profiles.defaultProfileName or null;
         packageAtDefault = wasixRaw.${defaultProfile}.${name};
@@ -508,7 +529,7 @@ in rec {
       in
         lib.throwIf (defaultProfile == null)
         "the WASIX profile inventory does not define defaultProfileName"
-        (lib.throwIf (!(baseWasix.${declaredProfile} ? ${name}))
+        (lib.throwIf (!(builtins.elem declaredProfile (supportedProfilesFor wasixRaw.${declaredProfile}.${name})))
           "${name}: preferred WASIX profile '${declaredProfile}' is unavailable"
           declaredProfile);
       callbackArgs = {
@@ -709,9 +730,10 @@ in rec {
           projectedPackageNodes.${projectLib.address "packages" ["python" interpreter name]}.value)
         packages)
       basePython;
-      preferred =
-        lib.genAttrs allWasixNames (name:
-          wasix.${preferredProfileNameFor name}.${name});
+      preferred = lib.genAttrs allWasixNames (name: let
+        profile = preferredProfileNameFor name;
+      in
+        projectedPackageFor "wasix" {inherit profile;} wasixRaw.${profile} name wasixRaw.${profile}.${name});
       packageViews = {
         inherit native wasix python preferred;
       };
