@@ -9,6 +9,7 @@ pub mod fs;
 pub mod git;
 pub mod http;
 pub mod json;
+pub mod log;
 pub mod naming;
 pub mod nix;
 pub mod poll;

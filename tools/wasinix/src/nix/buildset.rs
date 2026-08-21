@@ -542,7 +542,7 @@ pub fn build_union(
         std::path::absolute(request.work_dir).map_err(|error| io(request.work_dir, error))?;
     let log_path = work_dir.join("build-union.log");
     let stream_path = work_dir.join("build-results.jsonl");
-    let mut log = std::fs::File::create(&log_path).map_err(|e| io(&log_path, e))?;
+    let mut log = crate::support::log::BoundedLog::create(&log_path)?;
     let mut stream = std::fs::File::create(&stream_path).map_err(|e| io(&stream_path, e))?;
 
     // The evaluation's answer: every selected job's derivation and outputs.
@@ -968,6 +968,7 @@ pub fn build_union(
     if let Some(key) = &key {
         push_build_deps(key, &needed)?;
     }
+    log.finish()?;
     Ok(if failures == 0 {
         CommandStatus::SUCCESS
     } else {

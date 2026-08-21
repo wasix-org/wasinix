@@ -51,6 +51,11 @@ Progress is an append-only `events.jsonl`; the snapshot is derived from it, not
 maintained beside it. Every progress view (the terminal ladder, `run watch`,
 `run logs --follow`, a remote observer) replays that one stream.
 
+The build union transcript retains at most 64 MiB by default: its opening
+context and newest output, with the omitted byte count between them. A
+neighboring `*.retention.json` records original and retained bytes. Set
+`WASINIX_LOG_BYTES` to a positive byte limit when a runner needs another cap.
+
 The verdict has four values. A green run passes; a red run has a failed
 required gate or a comparison with regressions. Removed jobs stay in the
 comparison for reviewer information but do not fail it. A diff whose baseline
