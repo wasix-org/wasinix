@@ -112,7 +112,6 @@ fn volume_config(app_dir: &Path, registry: &str) -> Result<String> {
         .args(["app", "volume", "enable-s3"])
         .args(["--registry", registry])
         .current_dir(app_dir);
-    crate::support::tools::log(&enable);
     if !crate::support::tools::status(&mut enable)?.success() {
         return request_error("could not enable the volume's S3 endpoint");
     }
@@ -182,7 +181,6 @@ pub fn publish_index(request: Index) -> Result<CommandStatus> {
     publish
         .env("RCLONE_CONFIG", &config)
         .current_dir(&request.repo);
-    crate::support::tools::log(&publish);
     if !crate::support::tools::status(&mut publish)?.success() {
         return request_error("publishing the index failed");
     }
@@ -584,7 +582,6 @@ pub fn preview_index(
         .arg(&dists)
         .arg(site)
         .current_dir(repo);
-    crate::support::tools::log(&index);
     if !crate::support::tools::status(&mut index)?.success() {
         return request_error("building the preview index failed");
     }

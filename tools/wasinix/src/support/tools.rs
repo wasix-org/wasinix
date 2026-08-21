@@ -39,7 +39,7 @@ pub fn rendered(cmd: &Command) -> String {
 
 /// The command echo is plumbing, not narration: it prints under -v, while
 /// the default transcript carries the conceptual facts around it.
-pub fn log(cmd: &Command) {
+fn log(cmd: &Command) {
     if ui::verbosity() == ui::Verbosity::Verbose {
         ui::note(format!(
             "  {}",
@@ -48,14 +48,36 @@ pub fn log(cmd: &Command) {
     }
 }
 
+fn started(cmd: &Command) -> (String, Instant) {
+    log(cmd);
+    (rendered(cmd), Instant::now())
+}
+
+fn completed(command: &str, started: Instant, status: ExitStatus) {
+    if ui::verbosity() == ui::Verbosity::Verbose {
+        ui::note(format!(
+            "  finished {command} with {status} in {}",
+            crate::support::format::duration(started.elapsed().as_secs_f64())
+        ));
+    }
+}
+
 pub fn status(cmd: &mut Command) -> Result<std::process::ExitStatus> {
-    cmd.status()
-        .map_err(|error| spawn_failed(cmd.get_program(), error))
+    let (command, started) = started(cmd);
+    let status = cmd
+        .status()
+        .map_err(|error| spawn_failed(cmd.get_program(), error))?;
+    completed(&command, started, status);
+    Ok(status)
 }
 
 pub fn output(cmd: &mut Command) -> Result<Output> {
-    cmd.output()
-        .map_err(|error| spawn_failed(cmd.get_program(), error))
+    let (command, started) = started(cmd);
+    let output = cmd
+        .output()
+        .map_err(|error| spawn_failed(cmd.get_program(), error))?;
+    completed(&command, started, output.status);
+    Ok(output)
 }
 
 /// A child that is killed and reaped on drop unless ownership is explicitly
@@ -69,17 +91,6 @@ pub struct Child {
 impl Child {
     fn inner(&mut self) -> &mut std::process::Child {
         self.inner.as_mut().expect("child was already reaped")
-    }
-
-    fn completed(&self, status: ExitStatus) {
-        if ui::verbosity() == ui::Verbosity::Verbose {
-            ui::note(format!(
-                "  finished {} with {} in {}",
-                self.command,
-                status,
-                crate::support::format::duration(self.started.elapsed().as_secs_f64())
-            ));
-        }
     }
 
     pub fn id(&self) -> u32 {
@@ -109,7 +120,7 @@ impl Child {
     pub fn try_wait(&mut self) -> std::io::Result<Option<ExitStatus>> {
         let status = self.inner().try_wait()?;
         if let Some(status) = status {
-            self.completed(status);
+            completed(&self.command, self.started, status);
             self.inner = None;
         }
         Ok(status)
@@ -117,7 +128,7 @@ impl Child {
 
     pub fn wait(&mut self) -> std::io::Result<ExitStatus> {
         let status = self.inner().wait()?;
-        self.completed(status);
+        completed(&self.command, self.started, status);
         self.inner = None;
         Ok(status)
     }
@@ -125,7 +136,7 @@ impl Child {
     pub fn wait_with_output(mut self) -> std::io::Result<Output> {
         let inner = self.inner.take().expect("child was already reaped");
         let output = inner.wait_with_output()?;
-        self.completed(output.status);
+        completed(&self.command, self.started, output.status);
         Ok(output)
     }
 
@@ -141,21 +152,20 @@ impl Drop for Child {
         };
         let _ = child.kill();
         if let Ok(status) = child.wait() {
-            self.completed(status);
+            completed(&self.command, self.started, status);
         }
     }
 }
 
 pub fn spawn(cmd: &mut Command) -> Result<Child> {
-    log(cmd);
-    let command = rendered(cmd);
+    let (command, started) = started(cmd);
     let child = cmd
         .spawn()
         .map_err(|error| spawn_failed(cmd.get_program(), error))?;
     Ok(Child {
         inner: Some(child),
         command,
-        started: Instant::now(),
+        started,
     })
 }
 
@@ -181,7 +191,6 @@ pub fn diagnostics_tail(text: &str) -> String {
 /// context and the end of the tool's diagnostics (stderr, or stdout when the
 /// tool reports there).
 pub fn checked_output(cmd: &mut Command, context: &str) -> Result<Vec<u8>> {
-    log(cmd);
     let output = output(cmd)?;
     if output.status.success() {
         return Ok(output.stdout);
@@ -207,7 +216,6 @@ pub fn checked_output(cmd: &mut Command, context: &str) -> Result<Vec<u8>> {
 /// Run to completion streaming to the terminal; a nonzero exit becomes an
 /// error naming the context and the rendered command.
 pub fn checked_status(cmd: &mut Command, context: &str) -> Result<()> {
-    log(cmd);
     let status = status(cmd)?;
     if status.success() {
         Ok(())

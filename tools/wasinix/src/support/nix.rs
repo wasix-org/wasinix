@@ -315,7 +315,6 @@ impl Invocation {
     /// to the terminal.
     pub fn status(&self) -> Result<CommandStatus> {
         let mut cmd = self.command()?;
-        crate::support::tools::log(&cmd);
         Ok(CommandStatus::from_exit(crate::support::tools::status(
             &mut cmd,
         )?))
@@ -326,7 +325,6 @@ impl Invocation {
     /// failure message.
     pub fn captured_status(&self) -> Result<(CommandStatus, String)> {
         let mut cmd = self.command()?;
-        crate::support::tools::log(&cmd);
         let output = crate::support::tools::output(&mut cmd)?;
         let tail = crate::support::error::tail(&String::from_utf8_lossy(&output.stderr), 300);
         Ok((CommandStatus::from_exit(output.status), tail))
@@ -340,7 +338,6 @@ impl Invocation {
     /// note is often a log's last line.
     pub fn probe(&self, reason: &str) -> Result<Probe> {
         let mut cmd = self.command()?;
-        crate::support::tools::log(&cmd);
         if crate::support::ui::verbosity() == crate::support::ui::Verbosity::Verbose {
             crate::support::ui::note(format!("  (probe: {reason})"));
         }

@@ -43,7 +43,6 @@ pub fn git(repo: &Path, args: &[&str]) -> Result<String> {
 /// the operator should see.
 pub fn git_logged(repo: &Path, args: &[&str]) -> Result<String> {
     let mut cmd = command(repo, args);
-    crate::support::tools::log(&cmd);
     let output = crate::support::tools::output(&mut cmd)?;
     if !output.status.success() {
         return request_error(failed(&output));
@@ -84,7 +83,6 @@ pub fn git_stdin(repo: &Path, args: &[&str], input: &[u8]) -> Result<()> {
 pub fn git_global(args: &[&str]) -> Result<String> {
     let mut cmd = Command::new("git");
     cmd.args(args);
-    crate::support::tools::log(&cmd);
     let output = crate::support::tools::output(&mut cmd)?;
     if !output.status.success() {
         return request_error(failed(&output));
@@ -165,7 +163,6 @@ pub fn commit(
     // Exit 1 from a --quiet diff is an answer (something is staged), not a
     // failure.
     let mut diff = command(repo, &["diff", "--cached", "--quiet"]);
-    crate::support::tools::log(&diff);
     match crate::support::tools::status(&mut diff)?.code() {
         Some(0) => return Ok(false),
         Some(1) => {}

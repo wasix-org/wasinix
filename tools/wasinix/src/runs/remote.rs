@@ -76,7 +76,6 @@ fn copy_to_host(builder: &Builder, local: &Path, remote_path: &str) -> Result<()
     }
     cmd.arg(local)
         .arg(format!("{}:{remote_path}", builder.host));
-    tools::log(&cmd);
     if !tools::status(&mut cmd)?.success() {
         return request_error(format!(
             "could not copy {} to {}",
@@ -202,7 +201,6 @@ fn fetch_run(builder: &Builder, run_dir: &str, fetch_to: &Path) -> Result<()> {
     cmd.arg("-r")
         .arg(format!("{}:{run_dir}/.", builder.host))
         .arg(scratch.path());
-    tools::log(&cmd);
     if !tools::status(&mut cmd)?.success() {
         return request_error(format!(
             "could not retrieve remote run from {}:{run_dir}",

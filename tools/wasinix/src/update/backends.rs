@@ -62,7 +62,6 @@ pub(crate) fn run_capturing(
     for (key, value) in env {
         command.env(key, value);
     }
-    crate::support::tools::log(&command);
     let output = crate::support::tools::output(&mut command)?;
     Ok((
         output.status.code().unwrap_or(1),
@@ -232,7 +231,6 @@ pub fn run_nix_update(repo: &Path, argv: &[String]) -> Result<i32> {
     let argv = crate::update::request::nix_update_argv(argv, request.as_ref())?;
     let mut command = Command::new(&argv[0]);
     command.args(&argv[1..]).current_dir(repo);
-    crate::support::tools::log(&command);
     let status = crate::support::tools::status(&mut command)?;
     Ok(status.code().unwrap_or(1))
 }
