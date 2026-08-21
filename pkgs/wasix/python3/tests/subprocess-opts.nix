@@ -1,17 +1,18 @@
 {
   pkgs,
-  testLib,
+  harnesses,
   helpers,
-  preferredProfilePackages,
+  packages,
 }:
-helpers.forEachPython preferredProfilePackages ({
+helpers.forEachPython packages.preferred ({
   python,
+  pythonCommands,
   pyVer,
   tag,
 }: {
-  subprocess-opts = testLib.mkWasixRun {
+  subprocess-opts = harnesses.hostShell {
     name = "python${tag}-subprocess-opts";
-    wasixPkgs = [python];
+    wasixCommands = pythonCommands;
     script = ''
       cp ${./subprocess-opts-check.py} check.py
       python${pyVer} -O check.py | tee out.log

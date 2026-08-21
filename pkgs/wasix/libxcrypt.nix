@@ -1,9 +1,5 @@
-{
-  prev,
-  helpers,
-  ...
-}:
-helpers.extendPackage prev.libxcrypt {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   # The four dropped tests fail at link: three build mprotect guard pages,
   # which wasm lacks; getrandom-fallbacks needs -Wl,--wrap=close, which
   # wasm-ld cannot satisfy. XFAIL covers run failures only and one failed link

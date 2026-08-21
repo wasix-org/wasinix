@@ -18,6 +18,8 @@
         ln -s ${command.artifact.shim}/bin/${command.entrypoint} "$out/bin/${command.name}"
       ''));
 in {
+  inherit (testLib) defaultForwardEnv normalizers;
+
   hostShell = {
     name ? "wasinix-host-shell",
     script,
@@ -39,4 +41,24 @@ in {
       nativePkgs = hostPackages;
       wasixPkgs = map commandPackage wasixCommands;
     });
+
+  compareShells = {
+    name,
+    script,
+    common ? [],
+    hostPackages,
+    wasixCommands,
+    wasmerArgs ? [],
+    forwardEnv ? testLib.defaultForwardEnv,
+    timeout ? testLib.defaultTimeout,
+    wasixTimeout ? testLib.defaultWasixTimeout,
+    normalize ? null,
+    expectFail ? null,
+    broken ? null,
+  }:
+    testLib.mkScriptComparison {
+      inherit name script common wasmerArgs forwardEnv timeout wasixTimeout normalize expectFail broken;
+      nativePkgs = hostPackages;
+      wasixPkgs = map commandPackage wasixCommands;
+    };
 }

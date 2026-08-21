@@ -1,9 +1,5 @@
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.brotlicffi {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   patches = [./patches/test-with-system-brotli.patch];
 
   postPatch = ''

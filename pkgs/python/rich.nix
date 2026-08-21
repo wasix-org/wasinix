@@ -1,8 +1,4 @@
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.rich {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   pytestFlags = ["--deselect=tests/test_console.py::test_brokenpipeerror"];
 }

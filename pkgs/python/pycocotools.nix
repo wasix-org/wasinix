@@ -1,11 +1,10 @@
 # setup.py imports numpy for get_include(), which the build host cannot do with
 # the wasm numpy; its C headers are arch-independent.
 {
-  wasixPython,
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
+  pkgs,
 }:
-helpers.extendPackage pyprev.pycocotools {
-  nativeBuildInputs = [wasixPython.pythonOnBuildForHost.pkgs.numpy];
+exposeExtendedPackage {
+  nativeBuildInputs = [packages.sameProfile.python.pythonOnBuildForHost.pkgs.numpy];
 }

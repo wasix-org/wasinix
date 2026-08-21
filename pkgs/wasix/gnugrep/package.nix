@@ -2,25 +2,28 @@
 # fixpoint, so don't null it out. runtimeShellPackage null (no target-side
 # shell); gnulib-tests stripped (not portable).
 {
-  prev,
-  helpers,
-  ...
+  exposePackage,
+  extendPackage,
+  package,
+  wasmRename,
 }:
-helpers.wasmRename {
-  wasmName = "grep";
-  posixAlias = true;
-} (
-  helpers.extendPackage (prev.gnugrep.override {
-    runtimeShellPackage = null;
-  }) {
-    passthru.wasinix.shipped = true;
-    postPatch = ''
-      sed -i 's:gnulib-tests::g' Makefile.in
-    '';
-    patches = [
-      ./patches/0001-opendirat-rename-for-wasix-libc-collision.patch
-      ./patches/0002a-stdin-lseek-permission-as-nonseekable.patch
-      ./patches/0003a-fallback-progname-when-runtime-argv0-is-missing.patch
-    ];
-  }
+exposePackage (
+  wasmRename {
+    wasmName = "grep";
+    posixAlias = true;
+  } (
+    extendPackage (package.override {
+      runtimeShellPackage = null;
+    }) {
+      passthru.wasinix.shipped = true;
+      postPatch = ''
+        sed -i 's:gnulib-tests::g' Makefile.in
+      '';
+      patches = [
+        ./patches/0001-opendirat-rename-for-wasix-libc-collision.patch
+        ./patches/0002a-stdin-lseek-permission-as-nonseekable.patch
+        ./patches/0003a-fallback-progname-when-runtime-argv0-is-missing.patch
+      ];
+    }
+  )
 )

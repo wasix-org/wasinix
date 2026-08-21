@@ -1,23 +1,23 @@
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: let
   native = [pkgs.gzip];
-  wasix = [wasmerPkgs.gzip];
+  wasix = builtins.attrValues entry.commands;
   # Compare the round-trip (decompressed) output, not the compressed bytes;
   # gzip headers carry an OS byte / timestamp that legitimately differ.
   cmp = name: script:
-    testLib.mkScriptComparison {
+    harnesses.compareShells {
       inherit name script;
-      nativePkgs = native;
-      wasixPkgs = wasix;
+      hostPackages = native;
+      wasixCommands = wasix;
     };
 in {
-  version = testLib.mkWasixRun {
+  version = harnesses.hostShell {
     name = "gzip-version";
-    wasixPkgs = wasix;
+    wasixCommands = wasix;
     script = "gzip --version";
   };
 

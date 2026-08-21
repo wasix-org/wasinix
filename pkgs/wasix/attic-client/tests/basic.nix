@@ -1,11 +1,11 @@
 {
-  testLib,
-  wasmerPkgs,
+  harnesses,
+  entry,
   ...
 }: {
-  version = testLib.mkWasixRun {
+  version = harnesses.hostShell {
     name = "attic-client-version";
-    wasixPkgs = [wasmerPkgs.attic-client];
+    wasixCommands = builtins.attrValues entry.commands;
     script = "attic --version";
   };
 }

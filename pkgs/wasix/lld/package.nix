@@ -1,54 +1,55 @@
 # lld cross-built as a WASIX multicall executable. Link only the WebAssembly
 # backend supplied by the same patched LLVM fork as the llvm utility webc.
 {
-  final,
-  prev,
-  helpers,
-  toolchain,
-  ...
-}: let
-  wasixLlvm = final.wasix-llvm.passthru;
-  libllvm = final.llvm.passthru.wasix.libllvm;
-  base = prev.llvmPackages.lld.override {
-    version = wasixLlvm.version;
-    release_version = wasixLlvm.llvmVersion;
-    monorepoSrc = wasixLlvm.monorepoSrc;
-    inherit libllvm;
-  };
-in
-  helpers.extendPackage base {
-    passthru.wasix = {
-      shipped = true;
-      updateNotes = [
-        {message = "recheck the WASIX lld command set when the toolchain fork base version moves";}
-      ];
+  exposePackage,
+  extendPackage,
+  packages,
+}:
+exposePackage (
+  let
+    wasixLlvm = packages.sameProfile.wasix-llvm.passthru;
+    libllvm = packages.sameProfile.llvm.passthru.wasix.libllvm;
+    base = packages.sameProfile.llvmPackages.lld.override {
+      version = wasixLlvm.version;
+      release_version = wasixLlvm.llvmVersion;
+      monorepoSrc = wasixLlvm.monorepoSrc;
+      inherit libllvm;
     };
-    passthru.wasmer = {
-      name = "lld";
-      entrypoint = "wasm-ld";
-      commands =
-        map (name: {
-          inherit name;
-          module = "lld";
-          wasm = "lld.wasm";
-          output = "${name}.wasm";
-        }) [
-          "wasm-ld"
-          "ld.lld"
-          "lld"
+  in
+    extendPackage base {
+      passthru.wasinix = {
+        shipped = true;
+        update.notes = [
+          {message = "recheck the WASIX lld command set when the toolchain fork base version moves";}
         ];
-    };
+      };
+      passthru.wasmer = {
+        name = "lld";
+        entrypoint = "wasm-ld";
+        commands =
+          map (name: {
+            inherit name;
+            module = "lld";
+            wasm = "lld.wasm";
+            output = "${name}.wasm";
+          }) [
+            "wasm-ld"
+            "ld.lld"
+            "lld"
+          ];
+      };
 
-    cmakeFlags = [
-      "-DUNIX=ON"
-      "-DLLD_BUILD_TOOLS=ON"
-    ];
-    nativeBuildInputs = [final.disableWasmOptInConfigureHook];
-    ninjaFlags = ["lld"];
-    installPhase = _old: ''
-      runHook preInstall
-      mkdir -p "$out/bin" "$lib" "$dev"
-      cp bin/lld "$out/bin/lld.wasm"
-      runHook postInstall
-    '';
-  }
+      cmakeFlags = [
+        "-DUNIX=ON"
+        "-DLLD_BUILD_TOOLS=ON"
+      ];
+      nativeBuildInputs = [packages.sameProfile.disableWasmOptInConfigureHook];
+      ninjaFlags = ["lld"];
+      installPhase = _old: ''
+        runHook preInstall
+        mkdir -p "$out/bin" "$lib" "$dev"
+        cp bin/lld "$out/bin/lld.wasm"
+        runHook postInstall
+      '';
+    }
+)

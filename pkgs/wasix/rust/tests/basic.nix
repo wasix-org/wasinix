@@ -1,14 +1,12 @@
 {
-  testLib,
-  wasmerPkgs,
+  harnesses,
+  entry,
+  commands,
   ...
 }: {
-  compile = testLib.mkWasixRun {
+  compile = harnesses.hostShell {
     name = "rust-compile";
-    wasixPkgs = [
-      wasmerPkgs.rust
-      wasmerPkgs.lld
-    ];
+    wasixCommands = builtins.attrValues entry.commands ++ [commands."wasm-ld"];
     wasmerArgs = ["--enable-threads"];
     timeout = 600;
     script = ''

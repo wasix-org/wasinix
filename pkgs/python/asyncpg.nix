@@ -3,14 +3,16 @@
 # evaluate even though a cross build never runs the suite, and the server does
 # not evaluate for wasm; point them at the build-platform one instead.
 {
-  pyprev,
-  final,
-  helpers,
-  ...
+  exposePackage,
+  extendPackage,
+  package,
+  pkgs,
 }:
-helpers.extendPackage (pyprev.asyncpg.override {postgresql = final.buildPackages.postgresql;}) {
-  doCheck = false;
-  # nothing runs them, and some do not evaluate for wasm
-  nativeCheckInputs = _: [];
-  passthru.wasinix.checks.captured.broken = "the suite launches a WASIX PostgreSQL executable through host subprocess APIs";
-}
+exposePackage (
+  extendPackage (package.override {postgresql = pkgs.buildPackages.postgresql;}) {
+    doCheck = false;
+    # nothing runs them, and some do not evaluate for wasm
+    nativeCheckInputs = _: [];
+    passthru.wasinix.checks.captured.broken = "the suite launches a WASIX PostgreSQL executable through host subprocess APIs";
+  }
+)

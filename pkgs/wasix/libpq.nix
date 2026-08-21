@@ -3,19 +3,22 @@
 # curl_multi_init probe, and the wasi psql patch skips the locale setup NLS
 # needs. tzdata is build-time data, so take the native one.
 {
-  prev,
-  final,
-  helpers,
-  ...
+  exposePackage,
+  extendPackage,
+  package,
+  packages,
+  profileSets,
 }:
-helpers.extendPackage (prev.libpq.override {
-  curlSupport = false;
-  gssSupport = false;
-  nlsSupport = false;
-  tzdata = final.buildPackages.tzdata;
-}) {
-  # off sysroot's <setjmp.h> lacks the sigsetjmp postgres error handling needs.
-  passthru.wasix.supportedProfiles = helpers.profiles.withEh;
-  # wasm32-wasi matches no configure template; pick one explicitly.
-  configureFlags = old: old ++ ["--with-template=linux"];
-}
+exposePackage (
+  extendPackage (package.override {
+    curlSupport = false;
+    gssSupport = false;
+    nlsSupport = false;
+    tzdata = packages.sameProfile.buildPackages.tzdata;
+  }) {
+    # off sysroot's <setjmp.h> lacks the sigsetjmp postgres error handling needs.
+    passthru.wasix.supportedProfiles = profileSets.withEh;
+    # wasm32-wasi matches no configure template; pick one explicitly.
+    configureFlags = old: old ++ ["--with-template=linux"];
+  }
+)

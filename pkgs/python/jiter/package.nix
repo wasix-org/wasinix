@@ -6,19 +6,18 @@
 # so the rebase vendors from the file named here rather than from the src it
 # repointed (pkgs/set/rust-platform.nix).
 {
-  pyprev,
-  helpers,
-  final,
+  exposeExtendedPackage,
+  package,
+  pkgs,
   lib,
-  ...
 }: let
-  lock = ./locks/${pyprev.jiter.version}.lock;
+  lock = ./locks/${package.version}.lock;
 in
-  helpers.extendPackage pyprev.jiter ({
+  exposeExtendedPackage ({
       maturinBuildFlags = ["--features" "pyo3/extension-module"];
     }
     // lib.optionalAttrs (builtins.pathExists lock) {
-      cargoDeps = final.rustPlatform.importCargoLock {
+      cargoDeps = pkgs.rustPlatform.importCargoLock {
         lockFileContents = builtins.readFile lock;
       };
       # cargoSetupPostUnpackHook has already installed the vendor's lock, read

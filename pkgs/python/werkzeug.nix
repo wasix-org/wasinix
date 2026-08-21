@@ -1,9 +1,5 @@
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.werkzeug {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   pytestFlags = [
     "--deselect=tests/test_debug.py::TestDebugHelpers::test_exc_divider_found_on_chained_exception"
     "--deselect=tests/test_debug.py::test_debugged_application_pin_security_false"

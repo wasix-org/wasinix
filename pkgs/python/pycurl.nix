@@ -5,14 +5,12 @@
 # (openssl/zlib/brotli/zstd, cf. git). The wrapper (not a setup.py
 # substitution) because nixpkgs' preConfigure already rewrote the option list.
 {
-  final,
+  exposeExtendedPackage,
+  packages,
+  pkgs,
   lib,
-  pyfinal,
-  pyprev,
-  helpers,
-  ...
 }:
-helpers.extendPackage pyprev.pycurl {
+exposeExtendedPackage {
   preConfigure = ''
     mkdir -p "$TMPDIR/curl-config-static"
     cat > "$TMPDIR/curl-config-static/curl-config" <<'EOF'
@@ -20,7 +18,7 @@ helpers.extendPackage pyprev.pycurl {
     [ "$1" = "--libs" ] && set -- --static-libs
     exec @curlConfig@ "$@"
     EOF
-    sed -i 's/^    //; s|@curlConfig@|${lib.getExe' (lib.getDev final.curl) "curl-config"}|' \
+    sed -i 's/^    //; s|@curlConfig@|${lib.getDev pkgs.curl}/bin/curl-config|' \
       "$TMPDIR/curl-config-static/curl-config"
     chmod +x "$TMPDIR/curl-config-static/curl-config"
     export PYCURL_CURL_CONFIG="$TMPDIR/curl-config-static/curl-config"
@@ -43,6 +41,6 @@ helpers.extendPackage pyprev.pycurl {
   passthru = old:
     old
     // {
-      wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.flaky pyfinal.flask pyfinal.bottle pyfinal.numpy];
+      wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook packages.sameProfile.flaky packages.sameProfile.flask packages.sameProfile.bottle packages.sameProfile.numpy];
     };
 }

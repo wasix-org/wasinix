@@ -2,21 +2,21 @@
 # --version/--help before the config file is read or sodiumoxide initialises, so
 # they cover module load, std/env init and argv parsing without a cluster.
 {
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: let
-  wasix = [wasmerPkgs.garage];
+  wasix = builtins.attrValues entry.commands;
 in {
-  version = testLib.mkWasixRun {
+  version = harnesses.hostShell {
     name = "garage-version";
-    wasixPkgs = wasix;
+    wasixCommands = wasix;
     script = "garage --version";
   };
 
-  help = testLib.mkWasixRun {
+  help = harnesses.hostShell {
     name = "garage-help";
-    wasixPkgs = wasix;
+    wasixCommands = wasix;
     script = "garage --help";
   };
 }

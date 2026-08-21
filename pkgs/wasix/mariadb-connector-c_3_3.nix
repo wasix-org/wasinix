@@ -1,10 +1,9 @@
 # mariadb-connector-c for wasix, mysqlclient's C backend. Its unit tests need getlogin.
 {
-  prev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  profileSets,
 }:
-helpers.extendPackage prev.mariadb-connector-c_3_3 {
+exposeExtendedPackage {
   # remote_io defaults to a loadable module, which the static build drops
   # entirely; STATIC compiles it into libmariadb.a and puts curl on the link.
   cmakeFlags = [
@@ -23,5 +22,5 @@ helpers.extendPackage prev.mariadb-connector-c_3_3 {
     echo "Requires.private: libcurl" >>"$dev/lib/pkgconfig/libmariadb.pc"
   '';
   # pvio_socket.c needs poll/POLLIN, which only the PIC sysroots declare.
-  passthru.wasix.supportedProfiles = helpers.profiles.pic;
+  passthru.wasix.supportedProfiles = profileSets.pic;
 }

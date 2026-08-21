@@ -55,7 +55,7 @@
       then servedVersions
       else [baseVersion]
     )))
-  (lib.attrNames (rels."wasmerPackages.${name}" or {}));
+  (lib.attrNames (rels."artifacts.webc.${name}" or {}));
   description =
     w.description
     or (
@@ -249,8 +249,8 @@ in
             passthru.wasinix =
               ciWasinix
               // {
-                updateNotes = lib.optional (staleRels != []) {
-                  message = "release-revisions.json has stale keys (${lib.concatMapStringsSep ", " (v: "wasmerPackages.${name} ${v}") staleRels}); nix run .#update -- nixpkgs drops them";
+                update.notes = lib.optional (staleRels != []) {
+                  message = "release-revisions.json has stale keys (${lib.concatMapStringsSep ", " (v: "artifacts.webc.${name} ${v}") staleRels}); nix run .#update -- nixpkgs drops them";
                   when = _: _: true;
                 };
               };

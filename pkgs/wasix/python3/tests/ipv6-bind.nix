@@ -1,19 +1,20 @@
 {
   pkgs,
-  testLib,
+  harnesses,
   helpers,
-  preferredProfilePackages,
+  packages,
 }:
-helpers.forEachPython preferredProfilePackages ({
+helpers.forEachPython packages.preferred ({
   python,
+  pythonCommands,
   pyVer,
   tag,
 }: {
   # CPython's configure disables ipv6 for WASI, where wasi-libc has no
   # AF_INET6; WASIX has it, and getaddrinfo hands out AF_INET6 either way.
-  ipv6-bind = testLib.mkWasixRun {
+  ipv6-bind = harnesses.hostShell {
     name = "python${tag}-ipv6-bind";
-    wasixPkgs = [python];
+    wasixCommands = pythonCommands;
     wasmerArgs = ["--net"];
     script = ''
       cp ${./ipv6-bind-check.py} check.py

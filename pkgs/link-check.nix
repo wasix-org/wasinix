@@ -1,4 +1,4 @@
-# Link smoke test, the floor for a library with no upstream suite: link all
+# Link check for a library with no upstream suite: link all
 # objects, or a declared consumer for a header-only library, and run it.
 # This catches undefined symbols that surface only at link or instantiation.
 # Build-once / run-many like the real checks; never counted as a suite.
@@ -40,9 +40,9 @@
 
   # spec.pkgConfig overrides the pkg-config modules used for dependency
   # flags; spec.archives overrides the default of every shipped .a.
-  smokeBuild = name: drv: spec: profilePkgs:
+  linkBuild = name: drv: spec: profilePkgs:
     profilePkgs.stdenv.mkDerivation {
-      pname = "${name}-smoke";
+      pname = "${name}-link-check";
       version = "0";
       dontUnpack = true;
       nativeBuildInputs = [profilePkgs.buildPackages.pkg-config];
@@ -140,7 +140,7 @@
       passthru.wasix.supportedProfiles = (helpers.wasixMetaOf drv).supportedProfiles or null;
     };
 
-  smokeRun = name: smoke: spec:
+  runLinkCheck = name: linked: spec:
     pkgs.runCommand name {
       nativeBuildInputs = [wasixRun.run];
     } (''
@@ -148,22 +148,11 @@
         mkdir -p "$HOME"
       ''
       + runVerdict name spec ''
-        bash -c 'for m in ${smoke}/*.wasm; do echo "run $(basename "$m")"; wasix-run "$m" || exit 1; done'
+        bash -c 'for m in ${linked}/*.wasm; do echo "run $(basename "$m")"; wasix-run "$m" || exit 1; done'
       '');
 in {
-  # Opt out with passthru.wasix.smokeTest = false; tune with
-  # passthru.wasix.smokeTest = {source; pkgConfig; archives; extraLinkFlags; broken;}.
-  enabledFor = drv: ((helpers.wasixMetaOf drv).smokeTest or {}) != false;
-
-  linkFor = profilePkgs: drv: let
-    declared = (helpers.wasixMetaOf drv).smokeTest or {};
-    spec =
-      if lib.isAttrs declared
-      then declared
-      else {};
-    name = "${lib.getName drv}-smoke";
+  linkFor = profilePkgs: drv: spec: let
+    name = "${lib.getName drv}-link-check";
   in
-    lib.throwIf (declared == false)
-    "${name}: link smoke is disabled by passthru.wasix.smokeTest"
-    (smokeRun name (smokeBuild name drv spec profilePkgs) spec);
+    runLinkCheck name (linkBuild name drv spec profilePkgs) spec;
 }

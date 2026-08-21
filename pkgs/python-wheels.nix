@@ -1,16 +1,15 @@
-# The shipped Python wheels + import smoke-tests. Exposes each wheel in
-# python/wheels.nix as pythonWheels.<attr> (the wasm cross build) and
-# `.tests` (named leaves plus `.all`) for targeted builds and flat
-# `checks.wheel-<py>-<attr>-<test>` CI projections.
+# The shipped Python wheels and their import checks.
 {
   pkgs,
   lib,
   # the wasix cpython at its ehpic profile (drives the wheel closure + version).
   python3,
+  pythonPackages ? python3.pkgs,
+  packageVersions ? {},
   # the self-contained python webc; the interpreter it bundles runs the import
   # test with no host /nix/store.
   pythonWebc,
-  # wasmer runtime for the smoke-tests (flake input; null -> pkgs.wasmer).
+  # Wasmer runtime for the import checks (flake input; null -> pkgs.wasmer).
   wasmer ? null,
   mkTestGroup,
   # the shared check machinery (pkgs/emulated-check.nix, pkgs/lib/check-output.nix)
@@ -18,14 +17,14 @@
   installCheckOutputArgsIf,
   # Which worklist entries this call builds. noarch wheels (python-version-independent: they ship
   # no python code, e.g. a redistributed binary) build once on the default python; everything else
-  # builds per interpreter. See pkgs/default.nix.
+  # builds per interpreter.
   select ? (_: true),
   # This call's key in the pythonWheels set ("py313"/"py314"/"noarch"); history entries gate on it.
   pyKey,
 }: let
   testLib = import ./python-test-lib.nix {inherit pkgs lib python3 pythonWebc wasmer;};
 
-  wheelList = import ./python/wheels.nix;
+  wheelList = import ./python/wheels/default.nix;
   # Older releases also served (registry history), keyed by worklist attr then version;
   # JSON so scripts/history.py and update.py can edit it (schema: see wheels.nix header).
   historyTable = builtins.fromJSON (builtins.readFile ./python/history.json);
@@ -87,10 +86,10 @@
   # boto3 is, without appearing in the requiring wheel's own. Names only, so
   # this stays a string input rather than a dependency on every wheel.
   servedNames = let
-    entries = map (e: python3.pkgs.${e.attr}) (lib.filter (e: lib.elem pyKey (e.variants or allVariants)) wheelList);
+    entries = map (e: pythonPackages.${e.attr}) (lib.filter (e: lib.elem pyKey (e.variants or allVariants)) wheelList);
   in
     lib.unique (map (m: m.pname or m.name)
-      (lib.filter (m: m ? dist) (entries ++ python3.pkgs.requiredPythonModules entries)));
+      (lib.filter (m: m ? dist) (entries ++ pythonPackages.requiredPythonModules entries)));
 
   depsTest = name: wheel: let
     checker = pkgs.python3.withPackages (ps: [ps.packaging]);
@@ -107,7 +106,7 @@
   # breaks only when wasmer loads the module (google-re2 shipped that way
   # against abseil). Require something the loader will have to export each one.
   dynamicTest = name: wheel: let
-    members = lib.filter (m: m ? dist) ([wheel] ++ python3.pkgs.requiredPythonModules [wheel]);
+    members = lib.filter (m: m ? dist) ([wheel] ++ pythonPackages.requiredPythonModules [wheel]);
     sites = map (m: "${m}/${python3.sitePackages}") members;
   in
     pkgs.runCommand "wheel-dynamic-${name}" {} ''
@@ -121,7 +120,7 @@
   # member builds only on the default python, so the other interpreter can't resolve it from the
   # merged registry. Runs on the default python.
   noarchClosureTest = name: wheel: let
-    members = lib.filter (m: m ? dist) ([wheel] ++ python3.pkgs.requiredPythonModules [wheel]);
+    members = lib.filter (m: m ? dist) ([wheel] ++ pythonPackages.requiredPythonModules [wheel]);
   in
     pkgs.runCommand "wheel-noarch-closure-${name}" {} ''
       fail=
@@ -164,9 +163,9 @@
   pkgTests = e: let
     dir = pkgTestsDir e.attr;
     scope = {
-      wheel = python3.pkgs.${e.attr};
+      wheel = pythonPackages.${e.attr};
       # for `deps` (test-only wheels: pytest plugins, fixture libs)
-      pythonPkgs = python3.pkgs;
+      pythonPkgs = pythonPackages;
       inherit runPython pkgs lib;
     };
   in
@@ -213,8 +212,8 @@
                   }
                   or inputName;
               in
-                if builtins.hasAttr attr python3.pkgs
-                then python3.pkgs.${attr}
+                if builtins.hasAttr attr pythonPackages
+                then pythonPackages.${attr}
                 else null
             );
           in
@@ -291,7 +290,7 @@
           closureFor = d: let
             attempted = builtins.tryEval (
               let
-                modules = python3.pkgs.requiredPythonModules [d];
+                modules = pythonPackages.requiredPythonModules [d];
               in
                 builtins.seq (builtins.length modules) modules
             );
@@ -373,7 +372,6 @@
   # package one interpreter cannot run (cramjam's pyo3 predates 3.14).
   allVariants = ["py313" "py314" "noarch"];
 
-  historyUnder = v: lib.replaceStrings ["."] ["_"] v;
   historyOf = e:
     lib.concatMap (
       v: let
@@ -381,7 +379,7 @@
         name = "${e.attr}-${v}";
       in
         lib.optionals (lib.elem pyKey (spec.variants or ["py313" "py314"])) [
-          (lib.nameValuePair name (mkWheel name e python3.pkgs."${e.attr}_${historyUnder v}"))
+          (lib.nameValuePair name (mkWheel name e packageVersions.${e.attr}.${v}))
         ]
     ) (lib.attrNames (historyTable.${e.attr} or {}));
 in
@@ -391,6 +389,6 @@ in
     "history.json: noarch entries cannot carry history versions: ${lib.concatStringsSep ", " noarchHistory}"
     (lib.listToAttrs (
       lib.concatMap
-      (e: [(lib.nameValuePair e.attr (mkWheel e.attr e python3.pkgs.${e.attr}))] ++ historyOf e)
+      (e: [(lib.nameValuePair e.attr (mkWheel e.attr e pythonPackages.${e.attr}))] ++ historyOf e)
       (lib.filter (e: select e && lib.elem pyKey (e.variants or allVariants)) wheelList)
     )))

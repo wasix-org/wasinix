@@ -1,22 +1,22 @@
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: let
   native = [pkgs.findutils];
   # the find webc ships both find and xargs commands (each gets a shim).
-  wasix = [wasmerPkgs.find];
+  wasix = builtins.attrValues entry.commands;
   cmp = name: script:
-    testLib.mkScriptComparison {
+    harnesses.compareShells {
       inherit name script;
-      nativePkgs = native;
-      wasixPkgs = wasix;
+      hostPackages = native;
+      wasixCommands = wasix;
     };
 in {
-  version = testLib.mkWasixRun {
+  version = harnesses.hostShell {
     name = "find-version";
-    wasixPkgs = wasix;
+    wasixCommands = wasix;
     script = "find --version";
   };
 
@@ -36,10 +36,10 @@ in {
   # wasm runtime PATH. find -exec swallows the exec failure and exits 0, so it
   # surfaces as an output diff; xargs propagates it (non-zero exit). Both
   # tracked until the runtime resolves spawned commands.
-  exec = testLib.mkScriptComparison {
+  exec = harnesses.compareShells {
     name = "find-exec";
-    nativePkgs = native;
-    wasixPkgs = wasix;
+    hostPackages = native;
+    wasixCommands = wasix;
     script = ''
       mkdir -p t
       printf 'hello\n' > t/a.txt
@@ -48,9 +48,9 @@ in {
     broken = "find -exec's spawned command (cat) isn't resolvable in the wasm runtime PATH";
   };
 
-  xargs = testLib.mkWasixRun {
+  xargs = harnesses.hostShell {
     name = "find-xargs";
-    wasixPkgs = wasix;
+    wasixCommands = wasix;
     script = "printf 'a\\nb\\nc\\n' | xargs -n1 echo line";
     broken = "xargs's spawned command (echo) isn't resolvable in the wasm runtime PATH";
   };

@@ -1,11 +1,14 @@
 {
-  prev,
-  helpers,
-  ...
+  exposePackage,
+  extendPackage,
+  package,
+  wasmRename,
 }:
-helpers.wasmRename {wasmName = "unfurl";} (
-  helpers.extendPackage prev.unfurl {
-    subPackages = ["."];
-    passthru.wasinix.shipped = true;
-  }
+exposePackage (
+  wasmRename {wasmName = "unfurl";} (
+    extendPackage package {
+      subPackages = ["."];
+      passthru.wasinix.shipped = true;
+    }
+  )
 )

@@ -1,9 +1,5 @@
-{
-  prev,
-  helpers,
-  ...
-}:
-helpers.extendPackage prev.zlib {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   # Function form drops nixpkgs' default preConfigure (CHOST/AR fixups
   # targeting autoconf, which zlib's hand-written configure is not).
   preConfigure = _: "";

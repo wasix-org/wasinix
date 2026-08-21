@@ -1,14 +1,15 @@
 {
-  crossPkgs,
-  makeWasmerPackage,
-  testLib,
+  entry,
+  harnesses,
+  packageForEntry,
+  packages,
   ...
 }: let
-  program = crossPkgs.stdenv.mkDerivation {
+  program = packages.sameProfile.stdenv.mkDerivation {
     pname = "boost-context-test";
     version = "1.0.0";
     dontUnpack = true;
-    buildInputs = [crossPkgs.boost];
+    buildInputs = [(packageForEntry packages entry)];
     buildPhase = ''
       runHook preBuild
       $CXX -std=c++17 ${./context.cpp} -lboost_context -o boost-context-test.wasm
@@ -22,9 +23,11 @@
     passthru.wasmer.name = "boost-context-test";
   };
 in {
-  coroutine2 = testLib.mkWasixRun {
+  coroutine2 = harnesses.hostShell {
     name = "boost-context-coroutine2";
-    wasixPkgs = [(makeWasmerPackage {package = program;}).shim];
+    wasixCommands = [
+      (harnesses.packageCommand {package = program;})
+    ];
     script = ''
       [ "$(boost-context-test)" = "boost context ok" ]
     '';

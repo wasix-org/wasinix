@@ -17,9 +17,9 @@ use crate::support::nix::{Flake, eval};
 /// package name, and that name may itself hold a dot (`python3.14`), so the
 /// segments are cut here rather than by splitting the key.
 const ROOTS: [&str; 3] = [
-    "pythonRegistry.wheels",
-    "wasmerPackages",
-    "cargoRegistry.crates",
+    "artifacts.registry.python314.wheels",
+    "artifacts.webc",
+    "artifacts.registry.cargo-registry.crates",
 ];
 
 pub type Rels = BTreeMap<String, BTreeMap<String, u32>>;
@@ -59,15 +59,24 @@ pub fn store(repo: &Path, rels: &Rels) -> Result<()> {
 }
 
 pub fn served() -> Result<Served> {
-    crate::support::json::from_value(eval(&Flake::default(), "relVersions", None)?, "relVersions")
+    crate::support::json::from_value(
+        eval(&Flake::default(), "internals.publication.versions", None)?,
+        "internals.publication.versions",
+    )
 }
 
 pub fn info() -> Result<BTreeMap<String, Info>> {
-    crate::support::json::from_value(eval(&Flake::default(), "relInfo", None)?, "relInfo")
+    crate::support::json::from_value(
+        eval(&Flake::default(), "internals.publication.info", None)?,
+        "internals.publication.info",
+    )
 }
 
 fn info_from(flake: &Flake<'_>) -> Result<BTreeMap<String, Info>> {
-    crate::support::json::from_value(eval(flake, "relInfo", None)?, "relInfo")
+    crate::support::json::from_value(
+        eval(flake, "internals.publication.info", None)?,
+        "internals.publication.info",
+    )
 }
 
 pub fn changed(repo: &Path, reference: &str) -> Result<Vec<String>> {
@@ -111,7 +120,7 @@ pub fn changed(repo: &Path, reference: &str) -> Result<Vec<String>> {
 /// The rels keys a caller can name. A key already is an attr path, with the
 /// interpreter left out because one rel covers every interpreter.
 pub fn domain(served: &Served) -> Domain {
-    let mut domain = Domain::new(".#relVersions");
+    let mut domain = Domain::new("the publication catalog");
     for key in served.keys() {
         for root in ROOTS {
             if let Some(name) = key.strip_prefix(&format!("{root}.")) {

@@ -1,17 +1,17 @@
 {
-  testLib,
-  wasmerPkgs,
+  harnesses,
+  entry,
   ...
 }: {
-  version = testLib.mkWasixRun {
+  version = harnesses.hostShell {
     name = "anybuild-version";
-    wasixPkgs = [wasmerPkgs.anybuild];
+    wasixCommands = builtins.attrValues entry.commands;
     script = "anybuild --version";
   };
 
-  local-build = testLib.mkWasixRun {
+  local-build = harnesses.hostShell {
     name = "anybuild-local-build";
-    wasixPkgs = [wasmerPkgs.anybuild];
+    wasixCommands = builtins.attrValues entry.commands;
     script = ''
       mkdir project
       printf 'hello\n' > project/index.html

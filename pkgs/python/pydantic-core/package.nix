@@ -1,32 +1,31 @@
 {
-  pyprev,
-  pyfinal,
-  helpers,
+  exposeExtendedPackage,
+  packages,
+  package,
   lib,
-  ...
 }: let
-  pytest8CheckHook = pyfinal.pytestCheckHook.override {pytest = pyfinal.pytest_8_3;};
+  pytest8CheckHook = packages.sameProfile.pytestCheckHook.override {pytest = packages.sameProfile.pytest_8_3;};
 in
-  helpers.extendPackage pyprev.pydantic-core ({
+  exposeExtendedPackage ({
       maturinBuildFlags = ["--features" "pyo3/extension-module"];
-      patches = lib.optionals (lib.versionAtLeast pyprev.pydantic-core.version "2.46") [
+      patches = lib.optionals (lib.versionAtLeast package.version "2.46") [
         ./patches/wasm-function-recursion.patch
       ];
       passthru.wasixDeclaredCheckInputs = [
         pytest8CheckHook
-        pyfinal.hypothesis
-        pyfinal.inline-snapshot
-        pyfinal.pytest-timeout
-        pyfinal.dirty-equals
-        pyfinal.pytest-benchmark
-        pyfinal.pytest-mock
-        pyfinal.pytest-run-parallel
-        pyfinal.typing-inspection
+        packages.sameProfile.hypothesis
+        packages.sameProfile.inline-snapshot
+        packages.sameProfile.pytest-timeout
+        packages.sameProfile.dirty-equals
+        packages.sameProfile.pytest-benchmark
+        packages.sameProfile.pytest-mock
+        packages.sameProfile.pytest-run-parallel
+        packages.sameProfile.typing-inspection
       ];
       preCheck = ''
-        export PYTHONPATH="${pyfinal.pytest_8_3}/${pyfinal.python.sitePackages}:$PYTHONPATH"
+        export PYTHONPATH="${packages.sameProfile.pytest_8_3}/${packages.sameProfile.python.sitePackages}:$PYTHONPATH"
       '';
     }
-    // lib.optionalAttrs (lib.versionOlder pyprev.pydantic-core.version "2.42") {
+    // lib.optionalAttrs (lib.versionOlder package.version "2.42") {
       sourceRoot = "source";
     })

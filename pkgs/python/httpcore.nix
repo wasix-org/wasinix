@@ -1,19 +1,17 @@
 {
-  pyprev,
-  pyfinal,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
 }:
-helpers.extendPackage pyprev.httpcore {
+exposeExtendedPackage {
   passthru.wasixDeclaredCheckInputs = [
-    pyfinal.pytestCheckHook
-    pyfinal.pytest-asyncio
-    pyfinal.pytest-httpbin
-    pyfinal.anyio
-    pyfinal.h2
-    pyfinal.hpack
-    pyfinal.hyperframe
-    pyfinal.socksio
+    packages.sameProfile.pytestCheckHook
+    packages.sameProfile.pytest-asyncio
+    packages.sameProfile.pytest-httpbin
+    packages.sameProfile.anyio
+    packages.sameProfile.h2
+    packages.sameProfile.hpack
+    packages.sameProfile.hyperframe
+    packages.sameProfile.socksio
   ];
   postPatch = ''
     substituteInPlace tests/_async/test_connection_pool.py \

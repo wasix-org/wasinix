@@ -1,22 +1,23 @@
 # scikit-learn for wasix, built against the cross-built libomp.
 {
-  pyprev,
-  pyfinal,
-  wasixPython,
-  helpers,
-  toolchain,
-  lib,
-  ...
+  exposeExtendedPackage,
+  packages,
+  package,
+  pkgs,
+  dropInputsByName,
+  dropInputsByNameInfix,
+  mergeScript,
+  profileOf,
 }: let
-  isHistory = (pyprev.scikit-learn.passthru.wasix.historySpec or null) != null;
-  crossNumpyInc = wasixPython.pkgs.numpy.crossInclude;
+  isHistory = (package.passthru.wasix.historySpec or null) != null;
+  crossNumpyInc = packages.sameProfile.numpy.crossInclude;
   # openblas has no wasm build (scikit-learn reaches BLAS through scipy's cython
   # .pxd); nixpkgs' openmp needs an llvm-static that does not cross-build.
   dropUnwanted = xs:
-    helpers.dropInputsByNameInfix ["openmp-static"]
-    (helpers.dropInputsByName ["openblas" "blas" "lapack" "openmp"] xs);
+    dropInputsByNameInfix ["openmp-static"]
+    (dropInputsByName ["openblas" "blas" "lapack" "openmp"] xs);
 in
-  helpers.extendPackage pyprev.scikit-learn {
+  exposeExtendedPackage {
     # The full estimator matrix takes roughly 35 minutes under emulation.
     passthru.wasinix.checks.captured = {
       shards = 8;
@@ -29,11 +30,11 @@ in
     # psutil is left out of this list: its WASIX backend cannot inspect PID 1,
     # and joblib only uses it as an optional acceleration, not required by the
     # suite or package runtime.
-    passthru.wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.pytest-xdist pyfinal.hypothesis];
+    passthru.wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook packages.sameProfile.pytest-xdist packages.sameProfile.hypothesis];
     # Meson's fallback asks the build Python for NumPy headers. Native
     # NPY_SIZEOF_LONG=8 corrupts buffer formats in wasm extensions, where it is 4.
     postPatch = old:
-      helpers.mergeScript [
+      mergeScript [
         (
           if isHistory
           then ''
@@ -54,6 +55,6 @@ in
         ''
       ];
     # The cross python mirrors buildInputs into propagatedBuildInputs.
-    buildInputs = old: dropUnwanted old ++ [toolchain.openmp];
+    buildInputs = old: dropUnwanted old ++ [packages.native."wasix-sysroot".profiles.${profileOf pkgs.stdenv.hostPlatform}.openmp];
     propagatedBuildInputs = dropUnwanted;
   }

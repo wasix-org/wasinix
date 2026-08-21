@@ -1,10 +1,10 @@
 {
-  testLib,
-  wasmerPkgs,
-  crossPkgs,
+  harnesses,
+  entry,
+  packages,
   ...
 }: let
-  fixture = crossPkgs.stdenv.mkDerivation {
+  fixture = packages.sameProfile.stdenv.mkDerivation {
     pname = "lld-wasm-fixture";
     version = "1";
     dontUnpack = true;
@@ -20,9 +20,9 @@
     '';
   };
 in {
-  wasm-link = testLib.mkWasixRun {
+  wasm-link = harnesses.hostShell {
     name = "lld-wasm-link";
-    wasixPkgs = [wasmerPkgs.lld];
+    wasixCommands = builtins.attrValues entry.commands;
     wasmerArgs = ["--enable-threads"];
     script = ''
       cp ${fixture}/answer.o answer.o

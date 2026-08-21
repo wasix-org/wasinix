@@ -1,9 +1,5 @@
-{
-  helpers,
-  pyprev,
-  ...
-}:
-helpers.extendPackage pyprev.click {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   # The editor tests resolve the build-host sed inside the guest. The atomic
   # mode tests need permission bits that Wasmer's filestat currently drops.
   disabledTests = [

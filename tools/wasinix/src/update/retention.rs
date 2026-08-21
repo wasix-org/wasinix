@@ -73,16 +73,15 @@ pub(crate) fn retention_add_spec(served: &Served) -> String {
     format!("{spec}@{}", served.version)
 }
 
-const WHEEL_APPLY: &str = "ws: builtins.mapAttrs (_: s: builtins.mapAttrs (name: w: \
-    { version = w.version; history_spec = \"pythonWheels.${name}\"; \
-    retention = w.passthru.wasix.retention or null; }) s) ws";
+const WHEEL_APPLY: &str = "builtins.mapAttrs (name: w: \
+    { version = w.version; history_spec = \"packages.python.${name}\"; \
+    retention = w.passthru.wasinix.retention or null; })";
 fn cli_apply() -> String {
-    crate::support::nix::canonical_webcs_apply(
-        "name: p: { overlay = p.overlayName; \
-         history_spec = \"wasmerPackages.${name}\"; \
-         history = p.passthru.wasmer.history or false; version = p.version; \
-         retention = p.passthru.wasix.retention or null; }",
-    )
+    "builtins.mapAttrs (name: p: { inherit name; \
+     history_spec = \"packages.wasix.${name}\"; \
+     shipped = p.passthru.wasinix.shipped or false; version = p.version; \
+     retention = p.passthru.wasinix.retention or null; })"
+        .to_string()
 }
 
 #[derive(Deserialize)]
@@ -100,12 +99,12 @@ struct VersionState {
 
 fn version_apply(include_notes: bool) -> String {
     let notes = if include_notes {
-        "let n = builtins.tryEval p.updateNotes.versions; in { ok = n.success; value = if n.success then n.value else {}; }"
+        "let n = builtins.tryEval p.internals.updates.updateNotes.versions; in { ok = n.success; value = if n.success then n.value else {}; }"
     } else {
         "{ ok = true; value = {}; }"
     };
     format!(
-        "p: {{ wheels = ({WHEEL_APPLY}) p.pythonWheels; clis = ({}) p.wasmerPackages; notes = {notes}; }}",
+        "p: {{ wheels = {{ py313 = ({WHEEL_APPLY}) p.artifacts.wheel-py313; py314 = ({WHEEL_APPLY}) p.artifacts.wheel-py314; }}; clis = ({}) p.packages.preferred; notes = {notes}; }}",
         cli_apply()
     )
 }
@@ -155,23 +154,22 @@ fn versions_from_state(repo: &Path, state: &VersionState) -> Result<Versions> {
                 .entry(attr.clone())
                 .or_insert(crate::support::json::from_value(
                     info.clone(),
-                    "pythonWheels served versions",
+                    "Python wheel artifact versions",
                 )?);
         }
     }
 
-    for (_, info) in state.clis.as_object().into_iter().flatten() {
-        if info["history"].as_bool().unwrap_or(false) {
+    for (name, info) in state.clis.as_object().into_iter().flatten() {
+        if !info["shipped"].as_bool().unwrap_or(false) {
             continue;
         }
-        let overlay = info["overlay"].as_str().unwrap_or_default().to_string();
         result
             .get_mut("cli")
             .expect("the cli bucket exists")
-            .entry(overlay)
+            .entry(name.clone())
             .or_insert(crate::support::json::from_value(
                 info.clone(),
-                "wasmerPackages served versions",
+                "preferred package versions",
             )?);
     }
     Ok(result)
@@ -306,12 +304,10 @@ pub struct Note {
     pub version: Option<String>,
 }
 
-impl Note {}
-
 fn fired_notes_once(repo: &Path, priors: &Value) -> Result<Value> {
     let output = crate::support::nix::Invocation::flake(
         "eval",
-        format!(".#legacyPackages.{SYSTEM}.updateNotes.fired"),
+        format!(".#legacyPackages.{SYSTEM}.internals.updates.updateNotes.fired"),
     )
     .json()
     .impure()
@@ -322,9 +318,11 @@ fn fired_notes_once(repo: &Path, priors: &Value) -> Result<Value> {
     if !output.status.is_success() {
         return request_error(format!("note check failed: {}", output.stderr.trim()));
     }
-    serde_json::from_slice(&output.stdout).map_err(|source| crate::support::error::Error::Json {
-        path: "<updateNotes.fired>".into(),
-        source,
+    serde_json::from_slice(&output.stdout).map_err(|source| {
+        crate::support::error::Error::Json {
+            path: "<internals.updates.updateNotes.fired>".into(),
+            source,
+        }
     })
 }
 
@@ -343,10 +341,10 @@ pub fn fired_notes(repo: &Path, priors: &Value) -> Vec<Note> {
     };
     let mut seen: BTreeMap<String, Note> = BTreeMap::new();
     for (attr, notes) in fired.as_object().into_iter().flatten() {
-        // wasmerPackages.<n>.webc names as <n>, which may contain dots.
+        // artifacts.webc.<n>.webc names as <n>, which may contain dots.
         let base = attr.strip_suffix(".webc").unwrap_or(attr);
         let name = base
-            .strip_prefix("wasmerPackages.")
+            .strip_prefix("artifacts.webc.")
             .map(str::to_string)
             .unwrap_or_else(|| base.rsplit('.').next().unwrap_or(base).to_string());
         for note in notes.as_array().into_iter().flatten() {
@@ -369,9 +367,10 @@ mod tests {
     fn one_package_set_evaluation_returns_every_prior_view() {
         let expression = format!(
             "let p = {{ \
-             pythonWheels.py313.demo = {{ version = \"1\"; passthru.wasix.retention = \"minor\"; }}; \
-             wasmerPackages.cli = {{ overlayName = \"cli\"; version = \"2\"; passthru.wasmer = {{}}; passthru.wasix.retention = \"major\"; }}; \
-             updateNotes.versions.cli = \"2\"; \
+             artifacts.wheel-py313.demo = {{ version = \"1\"; passthru.wasinix.retention = \"minor\"; }}; \
+             artifacts.wheel-py314 = {{}}; \
+             packages.preferred.cli = {{ version = \"2\"; passthru.wasinix = {{ shipped = true; retention = \"major\"; }}; }}; \
+             internals.updates.updateNotes.versions.cli = \"2\"; \
              }}; in ({}) p",
             version_apply(true)
         );

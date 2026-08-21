@@ -4,12 +4,10 @@
 # Drop the substitution so no dead /nix/store path is baked into the wheel; the
 # original find_library("gmp") returns nothing on wasix, same fallback.
 {
-  pyprev,
-  helpers,
+  exposeExtendedPackage,
   lib,
-  ...
 }:
-helpers.extendPackage pyprev.pycryptodome {
+exposeExtendedPackage {
   # the wheel-shipped SelfTest suite in tests/upstream.nix replaces the derived
   # source-tree check (the source Crypto/ has no compiled modules)
   passthru.wasinix.checks.captured.install = false;

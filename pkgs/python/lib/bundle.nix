@@ -7,9 +7,9 @@
 #
 # Usage (an extendPackage fragment):
 #   bundle = import ./lib/bundle.nix {inherit lib;};
-#   helpers.extendPackage drv (bundle.bundleNative {
+#   extendPackage drv (bundle.bundleNative {
 #     pkg = "pyzbar";                                  # top-level source package dir
-#     files = [ { src = "${final.zbar.lib}/lib/libzbar.so"; } ];
+#     files = [ { src = "${pkgs.zbar.lib}/lib/libzbar.so"; } ];
 #     rewrites = [
 #       # short form: replace `from` with a __file__-relative path to `load`
 #       { file = "pyzbar/zbar_library.py"; from = "find_library('zbar')"; load = "libzbar.so"; }

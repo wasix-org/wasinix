@@ -15,104 +15,111 @@
 #   - Boost: see packages/boost.nix and the patches.
 #   - Markdown help off: lowdown doesn't cross-build.
 {
-  final,
-  prev,
-  helpers,
-  ...
-}: let
-  boostRoot = final.buildPackages.symlinkJoin {
-    name = "boost-wasix-root";
-    paths = [final.boost final.boost.dev];
-  };
-
-  # Meson's boost lookup ignores pkg-config and the BOOST_* env vars when
-  # cross-compiling; a machine-file property is the only channel. Merged after
-  # nixpkgs' own --cross-file.
-  boostRootFile = final.buildPackages.writeText "boost-root-cross-file.ini" ''
-    [properties]
-    boost_root = '${boostRoot}'
-  '';
-
-  # overrideScope has to come before appendPatches: the other order dies in this
-  # spliced cross scope with "expected a set but found a function", though the
-  # same chain is fine in a plain nixpkgs cross set.
-  configured = prev.nix.overrideScope (_: prevScope: {
-    nix-expr = prevScope.nix-expr.override {enableGC = false;};
-    nix-store = prevScope.nix-store.override {
-      withAWS = false;
-      # Derivation builds are unsupported, so their embedded builder shell is
-      # unreachable from this evaluator-only package.
-      embeddedSandboxShell = false;
+  exposePackage,
+  extendPackage,
+  package,
+  packages,
+  profileSets,
+  wasmRename,
+}:
+exposePackage (
+  let
+    boostRoot = packages.sameProfile.buildPackages.symlinkJoin {
+      name = "boost-wasix-root";
+      paths = [packages.sameProfile.boost packages.sameProfile.boost.dev];
     };
-    # the repl keeps its default editline; readline's .pc wants a termcap we
-    # don't have
-    nix-cmd = prevScope.nix-cmd.override {enableMarkdown = false;};
-  });
 
-  patched = configured.appendPatches [
-    ./patches/no-boost-iostreams-mmap-on-wasi.patch
-    ./patches/boost-modules-available-on-wasi.patch
-    ./patches/portability-32-bit-libcxx.patch
-    ./patches/unsupported-posix-apis-on-wasi.patch
-    ./patches/no-prelink-on-wasi.patch
-  ];
-
-  components = patched.overrideAllMesonComponents (_: prevAttrs: {
-    mesonFlags = (prevAttrs.mesonFlags or []) ++ ["--cross-file=${boostRootFile}"];
-    # Standing in for the prelink the patch above drops: every consumer of a
-    # nix library must take all of its members, or the translation units that
-    # only run a static registrar (primops, store implementations) are dropped
-    # and the feature silently disappears. The .pc files are how the components
-    # find each other, so the bracket goes there.
-    # postFixup, not postInstall: multiple-outputs moves the .pc files from
-    # $out to $dev during fixup.
-    postFixup =
-      (prevAttrs.postFixup or "")
-      + ''
-        for pc in "''${dev-$out}"/lib/pkgconfig/nix-*.pc; do
-          [ -e "$pc" ] || continue
-          sed -i -E 's|(-lnix[a-z0-9-]*)|-Wl,--whole-archive \1 -Wl,--no-whole-archive|g' "$pc"
-        done
-      '';
-  });
-  nixComponents = components.libs;
-  nixCli = helpers.wasmRename {wasmName = "nix";} (helpers.extendPackage components.nix-cli {
-    # Hydra takes the CLI and component set through nixVersions; keep that
-    # versioned pair here so consumers cannot mix patched and stock Nix.
-    passthru = {
-      inherit nixComponents;
-      nixVersions =
-        prev.nixVersions
-        // {
-          nix_2_34 = nixCli;
-          nixComponents_2_34 = nixComponents;
-        };
-      wasix = {
-        shipped = true;
-        updateNotes = [
-          {message = "recheck the vendored WASI portability patches against the new Nix release";}
-        ];
-        # C++ exceptions rule out the no-EH profile; PIC is untested.
-        supportedProfiles =
-          builtins.filter (p: builtins.elem p helpers.profiles.withoutPic) helpers.profiles.withEh;
-      };
-      # nixpkgs appends "+<n>" for the patches we add, which is not semver.
-      # The patch count is a rebuild of the same upstream release, so it belongs
-      # in the rel, not the version.
-      wasmer.version = v: final.lib.head (final.lib.splitString "+" v);
-    };
-    # wasmRename renames bin/nix after this hook. Keep Nix's compatibility
-    # commands and build-remote entry point targeting the final name.
-    postInstall = ''
-      for alias in "$out"/bin/nix-*; do
-        if [ -L "$alias" ] && [ "$(readlink "$alias")" = nix ]; then
-          ln -sf nix.wasm "$alias"
-        fi
-      done
-      if [ -L "$out/libexec/nix/build-remote" ]; then
-        ln -sf ../../bin/nix.wasm "$out/libexec/nix/build-remote"
-      fi
+    # Meson's boost lookup ignores pkg-config and the BOOST_* env vars when
+    # cross-compiling; a machine-file property is the only channel. Merged after
+    # nixpkgs' own --cross-file.
+    boostRootFile = packages.sameProfile.buildPackages.writeText "boost-root-cross-file.ini" ''
+      [properties]
+      boost_root = '${boostRoot}'
     '';
-  });
-in
-  nixCli
+
+    # overrideScope has to come before appendPatches: the other order dies in this
+    # spliced cross scope with "expected a set but found a function", though the
+    # same chain is fine in a plain nixpkgs cross set.
+    configured = package.overrideScope (_: prevScope: {
+      nix-expr = prevScope.nix-expr.override {enableGC = false;};
+      nix-store = prevScope.nix-store.override {
+        withAWS = false;
+        # Derivation builds are unsupported, so their embedded builder shell is
+        # unreachable from this evaluator-only package.
+        embeddedSandboxShell = false;
+      };
+      # the repl keeps its default editline; readline's .pc wants a termcap we
+      # don't have
+      nix-cmd = prevScope.nix-cmd.override {enableMarkdown = false;};
+    });
+
+    patched = configured.appendPatches [
+      ./patches/no-boost-iostreams-mmap-on-wasi.patch
+      ./patches/boost-modules-available-on-wasi.patch
+      ./patches/portability-32-bit-libcxx.patch
+      ./patches/unsupported-posix-apis-on-wasi.patch
+      ./patches/no-prelink-on-wasi.patch
+    ];
+
+    components = patched.overrideAllMesonComponents (_: prevAttrs: {
+      mesonFlags = (prevAttrs.mesonFlags or []) ++ ["--cross-file=${boostRootFile}"];
+      # Standing in for the prelink the patch above drops: every consumer of a
+      # nix library must take all of its members, or the translation units that
+      # only run a static registrar (primops, store implementations) are dropped
+      # and the feature silently disappears. The .pc files are how the components
+      # find each other, so the bracket goes there.
+      # postFixup, not postInstall: multiple-outputs moves the .pc files from
+      # $out to $dev during fixup.
+      postFixup =
+        (prevAttrs.postFixup or "")
+        + ''
+          for pc in "''${dev-$out}"/lib/pkgconfig/nix-*.pc; do
+            [ -e "$pc" ] || continue
+            sed -i -E 's|(-lnix[a-z0-9-]*)|-Wl,--whole-archive \1 -Wl,--no-whole-archive|g' "$pc"
+          done
+        '';
+    });
+    nixComponents = components.libs;
+    nixCli = wasmRename {wasmName = "nix";} (extendPackage components.nix-cli {
+      # Hydra takes the CLI and component set through nixVersions; keep that
+      # versioned pair here so consumers cannot mix patched and stock Nix.
+      passthru = {
+        inherit nixComponents;
+        nixVersions =
+          packages.sameProfile.nixVersions
+          // {
+            nix_2_34 = nixCli;
+            nixComponents_2_34 = nixComponents;
+          };
+        wasix = {
+          # C++ exceptions rule out the no-EH profile; PIC is untested.
+          supportedProfiles =
+            builtins.filter (p: builtins.elem p profileSets.withoutPic) profileSets.withEh;
+        };
+        wasinix = {
+          shipped = true;
+          update.notes = [
+            {message = "recheck the vendored WASI portability patches against the new Nix release";}
+          ];
+        };
+        # nixpkgs appends "+<n>" for the patches we add, which is not semver.
+        # The patch count is a rebuild of the same upstream release, so it belongs
+        # in the rel, not the version.
+        wasmer.version = v: packages.sameProfile.lib.head (packages.sameProfile.lib.splitString "+" v);
+      };
+      # wasmRename renames bin/nix after this hook. Keep Nix's compatibility
+      # commands and build-remote entry point targeting the packages.sameProfile name.
+      postInstall = ''
+        for alias in "$out"/bin/nix-*; do
+          if [ -L "$alias" ] && [ "$(readlink "$alias")" = nix ]; then
+            ln -sf nix.wasm "$alias"
+          fi
+        done
+        if [ -L "$out/libexec/nix/build-remote" ]; then
+          ln -sf ../../bin/nix.wasm "$out/libexec/nix/build-remote"
+        fi
+      '';
+    });
+  in
+    nixCli
+)

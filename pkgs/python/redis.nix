@@ -2,26 +2,25 @@
 # is missing it. buildPythonPackage folds `dependencies` into
 # propagatedBuildInputs when it is called, so a later tweak names the latter.
 {
-  pyprev,
-  pyfinal,
-  final,
-  helpers,
+  exposeExtendedPackage,
+  packages,
+  package,
+  pkgs,
   lib,
-  ...
 }:
-helpers.extendPackage pyprev.redis {
+exposeExtendedPackage {
   propagatedBuildInputs =
-    lib.optionals (lib.versionOlder pyprev.redis.version "6") [pyfinal.pyjwt];
+    lib.optionals (lib.versionOlder package.version "6") [packages.sameProfile.pyjwt];
   redisTestPort = 0;
   passthru.wasinix.checks.captured.broken = "the Redis test hook cannot start its server inside the emulated check";
   passthru.wasixDeclaredCheckInputs = [
-    pyfinal.numpy
-    pyfinal.pytest-asyncio
-    pyfinal.pytestCheckHook
-    pyfinal.pybreaker
-    pyfinal.opentelemetry-api
-    pyfinal.opentelemetry-sdk
-    final.buildPackages.redisTestHook
+    packages.sameProfile.numpy
+    packages.sameProfile.pytest-asyncio
+    packages.sameProfile.pytestCheckHook
+    packages.sameProfile.pybreaker
+    packages.sameProfile.opentelemetry-api
+    packages.sameProfile.opentelemetry-sdk
+    pkgs.buildPackages.redisTestHook
   ];
   # Requires the fork multiprocessing context.
   disabledTestPaths = ["tests/test_multiprocessing.py"];

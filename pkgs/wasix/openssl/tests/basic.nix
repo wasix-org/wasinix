@@ -2,23 +2,22 @@
 # forking OCSP responder is the one app feature wasi cannot have (HAVE_FORK=0).
 {
   pkgs,
-  testLib,
-  crossPkgs,
-  makeWasmerPackage,
+  harnesses,
+  entry,
   ...
 }: let
-  wasix = [(makeWasmerPackage {package = crossPkgs.openssl.bin;}).shim];
+  wasix = builtins.attrValues entry.commands;
   cmp = name: script:
-    testLib.mkScriptComparison {
+    harnesses.compareShells {
       name = "openssl-${name}";
-      nativePkgs = [pkgs.openssl];
-      wasixPkgs = wasix;
+      hostPackages = [pkgs.openssl];
+      wasixCommands = wasix;
       inherit script;
     };
 in {
-  version = testLib.mkWasixRun {
+  version = harnesses.hostShell {
     name = "openssl-version";
-    wasixPkgs = wasix;
+    wasixCommands = wasix;
     script = "openssl version";
   };
 

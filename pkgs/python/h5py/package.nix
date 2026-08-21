@@ -3,22 +3,18 @@
 # That static HDF5 also needs zlib and libaec's sz/aec named on the link, which
 # upstream gets through libhdf5.so.
 {
-  pyprev,
-  pyfinal,
-  final,
-  wasixPython,
-  lib,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
+  pkgs,
 }: let
-  crossNumpyInc = wasixPython.pkgs.numpy.crossInclude;
+  crossNumpyInc = packages.sameProfile.numpy.crossInclude;
 in
-  helpers.extendPackage pyprev.h5py {
-    env.HDF5_VERSION = final.hdf5.version;
+  exposeExtendedPackage {
+    env.HDF5_VERSION = pkgs.hdf5.version;
     env.H5PY_ROS3 = "0";
     env.H5PY_DIRECT_VFD = "0";
-    buildInputs = [final.zlib final.libaec];
-    passthru.wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook];
+    buildInputs = [pkgs.zlib pkgs.libaec];
+    passthru.wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook];
     # nixpkgs' `cd $out` targets the installed tree. The run-only check has a
     # fresh $out, so resolve the wheel being tested from the guest PYTHONPATH.
     preCheck = _: ''

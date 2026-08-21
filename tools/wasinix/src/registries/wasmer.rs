@@ -14,13 +14,13 @@ use std::process::Command;
 use std::sync::LazyLock;
 
 use regex::Regex;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 use crate::support::capability::Capability;
-use crate::support::error::{Error, Result, request_error};
+use crate::support::error::{request_error, Error, Result};
 use crate::support::naming::{self, Domain};
-use crate::support::nix::{Flake, SYSTEM};
+use crate::support::nix::{project_attr, Flake};
 
 /// The rebuild command doubles as the machine-readable rev record: the
 /// appended block is a pure function of (package dir, rev), so a later run
@@ -71,22 +71,27 @@ fn run(cmd: &mut Command) -> Result<()> {
 
 /// Canonical shipped webc names with every accepted alias.
 fn webc_domain() -> Result<Domain> {
-    let apply = crate::support::nix::canonical_webcs_apply(
-        "_: p: { overlay = p.overlayName; aliases = p.passthru.wasinix.aliases or []; }",
-    );
-    let named = crate::support::nix::eval(&Flake::default(), "wasmerPackages", Some(&apply))?;
-    let mut domain = Domain::new(".#wasmerPackages");
+    let apply = r#"p: builtins.listToAttrs (map (address:
+      let e = p.catalog.entries.${address}; in {
+        name = e.name;
+        value.aliases = e.policy.aliases or [];
+      }) (builtins.filter (address:
+        let e = p.catalog.entries.${address}; in
+          e.kind == "artifact" && e.artifactKind == "webc"
+          && e.instance.kind == "current")
+        (builtins.attrNames p.catalog.entries)))"#;
+    let named = crate::support::nix::eval(&Flake::default(), "", Some(apply))?;
+    let mut domain = Domain::new("the WebC artifact catalog");
     for (webc, info) in named.as_object().into_iter().flatten() {
-        let mut aliases = vec![info["overlay"].as_str().unwrap_or_default().to_string()];
-        aliases.extend(
+        let aliases =
             info["aliases"]
                 .as_array()
                 .into_iter()
                 .flatten()
-                .filter_map(|alias| alias.as_str().map(str::to_string)),
-        );
+                .filter_map(|alias| alias.as_str().map(str::to_string))
+                .collect();
         domain.add_path(
-            vec!["wasmerPackages".into(), webc.clone()],
+            vec!["artifacts".into(), "webc".into(), webc.clone()],
             webc,
             None,
             aliases,
@@ -115,20 +120,29 @@ fn selected_packages(specs: &[String]) -> Result<Vec<String>> {
 }
 
 fn build_pkg_roots(selected: &[String]) -> Result<Vec<PathBuf>> {
-    let prefix = format!(".#legacyPackages.{SYSTEM}");
+    let prefix = format!(".#{}", project_attr(""));
     let mut installables: Vec<String> = Vec::new();
-    if selected.is_empty() {
-        installables.push(format!("{prefix}.allWasmerPackages"));
+    let names = if selected.is_empty() {
+        crate::support::nix::eval(
+            &Flake::default(),
+            "artifacts.pkg",
+            Some("builtins.attrNames"),
+        )?
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|name| name.as_str().map(str::to_owned))
+        .collect()
     } else {
-        let mut seen = BTreeSet::new();
-        for name in selected {
-            if seen.insert(name.clone()) {
-                // Quoted: a webc name may contain dots (python3.14).
-                installables.push(format!(
-                    "{prefix}.wasmerPackages.{}.pkg",
-                    naming::quoted_attr(name)?
-                ));
-            }
+        selected.to_vec()
+    };
+    let mut seen = BTreeSet::new();
+    for name in names {
+        if seen.insert(name.clone()) {
+            installables.push(format!(
+                "{prefix}.artifacts.pkg.{}",
+                naming::quoted_attr(&name)?
+            ));
         }
     }
     crate::support::ui::fact("building", installables.join(" "));
@@ -137,7 +151,7 @@ fn build_pkg_roots(selected: &[String]) -> Result<Vec<PathBuf>> {
         .args(["-L", "--no-link"])
         .operands(installables)
         .out_paths("building the packages")?;
-    Ok(paths.into_iter().map(|path| path.join("pkg")).collect())
+    Ok(paths)
 }
 
 type PackageKey = (String, String);
@@ -149,19 +163,18 @@ pub(crate) struct ResolvedGraph {
 }
 
 fn resolved_graph() -> Result<ResolvedGraph> {
-    let apply = crate::support::nix::canonical_webcs_apply(
-        r#"_: p: {
-          name = "${p.pkg.id.owner}/${p.pkg.id.name}";
-          version = p.pkg.id.version;
+    let apply =
+        r#"ps: builtins.mapAttrs (_: p: {
+          name = "${p.id.owner}/${p.id.name}";
+          version = p.id.version;
           dependencies = map (d: {
             name = "${d.id.owner}/${d.id.name}";
             version = d.id.version;
-          }) p.pkg.depWebcs;
-        }"#,
-    );
-    let values = crate::support::nix::eval(&Flake::default(), "wasmerPackages", Some(&apply))?;
+          }) p.depWebcs;
+        }) ps"#;
+    let values = crate::support::nix::eval(&Flake::default(), "artifacts.pkg", Some(apply))?;
     let Some(values) = values.as_object() else {
-        return request_error("wasmerPackages dependency map is not an object");
+        return request_error("WebC package dependency map is not an object");
     };
     let mut graph = ResolvedGraph {
         dependencies: BTreeMap::new(),
@@ -171,11 +184,11 @@ fn resolved_graph() -> Result<ResolvedGraph> {
     for (attr, value) in values {
         let identity = |value: &Value| -> Result<PackageKey> {
             let Some(name) = value["name"].as_str() else {
-                return request_error(format!("wasmerPackages.{attr}: dependency name is missing"));
+                return request_error(format!("artifacts.pkg.{attr}: dependency name is missing"));
             };
             let Some(version) = value["version"].as_str() else {
                 return request_error(format!(
-                    "wasmerPackages.{attr}: dependency version is missing"
+                    "artifacts.pkg.{attr}: dependency version is missing"
                 ));
             };
             Ok((name.to_string(), version.to_string()))
@@ -183,7 +196,7 @@ fn resolved_graph() -> Result<ResolvedGraph> {
         let key = identity(value)?;
         let Some(dependencies) = value["dependencies"].as_array() else {
             return request_error(format!(
-                "wasmerPackages.{attr}: dependencies is not an array"
+                "artifacts.pkg.{attr}: dependencies is not an array"
             ));
         };
         let mut package_dependencies = BTreeMap::new();
@@ -192,23 +205,20 @@ fn resolved_graph() -> Result<ResolvedGraph> {
             if let Some(existing) = package_dependencies.insert(name.clone(), version.clone()) {
                 if existing != version {
                     return request_error(format!(
-                        "wasmerPackages.{attr}: {name} resolves to both {existing} and {version}"
+                        "artifacts.pkg.{attr}: {name} resolves to both {existing} and {version}"
                     ));
                 }
             }
         }
         graph.keys_by_attr.insert(attr.clone(), key.clone());
-        if graph
-            .attrs_by_key
-            .insert(key.clone(), attr.clone())
-            .is_some()
+        if graph.attrs_by_key.insert(key.clone(), attr.clone()).is_some()
             || graph
                 .dependencies
                 .insert(key.clone(), package_dependencies)
                 .is_some()
         {
             return request_error(format!(
-                "wasmerPackages has duplicate identity {}@{}",
+                "WebC package catalog has duplicate identity {}@{}",
                 key.0, key.1
             ));
         }
@@ -226,7 +236,7 @@ pub(crate) fn include_unpublished_dependencies(
     let mut pending = Vec::new();
     for attr in selected {
         let Some(key) = graph.keys_by_attr.get(attr) else {
-            return request_error(format!("wasmerPackages.{attr}: no resolved identity"));
+            return request_error(format!("artifacts.pkg.{attr}: no resolved identity"));
         };
         if examined.insert(key.clone()) {
             pending.push(key.clone());
@@ -242,7 +252,9 @@ pub(crate) fn include_unpublished_dependencies(
                 continue;
             }
             let Some(attr) = graph.attrs_by_key.get(&dependency) else {
-                return request_error(format!("no wasmerPackages attribute for {name}@{version}"));
+                return request_error(format!(
+                    "no WebC package artifact for {name}@{version}"
+                ));
             };
             attrs.insert(attr.clone());
             pending.push(dependency);
@@ -475,8 +487,7 @@ struct Scratch(PathBuf);
 
 impl Scratch {
     fn new(name: &str) -> Result<Scratch> {
-        let path = crate::support::env::temp_dir()
-            .join(format!("publish-webc-{}-{name}", std::process::id()));
+        let path = crate::support::env::temp_dir().join(format!("publish-webc-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&path);
         crate::support::fs::create_dir_all(&path)?;
         Ok(Scratch(path))
@@ -609,15 +620,13 @@ pub fn provenance(pkg: &Package, rev: &str) -> String {
     let origin = match &pkg.source {
         Some(source) => {
             let (file, line) = source.rsplit_once(':').unwrap_or((source.as_str(), "1"));
-            format!(
-                "Built from [{file}](https://github.com/wasix-org/wasinix/blob/{rev}/{file}#L{line})"
-            )
+            format!("Built from [{file}](https://github.com/wasix-org/wasinix/blob/{rev}/{file}#L{line})")
         }
         None => "Built by [wasinix](https://github.com/wasix-org/wasinix)".to_string(),
     };
     let short: String = rev.chars().take(12).collect();
     format!(
-        "\n{origin}\nat `{short}`; rebuild with\n\n    nix build 'github:wasix-org/wasinix/{rev}#wasmerPackages.\"{name}\".webc'\n"
+        "\n{origin}\nat `{short}`; rebuild with\n\n    nix build 'github:wasix-org/wasinix/{rev}#legacyPackages.x86_64-linux.artifacts.webc.\"{name}\"'\n"
     )
 }
 
@@ -703,7 +712,12 @@ pub fn stage(pkg: &Package, rev: &str, into: &Path, as_: &Staged) -> Result<Path
     Ok(dst)
 }
 
-fn staged_sha256(pkg: &Package, rev: &str, pub_name: &str, pub_version: &str) -> Result<String> {
+fn staged_sha256(
+    pkg: &Package,
+    rev: &str,
+    pub_name: &str,
+    pub_version: &str,
+) -> Result<String> {
     let scratch = Scratch::new("restage")?;
     let batch = BTreeSet::new();
     let staged = stage(
@@ -888,10 +902,7 @@ pub fn publish(options: Options) -> Result<crate::support::process::CommandStatu
     crate::support::ui::fact("packages", ordered.len());
     crate::support::ui::fact(
         "registry",
-        format!(
-            "{} (graphql: {graphql_url}, publish: {publish_host})",
-            options.registry
-        ),
+        format!("{} (graphql: {graphql_url}, publish: {publish_host})", options.registry),
     );
     if options.effects.is_dry_run() {
         crate::support::ui::fact("mode", "dry run; nothing publishes");
@@ -1090,11 +1101,10 @@ pub fn merge_webcs(from: &Path, into: &Path) -> Result<()> {
     }
     let mut pending = vec![from.to_path_buf()];
     while let Some(dir) = pending.pop() {
-        let entries = std::fs::read_dir(&dir).map_err(|e| crate::support::error::io(&dir, e))?;
+        let entries =
+            std::fs::read_dir(&dir).map_err(|e| crate::support::error::io(&dir, e))?;
         for entry in entries {
-            let path = entry
-                .map_err(|e| crate::support::error::io(&dir, e))?
-                .path();
+            let path = entry.map_err(|e| crate::support::error::io(&dir, e))?.path();
             if path.is_dir() {
                 pending.push(path);
                 continue;
@@ -1111,11 +1121,10 @@ fn tree_references(tree: &Path) -> Result<Vec<String>> {
     let mut references = Vec::new();
     let mut pending = vec![tree.to_path_buf()];
     while let Some(dir) = pending.pop() {
-        let entries = std::fs::read_dir(&dir).map_err(|e| crate::support::error::io(&dir, e))?;
+        let entries =
+            std::fs::read_dir(&dir).map_err(|e| crate::support::error::io(&dir, e))?;
         for entry in entries {
-            let path = entry
-                .map_err(|e| crate::support::error::io(&dir, e))?
-                .path();
+            let path = entry.map_err(|e| crate::support::error::io(&dir, e))?.path();
             if path.is_dir() {
                 pending.push(path);
                 continue;
@@ -1129,9 +1138,10 @@ fn tree_references(tree: &Path) -> Result<Vec<String>> {
                 .map(|part| part.as_os_str().to_string_lossy().to_string())
                 .collect();
             references.push(match parts.as_slice() {
-                [owner, name, version] => {
-                    format!("{owner}/{name}@{}", version.trim_end_matches(".webc"))
-                }
+                [owner, name, version] => format!(
+                    "{owner}/{name}@{}",
+                    version.trim_end_matches(".webc")
+                ),
                 _ => relative.display().to_string(),
             });
         }
@@ -1188,8 +1198,11 @@ pub fn materialize(options: ServeOptions) -> Result<PathBuf> {
     if !options.packages.is_empty() || build_all {
         // One eval answers both what exists and which packages carry a
         // dependency tree (depTree is null for the leaf packages).
-        let apply = crate::support::nix::canonical_webcs_apply("_: p: p.pkg.depTree != null");
-        let deps = crate::support::nix::eval(&Flake::default(), "wasmerPackages", Some(&apply))?;
+        let deps = crate::support::nix::eval(
+            &Flake::default(),
+            "artifacts.pkg",
+            Some("builtins.mapAttrs (_: p: p.depTree != null)"),
+        )?;
         let names: Vec<String> = if build_all {
             deps.as_object()
                 .into_iter()
@@ -1202,9 +1215,15 @@ pub fn materialize(options: ServeOptions) -> Result<PathBuf> {
         let mut installables: Vec<String> = Vec::new();
         for name in &names {
             let quoted = naming::quoted_attr(name)?;
-            installables.push(format!(".#wasmerPackages.{quoted}.webc"));
+            installables.push(format!(
+                ".#{}.artifacts.webc.{quoted}",
+                project_attr("")
+            ));
             if deps[name].as_bool() == Some(true) {
-                installables.push(format!(".#wasmerPackages.{quoted}.pkg.depTree"));
+                installables.push(format!(
+                    ".#{}.artifacts.pkg.{quoted}.depTree",
+                    project_attr("")
+                ));
             }
         }
         crate::support::ui::fact("building", format!("{} webc closures", names.len()));

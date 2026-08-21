@@ -1,28 +1,28 @@
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   helpers,
 }: let
   inherit (helpers) gitNative normalizeGitPaths gitSetup;
 in {
-  version = testLib.mkWasixRun {
+  version = harnesses.hostShell {
     name = "version";
-    wasixPkgs = [wasmerPkgs.git];
+    wasixCommands = builtins.attrValues entry.commands;
     script = "git --version";
   };
 
-  version-compare = testLib.mkScriptComparison {
+  version-compare = harnesses.compareShells {
     name = "version";
-    nativePkgs = [gitNative];
-    wasixPkgs = [wasmerPkgs.git];
+    hostPackages = [gitNative];
+    wasixCommands = builtins.attrValues entry.commands;
     normalize = normalizeGitPaths;
     script = "git --version";
   };
 
-  workflow = testLib.mkWasixRun {
+  workflow = harnesses.hostShell {
     name = "workflow";
-    wasixPkgs = [wasmerPkgs.git];
+    wasixCommands = builtins.attrValues entry.commands;
     script = ''
       ${gitSetup}
       git init
@@ -33,10 +33,10 @@ in {
     '';
   };
 
-  workflow-compare = testLib.mkScriptComparison {
+  workflow-compare = harnesses.compareShells {
     name = "workflow";
-    nativePkgs = [gitNative];
-    wasixPkgs = [wasmerPkgs.git];
+    hostPackages = [gitNative];
+    wasixCommands = builtins.attrValues entry.commands;
     normalize = normalizeGitPaths;
     script = ''
       ${gitSetup}
@@ -51,9 +51,9 @@ in {
     '';
   };
 
-  diff = testLib.mkWasixRun {
+  diff = harnesses.hostShell {
     name = "diff";
-    wasixPkgs = [wasmerPkgs.git];
+    wasixCommands = builtins.attrValues entry.commands;
     script = ''
       ${gitSetup}
       git init
@@ -68,10 +68,10 @@ in {
     '';
   };
 
-  diff-compare = testLib.mkScriptComparison {
+  diff-compare = harnesses.compareShells {
     name = "diff";
-    nativePkgs = [gitNative];
-    wasixPkgs = [wasmerPkgs.git];
+    hostPackages = [gitNative];
+    wasixCommands = builtins.attrValues entry.commands;
     normalize = normalizeGitPaths;
     script = ''
       ${gitSetup}
@@ -87,9 +87,9 @@ in {
     '';
   };
 
-  branch = testLib.mkWasixRun {
+  branch = harnesses.hostShell {
     name = "branch";
-    wasixPkgs = [wasmerPkgs.git];
+    wasixCommands = builtins.attrValues entry.commands;
     script = ''
       ${gitSetup}
       git init
@@ -108,9 +108,9 @@ in {
   };
 
   # -P needs USE_LIBPCRE2; without it git fails the command outright.
-  grep-pcre = testLib.mkWasixRun {
+  grep-pcre = harnesses.hostShell {
     name = "grep-pcre";
-    wasixPkgs = [wasmerPkgs.git];
+    wasixCommands = builtins.attrValues entry.commands;
     script = ''
       ${gitSetup}
       git init
@@ -128,9 +128,9 @@ in {
   # A shell subcommand: git-filter-branch runs through /bin/bash, calls the
   # coreutils and sed the webc mounts by store path, and resolves the filter's
   # own sed from PATH.
-  filter-branch = testLib.mkWasixRun {
+  filter-branch = harnesses.hostShell {
     name = "filter-branch";
-    wasixPkgs = [wasmerPkgs.git];
+    wasixCommands = builtins.attrValues entry.commands;
     script = ''
       ${gitSetup}
       git init
@@ -149,9 +149,9 @@ in {
 
   # The editor is nano's command atom, mounted at /bin by the webc dependency.
   # The alias runs it through git's own shell, the way `git commit` would.
-  editor = testLib.mkWasixRun {
+  editor = harnesses.hostShell {
     name = "editor";
-    wasixPkgs = [wasmerPkgs.git];
+    wasixCommands = builtins.attrValues entry.commands;
     script = ''
       ${gitSetup}
       editor=$(git var GIT_EDITOR)

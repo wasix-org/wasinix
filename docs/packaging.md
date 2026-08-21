@@ -176,8 +176,8 @@ nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
 ## A Python package or wheel
 
 - Ship a wheel: add `{attr = "<python3.pkgs name>";}` to
-  `pkgs/python/wheels.nix` (`pyImport` if the module name differs). Most need no
-  adaptation; compatible package suites run through the emulated check
+  `pkgs/python/wheels/default.nix` (`pyImport` if the module name differs). Most
+  need no adaptation; compatible package suites run through the emulated check
   machinery.
 - Fix a build: `pkgs/python/<attr>.nix`, same form as top-level plus
   `pyfinal`/`pyprev` for Python-set deps. Patches live in

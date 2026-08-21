@@ -134,7 +134,7 @@ in
       ./wasix-libc-xsi-signal.patch
     ];
 
-    passthru.wasix.updateNotes = [
+    passthru.wasinix.update.notes = [
       {message = "check whether libc-select-exceptfds.patch landed upstream (WASIX-TODO.md)";}
     ];
 

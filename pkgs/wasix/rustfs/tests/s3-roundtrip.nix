@@ -11,16 +11,16 @@
 # delegation masks the implied sync rights.
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: {
-  s3-roundtrip = testLib.mkWasixRun {
+  s3-roundtrip = harnesses.hostShell {
     name = "rustfs-s3-roundtrip";
-    wasixPkgs = [wasmerPkgs.rustfs];
-    nativePkgs = [pkgs.minio-client pkgs.coreutils];
+    wasixCommands = builtins.attrValues entry.commands;
+    hostPackages = [pkgs.minio-client pkgs.coreutils];
     wasmerArgs = ["--net"];
-    forwardEnv = testLib.defaultForwardEnv ++ ["RUST_BACKTRACE" "RUSTFS_CONSOLE_ENABLE"];
+    forwardEnv = harnesses.defaultForwardEnv ++ ["RUST_BACKTRACE" "RUSTFS_CONSOLE_ENABLE"];
     script = ''
       export RUST_BACKTRACE=1
       export RUSTFS_CONSOLE_ENABLE=false

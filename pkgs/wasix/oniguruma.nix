@@ -1,0 +1,1 @@
+{exposeExtendedPackage}: exposeExtendedPackage {}

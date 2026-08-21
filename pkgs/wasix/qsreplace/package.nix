@@ -1,11 +1,14 @@
 {
-  prev,
-  helpers,
-  ...
+  exposePackage,
+  extendPackage,
+  package,
+  wasmRename,
 }:
-helpers.wasmRename {wasmName = "qsreplace";} (
-  helpers.extendPackage prev.qsreplace {
-    subPackages = ["."];
-    passthru.wasinix.shipped = true;
-  }
+exposePackage (
+  wasmRename {wasmName = "qsreplace";} (
+    extendPackage package {
+      subPackages = ["."];
+      passthru.wasinix.shipped = true;
+    }
+  )
 )

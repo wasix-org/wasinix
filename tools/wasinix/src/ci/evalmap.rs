@@ -80,32 +80,130 @@ pub struct SelectorGroup {
     pub spot_owners: Vec<String>,
 }
 
-/// The flake's selector catalog (`.#ciSelectorCatalog`): a nix evaluation
-/// payload, not one of this tool's documents, so it carries no envelope.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct SelectorCatalog {
-    pub schema_version: u64,
+#[serde(rename_all = "camelCase")]
+pub struct CatalogCiPolicy {
     #[serde(default)]
-    pub jobs: Vec<String>,
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogPublication {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rel: Option<u32>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogPolicy {
     #[serde(default)]
-    pub info: BTreeMap<JobAddr, JobInfo>,
+    pub aliases: Vec<String>,
+    #[serde(default)]
+    pub ci: CatalogCiPolicy,
+    #[serde(default)]
+    pub publication: CatalogPublication,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogInstance {
+    #[serde(default)]
+    pub version: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogJob {
+    pub kind: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact_kind: Option<String>,
+    #[serde(default)]
+    pub variant: serde_json::Value,
+    #[serde(default)]
+    pub instance: CatalogInstance,
+    #[serde(default)]
+    pub policy: CatalogPolicy,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spot_target: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spot_owner: Option<String>,
+}
+
+impl CatalogJob {
+    fn into_info(self) -> JobInfo {
+        let variant = self
+            .variant
+            .get("profile")
+            .or_else(|| self.variant.get("interpreter"))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned);
+        let is_test = self.kind == "test";
+        JobInfo {
+            display_name: Some(self.name.clone()),
+            subject: self.subject.or(Some(self.name)),
+            test_name: self.test_name,
+            variant,
+            artifact_kind: self.artifact_kind,
+            version: self
+                .policy
+                .publication
+                .version
+                .or_else(|| (!self.instance.version.is_null()).then_some(self.instance.version)),
+            rel: self.policy.publication.rel,
+            role: Some(if is_test { "check" } else { "artifact" }.to_owned()),
+            aliases: self.policy.aliases,
+            tags: self.policy.ci.tags,
+            content_diff: !is_test,
+            spot_target: self.spot_target,
+            spot_owner: self.spot_owner,
+            ..JobInfo::default()
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct CatalogSelectors {
     #[serde(default)]
     pub sets: BTreeMap<String, Vec<String>>,
     #[serde(default)]
     pub groups: BTreeMap<String, SelectorGroup>,
 }
 
+/// The flake's `ci.catalog` evaluation payload.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectorCatalog {
+    pub schema_version: u64,
+    #[serde(default)]
+    pub jobs: BTreeMap<JobAddr, CatalogJob>,
+    #[serde(default)]
+    pub selectors: CatalogSelectors,
+}
+
 impl SelectorCatalog {
     pub fn into_map(self) -> EvalMap {
+        let info = self
+            .jobs
+            .iter()
+            .map(|(address, job)| (address.clone(), job.clone().into_info()))
+            .collect();
         EvalMap {
             jobs: self
                 .jobs
-                .into_iter()
-                .map(|name| (JobAddr(name), String::new()))
+                .into_keys()
+                .map(|address| (address, String::new()))
                 .collect(),
-            info: self.info,
-            sets: self.sets,
-            groups: self.groups,
+            info,
+            sets: self.selectors.sets,
+            groups: self.selectors.groups,
             ..EvalMap::default()
         }
     }
@@ -290,14 +388,19 @@ impl EvalMap {
         for name in self.jobs.keys().chain(self.errors.keys()) {
             let path: Vec<String> = name.0.split('.').map(str::to_string).collect();
             let axis = naming::axis_of(&path);
-            domain.add_path(path, &name.0, axis, Vec::new());
+            let aliases = self
+                .info
+                .get(name)
+                .map(|info| info.aliases.clone())
+                .unwrap_or_default();
+            domain.add_path(path, &name.0, axis, aliases);
         }
         domain
     }
 
     /// The job names a request's addresses select. An address naming one
     /// package across a variant axis selects every build of it, which is how
-    /// `packagesByProfile.zlib` covers all five profiles.
+    /// `packages.wasix.zlib` covers every supported profile.
     pub fn resolve_jobs(&self, requested: &[String]) -> Result<Vec<String>> {
         let domain = self.job_domain();
         let mut jobs = Vec::new();

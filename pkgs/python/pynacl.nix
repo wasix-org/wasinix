@@ -4,21 +4,19 @@
 # drop the hook and its `doc` output. The wheel itself is cffi-over-libsodium,
 # both already in the overlay.
 {
-  pyfinal,
-  pyprev,
-  lib,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
+  dropSphinxDocs,
 }: let
 in
-  helpers.extendPackage pyprev.pynacl (helpers.python.dropSphinxDocs []
+  exposeExtendedPackage (dropSphinxDocs []
     // {
       # Replaces the stashed check inputs: the inherited hypothesis is the
       # build-platform one, whose Rust _native the guest cannot import.
       passthru = old:
         old
         // {
-          wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.hypothesis];
+          wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook packages.sameProfile.hypothesis];
         };
       # -ra: pynacl's own quiet flags hide which tests fail
       pytestFlags = ["-ra"];

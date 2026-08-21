@@ -1,20 +1,20 @@
 {
-  testLib,
-  wasmerPkgs,
+  harnesses,
+  entry,
   ...
 }: let
-  wasix = [wasmerPkgs.ffmpeg];
+  wasix = builtins.attrValues entry.commands;
 in {
-  version = testLib.mkWasixRun {
+  version = harnesses.hostShell {
     name = "ffmpeg-version";
-    wasixPkgs = wasix;
+    wasixCommands = wasix;
     wasmerArgs = ["--enable-threads"];
     script = "ffmpeg -version";
   };
 
-  transcode = testLib.mkWasixRun {
+  transcode = harnesses.hostShell {
     name = "ffmpeg-transcode";
-    wasixPkgs = wasix;
+    wasixCommands = wasix;
     wasmerArgs = ["--enable-threads"];
     script = ''
       ffmpeg -v error -f lavfi -i 'sine=frequency=440:duration=0.1' \

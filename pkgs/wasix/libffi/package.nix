@@ -4,12 +4,8 @@
 # libffi, and a version bump that breaks the patch fails loudly. Also disable
 # the multi-os-directory probe (runs `clang -print-multi-os-directory`,
 # rejected by wasix-llvm's clang) and the raw API (inline asm).
-{
-  prev,
-  helpers,
-  ...
-}:
-helpers.extendPackage prev.libffi {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   patches = [./wasi-backend.patch];
   configureFlags = ["--disable-multi-os-directory" "--disable-raw-api"];
 }

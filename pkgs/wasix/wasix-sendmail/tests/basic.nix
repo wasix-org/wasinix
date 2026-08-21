@@ -1,14 +1,14 @@
 {
   pkgs,
-  testLib,
-  wasmerPkgs,
+  harnesses,
+  entry,
   ...
 }: {
-  file-backend = testLib.mkWasixRun {
+  file-backend = harnesses.hostShell {
     name = "wasix-sendmail-file-backend";
-    nativePkgs = [pkgs.gnugrep];
-    wasixPkgs = [wasmerPkgs.sendmail];
-    forwardEnv = testLib.defaultForwardEnv ++ ["SENDMAIL_FILE_PATH"];
+    hostPackages = [pkgs.gnugrep];
+    wasixCommands = builtins.attrValues entry.commands;
+    forwardEnv = harnesses.defaultForwardEnv ++ ["SENDMAIL_FILE_PATH"];
     script = ''
       export SENDMAIL_FILE_PATH="$WASIX_TEST_ROOT/mail.txt"
       printf 'To: recipient@example.com\nSubject: Test\n\nMessage body\n' | sendmail -t

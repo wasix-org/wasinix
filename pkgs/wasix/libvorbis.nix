@@ -5,12 +5,8 @@
 # stops a check job from being generated to run it at all (doCheck composes
 # after the check-output wrapper reads old.doCheck, so it's invisible to
 # the wrapper itself; wasixCheckPrebuild covers that half separately).
-{
-  prev,
-  helpers,
-  ...
-}:
-helpers.extendPackage prev.libvorbis {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   doCheck = false;
   wasixCheckPrebuild = ":";
 }

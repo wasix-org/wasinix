@@ -4,30 +4,31 @@
 # Patches go in the src, not patchPhase: the python duckdb wheel
 # symlinks this src into its external/duckdb submodule (nixpkgs: ln -s ${duckdb.src}).
 {
-  prev,
-  helpers,
-  ...
+  profileSets,
+  exposeExtendedPackage,
+  package,
+  packages,
 }: let
-  inherit (prev) lib;
-  patchedSrc = prev.buildPackages.applyPatches {
-    name = "duckdb-source-wasi-${prev.duckdb.version}";
-    src = prev.duckdb.src;
+  inherit (packages.sameProfile) lib;
+  patchedSrc = packages.sameProfile.buildPackages.applyPatches {
+    name = "duckdb-source-wasi-${package.version}";
+    src = package.src;
     patches =
       [
         ./patches/duckdb-wasi-no-file-lock.patch
         ./patches/duckdb-wasi-posix-semaphore.patch
         (
-          if lib.versionOlder prev.duckdb.version "1.5"
+          if lib.versionOlder package.version "1.5"
           then ./patches/duckdb-wasi-static-loadable-ext-pre15.patch
           else ./patches/duckdb-wasi-static-loadable-ext.patch
         )
         ./patches/duckdb-icu-double-conversion-wasm.patch
       ]
-      ++ lib.optional (lib.versionOlder prev.duckdb.version "1.5")
+      ++ lib.optional (lib.versionOlder package.version "1.5")
       ./patches/duckdb-wasi-no-if2ip-pre15.patch;
   };
 in
-  helpers.extendPackage prev.duckdb {
+  exposeExtendedPackage {
     src = patchedSrc;
     cmakeFlags = [
       # Skips a probe that runs a just-built duckdb_platform_binary, here wasm.
@@ -39,5 +40,5 @@ in
     ];
     # The non-PIC EH sysroots ship no <dlfcn.h>, which dl.hpp includes off Windows;
     # `off` compiles with -fno-exceptions, which libpg_query's try/throw rejects.
-    passthru.wasix.supportedProfiles = helpers.profiles.pic;
+    passthru.wasix.supportedProfiles = profileSets.pic;
   }

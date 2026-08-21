@@ -2,12 +2,8 @@
 # "wasm", which also matches wasi despite wasi having threads, fs and sockets, so
 # the seds narrow every wasm gate to the browser target. The shared Rust platform
 # applies the WASIX crate edits and amends the lock for dependencies they add.
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.hf-xet {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   patches = [./patches/hf-xet-wasi-sigint.patch];
   postPatch = ''
     chmod -R u+w ..

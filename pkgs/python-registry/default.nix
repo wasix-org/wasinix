@@ -21,7 +21,7 @@
   # The wheels carry their own release (pkgs/python-publish.nix). Revision
   # state is read only to report keys no served version claims.
   rels = builtins.fromJSON (builtins.readFile ../../release-revisions.json);
-  relPrefix = "pythonRegistry.wheels.";
+  relPrefix = "artifacts.registry.python314.wheels.";
   inherit (import ../python-publish.nix {inherit pkgs lib;}) publishOf interpreters;
 
   # Repo-relative "path:line" of the package definition, for the index's
@@ -62,8 +62,9 @@
       published = "${publishedDrv}";
       # provenance nested by python version and upstream version, so pname collides neither
       # across py313/py314 nor with a served history version of itself:
-      # `nix build github:wasix-org/wasinix/<rev>#${attr}` rebuilds it.
-      attr = ''pythonRegistry.published.${pv}.${name}."${version}"'';
+      # `nix build github:wasix-org/wasinix/<rev>#legacyPackages.x86_64-linux.${attr}`
+      # rebuilds it.
+      attr = ''artifacts.registry.python314.published.${pv}.${name}."${version}"'';
       drvPath = builtins.unsafeDiscardStringContext drv.drvPath;
       source = sourceOf drv;
       # our build differs from upstream's, so PyPI cannot stand in for it
@@ -156,7 +157,7 @@ in
       // {
         tests = mkTestGroup "python-registry" {behavior = tests;};
         inherit indexer wheelVersions wheels published;
-        wasix.updateNotes = lib.optional (staleRels != []) {
+        wasinix.update.notes = lib.optional (staleRels != []) {
           message = "release-revisions.json has stale keys (${lib.concatStringsSep ", " staleRels}); nix run .#update -- nixpkgs drops them";
           when = _: _: true;
         };

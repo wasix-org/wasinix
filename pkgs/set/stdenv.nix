@@ -1,6 +1,6 @@
 # The wasix cross stdenv: a nixpkgs cc-wrapper around a shim that execs
 # wasixcc/wasix++ with this profile's WASIXCC_* env. Installed as
-# config.replaceCrossStdenv by set/mk-pkgs.nix.
+# config.replaceCrossStdenv by the project constructor.
 {
   lib,
   toolchain,

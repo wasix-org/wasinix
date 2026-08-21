@@ -3,11 +3,10 @@
 # already reports such gaps as APR_ENOTIMPL. sendfile it implements per OS with
 # no wasi branch, so that one stays off rather than reporting a call it cannot make.
 {
-  prev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  profileSets,
 }:
-helpers.extendPackage prev.apr {
+exposeExtendedPackage {
   patches = [./patches/wasi-unsupported-calls.patch];
   # Nixpkgs removes the network tests. Emulated checks run with network access.
   postPatch = _: "";
@@ -16,7 +15,7 @@ helpers.extendPackage prev.apr {
   # check-output has already observed nixpkgs' doCheck, so skip its prebuild too.
   wasixCheckPrebuild = ":";
   # its DSO support needs dlopen, so the PIC sysroots
-  passthru.wasix.supportedProfiles = helpers.profiles.pic;
+  passthru.wasix.supportedProfiles = profileSets.pic;
   configureFlags = [
     "ac_cv_func_sendfile=no"
     # a run test, so cross builds take its fallback; wasi's strerror_r is the

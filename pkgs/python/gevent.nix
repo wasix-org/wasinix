@@ -2,12 +2,12 @@
 # cross-build here, so embed the bundled libev (the CPython default loop) and drop
 # the rest. libev's inner ./configure needs --host, else autoconf runs wasm probes.
 {
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  dropInputsByNameInfix,
+  linkInputs,
 }:
-helpers.extendPackage pyprev.gevent (
-  helpers.linkInputs (helpers.dropInputsByNameInfix ["libev" "libuv" "c-ares"])
+exposeExtendedPackage (
+  linkInputs (dropInputsByNameInfix ["libev" "libuv" "c-ares"])
   // {
     env = {
       GEVENTSETUP_EMBED = "1";

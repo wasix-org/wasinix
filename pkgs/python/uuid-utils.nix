@@ -1,10 +1,6 @@
 # uuid-utils for wasix. maturin/pyo3 wheel (fast UUIDs; langchain/langgraph ids).
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.uuid-utils {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   maturinBuildFlags = ["--features" "pyo3/extension-module"];
   # forks and re-execs the shebanged interpreter in-guest, which re-enters the
   # wasix-run stub (WASIX-TODO.md)

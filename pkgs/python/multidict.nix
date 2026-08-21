@@ -1,12 +1,10 @@
 {
-  pyprev,
-  pyfinal,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
 }:
-helpers.extendPackage pyprev.multidict {
+exposeExtendedPackage {
   # Omit objgraph, whose Graphviz closure cannot build for WASIX.
-  passthru.wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.pytest-cov-stub];
+  passthru.wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook packages.sameProfile.pytest-cov-stub];
   disabledTestPaths = [
     "tests/isolated"
     "tests/test_multidict_benchmarks.py"

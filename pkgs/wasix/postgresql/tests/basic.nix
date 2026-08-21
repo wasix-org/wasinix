@@ -3,24 +3,26 @@
 # tools reach a real server over TCP.
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
+  packageForEntry,
+  packages,
   ...
 }: let
-  postgres = [wasmerPkgs.postgres];
-  native = pkgs."postgresql_${pkgs.lib.versions.major wasmerPkgs.postgres.version}";
+  postgres = builtins.attrValues entry.commands;
+  native = pkgs."postgresql_${pkgs.lib.versions.major (packageForEntry packages entry).version}";
 in {
-  version = testLib.mkWasixRun {
+  version = harnesses.hostShell {
     name = "postgres-version";
-    wasixPkgs = postgres;
+    wasixCommands = postgres;
     script = "postgres --version";
   };
 
   # plpgsql exercises the dlopen path: its handler is a shared module the
   # backend loads on the first call.
-  single-user = testLib.mkWasixRun {
+  single-user = harnesses.hostShell {
     name = "postgres-single-user";
-    wasixPkgs = postgres;
+    wasixCommands = postgres;
     timeout = 1800;
     script = ''
       initdb -D db -U postgres --no-locale --encoding=UTF8
@@ -41,9 +43,9 @@ in {
     '';
   };
 
-  client = testLib.mkWasixRun {
+  client = harnesses.hostShell {
     name = "postgres-client";
-    wasixPkgs = postgres;
+    wasixCommands = postgres;
     wasmerArgs = ["--net"];
     timeout = 1800;
     # WASIX cannot bind an AF_UNIX socket, so the server is TCP-only.
@@ -74,9 +76,9 @@ in {
     '';
   };
 
-  postmaster = testLib.mkWasixRun {
+  postmaster = harnesses.hostShell {
     name = "postgres-postmaster";
-    wasixPkgs = postgres;
+    wasixCommands = postgres;
     wasmerArgs = ["--net"];
     timeout = 1800;
     broken = "the postmaster forks its background workers, and WASIX fork() reports ENOTSUP";

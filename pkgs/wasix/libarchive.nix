@@ -4,12 +4,8 @@
 # because wasm-ld tolerates the undefined symbol. A declaration plus an ENOSYS
 # stub keeps the archive_read_disk API linkable; only directory-tree reading
 # uses it, and nix only reads archives from memory/fds.
-{
-  prev,
-  helpers,
-  ...
-}:
-helpers.extendPackage prev.libarchive {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   # no emulated check: all 5 test binaries (libarchive_test, bsdtar_test,
   # bsdcpio_test, bsdcat_test, bsdunzip_test) trap with "out of bounds
   # memory access" immediately in main, before any real test logic runs

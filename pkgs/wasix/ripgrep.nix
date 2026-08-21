@@ -4,13 +4,15 @@
 # impossible when cross-building). Blank both; the wasix rustPlatform disables
 # installChecks anyway. pcre2 (-P) stays on.
 {
-  prev,
-  helpers,
-  ...
+  exposePackage,
+  extendPackage,
+  package,
 }:
-# No emulatedCheck: the globset --lib suite traps the runtime (exit 27, no
-# Rust panic); a wasmer bug, WASIX-TODO.md.
-helpers.extendPackage (prev.ripgrep.overrideAttrs (_: {
-  postFixup = "";
-  installCheckPhase = "";
-})) {passthru.wasinix.shipped = true;}
+exposePackage (
+  # No emulatedCheck: the globset --lib suite traps the runtime (exit 27, no
+  # Rust panic); a wasmer bug, WASIX-TODO.md.
+  extendPackage (package.overrideAttrs (_: {
+    postFixup = "";
+    installCheckPhase = "";
+  })) {passthru.wasinix.shipped = true;}
+)

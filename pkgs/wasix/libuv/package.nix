@@ -2,12 +2,8 @@
 # onto 1.52.1; the current wasix-libc has chown/setgroups/recvmsg/sendmsg, so
 # those reference patches are dropped. autogen.sh regenerates configure from
 # the patched configure.ac/Makefile.am.
-{
-  prev,
-  helpers,
-  ...
-}:
-helpers.extendPackage prev.libuv {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   # no emulated check: patch 0011 makes uv_spawn return UV_ENOSYS under
   # __wasi__ on every profile (fork itself is undeclared only under Wasm-EH,
   # not on off; WASIX-TODO.md); the library doesn't otherwise need fork().

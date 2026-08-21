@@ -3,33 +3,34 @@
 # nativeBuildInputs is what puts a2x on PATH. The configure flags answer probes
 # autoconf refuses to run when cross compiling.
 {
-  prev,
-  final,
-  helpers,
-  ...
+  exposePackage,
+  extendPackage,
+  package,
+  packages,
 }:
-helpers.extendPackage (prev.pixz.override {
-  inherit
-    (final.buildPackages)
-    libtool
-    asciidoc
-    libxslt
-    libxml2
-    docbook_xml_dtd_45
-    docbook_xsl
-    ;
-}) {
-  passthru.wasix.smokeTest = false;
-  configureFlags = [
-    "ac_cv_file_src_pixz_1=no"
-    "ac_cv_func_malloc_0_nonnull=yes"
-    "ac_cv_func_realloc_0_nonnull=yes"
-  ];
-  nativeBuildInputs = with final.buildPackages; [
-    asciidoc
-    libxslt
-    libxml2
-    docbook_xml_dtd_45
-    docbook_xsl
-  ];
-}
+exposePackage (
+  extendPackage (package.override {
+    inherit
+      (packages.sameProfile.buildPackages)
+      libtool
+      asciidoc
+      libxslt
+      libxml2
+      docbook_xml_dtd_45
+      docbook_xsl
+      ;
+  }) {
+    configureFlags = [
+      "ac_cv_file_src_pixz_1=no"
+      "ac_cv_func_malloc_0_nonnull=yes"
+      "ac_cv_func_realloc_0_nonnull=yes"
+    ];
+    nativeBuildInputs = with packages.sameProfile.buildPackages; [
+      asciidoc
+      libxslt
+      libxml2
+      docbook_xml_dtd_45
+      docbook_xsl
+    ];
+  }
+)

@@ -2,23 +2,22 @@
 # numpy.get_include() → native headers (NPY_SIZEOF_LONG=8) mismatching the wasm numpy (=4),
 # so its cython buffers fail to import ("Buffer dtype mismatch"). Point it at the cross numpy.
 {
-  pyfinal,
-  pyprev,
-  wasixPython,
+  exposeExtendedPackage,
+  packages,
+  package,
+  pkgs,
   lib,
-  helpers,
-  ...
 }: let
-  crossNumpyInc = "${wasixPython.pkgs.numpy}/lib/${wasixPython.libPrefix}/site-packages/numpy/_core/include";
+  crossNumpyInc = "${packages.sameProfile.numpy}/lib/${packages.sameProfile.python.libPrefix}/site-packages/numpy/_core/include";
   # 3.0 spells its numpy build pin differently and carries a usable version;
   # everything below needs both corrected.
-  pre3 = lib.versionOlder pyprev.pandas.version "3";
+  pre3 = lib.versionOlder package.version "3";
   # 2.2 pins its build tools exactly (meson==1.2.1, Cython~=3.0.5); 2.3 already
   # relaxed to ranges our set satisfies. Relax the exact pins to ours.
-  pinnedBuildTools = lib.versionOlder pyprev.pandas.version "2.3";
+  pinnedBuildTools = lib.versionOlder package.version "2.3";
 in
   # wasm build only: a native pandas must keep its own np.get_include().
-  helpers.extendPackage pyprev.pandas {
+  exposeExtendedPackage {
     # nixpkgs leaves pandas' suite off; opt in, running from the installed
     # wheel (the source tree lacks the compiled extensions). Replaces the
     # stashed check inputs: nixpkgs' list carries an optional-IO test matrix
@@ -26,7 +25,7 @@ in
     passthru = old:
       old
       // {
-        wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.hypothesis pyfinal.pytest-xdist];
+        wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook packages.sameProfile.hypothesis packages.sameProfile.pytest-xdist];
         wasinix =
           (old.wasinix or {})
           // {
@@ -98,7 +97,7 @@ in
           # prefers an importable _version_meson over versioneer, so state the
           # version here instead of depending on that sed.
           printf '__version__ = "%s"\n__git_version__ = "unknown"\n' \
-            '${pyprev.pandas.version}' > _version_meson.py
+            '${package.version}' > _version_meson.py
         ''
         + lib.optionalString pinnedBuildTools ''
           substituteInPlace pyproject.toml \

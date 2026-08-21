@@ -1,9 +1,5 @@
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.objgraph {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   # Graph rendering needs a native CLI; object counting does not.
   patches = _: [];
 }

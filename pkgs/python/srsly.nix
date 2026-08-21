@@ -1,11 +1,9 @@
 {
-  pyprev,
-  helpers,
+  exposeExtendedPackage,
+  packages,
   lib,
-  wasixPython,
-  ...
 }:
-helpers.extendPackage pyprev.srsly {
+exposeExtendedPackage {
   # setup.py prepends the running build interpreter's include directory,
   # making its 64-bit pyport.h win over the wasm32 Python headers.
   postPatch = ''
@@ -21,7 +19,7 @@ helpers.extendPackage pyprev.srsly {
   # These tests target a compatibility module excluded from the wheel.
   disabledTestPaths =
     ["srsly/tests/cloudpickle"]
-    ++ lib.optionals (lib.versionAtLeast wasixPython.pythonVersion "3.14") ["srsly/tests/ujson/test_ujson.py"];
+    ++ lib.optionals (lib.versionAtLeast packages.sameProfile.python.pythonVersion "3.14") ["srsly/tests/ujson/test_ujson.py"];
   disabledTests = [
     "test_duplicate_key_01"
     "test_duplicate_keys_02"

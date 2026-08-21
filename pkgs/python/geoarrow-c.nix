@@ -1,8 +1,4 @@
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.geoarrow-c {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   passthru.wasinix.checks.captured.broken = "extension exceptions trap in _Unwind_RaiseException";
 }

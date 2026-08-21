@@ -5,8 +5,8 @@
 # a data dir across a server restart.
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: let
   # Boot rustfs + wait until the S3 endpoint answers; `mc alias set` pings it, so
@@ -39,12 +39,12 @@
     }
   '';
   mkTest = name: body:
-    testLib.mkWasixRun {
+    harnesses.hostShell {
       inherit name;
-      wasixPkgs = [wasmerPkgs.rustfs];
-      nativePkgs = [pkgs.minio-client pkgs.coreutils pkgs.gnugrep pkgs.diffutils];
+      wasixCommands = builtins.attrValues entry.commands;
+      hostPackages = [pkgs.minio-client pkgs.coreutils pkgs.gnugrep pkgs.diffutils];
       wasmerArgs = ["--net"];
-      forwardEnv = testLib.defaultForwardEnv ++ ["RUST_BACKTRACE" "RUSTFS_CONSOLE_ENABLE"];
+      forwardEnv = harnesses.defaultForwardEnv ++ ["RUST_BACKTRACE" "RUSTFS_CONSOLE_ENABLE"];
       script = preamble + "\n" + body;
     };
 in {

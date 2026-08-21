@@ -7,8 +7,10 @@
     commands,
     entry,
     harnesses,
+    packageForEntry,
     packages,
     pkgs,
+    runners,
     ...
   }:
     lib.optionalAttrs (
@@ -22,7 +24,7 @@
       tests = projectLib.loadTestDirectory {
         dir = entry.definition.directory + "/tests";
         context = {
-          inherit artifacts commands entry harnesses packages pkgs;
+          inherit artifacts commands entry harnesses packageForEntry packages pkgs runners;
         };
       };
     };

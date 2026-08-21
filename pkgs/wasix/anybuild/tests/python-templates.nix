@@ -13,15 +13,18 @@
 # runs on both, so the newer interpreter's wheels are still exercised end to end.
 {
   pkgs,
-  preferredProfilePackages,
-  testLib,
+  artifacts,
+  harnesses,
   helpers,
-  pythonRegistry,
-  wasmerPackages,
+  packages,
+  runners,
 }: let
   inherit (pkgs) lib;
 
   examples = "${pkgs.anybuild.src}/examples";
+  pythonRegistry = artifacts.registry.python314;
+  wasmerRuntime = runners.rawWasm.withRuntime.wasmer;
+  bash = packages.preferred.bash.artifacts;
 
   # Templates whose install steps produce a cross-compiled site-packages: the
   # python provider serves the app off a wasix venv, while mkdocs only uses
@@ -41,11 +44,11 @@
   interpreters = {
     "3.13" = {
       host = pkgs.python313;
-      webc = preferredProfilePackages.python313;
+      webc = packages.preferred.python313.artifacts;
     };
     "3.14" = {
       host = pkgs.python314;
-      webc = preferredProfilePackages.python314;
+      webc = packages.preferred.python314.artifacts;
     };
   };
 
@@ -58,7 +61,7 @@
   runtimeWebcs = interpreter:
     pkgs.runCommand "anybuild-runtime-webcs-${interpreter.webc.pkg.id.name}" {} ''
       mkdir -p "$out"
-      for tree in ${interpreter.webc.webc} ${wasmerPackages.bash.webc} ${depTrees [interpreter.webc wasmerPackages.bash]}; do
+      for tree in ${interpreter.webc.webc} ${bash.webc} ${depTrees [interpreter.webc bash]}; do
         cp -R --no-preserve=mode,ownership "$tree/." "$out/"
       done
     '';
@@ -70,7 +73,7 @@
   interpreterEnv = version: interpreter: ''
     export ANYBUILD_PYTHON_VERSION=${version}
     export ANYBUILD_WASMER_PACKAGE_PYTHON=${reference interpreter.webc.pkg}
-    export ANYBUILD_WASMER_PACKAGE_BASH=${reference wasmerPackages.bash.pkg}
+    export ANYBUILD_WASMER_PACKAGE_BASH=${reference bash.pkg}
   '';
 
   # anybuild builds the wasmer invocation itself, so the local packages ride in
@@ -81,15 +84,15 @@
     #!/bin/sh
     if [ "\$1" = run ]; then
       shift
-      exec ${lib.getExe testLib.wasmer} run --quiet --offline --include-webc ${runtimeWebcs interpreter} "\$@"
+      exec ${wasmerRuntime}/bin/wasmer run --quiet --offline --include-webc ${runtimeWebcs interpreter} "\$@"
     fi
-    exec ${lib.getExe testLib.wasmer} "\$@"
+    exec ${wasmerRuntime}/bin/wasmer "\$@"
     EOF
     chmod +x wasmer-local
     wasmer_local="$PWD/wasmer-local"
   '';
 
-  toolsFor = interpreter: [pkgs.anybuild pkgs.uv interpreter.host pkgs.bash pkgs.curl testLib.wasmer];
+  toolsFor = interpreter: [pkgs.anybuild pkgs.uv interpreter.host pkgs.bash pkgs.curl wasmerRuntime];
 
   expectations = version:
     pkgs.writeText "anybuild-cross-install-${version}.json" (builtins.toJSON {
@@ -98,9 +101,10 @@
     });
 
   buildTest = version: interpreter:
-    testLib.mkScriptRun {
+    harnesses.hostShell {
       name = "anybuild-python-templates-${version}";
-      packages = toolsFor interpreter;
+      hostPackages = toolsFor interpreter;
+      wasixCommands = [];
       timeout = 5400;
       script = ''
         ${helpers.serveIndexes pythonRegistry}
@@ -128,9 +132,10 @@
   # registry, which is also the only way it can load our wheels at all (the
   # pinned python/python is built without threads; see WASIX-TODO.md).
   serveTest = version: interpreter:
-    testLib.mkScriptRun {
+    harnesses.hostShell {
       name = "anybuild-python-template-serve-${version}";
-      packages = toolsFor interpreter;
+      hostPackages = toolsFor interpreter;
+      wasixCommands = [];
       timeout = 1800;
       script = ''
         ${helpers.serveIndexes pythonRegistry}

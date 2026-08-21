@@ -3,14 +3,12 @@
 # imports rather than failing, so the miss only surfaces as an unresolved
 # `kSooControl` when wasmer loads the module; link abseil explicitly.
 {
-  pyprev,
-  final,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  pkgs,
 }: let
-  absl = final.abseil-cpp;
+  absl = pkgs.abseil-cpp;
 in
-  helpers.extendPackage pyprev.google-re2 {
+  exposeExtendedPackage {
     buildInputs = [absl];
     # The -l set is enumerated in the build, where abseil is an input anyway;
     # an eval-time readDir would import-from-derivation the whole toolchain.

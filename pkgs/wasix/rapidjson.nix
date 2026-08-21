@@ -1,16 +1,15 @@
 # rapidjson builds its tests and docs by default; a cross build runs neither,
 # and the doc pass wants doxygen and graphviz.
 {
-  prev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  dropInputsByName,
 }:
-helpers.extendPackage prev.rapidjson {
+exposeExtendedPackage {
   cmakeFlags = [
     "-DRAPIDJSON_BUILD_TESTS=OFF"
     "-DRAPIDJSON_BUILD_DOC=OFF"
   ];
-  passthru.wasix.smokeTest.source = ''
+  passthru.wasinix.checks.link.source = ''
     #include <rapidjson/document.h>
 
     int main() {
@@ -19,6 +18,6 @@ helpers.extendPackage prev.rapidjson {
       return document.HasParseError();
     }
   '';
-  buildInputs = helpers.dropInputsByName ["gtest"];
+  buildInputs = dropInputsByName ["gtest"];
   doCheck = false;
 }

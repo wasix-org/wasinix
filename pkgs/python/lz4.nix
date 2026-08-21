@@ -1,11 +1,7 @@
 # Pytest's default import mode puts the rootdir on sys.path, so the suite
 # imports the source tree, not the installed package; importlib mode avoids it.
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.lz4 {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   # the *_2.py memory tests import psutil, which raises on wasix at collection
   # and aborts the whole run
   disabledTestPaths = ["tests/stream/test_stream_2.py" "tests/block/test_block_2.py"];

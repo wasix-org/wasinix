@@ -2,22 +2,20 @@
 # accept the static libzmq target from wasix/zeromq.nix; without
 # Python_INCLUDE_DIR, find_package(Python) picks the build interpreter's headers.
 {
-  final,
-  wasixPython,
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
+  pkgs,
 }: let
-  py = wasixPython;
+  py = packages.sameProfile.python;
 in
-  helpers.extendPackage pyprev.pyzmq {
+  exposeExtendedPackage {
     patches = [./patches/pyzmq-detect-static-libzmq.patch];
     cmakeFlags = [
       "-DPython_INCLUDE_DIR=${py.crossIncludeDir}"
       "-DPython_EXECUTABLE=${py.pythonOnBuildForHost.interpreter}"
       # under CMP0190 FindPython refuses Interpreter + Development.Module together
       # when cross-compiling unless an emulator is set; `env` is the identity one.
-      "-DCMAKE_CROSSCOMPILING_EMULATOR=${final.lib.getExe' final.buildPackages.coreutils "env"}"
+      "-DCMAKE_CROSSCOMPILING_EMULATOR=${pkgs.buildPackages.coreutils}/bin/env"
     ];
     # libzmq.a is C++ but the extension links with the C driver.
     env.NIX_LDFLAGS = "-lc++ -lc++abi -lunwind";

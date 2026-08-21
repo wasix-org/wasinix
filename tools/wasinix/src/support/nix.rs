@@ -16,6 +16,18 @@ use crate::support::process::CommandStatus;
 
 pub const SYSTEM: &str = "x86_64-linux";
 
+pub fn project_attr(path: &str) -> String {
+    if path.is_empty() {
+        format!("legacyPackages.{SYSTEM}")
+    } else {
+        format!("legacyPackages.{SYSTEM}.{path}")
+    }
+}
+
+pub fn project_installable(flake: &str, path: &str) -> String {
+    format!("{flake}#{}", project_attr(path))
+}
+
 pub fn canonical_webcs_apply(map: &str) -> String {
     // Revisions from before alias support have no packageKey and contain only
     // canonical entries, which keeps cross-revision comparisons evaluable.
@@ -41,20 +53,15 @@ pub fn cache_push_store() -> String {
     format!("s3://{CACHE_BUCKET}?region=auto&endpoint={CACHE_ENDPOINT}&compression=zstd")
 }
 
+
 /// Whether a stderr line is nix transfer chatter rather than a message: an
 /// error excerpt taking the tail of a stream must not let hundreds of
 /// `copying path` lines push the actual failure out of the window.
 pub fn progress_noise(line: &str) -> bool {
     let line = line.trim_start();
-    [
-        "copying path '",
-        "building '",
-        "unpacking '",
-        "querying info about",
-        "downloading '",
-    ]
-    .iter()
-    .any(|prefix| line.starts_with(prefix))
+    ["copying path '", "building '", "unpacking '", "querying info about", "downloading '"]
+        .iter()
+        .any(|prefix| line.starts_with(prefix))
 }
 
 /// The target Nix announces when automatic GC starts. Nix does not report
@@ -330,7 +337,8 @@ impl Invocation {
             cmd.env(name, value);
         }
         if let Some(path) = &self.stdin {
-            let file = std::fs::File::open(path).map_err(|e| crate::support::error::io(path, e))?;
+            let file =
+                std::fs::File::open(path).map_err(|e| crate::support::error::io(path, e))?;
             cmd.stdin(file);
         }
         cmd.args(&self.subcommand);
@@ -539,17 +547,14 @@ pub fn eval_installable(installable: &str, apply: Option<&str>) -> Result<Value>
 
 /// Evaluate `legacyPackages.<system>.<attr>`, optionally through `--apply`.
 pub fn eval(flake: &Flake<'_>, attr: &str, apply: Option<&str>) -> Result<Value> {
-    eval_installable(
-        &format!("{}#legacyPackages.{SYSTEM}.{attr}", flake.0),
-        apply,
-    )
+    eval_installable(&project_installable(flake.0, attr), apply)
 }
 
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
 
-    use super::{Invocation, canonical_webcs_apply};
+    use super::{canonical_webcs_apply, Invocation};
 
     #[test]
     fn a_timed_invocation_cannot_lose_its_deadline() {

@@ -31,12 +31,41 @@
     tag = version;
     hash = "sha256-TKvDtvvCi1mOhYvbb7kHK7cWezZp/XyaydZY1ZJQR4g=";
   };
+  pin = pkgs.runCommand "wasix-llvm-pin" {
+    inherit version;
+    src = monorepoSrc;
+    pos = __curPos;
+  } "touch $out";
+  updateScript = {
+    name = "llvm";
+    command = nix-update-script {
+      extraArgs = [
+        "--flake"
+        "--version-regex"
+        "^([0-9.]+)$"
+      ];
+    };
+    attrPath = "packages.native.wasix-llvm.pin";
+    accepts = ["release" "revision"];
+    source = {
+      kind = "github";
+      owner = "wasix-org";
+      repo = "llvm-project";
+    };
+  };
+  updateNotes = [
+    {
+      name = "llvm";
+      message = "the base LLVM version moved with this bump and nixpkgs' patch selection switched with it; check the toolchain build and the applied patches";
+      when = prior: current: prior != null && current != null && baseOf prior != baseOf current;
+    }
+  ];
 
   # The stock compiler-rt/libcxx are invalid for wasix and the replacements are
   # per-ABI-variant, so override them with a throw pointing at variants.<v>. Safe:
   # the pieces we use (clang-unwrapped/lld/llvm/monorepoSrc) don't depend on them.
   perVariant = comp:
-    throw "toolchain.llvm.${comp}: wasix ${comp} is per-ABI-variant; there is no single one. Use toolchain.variants.<variant>.${comp} (e.g. variants.exnrefEh.${comp}).";
+    throw "wasix-llvm.${comp}: wasix ${comp} is per-ABI-variant; use the profile interface attached to packages.native.wasix-llvm";
   llvm =
     (llvmPackages.override (_old: {
       officialRelease = {};
@@ -68,8 +97,8 @@
           __intentionallyOverridingVersion = true;
           pos = __curPos;
         });
-        # Update metadata rides on clang because that is the fork drv in the ci
-        # job set (toolchain.llvm.clang). nix-update finds the file to edit at
+        # Update metadata rides on clang because that is the fork derivation.
+        # nix-update finds the file to edit at
         # the version attr's definition site, which through overrideAttrs still
         # points into nixpkgs; `pin` is the pin as a record of its own, with
         # version and src defined here.
@@ -79,36 +108,6 @@
             (old.passthru or {})
             // {
               unwrapped = final.clang-unwrapped;
-              pin = pkgs.runCommand "wasix-llvm-pin" {
-                inherit version;
-                src = monorepoSrc;
-                pos = __curPos;
-              } "touch $out";
-              updateScript = {
-                name = "llvm"; # attr tail is `clang`
-                # the fork also carries non-release tags (wasixrel-*, llvmorg-*)
-                command = nix-update-script {
-                  extraArgs = [
-                    "--flake"
-                    "--version-regex"
-                    "^([0-9.]+)$"
-                  ];
-                };
-                attrPath = "toolchain.llvm.clang.pin";
-                accepts = ["release" "revision"];
-                source = {
-                  kind = "github";
-                  owner = "wasix-org";
-                  repo = "llvm-project";
-                };
-              };
-              wasix.updateNotes = [
-                {
-                  name = "llvm";
-                  message = "the base LLVM version moved with this bump and nixpkgs' patch selection switched with it; check the toolchain build and the applied patches";
-                  when = prior: current: prior != null && current != null && baseOf prior != baseOf current;
-                }
-              ];
             };
         });
       }
@@ -141,6 +140,7 @@ in
     passthru =
       (old.passthru or {})
       // {
-        inherit version llvmVersion monorepoSrc llvm;
+        inherit version llvmVersion monorepoSrc llvm pin updateScript;
+        wasinix.update.notes = updateNotes;
       };
   })

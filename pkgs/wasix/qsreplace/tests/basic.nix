@@ -1,14 +1,14 @@
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: let
   cmp = name: script:
-    testLib.mkScriptComparison {
+    harnesses.compareShells {
       inherit name script;
-      nativePkgs = [pkgs.qsreplace];
-      wasixPkgs = [wasmerPkgs.qsreplace];
+      hostPackages = [pkgs.qsreplace];
+      wasixCommands = builtins.attrValues entry.commands;
     };
 in {
   replace = cmp "qsreplace-replace" ''

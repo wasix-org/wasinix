@@ -1,10 +1,9 @@
 # ruamel.base for wasix. setuptools names its namespace-package .pth after the
 # interpreter, so the two builds differ by that filename alone.
 {
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  package,
 }:
-helpers.extendPackage pyprev.ruamel-base {
-  passthru = pyprev.ruamel-base.passthru // {wasix = {interpreterSpecific = true;};};
+exposeExtendedPackage {
+  passthru = package.passthru // {wasix = {interpreterSpecific = true;};};
 }

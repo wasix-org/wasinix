@@ -16,10 +16,10 @@ package set. Rust extension modules use the shared Rust wheel hooks described in
 
 ## Wheels
 
-`pkgs/python/wheels.nix` declares the shipped wheels. `pkgs/python-wheels.nix`
-turns those declarations into build targets and runs their import tests under
-Wasmer. The wheel index and publication flow are described in
-[`registry.md`](registry.md#the-python-wheel-index).
+`pkgs/python/wheels/default.nix` declares the shipped wheels.
+`pkgs/python-wheels.nix` turns those declarations into build targets and runs
+their import tests under Wasmer. The wheel index and publication flow are
+described in [`registry.md`](registry.md#the-python-wheel-index).
 
 For package selection and coverage, see
 [`python-coverage.md`](python-coverage.md). The survey data behind that work is

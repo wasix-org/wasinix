@@ -1,13 +1,15 @@
 # libpng/libjpeg auto-thread; the *Support flags are build options (kept).
 {
-  prev,
-  helpers,
-  ...
+  exposePackage,
+  extendPackage,
+  package,
 }:
-helpers.extendPackage (prev.libwebp.override {
-  threadingSupport = false;
-  pngSupport = true;
-  jpegSupport = true;
-  tiffSupport = false;
-  gifSupport = false;
-}) {}
+exposePackage (
+  extendPackage (package.override {
+    threadingSupport = false;
+    pngSupport = true;
+    jpegSupport = true;
+    tiffSupport = false;
+    gifSupport = false;
+  }) {}
+)

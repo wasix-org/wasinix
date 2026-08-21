@@ -9,26 +9,25 @@
 # initialized first (hashlib before cryptography). Whole-archive libssl+libcrypto into
 # the dylib so every openssl reference resolves inside.
 {
-  pyprev,
-  pyfinal,
-  final,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  package,
+  pkgs,
+  lib,
 }: let
-  lib = final.lib;
+  lib = pkgs.lib;
   # nixpkgs' patches target the release nixpkgs packages (right now the argon2
   # and scrypt test files); on a rebased history version they mis-apply, and
   # tests don't run cross anyway. Keyed on the history spec rather than a
   # version boundary so it stays right across nixpkgs bumps.
-  isHistory = (pyprev.cryptography.passthru.wasix.historySpec or null) != null;
+  isHistory = (package.passthru.wasix.historySpec or null) != null;
   # the rust crate and its lock sat under src/rust until 45 moved both to the
   # repo root; the setup hook validates $cargoRoot/Cargo.lock. The vendor reads
   # the same lock, from the history entry's vendorLayout.
-  splitCargoRoot = lib.versionOlder pyprev.cryptography.version "45";
+  splitCargoRoot = lib.versionOlder package.version "45";
 in
-  helpers.extendPackage pyprev.cryptography ({
+  exposeExtendedPackage ({
       env = {
-        CC = lib.getExe' final.stdenv.cc "${final.stdenv.cc.targetPrefix}cc";
+        CC = "${pkgs.stdenv.cc}/bin/${pkgs.stdenv.cc.targetPrefix}cc";
         OPENSSL_NO_VENDOR = "1";
         CFLAGS = "-fwasm-exceptions";
         # The extension links through rustc's own wasm rust-lld, which keeps
@@ -38,8 +37,8 @@ in
         RUSTFLAGS = toString [
           "-C link-arg=-Bsymbolic"
           "-C link-arg=--whole-archive"
-          "-C link-arg=${lib.getLib final.openssl}/lib/libssl.a"
-          "-C link-arg=${lib.getLib final.openssl}/lib/libcrypto.a"
+          "-C link-arg=${lib.getLib pkgs.openssl}/lib/libssl.a"
+          "-C link-arg=${lib.getLib pkgs.openssl}/lib/libcrypto.a"
           "-C link-arg=--no-whole-archive"
           # openssl-sys's own -lssl/-lcrypto lazily pull some of the same
           # members; first definition wins and both are the same objects.

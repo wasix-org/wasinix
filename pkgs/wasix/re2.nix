@@ -2,12 +2,11 @@
 # build inputs; gbenchmark does not cross-build, and a cross build cannot run
 # either suite.
 {
-  prev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  dropInputsByName,
 }:
-helpers.extendPackage prev.re2 {
+exposeExtendedPackage {
   cmakeFlags = ["-DRE2_BUILD_TESTING=OFF"];
-  buildInputs = helpers.dropInputsByName ["gbenchmark" "gtest"];
+  buildInputs = dropInputsByName ["gbenchmark" "gtest"];
   doCheck = false;
 }

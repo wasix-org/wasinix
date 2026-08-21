@@ -3,17 +3,16 @@
 # clock_gettime(CLOCK_MONOTONIC) fallback for architectures without one, which
 # is what wasix provides.
 {
-  prev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  dropInputsByName,
 }:
-helpers.extendPackage prev.gbenchmark {
+exposeExtendedPackage {
   patches = [./cycleclock-wasm.patch];
 
   # gtest is built with exceptions, so its `__cxa_throw` finds nothing in the
   # exception-free profiles' libc++abi and the test executables fail to link.
   # A cross build cannot run them regardless.
   cmakeFlags = ["-DBENCHMARK_ENABLE_TESTING=OFF"];
-  buildInputs = helpers.dropInputsByName ["gtest"];
+  buildInputs = dropInputsByName ["gtest"];
   doCheck = false;
 }

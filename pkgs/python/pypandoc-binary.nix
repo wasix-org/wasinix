@@ -5,21 +5,22 @@
 # pandoc webc. poetry's pyproject.toml describes only the plain variant; drop
 # it so setuptools builds from setup(_binary).py.
 {
-  pyfinal,
-  preferredProfilePackages,
-  helpers,
-  ...
+  exposePackage,
+  extendPackage,
+  packages,
 }:
-helpers.extendPackage pyfinal.pypandoc {
-  pname = "pypandoc-binary";
-  nativeBuildInputs = [pyfinal.setuptools pyfinal.wheel];
-  postPatch = ''
-    mv setup_binary.py setup.py
-    rm pyproject.toml
-    # setup_requires wants pip, which is never used in-build (and does not
-    # cross-build); drop the check.
-    substituteInPlace setup.py \
-      --replace-fail "setup_requires=pypandoc.__setup_requires__," ""
-    install -Dm755 ${pyfinal.lib.getExe' preferredProfilePackages.pandoc "pandoc.wasm"} pypandoc/files/pandoc
-  '';
-}
+exposePackage (
+  extendPackage packages.sameProfile.pypandoc {
+    pname = "pypandoc-binary";
+    nativeBuildInputs = [packages.sameProfile.setuptools packages.sameProfile.wheel];
+    postPatch = ''
+      mv setup_binary.py setup.py
+      rm pyproject.toml
+      # setup_requires wants pip, which is never used in-build (and does not
+      # cross-build); drop the check.
+      substituteInPlace setup.py \
+        --replace-fail "setup_requires=pypandoc.__setup_requires__," ""
+      install -Dm755 ${packages.preferred.pandoc}/bin/pandoc.wasm pypandoc/files/pandoc
+    '';
+  }
+)

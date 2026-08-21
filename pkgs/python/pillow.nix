@@ -3,16 +3,16 @@
 # them, leaving a minimal codec set (freetype + jpeg/tiff/webp/openjpeg/zlib);
 # pillow's setup.py auto-disables features whose libs are absent.
 {
-  pyfinal,
-  pyprev,
-  final,
+  exposeExtendedPackage,
+  packages,
+  pkgs,
   lib,
-  helpers,
-  ...
+  dropInputsByName,
+  linkInputs,
 }: let
 in
-  helpers.extendPackage pyprev.pillow (
-    helpers.linkInputs (helpers.dropInputsByName ["lcms2" "libavif" "libimagequant" "libraqm" "libxcb"])
+  exposeExtendedPackage (
+    linkInputs (dropInputsByName ["lcms2" "libavif" "libimagequant" "libraqm" "libxcb"])
     // {
       # the fuzzer tests shell out to `find` at collection; the guest has no
       # coreutils, so collection errors and pytest aborts the entire run
@@ -20,7 +20,7 @@ in
       passthru = old:
         old
         // {
-          wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.numpy pyfinal.defusedxml];
+          wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook packages.sameProfile.numpy packages.sameProfile.defusedxml];
           # No suite: the codec paths trip the shared-library GOT/export
           # defect at a different symbol each run, killing the session
           # (WASIX-TODO.md).
@@ -30,7 +30,7 @@ in
       # keeping only the openjpeg (JPEG2K) root.
       preConfigure = lib.const ''
         substituteInPlace setup.py \
-          --replace-fail 'JPEG2K_ROOT = None' 'JPEG2K_ROOT = "${final.openjpeg.out}/lib", "${lib.getDev final.openjpeg}/include"'
+          --replace-fail 'JPEG2K_ROOT = None' 'JPEG2K_ROOT = "${pkgs.openjpeg.out}/lib", "${lib.getDev pkgs.openjpeg}/include"'
       '';
     }
   )

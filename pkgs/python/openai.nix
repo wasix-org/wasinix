@@ -5,14 +5,19 @@
 # overrideAttrs: buildPythonPackage must recompute propagatedBuildInputs AND
 # requiredPythonModules (makePythonPath forces the latter) without it. The
 # client and its JSON/HTTP core (jiter, httpx, pydantic) are unaffected.
-{pyprev, ...}:
-pyprev.openai.overridePythonAttrs (old: {
-  doCheck = false;
-  passthru =
-    (old.passthru or {})
-    // {
-      wasinix = ((old.passthru or {}).wasinix or {}) // {checks.captured.install = false;};
-    };
-  dependencies =
-    builtins.filter (d: (d.pname or d.name or "") != "sounddevice") (old.dependencies or []);
-})
+{
+  exposePackage,
+  package,
+}:
+exposePackage (
+  package.overridePythonAttrs (old: {
+    doCheck = false;
+    passthru =
+      (old.passthru or {})
+      // {
+        wasinix = ((old.passthru or {}).wasinix or {}) // {checks.captured.install = false;};
+      };
+    dependencies =
+      builtins.filter (d: (d.pname or d.name or "") != "sounddevice") (old.dependencies or []);
+  })
+)

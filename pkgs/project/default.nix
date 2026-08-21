@@ -10,6 +10,7 @@
   runnersFor ? _args: {},
   projectionRules ? {},
   pythonSetsFor ? _args: {},
+  packageTransformFor ? _args: _name: package: package,
   extendPythonSet ? packageSet: overlay: packageSet.overrideScope overlay,
   repairPythonPackage ? package:
     if package ? pythonModule
@@ -55,6 +56,8 @@
     contextFor,
     extension,
     lane,
+    scope,
+    variant,
   }: let
     declared = (extension.overlays or {}).${lane} or (_final: _prev: {});
     rawOverlay =
@@ -65,17 +68,32 @@
         projectLib.loadPackageOverlay {
           inherit contextFor;
           dir = declared.directory;
+          expose = declared.expose or [];
         }
       else throw "Wasinix extension '${extension.id}' overlay lane '${lane}' is not an overlay";
     overlay = final: previous:
-      lib.optionalAttrs (
+      lib.mapAttrs (name: value:
+        if lib.isDerivation value
+        then
+          packageTransformFor {
+            inherit scope variant;
+            packageSet = previous;
+          }
+          name
+          value
+        else value)
+      (lib.optionalAttrs (
         lane
         != "wasix"
         || previous.stdenv.hostPlatform.isWasix or false
-      ) (rawOverlay final previous);
+      ) (rawOverlay final previous));
   in
     projectLib.registerOverlay {
       inherit overlay;
+      definition =
+        if lib.isAttrs declared
+        then declared.definition or null
+        else null;
       source = extension.id;
     };
 
@@ -89,6 +107,7 @@
     contextFor,
     enclosingPkgs,
     extension,
+    interpreter,
   }: let
     declared = (extension.overlays or {}).python;
     enclosingContext = enclosingPkgs.${projectLib.extensionContextsAttr}.${extension.id};
@@ -100,18 +119,30 @@
         projectLib.loadPackageOverlay {
           inherit contextFor;
           dir = declared.directory;
+          expose = declared.expose or [];
         }
       else throw "Wasinix extension '${extension.id}' Python lane is not an overlay";
     overlay = final: previous:
       lib.optionalAttrs (previous.python.stdenv.hostPlatform.isWasix or false)
-      (lib.mapAttrs (_: value:
+      (lib.mapAttrs (name: value:
         if lib.isDerivation value
-        then repairPythonPackage value
+        then
+          packageTransformFor {
+            scope = "python";
+            variant = {inherit interpreter;};
+            packageSet = previous;
+          }
+          name
+          (repairPythonPackage value)
         else value)
       (rawOverlay final previous));
   in
     projectLib.registerOverlay {
       inherit overlay;
+      definition =
+        if lib.isAttrs declared
+        then declared.definition or null
+        else null;
       source = extension.id;
     };
 
@@ -145,15 +176,45 @@
 
   serializableEntry = entry:
     {
-      inherit (entry) kind address source lineage scope variant instance;
+      inherit (entry) kind address name source lineage scope variant instance;
       policy = {
-        aliases = entry.policy.aliases or [];
+        aliases = aliasAddressesFor entry;
         shipped = entry.policy.shipped or false;
         ci = entry.policy.ci or {};
+        publication = entry.policy.publication or {};
         retention = entry.policy.retention or null;
       };
     }
-    // lib.optionalAttrs (entry ? subject) {inherit (entry) subject;};
+    // lib.optionalAttrs (entry ? artifactKind) {inherit (entry) artifactKind;}
+    // lib.optionalAttrs (entry ? packageSubject) {inherit (entry) packageSubject;}
+    // lib.optionalAttrs (entry ? subject) {inherit (entry) subject;}
+    // lib.optionalAttrs (entry ? testName) {inherit (entry) testName;}
+    // lib.optionalAttrs (entry.kind == "package" && entry.scope == "wasix") {
+      spotTarget = "${entry.variant.profile}.${entry.name}";
+      spotOwner = entry.name;
+    };
+
+  aliasAddressesFor = entry: let
+    aliases = entry.policy.aliases or [];
+    projectionPathFor = alias: [alias] ++ builtins.tail entry.projectionPath;
+    addressFor = alias:
+      if entry.kind == "package"
+      then
+        projectLib.address "packages" (
+          (
+            if entry.scope == "native"
+            then ["native"]
+            else if entry.scope == "wasix"
+            then ["wasix" entry.variant.profile]
+            else ["python" entry.variant.interpreter]
+          )
+          ++ projectionPathFor alias
+        )
+      else projectLib.address "artifacts" ([entry.artifactKind] ++ projectionPathFor alias);
+  in
+    if builtins.elem entry.kind ["package" "artifact"]
+    then map addressFor (lib.unique (lib.filter (alias: alias != entry.name) aliases))
+    else [];
 
   projectionsFor = context: entry: let
     namespaces = ["artifacts" "commands" "tests"];
@@ -237,7 +298,7 @@ in rec {
     requestedCiSources = ci.sources or (map (extension: extension.id) extensions);
     unknownCiSources = lib.subtractLists extensionIds requestedCiSources;
 
-    overlaysFor = contextFor: lanes:
+    overlaysFor = contextFor: scope: variant: lanes:
       lib.concatMap (
         extension:
           [
@@ -245,7 +306,7 @@ in rec {
           ]
           ++ map (lane:
             laneOverlay {
-              inherit contextFor extension lane;
+              inherit contextFor extension lane scope variant;
             })
           lanes
       )
@@ -304,6 +365,11 @@ in rec {
         "${package.pname or package.name}: CI selects unsupported profile(s): ${lib.concatStringsSep ", " unsupported}"
         selected;
 
+      ciAvailable = package: let
+        attempted = builtins.tryEval (!(package.meta.broken or false) && (package.meta.available or true));
+      in
+        !attempted.success || attempted.value;
+
       historySpecsFor = scope: name: package: let
         source = (projectLib.packageMetadata package).source;
       in
@@ -313,7 +379,9 @@ in rec {
         finalSet,
         name,
         package,
+        scope,
         spec,
+        variant,
         version,
       }: let
         metadata = projectLib.packageMetadata package;
@@ -324,27 +392,47 @@ in rec {
           lib.throwIf (!(baseSet ? ${name}))
           "${source}.${name}: history requires a preceding package to rebase"
           (rebasePackage version spec baseSet.${name});
-        initial = baseSet // {${name} = rebased;};
-        replayed = lib.foldl' (previous: layer:
-          previous
-          // (projectLib.registerOverlay {
-              inherit (layer) definition overlay;
-              inherit source;
-              instanceFor = resultName: result:
-                if resultName == name
-                then {
-                  kind = "history";
-                  inherit version;
-                }
-                else
-                  (projectLib.packageMetadata
-                    result).instance or {
-                    kind = "current";
-                    version = toString (result.version or result.name);
-                  };
-            }
-            finalSet
-            previous))
+        normalize = packageSet: candidate:
+          packageTransformFor {
+            inherit scope variant packageSet;
+          }
+          name
+          (
+            if scope == "python"
+            then repairPythonPackage candidate
+            else candidate
+          );
+        initial = baseSet // {${name} = normalize baseSet rebased;};
+        replayed = lib.foldl' (previous: layer: let
+          next =
+            previous
+            // (projectLib.registerOverlay {
+                inherit (layer) definition overlay;
+                inherit source;
+                instanceFor = resultName: result:
+                  if resultName == name
+                  then {
+                    kind = "history";
+                    inherit version;
+                  }
+                  else
+                    (projectLib.packageMetadata
+                      result).instance or {
+                      kind = "current";
+                      version = toString (result.version or result.name);
+                    };
+              }
+              finalSet
+              previous);
+          candidate = next.${name};
+          pinned =
+            if toString candidate.version == version
+            then candidate
+            else rebasePackage version spec candidate;
+          result = normalize previous pinned;
+        in
+          next
+          // {${name} = result;})
         initial
         overlays;
         result = replayed.${name};
@@ -353,23 +441,23 @@ in rec {
         "${source}.${name}: history requested ${version}, but replay produced ${toString result.version}"
         result;
 
-      packageViewFor = scope: finalSet: name: package:
+      packageViewFor = scope: variant: finalSet: name: package:
         package
         // {
           versions = lib.mapAttrs (version: spec:
             (replayHistory {
-              inherit finalSet name package spec version;
+              inherit finalSet name package scope spec variant version;
             })
             // {versions = {};})
           (historySpecsFor scope name package);
         };
 
-      packageSetView = scope: finalSet:
-        lib.mapAttrs (name: package: packageViewFor scope finalSet name package)
+      packageSetView = scope: variant: finalSet:
+        lib.mapAttrs (name: package: packageViewFor scope variant finalSet name package)
         (projectLib.registeredPackages finalSet);
 
       projectedPackageFor = scope: variant: finalSet: name: rawPackage: let
-        package = packageViewFor scope finalSet name rawPackage;
+        package = packageViewFor scope variant finalSet name rawPackage;
         address =
           if scope == "native"
           then projectLib.address "packages" ["native" name]
@@ -425,7 +513,8 @@ in rec {
       contextFor = scope: variant: enclosingPkgs: {final, ...}: {
         inherit lib;
         packages = {
-          inherit native wasix python preferred;
+          native = nativeForContext;
+          inherit wasix python preferred;
           sameProfile = projectedPackageSet scope variant final;
         };
         commands = commandsView;
@@ -441,7 +530,7 @@ in rec {
           else if scope == "wasix"
           then nativeRaw
           else final;
-        inherit (projectLib) buildHostPypaTools dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix dropSphinxDocs extendPackage linkInputs mergeScript replaceInputsByName wasmRename;
+        inherit (projectLib) buildHostPypaTools dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix dropSphinxDocs extendPackage linkInputs mergeScript packageForEntry replaceInputsByName wasmRename;
       };
 
       nativeRaw = importNixpkgs {
@@ -459,7 +548,7 @@ in rec {
             scope = "native";
             variant = {};
           }
-          ++ overlaysFor (contextFor "native" {} null) ["shared" "native"];
+          ++ overlaysFor (contextFor "native" {} null) "native" {} ["shared" "native"];
       };
 
       wasixRaw =
@@ -479,7 +568,7 @@ in rec {
                   scope = "wasix";
                   variant = {inherit profile;};
                 }
-                ++ overlaysFor (contextFor "wasix" {inherit profile;} null) ["shared" "wasix"];
+                ++ overlaysFor (contextFor "wasix" {inherit profile;} null) "wasix" {inherit profile;} ["shared" "wasix"];
             }
         )
         profiles.profiles;
@@ -492,7 +581,7 @@ in rec {
               extendPythonSet packageSet (pythonLaneOverlay {
                 contextFor = contextFor "python" {inherit interpreter;} spec.pkgs;
                 enclosingPkgs = spec.pkgs;
-                inherit extension;
+                inherit extension interpreter;
               })
             else packageSet
         )
@@ -508,6 +597,9 @@ in rec {
       nativePackageInterfaces = nativePackageInterfacesFor {
         inherit project nativeRaw wasixRaw pythonRaw;
       };
+      nativeForContext = lib.genAttrs (projectLib.registeredNames nativeRaw) (name:
+        projectedPackageFor "native" {} nativeRaw name nativeRaw.${name}
+        // (nativePackageInterfaces.${name} or {}));
       unknownInterfacePackages = lib.subtractLists (projectLib.registeredNames nativeRaw) (lib.attrNames nativePackageInterfaces);
       nativeInterfacesValid =
         lib.throwIf (unknownInterfacePackages != [])
@@ -515,12 +607,14 @@ in rec {
         true;
       baseNative = lib.mapAttrs (name: package:
         package // (nativePackageInterfaces.${name} or {}))
-      (packageSetView "native" nativeRaw);
+      (packageSetView "native" {} nativeRaw);
       baseWasix = lib.mapAttrs (profile: packageSet:
         lib.filterAttrs (_: package: builtins.elem profile (supportedProfilesFor package))
-        (packageSetView "wasix" packageSet))
+        (packageSetView "wasix" {inherit profile;} packageSet))
       wasixRaw;
-      basePython = lib.mapAttrs (_: packageSet: packageSetView "python" packageSet) pythonRaw;
+      basePython = lib.mapAttrs (interpreter: packageSet:
+        packageSetView "python" {inherit interpreter;} packageSet)
+      pythonRaw;
       allWasixNames = lib.unique (lib.concatMap projectLib.registeredNames (lib.attrValues wasixRaw));
       preferredProfileNameFor = name: let
         defaultProfile = profiles.defaultProfileName or null;
@@ -554,7 +648,18 @@ in rec {
             enclosing = pythonSpecs.${entry.variant.interpreter}.pkgs;
           };
       in
-        contextFor entry.scope entry.variant selected.enclosing {inherit (selected) final;};
+        contextFor entry.scope entry.variant selected.enclosing {inherit (selected) final;}
+        // {
+          packageSets = {
+            native = nativeRaw;
+            wasix = wasixRaw;
+            python = pythonRaw;
+            preferred = lib.genAttrs allWasixNames (name: let
+              profile = preferredProfileNameFor name;
+            in
+              wasixRaw.${profile}.${name});
+          };
+        };
 
       nativeEntries = lib.mapAttrs' (name: package: let
         address = projectLib.address "packages" ["native" name];
@@ -610,28 +715,26 @@ in rec {
         subjectCi = subject.policy.ci or {};
         ownCi = own.ci or {};
       in
-        own
+        subject.policy
+        // own
         // {
           ci =
             subjectCi
             // ownCi
             // {tags = lib.unique ((subjectCi.tags or []) ++ (ownCi.tags or []));};
         };
-      mergeDisjoint = label: left: right: let
-        duplicates = lib.intersectLists (lib.attrNames left) (lib.attrNames right);
+      mergeDisjoint = label: sets: let
+        entries = lib.concatMap (lib.mapAttrsToList (name: value: {inherit name value;})) sets;
+        grouped = lib.groupBy (entry: entry.name) entries;
+        duplicates = lib.attrNames (lib.filterAttrs (_: values: lib.length values > 1) grouped);
       in
         lib.throwIf (duplicates != [])
         "duplicate ${label} address(es): ${lib.concatStringsSep ", " duplicates}"
-        (left // right);
-      mergeProjectionCollections = left: right: {
-        artifacts = mergeDisjoint "artifact" left.artifacts right.artifacts;
-        commands = mergeDisjoint "command" left.commands right.commands;
-        tests = mergeDisjoint "test" left.tests right.tests;
-      };
-      emptyProjectionCollection = {
-        artifacts = {};
-        commands = {};
-        tests = {};
+        (builtins.listToAttrs entries);
+      mergeProjectionCollections = collections: {
+        artifacts = mergeDisjoint "artifact" (map (collection: collection.artifacts) collections);
+        commands = mergeDisjoint "command" (map (collection: collection.commands) collections);
+        tests = mergeDisjoint "test" (map (collection: collection.tests) collections);
       };
       projectEntry = baseEntry: let
         outputs = projectionsFor (contextForEntry entry) entry;
@@ -675,9 +778,19 @@ in rec {
           );
         ownArtifacts = lib.mapAttrs' (_: node: lib.nameValuePair node.entry.address node.entry) artifactNodes;
         ownCommands = lib.mapAttrs' (name: command: let
+          commandVersion =
+            if (command.version or "") != ""
+            then command.version
+            else if baseEntry.instance.kind == "history"
+            then baseEntry.instance.version
+            else null;
           projectionPath =
-            [name]
-            ++ lib.optionals (baseEntry.instance.kind == "history") ["versions" baseEntry.instance.version];
+            (
+              if command.global or true
+              then [name]
+              else [name "from" baseEntry.name]
+            )
+            ++ lib.optionals (commandVersion != null) ["versions" commandVersion];
           address = projectLib.address "commands" projectionPath;
         in
           lib.nameValuePair address {
@@ -695,28 +808,53 @@ in rec {
           lib.nameValuePair address {
             kind = "test";
             inherit address check;
+            inherit (baseEntry) name;
+            testName = name;
             inherit (baseEntry) definition source lineage scope variant instance;
             subject = baseEntry.address;
             packageSubject = baseEntry.packageSubject or baseEntry.address;
             policy = inheritedPolicy baseEntry check;
           })
         outputs.tests;
-        descendants = lib.foldl' mergeProjectionCollections emptyProjectionCollection (map (node: node.descendants) (lib.attrValues artifactNodes));
+        descendants = mergeProjectionCollections (map (node: node.descendants) (lib.attrValues artifactNodes));
       in {
         inherit entry value;
-        descendants = mergeProjectionCollections descendants {
-          artifacts = ownArtifacts;
-          commands = ownCommands;
-          tests = ownTests;
-        };
+        descendants = mergeProjectionCollections [
+          descendants
+          {
+            artifacts = ownArtifacts;
+            commands = ownCommands;
+            tests = ownTests;
+          }
+        ];
       };
       projectedPackageNodes = lib.mapAttrs (_: projectEntry) packageEntries;
       projectedPackageEntries = lib.mapAttrs (_: node: node.entry) projectedPackageNodes;
-      projected = lib.foldl' mergeProjectionCollections emptyProjectionCollection (map (node: node.descendants) (lib.attrValues projectedPackageNodes));
+      projected = mergeProjectionCollections (map (node: node.descendants) (lib.attrValues projectedPackageNodes));
       artifactEntries = projected.artifacts;
       commandEntries = projected.commands;
       testEntries = projected.tests;
-      entries = lib.foldl' (mergeDisjoint "catalog") {} [projectedPackageEntries artifactEntries commandEntries testEntries];
+      entries = mergeDisjoint "catalog" [projectedPackageEntries artifactEntries commandEntries testEntries];
+      aliasClaims = lib.concatMap (entry:
+        map (alias: {
+          inherit alias;
+          target = entry.address;
+        })
+        (aliasAddressesFor entry))
+      (lib.attrValues entries);
+      aliasTargets =
+        lib.mapAttrs (_: claims: lib.unique (map (claim: claim.target) claims))
+        (lib.groupBy (claim: claim.alias) aliasClaims);
+      ambiguousAliases = lib.attrNames (lib.filterAttrs (_: targets: lib.length targets > 1) aliasTargets);
+      shadowingAliases = lib.attrNames (lib.filterAttrs (alias: targets:
+        builtins.hasAttr alias entries && !(builtins.elem alias targets))
+      aliasTargets);
+      aliasesValid =
+        lib.throwIf (ambiguousAliases != [])
+        "catalog aliases resolve to several entries: ${lib.concatStringsSep ", " ambiguousAliases}"
+        (lib.throwIf (shadowingAliases != [])
+          "catalog aliases shadow canonical entries: ${lib.concatStringsSep ", " shadowingAliases}"
+          true);
       native = lib.mapAttrs (name: _:
         projectedPackageNodes.${projectLib.address "packages" ["native" name]}.value)
       baseNative;
@@ -742,9 +880,10 @@ in rec {
       (lib.attrValues artifactEntries));
       commandsView = lib.foldl' lib.recursiveUpdate {} (map (entry:
         lib.setAttrByPath entry.projectionPath entry.command)
-      (lib.attrValues commandEntries));
+      (lib.attrValues (lib.filterAttrs (_: entry: entry.command.global or true) commandEntries)));
       ciPackageEntries = lib.filterAttrs (_: entry:
         builtins.elem entry.source requestedCiSources
+        && ciAvailable entry.package
         && (
           entry.scope
           != "wasix"
@@ -758,7 +897,20 @@ in rec {
       ciTestEntries = lib.filterAttrs (_: entry:
         builtins.elem entry.packageSubject ciPackageAddresses)
       testEntries;
-      ciEntries = lib.foldl' (mergeDisjoint "CI job") {} [ciPackageEntries ciArtifactEntries ciTestEntries];
+      ciEntries = mergeDisjoint "CI job" [ciPackageEntries ciArtifactEntries ciTestEntries];
+      selectorSetFor = entry:
+        if
+          entry.scope
+          == "python"
+          || (entry.kind == "artifact" && builtins.elem entry.artifactKind ["wheel-noarch" "wheel-py313" "wheel-py314"])
+          || (entry.kind == "test" && (lib.hasPrefix "artifacts.registry." entry.subject || lib.hasPrefix "artifacts.wheel-" entry.subject))
+        then "python"
+        else if entry.scope == "wasix"
+        then "packages"
+        else "core";
+      selectorSets =
+        lib.mapAttrs (_: selected: map (entry: entry.address) selected)
+        (lib.groupBy selectorSetFor (lib.attrValues ciEntries));
       derivationOf = entry:
         if entry.kind == "package"
         then entry.package
@@ -770,7 +922,8 @@ in rec {
       assert pythonShapesValid;
       assert wasixHistoryValid;
       assert pythonHistoryValid;
-      assert nativeInterfacesValid; {
+      assert nativeInterfacesValid;
+      assert aliasesValid; {
         schemaVersion = schema.version;
         packages = packageViews;
         commands = commandsView;
@@ -785,6 +938,10 @@ in rec {
           catalog = {
             schemaVersion = project.schemaVersion;
             jobs = lib.mapAttrs (_: serializableEntry) ciEntries;
+            selectors = {
+              sets = selectorSets;
+              groups = {};
+            };
           };
         };
         internals.packageSets = {

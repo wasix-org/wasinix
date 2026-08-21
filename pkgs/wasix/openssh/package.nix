@@ -3,12 +3,8 @@
 # copies when the system lacks them. There is no chroot either, so sshd's
 # session isolation reports that rather than pretending. ssh forks for
 # multiplexing and ProxyCommand, so this builds at the off profile.
-{
-  prev,
-  helpers,
-  ...
-}:
-helpers.extendPackage prev.openssh {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   patches = [./patches/wasi-unsupported-calls.patch];
   # no SCM_RIGHTS: openssh passes descriptors between its privsep processes and
   # for ControlMaster multiplexing, and already carries a switch for platforms
@@ -25,5 +21,4 @@ helpers.extendPackage prev.openssh {
     "ac_cv_header_ifaddrs_h=no"
   ];
   passthru.wasix.supportedProfiles = ["off"];
-  passthru.wasix.smokeTest = false;
 }

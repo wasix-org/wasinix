@@ -1,12 +1,13 @@
 {
   pkgs,
-  testLib,
-  wasmerPackages,
-  wasmerPkgs,
+  harnesses,
+  entry,
+  packageForEntry,
+  packages,
   ...
 }: {
   manifest = pkgs.runCommand "cli-manifest" {} ''
-    manifest=${wasmerPackages.cli.pkg}/pkg/cli/wasmer.toml
+    manifest=${(packageForEntry packages entry).artifacts.pkg}/pkg/cli/wasmer.toml
     grep -Fx '"wasmer/bash" = "*"' "$manifest"
     grep -Fx 'module = "wasmer/bash:bash"' "$manifest"
     grep -Fx 'atom = "wasmer/bash:bash"' "$manifest"
@@ -17,9 +18,9 @@
     touch "$out"
   '';
 
-  find = testLib.mkWasixRun {
+  find = harnesses.hostShell {
     name = "cli-find";
-    wasixPkgs = [wasmerPkgs.cli];
+    wasixCommands = builtins.attrValues entry.commands;
     script = ''
       test "$(bash -c 'find /tmp -maxdepth 0')" = /tmp
     '';

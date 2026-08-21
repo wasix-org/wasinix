@@ -1,11 +1,9 @@
 # preshed for wasix. Same host-include leak as cymem.nix.
 {
-  final,
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  pkgs,
 }:
-helpers.extendPackage pyprev.preshed {
+exposeExtendedPackage {
   postPatch = ''
     substituteInPlace setup.py \
       --replace-fail 'include_dirs = [get_path("include")]' 'include_dirs = []'
@@ -17,9 +15,9 @@ helpers.extendPackage pyprev.preshed {
       case "$_path" in *-preshed-*/lib/python*/site-packages) _site="$_path"; break ;; esac
     done
     [ -n "$_site" ] || exit 1
-    ${final.lib.getExe' final.buildPackages.coreutils "cp"} -r "$_site/preshed" "$NIX_BUILD_TOP/preshed"
-    ${final.lib.getExe' final.buildPackages.coreutils "chmod"} -R u+w "$NIX_BUILD_TOP/preshed"
-    ${final.lib.getExe' final.buildPackages.coreutils "cp"} -r "$_source_tests/." "$NIX_BUILD_TOP/preshed/tests/"
+    ${pkgs.buildPackages.coreutils}/bin/cp -r "$_site/preshed" "$NIX_BUILD_TOP/preshed"
+    ${pkgs.buildPackages.coreutils}/bin/chmod -R u+w "$NIX_BUILD_TOP/preshed"
+    ${pkgs.buildPackages.coreutils}/bin/cp -r "$_source_tests/." "$NIX_BUILD_TOP/preshed/tests/"
     export PYTHONPATH="$NIX_BUILD_TOP:$PYTHONPATH"
     pytestFlagsArray=("$NIX_BUILD_TOP/preshed/tests")
     cd "$NIX_BUILD_TOP"

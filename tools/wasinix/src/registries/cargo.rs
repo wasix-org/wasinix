@@ -36,13 +36,19 @@ fn nix_build(installable: &str) -> Result<PathBuf> {
 pub fn mint_path(given: Option<PathBuf>) -> Result<PathBuf> {
     match given {
         Some(path) => Ok(path),
-        None => nix_build(".#cargoRegistry"),
+        None => nix_build(&crate::support::nix::project_installable(
+            ".",
+            "artifacts.registry.cargo-registry",
+        )),
     }
 }
 
 /// The mint of another checkout (a PR's base), for diffing previews.
 pub fn mint_from(flake: &str) -> Result<PathBuf> {
-    nix_build(&format!("{flake}#cargoRegistry"))
+    nix_build(&crate::support::nix::project_installable(
+        flake,
+        "artifacts.registry.cargo-registry",
+    ))
 }
 
 /// One minted build, as manifest.json records it.
@@ -129,7 +135,7 @@ fn select(entries: &[MintCrate], specs: &[String]) -> Result<Vec<MintCrate>> {
     names.dedup();
     for name in names {
         domain.add_path(
-            vec!["cargoRegistry".into(), "crates".into(), name.into()],
+            vec!["artifacts".into(), "registry".into(), "cargo-registry".into(), name.into()],
             name,
             None,
             Vec::new(),
@@ -210,7 +216,7 @@ pub fn publish(options: PublishOptions) -> Result<(PublishReport, CommandStatus)
                     Action::Conflict,
                     format!(
                         "the index serves different bytes for this version; mint a new \
-                         one with `wasinix versions bump cargoRegistry.crates.{}@{}`",
+                         one with `wasinix versions bump artifacts.registry.cargo-registry.crates.{}@{}`",
                         entry.name, entry.upstream
                     ),
                     false,
@@ -358,7 +364,10 @@ pub fn start(options: ServeOptions) -> Result<Running> {
         Some(path) => path,
         None => {
             ui::fact("building", "the wasix server");
-            nix_build(".#wasmerPackages.wasix-cargo-registry")?
+            nix_build(&crate::support::nix::project_installable(
+                ".",
+                "artifacts.webc.cargo-registry",
+            ))?
         }
     };
     let manifest: Value = crate::support::json::read(&registry.join("manifest.json"))?;

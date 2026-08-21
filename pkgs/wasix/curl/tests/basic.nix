@@ -1,23 +1,23 @@
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   helpers,
 }: let
   inherit (helpers) startHttpServer startHttpsServer;
   nativeCurl = [pkgs.curl];
-  wasixCurl = [wasmerPkgs.curl];
+  wasixCurl = builtins.attrValues entry.commands;
 in {
-  version = testLib.mkWasixRun {
+  version = harnesses.hostShell {
     name = "curl-version";
-    wasixPkgs = wasixCurl;
+    wasixCommands = wasixCurl;
     script = "curl --version";
   };
 
-  http-get = testLib.mkScriptComparison {
+  http-get = harnesses.compareShells {
     name = "curl-http-get";
-    nativePkgs = nativeCurl ++ [pkgs.lighttpd];
-    wasixPkgs = wasixCurl;
+    hostPackages = nativeCurl ++ [pkgs.lighttpd];
+    wasixCommands = wasixCurl;
     wasmerArgs = ["--net"];
     script = ''
       ${startHttpServer}
@@ -25,10 +25,10 @@ in {
     '';
   };
 
-  http-post = testLib.mkScriptComparison {
+  http-post = harnesses.compareShells {
     name = "curl-http-post";
-    nativePkgs = nativeCurl ++ [pkgs.lighttpd];
-    wasixPkgs = wasixCurl;
+    hostPackages = nativeCurl ++ [pkgs.lighttpd];
+    wasixCommands = wasixCurl;
     wasmerArgs = ["--net"];
     script = ''
       ${startHttpServer}
@@ -36,10 +36,10 @@ in {
     '';
   };
 
-  http-redirect = testLib.mkScriptComparison {
+  http-redirect = harnesses.compareShells {
     name = "curl-http-redirect";
-    nativePkgs = nativeCurl ++ [pkgs.lighttpd];
-    wasixPkgs = wasixCurl;
+    hostPackages = nativeCurl ++ [pkgs.lighttpd];
+    wasixCommands = wasixCurl;
     wasmerArgs = ["--net"];
     script = ''
       ${startHttpServer}
@@ -47,10 +47,10 @@ in {
     '';
   };
 
-  https-get = testLib.mkScriptComparison {
+  https-get = harnesses.compareShells {
     name = "curl-https-get";
-    nativePkgs = nativeCurl ++ [pkgs.lighttpd pkgs.openssl];
-    wasixPkgs = wasixCurl;
+    hostPackages = nativeCurl ++ [pkgs.lighttpd pkgs.openssl];
+    wasixCommands = wasixCurl;
     wasmerArgs = ["--net"];
     script = ''
       ${startHttpsServer}
@@ -58,10 +58,10 @@ in {
     '';
   };
 
-  https-post = testLib.mkScriptComparison {
+  https-post = harnesses.compareShells {
     name = "curl-https-post";
-    nativePkgs = nativeCurl ++ [pkgs.lighttpd pkgs.openssl];
-    wasixPkgs = wasixCurl;
+    hostPackages = nativeCurl ++ [pkgs.lighttpd pkgs.openssl];
+    wasixCommands = wasixCurl;
     wasmerArgs = ["--net"];
     script = ''
       ${startHttpsServer}
@@ -69,10 +69,10 @@ in {
     '';
   };
 
-  https-redirect = testLib.mkScriptComparison {
+  https-redirect = harnesses.compareShells {
     name = "curl-https-redirect";
-    nativePkgs = nativeCurl ++ [pkgs.lighttpd pkgs.openssl];
-    wasixPkgs = wasixCurl;
+    hostPackages = nativeCurl ++ [pkgs.lighttpd pkgs.openssl];
+    wasixCommands = wasixCurl;
     wasmerArgs = ["--net"];
     script = ''
       ${startHttpsServer}

@@ -3,10 +3,13 @@
 # rejects. The xpm reader pulls xorgproto, whose XFD_ macros want a bitmask
 # fd_set where wasi's is a descriptor list. Every other codec stays.
 {
-  prev,
-  helpers,
-  ...
+  exposePackage,
+  extendPackage,
+  package,
+  dropInputsByName,
 }:
-helpers.extendPackage (prev.gd.override {withXorg = false;}) {
-  propagatedBuildInputs = helpers.dropInputsByName ["libavif"];
-}
+exposePackage (
+  extendPackage (package.override {withXorg = false;}) {
+    propagatedBuildInputs = dropInputsByName ["libavif"];
+  }
+)

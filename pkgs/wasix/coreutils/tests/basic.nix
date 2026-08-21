@@ -1,15 +1,15 @@
 {
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: let
-  coreutilsPkg = wasmerPkgs.coreutils;
+  coreutilsCommands = builtins.attrValues entry.commands;
 in {
   # Each program is its own webc command on one shared module, so argv[0] is
   # what selects it.
-  dispatch = testLib.mkWasixRun {
+  dispatch = harnesses.hostShell {
     name = "coreutils-dispatch";
-    wasixPkgs = [coreutilsPkg];
+    wasixCommands = coreutilsCommands;
     script = ''
       [ "$(basename /a/b/c.txt)" = "c.txt" ]
       [ "$(echo hi)" = "hi" ]
@@ -20,9 +20,9 @@ in {
   };
 
   # File operations against a real (mapped) directory.
-  files = testLib.mkWasixRun {
+  files = harnesses.hostShell {
     name = "coreutils-files";
-    wasixPkgs = [coreutilsPkg];
+    wasixCommands = coreutilsCommands;
     script = ''
       mkdir -p tree/sub
       printf 'one\ntwo\n' > tree/sub/f.txt

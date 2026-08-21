@@ -1,13 +1,11 @@
 {
-  helpers,
-  pyfinal,
-  pyprev,
-  ...
+  exposeExtendedPackage,
+  packages,
 }:
-helpers.extendPackage pyprev.safetensors {
+exposeExtendedPackage {
   patches = [./patches/safetensors-wasi-read-exact-at.patch];
-  passthru.wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.numpy pyfinal.fsspec];
-  passthru.wasix.updateNotes = [
+  passthru.wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook packages.sameProfile.numpy packages.sameProfile.fsspec];
+  passthru.wasinix.update.notes = [
     {message = "safetensors: re-check the WASI read_exact_at patch on bump.";}
   ];
   # The WASIX registry does not ship the optional ML framework stacks.

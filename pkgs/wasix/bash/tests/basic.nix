@@ -1,15 +1,15 @@
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: let
-  bashPkg = wasmerPkgs.bash;
+  bashCommands = builtins.attrValues entry.commands;
 in {
   # Core shell behavior: conditionals, loops, arrays, functions, pattern matching.
-  core = testLib.mkWasixRun {
+  core = harnesses.hostShell {
     name = "bash-core";
-    wasixPkgs = [bashPkg];
+    wasixCommands = bashCommands;
     script = ''
       set +e
       bash -c 'exit 7'
@@ -37,9 +37,9 @@ in {
   # test/[ returns its result through setjmp/longjmp; off-EH must yield ordinary
   # statuses where EH profiles crash with an uncaught exception. Covers empty
   # tests, unquoted-empty-var collapse, and syntax errors (deep-frame longjmp).
-  conditionals = testLib.mkWasixRun {
+  conditionals = harnesses.hostShell {
     name = "bash-conditionals";
-    wasixPkgs = [bashPkg];
+    wasixCommands = bashCommands;
     script = ''
       check() { # check <expected-status> <script>
         local want=$1 got
@@ -66,9 +66,9 @@ in {
   };
 
   # Fork-backed features: command substitution, pipelines, subshells.
-  fork = testLib.mkWasixRun {
+  fork = harnesses.hostShell {
     name = "bash-fork";
-    wasixPkgs = [bashPkg];
+    wasixCommands = bashCommands;
     script = ''
       bash -c 'v=$(echo hi); [ "$v" = hi ]; echo "$v"'
       bash -c 'printf "a\nb\n" | while read line; do echo "$line"; done'
@@ -78,9 +78,9 @@ in {
 
   # Process substitution names a pipe as /dev/fd/<n> and hands it to a child,
   # so the runtime has to resolve that path against the opener's own fds.
-  process-substitution = testLib.mkWasixRun {
+  process-substitution = harnesses.hostShell {
     name = "bash-process-substitution";
-    wasixPkgs = [bashPkg];
+    wasixCommands = bashCommands;
     script = ''
       out=$(bash -c 'read -r line < <(echo from-procsub); echo "$line"')
       if [ "$out" != "from-procsub" ]; then
@@ -100,9 +100,9 @@ in {
 
   # Interactive mode: readline must initialize and run commands. Feed a line on
   # stdin (a pipe, not a tty); -i forces interactive, EOF exits.
-  interactive = testLib.mkWasixRun {
+  interactive = harnesses.hostShell {
     name = "bash-interactive";
-    wasixPkgs = [bashPkg];
+    wasixCommands = bashCommands;
     script = ''
       out=$(printf 'echo readline-live-$((6 * 7))\n' | bash -i 2>&1)
       case "$out" in
@@ -115,10 +115,10 @@ in {
   # COLUMNS/LINES come from TIOCGWINSZ, which wasix-libc answers from
   # __wasi_tty_get. --noediting keeps readline from setting them instead, so
   # only bash's own winsize path can satisfy this.
-  winsize = testLib.mkWasixRun {
+  winsize = harnesses.hostShell {
     name = "bash-winsize";
-    wasixPkgs = [bashPkg];
-    nativePkgs = [pkgs.python3];
+    wasixCommands = bashCommands;
+    hostPackages = [pkgs.python3];
     script = ''
       cat > pty-size.py <<'PYEOF'
       import os, pty, select, struct, sys, fcntl, termios
@@ -151,9 +151,9 @@ in {
   # The sh command atom shares bash's module, and dependents exec it by that
   # name, so argv[0] must arrive as sh. PATH must reach the /bin where wasmer
   # mounts a webc's dependency commands.
-  sh = testLib.mkWasixRun {
+  sh = harnesses.hostShell {
     name = "bash-sh";
-    wasixPkgs = [bashPkg];
+    wasixCommands = bashCommands;
     script = ''
       out=$(sh -c 'echo "argv0=$0 path=$PATH"')
       if [ "$out" != "argv0=sh path=/bin:/usr/bin" ]; then

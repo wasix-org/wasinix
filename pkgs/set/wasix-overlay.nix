@@ -3,7 +3,7 @@
 {
   toolchain,
   wasixRustPlatform,
-  # wasmer-free emulation trampoline (wasmer/wasix-run.nix), used wherever an
+  # Wasmer-free emulation trampoline, used wherever an
   # emulator path is baked into a build.
   wasixRunStub,
 }: final: prev: let
@@ -66,7 +66,7 @@
       mesonEmulatorHook =
         final.buildPackages.makeSetupHook {name = "meson-emulator-hook-noop";}
         (final.buildPackages.writeText "meson-emulator-hook-noop.sh" ''
-          # wasix: intentionally empty — no meson exe_wrapper (see wasix/default.nix).
+          # wasix: intentionally empty because target executables do not run during builds.
         '');
 
       # Point the cross set's top-level `cargo`/`rustc` (the cargo-wasix shim

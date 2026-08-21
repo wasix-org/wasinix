@@ -5,12 +5,8 @@
 # packages/mariadb-connector-c_3_3.nix) so they track the connector's real
 # deps instead of a hand-listed closure. No suite: the tests need a running
 # MySQL server.
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.mysqlclient {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   preConfigure = ''
     export MYSQLCLIENT_CFLAGS="$($PKG_CONFIG --cflags libmariadb)"
     export MYSQLCLIENT_LDFLAGS="$($PKG_CONFIG --static --libs libmariadb)"

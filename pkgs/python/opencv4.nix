@@ -2,24 +2,23 @@
 # the header and numpy include dirs, which are 64-bit and corrupt every array on
 # wasm32; under CMAKE_CROSSCOMPILING it reads them as cache vars instead.
 {
-  pyprev,
-  wasixPython,
-  helpers,
-  lib,
-  ...
+  exposeExtendedPackage,
+  packages,
+  pkgs,
+  buildHostPypaTools,
 }: let
-  py = wasixPython;
+  py = packages.sameProfile.python;
   buildPy = py.pythonOnBuildForHost;
-  crossNumpyInc = py.pkgs.numpy.crossInclude;
+  crossNumpyInc = packages.sameProfile.numpy.crossInclude;
   pyInc = py.crossIncludeDir;
 in
-  helpers.extendPackage pyprev.opencv4 {
+  exposeExtendedPackage {
     # nixpkgs enables pytest without shipping tests in this wheel. The
     # package-specific cv2 operations check supplies runtime coverage.
     passthru.wasinix.checks.captured.install = false;
 
     # nixpkgs adds the cross set's pip/wheel/setuptools, which cannot run here.
-    nativeBuildInputs = helpers.python.buildHostPypaTools buildPy;
+    nativeBuildInputs = buildHostPypaTools buildPy;
 
     cmakeFlags = [
       "-DPYTHON3_EXECUTABLE=${buildPy.interpreter}"

@@ -64,7 +64,7 @@ impl Target {
     pub fn address(&self) -> String {
         match self.backend {
             Backend::FlakeInput => format!("inputs.{}", self.input),
-            Backend::CratePins => "cargoRegistry.crates".to_string(),
+            Backend::CratePins => "artifacts.registry.cargo-registry.crates".to_string(),
             Backend::UpdateScript => self
                 .attr
                 .strip_prefix(&format!("legacyPackages.{SYSTEM}."))
@@ -221,7 +221,7 @@ pub(crate) fn dedupe(declared: Vec<Target>) -> Vec<Target> {
 }
 
 pub fn discovered_targets(repo: &Path) -> Result<Vec<Target>> {
-    let declared = eval(&Flake::default(), "updateScripts", None)?;
+    let declared = eval(&Flake::default(), "internals.updates.updateScripts", None)?;
     let mut targets: Vec<Target> = Vec::new();
     for (attr, value) in declared.as_object().into_iter().flatten() {
         targets.push(declared_target(repo, attr, value)?);
@@ -231,7 +231,11 @@ pub fn discovered_targets(repo: &Path) -> Result<Vec<Target>> {
 
 /// Package-declared post-update operations, deduped across profile attrs.
 pub fn discovered_post_update_hooks() -> Result<Vec<PostUpdateHook>> {
-    let declared = eval(&Flake::default(), "postUpdateHooks", None)?;
+    let declared = eval(
+        &Flake::default(),
+        "internals.updates.postUpdateHooks",
+        None,
+    )?;
     let mut hooks: BTreeMap<String, PostUpdateHook> = BTreeMap::new();
     for (attr, value) in declared.as_object().into_iter().flatten() {
         let hook = declared_post_update_hook(attr, value)?;
@@ -293,8 +297,7 @@ pub fn all_targets(repo: &Path) -> Result<Vec<Target>> {
 
 /// The pins a caller can name. A pin is addressed where it lives, which is
 /// the attr its updateScript is declared on, or `inputs.<name>` for a flake
-/// input. Its short name stays as an alias: `toolchain.llvm.clang` is where
-/// the llvm pin lives, and `llvm` is what it is called.
+/// input. Its short name stays as an alias.
 pub fn domain(targets: &[Target]) -> Domain {
     let mut domain = Domain::new("wasinix update list");
     for target in targets {

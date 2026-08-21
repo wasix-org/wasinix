@@ -1,13 +1,13 @@
 # util-linux for wasix, built for libuuid only (cpython's _uuid backend; nixpkgs
 # sets libuuid = null off Linux).
 {
-  prev,
-  helpers,
-  ...
+  profileSets,
+  exposeExtendedPackage,
+  packages,
 }: let
-  lib = prev.lib;
+  lib = packages.sameProfile.lib;
 in
-  helpers.extendPackage prev.util-linux {
+  exposeExtendedPackage {
     configureFlags = [
       # Every program links libcommon, and libcommon does not compile here:
       # lib/configs.c wants sys/syslog.h, lib/fileutils.c calls fork, and
@@ -48,5 +48,5 @@ in
         --replace-fail '#ifdef HAVE_NET_IF_H' '#if defined(HAVE_NET_IF_H) && !defined(__wasi__)'
     '';
     # libuuid uses poll (present only in the PIC sysroots, cf. mariadb).
-    passthru.wasix.supportedProfiles = helpers.profiles.pic;
+    passthru.wasix.supportedProfiles = profileSets.pic;
   }

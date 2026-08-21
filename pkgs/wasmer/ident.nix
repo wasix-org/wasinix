@@ -45,7 +45,7 @@
       else if builtins.isFunction pw.version
       then pw.version upstreamVersion
       else throw "${name}: passthru.wasmer.version must be a function of the upstream version, not a literal; a literal freezes the published version across bumps";
-    rel = (rels."wasmerPackages.${name}" or {}).${baseVersion} or 1;
+    rel = (rels."artifacts.webc.${name}" or {}).${baseVersion} or 1;
     # no version encoding for rels works on the registry yet (WASIX-TODO.md:
     # build metadata is normalized away, prereleases hide from latest); the
     # rel goes into [package.metadata] as plumbing, but `wasmer package

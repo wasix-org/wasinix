@@ -72,7 +72,7 @@ in
       # neither, so point it at the unwrapped package
       updateScript = {
         command = nix-update-script {extraArgs = ["--flake"];};
-        attrPath = "toolchain.cargo-wasix.unwrapped";
+        attrPath = "packages.native.cargo-wasix-unwrapped";
         accepts = ["release" "revision"];
         source = {
           kind = "github";

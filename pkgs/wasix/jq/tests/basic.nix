@@ -1,25 +1,25 @@
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: let
   native = [pkgs.jq];
-  wasix = [wasmerPkgs.jq];
+  wasix = builtins.attrValues entry.commands;
   cmp = name: script:
-    testLib.mkScriptComparison {
+    harnesses.compareShells {
       inherit name script;
-      nativePkgs = native;
-      wasixPkgs = wasix;
+      hostPackages = native;
+      wasixCommands = wasix;
       # Under wasmer jq sees stdout as a TTY (isatty returns true even when it's
       # redirected to a file) and ANSI-colorizes output; native (piped) doesn't.
       # Strip ANSI so the comparison is on content, not the TTY-detection quirk.
-      normalize = testLib.normalizers.stripAnsi;
+      normalize = harnesses.normalizers.stripAnsi;
     };
 in {
-  version = testLib.mkWasixRun {
+  version = harnesses.hostShell {
     name = "jq-version";
-    wasixPkgs = wasix;
+    wasixCommands = wasix;
     script = "jq --version";
   };
 

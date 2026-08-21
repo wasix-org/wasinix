@@ -2,11 +2,10 @@
 # tests/unit use fenv FE_* macros the wasm32 <fenv.h> does not define
 # (WASIX-TODO.md). C++ exceptions are load-bearing, so no off profile.
 {
-  prev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  profileSets,
 }:
-helpers.extendPackage prev.geos {
+exposeExtendedPackage {
   doCheck = false;
   cmakeFlags = ["-DBUILD_GEOSOP=OFF"];
   # This geos is static-only: there is no shared libgeos_c.so to pull the C++
@@ -17,5 +16,5 @@ helpers.extendPackage prev.geos {
     substituteInPlace $out/bin/geos-config \
       --replace-fail 'echo -L''${libdir} -lgeos_c' 'echo -L''${libdir} -lgeos_c -lgeos'
   '';
-  passthru.wasix.supportedProfiles = helpers.profiles.withEh;
+  passthru.wasix.supportedProfiles = profileSets.withEh;
 }

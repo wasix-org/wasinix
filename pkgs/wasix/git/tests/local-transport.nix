@@ -1,14 +1,14 @@
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   helpers,
 }: let
   inherit (helpers) gitSetup;
 in {
-  clone-local = testLib.mkWasixRun {
+  clone-local = harnesses.hostShell {
     name = "clone-local";
-    wasixPkgs = [wasmerPkgs.git];
+    wasixCommands = builtins.attrValues entry.commands;
     script = ''
       ${gitSetup}
       mkdir source
@@ -23,10 +23,10 @@ in {
     '';
   };
 
-  push-local = testLib.mkWasixRun {
+  push-local = harnesses.hostShell {
     name = "push-local";
-    nativePkgs = [pkgs.git];
-    wasixPkgs = [wasmerPkgs.git];
+    hostPackages = [pkgs.git];
+    wasixCommands = builtins.attrValues entry.commands;
     script = ''
       ${gitSetup}
       ${pkgs.lib.getExe pkgs.git} init --bare --initial-branch=main remote.git
