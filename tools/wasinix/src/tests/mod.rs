@@ -6483,6 +6483,7 @@ mod tools {
             .unwrap_err()
             .to_string();
         assert!(error.contains("probing"), "{error}");
+        assert!(error.contains("stderr"), "{error}");
         assert!(error.contains("the-detail"), "{error}");
     }
 
@@ -6493,6 +6494,7 @@ mod tools {
         let error = checked_text(&mut command, "probing")
             .unwrap_err()
             .to_string();
+        assert!(error.contains("stdout"), "{error}");
         assert!(error.contains("stdout-detail"), "{error}");
     }
 
