@@ -199,8 +199,8 @@ fn push_build_deps(key: &SigningKey, drvs: &BTreeSet<String>) -> Result<()> {
 }
 
 #[cfg(unix)]
-fn kill_group(child: &crate::support::tools::Child) {
-    crate::support::process::signal_group(child.id(), 15);
+fn kill_group(child: &crate::support::tools::Child) -> std::io::Result<()> {
+    crate::support::process::signal_group(child.id(), libc::SIGTERM)
 }
 
 /// One selected derivation: which attrs share it (a union may select the
@@ -738,11 +738,6 @@ pub fn build_union(
             .operands(pending.iter().cloned())
             .route(request.route)?
             .command()?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            cmd.process_group(0);
-        }
         let mut child =
             crate::support::tools::spawn(cmd.stdout(Stdio::null()).stderr(Stdio::piped()))?;
         let stderr = child.take_stderr().expect("stderr was piped");
@@ -873,7 +868,7 @@ pub fn build_union(
             {
                 timed_out = true;
                 #[cfg(unix)]
-                kill_group(&child);
+                kill_group(&child).map_err(|e| io(&log_path, e))?;
                 child.wait().map_err(|e| io(&log_path, e))?;
                 break;
             }

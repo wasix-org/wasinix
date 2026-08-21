@@ -4869,6 +4869,15 @@ mod corpus {
         assert!(found.is_empty(), "{}", found.join("\n"));
     }
 
+    /// The shared spawn path creates the process group that every timeout and
+    /// cancellation path signals.
+    #[test]
+    fn process_groups_are_owned_by_the_spawn_path() {
+        let process_group = [".process_", "group("].concat();
+        let found = offenders(true, &["support/tools.rs"], &[&process_group]);
+        assert!(found.is_empty(), "{}", found.join("\n"));
+    }
+
     /// Run events have one narrator: cli/render's LineRenderer. The other
     /// allowed files emit or fold events; a new file touching event variants
     /// is a new consumer, which renders through the renderer rather than

@@ -282,12 +282,6 @@ pub fn start(command: &[String]) -> Result<String> {
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        // Its own group, so the run survives the caller's terminal.
-        supervisor.process_group(0);
-    }
     crate::support::tools::spawn(&mut supervisor)?.detach();
     Ok(run_id)
 }
@@ -352,11 +346,6 @@ fn supervise_payload(run_dir: &Path, command: &[String]) -> Result<()> {
         .stdin(std::process::Stdio::null())
         .stdout(log.try_clone().map_err(|e| io(&log_path, e))?)
         .stderr(log);
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        payload.process_group(0);
-    }
     let mut child = crate::support::tools::spawn(&mut payload)?;
     let payload_group = child.id();
 
@@ -372,11 +361,11 @@ fn supervise_payload(run_dir: &Path, command: &[String]) -> Result<()> {
             None if run_dir.join(CANCEL_MARKER).exists() => {
                 cancelled_at = Some(std::time::Instant::now());
                 #[cfg(unix)]
-                signal_group(payload_group, 15);
+                signal_group(payload_group, libc::SIGTERM).map_err(|e| io(&log_path, e))?;
             }
             Some(since) if since.elapsed() >= CANCEL_GRACE => {
                 #[cfg(unix)]
-                signal_group(payload_group, 9);
+                signal_group(payload_group, libc::SIGKILL).map_err(|e| io(&log_path, e))?;
             }
             _ => {}
         }
@@ -396,7 +385,7 @@ fn supervise_payload(run_dir: &Path, command: &[String]) -> Result<()> {
     // The payload is gone; anything still alive in its group survived the
     // TERM (a signal-shy child like `timeout`) and would run orphaned.
     #[cfg(unix)]
-    signal_group(payload_group, 9);
+    signal_group(payload_group, libc::SIGKILL).map_err(|e| io(&log_path, e))?;
     let exit = crate::support::process::CommandStatus::from_exit(status);
     // A clean exit is honest even if a cancel raced in: the payload finished
     // its work before the signal could stop it, so it completed, not
