@@ -62,8 +62,7 @@ pub fn git_stdin(repo: &Path, args: &[&str], input: &[u8]) -> Result<()> {
         .stderr(std::process::Stdio::piped());
     let mut child = crate::support::tools::spawn(&mut cmd)?;
     child
-        .stdin
-        .as_mut()
+        .stdin_mut()
         .expect("stdin was piped")
         .write_all(input)
         .map_err(|e| crate::support::error::io(repo, e))?;
