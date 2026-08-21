@@ -10,6 +10,261 @@ pub(crate) enum Surface {
     Comment,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Availability {
+    Shared,
+    Terminal,
+    Comment,
+    Ci,
+}
+
+struct CommandPolicy {
+    name: &'static str,
+    availability: Availability,
+}
+
+struct LeafPolicy {
+    path: &'static [&'static str],
+    comment_args: &'static [&'static str],
+    terminal_args: &'static [&'static str],
+}
+
+const COMMANDS: &[CommandPolicy] = &[
+    CommandPolicy {
+        name: "build",
+        availability: Availability::Shared,
+    },
+    CommandPolicy {
+        name: "spot",
+        availability: Availability::Shared,
+    },
+    CommandPolicy {
+        name: "diff",
+        availability: Availability::Shared,
+    },
+    CommandPolicy {
+        name: "bisect",
+        availability: Availability::Shared,
+    },
+    CommandPolicy {
+        name: "jobs",
+        availability: Availability::Terminal,
+    },
+    CommandPolicy {
+        name: "doctor",
+        availability: Availability::Terminal,
+    },
+    CommandPolicy {
+        name: "timings",
+        availability: Availability::Terminal,
+    },
+    CommandPolicy {
+        name: "cache",
+        availability: Availability::Terminal,
+    },
+    CommandPolicy {
+        name: "run",
+        availability: Availability::Terminal,
+    },
+    CommandPolicy {
+        name: "cargo",
+        availability: Availability::Terminal,
+    },
+    CommandPolicy {
+        name: "wasmer",
+        availability: Availability::Terminal,
+    },
+    CommandPolicy {
+        name: "python",
+        availability: Availability::Terminal,
+    },
+    CommandPolicy {
+        name: "publish",
+        availability: Availability::Terminal,
+    },
+    CommandPolicy {
+        name: "preview",
+        availability: Availability::Terminal,
+    },
+    CommandPolicy {
+        name: "serve",
+        availability: Availability::Terminal,
+    },
+    CommandPolicy {
+        name: "update",
+        availability: Availability::Shared,
+    },
+    CommandPolicy {
+        name: "versions",
+        availability: Availability::Shared,
+    },
+    CommandPolicy {
+        name: "remote",
+        availability: Availability::Terminal,
+    },
+    CommandPolicy {
+        name: "ci",
+        availability: Availability::Ci,
+    },
+    CommandPolicy {
+        name: "completions",
+        availability: Availability::Terminal,
+    },
+    CommandPolicy {
+        name: "regenerate",
+        availability: Availability::Comment,
+    },
+    CommandPolicy {
+        name: "fmt",
+        availability: Availability::Comment,
+    },
+    CommandPolicy {
+        name: "help",
+        availability: Availability::Comment,
+    },
+];
+
+const VERSION_COMMANDS: &[CommandPolicy] = &[
+    CommandPolicy {
+        name: "add",
+        availability: Availability::Terminal,
+    },
+    CommandPolicy {
+        name: "import",
+        availability: Availability::Terminal,
+    },
+    CommandPolicy {
+        name: "bump",
+        availability: Availability::Shared,
+    },
+];
+
+const ROOT_TERMINAL_ARGS: &[&str] = &["verbose", "quiet", "color"];
+
+const MUTATION_EFFECTS: &[&str] = &[
+    "commit",
+    "pr",
+    "branch",
+    "repository",
+    "base",
+    "fork",
+    "json",
+];
+
+const LEAVES: &[LeafPolicy] = &[
+    LeafPolicy {
+        path: &["build"],
+        comment_args: &[
+            "selectors",
+            "enabled_tags",
+            "at",
+            "overrides",
+            "from_pr",
+            "blocked",
+        ],
+        terminal_args: &[
+            "on",
+            "plan",
+            "json",
+            "run_dir",
+            "junit_out",
+            "push_cache",
+            "inputs_only",
+        ],
+    },
+    LeafPolicy {
+        path: &["spot"],
+        comment_args: &[
+            "selectors",
+            "enabled_tags",
+            "at",
+            "overrides",
+            "from_pr",
+            "base",
+            "from_source",
+            "target_only",
+            "blocked",
+        ],
+        terminal_args: &[
+            "on",
+            "plan",
+            "json",
+            "run_dir",
+            "junit_out",
+            "push_cache",
+            "inputs_only",
+        ],
+    },
+    LeafPolicy {
+        path: &["diff"],
+        comment_args: &["content_diff", "blocked", "words"],
+        terminal_args: &[
+            "plan",
+            "json",
+            "run_dir",
+            "junit_out",
+            "push_cache",
+            "inputs_only",
+        ],
+    },
+    LeafPolicy {
+        path: &["bisect"],
+        comment_args: &[
+            "target",
+            "good",
+            "bad",
+            "first_parent",
+            "reverse",
+            "blocked",
+            "command",
+        ],
+        terminal_args: &["run_dir"],
+    },
+    LeafPolicy {
+        path: &["update"],
+        comment_args: &["targets", "all"],
+        terminal_args: &[
+            "expect",
+            "commit",
+            "pr",
+            "branch",
+            "repository",
+            "base",
+            "fork",
+            "json",
+        ],
+    },
+    LeafPolicy {
+        path: &["versions", "bump"],
+        comment_args: &["specs", "all_versions", "changed"],
+        terminal_args: &[
+            "changed_from",
+            "commit",
+            "pr",
+            "branch",
+            "repository",
+            "base",
+            "fork",
+            "json",
+        ],
+    },
+    LeafPolicy {
+        path: &["regenerate"],
+        comment_args: &[],
+        terminal_args: &[],
+    },
+    LeafPolicy {
+        path: &["fmt"],
+        comment_args: &[],
+        terminal_args: &[],
+    },
+    LeafPolicy {
+        path: &["help"],
+        comment_args: &[],
+        terminal_args: &[],
+    },
+];
+
 fn clap_error(error: clap::Error) -> Error {
     let rendered = error.to_string();
     Error::Request(
@@ -35,15 +290,20 @@ fn terminal_only(matches: &clap::ArgMatches, ids: &[&str]) -> Result<()> {
     Ok(())
 }
 
-const MUTATION_EFFECTS: &[&str] = &[
-    "commit",
-    "pr",
-    "branch",
-    "repository",
-    "base",
-    "fork",
-    "json",
-];
+fn policy<'a>(policies: &'a [CommandPolicy], name: &str) -> Result<&'a CommandPolicy> {
+    policies
+        .iter()
+        .find(|policy| policy.name == name)
+        .ok_or_else(|| Error::Request(format!("{name} has no command-surface policy")))
+}
+
+fn reject_unavailable(policy: &CommandPolicy, path: &str) -> Result<()> {
+    match policy.availability {
+        Availability::Shared | Availability::Comment => Ok(()),
+        Availability::Terminal => Err(Error::Request(format!("{path} is terminal only"))),
+        Availability::Ci => Err(Error::Request(format!("{path} is CI only"))),
+    }
+}
 
 pub(crate) fn parse_comment(words: &[String]) -> Result<Cli> {
     let mut command = Cli::command();
@@ -52,43 +312,89 @@ pub(crate) fn parse_comment(words: &[String]) -> Result<Cli> {
             std::iter::once("wasinix").chain(words.iter().map(String::as_str)),
         )
         .map_err(clap_error)?;
-    terminal_only(&matches, &["verbose", "quiet", "color"])?;
-    let (name, args) = matches
+    terminal_only(&matches, ROOT_TERMINAL_ARGS)?;
+    let (name, mut args) = matches
         .subcommand()
         .ok_or_else(|| Error::Request("comment names no command".into()))?;
-    match name {
-        "build" | "spot" | "diff" => terminal_only(
-            args,
-            &[
-                "on",
-                "json",
-                "run_dir",
-                "junit_out",
-                "push_cache",
-                "inputs_only",
-                "plan",
-            ],
-        )?,
-        "bisect" => {
-            terminal_only(args, &["run_dir"])?;
-        }
-        "update" => {
-            terminal_only(args, MUTATION_EFFECTS)?;
-            terminal_only(args, &["expect"])?;
-        }
-        "versions" => {
-            let (verb, args) = args
-                .subcommand()
-                .ok_or_else(|| Error::Request("versions names no command".into()))?;
-            if verb != "bump" {
-                return Err(Error::Request(format!("versions {verb} is terminal only")));
-            }
-            terminal_only(args, MUTATION_EFFECTS)?;
-            terminal_only(args, &["changed_from"])?;
-        }
-        "regenerate" | "fmt" | "help" => {}
-        "ci" => return Err(Error::Request("ci is CI only".into())),
-        _ => return Err(Error::Request(format!("{name} is terminal only"))),
+    reject_unavailable(policy(COMMANDS, name)?, name)?;
+
+    let mut path = vec![name];
+    if name == "versions" {
+        let (verb, nested) = args
+            .subcommand()
+            .ok_or_else(|| Error::Request("versions names no command".into()))?;
+        let display = format!("versions {verb}");
+        reject_unavailable(policy(VERSION_COMMANDS, verb)?, &display)?;
+        path.push(verb);
+        args = nested;
     }
+    let leaf = LEAVES
+        .iter()
+        .find(|leaf| leaf.path == path)
+        .ok_or_else(|| {
+            Error::Request(format!("{} has no command-surface policy", path.join(" ")))
+        })?;
+    terminal_only(args, leaf.terminal_args)?;
     Cli::from_arg_matches(&matches).map_err(clap_error)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use clap::CommandFactory;
+
+    use super::{Cli, COMMANDS, LEAVES, ROOT_TERMINAL_ARGS, VERSION_COMMANDS};
+
+    fn names(values: impl Iterator<Item = impl ToString>) -> BTreeSet<String> {
+        values.map(|value| value.to_string()).collect()
+    }
+
+    #[test]
+    fn every_command_tree_node_has_surface_policy() {
+        let command = Cli::command();
+        assert_eq!(
+            names(command.get_arguments().filter_map(|arg| {
+                let id = arg.get_id().as_str();
+                (!matches!(id, "help" | "version")).then_some(id)
+            })),
+            names(ROOT_TERMINAL_ARGS.iter().copied()),
+        );
+        assert_eq!(
+            names(command.get_subcommands().map(|sub| sub.get_name())),
+            names(COMMANDS.iter().map(|policy| policy.name)),
+        );
+        let versions = command.find_subcommand("versions").unwrap();
+        assert_eq!(
+            names(versions.get_subcommands().map(|sub| sub.get_name())),
+            names(VERSION_COMMANDS.iter().map(|policy| policy.name)),
+        );
+    }
+
+    #[test]
+    fn every_shared_leaf_argument_has_surface_policy() {
+        let command = Cli::command();
+        for leaf in LEAVES {
+            let mut node = &command;
+            for segment in leaf.path {
+                node = node.find_subcommand(segment).unwrap();
+            }
+            let actual = names(node.get_arguments().filter_map(|arg| {
+                let id = arg.get_id().as_str();
+                (!matches!(id, "help" | "verbose" | "quiet" | "color")).then_some(id)
+            }));
+            let classified = names(leaf.comment_args.iter().chain(leaf.terminal_args).copied());
+            assert_eq!(actual, classified, "{}", leaf.path.join(" "));
+        }
+    }
+
+    #[test]
+    fn mutation_effects_stay_classified_consistently() {
+        for path in [["update"].as_slice(), ["versions", "bump"].as_slice()] {
+            let leaf = LEAVES.iter().find(|leaf| leaf.path == path).unwrap();
+            assert!(super::MUTATION_EFFECTS
+                .iter()
+                .all(|effect| leaf.terminal_args.contains(effect)));
+        }
+    }
 }
