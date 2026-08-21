@@ -12,7 +12,7 @@ exposePackage (
   packages.sameProfile.psycopg.passthru.c.overridePythonAttrs (o: {
     pname = "psycopg-binary";
     # nix-level only (the wheel's METADATA stays dep-free like upstream's):
-    # gives the import smoke-test psycopg, which the upstream guard requires
+    # gives the import check psycopg, which the upstream guard requires
     # to be imported first.
     dependencies = [packages.sameProfile.psycopg];
     # replaces the inherited postPatch (cd psycopg_c + fixes); same fixes, on

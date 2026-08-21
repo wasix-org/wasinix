@@ -2,7 +2,7 @@
   lib,
   mkCargoRegistry,
 }: {
-  cargoRegistry = {entry, ...}:
+  registryArtifact = {entry, ...}:
     lib.optionalAttrs (
       entry.kind
       == "package"

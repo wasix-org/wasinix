@@ -25,9 +25,8 @@
       passthru.wasinix.retention = "none";
       passthru.wasmer = {
         commands = [];
-        # data-only webc: no command to run, so no liveness smoke; the data
-        # is exercised by tests/smoke.nix.
-        smokeArgs = [];
+        # This data-only WebC has no command; its behavior test mounts the
+        # archive into a generated ICU consumer.
         fs."/share/icu/${icu.version}" = "${data}/share/icu/${icu.version}";
       };
     };

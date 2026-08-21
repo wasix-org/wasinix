@@ -18,17 +18,17 @@
       rustc answer.rs -C linker=/bin/wasm-ld -o answer.wasm
       test -s answer.wasm
 
-      mkdir -p cargo-smoke/src
-      cat > cargo-smoke/Cargo.toml <<'EOF'
+      mkdir -p cargo-check/src
+      cat > cargo-check/Cargo.toml <<'EOF'
       [package]
-      name = "cargo-smoke"
+      name = "cargo-check"
       version = "0.1.0"
       edition = "2024"
       EOF
-      cat > cargo-smoke/src/main.rs <<'EOF'
+      cat > cargo-check/src/main.rs <<'EOF'
       fn main() {}
       EOF
-      cargo check --offline --manifest-path cargo-smoke/Cargo.toml
+      cargo check --offline --manifest-path cargo-check/Cargo.toml
     '';
   };
 }

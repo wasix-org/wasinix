@@ -1,4 +1,4 @@
-# Per-variant smoke test: compile a small C++ program against the variant's
+# Per-variant compile check: compile a small C++ program against the variant's
 # sysroot via its clang-wasix*.cmake_toolchain (reusing the same flag source) and
 # assert a valid wasm object.
 #
@@ -77,5 +77,5 @@ in
       runHook postInstall
     '';
 
-    meta.description = "Sysroot compile smoke test for WASIX (${name} variant)";
+    meta.description = "Sysroot compile check for WASIX (${name} variant)";
   }

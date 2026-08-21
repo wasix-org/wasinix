@@ -1,5 +1,5 @@
 # anybuild's python templates built end to end against wasinix's own indexes,
-# with no network beyond loopback: the wasix overlay (.#pythonRegistry) as the
+# with no network beyond loopback: the projected Python registry as the
 # extra index and the pinned PyPI mirror (helpers.nix) as the primary one.
 #
 # Native anybuild, not the wasix build: the cross-wheel steps run uv and uvx on

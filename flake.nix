@@ -240,7 +240,7 @@
         nativeBuildInputs = [pkgs.ripgrep];
       } ''
         if rg -n \
-          'passthru\.wasix\.(shipped|ciProfiles|ciTags|emulatedCheck|installCheck|publication|retention|smokeTest|testExpectation|updateNotes|postUpdateHook)|passthru\.wasmer\.aliases|\bwasix\.(shipped|retention|updateNotes|postUpdateHook)|helpers\.libTweaks|\blibTweaks\s*=' \
+          'passthru\.wasix\.(shipped|ciProfiles|ciTags|emulatedCheck|installCheck|interpreterSpecific|publication|retention|smokeTest|testExpectation|updateNotes|postUpdateHook)|passthru\.wasmer\.(aliases|smokeArgs)|\bwasix\.(shipped|interpreterSpecific|retention|updateNotes|postUpdateHook)|helpers\.libTweaks|\blibTweaks\s*=' \
           ${self}/pkgs; then
           echo "A removed Wasinix source shape is still in use" >&2
           exit 1
@@ -330,7 +330,7 @@
           if WASIX_CARGO_TOKEN=$token wasinix cargo publish --mint mint2               --registry "$base" $extra > conflict.txt; then
             echo "conflicting publish succeeded" >&2; exit 1
           fi
-          grep -q 'versions bump cargoRegistry.crates.probe@0.1.0' conflict.txt
+          grep -q 'versions bump artifacts.registry.cargo-registry.crates.probe@0.1.0' conflict.txt
         done
 
         # The published crate resolves and compiles through the sparse index.
@@ -502,7 +502,7 @@
     };
     publicationInfo = let
       registry = project.artifacts.registry.python314;
-      cargoRegistry = project.artifacts.registry.cargo-registry;
+      cargoRegistryArtifact = project.artifacts.registry.cargo-registry;
       firstChangelog = derivations:
         lib.findFirst (value: value != null) null
         (map (derivation: let
@@ -548,9 +548,9 @@
         lib.nameValuePair "artifacts.registry.cargo-registry.crates.${name}" (informationFor {
           kind = "crate";
           versionOf = derivation: derivation.passthru.version;
-          derivations = builtins.attrValues (cargoRegistry.crates.${name} or {});
+          derivations = builtins.attrValues (cargoRegistryArtifact.crates.${name} or {});
         }))
-      cargoRegistry.crateVersions;
+      cargoRegistryArtifact.crateVersions;
     in
       wheelInfo // webcInfo // cargoInfo;
     updateCandidates = let

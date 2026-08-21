@@ -47,5 +47,5 @@ stdenvNoCC.mkDerivation {
     runHook postInstall
   '';
 
-  meta.description = "TinyGo and WASIX LLVM compile/run smoke test";
+  meta.description = "TinyGo and WASIX LLVM compile/run check";
 }

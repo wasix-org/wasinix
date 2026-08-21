@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Accumulating publisher for the static registry.
 
-Copies new wheels from a freshly built registry (nix build .#pythonRegistry)
+Copies new wheels from a freshly built structured-project registry
 into the S3-compatible volume behind the index app and regenerates the index
 HTML over everything published so far. Published wheel filenames are
 immutable: a changed build with an existing filename stays unpublished until a

@@ -199,7 +199,7 @@ in {
         else package;
       harnessesFor = {nativeRaw, ...}: (constructionFor nativeRaw).harnesses;
       projectionRules = {
-        cargoRegistry = {
+        cargoRegistryArtifact = {
           entry,
           packageSets,
           ...
@@ -207,7 +207,7 @@ in {
             inherit lib;
             inherit ((constructionFor packageSets.native)) mkCargoRegistry;
           })
-            .cargoRegistry
+            .registryArtifact
           args);
         wasmerArtifacts = {
           entry,
@@ -238,7 +238,7 @@ in {
           })
           packagedBehavior
           ;
-        pythonWheels = {
+        pythonWheelArtifacts = {
           entry,
           packages,
           packageSets,
@@ -247,9 +247,9 @@ in {
             inherit lib;
             inherit ((constructionFor packageSets.native)) mkPythonRegistry mkPythonWheels;
           })
-            .pythonWheels
+            .wheelArtifacts
           args);
-        pythonRegistry = {
+        pythonRegistryArtifact = {
           entry,
           packages,
           packageSets,
@@ -258,7 +258,7 @@ in {
             inherit lib;
             inherit ((constructionFor packageSets.native)) mkPythonRegistry mkPythonWheels;
           })
-            .pythonRegistry
+            .registryArtifact
           args);
         inherit
           (import ../artifacts/python.nix {

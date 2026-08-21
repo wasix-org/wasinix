@@ -14,8 +14,6 @@ exposePackage (
       withCxx = false;
     }) {
       passthru.wasinix.shipped = true;
-      # clear/reset/tput take -V, not --version.
-      passthru.wasmer.smokeArgs = ["-V"];
       # Replace configureFlags (not append): the override drops withCxx=false's flag,
       # so use a function to override the old value outright.
       configureFlags = _: [

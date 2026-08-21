@@ -63,7 +63,7 @@
       package.versions)
     packages.python.${interpreter};
 in {
-  pythonWheels = {
+  wheelArtifacts = {
     entry,
     packages,
     packageSets,
@@ -107,7 +107,7 @@ in {
       artifacts.${wheelArtifactKind pyKey} = wheels.${wheelName};
     };
 
-  pythonRegistry = {
+  registryArtifact = {
     entry,
     packages,
     packageSets,

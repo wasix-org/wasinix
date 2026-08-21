@@ -23,7 +23,7 @@
       staticfile_serve(
           config,
           build,
-          name = "smoke",
+          name = "behavior",
           build_post = [run("bash -c 'printf built > bash-ran'")],
       )
       EOF

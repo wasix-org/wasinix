@@ -48,7 +48,7 @@ def main():
             [
                 "nix",
                 "build",
-                f".#packagesByProfile.{profile}.yq-go.goModules",
+                f".#legacyPackages.x86_64-linux.packages.wasix.{profile}.yq-go.goModules",
                 "--no-link",
                 "--accept-flake-config",
             ],
