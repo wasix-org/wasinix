@@ -41,6 +41,7 @@
 
 ```json
 {
+  "blocked": "fail",
   "action": "diff",
   "baseline": "baseline",
   "contentDiff": false,

@@ -13,7 +13,7 @@ use crate::ci::contentdiff::ContentSummary;
 use crate::ci::facts::{BuildFacts, Failure, TestResult};
 use crate::ci::plan::{Plan, Task, TaskKind};
 use crate::ci::types::ResolvedRequest;
-use crate::support::atoms::{Bytes, DurationSecs, Rev, TaskStatus};
+use crate::support::atoms::{BlockedPolicy, Bytes, DurationSecs, Rev, TaskStatus};
 use crate::support::error::{Error, Result};
 use crate::support::schema::{self, Document};
 
@@ -83,7 +83,7 @@ pub struct Fragment {
 
 impl Document for Fragment {
     const KIND: &'static str = "fragment";
-    const SCHEMA: u32 = 1;
+    const SCHEMA: u32 = 2;
 }
 
 impl Fragment {
@@ -175,15 +175,29 @@ pub enum Conclusion {
     Success,
     Failure,
     Neutral,
+    Blocked,
 }
 
 impl Conclusion {
-    /// The word GitHub's check-run API takes.
-    pub fn as_github(self) -> &'static str {
+    pub fn command_status(self, blocked: BlockedPolicy) -> crate::support::process::CommandStatus {
+        use crate::support::process::CommandStatus;
+        match self {
+            Conclusion::Failure => CommandStatus::FAILURE,
+            Conclusion::Blocked if blocked == BlockedPolicy::Fail => CommandStatus::FAILURE,
+            _ => CommandStatus::SUCCESS,
+        }
+    }
+
+    pub fn as_github(self, blocked: BlockedPolicy) -> &'static str {
         match self {
             Conclusion::Success => "success",
             Conclusion::Failure => "failure",
             Conclusion::Neutral => "neutral",
+            Conclusion::Blocked => match blocked {
+                BlockedPolicy::Fail => "failure",
+                BlockedPolicy::Skip => "neutral",
+                BlockedPolicy::Good => "success",
+            },
         }
     }
 }
@@ -229,7 +243,22 @@ pub struct Report {
 
 impl Document for Report {
     const KIND: &'static str = "report";
-    const SCHEMA: u32 = 1;
+    const SCHEMA: u32 = 2;
+}
+
+impl Report {
+    pub fn blocked_policy(&self) -> BlockedPolicy {
+        self.request
+            .as_ref()
+            .map(|request| request.blocked)
+            .unwrap_or_default()
+    }
+
+    pub fn command_status(&self) -> crate::support::process::CommandStatus {
+        self.conclusion
+            .map(|conclusion| conclusion.command_status(self.blocked_policy()))
+            .unwrap_or(crate::support::process::CommandStatus::FAILURE)
+    }
 }
 
 /// Everything the fold needs to know beyond plan and fragments.
@@ -336,15 +365,15 @@ pub fn fold(plan: &Plan, fragments: &BTreeMap<String, Fragment>, context: FoldCo
         .filter(|view| {
             view.task.enabled
                 && !view.task.gate
-                && (failed(view.status) || view.status == TaskStatus::Neutral)
+                && (failed(view.status) || view.status == TaskStatus::Blocked)
         })
         .count();
     // A gate that ended neither passed nor failed: its work did not happen,
     // so the run answered nothing. Counting it nowhere concluded success and
     // reported a build whose jobs never ran as green.
-    let neutral_gate = views
-        .iter()
-        .find(|view| view.task.enabled && view.task.gate && view.status == TaskStatus::Neutral);
+    let blocked_gate = views.iter().find(|view| {
+        view.task.enabled && view.task.gate && view.status == TaskStatus::Blocked
+    });
     let active_failures = views
         .iter()
         .filter(|view| view.task.enabled && failed(view.status))
@@ -396,14 +425,14 @@ pub fn fold(plan: &Plan, fragments: &BTreeMap<String, Fragment>, context: FoldCo
             Some(Conclusion::Failure),
             "CI could not compare a candidate".to_string(),
         )
-    } else if let Some(view) = neutral_gate {
+    } else if let Some(view) = blocked_gate {
         let detail = view
             .fragment
             .map(|fragment| fragment.headline.clone())
             .unwrap_or_else(|| view.task.label.clone());
         (
-            Some(Conclusion::Neutral),
-            format!("CI is inconclusive: {detail}"),
+            Some(Conclusion::Blocked),
+            format!("CI blocked: {detail}"),
         )
     } else if !plan.tasks.is_empty() || !fragments.is_empty() {
         let title = if advisory_failures > 0 {

@@ -12,6 +12,7 @@
   "request": {
     "action": "diff",
     "baseline": "baseline",
+    "blocked": "fail",
     "cases": [
       {
         "action": "build",
@@ -44,7 +45,7 @@
     ],
     "contentDiff": false
   },
-  "schema": 1,
+  "schema": 2,
   "tasks": [
     {
       "case": "candidate-1",

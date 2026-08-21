@@ -51,11 +51,16 @@ Progress is an append-only `events.jsonl`; the snapshot is derived from it, not
 maintained beside it. Every progress view (the terminal ladder, `run watch`,
 `run logs --follow`, a remote observer) replays that one stream.
 
-The verdict has three values. A green run passes; a red run has a failed
+The verdict has four values. A green run passes; a red run has a failed
 required gate or a comparison with regressions. Removed jobs stay in the
 comparison for reviewer information but do not fail it. A diff whose baseline
 could not evaluate concludes **neutral**, never red, because a failure the base
-shares is the status quo, not a regression the change introduced.
+shares is the status quo, not a regression the change introduced. A selection
+whose jobs could not run because dependencies failed concludes **blocked**.
+Build, spot, diff, and bisect accept `--blocked=fail|skip|good` (default
+`fail`) to map that result to the process, check-run, and bisect outcome; the
+report still says blocked under every policy. A directly selected failure is
+always red.
 
 ## Where the time went
 

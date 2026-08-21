@@ -37,7 +37,7 @@ pub(crate) fn glyph(status: TaskStatus) -> &'static str {
     match status {
         TaskStatus::Success => "✓",
         TaskStatus::Failure | TaskStatus::Cancelled => "✗",
-        TaskStatus::Neutral => "⚠",
+        TaskStatus::Blocked => "⚠",
         TaskStatus::Skipped | TaskStatus::Deferred => "·",
         TaskStatus::Pending => "·",
     }

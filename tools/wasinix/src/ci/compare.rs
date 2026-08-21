@@ -508,7 +508,7 @@ pub fn project(
     request: &crate::ci::types::ResolvedRequest,
     finished: bool,
 ) -> Result<Vec<Comparison>> {
-    let crate::ci::types::Request::Diff(diff) = request else {
+    let crate::ci::types::RequestAction::Diff(diff) = &request.action else {
         return Ok(Vec::new());
     };
     let Some(baseline) = diff

@@ -333,7 +333,9 @@ pub fn check(
         }
         Some(conclusion) => {
             body["status"] = "completed".into();
-            body["conclusion"] = conclusion.as_github().into();
+            body["conclusion"] = conclusion
+                .as_github(rendered.report.blocked_policy())
+                .into();
         }
         None => {
             body["status"] = "in_progress".into();

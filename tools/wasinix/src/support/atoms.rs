@@ -151,6 +151,17 @@ pub enum JobStatus {
     Failure,
 }
 
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum BlockedPolicy {
+    #[default]
+    Fail,
+    Skip,
+    Good,
+}
+
 /// A plan task's outcome, including the renderer-only states.
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -161,7 +172,7 @@ pub enum TaskStatus {
     Failure,
     Cancelled,
     Skipped,
-    Neutral,
+    Blocked,
 }
 
 impl TaskStatus {
@@ -173,7 +184,7 @@ impl TaskStatus {
             TaskStatus::Failure => "failure",
             TaskStatus::Cancelled => "cancelled",
             TaskStatus::Skipped => "skipped",
-            TaskStatus::Neutral => "neutral",
+            TaskStatus::Blocked => "blocked",
         }
     }
 }
@@ -185,14 +196,12 @@ impl TaskStatus {
         matches!(self, TaskStatus::Failure | TaskStatus::Cancelled)
     }
 
-    /// The one mapping from a task's outcome to a process exit: skips,
-    /// deferrals, and neutral outcomes are answers.
-    pub fn exit(self) -> crate::support::process::CommandStatus {
+    pub fn exit(self, blocked: BlockedPolicy) -> crate::support::process::CommandStatus {
         use crate::support::process::CommandStatus;
-        if self.is_failure() {
-            CommandStatus::FAILURE
-        } else {
-            CommandStatus::SUCCESS
+        match self {
+            TaskStatus::Failure | TaskStatus::Cancelled => CommandStatus::FAILURE,
+            TaskStatus::Blocked if blocked == BlockedPolicy::Fail => CommandStatus::FAILURE,
+            _ => CommandStatus::SUCCESS,
         }
     }
 }

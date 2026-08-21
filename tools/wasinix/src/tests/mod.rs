@@ -244,14 +244,14 @@ mod plan {
     }
 
     fn core_diff() -> Request<RevSource> {
-        Request::Diff(Diff {
+        Request::diff(Diff {
             baseline: "baseline".into(),
             content_diff: false,
             cases: vec![
                 Case::Build(build("baseline", &["core"])),
                 Case::Build(build("candidate-1", &["core"])),
             ],
-        })
+        }, Default::default())
     }
 
     #[test]
@@ -283,14 +283,14 @@ mod plan {
 
     #[test]
     fn a_mixed_diff_plans_spot_and_build_as_advisory_cases() {
-        let request = Request::Diff(Diff {
+        let request = Request::diff(Diff {
             baseline: "baseline".into(),
             content_diff: false,
             cases: vec![
                 Case::Build(build("baseline", &["core"])),
                 Case::Spot(spot("candidate-1", "exnrefEh.zlib")),
             ],
-        });
+        }, Default::default());
         let plan = plan_of(&request, None, &[]);
         // A failed spot build still lays out its map and statuses, so a
         // failure both sides share stays the comparison's call.
@@ -306,7 +306,11 @@ mod plan {
 
     #[test]
     fn a_build_request_is_gated_by_its_builds() {
-        let plan = plan_of(&Request::Build(build("case", &["core"])), None, &[]);
+        let plan = plan_of(
+            &Request::build(build("case", &["core"]), Default::default()),
+            None,
+            &[],
+        );
         assert!(plan.tasks.iter().filter(|t| t.gate).count() == plan.tasks.len());
         assert_eq!(
             plan.tasks
@@ -336,7 +340,11 @@ mod plan {
 
     #[test]
     fn build_sections_have_a_stable_order() {
-        let plan = plan_of(&Request::Build(build("case", &["all"])), None, &[]);
+        let plan = plan_of(
+            &Request::build(build("case", &["all"]), Default::default()),
+            None,
+            &[],
+        );
         let order = |id: &str| plan.tasks.iter().find(|t| t.task_id == id).unwrap().order;
         assert!(order("case.core") < order("case.packages"));
         assert!(order("case.packages") < order("case.python"));
@@ -366,7 +374,11 @@ mod plan {
 
     #[test]
     fn phases_spell_camel_case_on_the_wire() {
-        let plan = plan_of(&Request::Build(build("case", &["core"])), None, &[]);
+        let plan = plan_of(
+            &Request::build(build("case", &["core"]), Default::default()),
+            None,
+            &[],
+        );
         let value = serde_json::to_value(&plan.tasks).unwrap();
         let phases: Vec<&str> = value
             .as_array()
@@ -380,10 +392,12 @@ mod plan {
     #[test]
     fn requests_round_trip_through_their_envelope() {
         use crate::support::schema;
-        let request = crate::ci::types::ResolvedRequest::Build(build("case", &["core"]));
+        let request =
+            crate::ci::types::ResolvedRequest::build(build("case", &["core"]), Default::default());
         let value = schema::to_value(&request).unwrap();
         assert_eq!(value["kind"], "request");
         assert_eq!(value["action"], "build");
+        assert_eq!(value["blocked"], "fail");
         assert!(value.get("overrides").is_none(), "empty lists stay absent");
         let back: crate::ci::types::ResolvedRequest = schema::from_value(value, "test").unwrap();
         assert_eq!(back, request);
@@ -1094,7 +1108,7 @@ mod compare {
         use crate::ci::types::{Case, Diff, Request};
         let scratch = crate::support::fs::Scratch::create("wasinix-test").unwrap();
         let run_dir = scratch.path();
-        let request = Request::Diff(Diff {
+        let request = Request::diff(Diff {
             baseline: "baseline".into(),
             content_diff: false,
             cases: vec![
@@ -1107,7 +1121,7 @@ mod compare {
                     ..case(&["job"])
                 }),
             ],
-        });
+        }, Default::default());
         let write_map = |id: &str, drv: &str| {
             let dir = crate::ci::prepare::case_dir(run_dir, id);
             crate::support::fs::create_dir_all(&crate::ci::prepare::maps_dir(&dir)).unwrap();
@@ -1845,7 +1859,7 @@ mod exec {
 mod cli {
     use clap::Parser;
 
-    use crate::ci::types::{OverrideKind, Request, SelectorKind};
+    use crate::ci::types::{OverrideKind, SelectorKind};
     use crate::cli::{Cli, CommandTree};
 
     fn parse(words: &[&str]) -> CommandTree {
@@ -1946,6 +1960,22 @@ mod cli {
     }
 
     #[test]
+    fn blocked_policy_is_explicit_and_defaults_to_failure() {
+        use crate::support::atoms::BlockedPolicy;
+
+        let CommandTree::Build(defaulted) = parse(&["build", "core"]) else {
+            panic!("expected build");
+        };
+        assert_eq!(defaulted.outcome.blocked, BlockedPolicy::Fail);
+
+        let CommandTree::Build(good) = parse(&["build", "core", "--blocked=good"]) else {
+            panic!("expected build");
+        };
+        assert_eq!(good.outcome.blocked, BlockedPolicy::Good);
+        assert!(Cli::try_parse_from(["wasinix", "build", "core", "--blocked=unknown"]).is_err());
+    }
+
+    #[test]
     fn the_at_separator_is_the_only_override_grammar() {
         let CommandTree::Build(args) = parse(&["build", "all", "--with", "wasmer=7.1.0"]) else {
             panic!("expected build");
@@ -2002,7 +2032,8 @@ mod cli {
         ]) else {
             panic!("expected diff");
         };
-        let Request::Diff(diff) = crate::cli::request::diff_request(&args).unwrap() else {
+        let request = crate::cli::request::diff_request(&args).unwrap();
+        let crate::ci::types::RequestAction::Diff(diff) = request.action else {
             panic!("expected a diff request");
         };
         assert!(diff.content_diff);
@@ -2152,7 +2183,7 @@ mod markdown {
                 label: "head: Packages".into(),
                 kind: TaskKind::Build,
                 case: "head".into(),
-                status: TaskStatus::Neutral,
+                status: TaskStatus::Blocked,
                 gate: true,
                 enabled: true,
                 headline: "1529 selected · 1 blocked".into(),
@@ -2180,7 +2211,6 @@ mod markdown {
         let body = comment(&report, &Default::default(), None, &links()).into_string();
         assert!(body.contains("checks.cli-behavior-find"), "{body}");
         assert!(body.contains("Never ran (1)"), "{body}");
-        // And the task that carried it, which is neutral rather than failed.
         assert!(body.contains("head: Packages"), "{body}");
     }
 
@@ -2253,7 +2283,7 @@ mod markdown {
                 &build.task_id,
                 &build.label,
                 build.kind,
-                TaskStatus::Neutral,
+                TaskStatus::Blocked,
                 "1 of 1 jobs blocked",
             )
             .with_data(FragmentData::Build(facts)),
@@ -2268,7 +2298,7 @@ mod markdown {
         );
         assert_eq!(
             report.conclusion,
-            Some(crate::ci::report::Conclusion::Neutral),
+            Some(crate::ci::report::Conclusion::Blocked),
             "a blocked gate concluded {:?}",
             report.conclusion
         );
@@ -2276,6 +2306,27 @@ mod markdown {
         assert!(!body.contains("jobs green"), "{body}");
         // The dependency that blocked it is the whole answer.
         assert!(body.contains("wasix-cc-legacy"), "{body}");
+    }
+
+    #[test]
+    fn blocked_policy_controls_process_and_check_conclusions() {
+        use crate::ci::report::Conclusion;
+        use crate::support::atoms::BlockedPolicy;
+        use crate::support::process::CommandStatus;
+
+        for (policy, status, check) in [
+            (BlockedPolicy::Fail, CommandStatus::FAILURE, "failure"),
+            (BlockedPolicy::Skip, CommandStatus::SUCCESS, "neutral"),
+            (BlockedPolicy::Good, CommandStatus::SUCCESS, "success"),
+        ] {
+            assert_eq!(Conclusion::Blocked.command_status(policy), status);
+            assert_eq!(Conclusion::Blocked.as_github(policy), check);
+        }
+        assert_eq!(
+            Conclusion::Failure.command_status(BlockedPolicy::Good),
+            CommandStatus::FAILURE,
+            "direct failures remain failures under every blocked policy"
+        );
     }
 
     #[test]
@@ -2355,12 +2406,18 @@ mod markdown {
     fn comment_commands_pin_every_case_to_the_runner() {
         use crate::cli::untrusted::{UntrustedCommand, parse};
         let parsed = parse("build checks.zlib --with wasixcc@0.4.3").unwrap();
-        let UntrustedCommand::Request(crate::ci::types::Request::Build(case)) = parsed else {
+        let UntrustedCommand::Request(request) = parsed else {
+            panic!("expected a build request");
+        };
+        let crate::ci::types::RequestAction::Build(case) = request.action else {
             panic!("expected a build request");
         };
         assert_eq!(case.on.as_deref(), Some("local"));
         let parsed = parse("diff build all --vs build all").unwrap();
-        let UntrustedCommand::Request(crate::ci::types::Request::Diff(diff)) = parsed else {
+        let UntrustedCommand::Request(request) = parsed else {
+            panic!("expected a diff request");
+        };
+        let crate::ci::types::RequestAction::Diff(diff) = request.action else {
             panic!("expected a diff request");
         };
         for case in &diff.cases {
@@ -3264,7 +3321,9 @@ mod render {
 }
 
 mod bisect {
+    use crate::ci::report::Conclusion;
     use crate::nix::bisect::{Dependency, Options, Outcome, completed, run};
+    use crate::support::atoms::BlockedPolicy;
     use crate::support::fs::Scratch;
 
     #[test]
@@ -3283,6 +3342,25 @@ mod bisect {
             Some(rev.to_string())
         );
         assert_eq!(completed("Bisecting: 3 revisions left to test"), None);
+    }
+
+    #[test]
+    fn blocked_candidates_follow_the_predicate_policy() {
+        let (mut report, _) = super::scenarios::green();
+        report.conclusion = Some(Conclusion::Blocked);
+
+        for (policy, expected) in [
+            (BlockedPolicy::Fail, Outcome::Bad),
+            (BlockedPolicy::Skip, Outcome::Skip),
+            (BlockedPolicy::Good, Outcome::Good),
+        ] {
+            report
+                .request
+                .as_mut()
+                .expect("scenario records its request")
+                .blocked = policy;
+            assert_eq!(crate::cli::bisect::candidate_outcome(&report).unwrap(), expected);
+        }
     }
 
     fn git(repo: &std::path::Path, args: &[&str]) -> String {
@@ -4679,7 +4757,7 @@ mod corpus {
             TaskStatus::Failure,
             TaskStatus::Cancelled,
             TaskStatus::Skipped,
-            TaskStatus::Neutral,
+            TaskStatus::Blocked,
         ] {
             assert_eq!(
                 serde_json::to_value(status).unwrap(),
@@ -4883,7 +4961,6 @@ mod corpus {
 
 mod untrusted {
     use crate::ci::origin::{Classifier, CommandKind};
-    use crate::ci::types::Request;
     use crate::cli::untrusted::{ClapClassifier, UntrustedCommand, parse, split_words};
 
     #[test]
@@ -4898,9 +4975,12 @@ mod untrusted {
 
     #[test]
     fn comment_commands_reenter_the_shared_grammar() {
-        let UntrustedCommand::Request(Request::Build(build)) =
+        let UntrustedCommand::Request(request) =
             parse("build core --enable-tag slow-tests").unwrap()
         else {
+            panic!("expected a build request");
+        };
+        let crate::ci::types::RequestAction::Build(build) = request.action else {
             panic!("expected a build request");
         };
         assert_eq!(build.enabled_tags, ["slow-tests"]);
@@ -4909,6 +4989,12 @@ mod untrusted {
             ClapClassifier.classify("build core").unwrap(),
             CommandKind::Build
         );
+
+        let UntrustedCommand::Request(request) = parse("build core --blocked=skip").unwrap()
+        else {
+            panic!("expected a build request");
+        };
+        assert_eq!(request.blocked, crate::support::atoms::BlockedPolicy::Skip);
     }
 
     /// Adapter-owned flags do not exist in the untrusted grammar: the parse
@@ -5203,14 +5289,14 @@ mod fold {
     }
 
     fn diff_request() -> Request<RevSource> {
-        Request::Diff(Diff {
+        Request::diff(Diff {
             baseline: "baseline".into(),
             content_diff: false,
             cases: vec![
                 Case::Build(build("baseline")),
                 Case::Build(build("candidate-1")),
             ],
-        })
+        }, Default::default())
     }
 
     fn fragment(task_id: &str, kind: TaskKind, status: TaskStatus, headline: &str) -> Fragment {
@@ -5219,7 +5305,11 @@ mod fold {
 
     #[test]
     fn a_green_build_concludes_success() {
-        let plan = plan_of(&Request::Build(build("case")), None, &[]);
+        let plan = plan_of(
+            &Request::build(build("case"), Default::default()),
+            None,
+            &[],
+        );
         let fragments: BTreeMap<String, Fragment> = plan
             .tasks
             .iter()
@@ -5238,7 +5328,11 @@ mod fold {
 
     #[test]
     fn a_failed_gate_concludes_failure_and_skips_its_downstream() {
-        let plan = plan_of(&Request::Build(build("case")), None, &[]);
+        let plan = plan_of(
+            &Request::build(build("case"), Default::default()),
+            None,
+            &[],
+        );
         let mut fragments = BTreeMap::new();
         fragments.insert(
             "case.treefmt".to_string(),
@@ -5484,7 +5578,11 @@ mod fold {
 
     #[test]
     fn a_finished_run_resolves_pending_gates_instead_of_holding_open() {
-        let plan = plan_of(&Request::Build(build("case")), None, &[]);
+        let plan = plan_of(
+            &Request::build(build("case"), Default::default()),
+            None,
+            &[],
+        );
         let report = fold(
             &plan,
             &BTreeMap::new(),
@@ -5505,7 +5603,11 @@ mod fold {
 
     #[test]
     fn failures_flow_from_typed_build_fragments() {
-        let plan = plan_of(&Request::Build(build("case")), None, &[]);
+        let plan = plan_of(
+            &Request::build(build("case"), Default::default()),
+            None,
+            &[],
+        );
         let mut fragments: BTreeMap<String, Fragment> = plan
             .tasks
             .iter()
@@ -5545,7 +5647,11 @@ mod fold {
 
     #[test]
     fn a_failure_position_becomes_a_repo_relative_annotation() {
-        let plan = plan_of(&Request::Build(build("case")), None, &[]);
+        let plan = plan_of(
+            &Request::build(build("case"), Default::default()),
+            None,
+            &[],
+        );
         let mut fragments: BTreeMap<String, Fragment> = plan
             .tasks
             .iter()
@@ -5650,7 +5756,7 @@ mod scenarios {
     }
 
     pub fn green() -> (Report, Fragments) {
-        let request = Request::Build(build("case"));
+        let request = Request::build(build("case"), Default::default());
         let plan = plan_of(&request, Some("golden"), &[]);
         let fragments = green_fragments(&plan);
         let report = fold(
@@ -5667,7 +5773,7 @@ mod scenarios {
     }
 
     pub fn failing() -> (Report, Fragments) {
-        let request = Request::Build(build("case"));
+        let request = Request::build(build("case"), Default::default());
         let plan = plan_of(&request, Some("golden"), &[]);
         let mut fragments = green_fragments(&plan);
         let facts = BuildFacts {
@@ -5726,14 +5832,14 @@ mod scenarios {
     }
 
     pub fn infra_neutral() -> (Report, Fragments) {
-        let request = Request::Diff(Diff {
+        let request = Request::diff(Diff {
             baseline: "baseline".into(),
             content_diff: false,
             cases: vec![
                 Case::Build(build("baseline")),
                 Case::Build(build("candidate-1")),
             ],
-        });
+        }, Default::default());
         let plan = plan_of(&request, Some("golden"), &[]);
         let mut fragments = BTreeMap::new();
         for task in &plan.tasks {
@@ -5773,14 +5879,14 @@ mod scenarios {
     /// rebuilds, version moves, added and removed jobs.
     pub fn diff_green() -> (Report, Fragments) {
         use crate::ci::compare::{BuildDiff, Comparison, EvalDiff, VersionUpdate};
-        let request = Request::Diff(Diff {
+        let request = Request::diff(Diff {
             baseline: "baseline".into(),
             content_diff: false,
             cases: vec![
                 Case::Build(build("baseline")),
                 Case::Build(build("candidate-1")),
             ],
-        });
+        }, Default::default());
         let plan = plan_of(&request, Some("golden"), &[]);
         let fragments = green_fragments(&plan);
         let comparison = Comparison {
@@ -5835,14 +5941,14 @@ mod scenarios {
     /// added/removed/version story.
     pub fn diff_in_progress() -> (Report, Fragments) {
         use crate::ci::compare::{Comparison, EvalDiff};
-        let request = Request::Diff(Diff {
+        let request = Request::diff(Diff {
             baseline: "baseline".into(),
             content_diff: false,
             cases: vec![
                 Case::Build(build("baseline")),
                 Case::Build(build("candidate-1")),
             ],
-        });
+        }, Default::default());
         let plan = plan_of(&request, Some("golden"), &[]);
         let mut fragments = BTreeMap::new();
         for task in &plan.tasks {
@@ -5890,7 +5996,7 @@ mod scenarios {
     }
 
     pub fn in_progress() -> (Report, Fragments) {
-        let request = Request::Build(build("case"));
+        let request = Request::build(build("case"), Default::default());
         let plan = plan_of(&request, Some("golden"), &[]);
         let mut fragments = BTreeMap::new();
         for task in plan.tasks.iter().take(2) {
@@ -5922,7 +6028,7 @@ mod scenarios {
     /// The golden rendered from this is the review artifact for any
     /// sanitizer change; the benign scenarios cannot show one.
     pub fn hostile() -> (Report, Fragments) {
-        let request = Request::Build(build("case"));
+        let request = Request::build(build("case"), Default::default());
         let plan = plan_of(&request, Some("golden"), &[]);
         let mut fragments = green_fragments(&plan);
         let facts = BuildFacts {
@@ -6996,7 +7102,7 @@ mod prepare {
     #[test]
     fn a_prepared_run_loads_back_with_its_tree_and_plan() {
         let (scratch, repo) = repo();
-        let request = Request::Build(Build::<RevSource> {
+        let request = Request::build(Build::<RevSource> {
             case_id: Some("case".into()),
             source: RevSource {
                 rev: resolve_rev(&repo, "HEAD").unwrap(),
@@ -7011,7 +7117,7 @@ mod prepare {
             overrides: Vec::new(),
             from_pr: None,
             on: None,
-        });
+        }, Default::default());
         let run_dir = scratch.path().join("run");
         let prepared = prepare_all(&repo, &request, &run_dir).unwrap();
         assert!(
@@ -7048,7 +7154,7 @@ mod prepare {
         let (scratch, repo) = repo();
         // The working tree, not a plain rev: reuse keys on the materialized
         // tree, so a clean checkout matches what a commit's run published.
-        let request = Request::Build(Build::<RevSource> {
+        let request = Request::build(Build::<RevSource> {
             case_id: Some("case".into()),
             source: RevSource {
                 rev: resolve_rev(&repo, "HEAD").unwrap(),
@@ -7063,7 +7169,7 @@ mod prepare {
             overrides: Vec::new(),
             from_pr: None,
             on: None,
-        });
+        }, Default::default());
         let tree = git(&repo, &["rev-parse", "HEAD^{tree}"]).unwrap();
         let maps = scratch.path().join("maps");
         crate::support::fs::create_dir_all(&maps).unwrap();
@@ -7136,7 +7242,7 @@ mod prepare {
         use crate::ci::events::Event;
         use crate::support::atoms::{RunState, TaskStatus};
         let (scratch, repo) = repo();
-        let request = Request::Build(Build::<RevSource> {
+        let request = Request::build(Build::<RevSource> {
             case_id: Some("case".into()),
             source: RevSource {
                 rev: resolve_rev(&repo, "HEAD").unwrap(),
@@ -7151,7 +7257,7 @@ mod prepare {
             overrides: Vec::new(),
             from_pr: None,
             on: None,
-        });
+        }, Default::default());
         let run_dir = scratch.path().join("run");
 
         // Before the plan is recorded the run still has something to say:
@@ -7195,7 +7301,7 @@ mod prepare {
     fn a_dirty_working_tree_materializes_under_its_own_tree_id() {
         let (scratch, repo) = repo();
         std::fs::write(repo.join("file"), "two\n").unwrap();
-        let request = Request::Build(Build::<RevSource> {
+        let request = Request::build(Build::<RevSource> {
             case_id: Some("case".into()),
             source: RevSource {
                 rev: resolve_rev(&repo, "HEAD").unwrap(),
@@ -7210,7 +7316,7 @@ mod prepare {
             overrides: Vec::new(),
             from_pr: None,
             on: None,
-        });
+        }, Default::default());
         let run_dir = scratch.path().join("run");
         prepare_all(&repo, &request, &run_dir).unwrap();
         let manifest: crate::ci::workspace::Materialization =

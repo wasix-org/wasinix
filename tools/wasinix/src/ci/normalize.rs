@@ -11,8 +11,8 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::ci::types::{
-    Build, Case, Diff, Override, OverrideKind, ParsedRequest, RefSource, Request, ResolvedRequest,
-    RevSource, Spot,
+    Build, Case, Diff, Override, OverrideKind, ParsedRequest, RefSource, Request, RequestAction,
+    ResolvedRequest, RevSource, Spot,
 };
 use crate::support::error::{Result, request_error};
 use crate::support::git;
@@ -230,10 +230,14 @@ fn normalize_spot(
 
 pub fn normalize(request: &ParsedRequest, context: &Context<'_>) -> Result<ResolvedRequest> {
     let mut sources = None;
-    Ok(match request {
-        Request::Build(build) => Request::Build(normalize_build(build, context, &mut sources)?),
-        Request::Spot(spot) => Request::Spot(normalize_spot(spot, context, &mut sources)?),
-        Request::Diff(diff) => {
+    let action = match &request.action {
+        RequestAction::Build(build) => {
+            RequestAction::Build(normalize_build(build, context, &mut sources)?)
+        }
+        RequestAction::Spot(spot) => {
+            RequestAction::Spot(normalize_spot(spot, context, &mut sources)?)
+        }
+        RequestAction::Diff(diff) => {
             let mut cases = Vec::new();
             for case in &diff.cases {
                 cases.push(match case {
@@ -241,12 +245,16 @@ pub fn normalize(request: &ParsedRequest, context: &Context<'_>) -> Result<Resol
                     Case::Spot(case) => Case::Spot(normalize_spot(case, context, &mut sources)?),
                 });
             }
-            Request::Diff(Diff {
+            RequestAction::Diff(Diff {
                 baseline: diff.baseline.clone(),
                 content_diff: diff.content_diff,
                 cases,
             })
         }
+    };
+    Ok(Request {
+        blocked: request.blocked,
+        action,
     })
 }
 

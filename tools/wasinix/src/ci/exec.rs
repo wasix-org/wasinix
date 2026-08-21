@@ -17,7 +17,7 @@ use crate::ci::facts;
 use crate::ci::plan::{BuildTarget, Phase, Task, TaskKind};
 use crate::ci::prepare::{Loaded, case_dir, fragments_dir};
 use crate::ci::report::{Fragment, FragmentData, LogExcerpt};
-use crate::ci::types::{Build, CaseRef, Request, ResolvedRequest, RevSource, Spot};
+use crate::ci::types::{Build, CaseRef, RequestAction, ResolvedRequest, RevSource, Spot};
 use crate::ci::workspace::{PATCH_FILE, reproduced_worktree};
 use crate::nix::evaljobs;
 use crate::nix::route::Route;
@@ -1018,8 +1018,7 @@ fn run_build_tasks(
         )?;
         // The ingest classifies each failure: jobs that never ran because
         // something below them failed first are blocked, not failing, so a
-        // task whose only losses are blocked concludes neutral and the red
-        // stays on the root's task.
+        // task whose only losses are blocked carries that distinct outcome.
         let blocked = build_facts
             .failures
             .iter()
@@ -1037,7 +1036,7 @@ fn run_build_tasks(
         let status = if failed > 0 {
             TaskStatus::Failure
         } else if blocked > 0 {
-            TaskStatus::Neutral
+            TaskStatus::Blocked
         } else {
             TaskStatus::Success
         };
@@ -1077,28 +1076,30 @@ fn run_build_tasks(
         });
         let headline =
             crate::support::ui::counts(&build_facts.census.as_ref().expect("just set").parts());
-        worst = worst.max(
-            finish_task(
-                ctx,
-                tracker,
-                Fragment::new(
-                    spec.task_id.clone(),
-                    spec.label.clone(),
-                    spec.kind,
-                    status,
-                    headline,
-                )
-                .with_data(FragmentData::Build(build_facts)),
-                Some((union_started.elapsed(), 0)),
-            )?
-            .exit(),
-        );
+        worst = worst.max(finish_task(
+            ctx,
+            tracker,
+            Fragment::new(
+                spec.task_id.clone(),
+                spec.label.clone(),
+                spec.kind,
+                status,
+                headline,
+            )
+            .with_data(FragmentData::Build(build_facts)),
+            Some((union_started.elapsed(), 0)),
+        )?
+        .exit(request.blocked));
     }
     Ok(worst)
 }
 
-fn content(ctx: &Context, request: &ResolvedRequest, candidate_id: &str) -> Result<Fragment> {
-    let Request::Diff(diff) = request else {
+fn content(
+    ctx: &Context,
+    request: &ResolvedRequest,
+    candidate_id: &str,
+) -> Result<Fragment> {
+    let RequestAction::Diff(diff) = &request.action else {
         return request_error("content requires a diff request");
     };
     if !diff.content_diff {
@@ -1386,8 +1387,9 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
                     .saturating_sub(bytes_before),
             )),
         )?;
-        worst = worst.max(status.exit());
-        if !status.exit().is_success() && fatal(task.phase) {
+        let task_status = status.exit(request.blocked);
+        worst = worst.max(task_status);
+        if !task_status.is_success() && fatal(task.phase) {
             broken.push(task.case.clone());
         }
     }
@@ -1432,11 +1434,7 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
         },
     );
     schema::write(&crate::ci::prepare::report_path(ctx.run_dir), &report)?;
-    let status = match report.conclusion {
-        Some(crate::ci::report::Conclusion::Success)
-        | Some(crate::ci::report::Conclusion::Neutral) => CommandStatus::SUCCESS,
-        _ => CommandStatus::FAILURE,
-    };
+    let status = report.command_status();
     finish(&mut tracker, status)?;
     Ok(status)
 }

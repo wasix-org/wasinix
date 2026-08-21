@@ -8,6 +8,7 @@
 
 ```json
 {
+  "blocked": "fail",
   "action": "build",
   "caseId": "case",
   "source": {

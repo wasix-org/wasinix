@@ -5,6 +5,7 @@
   "kind": "report",
   "request": {
     "action": "build",
+    "blocked": "fail",
     "caseId": "case",
     "selectors": [
       {
@@ -17,7 +18,7 @@
       "workingTree": false
     }
   },
-  "schema": 1,
+  "schema": 2,
   "startedAt": 1755000000,
   "tasks": [
     {
