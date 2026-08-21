@@ -171,12 +171,7 @@ in
     # bumps, then re-derives libddwaf from the new setup.py's LIBDDWAF_VERSION
     # (the nix-update command is passed through as its argv)
     passthru.updateScript = {
-      command =
-        [
-          lib.getExe
-          updateWrapper
-        ]
-        ++ nix-update-script {extraArgs = ["--flake"];};
+      command = [(lib.getExe updateWrapper)] ++ nix-update-script {extraArgs = ["--flake"];};
       accepts = [
         "release"
         "revision"

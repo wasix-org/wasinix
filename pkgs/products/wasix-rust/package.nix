@@ -395,7 +395,7 @@ in
       updateScript = {
         name = "wasix-rust";
         attrPath = "nativePackages.wasix-rust";
-        command = [lib.getExe updateWrapper] ++ nix-update-script {extraArgs = ["--flake"];};
+        command = [(lib.getExe updateWrapper)] ++ nix-update-script {extraArgs = ["--flake"];};
         accepts = ["release" "revision"];
         source = {
           kind = "github";

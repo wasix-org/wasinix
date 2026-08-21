@@ -156,7 +156,7 @@ in {
 
         pythonImportsCheck = ["tree_sitter_${lang}"];
 
-        passthru.updateScript = [final.lib.getExe updater lang];
+        passthru.updateScript = [(final.lib.getExe updater) lang];
       };
     }) (builtins.attrNames grammars));
 }
