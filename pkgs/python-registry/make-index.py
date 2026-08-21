@@ -486,7 +486,7 @@ def main() -> None:
         sys.exit(
             "wheels of the same name differ between interpreters, so which one is"
             " served would be arbitrary. Mark the package"
-            " `passthru.wasix.interpreterSpecific` to publish each build under its"
+            " `passthru.wasinix.publication.interpreterSpecific` to publish each build under its"
             " own tag, or `publishOnce` in wheels.nix to serve one of them:\n"
             f"{listed}"
         )

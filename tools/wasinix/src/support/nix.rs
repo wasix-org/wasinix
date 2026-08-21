@@ -28,17 +28,6 @@ pub fn project_installable(flake: &str, path: &str) -> String {
     format!("{flake}#{}", project_attr(path))
 }
 
-pub fn canonical_webcs_apply(map: &str) -> String {
-    // Revisions from before alias support have no packageKey and contain only
-    // canonical entries, which keeps cross-revision comparisons evaluable.
-    format!(
-        "ws: builtins.mapAttrs ({map}) (builtins.listToAttrs (builtins.map \
-         (name: {{ inherit name; value = ws.${{name}}; }}) (builtins.filter \
-         (name: let p = ws.${{name}}; in !(p.passthru.wasmer ? packageKey) \
-         || name == p.passthru.wasmer.packageKey) (builtins.attrNames ws))))"
-    )
-}
-
 /// The shared binary cache, spelled once: rotating the key or moving the
 /// bucket is an edit here and nowhere else. The workflows read the same
 /// values through the nix-config emitter.
@@ -554,7 +543,7 @@ pub fn eval(flake: &Flake<'_>, attr: &str, apply: Option<&str>) -> Result<Value>
 mod tests {
     use std::time::Duration;
 
-    use super::{canonical_webcs_apply, Invocation};
+    use super::Invocation;
 
     #[test]
     fn a_timed_invocation_cannot_lose_its_deadline() {
@@ -566,28 +555,4 @@ mod tests {
         assert!(error.contains("cannot export"), "{error}");
     }
 
-    #[test]
-    fn canonical_webc_filter_runs_in_nix() {
-        let apply = canonical_webcs_apply("name: _: name");
-        let expression = [
-            "let ws = { \
-             canonical.passthru.wasmer.packageKey = \"canonical\"; \
-             alias.passthru.wasmer.packageKey = \"canonical\"; \
-             legacy.passthru.wasmer = {}; \
-             }; in (",
-            &apply,
-            ") ws",
-        ]
-        .concat();
-        let value = Invocation::expr("eval", expression)
-            .option("experimental-features", "nix-command")
-            .args(["--store", "dummy://"])
-            .json()
-            .run_json("canonical webc filter")
-            .unwrap();
-        let entries = value.as_object().unwrap();
-        assert_eq!(entries["canonical"], "canonical");
-        assert_eq!(entries["legacy"], "legacy");
-        assert!(!entries.contains_key("alias"));
-    }
 }

@@ -600,7 +600,7 @@ impl CommandTree {
 
 /// A pattern segment containing a glob character matches like a build
 /// selector; a bare one matches by substring, and the segments slide over
-/// the address, so `hydra` finds `pythonWheels.py313.hydra-core` without
+/// the address, so `hydra` finds `artifacts.wheel-py313.hydra-core` without
 /// knowing the address shape.
 pub(crate) fn job_pattern_matches(pattern: &str, name: &str) -> bool {
     let wanted: Vec<&str> = pattern.split('.').collect();

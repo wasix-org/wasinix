@@ -4,7 +4,7 @@
 # `versions` constraint; output is inert data. See
 # ../lib/wasix-crate-patches/README.md.
 #
-#   nix build .#cargoRegistry
+#   nix build .#legacyPackages.x86_64-linux.artifacts.registry.cargo-registry
 {
   pkgs,
   lib,

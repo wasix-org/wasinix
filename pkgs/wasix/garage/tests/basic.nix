@@ -1,4 +1,4 @@
-# Runtime smoke tests for the garage webc under wasmer. clap answers
+# Runtime behavior checks for the Garage WebC under Wasmer. clap answers
 # --version/--help before the config file is read or sodiumoxide initialises, so
 # they cover module load, std/env init and argv parsing without a cluster.
 {

@@ -3,8 +3,8 @@
 
     pkgs/shared/anybuild/update-mirror.py --force
 
-anybuild's cross-wheel steps resolve against two indexes: the wasix overlay
-(.#pythonRegistry) and a primary index standing in for PyPI. The tests serve
+anybuild's cross-wheel steps resolve against two indexes: the Wasinix wheel
+registry and a primary index standing in for PyPI. The tests serve
 both over loopback, so the primary side has to be a fixed set of files rather
 than a live resolution.
 
@@ -19,7 +19,7 @@ their URL and sha256, which the test's index fetches as plain fetchurls.
 suite covers. Everything else in the file is generated. Needs network; CI only
 reads the committed result.
 
-Also the anybuild package's postUpdateHook, so a bump re-resolves the pins
+Also the anybuild package's update.post hook, so a bump re-resolves the pins
 against that release's examples/. Manual runs no-op when the recorded version
 is current; --force re-resolves anyway.
 """
@@ -226,7 +226,8 @@ def main():
     lock = json.loads(LOCK.read_text())
     names = lock["templates"]
 
-    anybuild_version = nix_eval(".#nativePackages.anybuild.version")
+    anybuild_attr = ".#legacyPackages.x86_64-linux.packages.native.anybuild"
+    anybuild_version = nix_eval(f"{anybuild_attr}.version")
     if lock.get("anybuild") == anybuild_version and not args.force:
         print(f"{LOCK.relative_to(REPO)} up to date (anybuild {anybuild_version})")
         return
@@ -234,9 +235,9 @@ def main():
     src = (
         Path(args.anybuild_src)
         if args.anybuild_src
-        else nix_build(".#nativePackages.anybuild.src")
+        else nix_build(f"{anybuild_attr}.src")
     )
-    anybuild = nix_build(".#nativePackages.anybuild")
+    anybuild = nix_build(anybuild_attr)
 
     requirements = {}
     providers = {}

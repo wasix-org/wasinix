@@ -1,5 +1,5 @@
 # Python wheels wasinix ships (nixpkgs python3.pkgs attr names); drives the
-# pythonWheels targets and import smoke-tests. Entry: {attr, pyImport ? nixpkgs'
+# Wheel artifacts and import checks. Entry: {attr, pyImport ? nixpkgs'
 # pythonImportsCheck, skipTest, noarch = build once for packages shipping no
 # python code, publishOnce = publish the default interpreter's ABI3 artifact,
 # variants = the interpreters to build on, default all}.
@@ -82,7 +82,7 @@
   {
     attr = "watchdog";
     # pure on non-macOS; wasix has no inotify, the polling observer is the
-    # usable path, so the smoke-test imports it directly.
+    # usable path, so the import check loads it directly.
     pyImport = "watchdog.observers.polling";
   }
   {
@@ -477,7 +477,7 @@
   }
 
   # ── C extensions linking a C library already in the overlay ────────────────────
-  # import targets reach the compiled module so the smoke-test exercises the .so.
+  # import targets reach the compiled module so the import check exercises the .so.
   {
     attr = "pyyaml";
     # only yaml._yaml proves libyaml linked; plain `yaml` has a pure fallback.
@@ -644,7 +644,7 @@
 
   # ── LLM / agent SDKs (pure-python; transitive deps auto-build + auto-publish) ───
   # Each pulls its whole closure into the build + PEP 503 registry; the import
-  # smoke-test exercises it under wasmer. huggingface-hub drops hf-xet (see its
+  # import check exercises it under Wasmer. huggingface-hub drops hf-xet (see its
   # override) so smolagents needs no Rust wheel.
   {attr = "mcp";} # Model Context Protocol (jsonschema -> rpds-py)
   {attr = "smolagents";} # huggingface smolagents (huggingface-hub, hf-xet dropped)

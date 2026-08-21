@@ -19,7 +19,7 @@
   # no python code, e.g. a redistributed binary) build once on the default python; everything else
   # builds per interpreter.
   select ? (_: true),
-  # This call's key in the pythonWheels set ("py313"/"py314"/"noarch"); history entries gate on it.
+  # This call's wheel variant ("py313"/"py314"/"noarch"); history entries gate on it.
   pyKey,
 }: let
   testLib = import ./python-test-lib.nix {inherit pkgs lib python3 pythonWebc wasmer;};
@@ -49,7 +49,7 @@
 
   inherit (testLib) runPython;
 
-  # `import <mod>` smoke-test: the runtime counterpart to the static
+  # `import <mod>` check: the runtime counterpart to the static
   # `self-contained` guard below.
   importTest = name: e: wheel:
     runPython {
@@ -81,7 +81,7 @@
   # requirement naming something the registry cannot serve fails only for the
   # user. The registry serves the closure, so every requirement must name a
   # member of it that builds a wheel.
-  # The same served set pythonRegistry publishes (python-registry/default.nix):
+  # The same served set the Python registry publishes:
   # a requirement may be met by another entry or its closure, as snowflake's
   # boto3 is, without appearing in the requiring wheel's own. Names only, so
   # this stays a string input rather than a dependency on every wheel.

@@ -173,8 +173,9 @@ in rec {
     preferred;
 
   # CI coverage is independent of platform support. Shipped products already
-  # have a canonical build through wasmerPackages, while an explicit preference
-  # likewise opts into one canonical profile unless ciProfiles says otherwise.
+  # have a canonical build through their WebC artifact, while an explicit
+  # preference likewise opts into one canonical profile unless ciProfiles says
+  # otherwise.
   ciProfilesOf = drv: let
     w = wasixMetaOf drv;
     ci = (wasinixMetaOf drv).ci or {};

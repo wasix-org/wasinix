@@ -2,7 +2,7 @@
 # python versions: each wheel carries its cp313/cp314 tag in the filename, so one index serves both
 # and a resolver picks the file matching the running interpreter.
 #
-#   nix build .#pythonRegistry
+#   nix build .#legacyPackages.x86_64-linux.artifacts.registry.python314
 #   pip install --index-url file://$(readlink -f result)/all/simple numpy
 {
   pkgs,
@@ -52,7 +52,7 @@
       # whose build follows the interpreter is published per set instead, under
       # a tag naming it, since one none-any filename cannot hold both builds.
       publishedDrv =
-        if drv.passthru.wasix.interpreterSpecific or false
+        if drv.passthru.wasinix.publication.interpreterSpecific or false
         then
           publishOf {
             inherit drv;
@@ -90,7 +90,7 @@
   wheelDists = lib.concatLists (lib.attrValues perVersion);
 
   # The published artifacts, addressable so the reproduce command on an index
-  # page names the bytes it describes (pythonRegistry.published.py314.numpy."2.5.0").
+  # page names the bytes it describes (published.py314.numpy."2.5.0").
   published =
     lib.mapAttrs (
       _: served:

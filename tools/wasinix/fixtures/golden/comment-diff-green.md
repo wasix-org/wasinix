@@ -10,14 +10,14 @@
 
 <details><summary>Version or rel changed (1)</summary>
 
-- `packagesByProfile.eh.zlib: 1.3.1 -> 1.3.2`
+- `packages.wasix.eh.zlib: 1.3.1 -> 1.3.2`
 
 </details>
 
 <details><summary>Rebuilt (2)</summary>
 
 - `checks.zlib` at 1.3.2
-- `packagesByProfile.eh.zlib`
+- `packages.wasix.eh.zlib`
 
 </details>
 

@@ -490,6 +490,13 @@ mod evalmap {
         let catalog: SelectorCatalog = serde_json::from_value(serde_json::json!({
             "schemaVersion": 1,
             "jobs": {
+                "packages.wasix.eh.zlib": {
+                    "kind": "package",
+                    "name": "zlib",
+                    "variant": {"profile": "eh"},
+                    "instance": {"kind": "current", "version": "1.3.1"},
+                    "policy": {"aliases": ["packages.wasix.eh.zlib-ng"]}
+                },
                 "tests.packages.wasix.eh.zlib.abi": {
                     "kind": "test",
                     "name": "zlib",
@@ -513,6 +520,11 @@ mod evalmap {
         assert_eq!(map.info[&address].test_name.as_deref(), Some("abi"));
         assert_eq!(map.info[&address].variant.as_deref(), Some("eh"));
         assert_eq!(map.info[&address].tags, ["slow"]);
+        assert_eq!(
+            map.resolve_jobs(&["packages.wasix.eh.zlib-ng".into()])
+                .unwrap(),
+            ["packages.wasix.eh.zlib"]
+        );
     }
 }
 
@@ -1049,8 +1061,8 @@ mod compare {
             ..Default::default()
         };
         let jobs = [
-            "packagesByProfile.default.zlib",
-            "packagesByProfile.pic.zlib",
+            "packages.wasix.default.zlib",
+            "packages.wasix.pic.zlib",
         ];
         let mut base = map(&[
             (jobs[0], "/nix/store/old-default.drv"),
@@ -1106,7 +1118,7 @@ mod compare {
             version: Some(serde_json::Value::String("3.9".into())),
             ..Default::default()
         };
-        let jobs = ["packagesByProfile.eh.protobuf", "pythonWheels.py313.protobuf"];
+        let jobs = ["packages.wasix.eh.protobuf", "artifacts.wheel-py313.protobuf"];
         let mut base = map(&[(jobs[0], "/a.drv"), (jobs[1], "/b.drv")]);
         base.info.insert(JobAddr(jobs[0].into()), old(""));
         base.info.insert(JobAddr(jobs[1].into()), old(""));
@@ -2163,19 +2175,19 @@ mod exec {
     #[test]
     fn an_evaluation_becomes_a_map_with_first_line_errors() {
         let jobs = crate::nix::evaljobs::parse_file(concat!(
-            "{\"attrPath\":[\"packagesByProfile\",\"zlib\"],\"drvPath\":\"/nix/store/z.drv\",\"outputs\":{\"out\":\"/nix/store/z\"}}\n",
+            "{\"attrPath\":[\"packages.wasix\",\"zlib\"],\"drvPath\":\"/nix/store/z.drv\",\"outputs\":{\"out\":\"/nix/store/z\"}}\n",
             "{\"attrPath\":[\"bad\",\"job\"],\"error\":\"boom\\nmore\"}\n",
         ))
         .unwrap();
         let rev = crate::support::atoms::Rev::parse(&"a".repeat(40)).unwrap();
         let map = crate::ci::evalmap::EvalMap::from_jobs(rev, &jobs);
         assert_eq!(
-            map.jobs.get("packagesByProfile.zlib").map(String::as_str),
+            map.jobs.get("packages.wasix.zlib").map(String::as_str),
             Some("/nix/store/z.drv")
         );
         assert_eq!(map.errors.get("bad.job").map(String::as_str), Some("boom"));
         assert_eq!(
-            map.outputs["packagesByProfile.zlib"]["out"],
+            map.outputs["packages.wasix.zlib"]["out"],
             "/nix/store/z"
         );
     }
@@ -2243,11 +2255,11 @@ mod cli {
     #[test]
     fn job_patterns_slide_and_mix_substring_with_glob() {
         use crate::cli::job_pattern_matches;
-        let name = "pythonWheels.py313.hydra-core";
+        let name = "artifacts.wheel-py313.hydra-core";
         assert!(job_pattern_matches("hydra", name));
         assert!(job_pattern_matches("hydra*", name));
         assert!(job_pattern_matches("py313.hydra-core", name));
-        assert!(job_pattern_matches("pythonWheels.*.hydra-core", name));
+        assert!(job_pattern_matches("artifacts.wheel-*.hydra-core", name));
         assert!(job_pattern_matches(
             "wheel*hydra*",
             "checks.wheel-py313-hydra-core-import"
@@ -2358,15 +2370,15 @@ mod cli {
 
     #[test]
     fn spot_defaults_to_the_toolchain_source_cut() {
-        let CommandTree::Spot(args) = parse(&["spot", "packagesByProfile.zlib"]) else {
+        let CommandTree::Spot(args) = parse(&["spot", "packages.wasix.zlib"]) else {
             panic!("expected spot");
         };
         let request =
             crate::cli::request::spot_case(&args.request, &args.spot, None, None).unwrap();
-        assert_eq!(request.targets, ["packagesByProfile.zlib"]);
+        assert_eq!(request.targets, ["packages.wasix.zlib"]);
         assert_eq!(request.from_source, ["toolchain"]);
 
-        let CommandTree::Spot(args) = parse(&["spot", "packagesByProfile.zlib", "--target-only"]) else {
+        let CommandTree::Spot(args) = parse(&["spot", "packages.wasix.zlib", "--target-only"]) else {
             panic!("expected spot");
         };
         let request =
@@ -2376,7 +2388,7 @@ mod cli {
         assert!(Cli::try_parse_from([
             "wasinix",
             "spot",
-            "packagesByProfile.zlib",
+            "packages.wasix.zlib",
             "--target-only",
             "--from-source",
             "rust",
@@ -2395,7 +2407,7 @@ mod cli {
             "main",
             "--vs",
             "spot",
-            "packagesByProfile.zlib",
+            "packages.wasix.zlib",
         ]) else {
             panic!("expected diff");
         };
@@ -3146,7 +3158,7 @@ mod markdown {
             bad: "8".repeat(40),
             first_parent: false,
             reverse: true,
-            command: vec!["build".into(), "nativePackages.wasixcc-unwrapped".into()],
+            command: vec!["build".into(), "packages.native.wasixcc-unwrapped".into()],
             first_bad: None,
             revisions_left: None,
             tests: vec![
@@ -3578,7 +3590,7 @@ mod markdown {
             .find(|task| task.kind == TaskKind::Build)
             .expect("a build request plans a build task");
         let detail = "checks.zlib: no match in the evaluated job list; \
-                      nearest: packagesByProfile.zlib";
+                      nearest: packages.wasix.zlib";
         let fragment = union_failure_fragment(&build.task_id, &build.label, build.kind, detail);
         let fragments: std::collections::BTreeMap<String, crate::ci::report::Fragment> =
             [(fragment.task_id.clone(), fragment)].into();
@@ -4602,7 +4614,7 @@ mod update {
 
         // A spot case's map has no set catalog and offers nothing to record.
         let narrow = crate::ci::evalmap::EvalMap {
-            jobs: [(crate::support::atoms::JobAddr("packagesByProfile.zlib".into()), String::new())]
+            jobs: [(crate::support::atoms::JobAddr("packages.wasix.zlib".into()), String::new())]
                 .into_iter()
                 .collect(),
             ..Default::default()
@@ -5404,7 +5416,7 @@ mod corpus {
             "build all",
             "build core checks.bash-sh --at main --on ec2:store --json",
             "build all --inputs-only",
-            "spot packagesByProfile.zlib --from-source rust --plan",
+            "spot packages.wasix.zlib --from-source rust --plan",
             "diff build all --at main --vs build all",
             "diff",
             "diff --content-diff",
@@ -6476,7 +6488,8 @@ mod untrusted {
             "build core --on ec2:host",
             "build core --json",
             "build core --inputs-only",
-            "spot packagesByProfile.zlib --junit-out out.xml",
+            "spot packages.wasix.zlib --junit-out out.xml",
+            "diff build all --vs build all --on ec2:host",
         ] {
             let error = parse(command).unwrap_err().to_string();
             assert!(error.contains("terminal only"), "{command}: {error}");
@@ -6663,15 +6676,15 @@ mod content {
     #[test]
     fn only_moved_content_bearing_jobs_are_compared() {
         let base = map(&[
-            ("packagesByProfile.zlib", "/nix/store/a.drv"),
+            ("packages.wasix.zlib", "/nix/store/a.drv"),
             ("checks.git", "/nix/store/c.drv"),
-            ("packagesByProfile.same", "/nix/store/s.drv"),
+            ("packages.wasix.same", "/nix/store/s.drv"),
         ]);
         let mut head = map(&[
-            ("packagesByProfile.zlib", "/nix/store/b.drv"),
+            ("packages.wasix.zlib", "/nix/store/b.drv"),
             ("checks.git", "/nix/store/d.drv"),
-            ("packagesByProfile.same", "/nix/store/s.drv"),
-            ("packagesByProfile.added", "/nix/store/e.drv"),
+            ("packages.wasix.same", "/nix/store/s.drv"),
+            ("packages.wasix.added", "/nix/store/e.drv"),
         ]);
         head.info.insert(
             JobAddr("checks.git".into()),
@@ -6682,24 +6695,24 @@ mod content {
         );
 
         let (jobs, excluded) = content_jobs(&base, &head, None);
-        assert_eq!(jobs, ["packagesByProfile.zlib"]);
+        assert_eq!(jobs, ["packages.wasix.zlib"]);
         assert_eq!(excluded, 1, "a moved check without content is counted out");
 
-        let allowed: BTreeSet<String> = ["packagesByProfile.same".to_string()].into();
+        let allowed: BTreeSet<String> = ["packages.wasix.same".to_string()].into();
         let (jobs, _) = content_jobs(&base, &head, Some(&allowed));
         assert!(jobs.is_empty(), "unmoved jobs never enter the comparison");
     }
 
     #[test]
     fn pairs_cover_shared_outputs_of_jobs_built_on_both_sides() {
-        let mut base = map(&[("packagesByProfile.zlib", "/nix/store/a.drv")]);
-        let mut head = map(&[("packagesByProfile.zlib", "/nix/store/b.drv")]);
+        let mut base = map(&[("packages.wasix.zlib", "/nix/store/a.drv")]);
+        let mut head = map(&[("packages.wasix.zlib", "/nix/store/b.drv")]);
         for (side, out, dev) in [
             (&mut base, "/nix/store/old-out", "/nix/store/old-dev"),
             (&mut head, "/nix/store/new-out", "/nix/store/new-dev"),
         ] {
             side.outputs.insert(
-                JobAddr("packagesByProfile.zlib".into()),
+                JobAddr("packages.wasix.zlib".into()),
                 [
                     ("out".to_string(), out.to_string()),
                     ("dev".to_string(), dev.to_string()),
@@ -6708,11 +6721,11 @@ mod content {
             );
         }
         head.outputs
-            .get_mut("packagesByProfile.zlib")
+            .get_mut("packages.wasix.zlib")
             .unwrap()
             .insert("doc".to_string(), "/nix/store/new-doc".to_string());
 
-        let jobs = ["packagesByProfile.zlib".to_string()];
+        let jobs = ["packages.wasix.zlib".to_string()];
         let pairs = pairs_of(&base, &head, &jobs, &BTreeSet::new());
         let outputs: Vec<&str> = pairs.iter().map(|pair| pair.output.as_str()).collect();
         assert_eq!(outputs, ["dev", "out"], "one-sided outputs pair with nothing");
@@ -7372,15 +7385,15 @@ mod scenarios {
             eval: Some(EvalDiff {
                 rebuilt: vec![
                     JobAddr("checks.zlib".into()),
-                    JobAddr("packagesByProfile.eh.zlib".into()),
+                    JobAddr("packages.wasix.eh.zlib".into()),
                 ],
-                identity_transitions: vec!["packagesByProfile.eh.zlib: 1.3.1 -> 1.3.2".into()],
+                identity_transitions: vec!["packages.wasix.eh.zlib: 1.3.1 -> 1.3.2".into()],
                 version_updates: vec![VersionUpdate {
                     subject: "zlib".into(),
                     before: "1.3.1".into(),
                     after: "1.3.2".into(),
                     changelog: Some("https://github.com/madler/zlib/releases/tag/v1.3.2".into()),
-                    jobs: vec![JobAddr("packagesByProfile.eh.zlib".into())],
+                    jobs: vec![JobAddr("packages.wasix.eh.zlib".into())],
                 }],
                 added: vec![JobAddr("checks.brotli".into())],
                 removed: vec![JobAddr("checks.legacy-tool".into())],

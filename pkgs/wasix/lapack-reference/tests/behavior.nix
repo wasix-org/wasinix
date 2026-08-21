@@ -10,7 +10,7 @@
 }: let
   crossPkgs = packages.sameProfile;
   prog = crossPkgs.stdenv.mkDerivation {
-    pname = "lapack-smoke";
+    pname = "lapack-behavior";
     version = "1.0.0";
     dontUnpack = true;
     nativeBuildInputs = [crossPkgs.pkg-config];
@@ -19,24 +19,24 @@
     # `pkg-config` is not on PATH.
     buildPhase = ''
       runHook preBuild
-      $CC ${./smoke.c} -o lapack-smoke.wasm $("$PKG_CONFIG" --cflags --libs --static lapack cblas)
+      $CC ${./behavior.c} -o lapack-behavior.wasm $("$PKG_CONFIG" --cflags --libs --static lapack cblas)
       runHook postBuild
     '';
     installPhase = ''
       runHook preInstall
-      install -Dm755 lapack-smoke.wasm -t "$out/bin"
+      install -Dm755 lapack-behavior.wasm -t "$out/bin"
       runHook postInstall
     '';
-    passthru.wasmer.name = "lapack-smoke";
+    passthru.wasmer.name = "lapack-behavior";
   };
 in {
-  smoke = harnesses.hostShell {
-    name = "lapack-reference-smoke";
+  behavior = harnesses.hostShell {
+    name = "lapack-reference-behavior";
     wasixCommands = [
       (harnesses.packageCommand {package = prog;})
     ];
     script = ''
-      out=$(lapack-smoke)
+      out=$(lapack-behavior)
       echo "$out"
       [ "$out" = "ddot=32.0 solve=1.0,2.0 info=0" ]
     '';

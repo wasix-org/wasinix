@@ -20,6 +20,6 @@ in
     # libzmq.a is C++ but the extension links with the C driver.
     env.NIX_LDFLAGS = "-lc++ -lc++abi -lunwind";
     # The async socket suite blocks immediately under Wasmer. The import
-    # smoke test still exercises the extension and bundled libzmq.
+    # import check still exercises the extension and bundled libzmq.
     passthru.wasinix.checks.captured.install = false;
   }

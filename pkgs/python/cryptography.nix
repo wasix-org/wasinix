@@ -47,7 +47,7 @@ in
       };
       maturinBuildFlags = ["--features" "pyo3/extension-module"];
       # cryptography-vectors does not cross-evaluate. The package-specific
-      # OpenSSL checks and import smoke cover the extension.
+      # OpenSSL checks and the import check cover the extension.
       passthru.wasinix.checks.captured.install = false;
     }
     // lib.optionalAttrs isHistory {patches = _: [];}
