@@ -1671,11 +1671,11 @@ mod exec {
 
     use crate::ci::events::{Event, Tracker, read_all};
     use crate::ci::exec::{
-        JobState, blocked_by_case_failure, cached_jobs, fatal, fixed_output_derivations,
-        project_junit, record_result,
+        JobState, blocked_by_case_failure, cached_jobs, classify_build_outcome, fatal,
+        fixed_output_derivations, project_junit, record_result,
     };
     use crate::ci::plan::{BuildTarget, Phase};
-    use crate::support::atoms::JobStatus;
+    use crate::support::atoms::{JobStatus, TaskStatus};
     use crate::support::fs::Scratch;
 
     fn state(drv: &str, status: Option<JobStatus>) -> JobState {
@@ -1726,6 +1726,14 @@ mod exec {
         assert!(!fatal(Phase::Build {
             set: BuildTarget::Packages,
         }));
+    }
+
+    #[test]
+    fn build_outcomes_distinguish_blocked_jobs_from_direct_failures() {
+        assert_eq!(classify_build_outcome(1, 1), (0, TaskStatus::Blocked));
+        assert_eq!(classify_build_outcome(8, 8), (0, TaskStatus::Blocked));
+        assert_eq!(classify_build_outcome(8, 7), (1, TaskStatus::Failure));
+        assert_eq!(classify_build_outcome(0, 0), (0, TaskStatus::Success));
     }
 
     #[test]

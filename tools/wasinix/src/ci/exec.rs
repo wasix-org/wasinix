@@ -1024,22 +1024,15 @@ fn run_build_tasks(
             .iter()
             .filter(|failure| failure.cause == facts::FailureCause::Transitive)
             .count();
-        let failed = spec
+        let unsuccessful = spec
             .jobs
             .iter()
             .filter(|name| {
                 jobs.get(&format!("{}::{name}", spec.case))
                     .is_none_or(|job| job.status != Some(JobStatus::Success))
             })
-            .count()
-            .saturating_sub(blocked);
-        let status = if failed > 0 {
-            TaskStatus::Failure
-        } else if blocked > 0 {
-            TaskStatus::Blocked
-        } else {
-            TaskStatus::Success
-        };
+            .count();
+        let (failed, status) = classify_build_outcome(unsuccessful, blocked);
         // Where the selected jobs went. `reused` came from a published
         // baseline and never entered the build, so the dry run never saw
         // them; the rest is the plan's split minus what actually failed.
@@ -1216,6 +1209,25 @@ pub(crate) fn blocked_by_case_failure(phase: Phase) -> bool {
 /// failed evaluation leaves nothing comparable downstream.
 pub(crate) fn fatal(phase: Phase) -> bool {
     matches!(phase, Phase::EvalInputs | Phase::Eval)
+}
+
+pub(crate) fn classify_build_outcome(
+    unsuccessful: usize,
+    blocked: usize,
+) -> (usize, TaskStatus) {
+    assert!(
+        blocked <= unsuccessful,
+        "blocked jobs cannot exceed unsuccessful jobs"
+    );
+    let failed = unsuccessful - blocked;
+    let status = if failed > 0 {
+        TaskStatus::Failure
+    } else if blocked > 0 {
+        TaskStatus::Blocked
+    } else {
+        TaskStatus::Success
+    };
+    (failed, status)
 }
 
 /// The one place a task ends: the fragment is written and its PhaseFinished
