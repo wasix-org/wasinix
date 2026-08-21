@@ -3,7 +3,10 @@
 //! (the supervisor), so no observer can clobber a recorded exit. The reaper
 //! is the one exception, and only for a supervisor proven dead.
 
+mod collection;
 pub mod remote;
+
+pub(crate) use collection::{gc, gc_under, is_pinned, set_pinned, GcPolicy};
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -24,6 +27,7 @@ pub const RUN_FILE: &str = "run.json";
 pub const ORIGIN_FILE: &str = "origin-command.json";
 pub const LOG_FILE: &str = "run.log";
 pub const CANCEL_MARKER: &str = "cancel";
+pub const PIN_FILE: &str = "pinned";
 const CANCEL_GRACE: Duration = Duration::from_secs(30);
 const HEARTBEAT_EVERY: Duration = Duration::from_secs(600);
 /// How long a `starting` record may sit without a live supervisor before an

@@ -258,6 +258,33 @@ pub enum RunCommand {
         #[arg(add = clap_complete::ArgValueCandidates::new(run_id_candidates))]
         run_id: String,
     },
+    /// Protect a local run from collection
+    Pin {
+        #[arg(add = clap_complete::ArgValueCandidates::new(run_id_candidates))]
+        run_id: String,
+    },
+    /// Allow a pinned local run to be collected
+    Unpin {
+        #[arg(add = clap_complete::ArgValueCandidates::new(run_id_candidates))]
+        run_id: String,
+    },
+    /// Remove final, unpinned runs outside explicit retention limits
+    Gc {
+        /// Remove runs at least this many days old
+        #[arg(long)]
+        max_age_days: Option<u64>,
+        /// Target this many newest runs; active and pinned runs may exceed it
+        #[arg(long)]
+        max_count: Option<usize>,
+        /// Target this many bytes; active and pinned runs may exceed it
+        #[arg(long)]
+        max_bytes: Option<u64>,
+        /// Report what would be removed without changing the registry
+        #[arg(long)]
+        dry_run: bool,
+        #[command(flatten)]
+        json: ui::JsonArg,
+    },
     #[command(hide = true)]
     Supervise {
         run_dir: PathBuf,
@@ -784,23 +811,34 @@ fn run_command(command: RunCommand) -> Result<CommandStatus> {
             #[derive(serde::Serialize, serde::Deserialize)]
             struct RunList {
                 runs: Vec<runs::Run>,
+                pinned: std::collections::BTreeSet<String>,
             }
             impl schema::Document for RunList {
                 const KIND: &'static str = "runList";
-                const SCHEMA: u32 = 1;
+                const SCHEMA: u32 = 2;
             }
             let mut runs = runs::list()?;
             if active {
                 runs.retain(|run| !run.state.is_final());
             }
-            ui::emit(&json, &RunList { runs }, |list| {
+            let mut pinned = std::collections::BTreeSet::new();
+            for run in &runs {
+                if runs::is_pinned(&runs::dir_of(&run.run_id)?)? {
+                    pinned.insert(run.run_id.clone());
+                }
+            }
+            ui::emit(&json, &RunList { runs, pinned }, |list| {
                 let rows: Vec<Vec<String>> = list
                     .runs
                     .iter()
                     .map(|run| {
                         vec![
                             run.run_id.clone(),
-                            run.state.to_string(),
+                            if list.pinned.contains(&run.run_id) {
+                                format!("{} (pinned)", run.state)
+                            } else {
+                                run.state.to_string()
+                            },
                             run.command.join(" "),
                         ]
                     })
@@ -822,22 +860,27 @@ fn run_command(command: RunCommand) -> Result<CommandStatus> {
             struct RunStatus {
                 run: runs::Run,
                 run_dir: PathBuf,
+                pinned: bool,
                 #[serde(default, skip_serializing_if = "Option::is_none")]
                 snapshot: Option<crate::ci::events::Snapshot>,
             }
             impl schema::Document for RunStatus {
                 const KIND: &'static str = "runStatus";
-                const SCHEMA: u32 = 1;
+                const SCHEMA: u32 = 2;
             }
             ui::emit(
                 &json,
                 &RunStatus {
                     run,
+                    pinned: runs::is_pinned(&run_dir)?,
                     run_dir,
                     snapshot,
                 },
                 |status| {
                     let mut parts = vec![status.run.state.to_string()];
+                    if status.pinned {
+                        parts.push("pinned".into());
+                    }
                     if let Some(snapshot) = &status.snapshot {
                         parts.push(format!("{} jobs done", snapshot.completed_jobs));
                         if snapshot.failed_jobs > 0 {
@@ -971,6 +1014,74 @@ fn run_command(command: RunCommand) -> Result<CommandStatus> {
                 }
                 None => runs::cancel(&run_id)?,
             }
+            Ok(CommandStatus::SUCCESS)
+        }
+        RunCommand::Pin { run_id } => {
+            runs::set_pinned(&run_id, true)?;
+            ui::result(format!("{run_id}: pinned"));
+            Ok(CommandStatus::SUCCESS)
+        }
+        RunCommand::Unpin { run_id } => {
+            runs::set_pinned(&run_id, false)?;
+            ui::result(format!("{run_id}: unpinned"));
+            Ok(CommandStatus::SUCCESS)
+        }
+        RunCommand::Gc {
+            max_age_days,
+            max_count,
+            max_bytes,
+            dry_run,
+            json,
+        } => {
+            let max_age = max_age_days
+                .map(|days| {
+                    days.checked_mul(24 * 60 * 60)
+                        .map(std::time::Duration::from_secs)
+                        .ok_or_else(|| {
+                            crate::support::error::Error::Request(format!(
+                                "--max-age-days {days} overflows seconds"
+                            ))
+                        })
+                })
+                .transpose()?;
+            let report = runs::gc(
+                runs::GcPolicy {
+                    max_age,
+                    max_count,
+                    max_bytes,
+                },
+                dry_run,
+            )?;
+            ui::emit(&json, &report, |report| {
+                let rows: Vec<Vec<String>> = report
+                    .collected
+                    .iter()
+                    .map(|run| vec![run.run_id.clone(), run.bytes.to_string()])
+                    .collect();
+                if !rows.is_empty() {
+                    ui::output(crate::support::table::render(
+                        Some(&[
+                            if report.dry_run {
+                                "would remove"
+                            } else {
+                                "removed"
+                            },
+                            "bytes",
+                        ]),
+                        &rows,
+                    ));
+                }
+                ui::result(format!(
+                    "{} {} runs ({}) · {} retained ({}) · {} active protected · {} pinned protected",
+                    if report.dry_run { "would remove" } else { "removed" },
+                    report.collected.len(),
+                    report.reclaimed_bytes,
+                    report.retained_runs,
+                    report.retained_bytes,
+                    report.protected_active,
+                    report.protected_pinned,
+                ));
+            })?;
             Ok(CommandStatus::SUCCESS)
         }
         RunCommand::Supervise { run_dir, command } => {

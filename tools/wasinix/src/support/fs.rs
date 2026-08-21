@@ -55,6 +55,33 @@ pub fn create_dir_all(path: &Path) -> Result<()> {
     std::fs::create_dir_all(path).map_err(|e| io(path, e))
 }
 
+pub fn remove_dir_all(path: &Path) -> Result<()> {
+    std::fs::remove_dir_all(path).map_err(|e| io(path, e))
+}
+
+pub fn tree_bytes(root: &Path) -> Result<u64> {
+    let mut total = 0u64;
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(path) = pending.pop() {
+        for entry in std::fs::read_dir(&path).map_err(|e| io(&path, e))? {
+            let entry = entry.map_err(|e| io(&path, e))?;
+            let kind = entry.file_type().map_err(|e| io(entry.path(), e))?;
+            if kind.is_dir() {
+                pending.push(entry.path());
+            } else if kind.is_file() {
+                let bytes = entry.metadata().map_err(|e| io(entry.path(), e))?.len();
+                total = total.checked_add(bytes).ok_or_else(|| {
+                    crate::support::error::Error::Failure(format!(
+                        "{} exceeds the u64 byte range",
+                        root.display()
+                    ))
+                })?;
+            }
+        }
+    }
+    Ok(total)
+}
+
 #[cfg(unix)]
 pub fn set_mode(path: &Path, mode: u32) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;

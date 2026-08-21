@@ -1334,7 +1334,11 @@ mod route {
 }
 
 mod runs {
-    use crate::runs::{LOG_FILE, RUN_FILE, Run, observed, supervise};
+    use std::time::Duration;
+
+    use crate::runs::{
+        GcPolicy, LOG_FILE, PIN_FILE, RUN_FILE, Run, gc_under, observed, supervise,
+    };
     use crate::support::atoms::RunState;
     use crate::support::fs::Scratch;
     use crate::support::schema;
@@ -1354,6 +1358,155 @@ mod runs {
             },
         )
         .unwrap();
+    }
+
+    fn stored_run(
+        root: &std::path::Path,
+        run_id: &str,
+        state: RunState,
+        started_at: u64,
+        pinned: bool,
+    ) -> std::path::PathBuf {
+        let dir = root.join(run_id);
+        crate::support::fs::create_dir_all(&dir).unwrap();
+        schema::write(
+            &dir.join(RUN_FILE),
+            &Run {
+                run_id: run_id.into(),
+                command: vec!["true".into()],
+                state,
+                pid: 0,
+                started_at,
+                finished_at: state.is_final().then_some(started_at),
+                exit_code: state.is_final().then_some(0),
+            },
+        )
+        .unwrap();
+        std::fs::write(dir.join("payload"), vec![b'x'; 128]).unwrap();
+        if pinned {
+            std::fs::write(dir.join(PIN_FILE), "").unwrap();
+        }
+        dir
+    }
+
+    #[test]
+    fn collection_respects_age_active_and_pinned_runs() {
+        let scratch = Scratch::create("wasinix-test").unwrap();
+        let root = scratch.path().join("runs");
+        crate::support::fs::create_dir_all(&root).unwrap();
+        let old = stored_run(&root, "old", RunState::Complete, 10, false);
+        let new = stored_run(&root, "new", RunState::Complete, 90, false);
+        let active = stored_run(&root, "active", RunState::Running, 1, false);
+        let pinned = stored_run(&root, "pinned", RunState::Failed, 1, true);
+
+        let report = gc_under(
+            &root,
+            GcPolicy {
+                max_age: Some(Duration::from_secs(50)),
+                max_count: None,
+                max_bytes: None,
+            },
+            false,
+            100,
+        )
+        .unwrap();
+
+        assert_eq!(
+            report
+                .collected
+                .iter()
+                .map(|run| run.run_id.as_str())
+                .collect::<Vec<_>>(),
+            ["old"]
+        );
+        assert!(!old.exists());
+        assert!(new.exists());
+        assert!(active.exists());
+        assert!(pinned.exists());
+        assert_eq!(report.protected_active, 1);
+        assert_eq!(report.protected_pinned, 1);
+    }
+
+    #[test]
+    fn count_collection_keeps_the_newest_runs() {
+        let scratch = Scratch::create("wasinix-test").unwrap();
+        let root = scratch.path().join("runs");
+        crate::support::fs::create_dir_all(&root).unwrap();
+        let newest = stored_run(&root, "newest", RunState::Complete, 30, false);
+        let middle = stored_run(&root, "middle", RunState::Complete, 20, false);
+        let oldest = stored_run(&root, "oldest", RunState::Complete, 10, false);
+
+        let report = gc_under(
+            &root,
+            GcPolicy {
+                max_age: None,
+                max_count: Some(2),
+                max_bytes: None,
+            },
+            true,
+            100,
+        )
+        .unwrap();
+
+        assert_eq!(
+            report
+                .collected
+                .iter()
+                .map(|run| run.run_id.as_str())
+                .collect::<Vec<_>>(),
+            ["oldest"]
+        );
+        assert_eq!(report.retained_runs, 2);
+        assert!(newest.exists() && middle.exists() && oldest.exists());
+    }
+
+    #[test]
+    fn byte_collection_removes_oldest_runs_until_under_budget() {
+        let scratch = Scratch::create("wasinix-test").unwrap();
+        let root = scratch.path().join("runs");
+        crate::support::fs::create_dir_all(&root).unwrap();
+        stored_run(&root, "newest", RunState::Complete, 30, false);
+        stored_run(&root, "oldest", RunState::Complete, 10, false);
+
+        let report = gc_under(
+            &root,
+            GcPolicy {
+                max_age: None,
+                max_count: None,
+                max_bytes: Some(0),
+            },
+            true,
+            100,
+        )
+        .unwrap();
+
+        assert_eq!(
+            report
+                .collected
+                .iter()
+                .map(|run| run.run_id.as_str())
+                .collect::<Vec<_>>(),
+            ["oldest", "newest"]
+        );
+        assert_eq!(report.retained_bytes.0, 0);
+    }
+
+    #[test]
+    fn collection_refuses_an_implicit_policy() {
+        let scratch = Scratch::create("wasinix-test").unwrap();
+        let error = gc_under(
+            scratch.path(),
+            GcPolicy {
+                max_age: None,
+                max_count: None,
+                max_bytes: None,
+            },
+            false,
+            100,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("needs --max-age-days"), "{error}");
     }
 
     #[test]
@@ -4362,6 +4515,9 @@ mod corpus {
             "run watch",
             "run wait",
             "run cancel",
+            "run pin",
+            "run unpin",
+            "run gc",
             "run supervise",
             "cargo serve",
             "cargo publish",
@@ -4472,6 +4628,9 @@ mod corpus {
             "run watch 123",
             "run wait 123 --timeout 60",
             "run cancel 123",
+            "run pin 123",
+            "run unpin 123",
+            "run gc --max-age-days 14 --max-count 20 --max-bytes 1073741824 --dry-run --json",
             "remote list --json",
             "remote status ec2",
             "remote doctor --ifd",
