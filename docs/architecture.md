@@ -90,6 +90,10 @@ call site. Each of these ships with its own enforcement (rustc visibility where
 possible, a source-scanning test in `src/tests/mod.rs` otherwise), so bypassing
 one is a compile error or a test failure, not a review comment.
 
+[`cli-plan.md`](cli-plan.md) defines the ordered migration that consolidates
+the current CLI onto these boundaries and replaces textual enforcement where a
+structural boundary can express the rule.
+
 - `support/env.rs`: the process environment, named accessors only.
 - `support/nix.rs::Invocation`: every nix invocation; construction classifies
   the installable, `.route()` applies placement, `.probe(reason)` is the named
