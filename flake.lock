@@ -199,11 +199,11 @@
         "wasinix": "wasinix"
       },
       "locked": {
-        "lastModified": 1786984815,
-        "narHash": "sha256-vl/34f5EXdK/7rSCCGcEY6A7IC90cPgIj6YmJ4j/GQ0=",
+        "lastModified": 1787319955,
+        "narHash": "sha256-MHGDoRalI7ZBhwSTp4KfBiE/to2HXESY/888n5OaJaA=",
         "ref": "refs/heads/main",
-        "rev": "d311915f4ba361453fd2f23449102c355221e536",
-        "revCount": 20818,
+        "rev": "b3e53400e5648bfa5b10a5dfc7e9a2c2ca170dc6",
+        "revCount": 20836,
         "submodules": true,
         "type": "git",
         "url": "https://github.com/wasmerio/wasmer"
