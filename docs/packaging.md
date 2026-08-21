@@ -284,6 +284,11 @@ suites can set `shards = N`; pytest checks partition collected node IDs
 deterministically, while custom phases consume `WASIX_CHECK_SHARD_COUNT` and
 `WASIX_CHECK_SHARD_NUM` themselves.
 
+`resultCheck` can replace the phase's exit status with a stricter verdict after
+the phase completes. It receives the captured output in `$_log` and the phase's
+status in `WASIX_CHECK_SUITE_STATUS`; its own status becomes the check result.
+Timeouts, output-cap failures, and Wasmer panics remain hard failures.
+
 Captured checks appear as catalog tests named `captured`; shards add their
 number to that name. Handwritten package tests remain appropriate for focused
 behavior and for suites that cannot use the installed package tree. Historical

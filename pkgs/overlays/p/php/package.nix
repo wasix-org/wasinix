@@ -174,6 +174,9 @@ in {
       enabledExtensions = lib.unique extensions;
       extensionBuildInputs = lib.concatMap (extension: extension.buildInputs or []) enabledExtensions;
       extensionEnv = lib.foldl' lib.recursiveUpdate {} (map (extension: extension.env or {}) enabledExtensions);
+      upstreamBaseline =
+        ./tests/upstream-baselines
+        + "/php${lib.versions.major spec.version}${lib.versions.minor spec.version}${lib.optionalString int64 "-int64"}.txt";
       src = final.fetchFromGitHub {
         owner = "php";
         repo = "php-src";
@@ -278,7 +281,7 @@ in {
           '';
 
         enableParallelBuilding = true;
-        doCheck = !int64 && spec.version == versions.php85.version;
+        doCheck = true;
         checkTarget = "test";
         wasixCheckPrebuild = ":";
 
@@ -343,7 +346,6 @@ in {
             });
           wasix = {
             emulatedCheck = {
-              broken = "the upstream suite exercises unsupported WASIX filesystem metadata, signals, socket options, and process limits";
               ciTags = ["slow-tests"];
               guestInputs = [
                 preferredProfilePackages.bash
@@ -352,13 +354,20 @@ in {
               postRestore = ''
                 export NO_INTERACTION=1
                 export WASIX_RUN_FLAGS="$WASIX_RUN_FLAGS --volume ${preferredProfilePackages.icu-data}/share/icu/${final.icu.version}:/share/icu/${final.icu.version}"
-                patch -p1 < ${./patches/php-run-tests-sharding.patch}
+                patch -p1 < ${
+                  if lib.versionOlder spec.version "8.0"
+                  then ./patches/php-run-tests-sharding-pre80.patch
+                  else ./patches/php-run-tests-sharding.patch
+                }
                 substituteInPlace Makefile \
                   --replace-fail 'TEST_PHP_EXECUTABLE=$(PHP_EXECUTABLE)' \
                   'TEST_PHP_EXECUTABLE=$(PHP_EXECUTABLE).wasm'
               '';
               shards = 8;
               timeout = 3600;
+              resultCheck = ''
+                ${final.buildPackages.bash}/bin/bash ${./tests/compare-upstream-results.sh} "$_log" ${upstreamBaseline}
+              '';
             };
             shipped = true;
             supportedProfiles =

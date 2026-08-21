@@ -120,6 +120,7 @@
   # through the capped logging pipeline.
   wrappedCheck = name: spec: phase: let
     timeout = spec.timeout or defaultTimeout;
+    resultCheck = spec.resultCheck or null;
     verdict = xverdict {
       inherit name;
       expectFail = spec.expectFail or null;
@@ -165,7 +166,7 @@
 
     if [ -n "$_timedout" ]; then
       echo "check '${name}' timed out after ${toString timeout}s (output stayed below the cap)" >&2
-      ${lib.optionalString ((spec.expectFail or null) != null) ''exit 1''}
+      ${lib.optionalString ((spec.expectFail or null) != null || resultCheck != null) ''exit 1''}
     fi
     if [ "$_rc" -eq 141 ]; then
       echo "check '${name}' exceeded the ${toString (outputCap / 1024 / 1024)}MB output cap; treating as a runaway suite" >&2
@@ -175,6 +176,15 @@
       echo "check '${name}' triggered an internal Wasmer/WASIX panic" >&2
       exit 1
     fi
+    ${lib.optionalString (resultCheck != null) ''
+      export WASIX_CHECK_SUITE_STATUS="$_rc"
+      set +e
+      (
+        ${resultCheck}
+      ) 2>&1 | tee -a "$_log"
+      _rc="''${PIPESTATUS[0]}"
+      set -e
+    ''}
     if [ "$_rc" -eq 0 ]; then
       ${verdict.onCheckPass}
     else
