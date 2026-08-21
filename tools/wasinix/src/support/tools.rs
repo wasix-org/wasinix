@@ -122,24 +122,6 @@ impl Timeout {
     }
 }
 
-#[cfg(unix)]
-fn signal_group(pid: u32, signal: libc::c_int) -> std::io::Result<()> {
-    let pid = libc::pid_t::try_from(pid)
-        .map_err(|_| std::io::Error::other(format!("child pid {pid} exceeds pid_t")))?;
-    // SAFETY: kill only reads its integer arguments. The negative child pid
-    // addresses the process group created by spawn.
-    let result = unsafe { libc::kill(-pid, signal) };
-    if result == 0 {
-        return Ok(());
-    }
-    let error = std::io::Error::last_os_error();
-    if error.raw_os_error() == Some(libc::ESRCH) {
-        Ok(())
-    } else {
-        Err(error)
-    }
-}
-
 #[cfg(not(unix))]
 fn force_kill(child: &mut std::process::Child) -> std::io::Result<()> {
     child.kill()
@@ -147,7 +129,7 @@ fn force_kill(child: &mut std::process::Child) -> std::io::Result<()> {
 
 #[cfg(unix)]
 fn force_kill(child: &mut std::process::Child) -> std::io::Result<()> {
-    signal_group(child.id(), libc::SIGKILL)
+    crate::support::process::signal_group(child.id(), libc::SIGKILL)
 }
 
 fn wait_deadline<T: Send + 'static>(
@@ -167,7 +149,7 @@ fn wait_deadline<T: Send + 'static>(
         }
         Err(mpsc::RecvTimeoutError::Timeout) => {
             #[cfg(unix)]
-            signal_group(pid, libc::SIGTERM)?;
+            crate::support::process::signal_group(pid, libc::SIGTERM)?;
             match receiver.recv_timeout(timeout.terminate_after) {
                 Ok(result) => Completion::TimedOut(result?),
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
@@ -175,7 +157,7 @@ fn wait_deadline<T: Send + 'static>(
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
                     #[cfg(unix)]
-                    signal_group(pid, libc::SIGKILL)?;
+                    crate::support::process::signal_group(pid, libc::SIGKILL)?;
                     #[cfg(not(unix))]
                     return Err(std::io::Error::other(
                         "child did not exit after timeout termination",
