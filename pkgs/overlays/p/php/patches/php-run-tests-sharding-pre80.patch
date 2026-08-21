@@ -1,0 +1,57 @@
+diff --git a/run-tests.php b/run-tests.php
+index a8a0a132f6..83c317ea8b 100755
+--- a/run-tests.php
++++ b/run-tests.php
+@@ -40,5 +40,32 @@
+  * refactored to be smaller and more manageable.
+  */
++function wasix_filter_test_shard(array $test_files): array
++{
++    $count = getenv('WASIX_CHECK_SHARD_COUNT');
++    if ($count === false) {
++        return $test_files;
++    }
++
++    $shard = getenv('WASIX_CHECK_SHARD_NUM');
++    if ($shard === false
++            || !preg_match('/^[0-9]+$/D', $count)
++            || !preg_match('/^[0-9]+$/D', $shard)
++            || (int) $count === 0 || (int) $shard >= (int) $count) {
++        error("invalid WASIX PHP test shard $shard of $count");
++    }
++
++    return array_values(array_filter(
++        $test_files,
++        static function ($test) use ($count, $shard): bool {
++            $test = is_array($test) ? $test[0] . ':' . $test[1] : $test;
++            $prefix = TEST_PHP_SRCDIR . DIRECTORY_SEPARATOR;
++            $path = strpos($test, $prefix) === 0 ? substr($test, strlen($prefix)) : $test;
++            $bucket = hexdec(substr(hash('sha256', $path), 0, 6)) % (int) $count;
++            return $bucket === (int) $shard;
++        }
++    ));
++}
++
+ function main()
+ {
+     /* This list was derived in a naïve mechanical fashion. If a member
+@@ -669,6 +697,7 @@ function main()
+-
++
+     $test_files = array_unique($test_files);
+     $test_files = array_merge($test_files, $redir_tests);
++    $test_files = wasix_filter_test_shard($test_files);
+-
++
+     // Run selected tests.
+     $test_cnt = count($test_files);
+@@ -760,6 +789,7 @@ function main()
+     }
+-
++
+     $test_files = array_unique($test_files);
++    $test_files = wasix_filter_test_shard($test_files);
+     usort($test_files, "test_sort");
+-
++
+     $start_time = time();
