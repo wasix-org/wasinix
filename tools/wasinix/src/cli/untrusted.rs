@@ -104,15 +104,6 @@ struct UntrustedDiff {
     words: Vec<String>,
 }
 
-/// The untrusted spelling of a diff case: the same selection cores, no
-/// placement.
-#[derive(Parser)]
-#[command(name = "case", no_binary_name = true)]
-enum UntrustedCase {
-    Build(UntrustedBuild),
-    Spot(UntrustedSpot),
-}
-
 /// Bisect from a comment. The adapter owns the run directory and the
 /// budget; the predicate re-enters the untrusted case grammar, so it is a
 /// build or spot pinned to the runner like any other comment command.
@@ -283,21 +274,8 @@ pub enum UntrustedCommand {
 }
 
 fn untrusted_case(words: &[String], case_id: String) -> Result<Case<RefSource>> {
-    let parsed = UntrustedCase::try_parse_from(words)
-        .map_err(|error| Error::Request(format!("diff case {case_id}: {error}")))?;
-    Ok(match &parsed {
-        UntrustedCase::Build(case) => Case::Build(super::request::build_case(
-            &case.request,
-            Some("local".to_string()),
-            Some(case_id),
-        )?),
-        UntrustedCase::Spot(case) => Case::Spot(super::request::spot_case(
-            &case.request,
-            &case.spot,
-            Some("local".to_string()),
-            Some(case_id),
-        )?),
-    })
+    super::request::parse_case(words, Some(case_id.clone()), super::Surface::Comment)
+        .map_err(|error| Error::Request(format!("diff case {case_id}: {error}")))
 }
 
 /// Parse an untrusted `/wasinix` command into the shared request family.

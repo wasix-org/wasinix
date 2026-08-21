@@ -46,7 +46,7 @@ pub fn predicate(
     dependency_target: &str,
     blocked: BlockedPolicy,
 ) -> Result<ParsedRequest> {
-    let request = match super::request::parse_case(words, None)? {
+    let request = match super::request::parse_case(words, None, super::Surface::Terminal)? {
         Case::Build(build) => Request::build(build, blocked),
         Case::Spot(spot) => Request::spot(spot, blocked),
     };

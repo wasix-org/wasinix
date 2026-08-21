@@ -278,19 +278,28 @@ pub(crate) fn spot_case(
 
 /// One trusted build or spot command as a case; the parser diff cases and
 /// bisect predicates share.
-pub(crate) fn parse_case(words: &[String], case_id: Option<String>) -> Result<Case<RefSource>> {
-    let parsed =
-        CaseCommand::try_parse_from(words).map_err(|error| Error::Request(error.to_string()))?;
+pub(crate) fn parse_case(
+    words: &[String],
+    case_id: Option<String>,
+    surface: super::Surface,
+) -> Result<Case<RefSource>> {
+    let parsed = CaseCommand::try_parse_from(words)
+        .map_err(|error| Error::Request(error.to_string()))?;
+    let placement = |on: &Option<String>| match (surface, on) {
+        (super::Surface::Comment, Some(_)) => request_error("--on is terminal only"),
+        (super::Surface::Comment, None) => Ok(Some("local".to_string())),
+        (super::Surface::Terminal, on) => Ok(on.clone()),
+    };
     Ok(match &parsed {
         CaseCommand::Build(case) => Case::Build(build_case(
             &case.request,
-            case.placement.on.clone(),
+            placement(&case.placement.on)?,
             case_id,
         )?),
         CaseCommand::Spot(case) => Case::Spot(spot_case(
             &case.request,
             &case.spot,
-            case.placement.on.clone(),
+            placement(&case.placement.on)?,
             case_id,
         )?),
     })
@@ -338,7 +347,7 @@ pub(crate) fn diff_request(args: &DiffArgs) -> Result<ParsedRequest> {
     let mut cases: Vec<Case<RefSource>> = Vec::new();
     for (case_id, case_words) in split_cases(&args.words) {
         cases.push(
-            parse_case(case_words, Some(case_id.clone()))
+            parse_case(case_words, Some(case_id.clone()), super::Surface::Terminal)
                 .map_err(|error| Error::Request(format!("diff case {case_id}: {error}")))?,
         );
     }
