@@ -153,6 +153,13 @@ pub fn wasinix_remote() -> Result<Option<String>> {
     optional("WASINIX_REMOTE")
 }
 
+/// The immutable orchestrator source whose locked capability outputs may be
+/// realised. Packaged launchers set this; a development binary falls back to
+/// its checkout.
+pub fn capability_flake() -> Option<PathBuf> {
+    path("WASINIX_CAPABILITY_FLAKE")
+}
+
 /// An explicit builders.toml location, overriding the config path.
 pub fn wasinix_builders() -> Option<PathBuf> {
     path("WASINIX_BUILDERS")

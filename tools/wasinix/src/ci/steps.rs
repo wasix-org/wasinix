@@ -5,6 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::support::atoms::{DurationSecs, Rev};
+use crate::support::capability::Capability;
 use crate::support::error::{Result, request_error};
 use crate::support::schema::Document;
 
@@ -135,7 +136,7 @@ impl StepTimings {
             );
             return Ok(());
         }
-        let mut cmd = std::process::Command::new("aws");
+        let mut cmd = Capability::Aws.command()?;
         cmd.args(["s3", "cp", "--no-progress"])
             .arg(&file)
             .arg(format!(

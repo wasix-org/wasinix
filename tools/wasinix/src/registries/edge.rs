@@ -2,10 +2,10 @@
 //! registry preview, so each cell only supplies its built site and app name.
 
 use std::path::Path;
-use std::process::Command;
 
 use serde_json::Value;
 
+use crate::support::capability::Capability;
 use crate::support::error::{Result, request_error};
 
 pub struct Site<'a> {
@@ -36,7 +36,7 @@ pub fn preview_site(request: Site<'_>) -> Result<String> {
 
     // --no-wait: an ephemeral preview does not need the reachability poll,
     // which errored after five minutes on a fresh app that had deployed fine.
-    let mut deploy = Command::new("wasmer");
+    let mut deploy = Capability::Wasmer.command()?;
     deploy
         .args(["deploy", "--non-interactive", "--no-wait"])
         .args(["--registry", request.registry])
@@ -48,7 +48,7 @@ pub fn preview_site(request: Site<'_>) -> Result<String> {
         ));
     }
 
-    let mut get = Command::new("wasmer");
+    let mut get = Capability::Wasmer.command()?;
     get.args(["app", "get", &format!("{}/{}", request.owner, request.app)])
         .args(["--registry", request.registry])
         .args(["--format", "json"]);

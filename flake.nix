@@ -204,6 +204,12 @@
       rclone
       wasmerRuntime
     ];
+    wasinixCapabilities = {
+      aws = wasix.pkgs.awscli2;
+      python = wasix.pkgs.python3;
+      rclone = wasix.pkgs.rclone;
+      wasmer = wasmerRuntime;
+    };
     mkWasinix = name: runtimeInputs: let
       launcher = wasix.pkgs.writeShellApplication {
         name = "wasinix";
@@ -212,6 +218,7 @@
         # Update scripts re-enter `wasinix`, so the launcher's own bin dir joins
         # the PATH it hands them.
         text = ''
+          export WASINIX_CAPABILITY_FLAKE=${self}
           PATH="''${0%/*}:$PATH" exec ${lib.getExe wasinixUnwrapped} "$@"
         '';
       };
@@ -956,6 +963,10 @@
     packages.${system} = {
       inherit wasinix;
       wasinix-core = wasinixCore;
+      wasinix-capability-aws = wasinixCapabilities.aws;
+      wasinix-capability-python = wasinixCapabilities.python;
+      wasinix-capability-rclone = wasinixCapabilities.rclone;
+      wasinix-capability-wasmer = wasinixCapabilities.wasmer;
       # the webc packages and the merged registry live under legacyPackages
       anybuild = wasix.nativePackages.anybuild;
       wasix-rust-toolchain = toolchain.wasixRustToolchain;

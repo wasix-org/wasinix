@@ -1,4 +1,5 @@
 pub mod atoms;
+pub mod capability;
 pub mod completions;
 pub mod effects;
 pub mod env;

@@ -9,6 +9,7 @@ use crate::github::client;
 use crate::github::sanitize::Markdown;
 use crate::github::surfaces::{Registry, Surface};
 use crate::registries::{cargo, python, wasmer};
+use crate::support::capability::Capability;
 use crate::support::error::{Error, Result};
 use crate::support::process::CommandStatus;
 use crate::support::ui;
@@ -127,7 +128,7 @@ fn status_body(args: &PreviewArgs, status: Status) -> Markdown {
 /// The production index url the pip line pairs the overlay with; the preview
 /// still renders without it, so a lookup failure only costs the hint.
 fn prod_index_url() -> Option<String> {
-    let mut get = std::process::Command::new("wasmer");
+    let mut get = Capability::Wasmer.command().ok()?;
     get.args(["app", "get", "wasmer/python-registry"])
         .args(["--registry", "wasmer.io"])
         .args(["--format", "json"]);

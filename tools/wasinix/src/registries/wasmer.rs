@@ -17,6 +17,7 @@ use regex::Regex;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
+use crate::support::capability::Capability;
 use crate::support::error::{Error, Result, request_error};
 use crate::support::naming::{self, Domain};
 use crate::support::nix::{Flake, SYSTEM};
@@ -491,7 +492,7 @@ impl Drop for Scratch {
 fn build_webc_sha256(pkg_dir: &Path, pkg: &Package) -> Result<String> {
     let scratch = Scratch::new("build")?;
     let out = scratch.0.join("package.webc");
-    run(Command::new("wasmer")
+    run(Capability::Wasmer.command()?
         .args(["package", "build", "--quiet", "--out"])
         .arg(&out)
         .arg(".")
@@ -1045,7 +1046,7 @@ fn publish_one(
         },
     )?;
     let staged_sha = build_webc_sha256(&staged, pkg)?;
-    run(Command::new("wasmer")
+    run(Capability::Wasmer.command()?
         .args(["publish", "--non-interactive", "--registry", publish_host])
         .current_dir(&staged))?;
     drop(scratch);

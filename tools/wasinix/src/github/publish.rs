@@ -11,6 +11,7 @@ use crate::ci::report::{Fragment, Report};
 use crate::github::client::Client;
 use crate::github::markdown::{self, Links};
 use crate::github::surfaces::{Registry, Surface};
+use crate::support::capability::Capability;
 use crate::support::error::Result;
 
 pub struct Target {
@@ -225,7 +226,7 @@ pub fn publish_failure_logs(
         );
         return Ok(Some(base));
     }
-    let mut cmd = std::process::Command::new("aws");
+    let mut cmd = Capability::Aws.command()?;
     cmd.args(["s3", "cp", "--no-progress", "--recursive"])
         .arg(scratch.path())
         .arg(format!(

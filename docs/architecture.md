@@ -71,7 +71,11 @@ and CI runs the same verb.
 
 `packages.<system>.wasinix-core` carries the orchestrator and its Git, Nix,
 nix-eval-jobs, and OpenSSH system boundaries. `wasinix` is the compatibility
-package that also carries optional registry and publication helpers.
+package that also carries optional registry and publication helpers. The
+`wasinix-capability-*` outputs expose each optional helper separately. A core
+launcher binds capability resolution to its own flake source and lock; a bare
+development binary uses its checkout. Resolution permits substitution or a
+remote builder but sets Nix's local build capacity to zero.
 
 CA derivations are not used because caches cannot reliably distribute or
 authenticate realisations
@@ -99,6 +103,8 @@ the current CLI onto these boundaries and replaces textual enforcement where a
 structural boundary can express the rule.
 
 - `support/env.rs`: the process environment, named accessors only.
+- `support/capability.rs`: the closed optional-program set and its exact locked
+  flake outputs; callers receive executable paths, never choose installables.
 - `support/nix.rs::Invocation`: every nix invocation; construction classifies
   the installable, `.route()` applies placement, `.probe(reason)` is the named
   exception for callers that parse failure output. The cache identity constants
