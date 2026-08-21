@@ -1,7 +1,7 @@
 # Structured project API v1
 
-Status: implemented. This document defines the public v1 contract. Repository-
-specific additions under `internals` are not part of that contract.
+Status: implemented. This document defines the public v1 contract.
+Repository-specific additions under `internals` are not part of that contract.
 
 Wasinix constructs one structured project for one evaluation system. A project
 contains package sets, artifacts, commands, tests, and a CI catalog. Other

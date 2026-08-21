@@ -11,7 +11,8 @@ Status: 🔴 needs upstream fix · 🟡 workaround in place · 🟢 fixed.
 
 A reproducible defect in the runtime, libc, or toolchain that a packager can hit
 again. Not a passing observation, not a package's own bug, and not a "recheck
-this next bump" note (that is `passthru.wasix.updateNotes`, `docs/updating.md`).
+this next bump" note (that is `passthru.wasinix.update.notes`,
+`docs/updating.md`).
 
 An entry is `### <short symptom> <status>` plus these bullets, in order:
 

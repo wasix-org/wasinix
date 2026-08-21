@@ -32,6 +32,25 @@ document-producing commands (`run list|status|report|failures`, `update list`,
 `remote list`, `cargo publish`, the build verbs) take `--json`;
 `-v`/`-q`/`--color` are global.
 
+## Catalog and selection
+
+Nix publishes facts; the CLI owns selection semantics. The structured project
+provides `ci.jobs`, a canonical-address-to-derivation map, and
+`ci.catalog.jobs`, serializable metadata for exactly the same keys. It also
+publishes factual selector sets and groups, such as which jobs belong to the
+Python set or which package owners make up the C toolchain group.
+
+The CLI checks `schemaVersion` before interpreting those facts. It resolves
+aliases, omitted profile axes, globs, named sets and groups, unions, and tag
+gates, then requests the exact resulting job addresses from Nix in one batch.
+Historical jobs remain cataloged and are tagged `history-tests`; selecting one
+without enabling that tag is an error rather than a silent omission.
+
+This division lets extension flakes contribute ordinary catalog entries and CI
+facts without reimplementing selector behavior in Nix. It also keeps the
+orchestrator's errors and selection rules identical for this repository and for
+external Wasinix projects.
+
 ## What a run produces
 
 A run is one directory. `prepare` resolves the request into it (materialized

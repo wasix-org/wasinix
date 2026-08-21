@@ -5,12 +5,16 @@ authoring is covered by [`packaging.md`](packaging.md).
 
 ## Toolchain
 
-`pkgs/toolchain/` builds:
+The buildable toolchain artifacts live under `pkgs/native/` and are exposed as
+ordinary `packages.native` entries. `pkgs/toolchain/` connects them into the
+profile interfaces:
 
-- `llvm.nix`: WASIX's LLVM sources through nixpkgs' LLVM machinery
-- `sysroot/`: wasix-libc, compiler-rt, libc++, libc++abi, and libunwind, staged
-  into one sysroot per profile
-- `wasixcc.nix`: the compiler driver around clang, wasm-ld, and wasm-opt
+- `packages.native.wasix-llvm`: WASIX's LLVM sources through nixpkgs' LLVM
+  machinery
+- `packages.native.wasix-sysroot`: wasix-libc, compiler-rt, libc++, libc++abi,
+  and libunwind, staged into one sysroot per profile
+- `packages.native.wasixcc`: the compiler driver around clang, wasm-ld, and
+  wasm-opt
 - `env.nix`: the canonical `WASIXCC_*` environment
 
 wasixcc selects the profile sysroot at compile time. Its executable dispatches
@@ -30,10 +34,11 @@ sysroot flags, directory names, and name lookup from it.
 
 ## Cross package sets
 
-`pkgs/set/mk-pkgs.nix` imports nixpkgs once per profile and replaces its cross
-stdenv with `pkgs/set/stdenv.nix`. Packages therefore keep ordinary nixpkgs
-build conventions while compiling through wasixcc. Override dependencies in the
-profile set rather than constructing a parallel package graph.
+The structured project constructor imports nixpkgs once per profile and replaces
+its cross stdenv with `pkgs/set/stdenv.nix`. Packages therefore keep ordinary
+nixpkgs build conventions while compiling through wasixcc. The public interface
+is `packages.native.wasixcc.profiles.<profile>.stdenv`; package units use
+`packages.sameProfile` rather than constructing a parallel package graph.
 
 Profile support and selection are described in
 [`packaging.md`](packaging.md#a-library). Known libc, runtime, and toolchain

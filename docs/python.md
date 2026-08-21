@@ -6,13 +6,15 @@ authoring is covered by
 
 ## CPython and its package set
 
-CPython needs dynamic linking for extension modules, so it is built only in the
-`ehpic` profile. Its overlay lives in `pkgs/wasix/python3/`.
+CPython needs dynamic linking for extension modules, so it supports the `ehpic`
+and `exnrefEhpic` profiles and prefers `exnrefEhpic`. Its overlay lives in
+`pkgs/wasix/python3/`; the `py313` and `py314` package fixpoints use that
+preferred profile.
 
-Python package adaptations live in `pkgs/python/`. They follow the normal
-overlay conventions, with `pyfinal` and `pyprev` for dependencies in the Python
-package set. Rust extension modules use the shared Rust wheel hooks described in
-[`rust.md`](rust.md).
+Python package adaptations live in `pkgs/python/`. They use the same package
+unit API as other lanes: `packages.sameProfile` is the immediate Python
+fixpoint, while `pkgs` is the enclosing WASIX set. Rust extension modules use
+the shared Rust wheel hooks described in [`rust.md`](rust.md).
 
 ## Wheels
 

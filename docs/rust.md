@@ -5,13 +5,15 @@ Adding a package is covered by [`packaging.md`](packaging.md#a-rust-cli).
 
 ## Building for WASIX
 
-`pkgs/toolchain/rust/` builds the WASIX Rust sources and cargo-wasix.
-`pkgs/set/rust-platform.nix` routes `buildRustPackage` through cargo-wasix and
-provides the WASIX defaults. Rust has a standard library for `eh` and `ehpic`,
-so Rust packages are limited to those profiles.
+`pkgs/native/wasix-rust/` builds the WASIX Rust sources, and
+`pkgs/native/cargo-wasix/` builds cargo-wasix. `pkgs/set/rust-platform.nix`
+routes `buildRustPackage` through cargo-wasix and provides the WASIX defaults.
+Rust has a standard library for `eh` and `ehpic`, so Rust packages are limited
+to those profiles.
 
-A nixpkgs CLI usually needs only `{ prev, ... }: prev.foo`. For a crate nixpkgs
-does not carry, use `final.rustPlatform.buildRustPackage`; see
+A nixpkgs CLI usually needs only
+`{exposePackage, package}: exposePackage package`. For a crate nixpkgs does not
+carry, use `packages.sameProfile.rustPlatform.buildRustPackage`; see
 `pkgs/wasix/crabsay.nix`. Python wheels use the shared maturin and
 setuptools-rust hooks.
 
@@ -32,8 +34,10 @@ are documented in
 allowing plain cargo projects to select them by version.
 
 - `wasinix update cargo-registry` re-resolves the crate versions and hashes.
-- `.#cargoRegistry` builds the registry contents.
-- `.#checks.x86_64-linux.cargo-registry` checks the mint and resolution.
+- `.#legacyPackages.x86_64-linux.artifacts.registry.cargo-registry` builds the
+  registry contents.
+- The registry's cataloged tests check minting and resolution.
 - `wasinix cargo serve` serves a fresh local registry under Wasmer.
 
-The server package is `wasmerPackages.wasix-cargo-registry`.
+The server WebC is
+`legacyPackages.x86_64-linux.artifacts.webc.wasix-cargo-registry`.

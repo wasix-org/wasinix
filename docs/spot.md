@@ -11,11 +11,11 @@ green spot build is evidence that a change compiles and links, not proof that it
 is correct. Verify at the root, on the full build, before keeping a change.
 
 ```sh
-wasinix spot packagesByProfile.exnrefEh.zlib             # toolchain experiment
-wasinix spot packagesByProfile.exnrefEh.zlib --plan      # what would it cost?
-wasinix spot packagesByProfile.exnrefEh.curl \
-  --from-source packagesByProfile.zlib                   # test a zlib edit through curl
-wasinix spot packagesByProfile.exnrefEh.zlib --on local  # build here, not on a remote
+wasinix spot packages.wasix.exnrefEh.zlib             # toolchain experiment
+wasinix spot packages.wasix.exnrefEh.zlib --plan      # what would it cost?
+wasinix spot packages.wasix.exnrefEh.curl \
+  --from-source packages.wasix.zlib                   # test a zlib edit through curl
+wasinix spot packages.wasix.exnrefEh.zlib --on local  # build here, not on a remote
 ```
 
 Targets and `--from-source` are CI selectors resolved through the selector
@@ -25,13 +25,13 @@ else from base; `--target-only` narrows that to just the named targets. A
 lower-level dev interface, `nix build -f spot.nix`, takes the resolved `keep`
 list of package and toolchain names directly.
 
-A target is a dotted path into `nixpkgsByProfile`, written `<profile>.<attr>`
-such as `exnrefEh.zlib`. There is nothing to author: edit whatever files you
-want (a wasixcc patch, a sysroot flag, a package definition), name the attrs to
-build from them, and everything else comes from the base revision. One caveat:
-the splice reads the working tree as a flake, so a brand new file (a fresh
-`.patch`, say) has to be `git add`ed first, or it is invisible and the target
-comes out identical to base.
+A resolved target is written `<profile>.<package>`, such as `exnrefEh.zlib`.
+There is nothing to author: edit whatever files you want (a wasixcc patch, a
+sysroot flag, a package definition), name the attrs to build from them, and
+everything else comes from the base revision. One caveat: the splice reads the
+working tree as a flake, so a brand new file (a fresh `.patch`, say) has to be
+`git add`ed first, or it is invisible and the target comes out identical to
+base.
 
 ## The model
 
@@ -49,13 +49,13 @@ an otherwise base world.
 `--from-source` names CI selectors whose spot owners join the keep set
 (repeatable):
 
-| selector                                          | keeps                                                       |
-| ------------------------------------------------- | ----------------------------------------------------------- |
-| `toolchain`                                       | all three toolchains: stdenv, rustPlatform, haskellPackages |
-| `cc`                                              | stdenv only                                                 |
-| `rust`                                            | rustPlatform only                                           |
-| `haskell`                                         | haskellPackages only                                        |
-| a package selector, e.g. `packagesByProfile.zlib` | that package                                                |
+| selector                                       | keeps                                                       |
+| ---------------------------------------------- | ----------------------------------------------------------- |
+| `toolchain`                                    | all three toolchains: stdenv, rustPlatform, haskellPackages |
+| `cc`                                           | stdenv only                                                 |
+| `rust`                                         | rustPlatform only                                           |
+| `haskell`                                      | haskellPackages only                                        |
+| a package selector, e.g. `packages.wasix.zlib` | that package                                                |
 
 The default is `toolchain`, so a plain toolchain experiment needs no flags;
 `--target-only` keeps nothing beyond the targets themselves, isolating a package
@@ -63,8 +63,8 @@ edit from any toolchain difference on your branch.
 
 - `exnrefEh.zlib` with no flag keeps the toolchains, so a wasixcc, sysroot,
   rustc, or ghc edit reaches the target with nothing to configure.
-- `--from-source packagesByProfile.zlib exnrefEh.curl` keeps a zlib edit, the
-  "edit a common dependency, test one package" case.
+- `--from-source packages.wasix.zlib exnrefEh.curl` keeps a zlib edit, the "edit
+  a common dependency, test one package" case.
 - `--from-source rust exnrefEh.ripgrep` keeps only the rust toolchain, so a
   rustc change is tested against the base C world.
 
@@ -112,35 +112,21 @@ a different world than the host builds.
 
 ## How the pin is built
 
-The splice in `pkgs/spot.nix` pins dependencies reached through two routes:
+The splice in the root `spot.nix` reads the base project's raw WASIX package
+sets, constructs a fresh working-tree project, and appends one pinning overlay
+through the caller-owned `importNixpkgs`. For each profile, that overlay
+replaces every cataloged package and toolchain owner not in the keep set with
+its base derivation. Dependencies reached through `packages.sameProfile`
+therefore see the same pinned fixpoint as direct package arguments.
 
-1. The overlay fixpoint, for `final.<dep>` references. This is the convention
-   for linked dependencies, and is out of reach of `.override`.
-2. The target's function arguments, for WASIX dependencies without overlay
-   entries. Native arguments remain native.
-
-The fixpoint pin covers overlay packages and the three toolchain attrs, applies
-only to WASIX sets, and enters through `pkgs/default.nix` so cross-profile
-runtime dependencies remain pinned. It does not pin the whole nixpkgs set, which
-would interfere with stdenv bootstrap.
-
-`spotOverlays` is empty in every normal evaluation, and the seam moves no drv
-path. Nothing that ships may set it.
-
-## Nested python targets
-
-`exnrefEhpic.python314.pkgs.numpy` is a valid target. The splice replaces its
-`buildPythonPackage` with one using the working-tree stdenv while keeping the
-interpreter, hooks, and Python dependencies on base.
-
-Two cases fall back to rebuilding the interpreter, still correct but larger: a
-base revision whose `buildPythonPackage` has no `.override`, and a target kept
-with `--keep python314`, which is how you test an edit to the interpreter's own
-definition, since the pinned base scope would not have it.
+The overlay applies only to WASIX sets. It does not pin the complete nixpkgs
+set, which would interfere with stdenv bootstrap, and it is supplied only to the
+temporary project created by Spot, so normal project evaluation has no Spot
+seam.
 
 ## Limits
 
 - Never a CI job. `spot.nix` is deliberately not a flake output, because the
   base revision is an evaluation-time input.
-- Targets are cross-set attrs. The layers above them (webc, `passthru.tests`,
-  the python registry) are not spliced.
+- Targets are cataloged WASIX packages. Artifacts, tests, and nested Python
+  packages are not direct Spot targets.

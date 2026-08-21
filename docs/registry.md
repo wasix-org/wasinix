@@ -62,7 +62,8 @@ Publishes the minted crates the deployed overlay registry
 and reports one plan row per crate (`--json` for the document). Idempotent by
 checksum against the live sparse index: an absent version publishes, identical
 bytes skip, and different bytes fail naming the
-`wasinix versions bump cargoRegistry.crates.<name>@<version>` that mints a fresh
+`wasinix versions bump artifacts.registry.cargo-registry.crates.<name>@<version>`
+that mints a fresh
 publishable version. A live publish needs `WASIX_CARGO_TOKEN` (a token whose
 sha256 is in the deployed server's hash list); dry runs never read it. The
 `publish-crates` workflow runs the same command, manual dispatch only.
@@ -94,52 +95,56 @@ the package's existing source fetcher: `{version, hash}`, `{tag|rev, hash}`, or
 optional. A wheel uses `variants`, such as `["py313"]`, when an entry applies to
 only some interpreters.
 
-`pkgs/lib/load-packages.nix` re-imports the package with its source rebased and
-creates `<attr>_<version>`. Package files handle version-specific differences;
-`passthru.wasix.historySpec` exposes the history entry when needed.
+The project constructor rebases the preceding package to each retained source,
+replays its registered package unit, and catalogs the result like a current
+package. Package files can inspect `passthru.wasinix.instance` when a retained
+version genuinely needs different adaptation.
 
-Keys differ per set, and webcs are normalised:
+History is exposed through each package's `versions` projection:
 
-- wheels: `.#pythonWheels.py313."numpy-2.1.3"`
-- webcs: `wasmerPackages` and the run-by-name stubs use `<name>-<semver>`, so a
-  test asks for `wasmerPkgs."jq-1.6.0"`.
+- `packages.python.py313.numpy.versions."2.1.3"`
+- `packages.wasix.exnrefEh.jq.versions."1.6"`
+- retained wheel and WebC artifacts appear under the corresponding artifact's
+  `versions` projection.
 
 A package may declare stable `passthru.wasinix.aliases` for public Nix
 addresses. These resolve to the canonical entry but do not create another
 publication.
 
-Webc attrs use full MAJOR.MINOR.PATCH while `history.json` keeps the upstream
-version as written. For example, jq `"1.6"` becomes `jq-1.6.0`.
+The published WebC identity may normalize the upstream version to semver, while
+the package history key remains the upstream version as written.
 
 Maintain the tables with `wasinix versions add` / `versions import`. Use
 `add <name>@<version>`, `--per-major`, or `--per-minor`; an address prefix
-(`pythonWheels.<name>` / `wasmerPackages.<name>`) disambiguates shared names.
+(`packages.python.<name>` / `packages.wasix.<name>`) disambiguates shared names.
 Pin updates retain outgoing major versions by default.
-`passthru.wasix.retention = "minor"` keeps each minor, while `"none"` opts out.
-Keep only versions consumers are likely to pin.
+`passthru.wasinix.retention = "minor"` keeps each minor, while `"none"` opts
+out. Keep only versions consumers are likely to pin.
 
-A `{names, packages}` family is only for a package nixpkgs itself carries at
-multiple versions, not for minting historical ones. Its version list should
-derive from nixpkgs. For example, icu uses a `postUpdateHook` to regenerate its
-list after a pin bump.
+A multi-package unit is only for a family nixpkgs itself carries at multiple
+versions, not for minting historical ones. Its version list should derive from
+nixpkgs. For example, icu uses an `update.post` hook to regenerate its list
+after a pin bump.
 
 ## The Python wheel index
 
 All shipped wheels, plus their transitive python deps, are published as a static
-PEP 503 "simple" index: `.#pythonRegistry` (`pkgs/python-registry/`). Serve the
-output from any static file host, or install directly:
+PEP 503 "simple" index:
+`.#legacyPackages.x86_64-linux.artifacts.registry.python314`
+(`pkgs/python-registry/`). Serve the output from any static file host, or
+install directly:
 
 ```sh
 pip install --index-url file://$(readlink -f result)/all/simple <pkg>
 ```
 
-A new `wheels.nix` entry lands in the registry automatically. Its test suite
-(`checks.<system>.python-registry`) walks the index for hash and metadata
-integrity and pip-installs representative packages, resolving their deps from
-the index too, then imports them under wasmer. The integrity walk also resolves
-every served wheel's `Requires-Dist` against the rest of the index, per
-interpreter the wheel installs on, since a resolver has no other source to fall
-back to.
+A new `pkgs/python/wheels/default.nix` entry lands in the registry
+automatically. Tests projected from the registry artifact walk the index for
+hash and metadata integrity and pip-install representative packages, resolving
+their dependencies from the index too, then import them under Wasmer. The
+integrity walk also resolves every served wheel's `Requires-Dist` against the
+rest of the index, per interpreter the wheel installs on, since a resolver has
+no other source to fall back to.
 
 `python-registry-resolve-sweep` runs pip itself over every served project, which
 catches what a model of pip cannot: a dependency reached only through an extra,
@@ -182,9 +187,10 @@ serving this index over loopback.
 
 Every wheel is published as `<version>+wasix.<rel>`, a PEP 440 local version.
 `rel` counts our builds of one upstream version and comes from the root
-`release-revisions.json`, keyed by attr path (`pythonRegistry.wheels.<pname>`,
-or `wasmerPackages.<name>` for webcs) then version, default 1. It is shared
-across python versions, since the cp tag already keeps filenames distinct.
+`release-revisions.json`, keyed by attr path
+(`artifacts.registry.python314.wheels.<pname>`, or `artifacts.webc.<name>` for
+webcs) then version, default 1. It is shared across python versions, since the
+cp tag already keeps filenames distinct.
 
 Bump it to republish a changed build, with `wasinix versions bump` or the manual
 `bump-rel.yml` workflow, which takes a list of packages and opens a PR. An
@@ -192,7 +198,7 @@ upstream version bump resets it by key miss, as `wasinix update` drops the stale
 key. For a deliberate whole-registry rebuild:
 
 ```sh
-wasinix versions bump --all-versions 'pythonRegistry.wheels.*'
+wasinix versions bump --all-versions 'artifacts.registry.python314.wheels.*'
 ```
 
 That flag also bumps every served history version, so it stays explicit.
@@ -209,9 +215,9 @@ runtime update, and the volume keeps its original artifact in that case. Bump
 the rel only when that rebuilt wheel is itself a release.
 
 GitHub Pages behaves differently: it is always deployed from the fresh
-`.#pythonRegistry` result, so it is a bleeding-edge snapshot and may serve new
-bytes under an existing filename. Use the volume-backed index for immutable,
-reproducible installs.
+`legacyPackages.x86_64-linux.artifacts.registry.python314` result, so it is a
+bleeding-edge snapshot and may serve new bytes under an existing filename. Use
+the volume-backed index for immutable, reproducible installs.
 
 After a green build of main, `publish-index` uploads new filenames to the volume
 and deploys the fresh snapshot to GitHub Pages. The volume service is defined by
@@ -220,13 +226,14 @@ and deploys the fresh snapshot to GitHub Pages. The volume service is defined by
 A wheel built by both interpreters is published once, under the one filename its
 `py3-none-any` tag earns it. Where the two builds differ, that name cannot hold
 both and the registry build fails naming the package. Mark it
-`passthru.wasix.interpreterSpecific` in its overlay entry and each build is
-published as `cp313-none-any` / `cp314-none-any` instead, which a resolver
-prefers over the generic tag, so an artifact already published under the generic
-name stops being selected without being withdrawn.
+`passthru.wasinix.publication.interpreterSpecific` in its overlay entry and each
+build is published as `cp313-none-any` / `cp314-none-any` instead, which a
+resolver prefers over the generic tag, so an artifact already published under
+the generic name stops being selected without being withdrawn.
 
 Each `manifests/<wheel>.json` records `wasinix_rev`, `attr`, and `drv_path`.
-Rebuild it with `nix build github:wasix-org/wasinix/<wasinix_rev>#<attr>`.
+Rebuild it with
+`nix build github:wasix-org/wasinix/<wasinix_rev>#legacyPackages.x86_64-linux.<attr>`.
 
 ## PR previews
 

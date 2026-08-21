@@ -41,23 +41,23 @@ moved. Every mutation renders from that ChangeSet: the terminal receipt, the
 commit messages (`<target>: <old> -> <new>`), the PR title, and the PR body, so
 a PR and its CI comment agree by construction. The repo-wide steps are
 registry-history retention (keep the outgoing version rebuildable when a bump
-crosses a major, or per `passthru.wasix.retention`: `minor` for
-latest-per-minor, `none` to opt out), the release-revisions.json prune (drop keys nothing
-serves), and finally the `passthru.wasix.postUpdateHook`s, which re-sync state
-derived from pins. Hooks run only when their package version changes;
-`wasinix update hooks` requests an unconditional repair. A command hook receives
-the old and new versions as its final two arguments. A generated attribute list
-uses a typed rule instead:
+crosses a major, or per `passthru.wasinix.retention`: `minor` for
+latest-per-minor, `none` to opt out), the release-revisions.json prune (drop
+keys nothing serves), and finally the `passthru.wasinix.update.post` hooks,
+which re-sync state derived from pins. Hooks run only when their package version
+changes; `wasinix update hooks` requests an unconditional repair. A command hook
+receives the old and new versions as its final two arguments. A generated
+attribute list uses a typed rule instead:
 
 ```nix
-postUpdateHook.syncAttrList = {
+passthru.wasinix.update.post.syncAttrList = {
   input = "nixpkgs";
   attrPath = "legacyPackages.\${system}";
   match = "^icu([0-9]+)$";
   capture = 1;
   probe = "version";
   sort = "numeric";
-  destination = "pkgs/overlay/packages/icu/versions.nix";
+destination = "pkgs/overlay/packages/icu/versions.nix";
 };
 ```
 
@@ -95,7 +95,7 @@ The served-version tables are maintained under the `versions` noun:
 backfills registry history, `versions import <lockfile>` pins what a lockfile
 declares, and `versions bump <package>` bumps a publication release counter.
 
-Things to check on a bump are declared as `passthru.wasix.updateNotes`
+Things to check on a bump are declared as `passthru.wasinix.update.notes`
 (`pkgs/lib/default.nix`) and surface in the PR body. Toolchain and nixpkgs bumps
 rebuild the world.
 

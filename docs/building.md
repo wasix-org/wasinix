@@ -59,8 +59,9 @@ minutes and everyone's queue time.
 Cached jobs are skipped for you by the build driver's dry-run plan: a job
 already in the cache costs neither a build nor a download. On a warm cache the
 sweep is an eval plus whatever the change genuinely rebuilds. That only holds
-while the change avoids mass rebuilds, which are easy to trigger: anything under
-`pkgs/toolchain/` (except `llvm.nix`) rebuilds everything, as does a pin bump.
+while the change avoids mass rebuilds, which are easy to trigger: edits to the
+native compiler, sysroot, stdenv, or language-platform construction rebuild most
+of the catalog, as does a pin bump.
 
 ## Let CI build it
 
@@ -103,9 +104,9 @@ recorded by the last evaluation, with no evaluation of its own:
 wasinix jobs hydra              # every address with a hydra segment
 wasinix jobs 'checks.wheel*'    # segment globs, as in build selectors
 
-nix build .#packagesByProfile.exnrefEh.zlib
-nix build .#wasmerPackages.git.webc
-nix build .#pythonWheels.py314.numpy
+nix build .#legacyPackages.x86_64-linux.packages.wasix.exnrefEh.zlib
+nix build .#legacyPackages.x86_64-linux.artifacts.webc.git
+nix build .#legacyPackages.x86_64-linux.artifacts.wheel-py314.numpy
 ```
 
 `wasinix build <selectors>` runs the same job through the orchestrator, which
@@ -125,7 +126,7 @@ one target.
   not move them at all.
 
   ```sh
-  nix eval .#legacyPackages.x86_64-linux.ci \
+  nix eval .#legacyPackages.x86_64-linux.ci.jobs \
     --apply 'j: builtins.mapAttrs (_: d: d.drvPath) j'
   ```
 
