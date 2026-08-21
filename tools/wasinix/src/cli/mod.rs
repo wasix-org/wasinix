@@ -22,6 +22,12 @@ use crate::support::{schema, ui};
 
 pub use request::{DiffArgs, ModeArgs, OutcomeArgs, RequestArgs, SpotExtras};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Surface {
+    Terminal,
+    Comment,
+}
+
 #[derive(Parser)]
 #[command(
     name = "wasinix",

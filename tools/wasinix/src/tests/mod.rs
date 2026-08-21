@@ -5005,9 +5005,6 @@ mod untrusted {
         assert_eq!(request.blocked, crate::support::atoms::BlockedPolicy::Skip);
     }
 
-    /// Adapter-owned flags do not exist in the untrusted grammar: the parse
-    /// itself fails. A "not available" denylist message would mean the
-    /// grammar accepted the flag and a filter caught it after the fact.
     #[test]
     fn adapter_owned_flags_are_unrepresentable_from_comments() {
         for command in [
@@ -5020,12 +5017,19 @@ mod untrusted {
             "build core --trusted-ref main",
             "build core --inputs-only",
             "spot packagesByProfile.zlib --junit-out out.xml",
-            "diff build all --vs build all --on ec2:host",
         ] {
             let error = parse(command).unwrap_err().to_string();
             assert!(error.contains("unexpected argument"), "{command}: {error}");
             assert!(!error.contains("not available"), "{command}: {error}");
         }
+    }
+
+    #[test]
+    fn shared_case_flags_name_the_surface_that_owns_them() {
+        let error = parse("diff build all --on ec2 --vs build all")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("--on is terminal only"), "{error}");
     }
 
     #[test]
