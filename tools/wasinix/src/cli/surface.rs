@@ -26,8 +26,9 @@ struct CommandPolicy {
 
 struct LeafPolicy {
     path: &'static [&'static str],
-    comment_args: &'static [&'static str],
+    shared_args: &'static [&'static str],
     terminal_args: &'static [&'static str],
+    comment_args: &'static [&'static str],
 }
 
 const COMMANDS: &[CommandPolicy] = &[
@@ -121,7 +122,7 @@ const COMMANDS: &[CommandPolicy] = &[
     },
     CommandPolicy {
         name: "help",
-        availability: Availability::Comment,
+        availability: Availability::Shared,
     },
 ];
 
@@ -155,7 +156,7 @@ const MUTATION_EFFECTS: &[&str] = &[
 const LEAVES: &[LeafPolicy] = &[
     LeafPolicy {
         path: &["build"],
-        comment_args: &[
+        shared_args: &[
             "selectors",
             "enabled_tags",
             "at",
@@ -172,10 +173,11 @@ const LEAVES: &[LeafPolicy] = &[
             "push_cache",
             "inputs_only",
         ],
+        comment_args: &[],
     },
     LeafPolicy {
         path: &["spot"],
-        comment_args: &[
+        shared_args: &[
             "selectors",
             "enabled_tags",
             "at",
@@ -195,10 +197,11 @@ const LEAVES: &[LeafPolicy] = &[
             "push_cache",
             "inputs_only",
         ],
+        comment_args: &[],
     },
     LeafPolicy {
         path: &["diff"],
-        comment_args: &["content_diff", "blocked", "words"],
+        shared_args: &["content_diff", "blocked", "words"],
         terminal_args: &[
             "plan",
             "json",
@@ -207,10 +210,11 @@ const LEAVES: &[LeafPolicy] = &[
             "push_cache",
             "inputs_only",
         ],
+        comment_args: &[],
     },
     LeafPolicy {
         path: &["bisect"],
-        comment_args: &[
+        shared_args: &[
             "target",
             "good",
             "bad",
@@ -220,10 +224,11 @@ const LEAVES: &[LeafPolicy] = &[
             "command",
         ],
         terminal_args: &["run_dir"],
+        comment_args: &[],
     },
     LeafPolicy {
         path: &["update"],
-        comment_args: &["targets", "all"],
+        shared_args: &["targets", "all"],
         terminal_args: &[
             "expect",
             "commit",
@@ -234,10 +239,11 @@ const LEAVES: &[LeafPolicy] = &[
             "fork",
             "json",
         ],
+        comment_args: &[],
     },
     LeafPolicy {
         path: &["versions", "bump"],
-        comment_args: &["specs", "all_versions", "changed"],
+        shared_args: &["specs", "all_versions"],
         terminal_args: &[
             "changed_from",
             "commit",
@@ -248,21 +254,25 @@ const LEAVES: &[LeafPolicy] = &[
             "fork",
             "json",
         ],
+        comment_args: &["changed"],
     },
     LeafPolicy {
         path: &["regenerate"],
-        comment_args: &[],
+        shared_args: &[],
         terminal_args: &[],
+        comment_args: &[],
     },
     LeafPolicy {
         path: &["fmt"],
-        comment_args: &[],
+        shared_args: &[],
         terminal_args: &[],
+        comment_args: &[],
     },
     LeafPolicy {
         path: &["help"],
-        comment_args: &[],
+        shared_args: &[],
         terminal_args: &[],
+        comment_args: &[],
     },
 ];
 
@@ -304,6 +314,97 @@ fn reject_unavailable(policy: &CommandPolicy, path: &str) -> Result<()> {
         Availability::Terminal => Err(Error::Request(format!("{path} is terminal only"))),
         Availability::Ci => Err(Error::Request(format!("{path} is CI only"))),
     }
+}
+
+fn annotate_about(command: clap::Command, label: &'static str) -> clap::Command {
+    let about = command
+        .get_about()
+        .map(ToString::to_string)
+        .unwrap_or_default();
+    command.hide(false).about(format!("{about} ({label} only)"))
+}
+
+fn annotate_arg(command: clap::Command, id: &'static str) -> clap::Command {
+    command.mut_arg(id, |arg| {
+        let help = arg.get_help().map(ToString::to_string).unwrap_or_default();
+        arg.help(format!("{help} (comment only)"))
+    })
+}
+
+fn annotate_path(
+    command: clap::Command,
+    path: &[&'static str],
+    args: &[&'static str],
+) -> clap::Command {
+    command.mut_subcommand(path[0], |mut child| {
+        if path.len() == 1 {
+            for id in args {
+                child = annotate_arg(child, id);
+            }
+            child
+        } else {
+            annotate_path(child, &path[1..], args)
+        }
+    })
+}
+
+pub(crate) fn terminal_command() -> clap::Command {
+    let mut command = Cli::command();
+    for policy in COMMANDS {
+        command = match policy.availability {
+            Availability::Comment => {
+                command.mut_subcommand(policy.name, |child| annotate_about(child, "comment"))
+            }
+            Availability::Ci => {
+                command.mut_subcommand(policy.name, |child| annotate_about(child, "CI"))
+            }
+            Availability::Shared | Availability::Terminal => command,
+        };
+    }
+    for leaf in LEAVES {
+        command = annotate_path(command, leaf.path, leaf.comment_args);
+    }
+    command
+}
+
+fn validate_terminal(matches: &clap::ArgMatches) -> Result<()> {
+    let (name, mut args) = matches
+        .subcommand()
+        .ok_or_else(|| Error::Request("terminal names no command".into()))?;
+    let top = policy(COMMANDS, name)?;
+    if top.availability == Availability::Comment {
+        return Err(Error::Request(format!("{name} is comment only")));
+    }
+    let mut path = vec![name];
+    if name == "versions" {
+        let (verb, nested) = args
+            .subcommand()
+            .ok_or_else(|| Error::Request("versions names no command".into()))?;
+        path.push(verb);
+        args = nested;
+    }
+    if let Some(leaf) = LEAVES.iter().find(|leaf| leaf.path == path) {
+        if let Some(id) = leaf
+            .comment_args
+            .iter()
+            .find(|id| command_line_value(args, id))
+        {
+            return Err(Error::Request(format!(
+                "--{} is comment only",
+                id.replace('_', "-")
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn parse_terminal() -> Result<Cli> {
+    let mut command = terminal_command();
+    let matches = command
+        .try_get_matches_from_mut(crate::support::env::args_os())
+        .map_err(clap_error)?;
+    validate_terminal(&matches)?;
+    Cli::from_arg_matches(&matches).map_err(clap_error)
 }
 
 fn command_at<'a>(mut command: &'a clap::Command, path: &[&str]) -> &'a clap::Command {
@@ -431,7 +532,13 @@ mod tests {
                 let id = arg.get_id().as_str();
                 (!matches!(id, "help" | "verbose" | "quiet" | "color")).then_some(id)
             }));
-            let classified = names(leaf.comment_args.iter().chain(leaf.terminal_args).copied());
+            let classified = names(
+                leaf.shared_args
+                    .iter()
+                    .chain(leaf.terminal_args)
+                    .chain(leaf.comment_args)
+                    .copied(),
+            );
             assert_eq!(actual, classified, "{}", leaf.path.join(" "));
         }
     }
@@ -464,6 +571,33 @@ mod tests {
             "/wasinix ci",
         ] {
             assert!(!help.contains(text), "included {text}: {help}");
+        }
+    }
+
+    #[test]
+    fn terminal_help_and_validation_name_non_terminal_nodes() {
+        let command = super::terminal_command();
+        let root = command.clone().render_long_help().to_string();
+        assert!(root.contains("CI only"), "{root}");
+        assert!(root.contains("comment only"), "{root}");
+
+        let mut versions = command.find_subcommand("versions").unwrap().clone();
+        let bump = versions
+            .find_subcommand_mut("bump")
+            .unwrap()
+            .render_long_help()
+            .to_string();
+        assert!(bump.contains("--changed"), "{bump}");
+        assert!(bump.contains("comment only"), "{bump}");
+
+        for words in [
+            ["wasinix", "fmt"].as_slice(),
+            ["wasinix", "versions", "bump", "--changed"].as_slice(),
+        ] {
+            let mut parser = super::terminal_command();
+            let matches = parser.try_get_matches_from_mut(words).unwrap();
+            let error = super::validate_terminal(&matches).unwrap_err().to_string();
+            assert!(error.contains("comment only"), "{error}");
         }
     }
 }
