@@ -82,11 +82,10 @@ fn run_logged(cmd: &mut Command, log_path: &Path) -> Result<CommandStatus> {
     let log = Arc::new(Mutex::new(
         std::fs::File::create(log_path).map_err(|e| io(log_path, e))?,
     ));
-    crate::support::tools::log(cmd);
     let mut child =
         crate::support::tools::spawn(cmd.stdout(Stdio::piped()).stderr(Stdio::piped()))?;
-    let stdout = child.stdout.take().expect("stdout was piped");
-    let stderr = child.stderr.take().expect("stderr was piped");
+    let stdout = child.take_stdout().expect("stdout was piped");
+    let stderr = child.take_stderr().expect("stderr was piped");
     std::thread::scope(|scope| {
         for stream in [
             Box::new(stdout) as Box<dyn std::io::Read + Send>,

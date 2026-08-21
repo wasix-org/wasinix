@@ -103,7 +103,6 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
         invocation = invocation.option("offline", "true");
     }
     let mut cmd = invocation.command()?;
-    crate::support::tools::log(&cmd);
     for path in [request.jobs_path, request.stderr_log] {
         if let Some(parent) = path.parent() {
             crate::support::fs::create_dir_all(parent)?;

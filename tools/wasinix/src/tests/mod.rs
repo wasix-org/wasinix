@@ -4680,7 +4680,13 @@ mod corpus {
     fn processes_start_through_support_tools() {
         let output = [".outp", "ut()"].concat();
         let spawn = [".spa", "wn()"].concat();
-        let found = offenders(true, &["support/tools.rs"], &[&output, &spawn]);
+        let process_child = ["process::", "Child"].concat();
+        let imported_child = ["process::{", "Child"].concat();
+        let found = offenders(
+            true,
+            &["support/tools.rs"],
+            &[&output, &spawn, &process_child, &imported_child],
+        );
         assert!(found.is_empty(), "{}", found.join("\n"));
     }
 
@@ -6514,6 +6520,17 @@ mod tools {
         let tail = crate::support::tools::diagnostics_tail(&text);
         assert!(tail.contains("error: builder for"), "{tail}");
         assert!(!tail.contains("copying path"), "{tail}");
+    }
+
+    #[test]
+    fn dropping_a_managed_child_reaps_it() {
+        let started = std::time::Instant::now();
+        {
+            let mut command = Command::new("sh");
+            command.args(["-c", "while :; do :; done"]);
+            let _child = crate::support::tools::spawn(&mut command).unwrap();
+        }
+        assert!(started.elapsed() < Duration::from_secs(2));
     }
 }
 

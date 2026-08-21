@@ -512,11 +512,9 @@ impl Builder {
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
-        crate::support::tools::log(&cmd);
         let mut child = crate::support::tools::spawn(&mut cmd)?;
         child
-            .stdin
-            .take()
+            .take_stdin()
             .expect("stdin was piped")
             .write_all(script.as_bytes())
             .map_err(|error| Error::Failure(format!("writing to {}: {error}", self.host)))?;

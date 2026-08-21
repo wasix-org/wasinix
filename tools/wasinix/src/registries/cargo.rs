@@ -3,7 +3,7 @@
 //! The instance has network, so unforked crates pass through to crates.io.
 
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command};
+use std::process::Command;
 use std::time::Duration;
 
 use serde_json::Value;
@@ -284,7 +284,7 @@ pub fn publish(options: PublishOptions) -> Result<(PublishReport, CommandStatus)
     ))
 }
 
-fn wait_ready(base: &str, server: &mut Child) -> Result<()> {
+fn wait_ready(base: &str, server: &mut crate::support::tools::Child) -> Result<()> {
     for _ in 0..150 {
         if let Some(status) = server
             .try_wait()
@@ -309,7 +309,7 @@ fn wait_ready(base: &str, server: &mut Child) -> Result<()> {
 /// A running instance that is torn down when this drops, however the caller
 /// leaves: a stranded wasmer would hold the port.
 struct Server {
-    process: Child,
+    process: crate::support::tools::Child,
     _storage: Option<crate::support::fs::Scratch>,
 }
 

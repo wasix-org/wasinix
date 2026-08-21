@@ -4,8 +4,8 @@
 //! plain ENOENT names neither what was missing nor where to get it.
 
 use std::ffi::OsStr;
-use std::process::{Command, Output};
-use std::time::Duration;
+use std::process::{ChildStderr, ChildStdin, ChildStdout, Command, ExitStatus, Output};
+use std::time::{Duration, Instant};
 
 use crate::support::error::{Error, Result};
 use crate::support::ui;
@@ -58,9 +58,105 @@ pub fn output(cmd: &mut Command) -> Result<Output> {
         .map_err(|error| spawn_failed(cmd.get_program(), error))
 }
 
-pub fn spawn(cmd: &mut Command) -> Result<std::process::Child> {
-    cmd.spawn()
-        .map_err(|error| spawn_failed(cmd.get_program(), error))
+/// A child that is killed and reaped on drop unless ownership is explicitly
+/// transferred with [`Child::detach`].
+pub struct Child {
+    inner: Option<std::process::Child>,
+    command: String,
+    started: Instant,
+}
+
+impl Child {
+    fn inner(&mut self) -> &mut std::process::Child {
+        self.inner.as_mut().expect("child was already reaped")
+    }
+
+    fn completed(&self, status: ExitStatus) {
+        if ui::verbosity() == ui::Verbosity::Verbose {
+            ui::note(format!(
+                "  finished {} with {} in {}",
+                self.command,
+                status,
+                crate::support::format::duration(self.started.elapsed().as_secs_f64())
+            ));
+        }
+    }
+
+    pub fn id(&self) -> u32 {
+        self.inner.as_ref().expect("child was already reaped").id()
+    }
+
+    pub fn stdin_mut(&mut self) -> Option<&mut ChildStdin> {
+        self.inner().stdin.as_mut()
+    }
+
+    pub fn take_stdin(&mut self) -> Option<ChildStdin> {
+        self.inner().stdin.take()
+    }
+
+    pub fn take_stdout(&mut self) -> Option<ChildStdout> {
+        self.inner().stdout.take()
+    }
+
+    pub fn take_stderr(&mut self) -> Option<ChildStderr> {
+        self.inner().stderr.take()
+    }
+
+    pub fn kill(&mut self) -> std::io::Result<()> {
+        self.inner().kill()
+    }
+
+    pub fn try_wait(&mut self) -> std::io::Result<Option<ExitStatus>> {
+        let status = self.inner().try_wait()?;
+        if let Some(status) = status {
+            self.completed(status);
+            self.inner = None;
+        }
+        Ok(status)
+    }
+
+    pub fn wait(&mut self) -> std::io::Result<ExitStatus> {
+        let status = self.inner().wait()?;
+        self.completed(status);
+        self.inner = None;
+        Ok(status)
+    }
+
+    pub fn wait_with_output(mut self) -> std::io::Result<Output> {
+        let inner = self.inner.take().expect("child was already reaped");
+        let output = inner.wait_with_output()?;
+        self.completed(output.status);
+        Ok(output)
+    }
+
+    pub fn detach(mut self) {
+        self.inner.take();
+    }
+}
+
+impl Drop for Child {
+    fn drop(&mut self) {
+        let Some(mut child) = self.inner.take() else {
+            return;
+        };
+        let _ = child.kill();
+        if let Ok(status) = child.wait() {
+            self.completed(status);
+        }
+    }
+}
+
+pub fn spawn(cmd: &mut Command) -> Result<Child> {
+    log(cmd);
+    let command = rendered(cmd);
+    let child = cmd
+        .spawn()
+        .map_err(|error| spawn_failed(cmd.get_program(), error))?;
+    Ok(Child {
+        inner: Some(child),
+        command,
+        started: Instant::now(),
+    })
 }
 
 /// How much of a failing tool's diagnostics reaches the caller's message.

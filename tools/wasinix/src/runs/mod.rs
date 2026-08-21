@@ -284,7 +284,7 @@ pub fn start(command: &[String]) -> Result<String> {
         // Its own group, so the run survives the caller's terminal.
         supervisor.process_group(0);
     }
-    crate::support::tools::spawn(&mut supervisor)?;
+    crate::support::tools::spawn(&mut supervisor)?.detach();
     Ok(run_id)
 }
 

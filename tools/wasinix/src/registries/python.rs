@@ -193,7 +193,7 @@ pub fn publish_index(request: Index) -> Result<CommandStatus> {
 /// resolves from the deployed app.
 /// A live local index server; dropped, it stops serving.
 pub struct Running {
-    child: std::process::Child,
+    child: crate::support::tools::Child,
     pub url: String,
 }
 
