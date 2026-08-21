@@ -88,15 +88,17 @@ jobs:
           path: "*-error.txt"
           if-no-files-found: ignore
 
-      # Help replies and is done: no run, no report, nothing downstream. The
-      # run dir argument is required by the verb and untouched by help.
-      - name: Reply help
-        if: steps.authorize.outputs.kind == 'help'
+      # Help and plans reply directly: no durable run or report follows. The
+      # run dir argument is required by the verb and holds only its origin.
+      - name: Reply direct command
+        if: >-
+          steps.authorize.outputs.kind == 'help' ||
+          steps.authorize.outputs.kind == 'plan'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           '${{ steps.authorize.outputs.bin }}' ci command \
-            --origin origin-command.json --run-dir help-run
+            --origin origin-command.json --run-dir direct-command
 
       - name: Share the authorized command
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

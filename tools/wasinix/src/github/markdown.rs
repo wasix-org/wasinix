@@ -10,6 +10,7 @@ use crate::ci::compare::Comparison;
 use crate::ci::events::Snapshot;
 use crate::ci::facts::{Failure, FailureCause};
 use crate::ci::report::{Conclusion, Fragment, FragmentData, Report};
+use crate::ci::types::ResolvedRequest;
 use crate::github::sanitize::Markdown;
 use crate::support::atoms::{Rev, TaskStatus};
 use crate::support::format;
@@ -44,6 +45,45 @@ fn origin_line(links: &Links) -> Markdown {
         ]),
         None => Markdown::new(),
     }
+}
+
+pub fn plan_reply(
+    command: &str,
+    request: &ResolvedRequest,
+    plan: &crate::ci::plan::Plan,
+    origin: &str,
+) -> crate::support::error::Result<Markdown> {
+    let request = serde_json::to_string_pretty(request).map_err(|source| {
+        crate::support::error::Error::Json {
+            path: "<resolved request>".into(),
+            source,
+        }
+    })?;
+    let mut body = Markdown::concat([
+        origin_line(&Links {
+            run_url: None,
+            sha: None,
+            log_base: None,
+            origin: Some(origin.to_string()),
+        }),
+        Markdown::constant("### Planned `/wasinix` run\n\n"),
+        Markdown::constant("No tasks were run.\n\n**Command**\n\n"),
+        Markdown::fenced(command, "text"),
+        Markdown::constant("\n<details><summary>Resolved request</summary>\n\n"),
+        Markdown::fenced(&request, "json"),
+        Markdown::constant("\n</details>\n\n**Pipeline**\n\n| task | role |\n|:--|:--|\n"),
+    ]);
+    for task in &plan.tasks {
+        body = Markdown::concat([
+            body,
+            Markdown::constant("| "),
+            Markdown::cell(&task.label),
+            Markdown::constant(" | "),
+            Markdown::constant(if task.gate { "required" } else { "advisory" }),
+            Markdown::constant(" |\n"),
+        ]);
+    }
+    Ok(body)
 }
 
 impl Links {
