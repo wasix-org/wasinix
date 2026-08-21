@@ -1,8 +1,8 @@
 //! Running nix-eval-jobs and parsing its JSON-lines format, in exactly one
 //! place.
 
+use std::io::Write;
 use std::path::Path;
-use std::process::Stdio;
 
 use serde::Deserialize;
 
@@ -107,14 +107,27 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
             crate::support::fs::create_dir_all(parent)?;
         }
     }
-    let jobs_file =
+    let mut jobs_file =
         std::fs::File::create(request.jobs_path).map_err(|e| io(request.jobs_path, e))?;
-    let completion = invocation.run_with_output(|cmd| {
-        cmd.stdout(Stdio::from(jobs_file)).stderr(Stdio::piped());
-    })?;
+    let stderr_log = crate::support::log::BoundedLog::create(request.stderr_log)?;
+    let completion = invocation.run_piped(
+        |mut stdout| {
+            std::io::copy(&mut stdout, &mut jobs_file)
+                .map_err(|error| io(request.jobs_path, error))?;
+            jobs_file
+                .flush()
+                .map_err(|error| io(request.jobs_path, error))
+        },
+        |mut stderr| {
+            let mut log = stderr_log;
+            std::io::copy(&mut stderr, &mut log)
+                .map_err(|error| io(request.stderr_log, error))?;
+            log.finish()?;
+            Ok(())
+        },
+    )?;
     let timed_out = matches!(completion, crate::support::tools::Completion::TimedOut(_));
     let output = completion.value();
-    crate::support::fs::write(request.stderr_log, &output.stderr)?;
     if timed_out {
         return Ok(Some(format!(
             "evaluation timed out after {} seconds",
@@ -124,9 +137,8 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
     if output.status.success() {
         return Ok(None);
     }
-    Ok(Some(error_excerpt(&String::from_utf8_lossy(
-        &output.stderr,
-    ))))
+    let stderr = crate::support::fs::tail(request.stderr_log, 256 * 1024)?;
+    Ok(Some(error_excerpt(&stderr)))
 }
 
 /// A nix trace ends with its root cause on an indented `error:` line; the

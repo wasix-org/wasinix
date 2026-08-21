@@ -6649,12 +6649,40 @@ mod process {
 }
 
 mod tools {
+    use std::io::Read;
     use std::process::Command;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
     use crate::support::tools::{
-        checked_text, output_timeout, status_timeout, Completion, Timeout,
+        checked_text, output_timeout, piped, status_timeout, Completion, Timeout,
     };
+
+    fn read_stream(mut stream: impl Read) -> crate::support::error::Result<Vec<u8>> {
+        let mut bytes = Vec::new();
+        stream
+            .read_to_end(&mut bytes)
+            .map_err(|error| crate::support::error::Error::Failure(error.to_string()))?;
+        Ok(bytes)
+    }
+
+    #[test]
+    fn piped_commands_drain_both_streams_and_keep_the_status() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "printf stdout; printf stderr >&2; exit 17"]);
+        let stderr = Arc::new(Mutex::new(Vec::new()));
+        let stderr_writer = Arc::clone(&stderr);
+        let completion = piped(&mut command, None, read_stream, move |stream| {
+            *stderr_writer.lock().unwrap() = read_stream(stream)?;
+            Ok(())
+        })
+        .unwrap()
+        .value();
+
+        assert_eq!(completion.status.code(), Some(17));
+        assert_eq!(completion.stdout, b"stdout");
+        assert_eq!(*stderr.lock().unwrap(), b"stderr");
+    }
 
     #[test]
     fn a_command_finishing_before_its_deadline_is_not_timed_out() {
