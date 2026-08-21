@@ -11,6 +11,7 @@ flate2 = "1"
 indicatif = { version = "0.18", default-features = false, features = [
   "unicode-width",
 ] }
+libc = "0.2"
 quick-xml = "0.37"
 regex = "1"
 serde = { version = "1", features = ["derive"] }

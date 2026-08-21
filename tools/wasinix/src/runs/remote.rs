@@ -68,7 +68,7 @@ impl Drop for TemporaryFiles {
 }
 
 fn copy_to_host(builder: &Builder, local: &Path, remote_path: &str) -> Result<()> {
-    let mut cmd = builder.scp(Deadline::Transfer)?;
+    let mut cmd = builder.scp()?;
     // scp's progress meter fights the progress ticker for the terminal's
     // last line; -v keeps it for anyone watching the raw transfer.
     if crate::support::ui::verbosity() != crate::support::ui::Verbosity::Verbose {
@@ -194,7 +194,7 @@ pub(crate) fn parse_poll(output: &[u8]) -> Result<Poll> {
 fn fetch_run(builder: &Builder, run_dir: &str, fetch_to: &Path) -> Result<()> {
     crate::support::fs::create_dir_all(fetch_to)?;
     let scratch = crate::support::fs::Scratch::create("wasinix-fetch")?;
-    let mut cmd = builder.scp(Deadline::Transfer)?;
+    let mut cmd = builder.scp()?;
     if crate::support::ui::verbosity() != crate::support::ui::Verbosity::Verbose {
         cmd.arg("-q");
     }
@@ -273,10 +273,13 @@ pub fn observe(
         std::thread::sleep(POLL_INTERVAL);
         // Quiet by contract: this fires every few seconds for the whole
         // run, and a logged poll would flood the transcript.
-        let mut cmd = builder.ssh(Deadline::Poll)?;
+        let mut cmd = builder.ssh()?;
         cmd.arg(poll_command(run_dir, pid, remote_offset));
-        let output = match tools::output(&mut cmd) {
-            Ok(output) if output.status.success() => output,
+        let output = match tools::output_timeout(
+            &mut cmd,
+            Deadline::Poll.timeout(),
+        ) {
+            Ok(tools::Completion::Finished(output)) if output.status.success() => output,
             _ => {
                 failures += 1;
                 if failures >= MAX_POLL_FAILURES {

@@ -5,6 +5,7 @@
 
 use std::ffi::OsStr;
 use std::process::{ChildStderr, ChildStdin, ChildStdout, Command, ExitStatus, Output};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use crate::support::error::{Error, Result};
@@ -63,21 +64,17 @@ fn completed(command: &str, started: Instant, status: ExitStatus) {
 }
 
 pub fn status(cmd: &mut Command) -> Result<std::process::ExitStatus> {
-    let (command, started) = started(cmd);
-    let status = cmd
-        .status()
-        .map_err(|error| spawn_failed(cmd.get_program(), error))?;
-    completed(&command, started, status);
-    Ok(status)
+    spawn(cmd)?
+        .wait()
+        .map_err(|error| Error::Failure(format!("waiting for {}: {error}", rendered(cmd))))
 }
 
 pub fn output(cmd: &mut Command) -> Result<Output> {
-    let (command, started) = started(cmd);
-    let output = cmd
-        .output()
-        .map_err(|error| spawn_failed(cmd.get_program(), error))?;
-    completed(&command, started, output.status);
-    Ok(output)
+    cmd.stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    spawn(cmd)?
+        .wait_with_output()
+        .map_err(|error| Error::Failure(format!("waiting for {}: {error}", rendered(cmd))))
 }
 
 /// A child that is killed and reaped on drop unless ownership is explicitly
@@ -86,6 +83,114 @@ pub struct Child {
     inner: Option<std::process::Child>,
     command: String,
     started: Instant,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Completion<T> {
+    Finished(T),
+    TimedOut(T),
+}
+
+impl<T> Completion<T> {
+    pub fn value(self) -> T {
+        match self {
+            Completion::Finished(value) | Completion::TimedOut(value) => value,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Timeout {
+    after: Duration,
+    terminate_after: Duration,
+}
+
+impl Timeout {
+    pub fn new(after: Duration) -> Timeout {
+        Timeout {
+            after,
+            terminate_after: Duration::from_secs(30),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn with_grace(after: Duration, terminate_after: Duration) -> Timeout {
+        Timeout {
+            after,
+            terminate_after,
+        }
+    }
+}
+
+#[cfg(unix)]
+fn signal_group(pid: u32, signal: libc::c_int) -> std::io::Result<()> {
+    let pid = libc::pid_t::try_from(pid)
+        .map_err(|_| std::io::Error::other(format!("child pid {pid} exceeds pid_t")))?;
+    // SAFETY: kill only reads its integer arguments. The negative child pid
+    // addresses the process group created by spawn.
+    let result = unsafe { libc::kill(-pid, signal) };
+    if result == 0 {
+        return Ok(());
+    }
+    let error = std::io::Error::last_os_error();
+    if error.raw_os_error() == Some(libc::ESRCH) {
+        Ok(())
+    } else {
+        Err(error)
+    }
+}
+
+#[cfg(not(unix))]
+fn force_kill(child: &mut std::process::Child) -> std::io::Result<()> {
+    child.kill()
+}
+
+#[cfg(unix)]
+fn force_kill(child: &mut std::process::Child) -> std::io::Result<()> {
+    signal_group(child.id(), libc::SIGKILL)
+}
+
+fn wait_deadline<T: Send + 'static>(
+    child: std::process::Child,
+    timeout: Timeout,
+    wait: impl FnOnce(std::process::Child) -> std::io::Result<T> + Send + 'static,
+) -> std::io::Result<Completion<T>> {
+    let pid = child.id();
+    let (sender, receiver) = mpsc::sync_channel(1);
+    let waiter = std::thread::spawn(move || {
+        let _ = sender.send(wait(child));
+    });
+    let completion = match receiver.recv_timeout(timeout.after) {
+        Ok(result) => Completion::Finished(result?),
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            return Err(std::io::Error::other("child waiter stopped unexpectedly"));
+        }
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            #[cfg(unix)]
+            signal_group(pid, libc::SIGTERM)?;
+            match receiver.recv_timeout(timeout.terminate_after) {
+                Ok(result) => Completion::TimedOut(result?),
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(std::io::Error::other("child waiter stopped unexpectedly"));
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    #[cfg(unix)]
+                    signal_group(pid, libc::SIGKILL)?;
+                    #[cfg(not(unix))]
+                    return Err(std::io::Error::other(
+                        "child did not exit after timeout termination",
+                    ));
+                    Completion::TimedOut(receiver.recv().map_err(|_| {
+                        std::io::Error::other("child waiter stopped unexpectedly")
+                    })??)
+                }
+            }
+        }
+    };
+    waiter
+        .join()
+        .map_err(|_| std::io::Error::other("child waiter panicked"))?;
+    Ok(completion)
 }
 
 impl Child {
@@ -114,7 +219,7 @@ impl Child {
     }
 
     pub fn kill(&mut self) -> std::io::Result<()> {
-        self.inner().kill()
+        force_kill(self.inner())
     }
 
     pub fn try_wait(&mut self) -> std::io::Result<Option<ExitStatus>> {
@@ -140,6 +245,31 @@ impl Child {
         Ok(output)
     }
 
+    pub fn wait_timeout(mut self, timeout: Timeout) -> std::io::Result<Completion<ExitStatus>> {
+        let inner = self.inner.take().expect("child was already reaped");
+        let completion = wait_deadline(inner, timeout, |mut child| child.wait())?;
+        completed(&self.command, self.started, *match &completion {
+            Completion::Finished(status) | Completion::TimedOut(status) => status,
+        });
+        Ok(completion)
+    }
+
+    pub fn wait_with_output_timeout(
+        mut self,
+        timeout: Timeout,
+    ) -> std::io::Result<Completion<Output>> {
+        let inner = self.inner.take().expect("child was already reaped");
+        let completion = wait_deadline(inner, timeout, |child| child.wait_with_output())?;
+        completed(
+            &self.command,
+            self.started,
+            match &completion {
+                Completion::Finished(output) | Completion::TimedOut(output) => output.status,
+            },
+        );
+        Ok(completion)
+    }
+
     pub fn detach(mut self) {
         self.inner.take();
     }
@@ -150,7 +280,7 @@ impl Drop for Child {
         let Some(mut child) = self.inner.take() else {
             return;
         };
-        let _ = child.kill();
+        let _ = force_kill(&mut child);
         if let Ok(status) = child.wait() {
             completed(&self.command, self.started, status);
         }
@@ -158,6 +288,11 @@ impl Drop for Child {
 }
 
 pub fn spawn(cmd: &mut Command) -> Result<Child> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
     let (command, started) = started(cmd);
     let child = cmd
         .spawn()
@@ -167,6 +302,20 @@ pub fn spawn(cmd: &mut Command) -> Result<Child> {
         command,
         started,
     })
+}
+
+pub fn output_timeout(cmd: &mut Command, timeout: Timeout) -> Result<Completion<Output>> {
+    cmd.stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    spawn(cmd)?
+        .wait_with_output_timeout(timeout)
+        .map_err(|error| Error::Failure(format!("waiting for {}: {error}", rendered(cmd))))
+}
+
+pub fn status_timeout(cmd: &mut Command, timeout: Timeout) -> Result<Completion<ExitStatus>> {
+    spawn(cmd)?
+        .wait_timeout(timeout)
+        .map_err(|error| Error::Failure(format!("waiting for {}: {error}", rendered(cmd))))
 }
 
 /// How much of a failing tool's diagnostics reaches the caller's message.
@@ -192,6 +341,25 @@ pub fn diagnostics_tail(text: &str) -> String {
 /// tool reports there).
 pub fn checked_output(cmd: &mut Command, context: &str) -> Result<Vec<u8>> {
     let output = output(cmd)?;
+    check_output(cmd, context, output)
+}
+
+pub fn checked_output_timeout(
+    cmd: &mut Command,
+    context: &str,
+    timeout: Timeout,
+) -> Result<Vec<u8>> {
+    match output_timeout(cmd, timeout)? {
+        Completion::Finished(output) => check_output(cmd, context, output),
+        Completion::TimedOut(_) => Err(Error::Failure(format!(
+            "{context}: {} timed out after {} seconds",
+            rendered(cmd),
+            timeout.after.as_secs()
+        ))),
+    }
+}
+
+fn check_output(cmd: &Command, context: &str, output: Output) -> Result<Vec<u8>> {
     if output.status.success() {
         return Ok(output.stdout);
     }
@@ -235,17 +403,13 @@ pub fn checked_text(cmd: &mut Command, context: &str) -> Result<String> {
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
-pub fn timed_command(program: &str, timeout: Duration) -> Command {
-    let mut command = Command::new("timeout");
-    // Without --foreground, timeout puts itself and the command in a new
-    // process group, so a cancel or sweep that signals the payload's group
-    // never reaches the command and it orphans. --foreground keeps it in the
-    // payload's group.
-    command
-        .args(["--foreground", "--signal=TERM", "--kill-after=30"])
-        .arg(timeout.as_secs().to_string())
-        .arg(program);
-    command
+pub fn checked_text_timeout(
+    cmd: &mut Command,
+    context: &str,
+    timeout: Timeout,
+) -> Result<String> {
+    let bytes = checked_output_timeout(cmd, context, timeout)?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 pub fn utf8_suffix(text: &str, max_bytes: usize) -> &str {
