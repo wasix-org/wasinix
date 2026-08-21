@@ -6,3 +6,6 @@ volumes:
   - name: index
     mount: /public
 app_id: da_RMMIrt4UYeW8
+
+domains:
+  - python-registry.wasix.org
