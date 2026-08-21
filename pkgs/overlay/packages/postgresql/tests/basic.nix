@@ -49,7 +49,7 @@ in {
     # WASIX cannot bind an AF_UNIX socket, so the server is TCP-only.
     script = ''
       ${pkgs.lib.getExe' native "initdb"} -D native -U postgres --no-locale --encoding=UTF8 >/dev/null
-      ${pkgs.lib.getExe native} -D native -c unix_socket_directories= \
+      ${pkgs.lib.getExe' native "postgres"} -D native -c unix_socket_directories= \
         -h 127.0.0.1 -p 55434 >native.log 2>&1 &
       pid=$!
       trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
