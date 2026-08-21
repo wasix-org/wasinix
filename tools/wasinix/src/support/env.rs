@@ -237,6 +237,10 @@ pub fn current_exe() -> Result<PathBuf> {
     std::env::current_exe().map_err(|e| crate::support::error::io("wasinix", e))
 }
 
+pub fn args_os() -> std::env::ArgsOs {
+    std::env::args_os()
+}
+
 /// Whether a spawn of this program word could succeed: a path is checked as
 /// given, a bare name must resolve on PATH.
 pub fn on_path(program: &str) -> bool {

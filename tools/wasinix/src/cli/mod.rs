@@ -1617,8 +1617,7 @@ fn run(command: CommandTree) -> Result<CommandStatus> {
             crate::support::error::request_error("this command is comment only")
         }
         CommandTree::SurfaceHelp => {
-            use clap::CommandFactory;
-            ui::output(<Cli as CommandFactory>::command().render_long_help());
+            ui::output(surface::terminal_command().render_long_help());
             Ok(CommandStatus::SUCCESS)
         }
     }
@@ -1627,8 +1626,14 @@ fn run(command: CommandTree) -> Result<CommandStatus> {
 pub fn main() -> std::process::ExitCode {
     // Dynamic shell completion: a request re-enters the binary with COMPLETE
     // set and exits here; `completions <shell>` prints the registration.
-    clap_complete::CompleteEnv::with_factory(<Cli as clap::CommandFactory>::command).complete();
-    let cli = Cli::parse();
+    clap_complete::CompleteEnv::with_factory(surface::terminal_command).complete();
+    let cli = match surface::parse_terminal() {
+        Ok(cli) => cli,
+        Err(error) => {
+            ui::report_error(&error);
+            return error.status().into();
+        }
+    };
     ui::set_verbosity(if cli.quiet {
         ui::Verbosity::Quiet
     } else if cli.verbose {
