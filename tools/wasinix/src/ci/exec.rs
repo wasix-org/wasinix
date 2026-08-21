@@ -75,10 +75,9 @@ fn excerpt_of(text: &str) -> LogExcerpt {
 /// console is not.
 fn run_logged(cmd: &mut Command, log_path: &Path) -> Result<CommandStatus> {
     use std::io::{BufRead, BufReader, Write};
-    use std::sync::Mutex;
-    let log = Mutex::new(crate::support::log::BoundedLog::create(log_path)?);
+    let log = crate::support::log::SharedLog::create(log_path)?;
     let echo = crate::support::ui::verbosity() == crate::support::ui::Verbosity::Verbose;
-    let copy = |stream: Box<dyn std::io::Read + Send>| -> Result<()> {
+    let copy = |stream: Box<dyn std::io::Read + Send>, mut log: crate::support::log::SharedLog| {
         let mut reader = BufReader::new(stream);
         let mut buffer = Vec::new();
         loop {
@@ -91,12 +90,7 @@ fn run_logged(cmd: &mut Command, log_path: &Path) -> Result<CommandStatus> {
             if echo {
                 crate::support::ui::raw(String::from_utf8_lossy(&buffer));
             }
-            log.lock()
-                .map_err(|_| Error::Failure(format!(
-                    "{} log lock was poisoned",
-                    log_path.display()
-                )))?
-                .write_all(&buffer)
+            log.write_all(&buffer)
                 .map_err(|error| io(log_path, error))?;
             buffer.clear();
         }
@@ -105,16 +99,11 @@ fn run_logged(cmd: &mut Command, log_path: &Path) -> Result<CommandStatus> {
     let completion = crate::support::tools::piped(
         cmd,
         None,
-        |stream| copy(Box::new(stream)),
-        |stream| copy(Box::new(stream)),
+        |stream| copy(Box::new(stream), log.clone()),
+        |stream| copy(Box::new(stream), log.clone()),
     )?;
     let status = completion.value().status;
-    log.into_inner()
-        .map_err(|_| Error::Failure(format!(
-            "{} log lock was poisoned",
-            log_path.display()
-        )))?
-        .finish()?;
+    log.finish()?;
     Ok(CommandStatus::from_exit(status))
 }
 

@@ -3,6 +3,7 @@
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
@@ -11,7 +12,9 @@ use crate::support::schema::Document;
 
 const DEFAULT_MAX_BYTES: u64 = 64 * 1024 * 1024;
 const HEAD_BYTES: u64 = 1024 * 1024;
-const MARKER_RESERVE: u64 = 256;
+const MARKER_RESERVE: u64 = 512;
+const LIVE_MARKER: &[u8] =
+    b"\n--- wasinix is retaining newer output in a rolling tail until this command ends ---\n";
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,6 +47,7 @@ pub struct BoundedLog {
     tail_bytes: u64,
     tail_position: u64,
     tail_limit: u64,
+    live_marker_written: bool,
     finished: bool,
 }
 
@@ -55,8 +59,21 @@ impl BoundedLog {
         Self::with_limit(path, max_bytes)
     }
 
+    fn create_followed(path: &Path) -> Result<Self> {
+        let max_bytes = crate::support::env::log_bytes()?
+            .map(|bytes| bytes as u64)
+            .unwrap_or(DEFAULT_MAX_BYTES);
+        let head_limit = (max_bytes.saturating_sub(MARKER_RESERVE)) / 2;
+        Self::with_head_limit(path, max_bytes, head_limit)
+    }
+
     fn with_limit(path: &Path, max_bytes: u64) -> Result<Self> {
-        if max_bytes <= MARKER_RESERVE + 1 {
+        let head_limit = HEAD_BYTES.min((max_bytes.saturating_sub(MARKER_RESERVE)) / 4);
+        Self::with_head_limit(path, max_bytes, head_limit)
+    }
+
+    fn with_head_limit(path: &Path, max_bytes: u64, head_limit: u64) -> Result<Self> {
+        if max_bytes <= MARKER_RESERVE {
             return request_error(format!(
                 "log retention needs more than {MARKER_RESERVE} bytes, got {max_bytes}"
             ));
@@ -64,7 +81,6 @@ impl BoundedLog {
         if let Some(parent) = path.parent() {
             crate::support::fs::create_dir_all(parent)?;
         }
-        let head_limit = HEAD_BYTES.min((max_bytes - MARKER_RESERVE) / 4);
         let tail_limit = max_bytes - MARKER_RESERVE - head_limit;
         let tail_path = path.with_file_name(format!(
             ".{}.tail-{}",
@@ -89,11 +105,21 @@ impl BoundedLog {
             tail_bytes: 0,
             tail_position: 0,
             tail_limit,
+            live_marker_written: false,
             finished: false,
         })
     }
 
     fn write_tail(&mut self, mut bytes: &[u8]) -> std::io::Result<()> {
+        if !self.live_marker_written
+            && self.tail_bytes.saturating_add(bytes.len() as u64) > self.tail_limit
+        {
+            self.head
+                .as_mut()
+                .expect("unfinished log has a head")
+                .write_all(LIVE_MARKER)?;
+            self.live_marker_written = true;
+        }
         let tail = self.tail.as_mut().expect("unfinished log has a tail");
         if bytes.len() as u64 >= self.tail_limit {
             bytes = &bytes[bytes.len() - self.tail_limit as usize..];
@@ -171,6 +197,53 @@ impl BoundedLog {
     }
 }
 
+#[derive(Clone)]
+pub struct SharedLog(Arc<Mutex<BoundedLog>>);
+
+impl SharedLog {
+    pub fn create(path: &Path) -> Result<Self> {
+        Ok(Self(Arc::new(Mutex::new(BoundedLog::create(path)?))))
+    }
+
+    pub fn create_followed(path: &Path) -> Result<Self> {
+        Ok(Self(Arc::new(Mutex::new(BoundedLog::create_followed(
+            path,
+        )?))))
+    }
+
+    pub fn finish(self) -> Result<Retention> {
+        let log = Arc::try_unwrap(self.0)
+            .map_err(|_| {
+                crate::support::error::Error::Failure(
+                    "cannot finish a retained log while a writer is still active".into(),
+                )
+            })?
+            .into_inner()
+            .map_err(|_| {
+                crate::support::error::Error::Failure(
+                    "cannot finish a retained log whose writer panicked".into(),
+                )
+            })?;
+        log.finish()
+    }
+}
+
+impl Write for SharedLog {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0
+            .lock()
+            .map_err(|_| std::io::Error::other("retained log writer panicked"))?
+            .write(bytes)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.0
+            .lock()
+            .map_err(|_| std::io::Error::other("retained log writer panicked"))?
+            .flush()
+    }
+}
+
 impl Write for BoundedLog {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
         self.original_bytes = self.original_bytes.saturating_add(bytes.len() as u64);
@@ -221,16 +294,16 @@ mod tests {
         let scratch = crate::support::fs::Scratch::create("wasinix-log-test").unwrap();
         let path = scratch.path().join("build.log");
         let input: Vec<u8> = (0..4096).map(|index| (index % 251) as u8).collect();
-        let mut log = super::BoundedLog::with_limit(&path, 1024).unwrap();
+        let mut log = super::BoundedLog::with_limit(&path, 2048).unwrap();
         for chunk in input.chunks(73) {
             log.write_all(chunk).unwrap();
         }
         let retention = log.finish().unwrap();
 
         let output = std::fs::read(&path).unwrap();
-        assert_eq!(&output[..192], &input[..192]);
-        assert_eq!(&output[output.len() - 576..], &input[input.len() - 576..]);
-        assert!(output.len() <= 1024);
+        assert_eq!(&output[..384], &input[..384]);
+        assert_eq!(&output[output.len() - 1152..], &input[input.len() - 1152..]);
+        assert!(output.len() <= 2048);
         assert_eq!(retention.original_bytes, 4096);
         assert_eq!(retention.retained_bytes, output.len() as u64);
         assert!(retention.truncated);
@@ -243,12 +316,35 @@ mod tests {
     fn leaves_a_small_log_unchanged() {
         let scratch = crate::support::fs::Scratch::create("wasinix-log-small-test").unwrap();
         let path = scratch.path().join("build.log");
-        let mut log = super::BoundedLog::with_limit(&path, 1024).unwrap();
+        let mut log = super::BoundedLog::with_limit(&path, 2048).unwrap();
         log.write_all(b"complete output\n").unwrap();
         let retention = log.finish().unwrap();
 
         assert_eq!(std::fs::read(&path).unwrap(), b"complete output\n");
         assert!(!retention.truncated);
         assert_eq!(retention.original_bytes, retention.retained_bytes);
+    }
+
+    #[test]
+    fn a_followed_log_only_appends_while_it_is_live() {
+        let scratch = crate::support::fs::Scratch::create("wasinix-log-follow-test").unwrap();
+        let path = scratch.path().join("run.log");
+        let input: Vec<u8> = (0..4096).map(|index| (index % 251) as u8).collect();
+        let mut log = super::BoundedLog::with_head_limit(&path, 2048, 768).unwrap();
+        log.write_all(&input[..1600]).unwrap();
+        let live = std::fs::read(&path).unwrap();
+        assert!(live.ends_with(super::LIVE_MARKER));
+
+        log.write_all(&input[1600..]).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), live);
+        let retention = log.finish().unwrap();
+        let finished = std::fs::read(&path).unwrap();
+        assert!(finished.starts_with(&live));
+        assert_eq!(
+            &finished[finished.len() - 768..],
+            &input[input.len() - 768..]
+        );
+        assert!(retention.truncated);
+        assert!(finished.len() <= 2048);
     }
 }

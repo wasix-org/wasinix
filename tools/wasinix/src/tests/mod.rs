@@ -4869,6 +4869,31 @@ mod corpus {
         assert!(found.is_empty(), "{}", found.join("\n"));
     }
 
+    /// Direct file creation is reserved for structured streams, finished
+    /// archives, and the bounded log owner. A new live transcript must use
+    /// support::log so its retention cannot be forgotten at one call site.
+    #[test]
+    fn live_logs_use_the_retention_writer() {
+        let create = ["File::", "create("].concat();
+        let mut unexpected = Vec::new();
+        for (relative, text) in sources(false) {
+            for (index, line) in text
+                .lines()
+                .enumerate()
+                .filter(|(_, line)| line.contains(&create))
+            {
+                let allowed = relative == "support/log.rs"
+                    || (relative == "ci/facts/logs.rs" && line.contains("&target"))
+                    || (relative == "nix/buildset.rs" && line.contains("&stream_path"))
+                    || (relative == "nix/evaljobs.rs" && line.contains("request.jobs_path"));
+                if !allowed {
+                    unexpected.push(format!("{relative}:{}: {}", index + 1, line.trim()));
+                }
+            }
+        }
+        assert!(unexpected.is_empty(), "{}", unexpected.join("\n"));
+    }
+
     /// The shared spawn path creates the process group that every timeout and
     /// cancellation path signals.
     #[test]
