@@ -10,16 +10,16 @@
 }:
 rustPlatform.buildRustPackage (finalAttrs: {
   pname = "anybuild";
-  version = "0.27.2";
+  version = "0.28.0";
 
   src = fetchFromGitHub {
     owner = "wasmerio";
     repo = "anybuild";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-wQJwHk3aV989/5hNLkt2eQW9c3tU3bLePJg7MHzgv3g=";
+    hash = "sha256-WYyr+Lis0rVs9bwNtzHtMtRx/4anM+O7TTmS4d3bIM4=";
   };
 
-  cargoHash = "sha256-jKOffOlvGb4b8mHJnb9Xas8lfYQZZ/my0Rc/FRAbd0c=";
+  cargoHash = "sha256-uMKjsztKNQ+qrR8RaBBLCMOsudKjLk0f0XN6wBYOsgw=";
 
   patches = [
     # python_index_url / ANYBUILD_PYTHON_INDEX_URL: the cross-wheel steps
