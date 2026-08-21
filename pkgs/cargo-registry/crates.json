@@ -38,6 +38,7 @@
   "aws-config": {
     "1.10.0": "sha256-7Q+M5i9pK9t1eEStYm7V2yofRPZte54EA4dXr1hszYc=",
     "1.10.1": "sha256-Lc8ie4dOwmDT426qQBRZ7McgyLPQM16nTmdIhpjB2gI=",
+    "1.11.0": "sha256-GgLAMDyV8grk2OJWsXfnoxgSGrF544z2KgdQhu80Mi4=",
     "1.8.18": "sha256-Gza3ZfmypLYC6X5AdiJdf828dsvJ68c5pjKYRoZ0fuw=",
     "1.9.0": "sha256-5GhqOdHBtLSfO5qBg96U2vcINcHMqWtq/hS+6IGuOCs="
   },
