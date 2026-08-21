@@ -5,11 +5,11 @@
 use std::collections::BTreeMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::support::capability::Capability;
 use crate::support::error::{Result, io, request_error};
 use crate::support::nix::{Flake, eval};
 use crate::support::process::CommandStatus;
@@ -89,7 +89,7 @@ fn rclone_section(text: &str) -> Option<&str> {
 /// which provisions the credentials the read then returns.
 fn volume_config(app_dir: &Path, registry: &str) -> Result<String> {
     let read = || -> Result<String> {
-        let mut cmd = Command::new("wasmer");
+        let mut cmd = Capability::Wasmer.command()?;
         cmd.args(["app", "volume", "credentials"])
             .args(["--registry", registry])
             .args(["--format", "rclone"])
@@ -107,7 +107,7 @@ fn volume_config(app_dir: &Path, registry: &str) -> Result<String> {
     if rclone_section(&first).is_some() {
         return Ok(first);
     }
-    let mut enable = Command::new("wasmer");
+    let mut enable = Capability::Wasmer.command()?;
     enable
         .args(["app", "volume", "enable-s3"])
         .args(["--registry", registry])
@@ -142,7 +142,7 @@ pub fn publish_index(request: Index) -> Result<CommandStatus> {
     // The volume's bucket is a per-deploy id, and the endpoint holds exactly
     // one, so it is discovered rather than named. The retry bounds are what
     // turn an endpoint that never answers into a message rather than a hang.
-    let mut list = Command::new("rclone");
+    let mut list = Capability::Rclone.command()?;
     list.arg("lsd")
         .arg(format!("{remote}:"))
         .args(["--contimeout", "30s"])
@@ -162,7 +162,7 @@ pub fn publish_index(request: Index) -> Result<CommandStatus> {
         ));
     };
 
-    let mut publish = Command::new("python3");
+    let mut publish = Capability::Python.command()?;
     publish
         .arg(app_dir.join("publish.py"))
         .arg("--registry")
@@ -232,7 +232,7 @@ pub fn start(given: Option<PathBuf>, port: u16) -> Result<Running> {
     ui::result(format!("serving the built index at {}", root.display()));
     ui::result(format!("  url:   {url}"));
     ui::result(format!("  use:   pip install --index-url {url} <package>"));
-    let mut cmd = Command::new("python3");
+    let mut cmd = Capability::Python.command()?;
     cmd.args(["-m", "http.server", &port.to_string(), "--directory"])
         .arg(&root);
     let child = crate::support::tools::spawn(&mut cmd)?;
@@ -379,7 +379,7 @@ pub fn coverage(cutoff: usize, limit: usize) -> Result<CoverageReport> {
     let scratch = crate::support::fs::Scratch::create("wasinix-python-coverage")?;
     let versions_path = scratch.path().join("wheel-versions.json");
     crate::support::json::write(&versions_path, &versions)?;
-    let mut command = Command::new("python3");
+    let mut command = Capability::Python.command()?;
     command
         .arg(repo.join("pypi-survey/scripts/coverage.py"))
         .arg(&versions_path)
@@ -413,7 +413,7 @@ pub fn refresh_survey(cutoff: usize) -> Result<()> {
         ("refine_sdist.py", vec![cutoff.clone()]),
         ("transitive.py", vec![]),
     ] {
-        let mut command = Command::new("python3");
+        let mut command = Capability::Python.command()?;
         command
             .arg(scripts.join(script))
             .args(args)
@@ -576,7 +576,7 @@ pub fn preview_index(
 
     let dists = scratch.join("dists.json");
     crate::support::json::write(&dists, &Value::Array(suffixed))?;
-    let mut index = Command::new("python3");
+    let mut index = Capability::Python.command()?;
     index
         .arg(repo.join("pkgs/python-registry/make-index.py"))
         .arg(&dists)

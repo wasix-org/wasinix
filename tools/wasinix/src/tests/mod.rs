@@ -4822,6 +4822,19 @@ mod corpus {
         assert!(found.is_empty(), "{}", found.join("\n"));
     }
 
+    /// Optional packaged programs resolve through the closed capability set,
+    /// which binds each executable to one locked flake output.
+    #[test]
+    fn optional_programs_run_through_capabilities() {
+        let banned: Vec<String> = ["aws", "python3", "rclone", "wasmer"]
+            .iter()
+            .map(|name| ["Command::", "new(\"", name, "\")"].concat())
+            .collect();
+        let banned: Vec<&str> = banned.iter().map(String::as_str).collect();
+        let found = offenders(false, &["support/capability.rs"], &banned);
+        assert!(found.is_empty(), "{}", found.join("\n"));
+    }
+
     /// The builder's store() is the one renderer of its ssh store URL, so a
     /// configured store_url override cannot be silently bypassed.
     #[test]

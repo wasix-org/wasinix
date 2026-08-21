@@ -9,6 +9,7 @@ use std::time::Duration;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
+use crate::support::capability::Capability;
 use crate::support::error::{Result, request_error};
 use crate::support::process::CommandStatus;
 use crate::support::ui;
@@ -240,7 +241,7 @@ pub fn publish(options: PublishOptions) -> Result<(PublishReport, CommandStatus)
                         )
                     })?);
                 }
-                let mut cmd = Command::new("python3");
+                let mut cmd = Capability::Python.command()?;
                 cmd.arg(&publisher)
                     .arg(&file)
                     .arg(&base)
@@ -420,7 +421,7 @@ pub fn start(options: ServeOptions) -> Result<Running> {
 
     // --volume, not --mapdir: durable writes need their fsync rights, or
     // publish hangs. 0.0.0.0 inside the guest, reached on loopback.
-    let mut run = Command::new("wasmer");
+    let mut run = Capability::Wasmer.command()?;
     run.arg("run")
         .arg(&wasm)
         .args(["--net", "--enable-threads"])
@@ -444,7 +445,7 @@ pub fn start(options: ServeOptions) -> Result<Running> {
     wait_ready(&base, &mut server.process)?;
 
     for path in &crates {
-        let mut cmd = Command::new("python3");
+        let mut cmd = Capability::Python.command()?;
         cmd.arg(&publisher).arg(path).args([&base, TOKEN]);
         let status = crate::support::tools::status(&mut cmd)?;
         if !status.success() {
@@ -496,7 +497,7 @@ pub struct PreviewOptions {
 }
 
 fn sparse_site(mint: &Path, site: &Path, base_url: &str, only: &[String]) -> Result<()> {
-    let mut cmd = Command::new("python3");
+    let mut cmd = Capability::Python.command()?;
     cmd.arg(mint.join("make-sparse-index.py"))
         .arg(mint)
         .arg(site)

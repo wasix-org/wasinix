@@ -9,6 +9,7 @@ use crate::ci::compare::JobStatuses;
 use crate::ci::evalmap::{EvalMap, StatusMap};
 use crate::ci::types::{Build, RevSource};
 use crate::support::atoms::JobAddr;
+use crate::support::capability::Capability;
 use crate::support::error::Result;
 
 /// A published baseline, or `None` with the reason surfaced: an absent or
@@ -169,7 +170,7 @@ pub fn publish_from_run(
         );
         return Ok(());
     }
-    let mut cmd = std::process::Command::new("aws");
+    let mut cmd = Capability::Aws.command()?;
     cmd.args(["s3", "cp", "--no-progress"])
         .arg(&file)
         .arg(format!(
