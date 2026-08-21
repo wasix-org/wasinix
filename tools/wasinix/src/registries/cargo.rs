@@ -245,7 +245,6 @@ pub fn publish(options: PublishOptions) -> Result<(PublishReport, CommandStatus)
                     .arg(&file)
                     .arg(&base)
                     .arg(token.as_deref().expect("token was just demanded"));
-                crate::support::tools::log(&cmd);
                 // One bad crate must not abort the rest; the failure lands in
                 // the report and the exit code.
                 match crate::support::tools::status(&mut cmd) {

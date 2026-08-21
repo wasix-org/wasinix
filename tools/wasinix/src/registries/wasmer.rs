@@ -1173,7 +1173,6 @@ pub fn exec_with_tree(
         "WASMER_FLAGS",
         format!("--offline --include-webc {}", tree.display()),
     );
-    crate::support::tools::log(&cmd);
     let status = crate::support::tools::status(&mut cmd)?;
     Ok(crate::support::process::CommandStatus::from_exit(status))
 }

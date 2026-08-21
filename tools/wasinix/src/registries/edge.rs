@@ -41,7 +41,6 @@ pub fn preview_site(request: Site<'_>) -> Result<String> {
         .args(["deploy", "--non-interactive", "--no-wait"])
         .args(["--registry", request.registry])
         .current_dir(scratch.path());
-    crate::support::tools::log(&deploy);
     if !crate::support::tools::status(&mut deploy)?.success() {
         return request_error(format!(
             "deploying {}/{} failed",

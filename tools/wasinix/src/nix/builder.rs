@@ -486,7 +486,6 @@ impl Builder {
     pub fn reachable(&self) -> Result<()> {
         let mut cmd = self.ssh(Deadline::Probe)?;
         cmd.arg("true");
-        crate::support::tools::log(&cmd);
         if !crate::support::tools::status(&mut cmd)?.success() {
             return request_error(format!(
                 "cannot reach {} with {}",

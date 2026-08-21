@@ -119,7 +119,6 @@ fn output_logged(cmd: &mut Command, log_path: &Path) -> Result<std::process::Out
     if let Some(parent) = log_path.parent() {
         crate::support::fs::create_dir_all(parent)?;
     }
-    crate::support::tools::log(cmd);
     let output = crate::support::tools::output(cmd)?;
     crate::support::fs::write(log_path, &output.stderr)?;
     Ok(output)
