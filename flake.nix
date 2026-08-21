@@ -190,41 +190,61 @@
       nativeCheckInputs = with wasix.pkgs; [gitMinimal nixVersions.latest];
       meta.mainProgram = "wasinix";
     };
-    # Every command is runnable from the same installed closure, so a remote
-    # host reached with `nix run .#wasinix` needs no ambient tools.
-    wasinixLauncher = wasix.pkgs.writeShellApplication {
-      name = "wasinix";
-      inheritPath = false;
-      runtimeInputs = with wasix.pkgs; [
-        awscli2
-        bash
-        coreutils
-        git
-        nix-eval-jobs
-        nixVersions.latest
-        openssh
-        python3
-        rclone
-        wasmerRuntime
-      ];
-      # Update scripts re-enter `wasinix`, so the launcher's own bin dir joins
-      # the PATH it hands them.
-      text = ''
-        PATH="''${0%/*}:$PATH" exec ${lib.getExe wasinixUnwrapped} "$@"
+    wasinixCoreInputs = with wasix.pkgs; [
+      bash
+      coreutils
+      git
+      nix-eval-jobs
+      nixVersions.latest
+      openssh
+    ];
+    wasinixOptionalInputs = with wasix.pkgs; [
+      awscli2
+      python3
+      rclone
+      wasmerRuntime
+    ];
+    mkWasinix = name: runtimeInputs: let
+      launcher = wasix.pkgs.writeShellApplication {
+        name = "wasinix";
+        inheritPath = false;
+        inherit runtimeInputs;
+        # Update scripts re-enter `wasinix`, so the launcher's own bin dir joins
+        # the PATH it hands them.
+        text = ''
+          PATH="''${0%/*}:$PATH" exec ${lib.getExe wasinixUnwrapped} "$@"
+        '';
+      };
+    in
+      wasix.pkgs.symlinkJoin {
+        inherit name;
+        paths = [launcher];
+        nativeBuildInputs = [wasix.pkgs.installShellFiles];
+        postBuild = ''
+          installShellCompletion --cmd wasinix \
+            --bash <(${lib.getExe wasinixUnwrapped} completions bash) \
+            --fish <(${lib.getExe wasinixUnwrapped} completions fish) \
+            --zsh <(${lib.getExe wasinixUnwrapped} completions zsh)
+        '';
+        meta.mainProgram = "wasinix";
+      };
+    wasinixCore = mkWasinix "wasinix-core" wasinixCoreInputs;
+    # The compatibility package keeps every command runnable without ambient
+    # tools for callers that require one hermetic closure.
+    wasinix = mkWasinix "wasinix" (wasinixCoreInputs ++ wasinixOptionalInputs);
+    wasinixCoreClosure = wasix.pkgs.closureInfo {rootPaths = [wasinixCore];};
+    wasinixCoreClosureCheck =
+      wasix.pkgs.runCommand "wasinix-core-closure-check" {
+        optionalPaths = lib.concatStringsSep " " (map toString wasinixOptionalInputs);
+      } ''
+        for path in $optionalPaths; do
+          if grep -Fx "$path" ${wasinixCoreClosure}/store-paths; then
+            echo "wasinix-core references optional capability $path" >&2
+            exit 1
+          fi
+        done
+        touch "$out"
       '';
-    };
-    wasinix = wasix.pkgs.symlinkJoin {
-      name = "wasinix";
-      paths = [wasinixLauncher];
-      nativeBuildInputs = [wasix.pkgs.installShellFiles];
-      postBuild = ''
-        installShellCompletion --cmd wasinix \
-          --bash <(${lib.getExe wasinixUnwrapped} completions bash) \
-          --fish <(${lib.getExe wasinixUnwrapped} completions fish) \
-          --zsh <(${lib.getExe wasinixUnwrapped} completions zsh)
-      '';
-      meta.mainProgram = "wasinix";
-    };
     # One alias per top-level command; the interface check keeps this list and
     # the CLI from drifting apart.
     commandAliases = ["build" "spot" "diff" "run" "remote" "ci"];
@@ -440,6 +460,7 @@
       core = mergeDisjoint "checksBySet.core" [
         {
           wasinix = wasinixUnwrapped;
+          wasinix-core-closure = wasinixCoreClosureCheck;
           wasinix-interface = wasinixInterfaceCheck;
           wasinix-cargo-publish = wasinixCargoPublishCheck;
           wasinix-wasmer-serve = wasinixWasmerServeCheck;
@@ -934,6 +955,7 @@
 
     packages.${system} = {
       inherit wasinix;
+      wasinix-core = wasinixCore;
       # the webc packages and the merged registry live under legacyPackages
       anybuild = wasix.nativePackages.anybuild;
       wasix-rust-toolchain = toolchain.wasixRustToolchain;

@@ -69,6 +69,10 @@ Unsupported and broken packages are filtered before becoming jobs.
 `wasinix build` evaluates them once and builds from the evaluated derivations,
 and CI runs the same verb.
 
+`packages.<system>.wasinix-core` carries the orchestrator and its Git, Nix,
+nix-eval-jobs, and OpenSSH system boundaries. `wasinix` is the compatibility
+package that also carries optional registry and publication helpers.
+
 CA derivations are not used because caches cannot reliably distribute or
 authenticate realisations
 ([nix#11748](https://github.com/NixOS/nix/issues/11748),
