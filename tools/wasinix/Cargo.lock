@@ -914,6 +914,7 @@ dependencies = [
  "clap_complete",
  "flate2",
  "indicatif",
+ "libc",
  "quick-xml",
  "regex",
  "serde",

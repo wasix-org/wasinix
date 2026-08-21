@@ -4682,10 +4682,17 @@ mod corpus {
         let spawn = [".spa", "wn()"].concat();
         let process_child = ["process::", "Child"].concat();
         let imported_child = ["process::{", "Child"].concat();
+        let timeout_program = ["Command::new(\"time", "out\")"].concat();
         let found = offenders(
             true,
             &["support/tools.rs"],
-            &[&output, &spawn, &process_child, &imported_child],
+            &[
+                &output,
+                &spawn,
+                &process_child,
+                &imported_child,
+                &timeout_program,
+            ],
         );
         assert!(found.is_empty(), "{}", found.join("\n"));
     }
@@ -6464,15 +6471,50 @@ mod tools {
     use std::process::Command;
     use std::time::Duration;
 
-    use crate::support::tools::{checked_text, rendered, timed_command};
+    use crate::support::tools::{
+        checked_text, output_timeout, status_timeout, Completion, Timeout,
+    };
 
     #[test]
-    fn timed_commands_get_a_term_and_kill_deadline() {
-        let command = timed_command("nix-eval-jobs", Duration::from_secs(1800));
-        assert_eq!(
-            rendered(&command),
-            "timeout --foreground --signal=TERM --kill-after=30 1800 nix-eval-jobs"
-        );
+    fn a_command_finishing_before_its_deadline_is_not_timed_out() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "printf done"]);
+        let completion = output_timeout(&mut command, Timeout::new(Duration::from_secs(1)))
+            .unwrap();
+        assert!(matches!(
+            completion,
+            Completion::Finished(output) if output.status.success() && output.stdout == b"done"
+        ));
+    }
+
+    #[test]
+    fn a_timed_command_gets_a_graceful_termination_window() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "trap 'exit 23' TERM; while :; do sleep 1; done"]);
+        let completion = status_timeout(
+            &mut command,
+            Timeout::with_grace(Duration::from_millis(50), Duration::from_secs(1)),
+        )
+        .unwrap();
+        assert!(matches!(completion, Completion::TimedOut(status) if status.code() == Some(23)));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_timed_command_that_ignores_term_is_killed() {
+        use std::os::unix::process::ExitStatusExt;
+
+        let mut command = Command::new("sh");
+        command.args(["-c", "trap '' TERM; while :; do :; done"]);
+        let completion = status_timeout(
+            &mut command,
+            Timeout::with_grace(Duration::from_millis(50), Duration::from_millis(50)),
+        )
+        .unwrap();
+        assert!(matches!(
+            completion,
+            Completion::TimedOut(status) if status.signal() == Some(libc::SIGKILL)
+        ));
     }
 
     #[test]

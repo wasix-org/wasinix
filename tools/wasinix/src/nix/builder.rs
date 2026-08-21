@@ -470,23 +470,31 @@ impl Builder {
         Ok(())
     }
 
-    pub fn ssh(&self, deadline: Deadline) -> Result<Command> {
-        let mut cmd = deadline.command("ssh");
+    pub fn ssh(&self) -> Result<Command> {
+        let mut cmd = Command::new("ssh");
         self.ssh_options(&mut cmd)?;
         cmd.arg(&self.host);
         Ok(cmd)
     }
 
-    pub fn scp(&self, deadline: Deadline) -> Result<Command> {
-        let mut cmd = deadline.command("scp");
+    pub fn scp(&self) -> Result<Command> {
+        let mut cmd = Command::new("scp");
         self.ssh_options(&mut cmd)?;
         Ok(cmd)
     }
 
     pub fn reachable(&self) -> Result<()> {
-        let mut cmd = self.ssh(Deadline::Probe)?;
+        let deadline = Deadline::Probe;
+        let mut cmd = self.ssh()?;
         cmd.arg("true");
-        if !crate::support::tools::status(&mut cmd)?.success() {
+        let status = crate::support::tools::status_timeout(
+            &mut cmd,
+            deadline.timeout(),
+        )?;
+        if !matches!(
+            status,
+            crate::support::tools::Completion::Finished(status) if status.success()
+        ) {
             return request_error(format!(
                 "cannot reach {} with {}",
                 self.host,
@@ -497,16 +505,17 @@ impl Builder {
     }
 
     pub fn ssh_output(&self, deadline: Deadline, script: &str) -> Result<String> {
-        let mut cmd = self.ssh(deadline)?;
+        let mut cmd = self.ssh()?;
         cmd.arg(script);
-        crate::support::tools::checked_text(&mut cmd, &format!("remote command on {}", self.host))
+        let context = format!("remote command on {}", self.host);
+        crate::support::tools::checked_text_timeout(&mut cmd, &context, deadline.timeout())
     }
 
     /// Like [`ssh_output`](Self::ssh_output), but the script arrives on
     /// stdin (`bash -s`), so a secret line never appears in the remote argv.
     pub fn ssh_stdin_output(&self, deadline: Deadline, script: &str) -> Result<String> {
         use std::io::Write;
-        let mut cmd = self.ssh(deadline)?;
+        let mut cmd = self.ssh()?;
         cmd.arg("bash -s")
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
@@ -517,9 +526,18 @@ impl Builder {
             .expect("stdin was piped")
             .write_all(script.as_bytes())
             .map_err(|error| Error::Failure(format!("writing to {}: {error}", self.host)))?;
-        let output = child
-            .wait_with_output()
+        let completion = child
+            .wait_with_output_timeout(deadline.timeout())
             .map_err(|error| Error::Failure(format!("remote command on {}: {error}", self.host)))?;
+        let output = match completion {
+            crate::support::tools::Completion::Finished(output) => output,
+            crate::support::tools::Completion::TimedOut(_) => {
+                return Err(Error::Failure(format!(
+                    "remote command on {} timed out",
+                    self.host
+                )));
+            }
+        };
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(Error::Failure(format!(
@@ -558,24 +576,17 @@ pub enum Deadline {
     Poll,
     /// The launch script, which builds the launcher on the host.
     Launch,
-    /// A whole run directory over scp; sized by the run, so unbounded.
-    Transfer,
 }
 
 impl Deadline {
-    fn command(self, program: &str) -> Command {
+    pub(crate) fn timeout(self) -> crate::support::tools::Timeout {
         let seconds = match self {
-            Deadline::Probe | Deadline::Poll => Some(30),
-            Deadline::Launch => Some(1800),
-            Deadline::Transfer => None,
+            Deadline::Probe | Deadline::Poll => 30,
+            Deadline::Launch => 1800,
         };
-        match seconds {
-            Some(seconds) => crate::support::tools::timed_command(
-                program,
-                std::time::Duration::from_secs(seconds),
-            ),
-            None => Command::new(program),
-        }
+        crate::support::tools::Timeout::new(
+            std::time::Duration::from_secs(seconds),
+        )
     }
 }
 

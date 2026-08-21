@@ -256,11 +256,8 @@ impl Invocation {
         self
     }
 
-    pub fn command(&self) -> Result<Command> {
-        let mut cmd = match self.timeout {
-            Some(timeout) => crate::support::tools::timed_command(&self.program, timeout),
-            None => Command::new(&self.program),
-        };
+    fn configured_command(&self) -> Result<Command> {
+        let mut cmd = Command::new(&self.program);
         if let Some(dir) = &self.workdir {
             cmd.current_dir(dir);
         }
@@ -295,12 +292,52 @@ impl Invocation {
         Ok(cmd)
     }
 
+    pub fn command(&self) -> Result<Command> {
+        if self.timeout.is_some() {
+            return Err(Error::Failure(
+                "a timed nix invocation cannot export an unbounded command".into(),
+            ));
+        }
+        self.configured_command()
+    }
+
+    pub fn run_with_output(
+        &self,
+        configure: impl FnOnce(&mut Command),
+    ) -> Result<crate::support::tools::Completion<std::process::Output>> {
+        let mut command = self.configured_command()?;
+        configure(&mut command);
+        let child = crate::support::tools::spawn(&mut command)?;
+        let output = match self.timeout {
+            Some(timeout) => child
+                .wait_with_output_timeout(crate::support::tools::Timeout::new(timeout)),
+            None => child
+                .wait_with_output()
+                .map(crate::support::tools::Completion::Finished),
+        };
+        output.map_err(|error| {
+            Error::Failure(format!(
+                "waiting for {}: {error}",
+                crate::support::tools::rendered(&command)
+            ))
+        })
+    }
+
     pub fn checked_output(&self, context: &str) -> Result<Vec<u8>> {
-        crate::support::tools::checked_output(&mut self.command()?, context)
+        let mut command = self.configured_command()?;
+        match self.timeout {
+            Some(timeout) => crate::support::tools::checked_output_timeout(
+                &mut command,
+                context,
+                crate::support::tools::Timeout::new(timeout),
+            ),
+            None => crate::support::tools::checked_output(&mut command, context),
+        }
     }
 
     pub fn checked_text(&self, context: &str) -> Result<String> {
-        crate::support::tools::checked_text(&mut self.command()?, context)
+        let bytes = self.checked_output(context)?;
+        Ok(String::from_utf8_lossy(&bytes).into_owned())
     }
 
     pub fn run_json(&self, context: &str) -> Result<Value> {
@@ -314,18 +351,32 @@ impl Invocation {
     /// Run and report the exit without capturing, for commands that stream
     /// to the terminal.
     pub fn status(&self) -> Result<CommandStatus> {
-        let mut cmd = self.command()?;
-        Ok(CommandStatus::from_exit(crate::support::tools::status(
-            &mut cmd,
-        )?))
+        let mut cmd = self.configured_command()?;
+        let status = match self.timeout {
+            Some(timeout) => match crate::support::tools::status_timeout(
+                &mut cmd,
+                crate::support::tools::Timeout::new(timeout),
+            )? {
+                crate::support::tools::Completion::Finished(status) => status,
+                crate::support::tools::Completion::TimedOut(_) => {
+                    return Err(Error::Failure(format!(
+                        "{} timed out after {} seconds",
+                        crate::support::tools::rendered(&cmd),
+                        timeout.as_secs()
+                    )));
+                }
+            },
+            None => crate::support::tools::status(&mut cmd)?,
+        };
+        Ok(CommandStatus::from_exit(status))
     }
 
     /// Run captured, so nix's transfer chatter cannot fight the progress
     /// ticker for the terminal; the stderr tail comes back for the caller's
     /// failure message.
     pub fn captured_status(&self) -> Result<(CommandStatus, String)> {
-        let mut cmd = self.command()?;
-        let output = crate::support::tools::output(&mut cmd)?;
+        let mut cmd = self.configured_command()?;
+        let output = self.output(&mut cmd)?;
         let tail = crate::support::error::tail(&String::from_utf8_lossy(&output.stderr), 300);
         Ok((CommandStatus::from_exit(output.status), tail))
     }
@@ -337,16 +388,33 @@ impl Invocation {
     /// unconditionally it became the whole result of a failed run, since a
     /// note is often a log's last line.
     pub fn probe(&self, reason: &str) -> Result<Probe> {
-        let mut cmd = self.command()?;
+        let mut cmd = self.configured_command()?;
         if crate::support::ui::verbosity() == crate::support::ui::Verbosity::Verbose {
             crate::support::ui::note(format!("  (probe: {reason})"));
         }
-        let output = crate::support::tools::output(&mut cmd)?;
+        let output = self.output(&mut cmd)?;
         Ok(Probe {
             status: CommandStatus::from_exit(output.status),
             stdout: output.stdout,
             stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
         })
+    }
+
+    fn output(&self, cmd: &mut Command) -> Result<std::process::Output> {
+        match self.timeout {
+            Some(timeout) => match crate::support::tools::output_timeout(
+                cmd,
+                crate::support::tools::Timeout::new(timeout),
+            )? {
+                crate::support::tools::Completion::Finished(output) => Ok(output),
+                crate::support::tools::Completion::TimedOut(_) => Err(Error::Failure(format!(
+                    "{} timed out after {} seconds",
+                    crate::support::tools::rendered(cmd),
+                    timeout.as_secs()
+                ))),
+            },
+            None => crate::support::tools::output(cmd),
+        }
     }
 
     /// Build with `--print-out-paths` and return the paths, so no caller
@@ -394,7 +462,19 @@ pub fn eval(flake: &Flake<'_>, attr: &str, apply: Option<&str>) -> Result<Value>
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::{Invocation, canonical_webcs_apply};
+
+    #[test]
+    fn a_timed_invocation_cannot_lose_its_deadline() {
+        let error = Invocation::tool("true")
+            .timeout(Duration::from_secs(1))
+            .command()
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("cannot export"), "{error}");
+    }
 
     #[test]
     fn canonical_webc_filter_runs_in_nix() {

@@ -102,7 +102,6 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
     if request.offline {
         invocation = invocation.option("offline", "true");
     }
-    let mut cmd = invocation.command()?;
     for path in [request.jobs_path, request.stderr_log] {
         if let Some(parent) = path.parent() {
             crate::support::fs::create_dir_all(parent)?;
@@ -110,19 +109,20 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
     }
     let jobs_file =
         std::fs::File::create(request.jobs_path).map_err(|e| io(request.jobs_path, e))?;
-    let output =
-        crate::support::tools::spawn(cmd.stdout(Stdio::from(jobs_file)).stderr(Stdio::piped()))?
-            .wait_with_output()
-            .map_err(|e| io(request.jobs_path, e))?;
+    let completion = invocation.run_with_output(|cmd| {
+        cmd.stdout(Stdio::from(jobs_file)).stderr(Stdio::piped());
+    })?;
+    let timed_out = matches!(completion, crate::support::tools::Completion::TimedOut(_));
+    let output = completion.value();
     crate::support::fs::write(request.stderr_log, &output.stderr)?;
-    if output.status.success() {
-        return Ok(None);
-    }
-    if output.status.code() == Some(124) {
+    if timed_out {
         return Ok(Some(format!(
             "evaluation timed out after {} seconds",
             timeout.as_secs()
         )));
+    }
+    if output.status.success() {
+        return Ok(None);
     }
     Ok(Some(error_excerpt(&String::from_utf8_lossy(
         &output.stderr,
