@@ -210,7 +210,7 @@
       rclone = wasix.pkgs.rclone;
       wasmer = wasmerRuntime;
     };
-    mkWasinix = name: runtimeInputs: let
+    mkWasinix = name: runtimeInputs: capabilitiesOnPath: let
       launcher = wasix.pkgs.writeShellApplication {
         name = "wasinix";
         inheritPath = false;
@@ -219,6 +219,7 @@
         # the PATH it hands them.
         text = ''
           export WASINIX_CAPABILITY_FLAKE=${self}
+          ${lib.optionalString capabilitiesOnPath "export WASINIX_CAPABILITIES_ON_PATH=1"}
           PATH="''${0%/*}:$PATH" exec ${lib.getExe wasinixUnwrapped} "$@"
         '';
       };
@@ -235,10 +236,10 @@
         '';
         meta.mainProgram = "wasinix";
       };
-    wasinixCore = mkWasinix "wasinix-core" wasinixCoreInputs;
+    wasinixCore = mkWasinix "wasinix-core" wasinixCoreInputs false;
     # The compatibility package keeps every command runnable without ambient
     # tools for callers that require one hermetic closure.
-    wasinix = mkWasinix "wasinix" (wasinixCoreInputs ++ wasinixOptionalInputs);
+    wasinix = mkWasinix "wasinix" (wasinixCoreInputs ++ wasinixOptionalInputs) true;
     wasinixCoreClosure = wasix.pkgs.closureInfo {rootPaths = [wasinixCore];};
     wasinixCoreClosureCheck =
       wasix.pkgs.runCommand "wasinix-core-closure-check" {

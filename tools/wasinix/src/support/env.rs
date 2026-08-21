@@ -160,6 +160,12 @@ pub fn capability_flake() -> Option<PathBuf> {
     path("WASINIX_CAPABILITY_FLAKE")
 }
 
+/// The compatibility launcher's assertion that its optional PATH entries
+/// came from the same locked package set.
+pub fn capabilities_on_path() -> Result<bool> {
+    flag("WASINIX_CAPABILITIES_ON_PATH")
+}
+
 /// An explicit builders.toml location, overriding the config path.
 pub fn wasinix_builders() -> Option<PathBuf> {
     path("WASINIX_BUILDERS")

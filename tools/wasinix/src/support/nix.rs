@@ -305,9 +305,21 @@ impl Invocation {
         &self,
         configure: impl FnOnce(&mut Command),
     ) -> Result<crate::support::tools::Completion<std::process::Output>> {
+        self.run_with_output_started(configure, |_| {})
+    }
+
+    /// Captured execution with a hook that receives the owned child process
+    /// group. Background owners use the id to cancel and then join their
+    /// worker; ordinary callers use [`Invocation::run_with_output`].
+    pub fn run_with_output_started(
+        &self,
+        configure: impl FnOnce(&mut Command),
+        started: impl FnOnce(u32),
+    ) -> Result<crate::support::tools::Completion<std::process::Output>> {
         let mut command = self.configured_command()?;
         configure(&mut command);
         let child = crate::support::tools::spawn(&mut command)?;
+        started(child.id());
         let output = match self.timeout {
             Some(timeout) => child
                 .wait_with_output_timeout(crate::support::tools::Timeout::new(timeout)),
