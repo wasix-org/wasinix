@@ -196,10 +196,13 @@ pub fn checked_output(cmd: &mut Command, context: &str) -> Result<Vec<u8>> {
         return Ok(output.stdout);
     }
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let diagnostics = if stderr.trim().is_empty() {
-        String::from_utf8_lossy(&output.stdout).into_owned()
+    let (stream, diagnostics) = if stderr.trim().is_empty() {
+        (
+            "stdout",
+            String::from_utf8_lossy(&output.stdout).into_owned(),
+        )
     } else {
-        stderr.into_owned()
+        ("stderr", stderr.into_owned())
     };
     let detail = diagnostics_tail(&diagnostics);
     if detail.is_empty() {
@@ -209,7 +212,7 @@ pub fn checked_output(cmd: &mut Command, context: &str) -> Result<Vec<u8>> {
             output.status
         )))
     } else {
-        Err(Error::Failure(format!("{context}: {detail}")))
+        Err(Error::Failure(format!("{context} ({stream}): {detail}")))
     }
 }
 
