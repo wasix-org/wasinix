@@ -2040,7 +2040,8 @@ mod cli {
         ]) else {
             panic!("expected diff");
         };
-        let request = crate::cli::request::diff_request(&args).unwrap();
+        let request =
+            crate::cli::request::diff_request(&args, crate::cli::Surface::Terminal).unwrap();
         let crate::ci::types::RequestAction::Diff(diff) = request.action else {
             panic!("expected a diff request");
         };
@@ -2053,7 +2054,9 @@ mod cli {
         let CommandTree::Diff(single) = parse(&["diff", "build", "all"]) else {
             panic!("expected diff");
         };
-        assert!(crate::cli::request::diff_request(&single).is_err());
+        assert!(
+            crate::cli::request::diff_request(&single, crate::cli::Surface::Terminal).is_err()
+        );
     }
 }
 
@@ -2401,13 +2404,10 @@ mod markdown {
         // The predicate cannot name a builder, and bisect owns the target's
         // revision, so a predicate pinning it is refused.
         assert!(parse("bisect wasmer --good pinned --bad main -- build all --on ec2").is_err());
-        let UntrustedCommand::Bisect(owned) =
+        assert!(
             parse("bisect wasmer --good pinned --bad main -- build all --with wasmer@7.1.0")
-                .unwrap()
-        else {
-            panic!("expected a bisect");
-        };
-        assert!(crate::cli::bisect::reject_own_override(&owned.predicate, "wasmer").is_err());
+                .is_err()
+        );
     }
 
     #[test]
@@ -5006,7 +5006,7 @@ mod untrusted {
     }
 
     #[test]
-    fn adapter_owned_flags_are_unrepresentable_from_comments() {
+    fn adapter_owned_flags_name_the_surface_that_owns_them() {
         for command in [
             "build core --run-dir /tmp/x",
             "build core --run-dir=/tmp/x",
@@ -5014,14 +5014,14 @@ mod untrusted {
             "build core --on ec2:host",
             "build core --json",
             "build core --plan",
-            "build core --trusted-ref main",
             "build core --inputs-only",
             "spot packagesByProfile.zlib --junit-out out.xml",
         ] {
             let error = parse(command).unwrap_err().to_string();
-            assert!(error.contains("unexpected argument"), "{command}: {error}");
-            assert!(!error.contains("not available"), "{command}: {error}");
+            assert!(error.contains("terminal only"), "{command}: {error}");
         }
+        let error = parse("build core --trusted-ref main").unwrap_err().to_string();
+        assert!(error.contains("unexpected argument"), "{error}");
     }
 
     #[test]
@@ -5030,6 +5030,10 @@ mod untrusted {
             .unwrap_err()
             .to_string();
         assert!(error.contains("--on is terminal only"), "{error}");
+        let error = parse("ci nix-config").unwrap_err().to_string();
+        assert!(error.contains("ci is CI only"), "{error}");
+        let error = parse("jobs zlib").unwrap_err().to_string();
+        assert!(error.contains("jobs is terminal only"), "{error}");
     }
 
     #[test]

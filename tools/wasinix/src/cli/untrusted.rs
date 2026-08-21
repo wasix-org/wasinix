@@ -1,12 +1,10 @@
-//! PR-comment commands re-enter the same selection cores as the terminal,
-//! wrapped in a grammar where adapter-owned flags (placement, run
-//! directories, cache signing, machine output) do not exist at all: an
-//! attempt to use one fails the parse, not a denylist.
+//! PR-comment build commands use the main Clap tree, then surface policy
+//! rejects effects the workflow adapter owns before typed conversion.
 
 use clap::Parser;
 
 use crate::ci::origin::{Classifier, CommandKind};
-use crate::ci::types::{Case, ParsedRequest, RefSource, Request};
+use crate::ci::types::{ParsedRequest, Request};
 use crate::support::error::{Error, Result, request_error};
 
 const MAX_WORDS: usize = 64;
@@ -65,71 +63,6 @@ pub fn split_words(command: &str) -> Result<Vec<String>> {
     Ok(words)
 }
 
-#[derive(clap::Args)]
-struct UntrustedBuild {
-    #[command(flatten)]
-    request: super::RequestArgs,
-}
-
-#[derive(clap::Args)]
-struct UntrustedRequest<T: clap::Args> {
-    #[command(flatten)]
-    request: T,
-    #[command(flatten)]
-    outcome: super::OutcomeArgs,
-}
-
-#[derive(clap::Args)]
-struct UntrustedSpot {
-    #[command(flatten)]
-    request: super::RequestArgs,
-    #[command(flatten)]
-    spot: super::SpotExtras,
-}
-
-#[derive(clap::Args)]
-struct UntrustedDiff {
-    /// Also compare the built contents of moved outputs
-    #[arg(long)]
-    content_diff: bool,
-    #[command(flatten)]
-    outcome: super::OutcomeArgs,
-    /// The cases, as build or spot commands separated by --vs
-    #[arg(
-        required = true,
-        trailing_var_arg = true,
-        allow_hyphen_values = true,
-        value_name = "CASE"
-    )]
-    words: Vec<String>,
-}
-
-/// Bisect from a comment. The adapter owns the run directory and the
-/// budget; the predicate re-enters the untrusted case grammar, so it is a
-/// build or spot pinned to the runner like any other comment command.
-#[derive(clap::Args)]
-struct UntrustedBisect {
-    /// Revision-capable update target, e.g. wasix-libc or wasmer
-    target: String,
-    /// Known passing ref, or `pinned` for the current pin
-    #[arg(long)]
-    good: String,
-    /// Known failing ref, or `pinned` for the current pin
-    #[arg(long)]
-    bad: String,
-    /// Follow only the first parent of merge commits
-    #[arg(long)]
-    first_parent: bool,
-    /// Find where the predicate started passing instead
-    #[arg(long)]
-    reverse: bool,
-    #[command(flatten)]
-    outcome: super::OutcomeArgs,
-    /// The build or spot command used as the pass/fail predicate
-    #[arg(required = true, trailing_var_arg = true, value_name = "PREDICATE")]
-    command: Vec<String>,
-}
-
 /// The mutation verbs a PR comment may ask for. The adapter owns branches,
 /// tokens, and commit flags, so none of those are spellable here.
 #[derive(clap::Args)]
@@ -167,10 +100,6 @@ enum UntrustedVersions {
     disable_help_subcommand = true
 )]
 enum UntrustedCli {
-    Build(UntrustedRequest<UntrustedBuild>),
-    Spot(UntrustedRequest<UntrustedSpot>),
-    Diff(UntrustedDiff),
-    Bisect(UntrustedBisect),
     Update(UntrustedUpdate),
     #[command(subcommand)]
     Versions(UntrustedVersions),
@@ -273,9 +202,50 @@ pub enum UntrustedCommand {
     Help,
 }
 
-fn untrusted_case(words: &[String], case_id: String) -> Result<Case<RefSource>> {
-    super::request::parse_case(words, Some(case_id.clone()), super::Surface::Comment)
-        .map_err(|error| Error::Request(format!("diff case {case_id}: {error}")))
+fn shared_command(words: &[String]) -> Result<UntrustedCommand> {
+    let parsed = super::surface::parse_comment(words)?;
+    Ok(match parsed.command {
+        super::CommandTree::Build(args) => UntrustedCommand::Request(Request::build(
+            super::request::build_case(&args.request, Some("local".to_string()), None)?,
+            args.outcome.blocked,
+        )),
+        super::CommandTree::Spot(args) => UntrustedCommand::Request(Request::spot(
+            super::request::spot_case(
+                &args.request,
+                &args.spot,
+                Some("local".to_string()),
+                None,
+            )?,
+            args.outcome.blocked,
+        )),
+        super::CommandTree::Diff(args) => UntrustedCommand::Request(
+            super::request::diff_request(&args, super::Surface::Comment)?,
+        ),
+        super::CommandTree::Bisect(args) => {
+            let words: Vec<String> = args
+                .command
+                .iter()
+                .skip_while(|word| *word == "--")
+                .cloned()
+                .collect();
+            let predicate = super::bisect::predicate(
+                &words,
+                &args.target,
+                args.outcome.blocked,
+                super::Surface::Comment,
+            )?;
+            UntrustedCommand::Bisect(BisectCommand {
+                target: args.target,
+                good: args.good,
+                bad: args.bad,
+                first_parent: args.first_parent,
+                reverse: args.reverse,
+                words,
+                predicate,
+            })
+        }
+        _ => unreachable!("comment surface accepted a non-comment command"),
+    })
 }
 
 /// Parse an untrusted `/wasinix` command into the shared request family.
@@ -283,6 +253,12 @@ pub fn parse(command: &str) -> Result<UntrustedCommand> {
     let words = split_words(command)?;
     if words.len() > MAX_WORDS {
         return request_error(format!("command has more than {MAX_WORDS} words"));
+    }
+    if !matches!(
+        words.first().map(String::as_str),
+        Some("update" | "versions" | "regenerate" | "fmt" | "help")
+    ) {
+        return shared_command(&words);
     }
     let parsed = UntrustedCli::try_parse_from(&words).map_err(|error| {
         // clap renders its own "error: " prefix; the caller adds one too, so
@@ -312,60 +288,6 @@ pub fn parse(command: &str) -> Result<UntrustedCommand> {
         }),
         UntrustedCli::Regenerate => UntrustedCommand::Mutation(MutationCommand::Regenerate),
         UntrustedCli::Fmt => UntrustedCommand::Mutation(MutationCommand::Format),
-        // Comment commands execute on the workflow runner itself, and the
-        // untrusted grammar rightly cannot spell --on, so every case is
-        // pinned local; a runner has no builders.toml to default from.
-        UntrustedCli::Build(args) => UntrustedCommand::Request(Request::build(
-            super::request::build_case(
-                &args.request.request,
-                Some("local".to_string()),
-                None,
-            )?,
-            args.outcome.blocked,
-        )),
-        UntrustedCli::Spot(args) => UntrustedCommand::Request(Request::spot(
-            super::request::spot_case(
-                &args.request.request,
-                &args.request.spot,
-                Some("local".to_string()),
-                None,
-            )?,
-            args.outcome.blocked,
-        )),
-        UntrustedCli::Diff(args) => {
-            let mut cases = Vec::new();
-            for (case_id, case_words) in super::request::split_cases(&args.words) {
-                cases.push(untrusted_case(case_words, case_id)?);
-            }
-            UntrustedCommand::Request(super::request::diff_of(
-                cases,
-                args.content_diff,
-                args.outcome.blocked,
-            )?)
-        }
-        UntrustedCli::Bisect(args) => {
-            let words: Vec<String> = args
-                .command
-                .iter()
-                .skip_while(|word| *word == "--")
-                .cloned()
-                .collect();
-            // The predicate is a case like any other, so it arrives pinned
-            // and a bisect grows no way to name a builder.
-            let predicate = match untrusted_case(&words, "predicate".to_string())? {
-                Case::Build(build) => Request::build(build, args.outcome.blocked),
-                Case::Spot(spot) => Request::spot(spot, args.outcome.blocked),
-            };
-            UntrustedCommand::Bisect(BisectCommand {
-                target: args.target,
-                good: args.good,
-                bad: args.bad,
-                first_parent: args.first_parent,
-                reverse: args.reverse,
-                words,
-                predicate,
-            })
-        }
     })
 }
 

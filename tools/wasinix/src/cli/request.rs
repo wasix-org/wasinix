@@ -343,11 +343,11 @@ pub(crate) fn diff_of(
     ))
 }
 
-pub(crate) fn diff_request(args: &DiffArgs) -> Result<ParsedRequest> {
+pub(crate) fn diff_request(args: &DiffArgs, surface: super::Surface) -> Result<ParsedRequest> {
     let mut cases: Vec<Case<RefSource>> = Vec::new();
     for (case_id, case_words) in split_cases(&args.words) {
         cases.push(
-            parse_case(case_words, Some(case_id.clone()), super::Surface::Terminal)
+            parse_case(case_words, Some(case_id.clone()), surface)
                 .map_err(|error| Error::Request(format!("diff case {case_id}: {error}")))?,
         );
     }
@@ -858,6 +858,6 @@ pub(crate) fn run_diff(repo: &Path, mut args: super::DiffArgs) -> Result<Command
     if args.mode.inputs_only {
         return request_error("--inputs-only applies to build, not diff");
     }
-    let request = diff_request(&args)?;
+    let request = diff_request(&args, super::Surface::Terminal)?;
     drive_terminal(repo, request, &args.mode)
 }

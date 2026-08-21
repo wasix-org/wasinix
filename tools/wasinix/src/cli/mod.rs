@@ -7,6 +7,7 @@ pub(crate) mod registries;
 pub(crate) mod remote;
 pub(crate) mod render;
 pub(crate) mod request;
+pub(crate) mod surface;
 pub(crate) mod timings;
 pub mod untrusted;
 pub(crate) mod update;
@@ -21,12 +22,7 @@ use crate::support::process::CommandStatus;
 use crate::support::{schema, ui};
 
 pub use request::{DiffArgs, ModeArgs, OutcomeArgs, RequestArgs, SpotExtras};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Surface {
-    Terminal,
-    Comment,
-}
+pub(crate) use surface::Surface;
 
 #[derive(Parser)]
 #[command(
