@@ -200,6 +200,10 @@ pub fn stall_timeout() -> Result<Option<Duration>> {
     duration_secs("WASINIX_STALL_SECONDS")
 }
 
+pub fn log_bytes() -> Result<Option<usize>> {
+    positive("WASINIX_LOG_BYTES")
+}
+
 pub fn no_baseline_reuse() -> Result<bool> {
     flag("CI_NO_BASELINE_REUSE")
 }
