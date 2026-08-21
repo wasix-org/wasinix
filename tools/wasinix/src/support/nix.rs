@@ -301,16 +301,26 @@ impl Invocation {
         self.configured_command()
     }
 
-    pub fn run_with_output(
+    pub fn run_piped<T>(
         &self,
-        configure: impl FnOnce(&mut Command),
-    ) -> Result<crate::support::tools::Completion<std::process::Output>> {
-        self.run_with_output_started(configure, |_| {})
+        stdout: impl FnOnce(Box<dyn std::io::Read + Send>) -> Result<T> + Send,
+        stderr: impl FnOnce(Box<dyn std::io::Read + Send>) -> Result<()> + Send,
+    ) -> Result<crate::support::tools::Completion<crate::support::tools::Piped<T>>>
+    where
+        T: Send,
+    {
+        let mut command = self.configured_command()?;
+        crate::support::tools::piped(
+            &mut command,
+            self.timeout.map(crate::support::tools::Timeout::new),
+            |stream| stdout(Box::new(stream)),
+            |stream| stderr(Box::new(stream)),
+        )
     }
 
     /// Captured execution with a hook that receives the owned child process
     /// group. Background owners use the id to cancel and then join their
-    /// worker; ordinary callers use [`Invocation::run_with_output`].
+    /// worker.
     pub fn run_with_output_started(
         &self,
         configure: impl FnOnce(&mut Command),

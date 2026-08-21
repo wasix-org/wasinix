@@ -5,7 +5,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
@@ -75,53 +75,79 @@ fn excerpt_of(text: &str) -> LogExcerpt {
 /// console is not.
 fn run_logged(cmd: &mut Command, log_path: &Path) -> Result<CommandStatus> {
     use std::io::{BufRead, BufReader, Write};
-    use std::sync::{Arc, Mutex};
-    if let Some(parent) = log_path.parent() {
-        crate::support::fs::create_dir_all(parent)?;
-    }
-    let log = Arc::new(Mutex::new(
-        std::fs::File::create(log_path).map_err(|e| io(log_path, e))?,
-    ));
-    let mut child =
-        crate::support::tools::spawn(cmd.stdout(Stdio::piped()).stderr(Stdio::piped()))?;
-    let stdout = child.take_stdout().expect("stdout was piped");
-    let stderr = child.take_stderr().expect("stderr was piped");
-    std::thread::scope(|scope| {
-        for stream in [
-            Box::new(stdout) as Box<dyn std::io::Read + Send>,
-            Box::new(stderr),
-        ] {
-            let log = Arc::clone(&log);
-            let echo = crate::support::ui::verbosity() == crate::support::ui::Verbosity::Verbose;
-            scope.spawn(move || {
-                let mut reader = BufReader::new(stream);
-                let mut buffer = Vec::new();
-                // Bytes, not utf8 lines: one stray byte from a compiler must
-                // not end the tee and truncate the log a report renders from.
-                while matches!(reader.read_until(b'\n', &mut buffer), Ok(n) if n > 0) {
-                    if echo {
-                        crate::support::ui::raw(String::from_utf8_lossy(&buffer));
-                    }
-                    if let Ok(mut log) = log.lock() {
-                        let _ = log.write_all(&buffer);
-                    }
-                    buffer.clear();
-                }
-            });
+    use std::sync::Mutex;
+    let log = Mutex::new(crate::support::log::BoundedLog::create(log_path)?);
+    let echo = crate::support::ui::verbosity() == crate::support::ui::Verbosity::Verbose;
+    let copy = |stream: Box<dyn std::io::Read + Send>| -> Result<()> {
+        let mut reader = BufReader::new(stream);
+        let mut buffer = Vec::new();
+        loop {
+            let read = reader
+                .read_until(b'\n', &mut buffer)
+                .map_err(|error| io(log_path, error))?;
+            if read == 0 {
+                break;
+            }
+            if echo {
+                crate::support::ui::raw(String::from_utf8_lossy(&buffer));
+            }
+            log.lock()
+                .map_err(|_| Error::Failure(format!(
+                    "{} log lock was poisoned",
+                    log_path.display()
+                )))?
+                .write_all(&buffer)
+                .map_err(|error| io(log_path, error))?;
+            buffer.clear();
         }
-    });
-    Ok(CommandStatus::from_exit(
-        child.wait().map_err(|e| io(log_path, e))?,
-    ))
+        Ok(())
+    };
+    let completion = crate::support::tools::piped(
+        cmd,
+        None,
+        |stream| copy(Box::new(stream)),
+        |stream| copy(Box::new(stream)),
+    )?;
+    let status = completion.value().status;
+    log.into_inner()
+        .map_err(|_| Error::Failure(format!(
+            "{} log lock was poisoned",
+            log_path.display()
+        )))?
+        .finish()?;
+    Ok(CommandStatus::from_exit(status))
 }
 
-fn output_logged(cmd: &mut Command, log_path: &Path) -> Result<std::process::Output> {
-    if let Some(parent) = log_path.parent() {
-        crate::support::fs::create_dir_all(parent)?;
-    }
-    let output = crate::support::tools::output(cmd)?;
-    crate::support::fs::write(log_path, &output.stderr)?;
-    Ok(output)
+struct LoggedOutput {
+    status: std::process::ExitStatus,
+    stdout: Vec<u8>,
+}
+
+fn output_logged(cmd: &mut Command, log_path: &Path) -> Result<LoggedOutput> {
+    use std::io::Read;
+    let log = crate::support::log::BoundedLog::create(log_path)?;
+    let output = crate::support::tools::piped(
+        cmd,
+        None,
+        |mut stream| {
+            let mut output = Vec::new();
+            stream
+                .read_to_end(&mut output)
+                .map_err(|error| io(log_path, error))?;
+            Ok(output)
+        },
+        |mut stream| {
+            let mut log = log;
+            std::io::copy(&mut stream, &mut log).map_err(|error| io(log_path, error))?;
+            log.finish()?;
+            Ok(())
+        },
+    )?
+    .value();
+    Ok(LoggedOutput {
+        status: output.status,
+        stdout: output.stdout,
+    })
 }
 
 pub(crate) fn fixed_output_derivations(graph: &Value) -> Vec<String> {
