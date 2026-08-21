@@ -1417,7 +1417,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                             &origin,
                         ),
                         crate::github::sanitize::Markdown::constant("</sub>\n\n"),
-                        crate::github::sanitize::Markdown::constant(untrusted::HELP),
+                        surface::comment_help(),
                     ]);
                     registry.upsert(
                         &crate::github::surfaces::Surface::CiReportReply {

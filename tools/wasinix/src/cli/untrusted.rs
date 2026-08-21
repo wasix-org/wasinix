@@ -114,23 +114,6 @@ impl MutationCommand {
     }
 }
 
-/// The reply `/wasinix help` posts.
-pub const HELP: &str = "### `/wasinix` commands\n\n\
-    - `/wasinix build <selectors>` builds sets or jobs on this PR\n\
-    - `/wasinix spot <targets>` rebuilds targets over a cached base\n\
-    - `/wasinix diff build ... --vs build ...` compares two cases\n\
-    - `/wasinix bisect <target> --good <ref> --bad <ref> -- build <selectors>` \
-    finds the dependency commit that broke it (`--reverse` for the one that \
-    fixed it)\n\
-    - `/wasinix update [targets|--all]` refreshes pins (bare on a managed PR \
-    replays its recipe)\n\
-    - `/wasinix versions bump <specs|--changed>` bumps publication rels\n\
-    - `/wasinix fmt` formats the branch and commits the result\n\
-    - `/wasinix regenerate` discards a managed branch and rebuilds it from \
-    its recipe\n\
-    - `/wasinix help` prints this message\n\n\
-    Any line of a comment works; the command runs against this pull request.\n";
-
 /// A bisect a comment asked for, with its predicate already parsed and
 /// pinned to the runner.
 #[derive(Debug, Clone, PartialEq)]
