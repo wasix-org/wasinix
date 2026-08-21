@@ -4,15 +4,14 @@
 # The legacy Wasm-EH from esaxx's C++ / onig's setjmp is translated to exnref by the
 # maturin hook. CC/CXX are the wasix cc so the cc crates cross-compile.
 {
-  pyprev,
-  final,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  pkgs,
+  lib,
 }: let
-  cc = final.lib.getExe' final.stdenv.cc "${final.stdenv.cc.targetPrefix}cc";
-  cxx = final.lib.getExe' final.stdenv.cc "${final.stdenv.cc.targetPrefix}c++";
+  cc = "${pkgs.stdenv.cc}/bin/${pkgs.stdenv.cc.targetPrefix}cc";
+  cxx = "${pkgs.stdenv.cc}/bin/${pkgs.stdenv.cc.targetPrefix}c++";
 in
-  helpers.extendPackage pyprev.tokenizers {
+  exposeExtendedPackage {
     # tokio's rt-multi-thread + signal are unsupported on wasm (compile_error!); sync
     # tokenization doesn't need the async runtime, so trim the bindings' tokio features
     # and switch to a current-thread runtime. The bindings are the wheel's own source

@@ -1,8 +1,4 @@
-{
-  prev,
-  helpers,
-  ...
-}:
-helpers.extendPackage prev.s3-server {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   passthru.wasinix.shipped = true;
 }

@@ -1,22 +1,22 @@
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: let
   native = [pkgs.gnugrep];
-  wasix = [wasmerPkgs.grep];
+  wasix = builtins.attrValues entry.commands;
   cmp = name: script:
-    testLib.mkScriptComparison {
+    harnesses.compareShells {
       inherit name script;
-      nativePkgs = native;
-      wasixPkgs = wasix;
+      hostPackages = native;
+      wasixCommands = wasix;
     };
 in {
   # Version banners differ; just assert it runs.
-  version = testLib.mkWasixRun {
+  version = harnesses.hostShell {
     name = "grep-version";
-    wasixPkgs = wasix;
+    wasixCommands = wasix;
     script = "grep --version";
   };
 

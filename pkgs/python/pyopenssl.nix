@@ -7,22 +7,23 @@
 # declares it. 23.3.0 caps cryptography below 42, under everything the set ships,
 # so it takes the oldest entry and skips the runtime dependency check.
 {
-  pyprev,
-  pyfinal,
-  helpers,
+  exposeExtendedPackage,
+  packages,
+  package,
   lib,
-  ...
+  dropSphinxDocs,
+  replaceInputsByName,
 }: let
-  version = pyprev.pyopenssl.version;
+  version = package.version;
   cryptography =
     if lib.versionOlder version "25"
-    then pyfinal.cryptography_43_0_3
+    then packages.sameProfile.cryptography.versions."43.0.3"
     else if lib.versionOlder version "26"
-    then pyfinal.cryptography_46_0_7
+    then packages.sameProfile.cryptography.versions."46.0.7"
     else null;
 in
-  helpers.extendPackage pyprev.pyopenssl (
-    helpers.python.dropSphinxDocs []
+  exposeExtendedPackage (
+    dropSphinxDocs []
     # dev holds no module, so keep out (module) + dist (wheel) only.
     // {
       outputs = _: ["out" "dist"];
@@ -30,7 +31,7 @@ in
       disabledTests = ["TestDTLS" "test_connect_refused" "test_connect_ex" "test_moving_buffer_behavior"];
     }
     // lib.optionalAttrs (cryptography != null) {
-      propagatedBuildInputs = helpers.replaceInputsByName {inherit cryptography;};
+      propagatedBuildInputs = replaceInputsByName {inherit cryptography;};
     }
     // lib.optionalAttrs (lib.versionOlder version "24") {dontCheckRuntimeDeps = true;}
   )

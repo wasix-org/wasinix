@@ -5,23 +5,21 @@
 # Every major the python protobuf attrs pull in needs the same bypass: python
 # protobuf N.M.P is paired with the C++ release M.P by an assertion in nixpkgs,
 # so protobuf4/5/6 reach past the default attr.
-let
+{
+  extendPackage,
+  exposeExtendedPackages,
+  pkgs,
+}: let
   versions = ["25" "29" "33"];
-in {
-  names = ["protobuf"] ++ map (v: "protobuf_${v}") versions;
-  packages = {
-    prev,
-    helpers,
-    ...
-  }: let
-    inherit (prev) lib;
-    tweak = package:
-      helpers.extendPackage package {
-        preConfigure = ''
-          cmakeFlagsArray+=("-DWITH_PROTOC=$build_protobuf/bin/protoc")
-        '';
-      };
-  in
-    {protobuf = tweak prev.protobuf;}
-    // lib.genAttrs (map (v: "protobuf_${v}") versions) (n: tweak prev.${n});
-}
+  inherit (pkgs) lib;
+  tweak = package:
+    extendPackage package {
+      preConfigure = ''
+        cmakeFlagsArray+=("-DWITH_PROTOC=$build_protobuf/bin/protoc")
+      '';
+    };
+in
+  exposeExtendedPackages (
+    {protobuf = tweak;}
+    // lib.genAttrs (map (v: "protobuf_${v}") versions) (_: tweak)
+  )

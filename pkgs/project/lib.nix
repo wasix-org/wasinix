@@ -280,6 +280,13 @@
 
   packageMetadata = package: (package.passthru or {}).wasinix or {};
 
+  packageForEntry = packages: entry: let
+    current = packages.sameProfile.${entry.name};
+  in
+    if entry.instance.kind == "history"
+    then current.versions.${entry.instance.version}
+    else current;
+
   addressSegment = segment:
     if builtins.match "[A-Za-z_][A-Za-z0-9_'-]*" segment != null
     then ".${segment}"
@@ -289,10 +296,15 @@
     root + lib.concatMapStrings addressSegment segments;
 
   loadPackageOverlays = directories:
-    lib.mapAttrs (_: directory: {
-      __wasinixPackageDirectory = true;
-      inherit directory;
-    })
+    lib.mapAttrs (_: declaration:
+      {
+        __wasinixPackageDirectory = true;
+      }
+      // (
+        if lib.isAttrs declaration
+        then declaration
+        else {directory = declaration;}
+      ))
     directories;
 
   stampPackage = {
@@ -381,13 +393,14 @@
         })
         // {versions = {};}));
 in rec {
-  inherit address addressSegment buildHostPypaTools callWith callWithLabel discoverUnits dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix dropSphinxDocs extendAttrs extensionContextsAttr historyBaseAttr historyOverlaysAttr linkInputs loadPackageOverlays loadTestDirectory machineMetadata mergeScript packageMetadata registryAttr replaceInputsByName stampPackage unitOverlaysAttr unitResult wasmRename;
+  inherit address addressSegment buildHostPypaTools callWith callWithLabel discoverUnits dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix dropSphinxDocs extendAttrs extensionContextsAttr historyBaseAttr historyOverlaysAttr linkInputs loadPackageOverlays loadTestDirectory machineMetadata mergeScript packageForEntry packageMetadata registryAttr replaceInputsByName stampPackage unitOverlaysAttr unitResult wasmRename;
 
   inherit extendPackage;
 
   loadPackageOverlay = {
     contextFor,
     dir,
+    expose ? [],
   }: final: prev: let
     instantiate = unit: final': prev': let
       formals = builtins.functionArgs (import unit.file);
@@ -419,6 +432,9 @@ in rec {
       })
       units;
     packages = builtins.foldl' mergeDisjoint {} (map (item: item.result) results);
+    inheritedNames = lib.subtractLists (lib.attrNames packages) expose;
+    missingInherited = lib.filter (name: !(builtins.hasAttr name prev)) inheritedNames;
+    inherited = lib.genAttrs inheritedNames (name: prev.${name});
     unitOverlays = builtins.foldl' (state: item:
       state
       // lib.genAttrs (lib.attrNames item.result) (_: {
@@ -427,7 +443,9 @@ in rec {
       })) {}
     results;
   in
-    packages // {${unitOverlaysAttr} = unitOverlays;};
+    lib.throwIf (missingInherited != [])
+    "package directory ${toString dir} exposes missing preceding package(s): ${lib.concatStringsSep ", " missingInherited}"
+    (inherited // packages // {${unitOverlaysAttr} = unitOverlays;});
 
   registerOverlay = {
     definition ? null,

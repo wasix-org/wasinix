@@ -2,13 +2,11 @@
 # WASIX does not export it. Keep AnyIO's asyncio and uvloop coverage while
 # leaving that optional backend out of the guest check closure.
 {
-  pyfinal,
-  pyprev,
-  helpers,
+  exposeExtendedPackage,
+  packages,
   lib,
-  ...
 }:
-helpers.extendPackage pyprev.anyio {
+exposeExtendedPackage {
   pytestFlags = old: lib.filter (flag: flag != "-Wignore::trio.TrioDeprecationWarning") old;
   # CPython's experimental subinterpreter queues are not built for WASIX.
   # Loopback TLS blocks in Wasmer; see WASIX-TODO.md.
@@ -38,15 +36,15 @@ helpers.extendPackage pyprev.anyio {
     // {
       wasinix = (old.wasinix or {}) // {checks.captured.timeout = 3600;};
       wasixDeclaredCheckInputs = [
-        pyfinal.pytestCheckHook
-        pyfinal.exceptiongroup
-        pyfinal.hypothesis
-        pyfinal.psutil
-        pyfinal.pytest-mock
-        pyfinal.pytest-timeout
-        pyfinal.pytest-xdist
-        pyfinal.trustme
-        pyfinal.uvloop
+        packages.sameProfile.pytestCheckHook
+        packages.sameProfile.exceptiongroup
+        packages.sameProfile.hypothesis
+        packages.sameProfile.psutil
+        packages.sameProfile.pytest-mock
+        packages.sameProfile.pytest-timeout
+        packages.sameProfile.pytest-xdist
+        packages.sameProfile.trustme
+        packages.sameProfile.uvloop
       ];
     };
 }

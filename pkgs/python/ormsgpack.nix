@@ -6,12 +6,8 @@
 # latent UB; wasm import type-checking is strict, so the 5-arg import doesn't match
 # libpython's 6-arg export. ormsgpack calls it once (uuid serialization); rebind it
 # to the correct 6-arg signature (pyo3-ffi's unused 5-arg decl is then dead).
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.ormsgpack {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   postPatch = ''
     cat >> src/serialize/uuid.rs <<'RS'
 

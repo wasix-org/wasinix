@@ -3,19 +3,18 @@
 # the archive at the baked-in /share/icu/<ver> default (no ICU_DATA set). The
 # no-dep variant proves the check really depends on the mounted data.
 {
-  testLib,
-  crossPkgs,
-  makeWasmerPackage,
+  harnesses,
+  packages,
   ...
 }: let
   versions = import ../../icu/versions.nix;
 
   prog = v: deps:
-    crossPkgs.stdenv.mkDerivation {
+    packages.sameProfile.stdenv.mkDerivation {
       pname = "icu-smoke${v}";
       version = "1.0.0";
       dontUnpack = true;
-      buildInputs = [crossPkgs."icu${v}"];
+      buildInputs = [packages.sameProfile."icu${v}"];
       buildPhase = ''
         $CXX ${./smoke.cc} -o icu-smoke.wasm -licui18n -licuuc -licudata
       '';
@@ -29,9 +28,11 @@
     };
 
   smoke = v:
-    testLib.mkWasixRun {
+    harnesses.hostShell {
       name = "icu-data${v}-smoke";
-      wasixPkgs = [(makeWasmerPackage {package = prog v [crossPkgs."icu-data${v}"];}).shim];
+      wasixCommands = [
+        (harnesses.packageCommand {package = prog v [packages.sameProfile."icu-data${v}"];})
+      ];
       script = ''
         out=$(icu-smoke)
         echo "$out"
@@ -48,12 +49,14 @@ in
     # Same program without the webc dependency: the archive is absent, so the
     # data lookup at /share/icu/<ver> must fail.
     no-dep = let
-      defaultMajor = crossPkgs.lib.versions.major crossPkgs.icu.version;
+      defaultMajor = packages.sameProfile.lib.versions.major packages.sameProfile.icu.version;
     in
-      testLib.mkWasixRun {
+      harnesses.hostShell {
         name = "icu-data-no-dep";
         expectFail = "no icu-data dependency, the data archive is not mounted";
-        wasixPkgs = [(makeWasmerPackage {package = prog defaultMajor [];}).shim];
+        wasixCommands = [
+          (harnesses.packageCommand {package = prog defaultMajor [];})
+        ];
         script = "icu-smoke";
       };
   }

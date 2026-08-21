@@ -1,12 +1,8 @@
 # orjson for wasix. maturin/pyo3-ffi wheel with a yyjson cc shim. Needs the maturin-on-wasix
 # wiring (see pydantic-core.nix): cross sysconfig, -fwasm-exceptions for the shim (ehpic PIC),
 # and pyo3-ffi/extension-module so the cdylib doesn't link libpython.
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.orjson {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   env = {
     CFLAGS = "-fwasm-exceptions";
   };

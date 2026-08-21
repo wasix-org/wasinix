@@ -2,34 +2,35 @@
 # current release, so its hunks miss on an older src. Cross builds never run the
 # tests, so a history version does without it.
 {
-  pyprev,
-  pyfinal,
-  helpers,
+  exposeExtendedPackage,
+  packages,
+  package,
   lib,
-  ...
+  dropInputsByName,
+  replaceInputsByName,
 }:
-helpers.extendPackage pyprev.pydantic (
-  lib.optionalAttrs ((pyprev.pydantic.passthru.wasix.historySpec or null) != null) {
+exposeExtendedPackage (
+  lib.optionalAttrs ((package.passthru.wasix.historySpec or null) != null) {
     patches = _: [];
     propagatedBuildInputs =
-      if lib.versionOlder pyprev.pydantic.version "2"
+      if lib.versionOlder package.version "2"
       then
-        helpers.dropInputsByName [
+        dropInputsByName [
           "pydantic-core"
           "annotated-types"
           "typing-inspection"
         ]
       else
-        helpers.replaceInputsByName (
-          lib.optionalAttrs (lib.versionOlder pyprev.pydantic.version "2.11")
-          {pydantic-core = pyfinal.pydantic-core_2_27_2;}
+        replaceInputsByName (
+          lib.optionalAttrs (lib.versionOlder package.version "2.11")
+          {pydantic-core = packages.sameProfile.pydantic-core.versions."2.27.2";}
         );
   }
   // {
     passthru = old:
       old
       // {
-        wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.hypothesis pyfinal.pytest-mock pyfinal.dirty-equals pyfinal.jsonschema pyfinal.inline-snapshot];
+        wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook packages.sameProfile.hypothesis packages.sameProfile.pytest-mock packages.sameProfile.dirty-equals packages.sameProfile.jsonschema packages.sameProfile.inline-snapshot];
       };
     disabledTestPaths = ["tests/pydantic_core/serializers/test_functions.py"];
     disabledTests = ["test_dataclass_import" "test_import_pydantic" "test_import_base_model" "test_leak_dataclass"];

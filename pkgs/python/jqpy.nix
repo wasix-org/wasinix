@@ -5,21 +5,23 @@
 # a pip user installs it). Import does not spawn jq, so it works standalone.
 # No suite: the released sdist ships no tests.
 {
-  pyfinal,
-  nix-update-script,
-  ...
+  exposePackage,
+  packages,
+  pkgs,
 }:
-pyfinal.buildPythonPackage (finalAttrs: {
-  pname = "jqpy";
-  version = "1.0.0";
-  pyproject = true;
+exposePackage (
+  packages.sameProfile.buildPythonPackage rec {
+    pname = "jqpy";
+    version = "1.0.0";
+    pyproject = true;
 
-  src = pyfinal.fetchPypi {
-    inherit (finalAttrs) pname version;
-    hash = "sha256-Cnhpuu3AgeEJnzhyeqfnbZJk+XLeZcdmGztnyCHQMh0=";
-  };
+    src = packages.sameProfile.fetchPypi {
+      inherit pname version;
+      hash = "sha256-Cnhpuu3AgeEJnzhyeqfnbZJk+XLeZcdmGztnyCHQMh0=";
+    };
 
-  build-system = [pyfinal.flit-core];
+    build-system = [packages.sameProfile.flit-core];
 
-  passthru.updateScript = nix-update-script {extraArgs = ["--flake"];};
-})
+    passthru.updateScript = pkgs.buildPackages.nix-update-script {extraArgs = ["--flake"];};
+  }
+)

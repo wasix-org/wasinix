@@ -1,15 +1,15 @@
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   helpers,
 }: let
   inherit (helpers) gitSetup;
 in {
-  clone-net = testLib.mkWasixRun {
+  clone-net = harnesses.hostShell {
     name = "clone-net";
-    nativePkgs = [pkgs.git];
-    wasixPkgs = [wasmerPkgs.git];
+    hostPackages = [pkgs.git];
+    wasixCommands = builtins.attrValues entry.commands;
     wasmerArgs = ["--net"];
     script = ''
       ${gitSetup}
@@ -26,10 +26,10 @@ in {
     '';
   };
 
-  fetch-net = testLib.mkWasixRun {
+  fetch-net = harnesses.hostShell {
     name = "fetch-net";
-    nativePkgs = [pkgs.git];
-    wasixPkgs = [wasmerPkgs.git];
+    hostPackages = [pkgs.git];
+    wasixCommands = builtins.attrValues entry.commands;
     wasmerArgs = ["--net"];
     script = ''
       ${gitSetup}
@@ -51,10 +51,10 @@ in {
     '';
   };
 
-  push-net = testLib.mkWasixRun {
+  push-net = harnesses.hostShell {
     name = "push-net";
-    nativePkgs = [pkgs.git];
-    wasixPkgs = [wasmerPkgs.git];
+    hostPackages = [pkgs.git];
+    wasixCommands = builtins.attrValues entry.commands;
     wasmerArgs = ["--net"];
     script = ''
       ${gitSetup}
@@ -75,10 +75,10 @@ in {
     '';
   };
 
-  pull-net = testLib.mkWasixRun {
+  pull-net = harnesses.hostShell {
     name = "pull-net";
-    nativePkgs = [pkgs.git];
-    wasixPkgs = [wasmerPkgs.git];
+    hostPackages = [pkgs.git];
+    wasixCommands = builtins.attrValues entry.commands;
     wasmerArgs = ["--net"];
     script = ''
       ${gitSetup}

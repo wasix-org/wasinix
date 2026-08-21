@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::support::capability::Capability;
-use crate::support::error::{Result, io, request_error};
-use crate::support::nix::{Flake, eval};
+use crate::support::error::{io, request_error, Result};
+use crate::support::nix::{eval, project_installable, Flake};
 use crate::support::process::CommandStatus;
 use crate::support::ui;
 
@@ -20,23 +20,23 @@ use crate::support::ui;
 /// deliberate choice: wasmer.io is production, wasmer.fun staging,
 /// wasmer.wtf dev.
 pub fn registry(flag: Option<&str>) -> String {
-    flag.map(str::to_string).unwrap_or_else(|| {
-        crate::support::env::wasmer_registry().expect("a set registry is unicode")
-    })
+    flag.map(str::to_string)
+        .unwrap_or_else(|| crate::support::env::wasmer_registry().expect("a set registry is unicode"))
 }
+
 
 /// The built index, or a fresh one when the caller named none.
 fn registry_path(given: Option<PathBuf>) -> Result<PathBuf> {
     if let Some(path) = given {
         return Ok(path);
     }
-    let paths = crate::support::nix::Invocation::flake("build", ".#pythonRegistry")
+    let paths = crate::support::nix::Invocation::flake(
+        "build",
+        project_installable(".", "artifacts.registry.python314"),
+    )
         .arg("--no-link")
         .out_paths("building the index")?;
-    Ok(paths
-        .into_iter()
-        .next_back()
-        .expect("out_paths is non-empty"))
+    Ok(paths.into_iter().next_back().expect("out_paths is non-empty"))
 }
 
 pub struct Preview {
@@ -67,11 +67,6 @@ pub struct Index {
     pub effects: crate::support::effects::Effects,
     /// The checkout, which holds the app config and the publisher.
     pub repo: PathBuf,
-    /// Upload the pages even when no wheel is new: they answer to the index
-    /// generator rather than to the wheel set.
-    pub refresh_listings: bool,
-    /// Withdraw the pages of projects that no longer belong in simple/.
-    pub withdraw_stale: bool,
 }
 
 /// The rclone config section the credentials come as. A volume without an S3
@@ -171,12 +166,6 @@ pub fn publish_index(request: Index) -> Result<CommandStatus> {
         .args(["--rev", &request.rev]);
     if request.effects.is_dry_run() {
         publish.arg("--dry-run");
-    }
-    if request.refresh_listings {
-        publish.arg("--refresh-listings");
-    }
-    if request.withdraw_stale {
-        publish.arg("--withdraw-stale");
     }
     publish
         .env("RCLONE_CONFIG", &config)
@@ -495,26 +484,25 @@ pub struct PlanDiff {
     pub webcs: Vec<PlanWebc>,
 }
 
-/// attr is the wasmerPackages key (jq-1.6.0 for a history entry); owner and
+/// attr is the WebC artifact key; owner and
 /// name are the identity it publishes under (wasmer/jq).
 fn webc_drvs_apply() -> String {
-    crate::support::nix::canonical_webcs_apply(
-        "_: p: { drv = p.pkg.drvPath; owner = p.pkg.id.owner; \
-         name = p.pkg.id.name; version = p.pkg.id.baseVersion; }",
-    )
+    "ps: builtins.mapAttrs (_: p: { drv = p.drvPath; owner = p.id.owner; \
+     name = p.id.name; version = p.id.baseVersion; }) ps"
+        .to_string()
 }
 
 fn dists(flake: &Flake<'_>) -> Result<BTreeMap<String, Value>> {
     // distsJson is a JSON string, not a structure: it is written for
     // consumers outside nix.
-    let raw = eval(flake, "pythonRegistry.distsJson", None)?;
+    let raw = eval(flake, "artifacts.registry.python314.distsJson", None)?;
     let parsed: Value = match raw.as_str() {
-        Some(text) => {
-            serde_json::from_str(text).map_err(|source| crate::support::error::Error::Json {
-                path: "<pythonRegistry.distsJson>".into(),
+        Some(text) => serde_json::from_str(text).map_err(|source| {
+            crate::support::error::Error::Json {
+                path: "<artifacts.registry.python314.distsJson>".into(),
                 source,
-            })?
-        }
+            }
+        })?,
         None => raw,
     };
     Ok(parsed
@@ -600,8 +588,8 @@ pub fn plan_diff(base_dir: &str) -> Result<PlanDiff> {
         .collect();
 
     let webc_apply = webc_drvs_apply();
-    let head_webcs = eval(&head, "wasmerPackages", Some(&webc_apply))?;
-    let base_webcs = eval(&base, "wasmerPackages", Some(&webc_apply))?;
+    let head_webcs = eval(&head, "artifacts.pkg", Some(&webc_apply))?;
+    let base_webcs = eval(&base, "artifacts.pkg", Some(&webc_apply))?;
     let webcs = head_webcs
         .as_object()
         .into_iter()

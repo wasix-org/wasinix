@@ -16,9 +16,6 @@
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    crane = {
-      url = "github:ipetkov/crane/v0.23.3";
-    };
     ghc-wasm-meta = {
       # The official read-only mirror of gitlab.haskell.org/haskell-wasm:
       # same commits, narHash-verified, and CI already depends on github,
@@ -33,12 +30,10 @@
     nixpkgs,
     wasmer,
     treefmt-nix,
-    crane,
     ghc-wasm-meta,
     ...
   }: let
     system = "x86_64-linux";
-    projectSchemaVersion = (builtins.fromJSON (builtins.readFile ./schema/project.json)).version;
     wasmerPatches = [
       # proc_fork must inherit the parent's signal dispositions; see WASIX-TODO.md
       ./patches/wasmer-signal-inherit-on-fork.patch
@@ -107,44 +102,31 @@
       passthru =
         (old.passthru or {})
         // {
-          wasix = {
+          wasinix.update = {
             # upstream's version stands still across our rev bumps
             noteVersion = "${old.version}-${wasmer.shortRev or "dirty"}";
-            updateNotes = [
+            notes = [
               {message = "recheck and drop any Wasmer patches that landed upstream; see WASIX-TODO.md";}
               {message = "check whether tokio PR 8291 landed in the vendored tokio; if so drop patches/tokio-fs-file-no-poison-on-cancel.patch and the patched cargoVendorDir (WASIX-TODO.md)";}
             ];
           };
         };
     });
-    # spotOverlays is empty everywhere but spot.nix; see pkgs/spot.nix.
-    mkWasix = spotOverlays:
-      import ./pkgs {
-        inherit system nixpkgs spotOverlays;
-        # runs the behavioural passthru.tests on the webc packages.
-        inherit wasmerRuntime;
-        # bindist GHC for toolchain.haskell; wasix/pandoc builds against it
-        ghcWasm = ghc-wasm-meta.packages.${system};
-      };
-    wasix = mkWasix {};
-    lib = wasix.pkgs.lib;
+    projectApi = import ./pkgs/project/wasinix.nix {
+      lib = nixpkgs.lib;
+      ghcWasm = ghc-wasm-meta.packages.${system};
+      inherit wasmerRuntime;
+    };
+    project = projectApi.mkProject {
+      inherit system;
+      importNixpkgs = args: import nixpkgs args;
+      ci.sources = ["wasinix"];
+    };
+    pkgs = project.internals.packageSets.nativeRaw;
+    inherit (pkgs) lib;
     wasixLib = import ./pkgs/lib {inherit lib;};
-    wasinixNixVersion = "2.35.2";
-    wasinixNixInstaller = "https://releases.nixos.org/nix/nix-${wasinixNixVersion}/install";
-    wasinixNix = let
-      package = wasix.pkgs.nixVersions.nix_2_35;
-      setupAction = builtins.readFile ./.github/actions/setup-nix/action.yml;
-    in
-      lib.throwIf (package.version != wasinixNixVersion)
-      "wasinix Nix is ${package.version}, expected ${wasinixNixVersion}"
-      (lib.throwIf (!lib.hasInfix "install_url: ${wasinixNixInstaller}" setupAction)
-        "setup-nix must install Nix ${wasinixNixVersion}"
-        package);
 
-    # From-source toolchain (LLVM fork + libc + runtimes + sysroot), see pkgs/toolchain.
-    toolchain = wasix.toolchain;
-
-    treefmtEval = treefmt-nix.lib.evalModule wasix.pkgs {
+    treefmtEval = treefmt-nix.lib.evalModule pkgs {
       projectRootFile = "flake.nix";
       # Captured tool output, compared byte for byte by the tests.
       settings.global.excludes = ["tools/wasinix/fixtures/golden/*"];
@@ -166,55 +148,6 @@
       };
     };
 
-    # Collect every package's passthru.tests into the flake checks. tryEval guards
-    # the `pkg ? tests` probe, which forces pkg; a throwing pkg keeps its entry, so
-    # the error surfaces as a failed check instead of aborting the whole output.
-    testWithOwner = owner: testName: drv:
-      drv
-      // {
-        passthru =
-          (drv.passthru or {})
-          // {
-            wasinix =
-              (drv.passthru.wasinix or {})
-              // {
-                check.subject = owner;
-                check.name = testName;
-              };
-          };
-      };
-    collectTestsPrefixedInto = prefix: initial:
-      lib.foldlAttrs (
-        acc: name: pkg: let
-          tests = pkg.tests;
-          fallback = {"${prefix}${name}" = pkg;};
-          single = {"${prefix}${name}" = testWithOwner name "tests" tests;};
-          testAttrs = let
-            declaredCases = (tests.passthru.wasinix or {}).testCases or null;
-          in
-            if declaredCases != null
-            then
-              lib.mapAttrs'
-              (caseName: drv:
-                lib.nameValuePair
-                "${prefix}${name}-${caseName}"
-                (testWithOwner name caseName drv))
-              declaredCases
-            else if lib.isDerivation tests
-            then single
-            else fallback;
-          entry = builtins.tryEval (lib.optionalAttrs (pkg ? tests) testAttrs);
-        in
-          acc
-          // (
-            if entry.success
-            then entry.value
-            else fallback
-          )
-      )
-      initial;
-    collectTestsPrefixed = prefix: collectTestsPrefixedInto prefix {};
-    collectTests = collectTestsPrefixed "";
     mergeDisjoint = context: sets: let
       names = lib.concatMap builtins.attrNames sets;
       duplicates =
@@ -226,114 +159,52 @@
       "${context}: duplicate jobs (${lib.concatStringsSep ", " duplicates})"
       (lib.foldl' (acc: set: acc // set) {} sets);
     treefmtCheck = treefmtEval.config.build.check self;
-    # The orchestrator uses the host Rust toolchain: it tests the wasix
-    # toolchain, so it must not depend on it.
-    craneLib = crane.mkLib wasix.pkgs;
-    wasinixCargoArgs = {
+    # The orchestrator binary. Vanilla nixpkgs Rust: this is the tool that
+    # tests the wasix toolchain, so it must not depend on it.
+    wasinixUnwrapped = pkgs.rustPlatform.buildRustPackage {
       pname = "wasinix";
       version = "0.1.0";
       src = ./tools/wasinix;
-      strictDeps = true;
-      cargoLock = ./tools/wasinix/Cargo.lock;
+      cargoLock.lockFile = ./tools/wasinix/Cargo.lock;
+      doCheck = true;
+      nativeCheckInputs = with pkgs; [gitMinimal nixVersions.latest];
+      meta.mainProgram = "wasinix";
     };
-    wasinixCargoArtifacts = craneLib.buildDepsOnly wasinixCargoArgs;
-    wasinixUnwrapped = craneLib.buildPackage (wasinixCargoArgs
-      // {
-        cargoArtifacts = wasinixCargoArtifacts;
-        doCheck = false;
-        meta.mainProgram = "wasinix";
-      });
-    wasinixHelperFiles =
-      lib.concatLists (builtins.attrValues
-        (builtins.fromTOML (builtins.readFile ./pkgs/helper-boundaries.toml)));
-    wasinixTestSource = lib.fileset.toSource {
-      root = ./.;
-      fileset = lib.fileset.unions (
-        [
-          ./.github
-          ./flake.nix
-          ./pkgs/helper-boundaries.toml
-          ./tools/wasinix
-        ]
-        ++ map (path: ./. + "/${path}") wasinixHelperFiles
-      );
-    };
-    wasinixTests = craneLib.cargoTest (wasinixCargoArgs
-      // {
-        src = wasinixTestSource;
-        cargoToml = ./tools/wasinix/Cargo.toml;
-        cargoArtifacts = wasinixCargoArtifacts;
-        nativeCheckInputs = [wasix.pkgs.gitMinimal wasinixNix];
-        postUnpack = ''
-          cd $sourceRoot/tools/wasinix
-          sourceRoot="."
-        '';
-      });
-    wasinixCoreInputs = with wasix.pkgs; [
-      bash
-      coreutils
-      gitMinimal
-      nix-eval-jobs
-      wasinixNix
-      openssh
-    ];
-    wasinixOptionalInputs = with wasix.pkgs; [
-      awscli2
-      python3
-      wasix.pythonRegistry.indexer
-      rclone
-      wasmerRuntime
-    ];
-    wasinixCapabilities = {
-      aws = wasix.pkgs.awscli2;
-      python = wasix.pkgs.python3;
-      python-index = wasix.pythonRegistry.indexer;
-      rclone = wasix.pkgs.rclone;
-      wasmer = wasmerRuntime;
-    };
-    mkWasinix = name: runtimeInputs: capabilitiesOnPath: let
-      launcher = wasix.pkgs.writeShellApplication {
-        name = "wasinix";
-        inheritPath = false;
-        inherit runtimeInputs;
-        # Update scripts re-enter `wasinix`, so the launcher's own bin dir joins
-        # the PATH it hands them.
-        text = ''
-          export WASINIX_CAPABILITY_FLAKE=${self}
-          ${lib.optionalString capabilitiesOnPath "export WASINIX_CAPABILITIES_ON_PATH=1"}
-          PATH="''${0%/*}:$PATH" exec ${lib.getExe wasinixUnwrapped} "$@"
-        '';
-      };
-    in
-      wasix.pkgs.symlinkJoin {
-        inherit name;
-        paths = [launcher];
-        nativeBuildInputs = [wasix.pkgs.installShellFiles];
-        postBuild = ''
-          installShellCompletion --cmd wasinix \
-            --bash <(${lib.getExe wasinixUnwrapped} completions bash) \
-            --fish <(${lib.getExe wasinixUnwrapped} completions fish) \
-            --zsh <(${lib.getExe wasinixUnwrapped} completions zsh)
-        '';
-        meta.mainProgram = "wasinix";
-      };
-    wasinixCore = mkWasinix "wasinix-core" wasinixCoreInputs false;
-    # The compatibility package keeps every command runnable without ambient
-    # tools for callers that require one hermetic closure.
-    wasinix = mkWasinix "wasinix" (wasinixCoreInputs ++ wasinixOptionalInputs) true;
-    wasinixCoreClosure = wasix.pkgs.closureInfo {rootPaths = [wasinixCore];};
-    wasinixCoreClosureCheck =
-      wasix.pkgs.runCommand "wasinix-core-closure-check" {
-        optionalPaths = builtins.unsafeDiscardStringContext (lib.concatStringsSep " " (map toString wasinixOptionalInputs));
-      } ''
-        for path in $optionalPaths; do
-          if grep -Fx "$path" ${wasinixCoreClosure}/store-paths; then
-            echo "wasinix-core references optional capability $path" >&2
-            exit 1
-          fi
-        done
-        touch "$out"
+    # Every command is runnable from the same installed closure, so a remote
+    # host reached with `nix run .#wasinix` needs no ambient tools.
+    wasinixLauncher = pkgs.writeShellApplication {
+      name = "wasinix";
+      inheritPath = false;
+      runtimeInputs = with pkgs; [
+        awscli2
+        bash
+        coreutils
+        git
+        nix-eval-jobs
+        nixVersions.latest
+        openssh
+        python3
+        rclone
+        wasmerRuntime
+      ];
+      # Update scripts re-enter `wasinix`, so the launcher's own bin dir joins
+      # the PATH it hands them.
+      text = ''
+        PATH="''${0%/*}:$PATH" exec ${lib.getExe wasinixUnwrapped} "$@"
       '';
+    };
+    wasinix = pkgs.symlinkJoin {
+      name = "wasinix";
+      paths = [wasinixLauncher];
+      nativeBuildInputs = [pkgs.installShellFiles];
+      postBuild = ''
+        installShellCompletion --cmd wasinix \
+          --bash <(${lib.getExe wasinixUnwrapped} completions bash) \
+          --fish <(${lib.getExe wasinixUnwrapped} completions fish) \
+          --zsh <(${lib.getExe wasinixUnwrapped} completions zsh)
+      '';
+      meta.mainProgram = "wasinix";
+    };
     # One alias per top-level command; the interface check keeps this list and
     # the CLI from drifting apart.
     commandAliases = ["build" "spot" "diff" "run" "remote" "ci"];
@@ -344,16 +215,16 @@
       }
       // lib.genAttrs commandAliases (
         name:
-          wasix.pkgs.writeShellApplication {
+          pkgs.writeShellApplication {
             inherit name;
             inheritPath = false;
-            runtimeInputs = [wasinixCore];
+            runtimeInputs = [wasinix];
             text = "exec wasinix ${name} \"$@\"";
           }
       );
     wasinixInterfaceCheck =
-      wasix.pkgs.runCommand "wasinix-interface-check" {
-        nativeBuildInputs = [wasinixCore] ++ builtins.attrValues (builtins.removeAttrs commands ["default" "wasinix"]);
+      pkgs.runCommand "wasinix-interface-check" {
+        nativeBuildInputs = builtins.attrValues commands;
       } ''
         wasinix --help >/dev/null
         for command in ${lib.escapeShellArgs commandAliases}; do
@@ -365,11 +236,11 @@
         touch "$out"
       '';
     sourceShapeCheck =
-      wasix.pkgs.runCommand "wasinix-source-shape-check" {
-        nativeBuildInputs = [wasix.pkgs.ripgrep];
+      pkgs.runCommand "wasinix-source-shape-check" {
+        nativeBuildInputs = [pkgs.ripgrep];
       } ''
         if rg -n \
-          'passthru\.wasix\.(shipped|ciProfiles|ciTags|emulatedCheck|installCheck|publication|testExpectation)|passthru\.wasmer\.aliases|\bwasix\.shipped|helpers\.libTweaks|\blibTweaks\s*=' \
+          'passthru\.wasix\.(shipped|ciProfiles|ciTags|emulatedCheck|installCheck|publication|retention|smokeTest|testExpectation|updateNotes|postUpdateHook)|passthru\.wasmer\.aliases|\bwasix\.(shipped|retention|updateNotes|postUpdateHook)|helpers\.libTweaks|\blibTweaks\s*=' \
           ${self}/pkgs; then
           echo "A removed Wasinix source shape is still in use" >&2
           exit 1
@@ -381,19 +252,20 @@
     # checksum idempotence, the conflict remedy, and a cargo consume over
     # sparse+loopback.
     wasinixCargoPublishCheck =
-      wasix.pkgs.runCommandCC "wasinix-cargo-publish-check" {
+      pkgs.runCommandCC "wasinix-cargo-publish-check" {
         nativeBuildInputs = [
           wasinixUnwrapped
           wasmerRuntime
-          wasix.pkgs.python3
-          wasix.pkgs.cargo
-          wasix.pkgs.rustc
-          wasix.pkgs.curl
-          wasix.pkgs.gnutar
-          wasix.pkgs.gzip
-          wasix.pkgs.writableTmpDirAsHomeHook
+          pkgs.python3
+          pkgs.cargo
+          pkgs.rustc
+          pkgs.curl
+          pkgs.gnutar
+          pkgs.gzip
+          pkgs.writableTmpDirAsHomeHook
         ];
-        server = wasix.wasmerPackages."wasix-cargo-registry";
+        publisher = ./pkgs/cargo-registry/publish-crate.py;
+        server = project.packages.preferred.cargo-registry;
       } ''
         set -u
         port=8733
@@ -414,6 +286,7 @@
           printf 'pub fn ok() -> u32 { %s }\n' "$2" > "$1/work/probe-0.1.0+wasix.1/src/lib.rs"
           tar czf "$1/crates/probe-0.1.0+wasix.1.crate" -C "$1/work" "probe-0.1.0+wasix.1"
           rm -r "$1/work"
+          cp "$publisher" "$1/publish-crate.py"
           cat > "$1/manifest.json" <<'EOF'
         {"crates":[{"crate":"probe","wasixVersion":"0.1.0+wasix.1","crateFile":"probe-0.1.0+wasix.1.crate","upstream":"0.1.0","rel":1}],"shadowLimits":[],"excluded":[],"unpinned":[],"stray":[]}
         EOF
@@ -477,17 +350,17 @@
         registry = "sparse+$base/"
         EOF
         echo 'fn main() { assert_eq!(probe::ok(), 42); }' > app/src/main.rs
-        ( cd app && CARGO_HOME="$PWD/../cargo-home" cargo run )
+        ( cd app && CARGO_HOME="$PWD/../cargo-home" cargo run --quiet )
         touch "$out"
       '';
     # `wasinix wasmer serve` from prebuilt webcs (no nix in the sandbox):
     # the merged tree runs a shipped command fully offline through the
     # WASMER_FLAGS the --exec contract sets.
     wasinixWasmerServeCheck =
-      wasix.pkgs.runCommand "wasinix-wasmer-serve-check" {
-        nativeBuildInputs = [wasinixUnwrapped wasmerRuntime wasix.pkgs.writableTmpDirAsHomeHook];
-        bashWebc = wasix.wasmerPackages.bash.webc;
-        bashDeps = wasix.wasmerPackages.bash.pkg.depTree;
+      pkgs.runCommand "wasinix-wasmer-serve-check" {
+        nativeBuildInputs = [wasinixUnwrapped wasmerRuntime pkgs.writableTmpDirAsHomeHook];
+        bashWebc = project.artifacts.webc.bash;
+        bashDeps = project.artifacts.pkg.bash.depTree;
       } ''
         export WASMER_DIR="$PWD/.wasmer"
         wasinix wasmer serve --webc "$bashWebc" --webc "$bashDeps" --out tree -- sh -c '
@@ -503,18 +376,19 @@
     # The meta serve fan-out: all three registries live at once, probed
     # through one --exec, torn down by one exit.
     wasinixServeAllCheck =
-      wasix.pkgs.runCommand "wasinix-serve-all-check" {
+      pkgs.runCommand "wasinix-serve-all-check" {
         nativeBuildInputs = [
           wasinixUnwrapped
           wasmerRuntime
-          wasix.pkgs.python3
-          wasix.pkgs.curl
-          wasix.pkgs.gnutar
-          wasix.pkgs.gzip
-          wasix.pkgs.writableTmpDirAsHomeHook
+          pkgs.python3
+          pkgs.curl
+          pkgs.gnutar
+          pkgs.gzip
+          pkgs.writableTmpDirAsHomeHook
         ];
-        server = wasix.wasmerPackages."wasix-cargo-registry";
-        bashWebc = wasix.wasmerPackages.bash.webc;
+        publisher = ./pkgs/cargo-registry/publish-crate.py;
+        server = project.packages.preferred.cargo-registry;
+        bashWebc = project.artifacts.webc.bash;
       } ''
         export WASMER_DIR="$PWD/.wasmer"
         mkdir -p mint/work/probe-0.1.0+wasix.1/src mint/crates index/simple
@@ -527,6 +401,7 @@
         echo 'pub fn ok() {}' > mint/work/probe-0.1.0+wasix.1/src/lib.rs
         tar czf mint/crates/probe-0.1.0+wasix.1.crate -C mint/work probe-0.1.0+wasix.1
         rm -r mint/work
+        cp "$publisher" mint/publish-crate.py
         cat > mint/manifest.json <<'EOF'
         {"crates":[{"crate":"probe","wasixVersion":"0.1.0+wasix.1","crateFile":"probe-0.1.0+wasix.1.crate","upstream":"0.1.0","rel":1}],"shadowLimits":[],"excluded":[],"unpinned":[],"stray":[]}
         EOF
@@ -539,544 +414,301 @@
         '
         touch "$out"
       '';
-    packageChecks = let
-      wasmerChecks = collectTests (removeAttrs wasix.wasmerPackageInventory ["rust"]);
-      rustChecks =
-        wasmerChecks
-        // lib.optionalAttrs (wasix.wasmerPackageInventory ? rust) {rust-webc = wasix.wasmerPackageInventory.rust.tests.all;};
-      libraryChecks =
-        lib.foldlAttrs
-        (acc: profile: packages: collectTestsPrefixedInto "lib-${profile}-" acc packages)
-        rustChecks
-        wasix.ciPackagesByProfile;
-      registryChecks = collectTestsPrefixedInto "" libraryChecks {cargo-registry = wasix.cargoRegistry;};
-      abiChecks = registryChecks // lib.mapAttrs' (p: lib.nameValuePair "abi-${p}") wasix.abiChecks;
-    in
-      collectTestsPrefixedInto "" abiChecks wasix.libraryTestPkgs;
-    checksBySet = {
-      core = mergeDisjoint "checksBySet.core" [
-        {
-          wasinix = wasinixTests;
-          wasinix-core-closure = wasinixCoreClosureCheck;
-          wasinix-interface = wasinixInterfaceCheck;
-          wasinix-source-shape = sourceShapeCheck;
-          wasinix-cargo-publish = wasinixCargoPublishCheck;
-          wasinix-wasmer-serve = wasinixWasmerServeCheck;
-          wasinix-serve-all = wasinixServeAllCheck;
-        }
-        (collectTests wasix.toolchainTestPkgs)
-      ];
-      packages = packageChecks;
-      python = mergeDisjoint "checksBySet.python" [
-        # pythonWheels is nested by version; collect as wheel-py314-<attr>.
-        (lib.concatMapAttrs (pv: wheelSet: collectTestsPrefixed "wheel-${pv}-" wheelSet) wasix.pythonWheels)
-        (collectTests {python-registry = wasix.pythonRegistry;})
-        (lib.mapAttrs' (name: lib.nameValuePair "pyclosure-${name}") wasix.pythonClosureTests)
-      ];
+    repositoryChecks = {
+      "tests.project.treefmt" = treefmtCheck;
+      "tests.project.wasinix" = wasinixUnwrapped;
+      "tests.project.wasinix-interface" = wasinixInterfaceCheck;
+      "tests.project.wasinix-source-shape" = sourceShapeCheck;
+      "tests.project.wasinix-cargo-publish" = wasinixCargoPublishCheck;
+      "tests.project.wasinix-wasmer-serve" = wasinixWasmerServeCheck;
+      "tests.project.wasinix-serve-all" = wasinixServeAllCheck;
     };
-    regularFlakeChecks = mergeDisjoint "checks" ([{treefmt = treefmtCheck;}] ++ builtins.attrValues checksBySet);
-    evalSanityChecks =
-      lib.concatMapAttrs (
-        profile: packages:
-          lib.mapAttrs' (
-            name: check: lib.nameValuePair "eval-sanity-${profile}-${name}" check
-          )
-          packages
-      )
-      wasix.evalSanity;
-    flakeChecks = regularFlakeChecks // evalSanityChecks;
+    repositoryCatalogEntries =
+      lib.mapAttrs (address: check: {
+        kind = "test";
+        inherit address check;
+        name = lib.last (lib.splitString "." address);
+        testName = lib.last (lib.splitString "." address);
+        source = "wasinix";
+        lineage = ["wasinix"];
+        scope = "native";
+        variant = {};
+        instance = {
+          kind = "current";
+          version = toString (check.version or check.name);
+        };
+        subject = "project";
+        packageSubject = "project";
+        policy = {
+          aliases = [];
+          shipped = false;
+          ci = {};
+          publication = {};
+          retention = null;
+        };
+      })
+      repositoryChecks;
+    repositoryCiCatalog =
+      lib.mapAttrs (_: entry: builtins.removeAttrs entry ["check"])
+      repositoryCatalogEntries;
+    allCiJobs = mergeDisjoint "project CI jobs" [project.ci.jobs repositoryChecks];
+    allCiCatalog = mergeDisjoint "project CI catalog" [project.ci.catalog.jobs repositoryCiCatalog];
+    jobsForSubjects = subjects:
+      map (entry: entry.address) (lib.filter (entry:
+        builtins.elem (entry.packageSubject or entry.address) subjects)
+      (builtins.attrValues allCiCatalog));
+    nativeSubjects = names: map (name: "packages.native.${name}") names;
+    toolchainNames = [
+      "cargo-wasix"
+      "cargo-wasix-unwrapped"
+      "wasix-flang"
+      "wasix-llvm"
+      "wasix-rust"
+      "wasix-sysroot"
+      "wasix-tinygo"
+      "wasixcc"
+      "wasixcc-unwrapped"
+    ];
+    ccNames = [
+      "wasix-flang"
+      "wasix-llvm"
+      "wasix-sysroot"
+      "wasix-tinygo"
+      "wasixcc"
+      "wasixcc-unwrapped"
+    ];
+    rustNames = ["cargo-wasix" "cargo-wasix-unwrapped" "wasix-rust"];
+    selectorGroups = {
+      toolchain = {
+        jobs = jobsForSubjects (nativeSubjects toolchainNames);
+        spotOwners = ["stdenv" "rustPlatform" "haskellPackages"];
+      };
+      cc = {
+        jobs = jobsForSubjects (nativeSubjects ccNames);
+        spotOwners = ["stdenv"];
+      };
+      rust = {
+        jobs = jobsForSubjects (nativeSubjects rustNames);
+        spotOwners = ["rustPlatform"];
+      };
+      haskell = {
+        jobs = jobsForSubjects (map (profile: "packages.wasix.${profile}.pandoc") (builtins.attrNames project.packages.wasix));
+        spotOwners = ["haskellPackages"];
+      };
+      emulated = {
+        jobs = map (entry: entry.address) (lib.filter (entry: entry.testName or null == "captured") (builtins.attrValues allCiCatalog));
+        spotOwners = [];
+      };
+    };
+    publicationInfo = let
+      registry = project.artifacts.registry.python314;
+      cargoRegistry = project.artifacts.registry.cargo-registry;
+      firstChangelog = derivations:
+        lib.findFirst (value: value != null) null
+        (map (derivation: let
+          attempted = builtins.tryEval (derivation.meta.changelog or null);
+        in
+          if attempted.success
+          then attempted.value
+          else null)
+        derivations);
+      informationFor = {
+        kind,
+        versionOf,
+        changelogOf ? (derivation: derivation),
+        derivations,
+      }: {
+        versions = lib.unique (map versionOf derivations);
+        inherit kind;
+        changelogs =
+          lib.mapAttrs (_: values: firstChangelog (map changelogOf values))
+          (lib.groupBy versionOf derivations);
+        derivations = lib.mapAttrs (_: values:
+          map (derivation: builtins.unsafeDiscardStringContext derivation.drvPath) values)
+        (lib.groupBy versionOf derivations);
+      };
+      wheelDerivations = name:
+        lib.concatMap (perInterpreter: lib.attrValues (perInterpreter.${name} or {}))
+        (lib.attrValues registry.wheels);
+      wheelInfo = lib.mapAttrs' (name: _:
+        lib.nameValuePair "artifacts.registry.python314.wheels.${name}" (informationFor {
+          kind = "wheel";
+          versionOf = derivation: derivation.version;
+          derivations = wheelDerivations name;
+        }))
+      registry.wheelVersions;
+      webcInfo = lib.mapAttrs' (name: package:
+        lib.nameValuePair "artifacts.webc.${name}" (informationFor {
+          kind = "webc";
+          versionOf = derivation: derivation.id.baseVersion;
+          derivations = [package] ++ builtins.attrValues (package.versions or {});
+        }))
+      project.artifacts.pkg;
+      cargoInfo = lib.mapAttrs' (name: _:
+        lib.nameValuePair "artifacts.registry.cargo-registry.crates.${name}" (informationFor {
+          kind = "crate";
+          versionOf = derivation: derivation.passthru.version;
+          derivations = builtins.attrValues (cargoRegistry.crates.${name} or {});
+        }))
+      cargoRegistry.crateVersions;
+    in
+      wheelInfo // webcInfo // cargoInfo;
+    updateCandidates = let
+      from = prefix: packages:
+        lib.mapAttrs' (name: package: lib.nameValuePair "${prefix}.${name}" package)
+        (lib.filterAttrs (_: package: (package.passthru.wasinix.source or null) == "wasinix") packages);
+    in
+      from "packages.native" project.packages.native
+      // from "packages.wasix" project.packages.preferred
+      // from "packages.python.py314" project.packages.python.py314;
+    commandDrvsOf = lib.concatMap (value:
+      if lib.isDerivation value
+      then [value.drvPath]
+      else builtins.attrNames (builtins.getContext (toString value)));
+    updateScripts = let
+      srcRoot = toString self;
+      scriptFor = address: package: let
+        declaration = package.passthru.updateScript or null;
+        commandValues =
+          if lib.isList declaration
+          then declaration
+          else if lib.isAttrs declaration && declaration ? command
+          then lib.toList declaration.command
+          else null;
+        command =
+          if commandValues == null
+          then null
+          else map toString commandValues;
+        position = builtins.unsafeGetAttrPos "updateScript" (package.passthru or {});
+        ours =
+          command
+          != null
+          && command != []
+          && position != null
+          && lib.hasPrefix srcRoot position.file;
+        value = lib.optionalAttrs ours {
+          ${address} =
+            {
+              inherit command;
+              commandDrvPaths = commandDrvsOf commandValues;
+              version = package.version or null;
+              position = package.meta.position or null;
+            }
+            // lib.optionalAttrs (lib.isAttrs declaration && declaration ? name) {inherit (declaration) name;}
+            // lib.optionalAttrs (lib.isAttrs declaration && declaration ? attrPath) {inherit (declaration) attrPath;}
+            // lib.optionalAttrs (lib.isAttrs declaration && declaration ? accepts) {inherit (declaration) accepts;}
+            // lib.optionalAttrs (lib.isAttrs declaration && declaration ? source) {inherit (declaration) source;};
+        };
+        result = builtins.tryEval (builtins.deepSeq value value);
+      in
+        if result.success
+        then result.value
+        else {};
+    in
+      lib.concatMapAttrs scriptFor updateCandidates;
+    updateNotes = let
+      noted = lib.filterAttrs (_: wasixLib.hasUpdateNotes) updateCandidates;
+      versionOf = package: let
+        attempted = builtins.tryEval (wasixLib.noteVersionOf package);
+      in
+        if attempted.success
+        then attempted.value
+        else null;
+    in {
+      versions = lib.mapAttrs (_: versionOf) noted;
+      fired = priors:
+        lib.filterAttrs (_: notes: notes != [])
+        (lib.mapAttrs (address: wasixLib.firedNotesOf (priors.${address} or null)) noted);
+    };
+    postUpdateHooks = let
+      srcRoot = toString self;
+      hookFor = address: package: let
+        declaration = (package.passthru.wasinix.update or {}).post or null;
+        command =
+          if declaration == null
+          then null
+          else map toString (lib.toList declaration);
+        position = builtins.unsafeGetAttrPos "wasinix" (package.passthru or {});
+        ours =
+          command
+          != null
+          && command != []
+          && position != null
+          && lib.hasPrefix srcRoot position.file;
+        value = lib.optionalAttrs ours {
+          ${address} = {
+            inherit command;
+            commandDrvPaths = commandDrvsOf (lib.toList declaration);
+            version = package.version or null;
+          };
+        };
+        result = builtins.tryEval (builtins.deepSeq value value);
+      in
+        if result.success
+        then result.value
+        else {};
+    in
+      lib.concatMapAttrs hookFor updateCandidates;
+    systemProject =
+      project
+      // {
+        tests = project.tests // repositoryChecks;
+        catalog.entries = project.catalog.entries // repositoryCatalogEntries;
+        internals =
+          project.internals
+          // {
+            publication = {
+              info = publicationInfo;
+              versions = lib.mapAttrs (_: info: info.versions) publicationInfo;
+            };
+            updates = {
+              inherit postUpdateHooks updateNotes updateScripts;
+            };
+          };
+        ci =
+          project.ci
+          // {
+            jobs = allCiJobs;
+            catalog =
+              project.ci.catalog
+              // {
+                jobs = allCiCatalog;
+                selectors.sets =
+                  project.ci.catalog.selectors.sets
+                  // {
+                    core = (project.ci.catalog.selectors.sets.core or []) ++ builtins.attrNames repositoryChecks;
+                  };
+                selectors.groups = selectorGroups;
+              };
+          };
+      };
   in {
+    lib = projectApi;
     formatter.${system} = treefmtEval.config.build.wrapper;
-
     apps.${system} =
       lib.mapAttrs (_: command: {
         type = "app";
         program = lib.getExe command;
       })
       commands;
-
-    # Custom outputs go under legacyPackages: unknown top-level flake outputs
-    # make `nix flake check` warn.
-    legacyPackages.${system} = let
-      # These attr paths are both the `.#` build targets and, flattened to dotted
-      # keys, the CI job names, so the two cannot drift.
-      buildable = {
-        # Profile-independent tools. Sysroot libraries and their Fortran/OpenMP
-        # drivers live under `.#toolchainByProfile.<profile>`.
-        toolchain = {
-          # These carry their test suites as passthru.tests.
-          inherit (wasix.toolchainTestPkgs) sysroot tinygo wasixcc;
-
-          cargo-wasix = toolchain.cargoWasix;
-          rust-toolchain = toolchain.wasixRustToolchain;
-          libc = toolchain.libc;
-          compiler-rt = toolchain.compiler-rt;
-          libcxx = toolchain.libcxx;
-          llvm = {inherit (toolchain.llvm) clang lld;};
-          flang = toolchain.flang; # host Fortran->wasm compiler (wasm32 target patch)
-          runtime = wasmerRuntime; # the wasmer runtime (input, patched)
-        };
-        # Every overlay package under every profile it supports. CI replaces
-        # this complete view with the package-declared ciProfiles selection.
-        packagesByProfile = wasix.packagesByProfile;
-        # Shared Wasmer/WASIX product recipes built for the native host.
-        nativePackages = wasix.nativePackages;
-        # <name> = wasm cross build; .pkg = its wasmer package; .webc = the built webc; .tests = its tests
-        wasmerPackages = wasix.wasmerPackages;
-        # <attr> = wasm cross build of python3.pkgs.<attr>; .tests = import smoke-test
-        pythonWheels = wasix.pythonWheels;
-        # all shipped wheels + transitive deps as a static PEP 503 index
-        pythonRegistry = wasix.pythonRegistry;
-        pythonClosureTests = wasix.pythonClosureTests;
-        # the crate patch tree minted as publishable +wasix.N fork builds
-        cargoRegistry = wasix.cargoRegistry;
-      };
-
-      # Flatten nested attrsets of derivations to {"a.b.c" = drv;}, also emitting a
-      # shipped package's passthru.webc as "<key>.webc". Only meta is read, never
-      # drvPath: every nix-eval-jobs worker computes the key set before its first
-      # job. A throwing leaf is KEPT, so it surfaces as one failed job.
-      drvOk = drv: let
-        r = builtins.tryEval (!(drv.meta.broken or false) && (drv.meta.available or true));
-      in
-        !r.success || r.value;
-      flattenDrvs = prefix:
-        lib.concatMapAttrs (
-          name: val: let
-            key =
-              if prefix == ""
-              then name
-              else "${prefix}.${name}";
-            # forcing val to classify it can throw; keep the leaf under its key
-            kind = builtins.tryEval (
-              if lib.isDerivation val
-              then "drv"
-              else if lib.isAttrs val
-              then "set"
-              else "other"
-            );
-          in
-            if !kind.success
-            then {${key} = val;}
-            else if kind.value == "drv"
-            then
-              lib.optionalAttrs (drvOk val) {${key} = val;}
-              // lib.optionalAttrs (val ? webc && drvOk val.webc) {"${key}.webc" = val.webc;}
-            else if kind.value == "set"
-            then flattenDrvs key val
-            else {}
-        );
-      # Disjoint selection presets. Keep these semantic: core validates the
-      # toolchain, packages covers C/C++/Rust programs and libraries, and python
-      # owns the wheel/registry matrix. `all` is the explicit full sweep.
-      ciSetParts = {
-        core = [
-          (flattenDrvs "toolchain" buildable.toolchain)
-          # The orchestrator itself: as a job its closure reaches the cache,
-          # so workflow steps running `nix run .#wasinix` substitute instead
-          # of compiling the crate and its tests from source.
-          (flattenDrvs "" {inherit wasinix;})
-          (flattenDrvs "checks" checksBySet.core)
-          (lib.mapAttrs' (name: check: lib.nameValuePair "checks.${name}" check) evalSanityChecks)
-        ];
-        packages = [
-          # The package-declared coverage, not every profile a package supports.
-          (flattenDrvs "packagesByProfile" wasix.ciPackagesByProfile)
-          (flattenDrvs "wasmerPackages" wasix.wasmerPackageInventory)
-          (flattenDrvs "nativePackages" buildable.nativePackages)
-          (flattenDrvs "" {inherit (buildable) cargoRegistry;})
-          (flattenDrvs "checks" checksBySet.packages)
-        ];
-        python = [
-          (flattenDrvs "pythonWheels" buildable.pythonWheels)
-          (flattenDrvs "" {inherit (buildable) pythonRegistry;})
-          (flattenDrvs "checks" checksBySet.python)
-        ];
-      };
-      ciSetsDisjoint =
-        lib.mapAttrs
-        (name: mergeDisjoint "ciSets.${name}")
-        ciSetParts;
-      ciSets =
-        ciSetsDisjoint
-        // {all = mergeDisjoint "ciSets.all" (builtins.attrValues ciSetsDisjoint);};
-      ciJobNames = builtins.attrNames ciSets.all;
-      toolchainJobs = lib.filter (lib.hasPrefix "toolchain.") ciJobNames;
-      spotLib = import ./pkgs/spot.nix {
-        inherit lib mkWasix;
-        pkgNames = wasix.wasixPkgNames;
-      };
-      ciGroups = {
-        toolchain = {
-          jobs = toolchainJobs;
-          spotOwners = spotLib.toolchainNames;
-        };
-        cc = {
-          jobs =
-            lib.filter
-            (name:
-              !(lib.hasPrefix "toolchain.cargo-wasix" name)
-              && !(lib.hasPrefix "toolchain.rust-toolchain" name)
-              && name != "toolchain.runtime")
-            toolchainJobs;
-          spotOwners = ["stdenv"];
-        };
-        rust = {
-          jobs =
-            lib.filter
-            (name:
-              lib.hasPrefix "toolchain.cargo-wasix" name
-              || lib.hasPrefix "toolchain.rust-toolchain" name)
-            toolchainJobs;
-          spotOwners = ["rustPlatform"];
-        };
-        haskell = {
-          jobs =
-            lib.filter
-            (name:
-              (lib.hasPrefix "packagesByProfile." name
-                || lib.hasPrefix "wasmerPackages." name)
-              && lib.hasInfix "pandoc" name)
-            ciJobNames;
-          spotOwners = ["haskellPackages"];
-        };
-        emulated = {
-          jobs =
-            lib.filter
-            (name: lib.hasPrefix "checks." name && lib.hasSuffix "-upstream" name)
-            ciJobNames;
-          spotOwners = [];
-        };
-      };
-      spotJobInfo =
-        lib.concatMapAttrs
-        (profile: packages:
-          lib.mapAttrs'
-          (name: _:
-            lib.nameValuePair "packagesByProfile.${profile}.${name}" {
-              spotTarget = "${profile}.${name}";
-              spotOwner = name;
-            })
-          packages)
-        wasix.ciPackagesByProfile;
-      wasmerJobAliases =
-        lib.concatMapAttrs (packageKey: package: let
-          aliases = package.passthru.wasinix.aliases or [];
-          addresses = map (alias: "wasmerPackages.${alias}") aliases;
-        in {
-          "wasmerPackages.${packageKey}" = addresses;
-          "wasmerPackages.${packageKey}.webc" = map (address: "${address}.webc") addresses;
-        })
-        wasix.wasmerPackageInventory;
-      ciJobInfo = lib.mapAttrs (name: drv: let
-        isCheck = lib.hasPrefix "checks." name;
-        wasinixMeta = drv.passthru.wasinix or {};
-        subject = wasinixMeta.check.subject or drv.pname or (lib.getName drv);
-        segments = lib.splitString "." name;
-        variant =
-          if
-            lib.length segments
-            > 2
-            && builtins.elem (builtins.head segments) ["packagesByProfile" "pythonWheels"]
-          then builtins.elemAt segments 1
-          else null;
-        artifactKind =
-          if isCheck
-          then "test"
-          else if lib.hasSuffix ".webc" name
-          then "webc"
-          else if lib.hasSuffix ".pkg" name
-          then "package"
-          else "artifact";
-      in
-        wasixLib.ciInfoOf drv
-        // {
-          displayName = subject;
-          inherit subject;
-          testName = wasinixMeta.check.name or null;
-          testFamily =
-            if lib.hasPrefix "checks.wheel-" name
-            then "wheel"
-            else if lib.hasPrefix "checks.lib-" name
-            then "library"
-            else null;
-          inherit variant artifactKind;
-          aliases = wasmerJobAliases.${name} or [];
-          tags = wasixLib.ciTagsOf drv;
-          role =
-            if isCheck
-            then "check"
-            else "artifact";
-          rebuildSignal = true;
-          contentDiff = !isCheck;
-        }
-        // (spotJobInfo.${name} or {}))
-      ciSets.all;
-      ciSelectorCatalog = {
-        schemaVersion = projectSchemaVersion;
-        jobs = ciJobNames;
-        groups = ciGroups;
-        info = ciJobInfo;
-        sets = lib.mapAttrs (_: jobs: builtins.attrNames jobs) ciSetsDisjoint;
-      };
-      # The derivations an updateScript or retentionHook command needs realised
-      # before it can run. A command element is usually a string with an
-      # interpolated store path, so the drv paths live in its string context,
-      # not in the value's type.
-      commandDrvsOf = lib.concatMap (
-        v:
-          if lib.isDerivation v
-          then [v.drvPath]
-          else builtins.attrNames (builtins.getContext (toString v))
-      );
-    in
-      buildable
-      // {
-        schemaVersion = projectSchemaVersion;
-        # Escape hatches / aggregates: reachable via `.#`, but not ci jobs.
-        inherit (wasix) nixpkgsByProfile toolchainByProfile defaultProfileName;
-
-        # Rebuild one target against the working tree with everything below it
-        # pinned to a pristine base (./spot.nix). A function, so never a ci job.
-        spotWith = spotLib.spotWith;
-        pkgsCross.wasix = wasix.pkgsCross;
-        allWasmerPackages = wasix.allWasmerPackages;
-        inherit (wasix) wasixRun;
-
-        inherit ciSets ciGroups ciJobInfo ciSelectorCatalog;
-        # The flat job map the docs teach as `.#ci`.
-        ci = ciSets.all;
-
-        remoteIfdProbe = wasix.pkgs.writeText "wasinix-remote-ifd-probe" "ok";
-        # Deliberate IFD: evaluating this attr builds the probe, which is how
-        # `remote doctor --ifd` verifies a builder can serve import-from-derivation.
-        # ciSets derives from `buildable`, never from here, so CI evaluation
-        # stays IFD-free; a naive sweep over all of legacyPackages will not.
-        remoteIfdProbeResult = builtins.readFile self.legacyPackages.${system}.remoteIfdProbe;
-
-        inherit
-          (let
-            changelogOf = drv: let
-              found = builtins.tryEval (drv.meta.changelog or null);
-            in
-              if found.success
-              then found.value
-              else null;
-            firstChangelog = drvs:
-              lib.findFirst (value: value != null) null (map changelogOf drvs);
-            drvPathsByVersion = versionOf: drvs:
-              lib.mapAttrs
-              (_: values: map (drv: builtins.unsafeDiscardStringContext drv.drvPath) values)
-              (lib.groupBy versionOf drvs);
-            changelogsByVersion = versionOf: changelogDrvOf: drvs:
-              lib.mapAttrs
-              (_: values: firstChangelog (map changelogDrvOf values))
-              (lib.groupBy versionOf drvs);
-            wheelDrvs = name:
-              lib.concatMap
-              (perPython: lib.attrValues (perPython.${name} or {}))
-              (lib.attrValues wasix.pythonRegistry.wheels);
-            webcs = lib.groupBy (p: p.pkg.id.name) (lib.attrValues wasix.wasmerPackageInventory);
-            relInfo =
-              lib.mapAttrs' (name: versions:
-                lib.nameValuePair "pythonRegistry.wheels.${name}" {
-                  inherit versions;
-                  kind = "wheel";
-                  changelogs = changelogsByVersion (drv: drv.version) (drv: drv) (wheelDrvs name);
-                  derivations = drvPathsByVersion (drv: drv.version) (wheelDrvs name);
-                })
-              wasix.pythonRegistry.wheelVersions
-              // lib.mapAttrs' (name: packages:
-                lib.nameValuePair "wasmerPackages.${name}" {
-                  versions = lib.unique (map (p: p.pkg.id.baseVersion) packages);
-                  kind = "webc";
-                  changelogs = changelogsByVersion (p: p.pkg.id.baseVersion) (p: p.pkg) packages;
-                  derivations = drvPathsByVersion (p: p.pkg.id.baseVersion) packages;
-                })
-              webcs
-              // lib.mapAttrs' (name: versions:
-                lib.nameValuePair "cargoRegistry.crates.${name}" {
-                  inherit versions;
-                  kind = "crate";
-                  changelogs =
-                    changelogsByVersion
-                    (drv: drv.passthru.version)
-                    (drv: drv)
-                    (lib.attrValues (wasix.cargoRegistry.crates.${name} or {}));
-                  derivations =
-                    drvPathsByVersion
-                    (drv: drv.passthru.version)
-                    (lib.attrValues (wasix.cargoRegistry.crates.${name} or {}));
-                })
-              wasix.cargoRegistry.crateVersions;
-          in {
-            inherit relInfo;
-            relVersions = lib.mapAttrs (_: info: info.versions) relInfo;
-          })
-          relInfo
-          relVersions
-          ;
-
-        # passthru.wasix.updateNotes: things to check when a package moves.
-        # `versions` is published in the eval maps; `fired` gets the base branch's
-        # copy back as the `prior` side of each note's predicate.
-        updateNotes = let
-          noted = lib.filterAttrs (_: wasixLib.hasUpdateNotes) ciSets.all;
-          versionOf = drv: let
-            r = builtins.tryEval (wasixLib.noteVersionOf drv);
-          in
-            if r.success
-            then r.value
-            else null;
-        in {
-          versions = lib.mapAttrs (_: versionOf) noted;
-          fired = priors:
-            lib.filterAttrs (_: ns: ns != [])
-            (lib.mapAttrs (attr: wasixLib.firedNotesOf (priors.${attr} or null)) noted);
-        };
-
-        # passthru.updateScript declarations collected for the update driver, with
-        # meta.position (the file the pin lives in).
-        updateScripts = let
-          srcRoot = toString self;
-          scriptOf = attr: drv: let
-            s = drv.passthru.updateScript or null;
-            commandValues =
-              if lib.isList s
-              then s
-              else if lib.isAttrs s && s ? command
-              then lib.toList s.command
-              else null;
-            command =
-              if commandValues == null
-              then null
-              else map toString commandValues;
-            commandDrvPaths =
-              if commandValues == null
-              then null
-              else commandDrvsOf commandValues;
-            # prev.X packages inherit nixpkgs' updateScripts, which must not
-            # run against this repo; ours are the ones declared in this tree.
-            # Registry-history attrs (numpy_2_1_3) re-import the package file, so
-            # they inherit its in-tree updateScript too; exclude them, else
-            # nix-update would bump a version pinned on purpose.
-            pos = builtins.unsafeGetAttrPos "updateScript" (drv.passthru or {});
-            ours =
-              command
-              != null
-              && command != []
-              && pos != null
-              && lib.hasPrefix srcRoot pos.file
-              && !(drv.passthru.wasmer.history or false);
-            entry = builtins.tryEval (
-              let
-                v = lib.optionalAttrs ours {
-                  ${attr} =
-                    {
-                      inherit command commandDrvPaths;
-                      version = drv.version or null;
-                    }
-                    // lib.optionalAttrs (lib.isAttrs s && s ? name) {inherit (s) name;}
-                    // lib.optionalAttrs (lib.isAttrs s && s ? attrPath) {inherit (s) attrPath;}
-                    // lib.optionalAttrs (lib.isAttrs s && s ? accepts) {inherit (s) accepts;}
-                    // lib.optionalAttrs (lib.isAttrs s && s ? source) {inherit (s) source;}
-                    // {position = drv.meta.position or null;};
-                };
-              in
-                builtins.deepSeq v v
-            );
-          in
-            if entry.success
-            then entry.value
-            else {};
-        in
-          lib.concatMapAttrs scriptOf ciSets.all;
-
-        # passthru.wasix.postUpdateHook: an operation the update driver runs
-        # when its package version moves. In-tree only; repeats are deduped.
-        postUpdateHooks = let
-          srcRoot = toString self;
-          hookOf = attr: drv: let
-            h = (drv.passthru.wasix or {}).postUpdateHook or null;
-            pos = builtins.unsafeGetAttrPos "wasix" (drv.passthru or {});
-            eligible = builtins.tryEval (
-              h
-              != null
-              && pos != null
-              && lib.hasPrefix srcRoot pos.file
-            );
-            ours = eligible.success && eligible.value;
-            action =
-              if lib.isAttrs h && !lib.isDerivation h
-              then
-                if builtins.attrNames h == ["syncAttrList"]
-                then
-                  if h.syncAttrList ? kind
-                  then throw "syncAttrList cannot declare its operation kind"
-                  else h.syncAttrList // {kind = "syncAttrList";}
-                else throw "postUpdateHook attribute sets must contain only syncAttrList"
-              else let
-                command = map toString (lib.toList h);
-              in
-                if command == []
-                then throw "postUpdateHook commands cannot be empty"
-                else {
-                  kind = "command";
-                  inherit command;
-                  commandDrvPaths = commandDrvsOf (lib.toList h);
-                };
-          in
-            lib.optionalAttrs ours {
-              ${attr} = {
-                inherit action;
-                version = toString drv.version;
-              };
-            };
-        in
-          lib.concatMapAttrs hookOf ciSets.all;
-      };
-
-    devShells.${system}.default = wasix.pkgs.mkShell {
+    legacyPackages.${system} = systemProject;
+    checks.${system} = systemProject.tests;
+    packages.${system} = {
+      default = wasinix;
+      inherit wasinix;
+    };
+    devShells.${system}.default = pkgs.mkShell {
       packages = [
         wasinix
-        toolchain.wasixcc
-        toolchain.cargoWasix
-        wasix.nixpkgsByProfile.${wasix.defaultProfileName}.ncurses
-        wasix.pkgs.gnumake
-        wasix.pkgs.pkg-config
+        project.packages.native.cargo-wasix
+        project.packages.native.wasixcc
+        project.packages.preferred.ncurses
+        pkgs.gnumake
+        pkgs.pkg-config
         wasmerRuntime
-
-        nixpkgs.legacyPackages.${system}.nix-eval-jobs
-        nixpkgs.legacyPackages.${system}.nixVersions.latest
+        pkgs.nix-eval-jobs
+        pkgs.nixVersions.latest
       ];
-      shellHook = ''
-        ${wasix.toolchainByProfile.${wasix.defaultProfileName}.toolchainEnv}
-        ${wasix.toolchainByProfile.${wasix.defaultProfileName}.ccEnv}
-      '';
-    };
-
-    checks.${system} = flakeChecks;
-
-    packages.${system} = {
-      inherit wasinix;
-      wasinix-core = wasinixCore;
-      wasinix-capability-aws = wasinixCapabilities.aws;
-      wasinix-capability-python = wasinixCapabilities.python;
-      wasinix-capability-python-index = wasinixCapabilities.python-index;
-      wasinix-capability-rclone = wasinixCapabilities.rclone;
-      wasinix-capability-wasmer = wasinixCapabilities.wasmer;
-      # the webc packages and the merged registry live under legacyPackages
-      anybuild = wasix.nativePackages.anybuild;
-      wasix-rust-toolchain = toolchain.wasixRustToolchain;
-
-      # From-source toolchain parts, buildable in isolation.
-      wasix-libc = toolchain.libc;
-      # direct cmake of llvm-project, driven by wasix-libc's clang-wasix*.cmake_toolchain
-      wasix-compiler-rt = toolchain.compiler-rt;
-      wasix-libcxx = toolchain.libcxx;
-      wasix-sysroot = toolchain.sysroot;
-
-      wasmer = wasmerRuntime;
     };
   };
 }

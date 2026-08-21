@@ -1,17 +1,18 @@
 {
   pkgs,
-  testLib,
+  harnesses,
   helpers,
-  preferredProfilePackages,
+  packages,
 }:
-helpers.forEachPython preferredProfilePackages ({
+helpers.forEachPython packages.preferred ({
   python,
+  pythonCommands,
   pyVer,
   tag,
 }: {
-  bin-aliases = testLib.mkWasixRun {
+  bin-aliases = harnesses.hostShell {
     name = "python${tag}-bin-aliases";
-    wasixPkgs = [python];
+    wasixCommands = pythonCommands;
     script = ''
       for command in python python3 python${pyVer}; do
         "${pkgs.lib.getExe' python "$command"}" -c \

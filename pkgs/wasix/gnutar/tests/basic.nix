@@ -1,23 +1,23 @@
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: let
   native = [pkgs.gnutar];
-  wasix = [wasmerPkgs.tar];
+  wasix = builtins.attrValues entry.commands;
   # Archive bytes carry mtimes/uids that differ; compare the listing and the
   # extracted *content* instead.
   cmp = name: script:
-    testLib.mkScriptComparison {
+    harnesses.compareShells {
       inherit name script;
-      nativePkgs = native;
-      wasixPkgs = wasix;
+      hostPackages = native;
+      wasixCommands = wasix;
     };
 in {
-  version = testLib.mkWasixRun {
+  version = harnesses.hostShell {
     name = "tar-version";
-    wasixPkgs = wasix;
+    wasixCommands = wasix;
     script = "tar --version";
   };
 

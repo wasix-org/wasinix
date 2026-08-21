@@ -2,15 +2,17 @@
 # libssh2 doesn't cross-build (inet_addr is absent from wasix-libc), and the
 # ssh transport is unreachable from wasm anyway; HTTPS via openssl stays on.
 {
-  prev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
+  dropInputsByName,
+  linkInputs,
+  profileOf,
 }: let
   # The git2 CLI links util/process.c, which needs fork; Wasm-EH hides fork
   # (WASIX-TODO.md), so build the CLI only in the off profile, as upstream does.
-  offProfile = (helpers.profileOf prev.stdenv.hostPlatform) == "off";
+  offProfile = (profileOf packages.sameProfile.stdenv.hostPlatform) == "off";
 in
-  helpers.extendPackage prev.libgit2 (
+  exposeExtendedPackage (
     {
       # appended after nixpkgs' flags; for duplicated -D options the last wins
       cmakeFlags = [
@@ -33,5 +35,5 @@ in
       doCheck = false;
       wasixCheckPrebuild = ":";
     }
-    // helpers.linkInputs (helpers.dropInputsByName ["libssh2"])
+    // linkInputs (dropInputsByName ["libssh2"])
   )

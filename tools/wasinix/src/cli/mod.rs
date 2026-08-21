@@ -826,7 +826,7 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
             let scratch = crate::support::fs::Scratch::create("wasinix-cache-push")?;
             let jobs_path = scratch.path().join("jobs.jsonl");
             let attr = format!(
-                ".#legacyPackages.{}.ciSets.all",
+                ".#legacyPackages.{}.ci.jobs",
                 crate::support::nix::SYSTEM
             );
             if let Some(error) = crate::nix::evaljobs::run(&crate::nix::evaljobs::RunRequest {

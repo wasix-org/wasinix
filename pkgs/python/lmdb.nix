@@ -1,9 +1,5 @@
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.lmdb {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   preCheck = ''
     rm -r lmdb
   '';

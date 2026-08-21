@@ -1,39 +1,39 @@
 # fastapi 0.115 caps starlette<0.47 and the set ships 1.3.1, so a rebased 0.115
 # takes the starlette history entry that satisfies it instead of the current one.
 {
-  pyprev,
-  pyfinal,
-  helpers,
+  exposeExtendedPackage,
+  packages,
+  package,
   lib,
-  ...
+  replaceInputsByName,
 }:
-helpers.extendPackage pyprev.fastapi (
-  lib.optionalAttrs (lib.versionOlder pyprev.fastapi.version "0.116") {
-    propagatedBuildInputs = helpers.replaceInputsByName {
-      starlette = pyfinal.starlette_0_46_2;
+exposeExtendedPackage (
+  lib.optionalAttrs (lib.versionOlder package.version "0.116") {
+    propagatedBuildInputs = replaceInputsByName {
+      starlette = packages.sameProfile.starlette.versions."0.46.2";
     };
   }
   // {
     passthru.wasixDeclaredCheckInputs = [
-      pyfinal.a2wsgi
-      pyfinal.anyio
-      pyfinal.dirty-equals
-      pyfinal.email-validator
-      pyfinal.flask
-      pyfinal.httpx2
-      pyfinal.inline-snapshot
-      pyfinal.itsdangerous
-      pyfinal.jinja2
-      pyfinal.pydantic-extra-types
-      pyfinal.pydantic-settings
-      pyfinal.pwdlib
-      pyfinal.pyjwt
-      pyfinal.pytestCheckHook
-      pyfinal.pytest-xdist
-      pyfinal.pytest-timeout
-      pyfinal.python-multipart
-      pyfinal.pyyaml
-      pyfinal.typer
+      packages.sameProfile.a2wsgi
+      packages.sameProfile.anyio
+      packages.sameProfile.dirty-equals
+      packages.sameProfile.email-validator
+      packages.sameProfile.flask
+      packages.sameProfile.httpx2
+      packages.sameProfile.inline-snapshot
+      packages.sameProfile.itsdangerous
+      packages.sameProfile.jinja2
+      packages.sameProfile.pydantic-extra-types
+      packages.sameProfile.pydantic-settings
+      packages.sameProfile.pwdlib
+      packages.sameProfile.pyjwt
+      packages.sameProfile.pytestCheckHook
+      packages.sameProfile.pytest-xdist
+      packages.sameProfile.pytest-timeout
+      packages.sameProfile.python-multipart
+      packages.sameProfile.pyyaml
+      packages.sameProfile.typer
     ];
     disabledTests = [
       "test_fastapi_cli"

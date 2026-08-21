@@ -1,9 +1,5 @@
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.trio {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   # Gate optional platform APIs by the capabilities WASIX exposes.
   postPatch = ''
     substituteInPlace src/trio/_core/__init__.py \

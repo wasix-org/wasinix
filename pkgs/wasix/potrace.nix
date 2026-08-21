@@ -1,10 +1,6 @@
 # zlib auto-threads. Custom build: only the static libpotrace, no CLI.
-{
-  prev,
-  helpers,
-  ...
-}:
-helpers.extendPackage prev.potrace {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   # no emulated check: the test programs bundle getopt, which collides with
   # wasix-libc's at link.
   doCheck = false;

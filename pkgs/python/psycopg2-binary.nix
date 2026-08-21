@@ -3,14 +3,16 @@
 # resolves. Its selling point is a bundled libpq; we link the libpq we build
 # either way, so this differs from psycopg2 only in the name pip matches.
 {
-  pyfinal,
-  helpers,
-  ...
+  exposePackage,
+  extendPackage,
+  packages,
 }:
-helpers.extendPackage pyfinal.psycopg2 {
-  pname = "psycopg2-binary";
-  postPatch = ''
-    substituteInPlace setup.py \
-      --replace-fail 'setup(name="psycopg2"' 'setup(name="psycopg2-binary"'
-  '';
-}
+exposePackage (
+  extendPackage packages.sameProfile.psycopg2 {
+    pname = "psycopg2-binary";
+    postPatch = ''
+      substituteInPlace setup.py \
+        --replace-fail 'setup(name="psycopg2"' 'setup(name="psycopg2-binary"'
+    '';
+  }
+)

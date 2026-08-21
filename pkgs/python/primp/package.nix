@@ -8,12 +8,8 @@
 # - env: aws-lc-sys C (cc-rs CcBuilder, universal bindings, no bindgen) minus its two
 #   wasi-incompatible sources: NO_JITTER_ENTROPY (needs -O0 + hi-res timer),
 #   OPENSSL_NO_TTY (console.c's tty branch; the stub keeps evp.c's console symbols).
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.primp {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   postPatch = ''
     for f in $(grep -rlE 'target_arch = "wasm32"' crates/primp-reqwest crates/primp); do
       substituteInPlace "$f" \

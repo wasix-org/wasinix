@@ -10,13 +10,12 @@
 # extension and forces a cp38-abi3 tag from a bdist_wheel subclass, so an older
 # release needs whichever of the two it actually uses turned off.
 {
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  package,
 }:
-helpers.extendPackage pyprev.tornado {
+exposeExtendedPackage {
   postPatch = _:
-    if (pyprev.tornado.passthru.wasix.historySpec or null) == null
+    if (package.passthru.wasix.historySpec or null) == null
     then ''
       substituteInPlace setup.py \
         --replace-fail 'can_use_limited_api = not sysconfig.get_config_var("Py_GIL_DISABLED")' \

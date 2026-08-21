@@ -2,10 +2,12 @@
 # (its native test env happens to provide it). overridePythonAttrs, not
 # extendPackage cannot change requiredPythonModules computed by the builder.
 {
-  pyfinal,
-  pyprev,
-  ...
+  exposePackage,
+  packages,
+  package,
 }:
-pyprev.aioresponses.overridePythonAttrs (o: {
-  propagatedBuildInputs = (o.propagatedBuildInputs or []) ++ [pyfinal.packaging];
-})
+exposePackage (
+  package.overridePythonAttrs (o: {
+    propagatedBuildInputs = (o.propagatedBuildInputs or []) ++ [packages.sameProfile.packaging];
+  })
+)

@@ -1,19 +1,20 @@
 {
   pkgs,
-  testLib,
+  harnesses,
   helpers,
-  preferredProfilePackages,
+  packages,
 }:
-helpers.forEachPython preferredProfilePackages ({
+helpers.forEachPython packages.preferred ({
   python,
+  pythonCommands,
   pyVer,
   tag,
 }: {
   # ensurepip cannot run in a cross build, so the bundled wheel is unpacked at
   # install time; without that `import pip` is gone even though it runs fine.
-  pip-usable = testLib.mkWasixRun {
+  pip-usable = harnesses.hostShell {
     name = "python${tag}-pip-usable";
-    wasixPkgs = [python];
+    wasixCommands = pythonCommands;
     script = ''
       python${pyVer} -m pip --version | tee out.log
       grep -q '^pip ' out.log

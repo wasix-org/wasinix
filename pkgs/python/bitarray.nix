@@ -1,17 +1,15 @@
 {
-  final,
-  pyprev,
-  pyfinal,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
+  pkgs,
 }:
-helpers.extendPackage pyprev.bitarray {
+exposeExtendedPackage {
   # The guest exits zero after bitarray.test(), so check unittest's summary.
   installCheckPhase = _: ''
     cd $out
     _log="$NIX_BUILD_TOP/bitarray-test.log"
-    ${pyfinal.python.interpreter} -c 'import bitarray; bitarray.test()' 2>&1 | ${final.lib.getExe' final.buildPackages.coreutils "tee"} "$_log"
-    ${final.lib.getExe final.buildPackages.gnugrep} -qx OK "$_log"
+    ${packages.sameProfile.python.interpreter} -c 'import bitarray; bitarray.test()' 2>&1 | ${pkgs.buildPackages.coreutils}/bin/tee "$_log"
+    ${pkgs.buildPackages.gnugrep}/bin/grep -qx OK "$_log"
   '';
   passthru.wasinix.checks.captured.broken = "WASIX reports bitarray objects as hashable";
 }

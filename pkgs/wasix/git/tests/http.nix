@@ -1,15 +1,15 @@
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   helpers,
 }: let
   inherit (helpers) gitSetup setupNativeRemote startLighttpdHttp startLighttpdHttps;
 in {
-  clone-http = testLib.mkWasixRun {
+  clone-http = harnesses.hostShell {
     name = "clone-http";
-    nativePkgs = [pkgs.git pkgs.lighttpd];
-    wasixPkgs = [wasmerPkgs.git];
+    hostPackages = [pkgs.git pkgs.lighttpd];
+    wasixCommands = builtins.attrValues entry.commands;
     wasmerArgs = ["--net"];
     script = ''
       ${gitSetup}
@@ -20,10 +20,10 @@ in {
     '';
   };
 
-  fetch-http = testLib.mkWasixRun {
+  fetch-http = harnesses.hostShell {
     name = "fetch-http";
-    nativePkgs = [pkgs.git pkgs.lighttpd];
-    wasixPkgs = [wasmerPkgs.git];
+    hostPackages = [pkgs.git pkgs.lighttpd];
+    wasixCommands = builtins.attrValues entry.commands;
     wasmerArgs = ["--net"];
     script = ''
       ${gitSetup}
@@ -40,10 +40,10 @@ in {
     '';
   };
 
-  push-http = testLib.mkWasixRun {
+  push-http = harnesses.hostShell {
     name = "push-http";
-    nativePkgs = [pkgs.git pkgs.lighttpd];
-    wasixPkgs = [wasmerPkgs.git];
+    hostPackages = [pkgs.git pkgs.lighttpd];
+    wasixCommands = builtins.attrValues entry.commands;
     wasmerArgs = ["--net"];
     script = ''
       ${gitSetup}
@@ -59,10 +59,10 @@ in {
     '';
   };
 
-  clone-https = testLib.mkWasixRun {
+  clone-https = harnesses.hostShell {
     name = "clone-https";
-    nativePkgs = [pkgs.git pkgs.lighttpd pkgs.openssl];
-    wasixPkgs = [wasmerPkgs.git];
+    hostPackages = [pkgs.git pkgs.lighttpd pkgs.openssl];
+    wasixCommands = builtins.attrValues entry.commands;
     wasmerArgs = ["--net"];
     script = ''
       ${gitSetup}
@@ -73,10 +73,10 @@ in {
     '';
   };
 
-  fetch-https = testLib.mkWasixRun {
+  fetch-https = harnesses.hostShell {
     name = "fetch-https";
-    nativePkgs = [pkgs.git pkgs.lighttpd pkgs.openssl];
-    wasixPkgs = [wasmerPkgs.git];
+    hostPackages = [pkgs.git pkgs.lighttpd pkgs.openssl];
+    wasixCommands = builtins.attrValues entry.commands;
     wasmerArgs = ["--net"];
     script = ''
       ${gitSetup}
@@ -93,10 +93,10 @@ in {
     '';
   };
 
-  push-https = testLib.mkWasixRun {
+  push-https = harnesses.hostShell {
     name = "push-https";
-    nativePkgs = [pkgs.git pkgs.lighttpd pkgs.openssl];
-    wasixPkgs = [wasmerPkgs.git];
+    hostPackages = [pkgs.git pkgs.lighttpd pkgs.openssl];
+    wasixCommands = builtins.attrValues entry.commands;
     wasmerArgs = ["--net"];
     script = ''
       ${gitSetup}

@@ -1,13 +1,14 @@
 {
   pkgs,
-  testLib,
+  harnesses,
   helpers,
-  preferredProfilePackages,
+  packages,
 }: let
   lib = pkgs.lib;
 in
-  helpers.forEachPython preferredProfilePackages ({
+  helpers.forEachPython packages.preferred ({
     python,
+    pythonCommands,
     pyVer,
     tag,
   }: let
@@ -15,9 +16,9 @@ in
       name,
       fds,
     }:
-      testLib.mkWasixRun {
+      harnesses.hostShell {
         name = "python${tag}-${name}";
-        wasixPkgs = [python];
+        wasixCommands = pythonCommands;
         script = ''
           cp ${./spawn-passfd-check.py} check.py
           python${pyVer} check.py ${lib.concatMapStringsSep " " toString fds} | tee out.log

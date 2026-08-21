@@ -3,11 +3,11 @@
 # a store directory and nothing builds.
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: let
-  wasix = [wasmerPkgs.nix];
+  wasix = builtins.attrValues entry.commands;
 
   # Two differences that aren't about the evaluator:
   #  - under wasmer isatty(1) is true even when stdout is a file, so nix's
@@ -23,10 +23,10 @@
   # nix-command is experimental in a release build, and the store has to be one
   # that needs no filesystem.
   cmp = name: expr:
-    testLib.mkScriptComparison {
+    harnesses.compareShells {
       name = "nix-${name}";
-      nativePkgs = [pkgs.nix];
-      wasixPkgs = wasix;
+      hostPackages = [pkgs.nix];
+      wasixCommands = wasix;
       normalize = normalizeLog;
       script = ''
         nix --extra-experimental-features nix-command --store dummy:// \
@@ -34,9 +34,9 @@
       '';
     };
 in {
-  version = testLib.mkWasixRun {
+  version = harnesses.hostShell {
     name = "nix-version";
-    wasixPkgs = wasix;
+    wasixCommands = wasix;
     script = "nix --version";
   };
 
@@ -53,10 +53,10 @@ in {
 
   # Store writes run the NAR serializer through its Boost coroutine; a matching
   # store path means the bytes it produced are identical.
-  store-path = testLib.mkScriptComparison {
+  store-path = harnesses.compareShells {
     name = "nix-store-path";
-    nativePkgs = [pkgs.nix];
-    wasixPkgs = wasix;
+    hostPackages = [pkgs.nix];
+    wasixCommands = wasix;
     normalize = normalizeLog;
     script = ''
       mkdir -p tree/sub

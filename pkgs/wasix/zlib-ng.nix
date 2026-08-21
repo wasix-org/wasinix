@@ -1,6 +1,8 @@
 {
-  prev,
-  helpers,
-  ...
+  exposePackage,
+  extendPackage,
+  package,
 }:
-helpers.extendPackage (prev.zlib-ng.override {gtest = null;}) {}
+exposePackage (
+  extendPackage (package.override {gtest = null;}) {}
+)

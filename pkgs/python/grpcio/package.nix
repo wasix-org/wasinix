@@ -1,16 +1,17 @@
 # grpcio for wasix. Built like a pip sdist install, with abseil, boringssl, c-ares,
 # re2 and zlib vendored into the extension; the patch ports their platform probes.
 {
-  pyprev,
+  exposeExtendedPackage,
+  package,
   lib,
-  helpers,
-  ...
+  dropInputsByNameInfix,
+  linkInputs,
 }: let
   # before 1.75 the sdist is setup.py only, so nixpkgs' cython-unpin substitution
   # has no file to patch.
-  noPyproject = lib.versionOlder pyprev.grpcio.version "1.75";
+  noPyproject = lib.versionOlder package.version "1.75";
 in
-  helpers.extendPackage pyprev.grpcio (
+  exposeExtendedPackage (
     {
       patches = [./patches/grpcio-wasix.patch];
       env = {
@@ -25,6 +26,6 @@ in
       };
     }
     # protobuf is only an extras dep; keeps the wheel closure protobuf-free
-    // helpers.linkInputs (helpers.dropInputsByNameInfix ["c-ares" "openssl" "zlib" "protobuf"])
+    // linkInputs (dropInputsByNameInfix ["c-ares" "openssl" "zlib" "protobuf"])
     // lib.optionalAttrs noPyproject {postPatch = _: "";}
   )

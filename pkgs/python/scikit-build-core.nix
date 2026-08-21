@@ -5,5 +5,10 @@
 # wasm target onto the native build and rustc errors "could not find specification for target".
 # We don't run this build tool's own test suite; disable it so its check-only rust deps leave the
 # closure. Ungated: harmless on both the cross set and the native pythonForBuild.
-{pyprev, ...}:
-pyprev.scikit-build-core.overridePythonAttrs (_: {doCheck = false;})
+{
+  exposePackage,
+  package,
+}:
+exposePackage (
+  package.overridePythonAttrs (_: {doCheck = false;})
+)

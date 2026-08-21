@@ -1,8 +1,4 @@
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.regex {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   disabledTests = ["test_main"];
 }

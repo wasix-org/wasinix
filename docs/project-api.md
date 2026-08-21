@@ -1,9 +1,7 @@
 # Structured project API v1
 
-Status: agreed design, not yet implemented. The current implementation is
-described in [`architecture.md`](architecture.md). This document is the contract
-for replacing it; until that work lands, its attribute paths are not available
-from the flake.
+Status: implemented. This document defines the public v1 contract. Repository-
+specific additions under `internals` are not part of that contract.
 
 Wasinix constructs one structured project for one evaluation system. A project
 contains package sets, artifacts, commands, tests, and a CI catalog. Other

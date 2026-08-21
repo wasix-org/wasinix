@@ -2,14 +2,12 @@
 # Development.Module to the build interpreter's 64-bit headers, so pyport.h fatals
 # on wasm32 (LONG_BIT 32); point Python_INCLUDE_DIR at the wasix python.
 {
-  wasixPython,
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
 }: let
-  py = wasixPython;
+  py = packages.sameProfile.python;
 in
-  helpers.extendPackage pyprev.rapidfuzz {
+  exposeExtendedPackage {
     cmakeFlags = ["-DPython_INCLUDE_DIR=${py.crossIncludeDir}"];
     # Hamming distance throws through a C++ extension path that Wasmer cannot
     # currently unwind. Keep the extension import smoke test.

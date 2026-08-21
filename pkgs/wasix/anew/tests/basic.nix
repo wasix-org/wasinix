@@ -1,11 +1,11 @@
 {
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: {
-  append = testLib.mkWasixRun {
+  append = harnesses.hostShell {
     name = "anew-append";
-    wasixPkgs = [wasmerPkgs.anew];
+    wasixCommands = builtins.attrValues entry.commands;
     script = ''
       values="$WASIX_TEST_ROOT/values"
       printf 'one\ntwo\n' > "$values"

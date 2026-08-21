@@ -1,10 +1,6 @@
 # fd: a `find` alternative in Rust.
-{
-  prev,
-  helpers,
-  ...
-}:
-helpers.extendPackage prev.fd {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   passthru.wasix.broken = ''
     porting needs per-function wasi arms for code that has no wasi support — jemalloc
     (doesn't cross-build), the `ctrlc` crate (no wasi platform at all), and fd's own

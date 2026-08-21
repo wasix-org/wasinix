@@ -1,12 +1,10 @@
 # Pytest's default import mode puts the rootdir on sys.path, so the suite
 # imports the source tree, not the installed package; importlib mode avoids it.
 {
-  pyfinal,
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
 }:
-helpers.extendPackage pyprev.fastavro {
+exposeExtendedPackage {
   pytestFlags =
     ["--import-mode=importlib"]
     # asserts python-snappy is absent, but cramjam satisfies snappy; the prefix
@@ -17,6 +15,6 @@ helpers.extendPackage pyprev.fastavro {
   passthru = old:
     old
     // {
-      wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.numpy pyfinal.zlib-ng pyfinal.pandas pyfinal.zstandard pyfinal.lz4];
+      wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook packages.sameProfile.numpy packages.sameProfile.zlib-ng packages.sameProfile.pandas packages.sameProfile.zstandard packages.sameProfile.lz4];
     };
 }

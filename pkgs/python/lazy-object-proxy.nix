@@ -1,9 +1,7 @@
 {
-  pyprev,
-  pyfinal,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
 }:
-helpers.extendPackage pyprev.lazy-object-proxy {
-  passthru.wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.pytest-benchmark];
+exposeExtendedPackage {
+  passthru.wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook packages.sameProfile.pytest-benchmark];
 }

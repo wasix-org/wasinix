@@ -894,9 +894,9 @@ current toolchain before relying on it.
   C and uses no abseil. `api_implementation` catches the ImportError and falls
   back to the pure-python backend, so `import google.protobuf` still works, one
   order of magnitude slower and with none of the C++ descriptor pool semantics.
-- Workaround: the `wheel-py313-protobuf4` entry in `python/wheels.nix` imports
-  `google.protobuf.internal._api_implementation`, nixpkgs' own check that
-  `--cpp_implementation` took effect, instead of the extension the other
+- Workaround: the `wheel-py313-protobuf4` entry in `python/wheels/default.nix`
+  imports `google.protobuf.internal._api_implementation`, nixpkgs' own check
+  that `--cpp_implementation` took effect, instead of the extension the other
   protobuf entries import. The wheel ships and degrades quietly, so nothing
   reports the slower backend.
 - Fix: put the abseil archives on the extension's link line in the order

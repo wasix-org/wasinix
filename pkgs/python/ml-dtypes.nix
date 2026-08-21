@@ -2,14 +2,12 @@
 # CMakeLists' numpy probe both resolve to the build interpreter: pyport.h fatals
 # on wasm32 (LONG_BIT 32), and numpy's 64-bit long mis-sizes npy_intp.
 {
-  wasixPython,
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
 }: let
-  py = wasixPython;
+  py = packages.sameProfile.python;
 in
-  helpers.extendPackage pyprev.ml-dtypes {
+  exposeExtendedPackage {
     cmakeFlags = ["-DPython_INCLUDE_DIR=${py.crossIncludeDir}"];
     postPatch = ''
       substituteInPlace CMakeLists.txt \

@@ -2,11 +2,9 @@
 # pass false-negatives it ("Cannot find libm functions"); skip wasm-opt during
 # configure.
 {
-  final,
-  prev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
 }:
-(helpers.extendPackage prev.sqlite {}).overrideAttrs (o: {
-  nativeBuildInputs = (o.nativeBuildInputs or []) ++ [final.disableWasmOptInConfigureHook];
-})
+exposeExtendedPackage {
+  nativeBuildInputs = [packages.sameProfile.disableWasmOptInConfigureHook];
+}

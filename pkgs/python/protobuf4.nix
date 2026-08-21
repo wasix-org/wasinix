@@ -3,19 +3,17 @@
 # has no such closure, so wasm-ld turns each abseil reference into a module
 # import and loading the extension aborts on the first missing export.
 {
-  final,
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  pkgs,
 }:
-helpers.extendPackage pyprev.protobuf4 {
-  buildInputs = [final.abseil-cpp];
+exposeExtendedPackage {
+  buildInputs = [pkgs.abseil-cpp];
   preBuild = ''
-    for _archive in ${final.abseil-cpp}/lib/libabsl_*.a; do
+    for _archive in ${pkgs.abseil-cpp}/lib/libabsl_*.a; do
       _name=''${_archive##*/}
       _name=''${_name#lib}
       NIX_LDFLAGS="$NIX_LDFLAGS -l''${_name%.a}"
     done
-    export NIX_LDFLAGS="$NIX_LDFLAGS -L${final.abseil-cpp}/lib"
+    export NIX_LDFLAGS="$NIX_LDFLAGS -L${pkgs.abseil-cpp}/lib"
   '';
 }

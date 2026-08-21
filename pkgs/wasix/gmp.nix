@@ -1,9 +1,5 @@
-{
-  prev,
-  helpers,
-  ...
-}:
-helpers.extendPackage prev.gmp {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   # t-nextprime and t-scanf fail under wasmer (wasix scanf gaps); XFAIL so the
   # rest of the suite still runs.
   checkFlagsArray = [''XFAIL_TESTS=t-nextprime t-scanf''];

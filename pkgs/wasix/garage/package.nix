@@ -2,16 +2,15 @@
 # deployments. Nixpkgs owns the source, vendoring, and native
 # packaging; this override carries only the WASIX compatibility changes.
 {
-  final,
-  helpers,
-  prev,
-  toolchain,
-  ...
+  exposeExtendedPackage,
+  packages,
+  dropInputsByName,
+  profileOf,
 }: let
-  inherit (prev) lib;
-  sysroot = toolchain.sysroot.variants.${helpers.profileOf prev.stdenv.hostPlatform}.sysroot;
+  inherit (packages.sameProfile) lib;
+  sysroot = packages.native."wasix-sysroot".profiles.${profileOf packages.sameProfile.stdenv.hostPlatform}.sysroot;
 in
-  helpers.extendPackage prev.garage {
+  exposeExtendedPackage {
     patches = [
       ./patches/garage-manifest.patch
       ./patches/garage-code.patch
@@ -23,18 +22,18 @@ in
     # the build links the sysroot's libsodium, zstd and sqlite.
     cargoBuildFeatures = old: lib.subtractLists ["bundled-libs" "lmdb" "syslog"] old ++ ["system-libs"];
 
-    buildInputs = old: old ++ [final.libsodium final.sqlite final.zlib final.zstd];
+    buildInputs = old: old ++ [packages.sameProfile.libsodium packages.sameProfile.sqlite packages.sameProfile.zlib packages.sameProfile.zstd];
 
     # sqlite's and libsodium's pkg-config Libs.private put -lz and -lpthread on
     # the link line, and rustc searches neither a buildInput's libdir nor the
     # sysroot (WASIX-TODO.md).
-    env.RUSTFLAGS = "-L ${final.zlib}/lib -L ${sysroot}/lib/wasm32-wasi";
+    env.RUSTFLAGS = "-L ${packages.sameProfile.zlib}/lib -L ${sysroot}/lib/wasm32-wasi";
 
     # protobuf runs at build time; the package argument was resolved in the
     # target set.
     nativeBuildInputs = old:
-      helpers.dropInputsByName ["protobuf"] old
-      ++ [final.buildPackages.protobuf];
+      dropInputsByName ["protobuf"] old
+      ++ [packages.sameProfile.buildPackages.protobuf];
 
     passthru.wasinix.shipped = true;
   }

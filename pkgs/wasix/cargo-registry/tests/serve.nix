@@ -4,17 +4,17 @@
 # payload rather than depending on the mint. Same --net + loopback as the git tests.
 {
   pkgs,
-  testLib,
-  wasmerPkgs,
+  harnesses,
+  entry,
 }: {
-  serve = testLib.mkWasixRun {
+  serve = harnesses.hostShell {
     name = "cargo-registry-serve";
-    nativePkgs = [pkgs.cargo pkgs.rustc pkgs.stdenv.cc pkgs.python3 pkgs.curl pkgs.coreutils pkgs.gnutar pkgs.gzip];
-    wasixPkgs = [wasmerPkgs.wasix-cargo-registry];
+    hostPackages = [pkgs.cargo pkgs.rustc pkgs.stdenv.cc pkgs.python3 pkgs.curl pkgs.coreutils pkgs.gnutar pkgs.gzip];
+    wasixCommands = builtins.attrValues entry.commands;
     wasmerArgs = ["--net" "--enable-threads"];
     # The server reads its config from these; forward them into the guest.
     forwardEnv =
-      testLib.defaultForwardEnv
+      harnesses.defaultForwardEnv
       ++ ["REGISTRY_LISTEN_ADDR" "REGISTRY_BASE_URL" "REGISTRY_AUTH_TOKEN_HASHES" "REGISTRY_STORAGE_PATH"];
     script = ''
       port=8731

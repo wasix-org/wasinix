@@ -1,12 +1,12 @@
 {
   pkgs,
-  testLib,
-  wasmerPkgs,
+  harnesses,
+  entry,
 }: {
-  serve = testLib.mkWasixRun {
-    name = "static-web-server-serve";
-    nativePkgs = [pkgs.coreutils pkgs.curl];
-    wasixPkgs = [wasmerPkgs.static-web-server];
+  legacy-command = harnesses.hostShell {
+    name = "static-web-server-legacy-command";
+    hostPackages = [pkgs.coreutils pkgs.curl];
+    wasixCommands = builtins.attrValues entry.commands;
     wasmerArgs = ["--net" "--enable-threads"];
     script = ''
       port=8732

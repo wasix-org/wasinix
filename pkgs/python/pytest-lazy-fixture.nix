@@ -1,10 +1,8 @@
 {
-  pyfinal,
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
 }:
-helpers.extendPackage pyprev.pytest-lazy-fixture {
+exposeExtendedPackage {
   # pytest-lazy-fixture declares pytest as a runtime dependency in wheel metadata.
-  propagatedBuildInputs = [pyfinal.pytest];
+  propagatedBuildInputs = [packages.sameProfile.pytest];
 }

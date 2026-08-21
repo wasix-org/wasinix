@@ -1,9 +1,5 @@
-{
-  prev,
-  helpers,
-  ...
-}:
-helpers.extendPackage prev.lzo {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   checkTarget = "check-local";
   # automake's check-local runs its binaries regardless of TESTS=, and the test
   # build is wasmer-free, so the generic prebuild would die on "cannot execute

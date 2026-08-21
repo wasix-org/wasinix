@@ -1,8 +1,4 @@
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.python-rapidjson {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   passthru.wasinix.checks.captured.broken = "circular-input tests exhaust the Wasm call stack";
 }

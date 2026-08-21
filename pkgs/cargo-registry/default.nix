@@ -12,7 +12,7 @@
   cargoRegistryWire,
   mkTestGroup,
 }: let
-  relPrefix = "cargoRegistry.crates.";
+  relPrefix = "artifacts.registry.cargo-registry.crates.";
   rels = builtins.fromJSON (builtins.readFile ../../release-revisions.json);
   relOf = crate: version: (rels."${relPrefix}${crate}" or {}).${version} or 1;
 
@@ -173,12 +173,12 @@ in
         # (mintable only). Lazy, so forcing it doesn't force `minted`.
         pinConstraints =
           lib.filterAttrs (c: _: !(crateEdits.notMinted ? ${c})) crateEdits.edited;
-        # cargoRegistry.crates.<name>."<upstream version>" rebuilds one build.
+        # artifacts.registry.cargo-registry.crates.<name>."<upstream version>" rebuilds one build.
         crates =
           lib.mapAttrs (_: ds: lib.listToAttrs (map (d: lib.nameValuePair d.passthru.version d) ds))
           (lib.groupBy (d: d.passthru.crate) minted);
         tests = mkTestGroup "cargo-registry" {behavior = tests;};
-        wasix.updateNotes = lib.optional (staleRels != []) {
+        wasinix.update.notes = lib.optional (staleRels != []) {
           message = "release-revisions.json has stale keys (${lib.concatStringsSep ", " staleRels}); nix run .#update -- nixpkgs drops them";
           when = _: _: true;
         };

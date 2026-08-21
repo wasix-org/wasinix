@@ -1,14 +1,12 @@
 {
-  testLib,
-  wasmerPkgs,
+  harnesses,
+  entry,
+  commands,
   ...
 }: {
-  compile-and-link = testLib.mkWasixRun {
+  compile-and-link = harnesses.hostShell {
     name = "clang-compile-and-link";
-    wasixPkgs = [
-      wasmerPkgs.clang
-      wasmerPkgs.lld
-    ];
+    wasixCommands = builtins.attrValues entry.commands ++ [commands."wasm-ld"];
     wasmerArgs = ["--enable-threads"];
     script = ''
       cat > answer.c <<'EOF'

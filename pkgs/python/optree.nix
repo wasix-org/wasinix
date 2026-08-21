@@ -2,12 +2,8 @@
 # Its except clause catches OSError, but wasix CPython rejects subprocess `cwd`
 # with NotImplementedError, so importing optree raises. We build the tag, which
 # is what __release__ marks.
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.optree {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   postPatch = ''
     substituteInPlace optree/version.py \
       --replace-fail "__release__ = False" "__release__ = True"

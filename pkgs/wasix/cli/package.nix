@@ -1,40 +1,49 @@
 {
-  final,
-  preferredProfilePackages,
-  wasmerDependencies,
-  ...
-}: let
-  pname = "cli";
-  version = "0.1.4";
-  tools = with preferredProfilePackages; [
-    curl
-    findutils
-    gnugrep
-    gzip
-    less
-    nano
-    ncurses-progs
-    gnused
-    gnutar
-  ];
-in
-  final.runCommand "${pname}-${version}" {
-    inherit pname version;
-    meta.description = "Shell environment with common command-line tools";
-    passthru = {
-      wasinix.shipped = true;
-      wasmer = {
-        name = pname;
-        entrypoint = "bash";
-        commands = [
-          {
-            name = "bash";
-            dependency = wasmerDependencies.any preferredProfilePackages.bash;
-          }
-        ];
-        dependencies = map wasmerDependencies.any tools;
+  exposePackage,
+  packages,
+}:
+exposePackage (
+  let
+    pname = "cli";
+    version = "0.1.4";
+    tools = with packages.preferred; [
+      curl
+      findutils
+      gnugrep
+      gzip
+      less
+      nano
+      ncurses-progs
+      gnused
+      gnutar
+    ];
+  in
+    packages.sameProfile.runCommand "${pname}-${version}" {
+      inherit pname version;
+      meta.description = "Shell environment with common command-line tools";
+      passthru = {
+        wasinix.shipped = true;
+        wasmer = {
+          name = pname;
+          entrypoint = "bash";
+          commands = [
+            {
+              name = "bash";
+              dependency = {
+                package = packages.preferred.bash;
+                version = "*";
+              };
+            }
+          ];
+          dependencies =
+            map (package: {
+              inherit package;
+              version = "*";
+            })
+            tools;
+        };
       };
-    };
-  } ''
-    mkdir -p "$out"
-  ''
+    } ''
+      mkdir -p "$out"
+    ''
+)

@@ -1,10 +1,13 @@
 {
-  prev,
-  helpers,
-  ...
+  exposePackage,
+  extendPackage,
+  package,
+  wasmRename,
 }:
-helpers.wasmRename {wasmName = "gojq";} (
-  helpers.extendPackage prev.gojq {
-    passthru.wasinix.shipped = true;
-  }
+exposePackage (
+  wasmRename {wasmName = "gojq";} (
+    extendPackage package {
+      passthru.wasinix.shipped = true;
+    }
+  )
 )

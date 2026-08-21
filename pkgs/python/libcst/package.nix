@@ -1,14 +1,13 @@
 {
-  pyprev,
-  pyfinal,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
+  replaceInputsByName,
 }: let
-  formatCheckingUfmt = pyfinal.ufmt.overridePythonAttrs (old: {
-    dependencies = helpers.replaceInputsByName {black = pyfinal.black_25_1_0;} old.dependencies;
+  formatCheckingUfmt = packages.sameProfile.ufmt.overridePythonAttrs (old: {
+    dependencies = replaceInputsByName {black = packages.sameProfile.black.versions."25.1.0";} old.dependencies;
   });
 in
-  helpers.extendPackage pyprev.libcst {
+  exposeExtendedPackage {
     patches = [./patches/wasix-execution.patch];
-    passthru.wasixDeclaredCheckInputs = [pyfinal.hypothesmith pyfinal.pytestCheckHook formatCheckingUfmt];
+    passthru.wasixDeclaredCheckInputs = [packages.sameProfile.hypothesmith packages.sameProfile.pytestCheckHook formatCheckingUfmt];
   }

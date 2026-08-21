@@ -7,13 +7,19 @@
     entry,
     packages,
     ...
-  }:
+  }: let
+    hasPackagedTests =
+      entry.definition
+      != null
+      && entry.definition.directory != null
+      && builtins.pathExists (entry.definition.directory + "/tests");
+  in
     lib.optionalAttrs (
       entry.kind
       == "package"
       && entry.scope == "wasix"
       && entry.preferred
-      && (entry.policy.shipped or false)
+      && ((entry.policy.shipped or false) || hasPackagedTests)
       && !(entry.package.meta.broken or false)
     ) (let
       current = packages.sameProfile.${entry.name};
@@ -49,6 +55,7 @@
           {
             name = identity.name;
             entrypoint = manifest.entrypoint or identity.name;
+            global = true;
           }
         ]
         else if builtins.isList declaredCommands
@@ -62,6 +69,7 @@
               if lib.isAttrs command
               then command.name or null
               else null;
+            global = !(lib.isAttrs command && command ? dependency);
           })
           declaredCommands
         else [];
@@ -72,8 +80,9 @@
       duplicateCommands = lib.attrNames (lib.filterAttrs (_: commands: lib.length commands > 1) (lib.groupBy (command: command.name) commandSpecs));
       commands = lib.listToAttrs (map (command:
         lib.nameValuePair command.name {
-          inherit (command) name entrypoint;
+          inherit (command) name entrypoint global;
           artifact = entry.artifact;
+          version = lib.optionalString (manifest.history or false) identity.baseVersion;
         })
       commandSpecs);
     in

@@ -3,14 +3,12 @@
 # lacks. Upstream already ships that machinery through _soundfile_data; only its
 # runtime platform switch needs a wasix branch, sys.platform being unknown to it.
 {
-  final,
+  exposeExtendedPackage,
+  packages,
+  pkgs,
   lib,
-  pyprev,
-  pyfinal,
-  helpers,
-  ...
 }:
-helpers.extendPackage pyprev.soundfile {
+exposeExtendedPackage {
   # setup.py derives the bundled libname from these; keep the runtime name below in step.
   # Only `linux` packages _soundfile_data at all, and it also picks the wheel's
   # platform tag, which the postPatch below corrects.
@@ -21,7 +19,7 @@ helpers.extendPackage pyprev.soundfile {
   # _soundfile_data must be a real package, not a namespace one: the loader reads
   # its __file__. `_:` replaces nixpkgs' postPatch, which bakes a store path.
   postPatch = _: ''
-    install -Dm644 ${lib.getLib final.libsndfile}/lib/libsndfile.so _soundfile_data/libsndfile_wasm32.so
+    install -Dm644 ${lib.getLib pkgs.libsndfile}/lib/libsndfile.so _soundfile_data/libsndfile_wasm32.so
     touch _soundfile_data/__init__.py
     substituteInPlace soundfile.py \
       --replace-fail "raise OSError('no packaged library for this platform')" \
@@ -35,7 +33,7 @@ helpers.extendPackage pyprev.soundfile {
       "--deselect=tests/test_soundfile.py::test_if_open_with_mode_w_truncates"
       "--deselect=tests/test_soundfile.py::test_write_flush_should_write_to_disk[obj]"
     ]
-    ++ lib.optionals (lib.versionOlder pyfinal.python.version "3.14") [
+    ++ lib.optionals (lib.versionOlder packages.sameProfile.python.version "3.14") [
       # This file-object write is not visible when reopened by path on Python 3.13.
       "--deselect=tests/test_soundfile.py::test_file_attributes_should_save_to_disk[obj]"
     ];

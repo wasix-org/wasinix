@@ -1,10 +1,8 @@
 {
-  pyfinal,
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
 }:
-helpers.extendPackage pyprev.pytest-datadir {
+exposeExtendedPackage {
   # pytest-datadir declares pytest as a runtime dependency in wheel metadata.
-  propagatedBuildInputs = [pyfinal.pytest];
+  propagatedBuildInputs = [packages.sameProfile.pytest];
 }

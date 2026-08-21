@@ -1,58 +1,58 @@
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: let
   nativeSed = [pkgs.gnused];
-  wasixSed = [wasmerPkgs.sed];
+  wasixSed = builtins.attrValues entry.commands;
 in {
-  version = testLib.mkWasixRun {
+  version = harnesses.hostShell {
     name = "sed-version";
-    wasixPkgs = wasixSed;
+    wasixCommands = wasixSed;
     script = "sed --version";
   };
 
-  substitute = testLib.mkScriptComparison {
+  substitute = harnesses.compareShells {
     name = "sed-substitute";
-    nativePkgs = nativeSed;
-    wasixPkgs = wasixSed;
+    hostPackages = nativeSed;
+    wasixCommands = wasixSed;
     script = ''
       echo "hello world" | sed 's/world/there/'
     '';
   };
 
-  delete = testLib.mkScriptComparison {
+  delete = harnesses.compareShells {
     name = "sed-delete";
-    nativePkgs = nativeSed;
-    wasixPkgs = wasixSed;
+    hostPackages = nativeSed;
+    wasixCommands = wasixSed;
     script = ''
       printf 'keep\ndelete me\nkeep\n' | sed '/delete/d'
     '';
   };
 
-  print = testLib.mkScriptComparison {
+  print = harnesses.compareShells {
     name = "sed-print";
-    nativePkgs = nativeSed;
-    wasixPkgs = wasixSed;
+    hostPackages = nativeSed;
+    wasixCommands = wasixSed;
     script = ''
       printf 'foo\nbar\nbaz\n' | sed -n '/bar/p'
     '';
   };
 
-  address-range = testLib.mkScriptComparison {
+  address-range = harnesses.compareShells {
     name = "sed-address-range";
-    nativePkgs = nativeSed;
-    wasixPkgs = wasixSed;
+    hostPackages = nativeSed;
+    wasixCommands = wasixSed;
     script = ''
       printf 'a\nb\nc\nd\ne\n' | sed '2,4d'
     '';
   };
 
-  inplace = testLib.mkScriptComparison {
+  inplace = harnesses.compareShells {
     name = "sed-inplace";
-    nativePkgs = nativeSed;
-    wasixPkgs = wasixSed;
+    hostPackages = nativeSed;
+    wasixCommands = wasixSed;
     script = ''
       echo "hello world" > test.txt
       sed -i 's/world/there/' test.txt
@@ -60,10 +60,10 @@ in {
     '';
   };
 
-  multiple-expressions = testLib.mkScriptComparison {
+  multiple-expressions = harnesses.compareShells {
     name = "sed-multiple-expressions";
-    nativePkgs = nativeSed;
-    wasixPkgs = wasixSed;
+    hostPackages = nativeSed;
+    wasixCommands = wasixSed;
     script = ''
       echo "foo bar baz" | sed -e 's/foo/FOO/' -e 's/bar/BAR/'
     '';

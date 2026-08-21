@@ -1,13 +1,13 @@
 {
-  testLib,
-  wasmerPkgs,
+  harnesses,
+  entry,
   ...
 }: let
-  wasix = [wasmerPkgs.llvm];
+  wasix = builtins.attrValues entry.commands;
 in {
-  ir-roundtrip = testLib.mkWasixRun {
+  ir-roundtrip = harnesses.hostShell {
     name = "llvm-ir-roundtrip";
-    wasixPkgs = wasix;
+    wasixCommands = wasix;
     wasmerArgs = ["--enable-threads"];
     script = ''
       cat > input.ll <<'EOF'
@@ -21,9 +21,9 @@ in {
     '';
   };
 
-  wasm-object = testLib.mkWasixRun {
+  wasm-object = harnesses.hostShell {
     name = "llvm-wasm-object";
-    wasixPkgs = wasix;
+    wasixCommands = wasix;
     wasmerArgs = ["--enable-threads"];
     script = ''
       cat > input.ll <<'EOF'

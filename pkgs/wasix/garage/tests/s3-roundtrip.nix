@@ -8,16 +8,16 @@
 # auth, and block read/write through the data dir.
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: {
-  s3-roundtrip = testLib.mkWasixRun {
+  s3-roundtrip = harnesses.hostShell {
     name = "garage-s3-roundtrip";
-    wasixPkgs = [wasmerPkgs.garage];
-    nativePkgs = [pkgs.minio-client pkgs.coreutils];
+    wasixCommands = builtins.attrValues entry.commands;
+    hostPackages = [pkgs.minio-client pkgs.coreutils];
     wasmerArgs = ["--net"];
-    forwardEnv = testLib.defaultForwardEnv ++ ["RUST_BACKTRACE" "GARAGE_CONFIG_FILE"];
+    forwardEnv = harnesses.defaultForwardEnv ++ ["RUST_BACKTRACE" "GARAGE_CONFIG_FILE"];
     script = ''
       export RUST_BACKTRACE=1
       export GARAGE_CONFIG_FILE="$PWD/garage.toml"

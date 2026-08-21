@@ -1,30 +1,26 @@
 //! How an argument names a thing.
 //!
-//! There is one address space: the flake attr path, rooted at
-//! `legacyPackages.<system>` (or at `inputs.` for a flake input). Every command
-//! takes addresses from it, so an argument is always something you can paste
-//! after `nix build .#`.
+//! There is one address space: the structured project catalog. Every command
+//! takes canonical catalog addresses.
 //!
 //! ```text
-//! packagesByProfile.eh.zlib   full      the path itself
-//! eh.zlib                     suffix    leading segments dropped, must reach the leaf
-//! packagesByProfile.zlib      axis-free the variant segment dropped: every profile
-//! packagesByProfile.*.zl*     glob      `*` matches in one segment, never across a dot
-//! wasmerPackages."py3.14"   quoted      a segment holding a dot, spelled as Nix spells it
-//! numpy@2.0.0               versioned   `@` attaches a version to any of the above
+//! packages.wasix.eh.zlib   full      the path itself
+//! eh.zlib                  suffix    leading segments dropped, must reach the leaf
+//! packages.wasix.zlib      axis-free the variant segment dropped: every profile
+//! packages.wasix.*.zl*     glob      `*` matches in one segment, never across a dot
+//! packages.wasix.eh."a.b" quoted      a segment holding a dot, spelled as Nix spells it
+//! numpy@2.0.0              versioned   `@` attaches a version to any of the above
 //! ```
 //!
 //! A command declares its own domain: the addresses it can act on. That is why
-//! there are no namespace prefixes. `pin:` was never a root anyway, since pins
-//! live at `toolchain.libc`, `pythonWheels.py313.ddtrace` and `inputs.nixpkgs`;
-//! "what the update driver owns" is a property of the command, not of the name.
+//! there are no command-specific namespace prefixes.
 
 use std::collections::BTreeMap;
 
 use crate::support::error::{Result, request_error};
 
 /// Split an address into segments, honouring the quoting Nix itself uses for a
-/// segment that holds a dot (`wasmerPackages."python3.14"`).
+/// segment that holds a dot (`artifacts.webc."python3.14"`).
 pub fn split(address: &str) -> Result<Vec<String>> {
     let mut segments = Vec::new();
     let mut current = String::new();
@@ -106,23 +102,30 @@ pub fn parse(spec: &str) -> Result<Spec> {
     })
 }
 
-/// Roots whose second segment is a build variant rather than part of what the
-/// thing is: the profile in `packagesByProfile.<profile>.<name>`, the
-/// interpreter in `pythonWheels.<interpreter>.<name>`. The values themselves
-/// are not restated here; only which segment holds them.
-pub const VARIANT_ROOTS: [&str; 2] = ["packagesByProfile", "pythonWheels"];
-
 /// Which segment of a path a caller may leave out, if any.
 pub fn axis_of(path: &[String]) -> Option<usize> {
-    (path.len() > 2 && VARIANT_ROOTS.contains(&path[0].as_str())).then_some(1)
+    match path {
+        [root, lane, _, _, ..]
+            if root == "packages" && matches!(lane.as_str(), "wasix" | "python") =>
+        {
+            Some(2)
+        }
+        [root, packages, lane, _, _, ..]
+            if root == "tests"
+                && packages == "packages"
+                && matches!(lane.as_str(), "wasix" | "python") =>
+        {
+            Some(3)
+        }
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone)]
 struct Entry {
     path: Vec<String>,
     /// A segment the caller may leave out because it is a build variant: the
-    /// profile in `packagesByProfile.<profile>.<name>`, the interpreter in
-    /// `pythonWheels.<interpreter>.<name>`. Omitting it means all of them.
+    /// profile or interpreter variant. Omitting it means all variants.
     axis: Option<usize>,
     /// Names this entry also answers to, for a thing the repo calls something
     /// other than its leaf: a CLI's overlay attr beside its webc name.
@@ -196,7 +199,7 @@ impl Domain {
     }
 
     /// Segments given directly, for a name the repo spells with a dot in it
-    /// (`wasmerPackages."python3.14"`), which no split of a flat string
+    /// (`packages.wasix.eh."python3.14"`), which no split of a flat string
     /// recovers.
     pub fn add_path(
         &mut self,

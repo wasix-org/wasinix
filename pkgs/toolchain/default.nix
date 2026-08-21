@@ -62,8 +62,8 @@
   wasixcc = pkgs.wasixcc;
   cargoWasix = pkgs.cargo-wasix;
 in {
-  # The wasix rustPlatform is assembled in pkgs/default.nix, where the pkgsCross
-  # it needs is in scope.
+  # The WASIX Rust platform is assembled by the project factory, where its
+  # cross package set is in scope.
   inherit
     wasixLlvm
     wasixSysroot
@@ -87,8 +87,8 @@ in {
     flang
     flangCross
     ;
-  # Internal inputs for pkgs/default.nix and the overlay. Profile-sensitive
-  # outputs are public through toolchainByProfile, never as implicit defaults.
+  # Internal inputs for the project factory and infrastructure overlay.
+  # Profile-sensitive interfaces are attached to their native packages.
   inherit flangRtByProfile wasixflangByProfile openmpByProfile;
   inherit haskell;
 }

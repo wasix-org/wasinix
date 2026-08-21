@@ -10,13 +10,13 @@
 # names and builds a wheel with the wrong version. 0.3 also caps
 # langchain-core<1 and needs text-splitters and SQLAlchemy, which 1.x dropped.
 {
-  pyprev,
-  pyfinal,
-  helpers,
+  exposeExtendedPackage,
+  packages,
+  package,
   lib,
-  ...
+  replaceInputsByName,
 }:
-helpers.extendPackage pyprev.langchain ({
+exposeExtendedPackage ({
     postPatch = _: "";
     disabledTestPaths = [
       "tests/unit_tests/agents/middleware/implementations/test_shell_tool.py"
@@ -24,15 +24,15 @@ helpers.extendPackage pyprev.langchain ({
     ];
     passthru.wasinix.checks.captured.install = false;
   }
-  // lib.optionalAttrs (lib.versionOlder pyprev.langchain.version "1") {
+  // lib.optionalAttrs (lib.versionOlder package.version "1") {
     sourceRoot = "source/libs/langchain";
     propagatedBuildInputs = ps:
-      helpers.replaceInputsByName {
-        langchain-core = pyfinal.langchain-core_0_3_86;
+      replaceInputsByName {
+        langchain-core = packages.sameProfile.langchain-core.versions."0.3.86";
       }
       ps
       ++ [
-        pyfinal.langchain-text-splitters_0_3_11
-        pyfinal.sqlalchemy
+        packages.sameProfile.langchain-text-splitters.versions."0.3.11"
+        packages.sameProfile.sqlalchemy
       ];
   })

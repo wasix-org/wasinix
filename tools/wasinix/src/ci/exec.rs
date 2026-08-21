@@ -237,7 +237,7 @@ fn eval_inputs(
     let _lease = route.acquire()?;
     let logs = crate::ci::prepare::logs_dir(&case_dir(ctx.run_dir, case_id)).join("eval-inputs");
     let attr = format!(
-        ".#legacyPackages.{}.ciSets.all",
+        ".#legacyPackages.{}.ci.jobs",
         crate::support::nix::SYSTEM
     );
     let jobs_path = logs.join("jobs.jsonl");
@@ -288,7 +288,7 @@ fn selector_catalog(worktree: &Path, route: &Route) -> Result<crate::ci::evalmap
     let bytes = crate::support::nix::Invocation::flake(
         "eval",
         format!(
-            ".#legacyPackages.{}.ciSelectorCatalog",
+            ".#legacyPackages.{}.ci.catalog",
             crate::support::nix::SYSTEM
         ),
     )
@@ -300,7 +300,7 @@ fn selector_catalog(worktree: &Path, route: &Route) -> Result<crate::ci::evalmap
     .checked_output("the CI selector catalog")?;
     let catalog: crate::ci::evalmap::SelectorCatalog =
         serde_json::from_slice(&bytes).map_err(|source| Error::Json {
-        path: "<ciSelectorCatalog>".into(),
+        path: "<ci.catalog>".into(),
         source,
     })?;
     let expected = crate::support::schema::project_version();
@@ -353,7 +353,7 @@ fn evaluate(
     let case_id = case.case_id();
     let maps = crate::ci::prepare::maps_dir(&case_dir(ctx.run_dir, case_id));
     let attr = format!(
-        ".#legacyPackages.{}.ciSets.all",
+        ".#legacyPackages.{}.ci.jobs",
         crate::support::nix::SYSTEM
     );
     let eval_log = maps.join("eval.log");
@@ -386,7 +386,7 @@ fn evaluate(
 
     let jobs = evaljobs::parse_file(&crate::support::fs::read_to_string(&jobs_path)?)?;
     let mut mapping = EvalMap::from_jobs(case.source.rev.clone(), &jobs);
-    let catalog = selector_catalog(worktree, route)?;
+    let catalog = selector_catalog(worktree, route)?.into_map();
     mapping.info = catalog.info;
     mapping.sets = catalog.sets;
     mapping.groups = catalog.groups;
@@ -495,7 +495,7 @@ fn spot(
         .iter()
         .map(|target| {
             (
-                JobAddr(format!("packagesByProfile.{}", target.target)),
+                JobAddr(format!("packages.wasix.{}", target.target)),
                 target.spliced_drv_path.clone(),
             )
         })

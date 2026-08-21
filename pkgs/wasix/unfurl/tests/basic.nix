@@ -1,14 +1,14 @@
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: let
   cmp = name: mode: extra:
-    testLib.mkScriptComparison ({
+    harnesses.compareShells ({
         inherit name;
-        nativePkgs = [pkgs.unfurl];
-        wasixPkgs = [wasmerPkgs.unfurl];
+        hostPackages = [pkgs.unfurl];
+        wasixCommands = builtins.attrValues entry.commands;
         script = "printf '%s\\n' 'https://sub.example.com/path?id=1&name=sam' | unfurl ${mode}";
       }
       // extra);

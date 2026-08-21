@@ -5,16 +5,15 @@
 # half lives in _psutil_posix.c and users.c reads utmp, so an older release takes
 # the same edits cut against that layout.
 {
-  pyprev,
+  exposeExtendedPackage,
+  package,
   lib,
-  helpers,
-  ...
 }:
-helpers.extendPackage pyprev.psutil {
+exposeExtendedPackage {
   # The suite loops on a TypeError because the guest has no /proc.
   passthru.wasinix.checks.captured.install = false;
   patches =
-    if lib.versionOlder pyprev.psutil.version "7"
+    if lib.versionOlder package.version "7"
     then [./patches/psutil-presplit-wasix.patch]
     else [./patches/psutil-wasix.patch];
   # limited API off: an abi3 wheel carries one cp36-abi3 filename for a .so built

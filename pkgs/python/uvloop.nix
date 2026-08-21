@@ -3,12 +3,8 @@
 # PyOS_AfterFork_* only under HAVE_FORK, which the wasix python lacks; uvloop
 # calls them unconditionally around uv_spawn. No-op them: uv_spawn returns
 # ENOSYS on wasix (no fork), so the hooks would bracket nothing.
-{
-  pyprev,
-  helpers,
-  ...
-}:
-helpers.extendPackage pyprev.uvloop {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   env.NIX_CFLAGS_COMPILE = "-DPyOS_BeforeFork()= -DPyOS_AfterFork_Parent()= -DPyOS_AfterFork_Child()=";
   # both raise at import, aborting collection: test_process imports psutil,
   # test_tcp fails to load a helper module in the guest

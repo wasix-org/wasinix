@@ -1,10 +1,9 @@
 {
-  pyprev,
-  helpers,
+  exposeExtendedPackage,
+  package,
   lib,
-  ...
 }:
-helpers.extendPackage pyprev.docutils {
+exposeExtendedPackage {
   postPatch =
     ''
       matches=()
@@ -18,7 +17,7 @@ helpers.extendPackage pyprev.docutils {
       substituteInPlace "''${matches[@]}" \
         --replace-fail '[Errno 2]' '[Errno 44]'
     ''
-    + lib.optionalString (lib.versionAtLeast pyprev.docutils.version "0.19") ''
+    + lib.optionalString (lib.versionAtLeast package.version "0.19") ''
       substituteInPlace docutils/writers/odf_odt/__init__.py \
         --replace-fail 'subprocess.CalledProcessError, FileNotFoundError, ValueError' \
           'subprocess.CalledProcessError, OSError, ValueError'

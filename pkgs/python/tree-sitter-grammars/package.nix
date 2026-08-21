@@ -4,7 +4,10 @@
 # src/tree_sitter/parser.h and the external scanner, which builds a parser whose
 # scanner symbols are missing at load. swift generates its parser sources during
 # release, so it has none in the repo and uses the sdist instead.
-let
+{
+  packages,
+  pkgs,
+}: let
   grammars = {
     c = {
       version = "0.24.2";
@@ -123,48 +126,40 @@ let
       owner = "tree-sitter-grammars";
     };
   };
-in {
-  names = map (lang: "tree-sitter-${lang}") (builtins.attrNames grammars);
-  packages = {
-    pyfinal,
-    final,
-    ...
-  }: let
-    updater = final.buildPackages.writeShellApplication {
-      name = "update-tree-sitter-grammars";
-      runtimeInputs = with final.buildPackages; [curl git gnused jq nix];
-      text = builtins.readFile ./update.sh;
-    };
-  in
-    builtins.listToAttrs (map (lang: let
-      spec = grammars.${lang};
-    in {
-      name = "tree-sitter-${lang}";
-      value = pyfinal.buildPythonPackage ({
-          pname = "tree-sitter-${lang}";
-          inherit (spec) version;
-          pyproject = true;
+  updater = pkgs.buildPackages.writeShellApplication {
+    name = "update-tree-sitter-grammars";
+    runtimeInputs = with pkgs.buildPackages; [curl git gnused jq nix];
+    text = builtins.readFile ./update.sh;
+  };
+in
+  builtins.listToAttrs (map (lang: let
+    spec = grammars.${lang};
+  in {
+    name = "tree-sitter-${lang}";
+    value = packages.sameProfile.buildPythonPackage ({
+      pname = "tree-sitter-${lang}";
+      inherit (spec) version;
+      pyproject = true;
 
-          src =
-            if spec ? owner
-            then
-              final.fetchFromGitHub {
-                inherit (spec) owner hash;
-                repo = "tree-sitter-${lang}";
-                tag = "v${spec.version}";
-              }
-            else
-              pyfinal.fetchPypi {
-                pname = "tree_sitter_${lang}";
-                inherit (spec) version hash;
-              };
+      src =
+        if spec ? owner
+        then
+          pkgs.fetchFromGitHub {
+            inherit (spec) owner hash;
+            repo = "tree-sitter-${lang}";
+            tag = "v${spec.version}";
+          }
+        else
+          packages.sameProfile.fetchPypi {
+            pname = "tree_sitter_${lang}";
+            inherit (spec) version hash;
+          };
 
-          build-system = [pyfinal.setuptools];
+      build-system = [packages.sameProfile.setuptools];
 
-          pythonImportsCheck = ["tree_sitter_${lang}"];
+      pythonImportsCheck = ["tree_sitter_${lang}"];
 
-          passthru.updateScript = [(final.lib.getExe updater) lang];
-        }
-        // final.lib.optionalAttrs (spec ? postPatch) {inherit (spec) postPatch;});
-    }) (builtins.attrNames grammars));
-}
+      passthru.updateScript = ["${updater}/bin/update-tree-sitter-grammars" lang];
+    }
+    // pkgs.lib.optionalAttrs (spec ? postPatch) {inherit (spec) postPatch;});
+  }) (builtins.attrNames grammars))

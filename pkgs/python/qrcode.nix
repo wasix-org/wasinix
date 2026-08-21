@@ -3,22 +3,21 @@
 # `dependencies` into propagatedBuildInputs when it is called, so a later tweak
 # has to name the latter.
 {
-  pyprev,
-  pyfinal,
-  helpers,
+  exposeExtendedPackage,
+  packages,
+  package,
   lib,
-  ...
 }:
-helpers.extendPackage pyprev.qrcode {
-  propagatedBuildInputs = lib.optionals (lib.versionOlder pyprev.qrcode.version "8") [
-    pyfinal.typing-extensions
-    pyfinal.pypng
+exposeExtendedPackage {
+  propagatedBuildInputs = lib.optionals (lib.versionOlder package.version "8") [
+    packages.sameProfile.typing-extensions
+    packages.sameProfile.pypng
   ];
   # Replaces the stashed check inputs: the inherited pillow is the
   # build-platform one, with no loadable _imaging.
   passthru = old:
     old
     // {
-      wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.pillow];
+      wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook packages.sameProfile.pillow];
     };
 }

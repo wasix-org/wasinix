@@ -1,11 +1,10 @@
 # The cffi build step runs on the build host, so it needs that interpreter's
 # _cffi_backend rather than the wasm one.
 {
-  wasixPython,
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
+  pkgs,
 }:
-helpers.extendPackage pyprev.onigurumacffi {
-  nativeBuildInputs = [wasixPython.pythonOnBuildForHost.pkgs.cffi];
+exposeExtendedPackage {
+  nativeBuildInputs = [packages.sameProfile.python.pythonOnBuildForHost.pkgs.cffi];
 }

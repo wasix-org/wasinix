@@ -1,27 +1,30 @@
 {
-  prev,
-  helpers,
-  ...
+  exposePackage,
+  extendPackage,
+  package,
+  wasmRename,
 }:
-helpers.wasmRename {wasmName = "yq";} (
-  helpers.extendPackage prev.yq-go {
-    vendorHash = "sha256-1UpQBsSVPQHdo5mukXGatLl7ru0qS4OS6ybuyMszJHc=";
-    subPackages = ["."];
-    tinygoBuildFlags = ["-opt=1"];
-    # Go's checkPhase builds the tests; the Makefile check target invokes /bin/bash.
-    wasixCheckPrebuild = ":";
-    # go-json links against the standard Go compiler's private reflect ABI,
-    # which TinyGo does not provide. These files use its public JSON API only.
-    postPatch = ''
-      substituteInPlace \
-        pkg/yqlib/candidate_node_json.go \
-        pkg/yqlib/decoder_json.go \
-        pkg/yqlib/encoder_json.go \
-        --replace-fail '"github.com/goccy/go-json"' '"encoding/json"'
-    '';
-    passthru.wasix = {
-      shipped = true;
-      postUpdateHook = ["pkgs/wasix/yq-go/update-vendor-hash.py"];
-    };
-  }
+exposePackage (
+  wasmRename {wasmName = "yq";} (
+    extendPackage package {
+      vendorHash = "sha256-1UpQBsSVPQHdo5mukXGatLl7ru0qS4OS6ybuyMszJHc=";
+      subPackages = ["."];
+      tinygoBuildFlags = ["-opt=1"];
+      # Go's checkPhase builds the tests; the Makefile check target invokes /bin/bash.
+      wasixCheckPrebuild = ":";
+      # go-json links against the standard Go compiler's private reflect ABI,
+      # which TinyGo does not provide. These files use its public JSON API only.
+      postPatch = ''
+        substituteInPlace \
+          pkg/yqlib/candidate_node_json.go \
+          pkg/yqlib/decoder_json.go \
+          pkg/yqlib/encoder_json.go \
+          --replace-fail '"github.com/goccy/go-json"' '"encoding/json"'
+      '';
+      passthru.wasinix = {
+        shipped = true;
+        update.post = ["pkgs/wasix/yq-go/update-vendor-hash.py"];
+      };
+    }
+  )
 )

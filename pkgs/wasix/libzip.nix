@@ -1,16 +1,18 @@
 # zlib/xz/zstd auto-thread; withLZMA/withBzip2 are build options (kept).
 {
-  final,
-  prev,
-  helpers,
-  ...
+  exposePackage,
+  extendPackage,
+  package,
+  packages,
 }:
-(helpers.extendPackage (prev.libzip.override {
-  withLZMA = true;
-  withBzip2 = false;
-}) {})
+exposePackage (
+  (extendPackage (package.override {
+    withLZMA = true;
+    withBzip2 = false;
+  }) {})
 .overrideAttrs (o: {
-  # libzip's cmake feature checks link conftests that the default wasm-opt pass
-  # false-negatives; skip wasm-opt during configure.
-  nativeBuildInputs = (o.nativeBuildInputs or []) ++ [final.disableWasmOptInConfigureHook];
-})
+    # libzip's cmake feature checks link conftests that the default wasm-opt pass
+    # false-negatives; skip wasm-opt during configure.
+    nativeBuildInputs = (o.nativeBuildInputs or []) ++ [packages.sameProfile.disableWasmOptInConfigureHook];
+  })
+)

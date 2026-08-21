@@ -3,15 +3,14 @@
 # which the non-PIC EH sysroots do not ship. Linking openssl replaces the
 # dlopen; prometheus-cpp's metrics exposer serves no CGI.
 {
-  prev,
-  final,
-  helpers,
-  ...
+  profileSets,
+  exposeExtendedPackage,
+  packages,
 }:
-helpers.extendPackage prev.civetweb {
-  buildInputs = [final.openssl];
+exposeExtendedPackage {
+  buildInputs = [packages.sameProfile.openssl];
   # CivetServer.cpp throws, so the C++ wrapper needs an EH profile.
-  passthru.wasix.supportedProfiles = helpers.profiles.withEh;
+  passthru.wasix.supportedProfiles = profileSets.withEh;
   cmakeFlags = [
     "-DCIVETWEB_DISABLE_CGI=ON"
     "-DCIVETWEB_ENABLE_SSL_DYNAMIC_LOADING=OFF"

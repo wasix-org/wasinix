@@ -2,16 +2,16 @@
 # release, whose hunks miss on a rebased history src. Keep the plugins instead,
 # taken from the build host since the cross set's cannot run at build time.
 {
-  pyfinal,
-  pyprev,
-  helpers,
+  exposeExtendedPackage,
+  packages,
+  package,
+  pkgs,
   lib,
-  ...
 }: let
-  buildPy = pyprev.python.pythonOnBuildForHost;
+  buildPy = packages.sameProfile.python.pythonOnBuildForHost;
 in
-  helpers.extendPackage pyprev.attrs (
-    lib.optionalAttrs ((pyprev.attrs.passthru.wasix.historySpec or null) != null) {
+  exposeExtendedPackage (
+    lib.optionalAttrs ((package.passthru.wasix.historySpec or null) != null) {
       patches = _: [];
       nativeBuildInputs = [
         buildPy.pkgs.hatch-fancy-pypi-readme
@@ -23,7 +23,7 @@ in
         old
         // {
           wasinix = (old.wasinix or {}) // {checks.captured.install = true;};
-          wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.hypothesis pyfinal.pretend];
+          wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook packages.sameProfile.hypothesis packages.sameProfile.pretend];
         };
       pytestFlags = ["--import-mode=importlib"];
       disabledTests = ["test_overwrite_base"];

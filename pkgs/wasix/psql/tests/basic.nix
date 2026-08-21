@@ -1,22 +1,24 @@
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
+  packageForEntry,
+  packages,
   ...
 }: let
-  psql = [wasmerPkgs.psql];
-  nativePsql = [pkgs."postgresql_${toString (pkgs.lib.versions.major wasmerPkgs.psql.version)}"];
+  psql = builtins.attrValues entry.commands;
+  nativePsql = [pkgs."postgresql_${toString (pkgs.lib.versions.major (packageForEntry packages entry).version)}"];
 in {
-  version = testLib.mkWasixRun {
+  version = harnesses.hostShell {
     name = "psql-version";
-    wasixPkgs = psql;
+    wasixCommands = psql;
     script = "psql --version";
   };
 
-  query = testLib.mkWasixRun {
+  query = harnesses.hostShell {
     name = "psql-query";
-    nativePkgs = nativePsql;
-    wasixPkgs = psql;
+    hostPackages = nativePsql;
+    wasixCommands = psql;
     wasmerArgs = ["--net"];
     timeout = 900;
     script = ''
@@ -37,10 +39,10 @@ in {
     '';
   };
 
-  tls = testLib.mkWasixRun {
+  tls = harnesses.hostShell {
     name = "psql-tls";
-    nativePkgs = [pkgs.openssl] ++ nativePsql;
-    wasixPkgs = psql;
+    hostPackages = [pkgs.openssl] ++ nativePsql;
+    wasixCommands = psql;
     wasmerArgs = ["--net"];
     timeout = 900;
     script = ''

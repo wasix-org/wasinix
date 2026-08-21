@@ -1,13 +1,13 @@
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: {
-  query = testLib.mkScriptComparison {
+  query = harnesses.compareShells {
     name = "gojq-query";
-    nativePkgs = [pkgs.gojq];
-    wasixPkgs = [wasmerPkgs.gojq];
+    hostPackages = [pkgs.gojq];
+    wasixCommands = builtins.attrValues entry.commands;
     script = ''
       printf '%s\n' '{"values":["hello","world"]}' | gojq --raw-output '.values[1]'
     '';

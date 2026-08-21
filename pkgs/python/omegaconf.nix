@@ -2,8 +2,10 @@
 # substitutes into a patch. Evaluating the wasm antlr4 fails ("Unsupported
 # platform: wasip1"), and the jar runs on the build platform anyway.
 {
-  pyprev,
-  final,
-  ...
+  exposePackage,
+  package,
+  pkgs,
 }:
-pyprev.omegaconf.override {antlr4 = final.buildPackages.antlr4;}
+exposePackage (
+  package.override {antlr4 = pkgs.buildPackages.antlr4;}
+)

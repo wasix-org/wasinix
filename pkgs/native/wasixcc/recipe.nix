@@ -45,7 +45,7 @@ in
       unwrapped = wasixccUnwrapped;
       updateScript = {
         command = nix-update-script {extraArgs = ["--flake"];};
-        attrPath = "toolchain.wasixcc.unwrapped";
+        attrPath = "packages.native.wasixcc-unwrapped";
         accepts = ["release" "revision"];
         source = {
           kind = "github";
@@ -53,7 +53,7 @@ in
           repo = "wasixcc";
         };
       };
-      wasix.updateNotes = [
+      wasinix.update.notes = [
         {message = "check whether wasixcc-relocatable-link-passthrough.patch landed upstream";}
         {message = "regenerate wasixcc.Cargo.lock: delete upstream's Cargo.lock and .cargo/config.toml, then `cargo generate-lockfile`; drop the override once upstream keeps the WASIX registry out of the default build";}
         {message = "drop wasixcc-rlib-linker-input.patch once wasixcc recognizes Rust .rlib archives as linker inputs";}

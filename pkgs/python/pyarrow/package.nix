@@ -2,25 +2,23 @@
 # before 24 use setup.py environment variables; newer releases use
 # scikit-build-core CMake flags. Both need explicit cross Python/NumPy headers.
 {
-  final,
-  pyfinal,
-  pyprev,
-  wasixPython,
+  exposeExtendedPackage,
+  packages,
+  package,
   lib,
-  helpers,
-  ...
+  dropInputsByNameInfix,
 }: let
-  py = wasixPython;
-  crossNumpyInc = py.pkgs.numpy.crossInclude;
+  py = packages.sameProfile.python;
+  crossNumpyInc = packages.sameProfile.numpy.crossInclude;
   # pyarrow IS an arrow-cpp release: nixpkgs takes `inherit (arrow-cpp) version
   # src`, both from the same apache/arrow tag. So a history pyarrow has to link
   # the same-versioned arrow-cpp mint, which wasix/history.json carries.
-  version = pyprev.pyarrow.version;
-  isHistory = (pyprev.pyarrow.passthru.wasix.historySpec or null) != null;
+  version = package.version;
+  isHistory = (package.passthru.wasix.historySpec or null) != null;
   arrowCpp =
     if isHistory
-    then final."arrow-cpp_${lib.replaceStrings ["."] ["_"] version}"
-    else final.arrow-cpp;
+    then packages.preferred.arrow-cpp.versions.${version}
+    else packages.preferred.arrow-cpp;
   # Before 24, setup.py reads PYARROW_CMAKE_OPTIONS and PYARROW_WITH_*.
   # Newer releases read the equivalent CMake variables.
   preSkbuild = lib.versionOlder version "24";
@@ -35,7 +33,7 @@
     "-DPython3_NumPy_INCLUDE_DIR=${crossNumpyInc}"
   ];
 in
-  helpers.extendPackage pyprev.pyarrow ({
+  exposeExtendedPackage ({
       patches = [./patches/pyarrow-static-arrow-wasix.patch];
       # No suite: the extension fails to load its arrow C++
       # ("arrow::compute::Initialize" unresolved), dying at collection;
@@ -43,7 +41,7 @@ in
       passthru.wasinix.checks.captured.install = false;
       # PyArrow uses libcst only in a maintenance script; its native Rust build
       # cannot target wasm32-wasmer-wasi-dl. Remove it from inputs and pyproject.
-      nativeBuildInputs = helpers.dropInputsByNameInfix ["libcst"];
+      nativeBuildInputs = dropInputsByNameInfix ["libcst"];
       # only 24 declares it; older releases have nothing to drop
       postPatch = lib.optionalString (!preSkbuild) ''
         substituteInPlace pyproject.toml --replace-fail '"libcst>=1.8.6",' ""
@@ -57,8 +55,8 @@ in
       then {
         # arrow-cpp reaches the link through both input lists, so replacing
         # only one leaves both versions' library search paths.
-        buildInputs = old: [arrowCpp] ++ helpers.dropInputsByNameInfix ["arrow-cpp"] old;
-        propagatedBuildInputs = old: [arrowCpp] ++ helpers.dropInputsByNameInfix ["arrow-cpp"] old;
+        buildInputs = old: [arrowCpp] ++ dropInputsByNameInfix ["arrow-cpp"] old;
+        propagatedBuildInputs = old: [arrowCpp] ++ dropInputsByNameInfix ["arrow-cpp"] old;
         # The build-host importlib.metadata cannot resolve a cross-layout version.
         dontCheckPythonMetadata = true;
         env = {

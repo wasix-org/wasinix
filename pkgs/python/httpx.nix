@@ -1,13 +1,11 @@
 {
-  pyprev,
-  pyfinal,
-  helpers,
+  exposeExtendedPackage,
+  packages,
   lib,
-  ...
 }:
-helpers.extendPackage pyprev.httpx {
+exposeExtendedPackage {
   # Omit pytest-trio: Trio dispatches WASIX to its kqueue backend.
-  passthru.wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.pytest-asyncio pyfinal.pytest-mock pyfinal.anyio pyfinal.brotlicffi pyfinal.chardet pyfinal.h2 pyfinal.sniffio pyfinal.socksio pyfinal.trustme pyfinal.uvicorn pyfinal.zstandard];
+  passthru.wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook packages.sameProfile.pytest-asyncio packages.sameProfile.pytest-mock packages.sameProfile.anyio packages.sameProfile.brotlicffi packages.sameProfile.chardet packages.sameProfile.h2 packages.sameProfile.sniffio packages.sameProfile.socksio packages.sameProfile.trustme packages.sameProfile.uvicorn packages.sameProfile.zstandard];
   postPatch = ''
     substituteInPlace pyproject.toml \
       --replace-fail '  "ignore: trio.MultiError is deprecated since Trio 0.22.0:trio.TrioDeprecationWarning"' \

@@ -1,10 +1,8 @@
 {
-  pyfinal,
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
 }:
-helpers.extendPackage pyprev.mcp {
+exposeExtendedPackage {
   # Replaces the stashed check inputs: the inherited list drags ruff (via
   # inline-snapshot), which cannot compile on wasix.
   passthru = old:
@@ -12,7 +10,7 @@ helpers.extendPackage pyprev.mcp {
     // {
       # xdist owns the --numprocesses flag mcp's config passes; -n 0 keeps one guest
       # typer: conftest imports mcp.cli, which sys.exit(1)s without it
-      wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook pyfinal.pytest-asyncio pyfinal.anyio pyfinal.inline-snapshot pyfinal.pytest-timeout pyfinal.pytest-xdist pyfinal.typer];
+      wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook packages.sameProfile.pytest-asyncio packages.sameProfile.anyio packages.sameProfile.inline-snapshot packages.sameProfile.pytest-timeout packages.sameProfile.pytest-xdist packages.sameProfile.typer];
     };
   pytestFlags = ["-n" "0"];
   # test_examples/func_metadata want pytest-examples, which hard-depends on

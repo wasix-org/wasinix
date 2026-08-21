@@ -9,14 +9,16 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use regex::Regex;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
-use crate::support::error::{Result, request_error};
+use crate::support::error::{request_error, Result};
 use crate::support::naming::{self, Domain, Resolved};
-use crate::support::nix::{Flake, SYSTEM, eval};
+use crate::support::nix::{eval, Flake, SYSTEM};
 
 /// The interpreters the wheel set ships.
 const INTERPRETERS: [&str; 2] = ["py313", "py314"];
+const WHEEL_ROOT: &str = "packages.python";
+const CLI_ROOT: &str = "packages.wasix";
 /// A fixed-output derivation is keyed by its hash, so re-pointing a fetcher
 /// without also replacing the hash returns the cached old content.
 const FAKE_HASH: &str = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
@@ -44,15 +46,8 @@ pub fn parse_version(value: &str) -> Option<Vec<u64>> {
     })
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Kind {
-    Wheel,
-    Cli,
-}
-
 #[derive(Debug, Clone)]
 pub struct Target {
-    pub kind: Kind,
     /// The history.json key: a wheel attr, or a CLI's overlay attr.
     pub attr: String,
     /// Flake attr path of the *current* package, which the rebase derives from.
@@ -80,7 +75,7 @@ fn wheel_worklist(repo: &Path) -> Result<BTreeMap<String, String>> {
         "eval",
         format!(
             "import {}",
-            repo.join("pkgs/python/wheels.nix")
+            repo.join("pkgs/python/wheels/default.nix")
                 .display()
         ),
     )
@@ -114,7 +109,7 @@ fn wheel_path(attr: &str) -> Result<String> {
     for interpreter in INTERPRETERS.iter().rev() {
         let attrs = eval(
             &Flake::default(),
-            &format!("pythonWheels.{interpreter}"),
+            &format!("packages.python.{interpreter}"),
             Some("builtins.attrNames"),
         )?;
         if attrs
@@ -124,7 +119,7 @@ fn wheel_path(attr: &str) -> Result<String> {
             .any(|value| value.as_str() == Some(attr))
         {
             return Ok(format!(
-                "pythonWheels.{interpreter}.{}",
+                "packages.python.{interpreter}.{}",
                 crate::support::naming::quoted_attr(attr)?
             ));
         }
@@ -132,28 +127,22 @@ fn wheel_path(attr: &str) -> Result<String> {
     request_error(format!("{attr}: not shipped by any interpreter set"))
 }
 
-/// webc name -> overlay attr for the currently shipped CLIs. The table keys by
-/// overlay attr (gitMinimal) while the package evaluates by webc name (git), so
-/// either resolves.
-fn cli_map() -> Result<BTreeMap<String, (String, String)>> {
-    let apply = crate::support::nix::canonical_webcs_apply(
-        "webc: p: { overlay = p.overlayName; \
-         aliases = p.passthru.wasinix.aliases or []; \
-         history = p.passthru.wasmer.history or false; }",
-    );
-    let packages = eval(&Flake::default(), "wasmerPackages", Some(&apply))?;
+/// Preferred shipped package names with every accepted alias.
+fn cli_map() -> Result<BTreeMap<String, String>> {
+    let packages = eval(
+        &Flake::default(),
+        "packages.preferred",
+        Some("builtins.mapAttrs (_: p: { aliases = p.passthru.wasinix.aliases or []; shipped = p.passthru.wasinix.shipped or false; })"),
+    )?;
     let mut map = BTreeMap::new();
-    for (webc, info) in packages.as_object().into_iter().flatten() {
-        if info["history"].as_bool().unwrap_or(false) {
+    for (name, info) in packages.as_object().into_iter().flatten() {
+        if !info["shipped"].as_bool().unwrap_or(false) {
             continue;
         }
-        let overlay = info["overlay"].as_str().unwrap_or_default().to_string();
-        let entry = (overlay.clone(), webc.clone());
-        map.insert(normalize(&overlay), entry.clone());
-        map.insert(normalize(webc), entry.clone());
+        map.insert(normalize(name), name.clone());
         for alias in info["aliases"].as_array().into_iter().flatten() {
             if let Some(alias) = alias.as_str() {
-                map.insert(normalize(alias), entry.clone());
+                map.insert(normalize(alias), name.clone());
             }
         }
     }
@@ -165,8 +154,8 @@ fn cli_map() -> Result<BTreeMap<String, (String, String)>> {
 pub struct Sets {
     /// Normalized name -> wheel attr.
     wheels: BTreeMap<String, String>,
-    /// Normalized name -> (overlay attr, webc name).
-    clis: BTreeMap<String, (String, String)>,
+    /// Normalized name -> package attr.
+    clis: BTreeMap<String, String>,
 }
 
 impl Sets {
@@ -175,12 +164,12 @@ impl Sets {
     pub fn load(repo: &Path, only: Option<&str>) -> Result<Sets> {
         let wants = |root| only.is_none() || only == Some(root);
         Ok(Sets {
-            wheels: if wants("pythonWheels") {
+            wheels: if wants(WHEEL_ROOT) {
                 wheel_worklist(repo)?
             } else {
                 BTreeMap::new()
             },
-            clis: if wants("wasmerPackages") {
+            clis: if wants(CLI_ROOT) {
                 cli_map()?
             } else {
                 BTreeMap::new()
@@ -188,29 +177,24 @@ impl Sets {
         })
     }
     /// One entry per interpreter, all keyed by the same attr: a history entry
-    /// covers every interpreter, so `pythonWheels.numpy` is the address and the
+    /// covers every interpreter, so `packages.python.numpy` is the address and the
     /// interpreter segment is the variant.
     pub fn domain(&self) -> Domain {
         let mut domain = Domain::new("the shipped wheels and CLIs");
         for attr in self.wheels.values() {
             for interpreter in INTERPRETERS {
-                let path = vec!["pythonWheels".into(), interpreter.into(), attr.clone()];
+                let path = vec!["packages".into(), "python".into(), interpreter.into(), attr.clone()];
                 let axis = naming::axis_of(&path);
                 domain.add_path(path, attr, axis, vec![normalize(attr)]);
             }
         }
-        // The map holds each CLI twice, under both of its names.
-        let clis: BTreeMap<&String, &String> = self
-            .clis
-            .values()
-            .map(|(overlay, webc)| (webc, overlay))
-            .collect();
-        for (webc, overlay) in clis {
+        let clis: BTreeSet<&String> = self.clis.values().collect();
+        for name in clis {
             domain.add_path(
-                vec!["wasmerPackages".into(), webc.clone()],
-                overlay,
+                vec!["packages".into(), "wasix".into(), name.clone()],
+                name,
                 None,
-                vec![overlay.clone(), normalize(overlay), normalize(webc)],
+                vec![normalize(name)],
             );
         }
         domain
@@ -221,7 +205,6 @@ impl Sets {
             return Ok(None);
         };
         Ok(Some(Target {
-            kind: Kind::Wheel,
             path: wheel_path(attr)?,
             attr: attr.clone(),
             history: wheel_history(repo),
@@ -236,22 +219,20 @@ impl Sets {
         let missing = || format!("{} is not in the loaded set", resolved.address());
         if resolved
             .path
-            .first()
-            .is_some_and(|root| root == "pythonWheels")
+            .starts_with(&["packages".to_string(), "python".to_string()])
         {
             return self
                 .wheel_target(repo, &resolved.key)?
                 .ok_or_else(|| crate::support::error::Error::Request(missing()));
         }
-        let Some((attr, webc)) = self.clis.get(&normalize(&resolved.key)) else {
+        let Some(attr) = self.clis.get(&normalize(&resolved.key)) else {
             return request_error(missing());
         };
         Ok(Target {
-            kind: Kind::Cli,
             attr: attr.clone(),
             path: format!(
-                "wasmerPackages.{}",
-                crate::support::naming::quoted_attr(webc)?
+                "packages.preferred.{}",
+                crate::support::naming::quoted_attr(attr)?
             ),
             history: cli_history(repo),
             pypi: false,
@@ -263,9 +244,9 @@ impl Sets {
 /// The root a spec names, when it names one. Loading the other set is an
 /// evaluation, so it is worth knowing before it happens.
 fn named_root(segments: &[String]) -> Option<&str> {
-    match segments.first().map(String::as_str) {
-        Some("pythonWheels") => Some("pythonWheels"),
-        Some("wasmerPackages") => Some("wasmerPackages"),
+    match segments {
+        [root, lane, ..] if root == "packages" && lane == "python" => Some(WHEEL_ROOT),
+        [root, lane, ..] if root == "packages" && lane == "wasix" => Some(CLI_ROOT),
         _ => None,
     }
 }
@@ -336,8 +317,10 @@ fn github_tags(owner: &str, repo: &str) -> Result<Vec<String>> {
     // 1000 tags is plenty to cover every major.
     for page in 1..=10 {
         let path = format!("repos/{owner}/{repo}/tags?per_page=100&page={page}");
-        let data = crate::github::client::Client::new(crate::github::client::token().as_deref())
-            .get(&path)?;
+        let data = crate::github::client::Client::new(
+            crate::github::client::token().as_deref(),
+        )
+        .get(&path)?;
         let Some(items) = data.as_array() else { break };
         tags.extend(
             items
@@ -499,10 +482,7 @@ pub fn substitute_version(
                     continue;
                 }
             }
-            let ch = haystack[index..]
-                .chars()
-                .next()
-                .expect("index is on a boundary");
+            let ch = haystack[index..].chars().next().expect("index is on a boundary");
             out.push(ch);
             index += ch.len_utf8();
         }
@@ -560,11 +540,13 @@ fn hash_field(repo: &Path, target: &Target) -> Result<&'static str> {
         .apply("d: d.outputHash")
         .workdir(repo)
         .probe("the field name is judged from the eval's own complaint")?;
-    Ok(if output.stderr.contains("multiple hashes passed") {
-        "sha256"
-    } else {
-        "hash"
-    })
+    Ok(
+        if output.stderr.contains("multiple hashes passed") {
+            "sha256"
+        } else {
+            "hash"
+        },
+    )
 }
 
 fn concrete_url(repo: &Path, url: &str) -> Result<String> {
@@ -586,7 +568,10 @@ fn concrete_url(repo: &Path, url: &str) -> Result<String> {
         .workdir(repo)
         .probe("a failed mirror resolve names the url")?;
     if !output.status.is_success() {
-        return request_error(format!("could not resolve {url}: {}", output.stderr.trim()));
+        return request_error(format!(
+            "could not resolve {url}: {}",
+            output.stderr.trim()
+        ));
     }
     let mirrors: Vec<String> = serde_json::from_slice(&output.stdout).map_err(|source| {
         crate::support::error::Error::Json {
@@ -805,24 +790,13 @@ pub fn verify_mint(repo: &Path, target: &Target, added: &[String], before: &Hist
     if added.is_empty() {
         return Ok(());
     }
-    let sets: Vec<String> = match target.kind {
-        Kind::Wheel => INTERPRETERS
-            .iter()
-            .map(|version| format!("pythonWheels.{version}"))
-            .collect(),
-        Kind::Cli => vec!["wasmerPackages".to_string()],
-    };
-    for set in sets {
-        let output = crate::support::nix::Invocation::flake(
-            "eval",
-            format!(".#legacyPackages.{SYSTEM}.{set}"),
-        )
-        .apply("ws: builtins.mapAttrs (_: p: p.version) ws")
+    let output = crate::support::nix::Invocation::flake(
+        "eval",
+        format!(".#legacyPackages.{SYSTEM}.schemaVersion"),
+    )
         .workdir(repo)
         .probe("verify_mint reports the failing set's own stderr")?;
-        if output.status.is_success() {
-            continue;
-        }
+    if !output.status.is_success() {
         write_history(repo, &target.history, before, false)?;
         let tail = crate::support::error::tail(&output.stderr, 600);
         return request_error(format!(
@@ -880,7 +854,7 @@ pub fn add_version(
         Err(error) if options.skip_unsupported => {
             return Ok(AddOutcome::Skipped {
                 reason: error.to_string(),
-            });
+            })
         }
         Err(error) => return Err(error),
     };
@@ -947,13 +921,18 @@ pub fn add_version(
     if let Some(note) = &options.note {
         entry.insert("note".into(), Value::String(note.clone()));
     }
-    history.entry(target.attr.clone()).or_default().insert(
-        version.to_string(),
-        serde_json::to_value(entry).map_err(|source| crate::support::error::Error::Json {
-            path: "<history entry>".into(),
-            source,
-        })?,
-    );
+    history
+        .entry(target.attr.clone())
+        .or_default()
+        .insert(
+            version.to_string(),
+            serde_json::to_value(entry).map_err(|source| {
+                crate::support::error::Error::Json {
+                    path: "<history entry>".into(),
+                    source,
+                }
+            })?,
+        );
 
     let tail = match &chosen {
         Some(picked) if !picked.is_empty() => {
@@ -1011,7 +990,7 @@ pub fn lockfile_pins(path: &Path) -> Result<Vec<(String, String)>> {
 
 pub struct AddCommand {
     /// `name[@version]`, optionally address-prefixed
-    /// (`pythonWheels.<name>` / `wasmerPackages.<name>`).
+    /// (`packages.python.<name>` / `packages.wasix.<name>`).
     pub spec: String,
     pub per_major: bool,
     pub per_minor: bool,
@@ -1151,7 +1130,7 @@ pub fn from_lockfile(repo: &Path, path: &Path, dry_run: bool) -> Result<Backfill
     let mut touched: Vec<(Target, String)> = Vec::new();
     let mut outcomes = Vec::new();
     // Lockfile pins are python dependencies.
-    let sets = Sets::load(repo, Some("pythonWheels"))?;
+    let sets = Sets::load(repo, Some(WHEEL_ROOT))?;
     for (name, version) in lockfile_pins(path)? {
         let Some(target) = sets.wheel_target(repo, &name)? else {
             continue; // not shipped by us: PyPI serves it
@@ -1177,10 +1156,7 @@ pub fn from_lockfile(repo: &Path, path: &Path, dry_run: bool) -> Result<Backfill
     let mut files: Vec<PathBuf> = if dry_run {
         Vec::new()
     } else {
-        touched
-            .iter()
-            .map(|(target, _)| target.history.clone())
-            .collect()
+        touched.iter().map(|(target, _)| target.history.clone()).collect()
     };
     files.sort();
     files.dedup();

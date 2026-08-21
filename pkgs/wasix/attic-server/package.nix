@@ -1,9 +1,5 @@
-{
-  helpers,
-  prev,
-  ...
-}:
-helpers.extendPackage prev.attic-server {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   env = {
     AWS_LC_SYS_NO_JITTER_ENTROPY = "1";
     AWS_LC_SYS_CFLAGS = "-DOPENSSL_NO_TTY";

@@ -6,7 +6,7 @@
   rustPlatform,
   fetchFromGitHub,
   nix-update-script,
-  shellPath ? lib.getExe bash,
+  shellPath ? "${bash}/bin/bash",
 }:
 rustPlatform.buildRustPackage (finalAttrs: {
   pname = "anybuild";
@@ -45,7 +45,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
   passthru = {
     updateScript = {
       command = nix-update-script {extraArgs = ["--flake"];};
-      attrPath = "nativePackages.anybuild";
+      attrPath = "packages.native.anybuild";
       accepts = ["release" "revision"];
       source = {
         kind = "github";
@@ -55,22 +55,20 @@ rustPlatform.buildRustPackage (finalAttrs: {
     };
     # The template tests pin PyPI from this source's examples/, so a bump has to
     # re-resolve them. The script no-ops unless the recorded version moved.
-    wasix.postUpdateHook = [
-      (lib.getExe (buildPackages.writeShellApplication {
+    wasinix.update.post = [
+      "${buildPackages.writeShellApplication {
         name = "anybuild-update-mirror";
         runtimeInputs = with buildPackages; [git python3 uv];
         text = ''
           exec python3 "$(git rev-parse --show-toplevel)/pkgs/shared/anybuild/update-mirror.py" "$@"
         '';
-      }))
+      }}/bin/anybuild-update-mirror"
     ];
   };
 
   meta = {
     description = "Detect, build, and run projects";
-    longDescription = "A command-line tool that detects project types, builds them with the appropriate toolchain, and runs the resulting programs.";
     homepage = "https://github.com/wasmerio/anybuild";
-    changelog = "https://github.com/wasmerio/anybuild/releases/tag/v${finalAttrs.version}";
     license = lib.licenses.mit;
     mainProgram = "anybuild";
   };

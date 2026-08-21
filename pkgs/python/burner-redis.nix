@@ -2,11 +2,10 @@
 # on wasm; the current-thread scheduler is what wasix has, and the client drives
 # one runtime from python either way.
 {
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  lib,
 }:
-helpers.extendPackage pyprev.burner-redis {
+exposeExtendedPackage {
   postPatch = ''
     substituteInPlace src/lib.rs \
       --replace-fail "Builder::new_multi_thread()" "Builder::new_current_thread()"

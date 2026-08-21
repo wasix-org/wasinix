@@ -1,5 +1,5 @@
 # The wasix ABI profile table (EH/PIC variants). Everything derives from it:
-#   - set/mk-pkgs.nix merges the fields into the crossSystem, so they appear as
+#   - project/wasinix.nix merges the fields into each crossSystem, so they appear as
 #     hostPlatform.wasmExceptions/wasmPic (read by set/stdenv.nix and profileOf).
 #   - toolchain/sysroot/ builds one sysroot per profile from sysrootEncodings.
 #   - pkgs/lib exposes profile-set constructors and the platform -> profile lookup.
@@ -27,8 +27,8 @@ rec {
   profileNames = builtins.attrNames profiles;
 
   # Default profile for shipped binaries and the library matrix. A package that
-  # needs a different profile declares it via passthru.wasix (see pkgs/lib);
-  # pkgs/default.nix reads that to build preferredProfilePackages.
+  # needs a different profile declares it via passthru.wasix; the project
+  # constructor reads that to build packages.preferred.
   defaultProfileName = "exnrefEh";
 
   # The {eh, pic, exnref} encoding of each profile, which wasix-libc's

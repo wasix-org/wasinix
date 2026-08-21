@@ -2,10 +2,9 @@
 # interpreter it was built for, so the two builds carry different sources and
 # cannot share one py3-none-any filename.
 {
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  package,
 }:
-helpers.extendPackage pyprev.multiprocess {
-  passthru = pyprev.multiprocess.passthru // {wasix = {interpreterSpecific = true;};};
+exposeExtendedPackage {
+  passthru = package.passthru // {wasix = {interpreterSpecific = true;};};
 }

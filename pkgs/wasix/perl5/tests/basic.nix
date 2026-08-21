@@ -1,21 +1,22 @@
 # perl under wasmer. The XS case is the reason this build is PIC-only: the
 # module is a side module reached through dlopen, not linked into perl.
 {
-  testLib,
-  crossPkgsPic,
-  emulatedCheckFor,
-  makeWasmerPackage,
+  harnesses,
+  entry,
+  packages,
   ...
 }: let
-  wasix = [(makeWasmerPackage {package = crossPkgsPic.perl;}).shim];
+  wasix = builtins.attrValues entry.commands;
   run = name: script:
-    testLib.mkWasixRun {
+    harnesses.hostShell {
       name = "perl-${name}";
-      wasixPkgs = wasix;
+      wasixCommands = wasix;
       inherit script;
     };
 in {
-  module-upstream = emulatedCheckFor crossPkgsPic.perlPackages.SubIdentify;
+  module-upstream = harnesses.capturedSuite {
+    drv = packages.sameProfile.perlPackages.SubIdentify;
+  };
 
   version = run "version" "perl -v";
 

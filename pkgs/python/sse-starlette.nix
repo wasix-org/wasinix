@@ -1,9 +1,7 @@
 {
-  pyprev,
-  pyfinal,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
 }:
-helpers.extendPackage pyprev.sse-starlette {
-  propagatedBuildInputs = [pyfinal.starlette];
+exposeExtendedPackage {
+  propagatedBuildInputs = [packages.sameProfile.starlette];
 }

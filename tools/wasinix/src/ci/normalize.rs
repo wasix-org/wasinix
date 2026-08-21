@@ -14,7 +14,7 @@ use crate::ci::types::{
     Build, Case, Diff, Override, OverrideKind, ParsedRequest, RefSource, Request, RequestAction,
     ResolvedRequest, RevSource, Spot,
 };
-use crate::support::error::{Result, request_error};
+use crate::support::error::{request_error, Result};
 use crate::support::git;
 
 static PR_SPEC: LazyLock<Regex> = LazyLock::new(|| {
@@ -106,11 +106,14 @@ pub fn resolve_pull_request(spec: &str, context: &Context<'_>) -> Result<PullReq
 /// Which update target a repository maps to, discovered from the flake rather
 /// than hardcoded, so a new pinned dependency needs no change here.
 pub fn update_sources(repo: &Path) -> Result<HashMap<String, Vec<String>>> {
+    let declarations = crate::support::nix::eval(
+        &crate::support::nix::Flake(&repo.display().to_string()),
+        "internals.updates.updateScripts",
+        None,
+    )?;
     let mut sources: HashMap<String, Vec<String>> = Default::default();
-    for target in crate::update::targets::all_targets(repo)? {
-        let Some(source) = target.source else {
-            continue;
-        };
+    for (attr, declaration) in declarations.as_object().into_iter().flatten() {
+        let source = &declaration["source"];
         if source["kind"].as_str() != Some("github") {
             continue;
         }
@@ -120,7 +123,11 @@ pub fn update_sources(repo: &Path) -> Result<HashMap<String, Vec<String>>> {
             source["repo"].as_str().unwrap_or_default()
         )
         .to_lowercase();
-        sources.entry(key).or_default().push(target.name);
+        let name = declaration["name"]
+            .as_str()
+            .map(str::to_string)
+            .unwrap_or_else(|| attr.rsplit('.').next().unwrap_or(attr).to_string());
+        sources.entry(key).or_default().push(name);
     }
     Ok(sources)
 }

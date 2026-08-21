@@ -5,12 +5,10 @@
 # path; the right upstream (llhttp) fix is gating on __EMSCRIPTEN__ or a
 # dedicated macro instead of __wasm__.
 {
-  pyfinal,
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  packages,
 }:
-helpers.extendPackage pyprev.httptools {
+exposeExtendedPackage {
   postPatch = ''
     substituteInPlace vendor/llhttp/src/api.c \
       --replace-fail '#if defined(__wasm__)' '#if defined(__wasm__) && !defined(__wasi__)'
@@ -27,6 +25,6 @@ helpers.extendPackage pyprev.httptools {
     old
     // {
       wasinix = (old.wasinix or {}) // {checks.captured.install = true;};
-      wasixDeclaredCheckInputs = [pyfinal.pytestCheckHook];
+      wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook];
     };
 }

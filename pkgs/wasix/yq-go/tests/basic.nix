@@ -1,13 +1,13 @@
 {
   pkgs,
-  wasmerPkgs,
-  testLib,
+  entry,
+  harnesses,
   ...
 }: {
-  yaml-to-json = testLib.mkScriptComparison {
+  yaml-to-json = harnesses.compareShells {
     name = "yq-yaml-to-json";
-    nativePkgs = [pkgs.yq-go];
-    wasixPkgs = [wasmerPkgs.yq];
+    hostPackages = [pkgs.yq-go];
+    wasixCommands = builtins.attrValues entry.commands;
     script = "printf 'test: 1\\n' | yq eval -M -o=json '.' -";
   };
 }

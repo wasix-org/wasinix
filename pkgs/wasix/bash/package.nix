@@ -3,15 +3,12 @@
 # profile but refuses to build outside off-EH (preConfigure below). readline
 # auto-threads in as the off-profile build.
 {
-  final,
-  prev,
-  helpers,
-  preferredProfilePackages,
-  ...
+  exposeExtendedPackage,
+  packages,
 }: let
-  offProfile = (final.stdenv.hostPlatform.wasmExceptions or "yes") == "no";
+  offProfile = (packages.sameProfile.stdenv.hostPlatform.wasmExceptions or "yes") == "no";
 in
-  helpers.extendPackage prev.bash {
+  exposeExtendedPackage {
     configureFlags = [
       "--without-bash-malloc" # bash's malloc assumes sbrk/brk; use libc's.
       "--disable-nls"
@@ -48,7 +45,7 @@ in
     passthru.wasmer.entrypoint = "bash";
     # A shell with nothing to run is not a shell: wasmer mounts each dependency
     # command under /bin, which is where DEFAULT_PATH_VALUE points.
-    passthru.wasmer.dependencies = [preferredProfilePackages.coreutils];
+    passthru.wasmer.dependencies = [packages.preferred.coreutils];
     passthru.wasmer.commands = [
       {name = "bash";}
       {
@@ -58,13 +55,13 @@ in
         output = "bash.wasm";
       }
     ];
-    preConfigure = final.lib.optionalString (!offProfile) ''
+    preConfigure = packages.sameProfile.lib.optionalString (!offProfile) ''
       echo 'bash must be built in the off-EH profile (wasmExceptions = "no")' >&2
       exit 1
     '';
     doInstallCheck = false;
     # readline is linked statically, so bash also needs its ncurses (termcap).
-    buildInputs = [final.ncurses];
+    buildInputs = [packages.sameProfile.ncurses];
     env = {
       # gnu17: clang defaults to C23 where `bool` is a keyword bash redefines.
       # NO_MAIN_ENV_ARG: WASI clang only wraps a 2-arg main(); pick bash's.
@@ -88,7 +85,7 @@ in
     };
     # mkbuiltins et al. run on the build host: native cc, same gnu17 pin.
     preBuild = ''
-      makeFlagsArray+=("CC_FOR_BUILD=${final.lib.getExe' final.buildPackages.stdenv.cc "cc"} -std=gnu17")
+      makeFlagsArray+=("CC_FOR_BUILD=${packages.sameProfile.buildPackages.stdenv.cc}/bin/cc -std=gnu17")
     '';
     # Ship as *.wasm (already asyncified at link) and repoint bin/sh at the
     # renamed wasm. Done by hand, not via the wasmRename helper, because sh

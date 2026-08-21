@@ -1,11 +1,10 @@
 # openjph's exported cmake config hardcodes INTERFACE_INCLUDE_DIRECTORIES to
 # $out/include, which a split dev output leaves non-existent.
 {
-  prev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  profileSets,
 }:
-helpers.extendPackage prev.openjph {
+exposeExtendedPackage {
   outputs = _: ["out"];
-  passthru.wasix.supportedProfiles = helpers.profiles.withEh;
+  passthru.wasix.supportedProfiles = profileSets.withEh;
 }

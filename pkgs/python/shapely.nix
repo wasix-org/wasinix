@@ -6,13 +6,11 @@
 # hand-linked: setuptools links extensions with the C driver, so wasixcc adds
 # no libc++, and the interpreter only exports the libc++ subset cpython uses.
 {
-  final,
-  pyprev,
-  helpers,
-  ...
+  exposeExtendedPackage,
+  pkgs,
 }:
-helpers.extendPackage pyprev.shapely {
-  env.GEOS_CONFIG = final.lib.getExe' final.geos "geos-config";
+exposeExtendedPackage {
+  env.GEOS_CONFIG = "${pkgs.geos}/bin/geos-config";
   env.NIX_LDFLAGS = "-lc++ -lc++abi -lunwind";
   # Replaces nixpkgs' preCheck: its `cd $out` breaks in the run-only check
   # derivation, where $out is unwritten; resolve the installed tree off the

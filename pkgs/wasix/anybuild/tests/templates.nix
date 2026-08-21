@@ -8,13 +8,15 @@
 # no node/php/go/uv. The python side is covered natively in python-templates.nix.
 {
   pkgs,
-  testLib,
-  wasmerPkgs,
-  crossPkgs,
-  pythonRegistry,
+  harnesses,
+  entry,
+  artifacts,
+  packageForEntry,
+  packages,
 }: let
   inherit (pkgs) lib;
-  examples = "${crossPkgs.anybuild.src}/examples";
+  examples = "${(packageForEntry packages entry).src}/examples";
+  pythonRegistry = artifacts.registry.python314;
 
   # Providers whose plan carries the wasix wheel index (python.bzl's cross
   # steps, and mkdocs which builds on them).
@@ -28,10 +30,10 @@
 in {
   # Every template resolves to a provider and plans, with the Anybuild file
   # regenerated from detection rather than read from the committed one.
-  plan = testLib.mkWasixRun {
+  plan = harnesses.hostShell {
     name = "anybuild-templates-plan";
-    nativePkgs = [pkgs.jq pkgs.diffutils];
-    wasixPkgs = [wasmerPkgs.anybuild];
+    hostPackages = [pkgs.jq pkgs.diffutils];
+    wasixCommands = builtins.attrValues entry.commands;
     timeout = 1800;
     script = ''
       cp -R ${examples} templates
@@ -60,12 +62,12 @@ in {
   # The wasix wheel index served over loopback, with anybuild pointed at it: the
   # python providers must carry that exact URL and cross-compile for wasix, and
   # the URL must be a live index rather than an echoed string.
-  overlay-index = testLib.mkWasixRun {
+  overlay-index = harnesses.hostShell {
     name = "anybuild-templates-overlay-index";
-    nativePkgs = [pkgs.python3 pkgs.curl pkgs.jq];
-    wasixPkgs = [wasmerPkgs.anybuild];
+    hostPackages = [pkgs.python3 pkgs.curl pkgs.jq];
+    wasixCommands = builtins.attrValues entry.commands;
     wasmerArgs = ["--net"];
-    forwardEnv = testLib.defaultForwardEnv ++ ["ANYBUILD_PYTHON_EXTRA_INDEX_URL"];
+    forwardEnv = harnesses.defaultForwardEnv ++ ["ANYBUILD_PYTHON_EXTRA_INDEX_URL"];
     timeout = 1800;
     script = ''
       python3 -m http.server 8731 --bind 127.0.0.1 --directory ${pythonRegistry} &
@@ -115,10 +117,10 @@ in {
 
   # A real build, end to end, of the templates that need no toolchain: the
   # provider's steps run and the served artifacts match the project's sources.
-  static-build = testLib.mkWasixRun {
+  static-build = harnesses.hostShell {
     name = "anybuild-templates-static-build";
-    nativePkgs = [pkgs.diffutils];
-    wasixPkgs = [wasmerPkgs.anybuild];
+    hostPackages = [pkgs.diffutils];
+    wasixCommands = builtins.attrValues entry.commands;
     script = ''
       cp -R ${examples} templates
       chmod -R u+w templates

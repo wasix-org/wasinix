@@ -1,22 +1,25 @@
 # numpy for wasix. openblas doesn't cross-build (throws "unsupported system: wasm32-wasi");
 # use the bundled reference BLAS (-Dallow-noblas) and drop blas/lapack + gfortran + the site.cfg.
 {
-  pyprev,
+  exposePackage,
+  extendPackage,
+  packages,
+  package,
   lib,
-  helpers,
-  ...
+  dropInputsByName,
+  linkInputs,
 }: let
   # gfortran only compiles the Fortran BLAS wrappers; allow-noblas leaves nothing to compile.
   noFortran = lib.filter (x: !(lib.hasInfix "gfortran" (lib.getName x)));
 in
   # wasm build only: the noblas/-fexceptions/no-gfortran variant breaks the native checkPhase.
-  lib.fix (self:
-    helpers.extendPackage pyprev.numpy (
-      helpers.linkInputs (helpers.dropInputsByName ["blas" "lapack"])
+  exposePackage (lib.fix (self:
+    extendPackage package (
+      linkInputs (dropInputsByName ["blas" "lapack"])
       // {
         # Extensions must use the target numpy headers: build-python headers use
         # a 64-bit long and mis-size npy_intp for wasm32.
-        passthru.crossInclude = "${self}/lib/${pyprev.python.libPrefix}/site-packages/numpy/_core/include";
+        passthru.crossInclude = "${self}/lib/${packages.sameProfile.python.libPrefix}/site-packages/numpy/_core/include";
         # the wheel-shipped suite in tests/upstream.nix replaces the derived
         # source-tree check (the source numpy/ has no compiled modules)
         passthru.wasinix.checks.captured.install = false;
@@ -26,7 +29,7 @@ in
         mesonFlags = old:
           lib.filter (
             f:
-              lib.versionAtLeast pyprev.numpy.version "2.3"
+              lib.versionAtLeast package.version "2.3"
               || f != "-Ddefault_both_libraries=static"
           ) (old ++ [(lib.mesonBool "allow-noblas" true)]);
         # lib.const = replace, not concat: drop upstream's site.cfg symlink (dead BLAS paths)
@@ -52,9 +55,9 @@ in
           ''
           # npy_cpu.h < 2.4 only knows wasm under emscripten; clang targeting
           # wasm32-wasi defines __wasm__ (what upstream widened the guard to in 2.4).
-          + lib.optionalString (lib.versionOlder pyprev.numpy.version "2.4") ''
+          + lib.optionalString (lib.versionOlder package.version "2.4") ''
             substituteInPlace numpy/_core/include/numpy/npy_cpu.h \
               --replace-fail '#elif defined(__EMSCRIPTEN__)' '#elif defined(__EMSCRIPTEN__) || defined(__wasm__)'
           '');
       }
-    ))
+    )))

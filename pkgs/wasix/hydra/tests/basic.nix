@@ -3,13 +3,15 @@
 # postmaster, which cannot fork its workers.
 {
   pkgs,
-  testLib,
-  wasmerPackages,
-  wasmerPkgs,
+  harnesses,
+  entry,
+  packageForEntry,
+  packages,
   ...
 }: let
-  hydra = wasmerPackages.hydra;
-  wasix = [wasmerPkgs.hydra];
+  hydraPackage = packageForEntry packages entry;
+  hydra = hydraPackage.artifacts.pkg;
+  wasix = builtins.attrValues entry.commands;
   # nix reads the user from LOGNAME when there is no passwd file to look up.
   forwardEnv = [
     "HOME"
@@ -23,20 +25,20 @@
     "HYDRA_DBI"
   ];
   run = name: args:
-    testLib.mkWasixRun ({
+    harnesses.hostShell ({
         name = "hydra-${name}";
-        wasixPkgs = wasix;
+        wasixCommands = wasix;
         wasmerArgs = ["--net"];
         inherit forwardEnv;
       }
       // args);
 in {
   runtime-mounts = pkgs.runCommand "hydra-runtime-mounts" {} ''
-    manifest=${hydra.pkg}/pkg/hydra/wasmer.toml
+    manifest=${hydra}/pkg/hydra/wasmer.toml
     ${pkgs.lib.concatMapStrings (path: ''
         grep -F '${builtins.unsafeDiscardStringContext (builtins.toJSON "${path}")} = "fs${path}"' "$manifest"
       '')
-      hydra.passthru.wasmer.selfMounts}
+      hydraPackage.passthru.wasmer.selfMounts}
     touch "$out"
   '';
 
@@ -55,7 +57,7 @@ in {
   };
 
   database = run "database" {
-    nativePkgs = [pkgs.postgresql];
+    hostPackages = [pkgs.postgresql];
     timeout = 900;
     script = ''
       export LOGNAME=hydra USER=hydra

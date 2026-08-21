@@ -2,18 +2,19 @@
 # the same discovery path scipy uses, and run it under wasmer. lapack-reference is
 # PIC-only, hence crossPkgsPic.
 {
-  testLib,
-  crossPkgsPic,
-  makeWasmerPackage,
+  harnesses,
+  entry,
+  packageForEntry,
+  packages,
   ...
 }: let
-  crossPkgs = crossPkgsPic;
+  crossPkgs = packages.sameProfile;
   prog = crossPkgs.stdenv.mkDerivation {
     pname = "lapack-smoke";
     version = "1.0.0";
     dontUnpack = true;
     nativeBuildInputs = [crossPkgs.pkg-config];
-    buildInputs = [crossPkgs.lapack-reference];
+    buildInputs = [(packageForEntry packages entry)];
     # Cross pkg-config is the target-prefixed wrapper in $PKG_CONFIG; bare
     # `pkg-config` is not on PATH.
     buildPhase = ''
@@ -29,9 +30,11 @@
     passthru.wasmer.name = "lapack-smoke";
   };
 in {
-  smoke = testLib.mkWasixRun {
+  smoke = harnesses.hostShell {
     name = "lapack-reference-smoke";
-    wasixPkgs = [(makeWasmerPackage {package = prog;}).shim];
+    wasixCommands = [
+      (harnesses.packageCommand {package = prog;})
+    ];
     script = ''
       out=$(lapack-smoke)
       echo "$out"

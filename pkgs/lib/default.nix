@@ -123,13 +123,13 @@ in rec {
     };
 
   hasUpdateNotes = drv: let
-    r = builtins.tryEval ((wasixMetaOf drv).updateNotes or [] != []);
+    r = builtins.tryEval ((wasinixMetaOf drv).update.notes or [] != []);
   in
     r.success && r.value;
 
   # What an updateNote's predicate compares. A package pinned by a flake input
   # keeps upstream's version across rev bumps, hence the noteVersion escape.
-  noteVersionOf = drv: (wasixMetaOf drv).noteVersion or drv.version or null;
+  noteVersionOf = drv: (wasinixMetaOf drv).update.noteVersion or drv.version or null;
 
   # updateNotes whose predicate fires for (prior, current).
   firedNotesOf = prior: drv: let
@@ -145,7 +145,7 @@ in rec {
           // lib.optionalAttrs (n ? name) {inherit (n) name;}
       )
       (lib.filter (n: (n.when or defaultWhen) prior version)
-        ((wasixMetaOf drv).updateNotes or []));
+        ((wasinixMetaOf drv).update.notes or []));
     forced = builtins.tryEval (builtins.deepSeq fired fired);
   in
     if forced.success

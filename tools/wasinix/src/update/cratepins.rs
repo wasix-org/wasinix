@@ -153,8 +153,12 @@ pub fn run(repo: &Path, refresh: bool) -> Result<String> {
         Err(error) => return Err(crate::support::error::io(&path, error)),
     };
     let constraints: Constraints = crate::support::json::from_value(
-        eval(&Flake::default(), "cargoRegistry.pinConstraints", None)?,
-        "cargoRegistry.pinConstraints",
+        eval(
+            &Flake::default(),
+            "artifacts.registry.cargo-registry.pinConstraints",
+            None,
+        )?,
+        "artifacts.registry.cargo-registry.pinConstraints",
     )?;
     let wanted = resolve(&constraints)?;
 

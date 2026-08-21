@@ -1,18 +1,24 @@
 {
-  prev,
-  helpers,
-  preferredProfilePackages,
-  wasmerDependencies,
-  ...
+  exposePackage,
+  extendPackage,
+  package,
+  packages,
 }:
-helpers.extendPackage (prev.anybuild.override {shellPath = "/bin/bash";}) {
-  passthru.wasinix.shipped = true;
-  passthru.wasmer = {
-    entrypoint = "anybuild";
-    dependencies = [(wasmerDependencies.any preferredProfilePackages.bash)];
-    commandEnv = {
-      anybuild.PATH = "/bin:/usr/bin";
-      shipit.PATH = "/bin:/usr/bin";
+exposePackage (
+  extendPackage (package.override {shellPath = "/bin/bash";}) {
+    passthru.wasinix.shipped = true;
+    passthru.wasmer = {
+      entrypoint = "anybuild";
+      dependencies = [
+        {
+          package = packages.preferred.bash;
+          version = "*";
+        }
+      ];
+      commandEnv = {
+        anybuild.PATH = "/bin:/usr/bin";
+        shipit.PATH = "/bin:/usr/bin";
+      };
     };
-  };
-}
+  }
+)
