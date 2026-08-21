@@ -18,7 +18,7 @@ Verbs act on the tree, nouns have lifecycles:
 - `update` and `versions` maintain pins and the served-version tables
   (`docs/updating.md`).
 - `run` owns durable runs: `start`, `list`, `status`, `logs`, `report`,
-  `failures`, `watch`, `wait`, `cancel`.
+  `failures`, `watch`, `wait`, `cancel`, `pin`, `unpin`, `gc`.
 - `remote` inspects the configured builders: `list`, `status`, `doctor`,
   `field`, `init`.
 - `cargo`, `wasmer`, and `python` are the three registries, each with
@@ -104,6 +104,11 @@ run, and `ci observe` re-attaches. The launch prints a `<remote>:<run>` handle,
 which `run cancel` accepts. The remote supervisor holds one of the builder's
 `capacity` slots for the run's whole life, so concurrent launches from different
 machines cannot overcommit the host.
+
+`run gc` combines explicit `--max-age-days`, `--max-count`, and `--max-bytes`
+limits. It never collects a recorded active run or one protected by `run pin`;
+`--dry-run` and `--json` expose the same selection without deleting it. There
+is no implicit retention limit.
 
 ## GitHub
 

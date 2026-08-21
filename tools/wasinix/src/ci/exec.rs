@@ -142,23 +142,6 @@ pub(crate) fn fixed_output_derivations(graph: &Value) -> Vec<String> {
     paths
 }
 
-fn directory_bytes(root: &Path) -> Result<u64> {
-    let mut total = 0;
-    let mut pending = vec![root.to_path_buf()];
-    while let Some(path) = pending.pop() {
-        for entry in std::fs::read_dir(&path).map_err(|e| io(&path, e))? {
-            let entry = entry.map_err(|e| io(&path, e))?;
-            let file_type = entry.file_type().map_err(|e| io(&path, e))?;
-            if file_type.is_dir() {
-                pending.push(entry.path());
-            } else if file_type.is_file() {
-                total += entry.metadata().map_err(|e| io(&path, e))?.len();
-            }
-        }
-    }
-    Ok(total)
-}
-
 fn treefmt(worktree: &Path, case_id: &str, route: &Route, log: &Path) -> Result<Fragment> {
     let _lease = route.acquire()?;
     let mut cmd = crate::support::nix::Invocation::flake(
@@ -1372,7 +1355,7 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
         let started = Instant::now();
         // Telemetry only: an unreadable directory must not strand the phase
         // this loop just opened.
-        let bytes_before = directory_bytes(ctx.run_dir).unwrap_or(0);
+        let bytes_before = crate::support::fs::tree_bytes(ctx.run_dir).unwrap_or(0);
         let fragment = match run_phase(ctx, request, &task.case, task.phase) {
             Ok(fragment) => fragment,
             Err(error) => {
@@ -1392,7 +1375,7 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
             fragment,
             Some((
                 started.elapsed(),
-                directory_bytes(ctx.run_dir)
+                crate::support::fs::tree_bytes(ctx.run_dir)
                     .unwrap_or(bytes_before)
                     .saturating_sub(bytes_before),
             )),
