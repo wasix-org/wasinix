@@ -10,33 +10,32 @@ for the Wasmer registry.
 ```sh
 nix develop                       # shell with wasixcc + cargo-wasix on PATH
 
-nix build .#wasix-sysroot         # the per-profile sysroots
+nix build .#legacyPackages.x86_64-linux.packages.native.wasix-sysroot
 
 # example targets under legacyPackages (the system is explicit):
-nix build .#legacyPackages.x86_64-linux.wasmerPackages.git         # a CLI
-nix build .#legacyPackages.x86_64-linux.wasmerPackages.git.webc    # its webc
-nix build .#legacyPackages.x86_64-linux.nativePackages.anybuild   # native shared recipe
-nix build .#legacyPackages.x86_64-linux.nativePackages.wasixcc    # the C/C++ driver
-nix build .#legacyPackages.x86_64-linux.packagesByProfile.eh.anybuild # WASIX shared recipe
-nix build .#legacyPackages.x86_64-linux.packagesByProfile.exnrefEh.zlib # a library
-nix build .#legacyPackages.x86_64-linux.pythonWheels.py314.numpy    # a wheel
-nix build .#legacyPackages.x86_64-linux.pythonRegistry              # static wheel index
-nix build .#legacyPackages.x86_64-linux.allWasmerPackages                   # all webcs
+nix build .#legacyPackages.x86_64-linux.packages.preferred.git     # source package
+nix build .#legacyPackages.x86_64-linux.artifacts.webc.git         # its WebC
+nix build .#legacyPackages.x86_64-linux.packages.native.anybuild   # native shared recipe
+nix build .#legacyPackages.x86_64-linux.packages.native.wasixcc    # the C/C++ driver
+nix build .#legacyPackages.x86_64-linux.packages.wasix.eh.anybuild # WASIX shared recipe
+nix build .#legacyPackages.x86_64-linux.packages.wasix.exnrefEh.zlib # a library
+nix build .#legacyPackages.x86_64-linux.artifacts.wheel-py314.numpy # a wheel
+nix build .#legacyPackages.x86_64-linux.artifacts.registry.python314 # static wheel index
 
 nix run .#wasinix -- update --all         # bump the source pins
 ```
 
-CI builds every package as its own job (`.#legacyPackages.<system>.ci`, driven
-by the `wasinix` CLI in `tools/wasinix`). A job's dotted name is its build path.
+CI builds cataloged packages, artifacts, and tests as separate jobs from
+`legacyPackages.<system>.ci.jobs`, driven by the `wasinix` CLI in
+`tools/wasinix`. Each job has one canonical catalog address.
 
 ## Structure
 
-`pkgs/toolchain/` builds the toolchain from source; `pkgs/profiles.nix` +
-`pkgs/set/` turn it into five ABI profiles, each a full nixpkgs cross package
-set; `pkgs/shared/` holds recipes instantiated for both the native host and
-WASIX, while `pkgs/wasix/` and `pkgs/python/` hold target-specific adaptations;
-`pkgs/wasmer/` packages CLIs as webc and tests them under Wasmer. Details:
-[`docs/architecture.md`](docs/architecture.md).
+`pkgs/project/` constructs the schema-versioned package catalog;
+`pkgs/profiles.nix` and `pkgs/set/` produce five ABI-profile package sets;
+`pkgs/shared/`, `pkgs/native/`, `pkgs/wasix/`, and `pkgs/python/` are the
+registered overlay lanes; projection rules produce artifacts, commands, and
+tests. Details: [`docs/architecture.md`](docs/architecture.md).
 
 ## Documentation
 
@@ -44,6 +43,7 @@ WASIX, while `pkgs/wasix/` and `pkgs/python/` hold target-specific adaptations;
 | ---------------------------------------------------- | -------------------------------------------- |
 | [`docs/setup.md`](docs/setup.md)                     | first-time setup and `wasinix doctor`        |
 | [`docs/architecture.md`](docs/architecture.md)       | how the layers fit together                  |
+| [`docs/project-api.md`](docs/project-api.md)         | structured project and extension API         |
 | [`docs/c.md`](docs/c.md)                             | C/C++ toolchain, profiles, and cross stdenv  |
 | [`docs/packaging.md`](docs/packaging.md)             | adding packages: C, CLI/webc, Rust, Python   |
 | [`docs/registry.md`](docs/registry.md)               | publishing, version history, rels, previews  |

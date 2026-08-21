@@ -38,10 +38,10 @@ closure is published or resolves from PyPI:
 
 Out-of-scope packages are excluded from the denominator; see below.
 
-The shipped native set is the registry closure, not `wheels.nix`: transitive
-dependencies publish without a worklist entry. Per-package build details live in
-each `pkgs/wasix/<pkg>.nix` / `pkgs/python/<pkg>.nix` and the commit that added
-it.
+The shipped native set is the registry closure, not
+`pkgs/python/wheels/default.nix`: transitive dependencies publish without a
+worklist entry. Per-package build details live in each `pkgs/wasix/<pkg>.nix` /
+`pkgs/python/<pkg>.nix` and the commit that added it.
 
 ## Decide what to add
 
@@ -82,7 +82,7 @@ Take the shipped set from every interpreter, since a `publishOnce` entry appears
 under only one:
 
 ```
-nix eval --json .#legacyPackages.x86_64-linux.pythonRegistry.wheels \
+nix eval --json .#legacyPackages.x86_64-linux.artifacts.registry.python314.wheels \
   --apply 'ws: builtins.concatLists (map builtins.attrNames (builtins.attrValues ws))'
 ```
 
@@ -131,12 +131,12 @@ payloads. The survey data owns the package inventory.
 ## Demand side
 
 Unblocking a native package does not by itself publish the packages it unblocks.
-They reach the registry only as the closure of something in `wheels.nix`. Two
-ways to close that gap:
+They reach the registry only as the closure of something in
+`pkgs/python/wheels/default.nix`. Two ways to close that gap:
 
 - Curated apps, the current model: add top-level packages, deps ride along. Good
   signal per entry, uneven coverage.
-- Survey-driven worklist: generate `wheels.nix` pure entries for every top-N
+- Survey-driven worklist: generate wheel-list pure entries for every top-N
   package whose native closure is already satisfied. Pure builds are cheap, so
   this is what turns the coverage percentage into an actually populated
   registry. Gate by cutoff (top-1k first) to bound CI cost.

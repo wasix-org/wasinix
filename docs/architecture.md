@@ -1,17 +1,15 @@
 # Architecture
 
-`pkgs/default.nix` composes the repository from toolchains, profile package
-sets, package lanes, and publishable outputs.
-
-The agreed replacement for this composition and its public extension API is
-specified in [`project-api.md`](project-api.md). That document describes a
-design not yet implemented; this page continues to describe the current tree.
+`pkgs/project/wasinix.nix` specializes the public structured project constructor
+for this repository. [`project-api.md`](project-api.md) is the v1 contract for
+consumers and extensions; this page explains how Wasinix itself uses it.
 
 ## Toolchains and package sets
 
-`pkgs/toolchain/` builds the language toolchains. `pkgs/profiles.nix` defines
-the ABI profiles, and `pkgs/set/mk-pkgs.nix` imports nixpkgs once per profile
-with the corresponding WASIX stdenv and language builders.
+`pkgs/profiles.nix` is the ABI profile inventory. `mkProject` imports one native
+nixpkgs set and one cross set per profile, applying registered overlays in the
+same order to every applicable set. `pkgs/toolchain/` constructs the
+profile-specific interfaces used by those sets.
 
 Each profile is a complete nixpkgs package set. Overriding a dependency there
 therefore affects everything in that profile that consumes it. The language
@@ -24,21 +22,28 @@ details live in:
 
 ## Package lanes
 
+The built-in `wasinix` extension is defined in `pkgs/extension.nix`. Its overlay
+lanes are discovered by `loadPackageOverlays`:
+
+- `shared` applies to native and WASIX sets;
+- `native` applies only to the native set;
+- `wasix` applies to every WASIX profile set;
+- `python` applies to each supported Python package fixpoint.
+
 `pkgs/shared/<name>/recipe.nix` is the shared recipe for a package built both
-natively and with a WASIX host; its sibling `package.nix` is the structured
-package unit. The recipe overlay is applied to the native set and, before the
-WASIX overlay, to every profile set. The same recipe receives the appropriate
-`stdenv`, `rustPlatform`, and dependency splice from its scope.
+natively and with a WASIX host; its sibling `package.nix` exposes it as a
+cataloged package. The same recipe receives the appropriate `stdenv`,
+`rustPlatform`, and dependency splice from its scope.
 
 Buildable compiler and sysroot recipes use the same pair under `pkgs/native/`.
 Their recipe overlay remains available to cross-set build stages, while only the
 native instance is a package-unit catalog entry.
 
 WASIX-specific policy lives in `pkgs/wasix/`: patches, flags, runtime
-dependencies, wasm command names, webc configuration, and tests. An entry
-normally adapts `prev.<name>` rather than duplicating its recipe. Entries are
-loaded from `trivial.nix`, a flat `<name>.nix`, or `<name>/package.nix` by
-`pkgs/lib/load-packages.nix`.
+dependencies, Wasm command names, WebC configuration, and tests. A unit normally
+uses `exposeExtendedPackage` to adapt the preceding package. Units are
+shallow-discovered from `<name>.nix` or `<name>/package.nix`; a directory keeps
+patches and behavior tests beside the package that owns them.
 
 Python package adaptations and their history live in `pkgs/python/`.
 
@@ -49,40 +54,45 @@ Packages declare support through `passthru.wasix`:
 - `broken`: a defect and its reason
 
 CI policy is separate under `passthru.wasinix.ci`; `profiles` selects the
-supported subset built continuously.
+supported subset built continuously. `packages.wasix.<profile>` exposes every
+supported build, while `packages.preferred.<name>` projects each package's
+preferred profile. The latter is useful for runtime commands and artifacts but
+is not a coherent package set for linked dependencies.
 
-`packagesByProfile` exposes every supported build. CI uses the transposed
-`ciPackagesByProfile`; it does not define another package taxonomy.
-`preferredProfilePackages.<name>` supplies the canonical WASIX build for runtime
-dependencies that may use another profile.
+Buildable LLVM, Rust, wasixcc, sysroot, cargo registry, and anybuild values are
+ordinary packages under `packages.native`. Profile-specific stdenvs and language
+builders hang from the native package that owns them, for example
+`packages.native.wasixcc.profiles.<profile>.stdenv`.
 
 ## Webc packaging
 
-`pkgs/wasmer/` turns shipped CLIs into webc packages. The default manifest uses
+`pkgs/wasmer/` turns shipped CLIs into WebC packages. The default manifest uses
 `meta.mainProgram` and the package's `bin/*.wasm`; deviations belong in
-`passthru.wasmer`. Shipped entries in `preferredProfilePackages` also expose
-their `.pkg`, `.webc`, and `.shim`, plus `.tests` when present; `wasmerPackages`
-is the public package namespace and includes explicitly declared aliases. Its
-canonical entries alone drive publication, CI, and aggregate generation. Tests
-run under Wasmer through `pkgs/wasmer/test-lib.nix`.
+`passthru.wasmer`, while `passthru.wasinix.shipped` opts into publication.
+Projection rules map a cataloged package to its package directory and WebC
+artifacts, then map the WebC entry to commands and packaged behavior tests. The
+global views are `artifacts.pkg.<name>`, `artifacts.webc.<name>`, and
+`commands.<name>`. Canonical entries alone drive publication and CI; aliases are
+alternate catalog addresses, not duplicate builds.
 
 ## Flake outputs
 
 - `packages.<system>`: convenient development outputs
-- `checks.<system>`: package tests plus generated ABI, wheel, and formatting
-  checks
-- `legacyPackages.<system>`: the complete build trees
+- `checks.<system>`: the structured project's tests plus repository checks
+- `legacyPackages.<system>`: the complete structured project
 
-The main legacy trees are `toolchain`, `packagesByProfile`, `nativePackages`,
-`wasmerPackages`, `pythonWheels`, `pythonRegistry`, `allWasmerPackages`,
-`scripts`, and `ci`. `flake.nix` is the exact inventory.
+The project exposes `schemaVersion`, `packages`, `artifacts`, `commands`,
+`runners`, `harnesses`, `tests`, `catalog`, and `ci`. Repository-only
+publication and update projections live under `internals`; consumers must not
+depend on them.
 
-`legacyPackages.<system>.ci` flattens the build trees to dotted job names.
-Unsupported and broken packages are filtered before becoming jobs.
-`wasinix build` records the selected derivations for its plan and report, then
-realises those derivations directly. Nix owns the dependency graph and build
-schedule; the recorded evaluation remains the single source of job identity. CI
-runs the same verb.
+`ci.jobs` is a flat map from canonical job address to derivation.
+`ci.catalog.jobs` carries the serializable facts for exactly the same keys.
+Unsupported, unavailable, and explicitly broken packages remain visible in the
+package catalog but do not become CI jobs. The Wasinix CLI owns selector and tag
+semantics, records the selected derivations once, and realises those derivations
+directly. Nix owns the dependency graph and build schedule; the recorded
+evaluation remains the single source of job identity. CI runs the same verb.
 
 `packages.<system>.wasinix-core` carries the orchestrator and its Git, Nix,
 nix-eval-jobs, and OpenSSH system boundaries. `wasinix` is the compatibility
@@ -107,10 +117,13 @@ authenticate realisations
 
 ## Passthru namespaces
 
-- `passthru.wasix`: profile support and WASIX package policy
-- `passthru.wasmer`: webc configuration
-- `passthru.tests`: standard nixpkgs tests
-- `passthru.pkg` and `passthru.webc`: built Wasmer package outputs
+- `passthru.wasix`: WASIX compatibility and profile support
+- `passthru.wasmer`: Wasmer manifest and runtime package configuration
+- `passthru.wasinix`: catalog, checks, CI, retention, publication, and update
+  policy
+
+Generated tests and artifacts are catalog projections. They are not maintained
+as authoritative `passthru.tests`, `passthru.pkg`, or `passthru.webc` trees.
 
 ## One place per concern in the orchestrator
 

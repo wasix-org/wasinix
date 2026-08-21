@@ -12,12 +12,12 @@ WASIX profile set. Use ordinary function arguments such as `stdenv`,
 `rustPlatform`, and named dependencies; do not take a native build from a cross
 set's `buildPackages`.
 
-Keep the matching overlay entry. Put only WASIX-specific adaptation in
-`pkgs/wasix/<name>/package.nix`, deriving from the preceding shared recipe:
+Put only WASIX-specific adaptation in `pkgs/wasix/<name>/package.nix`, deriving
+from the preceding shared recipe:
 
 ```nix
-{prev, helpers, ...}:
-helpers.extendPackage prev.foo {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   passthru.wasinix.shipped = true;
 }
 ```
@@ -26,36 +26,31 @@ Where the native and WASIX builds differ in something small, branch on
 `stdenv.hostPlatform.isWasix` inside the shared recipe rather than forking it
 into two.
 
-The results are `nativePackages.<name>` and
-`packagesByProfile.<profile>.<name>`. `preferredProfilePackages.<name>` remains
-the convenient canonical WASIX build.
+The results are `packages.native.<name>` and `packages.wasix.<profile>.<name>`.
+`packages.preferred.<name>` remains the convenient canonical WASIX build.
 
 ## A WASIX-only package
 
-Lightest form that works (the loader finds all of these):
+The loader finds either of these shallow unit forms:
 
-- No changes: name in `pkgs/wasix/trivial.nix`.
 - Changes, no extra files: `pkgs/wasix/<name>.nix`.
 - Patches/tests: `pkgs/wasix/<name>/` with `package.nix`, `patches/`, `tests/`.
-- Version families: one dir whose `package.nix` evaluates to `{names, packages}`
-  instead of a function; `names` is the static attr list it provides,
-  `packages = callArgs: {<name> = drv;}`. See `pkgs/wasix/icu/` for an example.
+- Version families: one directory whose unit returns several derivations with
+  `exposeExtendedPackages`. See `pkgs/wasix/icu/`.
 
 A package file is a function over one argument set:
 
 ```nix
-{ final, prev, helpers, toolchain, preferredProfilePackages, wasmerDependencies, nixpkgs, ... }: ...
+{package, packages, exposePackage, exposeExtendedPackage, ...}: ...
 ```
 
-`prev.<name>` is the nixpkgs package, already compiling with the WASIX stdenv
-and resolving deps within the profile. `final.<dep>` names a same-profile dep
-explicitly. `preferredProfilePackages.<tool>` is for tools executed at runtime,
-which may need another profile.
+`package` is the preceding value of the discovered attribute.
+`packages.sameProfile.<dep>` is the immediate recursive package set, already
+using the WASIX stdenv for the current profile. `packages.preferred.<tool>` is
+for runtime tools that may deliberately use another profile.
 
-Those two are the only ways a package file names a dependency. Reaching for
-`nixpkgsByProfile.<profile>.<dep>` from a package file pins a profile the
-package does not control; use `final` for linking and `preferredProfilePackages`
-for runtime tools.
+Use `packages.sameProfile` for linked dependencies. Reaching into an absolute
+profile view from a package unit pins a profile the package does not control.
 
 Patches live next to the file that applies them, so a package's patches belong
 in its own `patches/` directory and toolchain patches under `pkgs/toolchain/`.
@@ -65,22 +60,23 @@ and a version tag over a pinned hash.
 
 ## Tweaks
 
-`helpers.extendPackage prev.foo { <attrs> }` merges attributes by kind: phases
-concatenate, lists append, attrsets merge recursively, scalars replace, a
-function gets the old value. It does not choose check policy. Don't write
-`(old.X or []) ++ ...` by hand.
+`exposeExtendedPackage {<attrs>}` extends and exposes the preceding package. Its
+`extendPackage` merge concatenates phases, appends lists, recursively merges
+non-derivation attrsets, lets a function transform the old value, and replaces
+other values. It does not choose check policy. Use `extendPackage package attrs`
+directly when a unit needs the intermediate derivation.
 
 ## A library
 
 ```nix
-{ prev, helpers, ... }:
-helpers.extendPackage prev.foo { configureFlags = [ "--disable-bar" ]; }
+{exposeExtendedPackage}:
+exposeExtendedPackage {configureFlags = ["--disable-bar"];}
 ```
 
 Profile limits are declared, never written to meta directly:
 
 ```nix
-passthru.wasix.supportedProfiles = helpers.profiles.withoutPic;
+passthru.wasix.supportedProfiles = profileSets.withoutPic;
 passthru.wasix.broken = "reason + upstream link";   # defect, not a limit
 ```
 
@@ -98,25 +94,24 @@ passthru.wasinix.ci.profiles = ["eh" "ehpic"];
 ```
 
 `wasinix.ci.profiles` must be a subset of `supportedProfiles`. The complete
-result is always available as `packagesByProfile.<profile>.foo`; CI selects from
+result is always available as `packages.wasix.<profile>.foo`; CI selects from
 that matrix using the package declaration.
 
 ## A Rust CLI
 
-Usually `{ prev, ... }: prev.foo`; the WASIX rustPlatform builds it through
-cargo-wasix, installs the `.wasm`s, and limits it to `eh`/`ehpic`. Crates not in
-nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
+Usually `{exposePackage, package}: exposePackage package`; the WASIX
+`rustPlatform` builds it through cargo-wasix and installs the `.wasm` files.
+Crates not in nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
 
 ## A CLI shipped as webc
 
-1. Rename the binary to `<name>.wasm` and declare it shipped (`shippedCommands`
-   in `pkgs/default.nix` is derived from the flag):
+1. Rename the binary to `<name>.wasm` and declare it shipped:
 
    ```nix
-   { prev, helpers, ... }:
-   helpers.wasmRename { wasmName = "foo"; } (helpers.extendPackage prev.foo {
+   {exposePackage, extendPackage, package, wasmRename}:
+   exposePackage (wasmRename {wasmName = "foo";} (extendPackage package {
      passthru.wasinix.shipped = true;
-   })
+   }))
    ```
 
    Programs needing `fork()` or `setjmp` set
@@ -148,7 +143,7 @@ nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
    passthru.wasmer.commands = [
      {
        name = "bash";
-       dependency = wasmerDependencies.any preferredProfilePackages.bash;
+       dependency = wasmerDependencies.any packages.preferred.bash;
      }
    ];
    ```
@@ -159,11 +154,11 @@ nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
 
    ```nix
    passthru.wasmer.dependencies = [
-     preferredProfilePackages.foo
-     (wasmerDependencies.any preferredProfilePackages.bar)
-     (wasmerDependencies.exact preferredProfilePackages.baz)
-     (wasmerDependencies.compatibleMajor preferredProfilePackages.qux)
-     (wasmerDependencies.compatibleMinor preferredProfilePackages.quux)
+     packages.preferred.foo
+     (wasmerDependencies.any packages.preferred.bar)
+     (wasmerDependencies.exact packages.preferred.baz)
+     (wasmerDependencies.compatibleMajor packages.preferred.qux)
+     (wasmerDependencies.compatibleMinor packages.preferred.quux)
    ];
    ```
 
@@ -179,8 +174,8 @@ nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
   `pkgs/python/wheels/default.nix` (`pyImport` if the module name differs). Most
   need no adaptation; compatible package suites run through the emulated check
   machinery.
-- Fix a build: `pkgs/python/<attr>.nix`, same form as top-level plus
-  `pyfinal`/`pyprev` for Python-set deps. Patches live in
+- Fix a build: `pkgs/python/<attr>.nix`, using `packages.sameProfile` for Python
+  dependencies and `pkgs` for the enclosing WASIX set. Patches live in
   `pkgs/python/patches/`; Rust-wheel helpers live in `pkgs/python/lib/`.
 - Ship an older release too (a version consumers pin): see
   [Registry history](registry.md#registry-history).
@@ -188,15 +183,17 @@ nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
 
 ## Tests
 
-`pkgs/wasix/<name>/tests/*.nix`, each returning an attrset of derivations built
-with `pkgs/wasmer/test-lib.nix` (a `helpers.nix` is shared setup). They attach
-as `passthru.tests` and appear under `checks.<system>.<name>`. Besides
-`pkgs`/`testLib`/`wasmerPkgs`, test files can take `preferredProfilePackages`,
-`crossPkgs` (the default-profile cross set), and `makeWasmerPackage` to
-cross-build and package a consumer program. See icu-data's smoke test for an
-example. `mkScriptComparison` diffs against the native tool; `expectFail` marks
-a must-fail test; `broken "reason"` tolerates a known failure and fails loudly
-once it starts passing.
+`pkgs/wasix/<name>/tests/*.nix` files receive the same final context as package
+construction plus `entry`, the completed catalog entry. Each returns an attrset
+of test derivations. A sibling `helpers.nix` can provide shared setup. Tests are
+catalog projections under `tests.<subject>.<name>`; they are not attached back
+to packages as an authoritative `passthru.tests` tree.
+
+Use `entry.commands` and `harnesses.hostShell` for packaged command behavior, or
+`harnesses.wasixShell` when the workflow belongs inside WASIX. Host fixtures and
+server setup belong in the harness's explicit host setup. For a generated
+consumer, build against `packages.sameProfile` and use
+`harnesses.packageCommand` to package the result.
 
 Every wheel also gets the guards in `pkgs/python-wheels.nix`: `import` runs the
 module on the shipped python, `self-contained` rejects a baked `/nix/store`
@@ -224,11 +221,11 @@ nixpkgs custom `installCheckPhase` or check hook. Override that choice with
 collected node IDs deterministically, while custom phases consume
 `WASIX_CHECK_SHARD_COUNT` and `WASIX_CHECK_SHARD_NUM` themselves.
 
-Unsharded checks appear as `passthru.tests.upstream`; sharded checks use
-`upstream-<number>-of-<count>`. Handwritten package tests remain appropriate for
-focused behavior and for suites that cannot use the installed package tree.
-`pkgs/python-closure-tests.nix` separately imports the dependency closure of
-every shipped wheel.
+Captured checks appear as catalog tests named `captured`; shards add their
+number to that name. Handwritten package tests remain appropriate for focused
+behavior and for suites that cannot use the installed package tree. Historical
+instances receive the same applicable tests, tagged `history-tests` so normal CI
+does not execute them.
 
 ## Update scripts
 
@@ -244,8 +241,7 @@ has exercised none of its rewriting.
 
 - Nix only sees git-tracked files, so `git add -N` a new one before building
   (`docs/building.md`).
-- Off-only packages fail in other profiles on purpose; use
-  `preferredProfilePackages`.
+- Off-only packages fail in other profiles on purpose; use `packages.preferred`.
 - `configure` misdetecting features can be wasm-opt failing on test programs:
   add `disableWasmOptInConfigureHook` to `nativeBuildInputs`.
 - Odd runtime behaviour, such as unexpected exit codes or output formatting, is
