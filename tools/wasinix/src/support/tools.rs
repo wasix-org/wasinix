@@ -291,6 +291,46 @@ pub fn spawn(cmd: &mut Command) -> Result<Child> {
     })
 }
 
+pub struct PipeReaders(Vec<std::thread::JoinHandle<Result<()>>>);
+
+impl PipeReaders {
+    pub fn join(self, cmd: &Command) -> Result<()> {
+        let mut failure = None;
+        for reader in self.0 {
+            let result = reader
+                .join()
+                .map_err(|_| {
+                    Error::Failure(format!("reading output from {} panicked", rendered(cmd)))
+                })
+                .and_then(|result| result);
+            if failure.is_none() {
+                failure = result.err();
+            }
+        }
+        if let Some(error) = failure {
+            return Err(error);
+        }
+        Ok(())
+    }
+}
+
+pub fn spawn_piped(
+    cmd: &mut Command,
+    stdout: impl FnOnce(ChildStdout) -> Result<()> + Send + 'static,
+    stderr: impl FnOnce(ChildStderr) -> Result<()> + Send + 'static,
+) -> Result<(Child, PipeReaders)> {
+    cmd.stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let mut child = spawn(cmd)?;
+    let child_stdout = child.take_stdout().expect("stdout was piped");
+    let child_stderr = child.take_stderr().expect("stderr was piped");
+    let readers = PipeReaders(vec![
+        std::thread::spawn(move || stdout(child_stdout)),
+        std::thread::spawn(move || stderr(child_stderr)),
+    ]);
+    Ok((child, readers))
+}
+
 pub fn piped<T>(
     cmd: &mut Command,
     timeout: Option<Timeout>,

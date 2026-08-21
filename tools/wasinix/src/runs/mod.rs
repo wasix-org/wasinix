@@ -336,17 +336,30 @@ fn supervise_payload(run_dir: &Path, command: &[String]) -> Result<()> {
     let _lease = host_lease()?;
 
     let log_path = run_dir.join(LOG_FILE);
-    let log = std::fs::File::create(&log_path).map_err(|e| io(&log_path, e))?;
+    let log = crate::support::log::SharedLog::create_followed(&log_path)?;
     let mut payload = Command::new(&command[0]);
     payload.args(&command[1..]);
     if !command.iter().any(|word| word == "--run-dir") {
         payload.arg("--run-dir").arg(run_dir);
     }
-    payload
-        .stdin(std::process::Stdio::null())
-        .stdout(log.try_clone().map_err(|e| io(&log_path, e))?)
-        .stderr(log);
-    let mut child = crate::support::tools::spawn(&mut payload)?;
+    payload.stdin(std::process::Stdio::null());
+    let stdout_log = log.clone();
+    let stderr_log = log.clone();
+    let stdout_path = log_path.clone();
+    let stderr_path = log_path.clone();
+    let (mut child, readers) = crate::support::tools::spawn_piped(
+        &mut payload,
+        move |mut stream| {
+            let mut log = stdout_log;
+            std::io::copy(&mut stream, &mut log).map_err(|error| io(&stdout_path, error))?;
+            Ok(())
+        },
+        move |mut stream| {
+            let mut log = stderr_log;
+            std::io::copy(&mut stream, &mut log).map_err(|error| io(&stderr_path, error))?;
+            Ok(())
+        },
+    )?;
     let payload_group = child.id();
 
     record_started(run_dir)?;
@@ -386,6 +399,8 @@ fn supervise_payload(run_dir: &Path, command: &[String]) -> Result<()> {
     // TERM (a signal-shy child like `timeout`) and would run orphaned.
     #[cfg(unix)]
     signal_group(payload_group, libc::SIGKILL).map_err(|e| io(&log_path, e))?;
+    readers.join(&payload)?;
+    log.finish()?;
     let exit = crate::support::process::CommandStatus::from_exit(status);
     // A clean exit is honest even if a cancel raced in: the payload finished
     // its work before the signal could stop it, so it completed, not

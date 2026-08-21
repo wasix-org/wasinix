@@ -51,9 +51,9 @@ Progress is an append-only `events.jsonl`; the snapshot is derived from it, not
 maintained beside it. Every progress view (the terminal ladder, `run watch`,
 `run logs --follow`, a remote observer) replays that one stream.
 
-Task transcripts retain at most 64 MiB each by default: their opening context
-and newest output, with the omitted byte count between them. A neighboring
-`*.retention.json` records original and retained bytes. Set
+Task and durable-run transcripts retain at most 64 MiB each by default: their
+opening context and newest output, with the omitted byte count between them. A
+neighboring `*.retention.json` records original and retained bytes. Set
 `WASINIX_LOG_BYTES` to a positive byte limit when a runner needs another cap.
 
 The verdict has four values. A green run passes; a red run has a failed
@@ -109,6 +109,10 @@ run, and `ci observe` re-attaches. The launch prints a `<remote>:<run>` handle,
 which `run cancel` accepts. The remote supervisor holds one of the builder's
 `capacity` slots for the run's whole life, so concurrent launches from different
 machines cannot overcommit the host.
+
+A followed run log remains append-only. If its rolling tail begins replacing
+older output, the follower sees a retention marker immediately and receives
+the retained newest output when the command ends.
 
 `run gc` combines explicit `--max-age-days`, `--max-count`, and `--max-bytes`
 limits. It never collects a recorded active run or one protected by `run pin`;
