@@ -1,11 +1,9 @@
-//! PR-comment build commands use the main Clap tree, then surface policy
+//! PR-comment commands use the main Clap tree, then surface policy
 //! rejects effects the workflow adapter owns before typed conversion.
-
-use clap::Parser;
 
 use crate::ci::origin::{Classifier, CommandKind};
 use crate::ci::types::{ParsedRequest, Request};
-use crate::support::error::{Error, Result, request_error};
+use crate::support::error::{Result, request_error};
 
 const MAX_WORDS: usize = 64;
 
@@ -61,54 +59,6 @@ pub fn split_words(command: &str) -> Result<Vec<String>> {
         words.push(current);
     }
     Ok(words)
-}
-
-/// The mutation verbs a PR comment may ask for. The adapter owns branches,
-/// tokens, and commit flags, so none of those are spellable here.
-#[derive(clap::Args)]
-struct UntrustedUpdate {
-    /// Targets; empty replays a managed PR's recorded recipe
-    targets: Vec<String>,
-    /// Update every target
-    #[arg(long, conflicts_with = "targets")]
-    all: bool,
-}
-
-#[derive(Parser)]
-#[command(name = "versions", no_binary_name = true)]
-enum UntrustedVersions {
-    /// Bump publication release counters (+wasix.N)
-    Bump {
-        /// Packages, optionally @<version>
-        #[arg(required_unless_present = "changed")]
-        specs: Vec<String>,
-        /// Bump every version a package serves
-        #[arg(long)]
-        all_versions: bool,
-        /// Select served versions whose publication derivations changed
-        /// from the pull request's base
-        #[arg(long, conflicts_with_all = ["specs", "all_versions"])]
-        changed: bool,
-    },
-}
-
-#[derive(Parser)]
-#[command(
-    name = "/wasinix",
-    no_binary_name = true,
-    disable_help_flag = true,
-    disable_help_subcommand = true
-)]
-enum UntrustedCli {
-    Update(UntrustedUpdate),
-    #[command(subcommand)]
-    Versions(UntrustedVersions),
-    /// Discard the branch and rebuild it from the recorded recipe
-    Regenerate,
-    /// Run the repo's formatter over the pull request's tree
-    Fmt,
-    /// Reply with the command language
-    Help,
 }
 
 /// A parsed mutation, replayable from the recorded recipe text.
@@ -244,6 +194,27 @@ fn shared_command(words: &[String]) -> Result<UntrustedCommand> {
                 predicate,
             })
         }
+        super::CommandTree::Update(args) => {
+            UntrustedCommand::Mutation(MutationCommand::Update {
+                targets: args.targets,
+                all: args.all,
+            })
+        }
+        super::CommandTree::Versions(super::update::VersionsCommand::Bump {
+            specs,
+            all_versions,
+            changed,
+            ..
+        }) => UntrustedCommand::Mutation(MutationCommand::Bump {
+            specs,
+            all_versions,
+            changed,
+        }),
+        super::CommandTree::Regenerate => {
+            UntrustedCommand::Mutation(MutationCommand::Regenerate)
+        }
+        super::CommandTree::Fmt => UntrustedCommand::Mutation(MutationCommand::Format),
+        super::CommandTree::SurfaceHelp => UntrustedCommand::Help,
         _ => unreachable!("comment surface accepted a non-comment command"),
     })
 }
@@ -254,41 +225,7 @@ pub fn parse(command: &str) -> Result<UntrustedCommand> {
     if words.len() > MAX_WORDS {
         return request_error(format!("command has more than {MAX_WORDS} words"));
     }
-    if !matches!(
-        words.first().map(String::as_str),
-        Some("update" | "versions" | "regenerate" | "fmt" | "help")
-    ) {
-        return shared_command(&words);
-    }
-    let parsed = UntrustedCli::try_parse_from(&words).map_err(|error| {
-        // clap renders its own "error: " prefix; the caller adds one too, so
-        // it comes off here or every refusal reads "error: error:".
-        let rendered = error.to_string();
-        Error::Request(
-            rendered
-                .strip_prefix("error: ")
-                .unwrap_or(&rendered)
-                .to_string(),
-        )
-    })?;
-    Ok(match parsed {
-        UntrustedCli::Help => UntrustedCommand::Help,
-        UntrustedCli::Update(args) => UntrustedCommand::Mutation(MutationCommand::Update {
-            targets: args.targets,
-            all: args.all,
-        }),
-        UntrustedCli::Versions(UntrustedVersions::Bump {
-            specs,
-            all_versions,
-            changed,
-        }) => UntrustedCommand::Mutation(MutationCommand::Bump {
-            specs,
-            all_versions,
-            changed,
-        }),
-        UntrustedCli::Regenerate => UntrustedCommand::Mutation(MutationCommand::Regenerate),
-        UntrustedCli::Fmt => UntrustedCommand::Mutation(MutationCommand::Format),
-    })
+    shared_command(&words)
 }
 
 /// The origin seam's classifier, backed by the real grammar: a command that

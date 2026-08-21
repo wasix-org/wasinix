@@ -4323,12 +4323,13 @@ mod corpus {
 
     use crate::cli::Cli;
 
-    /// Every leaf is either tree-mutating (and flattens MutationMode) or
-    /// read-only, explicitly: adding a subcommand fails this test until it
-    /// is classified.
+    /// Every leaf has one effect class. Interactive mutations expose
+    /// MutationMode; comment mutations get branch and credential policy from
+    /// their adapter instead.
     #[test]
     fn every_leaf_is_classified_and_mutating_leaves_carry_mutation_mode() {
         const MUTATING: &[&str] = &["update", "versions add", "versions import", "versions bump"];
+        const COMMENT_MUTATING: &[&str] = &["regenerate", "fmt"];
         const READONLY: &[&str] = &[
             "build",
             "spot",
@@ -4385,6 +4386,7 @@ mod corpus {
             "ci mutate-publish",
             "ci reply",
             "completions",
+            "help",
         ];
         fn leaves(command: &clap::Command, prefix: &str, found: &mut Vec<(String, clap::Command)>) {
             for sub in command.get_subcommands() {
@@ -4405,10 +4407,11 @@ mod corpus {
         assert!(!found.is_empty());
         for (path, command) in &found {
             let mutating = MUTATING.contains(&path.as_str());
+            let comment_mutating = COMMENT_MUTATING.contains(&path.as_str());
             let readonly = READONLY.contains(&path.as_str());
             assert!(
-                mutating ^ readonly,
-                "{path} must appear in exactly one of MUTATING/READONLY"
+                usize::from(mutating) + usize::from(comment_mutating) + usize::from(readonly) == 1,
+                "{path} must appear in exactly one effect class"
             );
             if mutating {
                 for flag in ["commit", "pr", "branch", "repository", "base", "fork"] {
@@ -4419,7 +4422,7 @@ mod corpus {
                 }
             }
         }
-        for expected in MUTATING.iter().chain(READONLY) {
+        for expected in MUTATING.iter().chain(COMMENT_MUTATING).chain(READONLY) {
             assert!(
                 found.iter().any(|(path, _)| path == expected),
                 "{expected} classified but no longer a leaf"
@@ -4508,6 +4511,7 @@ mod corpus {
             "python survey refresh --cutoff 1000",
             "publish --dry-run",
             "completions bash",
+            "help",
         ] {
             parses(command);
         }
@@ -5034,6 +5038,14 @@ mod untrusted {
         assert!(error.contains("ci is CI only"), "{error}");
         let error = parse("jobs zlib").unwrap_err().to_string();
         assert!(error.contains("jobs is terminal only"), "{error}");
+        let error = parse("update wasmer --commit").unwrap_err().to_string();
+        assert!(error.contains("--commit is terminal only"), "{error}");
+        let error = parse("versions add numpy@1.26.4").unwrap_err().to_string();
+        assert!(error.contains("versions add is terminal only"), "{error}");
+        let error = parse("versions bump --changed-from main")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("--changed-from is terminal only"), "{error}");
     }
 
     #[test]
