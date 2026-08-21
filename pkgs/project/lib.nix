@@ -68,6 +68,20 @@
   dropFlagsByPrefix = prefixes:
     builtins.filter (flag: !(lib.any (prefix: lib.hasPrefix prefix flag) prefixes));
 
+  buildHostPypaTools = buildPython: old:
+    dropInputsByName ["pip" "wheel" "setuptools"] old
+    ++ [buildPython.pkgs.pip buildPython.pkgs.wheel buildPython.pkgs.setuptools];
+
+  dropSphinxDocs = extraNames: {
+    nativeBuildInputs = dropInputsByNameInfix (["sphinx"] ++ extraNames);
+    outputs = outputs:
+      lib.filter (output: output != "doc") (
+        if outputs == null
+        then ["out"]
+        else outputs
+      );
+  };
+
   extendAttrs = old:
     lib.mapAttrs (
       name: value: let
@@ -177,7 +191,9 @@
     file,
     name,
     previous ? null,
+    previousAvailable ? previous != null,
     previousRegistered ? previous != null && ((packageMetadata previous).source or null) != null,
+    previousSet ? {},
   }: let
     function = import file;
     exposePackage = package: {
@@ -194,16 +210,26 @@
           });
     };
     exposeExtendedPackage = attrs:
-      if previous == null
+      if !previousAvailable
       then throw "${name}: exposeExtendedPackage requires a preceding package"
       else exposePackage (extendPackage previous attrs);
+    exposeExtendedPackages = updates:
+      lib.mapAttrs (
+        resultName: update:
+          if !(builtins.hasAttr resultName previousSet)
+          then throw "${name}: exposeExtendedPackages requires preceding package '${resultName}'"
+          else if builtins.isFunction update
+          then update previousSet.${resultName}
+          else extendPackage previousSet.${resultName} update
+      )
+      updates;
     value =
       callWith (
         context
         // {
-          inherit exposeExtendedPackage exposePackage;
+          inherit exposeExtendedPackage exposeExtendedPackages exposePackage;
         }
-        // lib.optionalAttrs (previous != null) {package = previous;}
+        // lib.optionalAttrs previousAvailable {package = previous;}
       )
       function;
     packages =
@@ -355,7 +381,7 @@
         })
         // {versions = {};}));
 in rec {
-  inherit address addressSegment callWith callWithLabel discoverUnits dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix extendAttrs extensionContextsAttr historyBaseAttr historyOverlaysAttr linkInputs loadPackageOverlays loadTestDirectory machineMetadata mergeScript packageMetadata registryAttr replaceInputsByName stampPackage unitOverlaysAttr unitResult wasmRename;
+  inherit address addressSegment buildHostPypaTools callWith callWithLabel discoverUnits dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix dropSphinxDocs extendAttrs extensionContextsAttr historyBaseAttr historyOverlaysAttr linkInputs loadPackageOverlays loadTestDirectory machineMetadata mergeScript packageMetadata registryAttr replaceInputsByName stampPackage unitOverlaysAttr unitResult wasmRename;
 
   inherit extendPackage;
 
@@ -366,6 +392,7 @@ in rec {
     instantiate = unit: final': prev': let
       formals = builtins.functionArgs (import unit.file);
       requestsPrevious = formals ? package || formals ? exposeExtendedPackage;
+      previousAvailable = builtins.hasAttr unit.name prev';
     in
       unitResult {
         inherit (unit) file name;
@@ -374,10 +401,12 @@ in rec {
           prev = prev';
         };
         previous =
-          if requestsPrevious
-          then prev'.${unit.name} or null
+          if requestsPrevious && previousAvailable
+          then builtins.addErrorContext "while resolving the preceding package for ${toString unit.file}\n" (prev'.${unit.name} or null)
           else null;
+        inherit previousAvailable;
         previousRegistered = builtins.hasAttr unit.name (prev'.${registryAttr} or {});
+        previousSet = prev';
       };
     units = discoverUnits dir;
     results =
@@ -416,7 +445,7 @@ in rec {
       unitOverlays = result.${unitOverlaysAttr} or {};
       visibleResult = builtins.removeAttrs result [unitOverlaysAttr];
       reserved = lib.intersectLists (lib.attrNames result) [registryAttr extensionContextsAttr];
-      names = builtins.removeAttrs (lib.genAttrs (lib.attrNames visibleResult) (_: true)) [registryAttr extensionContextsAttr];
+      names = builtins.removeAttrs (lib.genAttrs (lib.attrNames visibleResult) (_: source)) [registryAttr extensionContextsAttr];
       stamped =
         lib.mapAttrs (
           name: value:
@@ -431,7 +460,10 @@ in rec {
                   then definition
                   else unit.definition;
                 package = value;
-                previous = prev.${name} or null;
+                previous =
+                  if builtins.hasAttr name (prev.${registryAttr} or {})
+                  then prev.${name}
+                  else null;
                 previousSet = prev;
                 overlay =
                   if unit == null

@@ -26,6 +26,8 @@
   };
   prev = {
     existing = previous;
+    family-a = familyA;
+    family-b = familyB;
     new = throw "an exposePackage unit must not force its preceding value";
   };
   contextFor = {final, ...}: {
@@ -119,6 +121,10 @@
     lib.fix (final:
       builtins.foldl' (previous: overlay: previous // overlay final previous) {
         inheritedPython = mkPackage {name = "inherited-python";};
+        python = mkPackage {
+          name = "python";
+          stdenv.hostPlatform.isWasix = true;
+        };
         overrideScope = overlay: mkPythonSet (overlays ++ [overlay]);
       }
       overlays);
@@ -262,6 +268,8 @@
   fakeImportNixpkgs = args: let
     base = {
       inherit dependency newRecipe familyA familyB;
+      family-a = familyA;
+      family-b = familyB;
       behavior = mkPackage {
         name = "behavior";
         version = "1.0";
@@ -269,6 +277,7 @@
       existing = previous;
       inherited = mkPackage {name = "inherited";};
       profile = args.crossSystem.wasinixProfile or "native";
+      stdenv.hostPlatform.isWasix = args ? crossSystem;
     };
   in
     lib.fix (final: builtins.foldl' (previous: overlay: previous // overlay final previous) base args.overlays);
@@ -790,6 +799,7 @@ in {
       focusedHelper = project.packages.wasix.default.uses-inherited.passthru.usedFocusedHelper;
       runnerContextName = project.packages.wasix.default.uses-inherited.passthru.runnerContextName;
       runnerName = project.runners.rawWasm.unbound.name;
+      profileNames = project.packages.wasix.default.uses-inherited.passthru.profileNames;
       pythonNames = lib.attrNames project.packages.python.py;
       pythonSource = project.packages.python.py.uses-python.passthru.wasinix.source;
       pythonContextName = project.packages.python.py.contextProof.name;
@@ -853,6 +863,7 @@ in {
       focusedHelper = true;
       runnerContextName = "raw-wasm-unbound";
       runnerName = "raw-wasm-unbound";
+      profileNames = ["alternate" "default"];
       pythonNames = ["contextProof" "corePython" "inheritedPython" "uses-python"];
       pythonSource = "consumer";
       pythonContextName = "top-owned-";

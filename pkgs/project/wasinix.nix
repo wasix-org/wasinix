@@ -112,10 +112,7 @@ in {
           })
           profiles.profiles;
         "wasix-sysroot".profiles =
-          lib.mapAttrs (profile: _spec: {
-            inherit (nativeRaw."wasix-sysroot".passthru.variants.${profile}) sysroot;
-          })
-          profiles.profiles;
+          nativeRaw."wasix-sysroot".passthru.variants;
       };
       pythonSetsFor = {wasixRaw, ...}: {
         py313 = {

@@ -2,6 +2,7 @@
   dropInputsByName,
   exposePackage,
   packages,
+  profileSets,
   runners,
 }:
 exposePackage (packages.sameProfile.inherited.overrideAttrs (_: {
@@ -9,5 +10,6 @@ exposePackage (packages.sameProfile.inherited.overrideAttrs (_: {
   passthru = {
     usedFocusedHelper = dropInputsByName ["dependency"] [packages.sameProfile.dependency] == [];
     runnerContextName = runners.rawWasm.unbound.name;
+    profileNames = profileSets.all;
   };
 }))

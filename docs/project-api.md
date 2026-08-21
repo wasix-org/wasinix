@@ -269,8 +269,10 @@ available directly as `mergeScript`, `dropInputsByName`,
 `dropInputsByNameInfix`, `replaceInputsByName`, `linkInputs`,
 `dropPatchesByNameInfix`, and `dropFlagsByPrefix`. There is no `libTweaks` or
 generic `helpers` compatibility name in the v1 package-unit API. Profile-aware
-units request `profileOf` or `profileTraitsOf` directly, and `wasmRename`
-normalizes command filenames before WebC projection.
+units request `profileOf`, `profileTraitsOf`, or the named `profileSets` subsets
+directly, `buildHostPypaTools` and `dropSphinxDocs` cover common Python build
+adaptations, and `wasmRename` normalizes command filenames before WebC
+projection.
 
 A new package can retain a normal nixpkgs recipe:
 
@@ -286,16 +288,21 @@ exposePackage (packages.sameProfile.callPackage ./recipe.nix {})
 A unit that genuinely owns several attributes returns an attrset of derivations:
 
 ```nix
-{packages}: {
-  llvm = packages.sameProfile.callPackage ./llvm.nix {};
-  clang = packages.sameProfile.callPackage ./clang.nix {};
+{exposeExtendedPackages}:
+exposeExtendedPackages {
+  llvm = {};
+  clang = previous: previous.overrideAttrs (_: {doCheck = true;});
 }
 ```
 
-This replaces a separate `{names, packages}` declaration. All returned values
-must be derivations, and the returned attribute shape must be the same in every
-variant where the unit is instantiated. Unrelated packages use separate units; a
-multi-package unit is for construction that is actually shared.
+`exposeExtendedPackages` extends each named preceding package. An attrset value
+uses `extendPackage`; a function receives the corresponding preceding package
+and returns its replacement. A unit constructing several new packages returns
+the attrset directly. This replaces a separate `{names, packages}` declaration.
+All returned values must be derivations, and the returned attribute shape must
+be the same in every variant where the unit is instantiated. Unrelated packages
+use separate units; a multi-package unit is for construction that is actually
+shared.
 
 Python units use the same `packages.sameProfile` name for their immediate Python
 fixpoint:
