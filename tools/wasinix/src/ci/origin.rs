@@ -91,6 +91,8 @@ impl Api for Rest {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandKind {
     Build,
+    /// The command resolves and replies but runs no build tasks.
+    Plan,
     /// The command rewrites the pull request's branch.
     Mutation,
     /// The command only replies; no run, no report, no build machinery.
@@ -101,6 +103,7 @@ impl CommandKind {
     pub fn as_str(self) -> &'static str {
         match self {
             CommandKind::Build => "build",
+            CommandKind::Plan => "plan",
             CommandKind::Mutation => "mutation",
             CommandKind::Help => "help",
         }

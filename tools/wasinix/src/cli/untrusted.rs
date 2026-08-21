@@ -130,30 +130,47 @@ pub struct BisectCommand {
 #[derive(Debug)]
 pub enum UntrustedCommand {
     Request(ParsedRequest),
+    Plan(ParsedRequest),
     Bisect(BisectCommand),
     Mutation(MutationCommand),
     Help,
 }
 
+fn request_command(request: ParsedRequest, plan: bool) -> UntrustedCommand {
+    if plan {
+        UntrustedCommand::Plan(request)
+    } else {
+        UntrustedCommand::Request(request)
+    }
+}
+
 fn shared_command(words: &[String]) -> Result<UntrustedCommand> {
     let parsed = super::surface::parse_comment(words)?;
     Ok(match parsed.command {
-        super::CommandTree::Build(args) => UntrustedCommand::Request(Request::build(
-            super::request::build_case(&args.request, Some("local".to_string()), None)?,
-            args.outcome.blocked,
-        )),
-        super::CommandTree::Spot(args) => UntrustedCommand::Request(Request::spot(
-            super::request::spot_case(
-                &args.request,
-                &args.spot,
-                Some("local".to_string()),
-                None,
-            )?,
-            args.outcome.blocked,
-        )),
-        super::CommandTree::Diff(args) => UntrustedCommand::Request(
-            super::request::diff_request(&args, super::Surface::Comment)?,
-        ),
+        super::CommandTree::Build(args) => {
+            let request = Request::build(
+                super::request::build_case(&args.request, Some("local".to_string()), None)?,
+                args.outcome.blocked,
+            );
+            request_command(request, args.mode.plan)
+        }
+        super::CommandTree::Spot(args) => {
+            let request = Request::spot(
+                super::request::spot_case(
+                    &args.request,
+                    &args.spot,
+                    Some("local".to_string()),
+                    None,
+                )?,
+                args.outcome.blocked,
+            );
+            request_command(request, args.mode.plan)
+        }
+        super::CommandTree::Diff(args) => {
+            let plan = args.mode.plan;
+            let request = super::request::diff_request(&args, super::Surface::Comment)?;
+            request_command(request, plan)
+        }
         super::CommandTree::Bisect(args) => {
             let words: Vec<String> = args
                 .command
@@ -221,6 +238,7 @@ impl Classifier for ClapClassifier {
             // A bisect runs builds and reports; the build job's shape fits
             // it, and it carries no write credential.
             UntrustedCommand::Request(_) | UntrustedCommand::Bisect(_) => Ok(CommandKind::Build),
+            UntrustedCommand::Plan(_) => Ok(CommandKind::Plan),
             UntrustedCommand::Help => Ok(CommandKind::Help),
             UntrustedCommand::Mutation(_) => Ok(CommandKind::Mutation),
         }

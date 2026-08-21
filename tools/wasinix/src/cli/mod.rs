@@ -996,9 +996,8 @@ const COMMENT_BISECT_BUDGET: crate::nix::bisect::Budget = crate::nix::bisect::Bu
     wall: std::time::Duration::from_secs(4 * 60 * 60),
 };
 
-/// Upsert the bisect's one reply. Every tick rewrites the same comment, so
-/// a long bisect leaves one current answer rather than a trail.
-fn bisect_reply(
+/// Upsert the reply keyed to the command comment.
+fn command_reply(
     command: &crate::ci::origin::Command,
     body: crate::github::sanitize::Markdown,
 ) -> Result<()> {
@@ -1033,7 +1032,7 @@ fn ci_bisect(
     // reply exists before the first one and is rewritten after each, which
     // is also what a budget-stopped run leaves behind.
     let mut progress = |tested: usize| {
-        bisect_reply(
+        command_reply(
             command,
             crate::github::markdown::bisect_progress(&target, tested),
         )
@@ -1060,7 +1059,7 @@ fn ci_bisect(
         // disk: losing it to the generic failure path costs a build apiece.
         Err(error) => {
             if let Some(partial) = crate::nix::bisect::read_report(&bisect_dir) {
-                let _ = bisect_reply(
+                let _ = command_reply(
                     command,
                     crate::github::markdown::bisect_reply(
                         &partial,
@@ -1077,24 +1076,13 @@ fn ci_bisect(
             return Err(error);
         }
     };
-    let client = crate::github::client::Client::new(crate::github::client::token().as_deref());
-    let mut registry = crate::github::surfaces::Registry::new(
-        &client,
-        command.origin.repository.clone(),
-        command.origin.pull_request,
-        crate::github::surfaces::BOT_AUTHOR,
-        crate::support::effects::Effects::Apply,
-    );
     let origin = crate::github::surfaces::origin_comment_url(
         &command.origin.repository,
         command.origin.pull_request,
         command.origin.comment_id,
     );
-    registry.upsert(
-        &crate::github::surfaces::Surface::CiReportReply {
-            comment_id: command.origin.comment_id,
-        },
-        &[],
+    command_reply(
+        command,
         crate::github::markdown::bisect_reply(
             &report,
             None,
@@ -1380,6 +1368,32 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             )?;
             let mut parsed = match untrusted::parse(&command.command)? {
                 untrusted::UntrustedCommand::Request(request) => request,
+                untrusted::UntrustedCommand::Plan(mut request) => {
+                    request.default_from_pr();
+                    let resolved = crate::ci::normalize::normalize(
+                        &request,
+                        &crate::ci::normalize::Context {
+                            repo: &repo,
+                            origin: Some(&command.origin),
+                        },
+                    )?;
+                    let plan = crate::ci::plan::plan_of(&resolved, None, &[]);
+                    let origin = crate::github::surfaces::origin_comment_url(
+                        &command.origin.repository,
+                        command.origin.pull_request,
+                        command.origin.comment_id,
+                    );
+                    command_reply(
+                        &command,
+                        crate::github::markdown::plan_reply(
+                            &command.command,
+                            &resolved,
+                            &plan,
+                            &origin,
+                        )?,
+                    )?;
+                    return Ok(CommandStatus::SUCCESS);
+                }
                 // A bisect answers with its own reply rather than a CI
                 // report: its result is a commit, not a set of job outcomes.
                 untrusted::UntrustedCommand::Bisect(bisect) => {
@@ -1395,16 +1409,6 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 // Help is a command like any other: it replies to the comment
                 // that asked, rather than erroring into the failure path.
                 untrusted::UntrustedCommand::Help => {
-                    let client = crate::github::client::Client::new(
-                        crate::github::client::token().as_deref(),
-                    );
-                    let mut registry = crate::github::surfaces::Registry::new(
-                        &client,
-                        command.origin.repository.clone(),
-                        command.origin.pull_request,
-                        crate::github::surfaces::BOT_AUTHOR,
-                        crate::support::effects::Effects::Apply,
-                    );
                     let origin = crate::github::surfaces::origin_comment_url(
                         &command.origin.repository,
                         command.origin.pull_request,
@@ -1419,13 +1423,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                         crate::github::sanitize::Markdown::constant("</sub>\n\n"),
                         surface::comment_help(),
                     ]);
-                    registry.upsert(
-                        &crate::github::surfaces::Surface::CiReportReply {
-                            comment_id: command.origin.comment_id,
-                        },
-                        &[],
-                        body,
-                    )?;
+                    command_reply(&command, body)?;
                     return Ok(CommandStatus::SUCCESS);
                 }
             };

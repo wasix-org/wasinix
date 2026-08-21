@@ -306,11 +306,8 @@ mod plan {
 
     #[test]
     fn a_build_request_is_gated_by_its_builds() {
-        let plan = plan_of(
-            &Request::build(build("case", &["core"]), Default::default()),
-            None,
-            &[],
-        );
+        let request = Request::build(build("case", &["core"]), Default::default());
+        let plan = plan_of(&request, None, &[]);
         assert!(plan.tasks.iter().filter(|t| t.gate).count() == plan.tasks.len());
         assert_eq!(
             plan.tasks
@@ -322,6 +319,23 @@ mod plan {
                 set: BuildTarget::Core
             }
         );
+    }
+
+    #[test]
+    fn a_comment_plan_reply_names_the_resolved_request_and_tasks() {
+        let request = Request::build(build("case", &["core"]), Default::default());
+        let plan = plan_of(&request, None, &[]);
+        let body = crate::github::markdown::plan_reply(
+            "build core --plan",
+            &request,
+            &plan,
+            "https://github.com/wasix-org/wasinix/pull/1#issuecomment-2",
+        )
+        .unwrap()
+        .into_string();
+        assert!(body.contains("No tasks were run"), "{body}");
+        assert!(body.contains("case: Core"), "{body}");
+        assert!(body.contains("build core --plan"), "{body}");
     }
 
     #[test]
@@ -4850,14 +4864,19 @@ mod corpus {
                 kind.as_str()
             );
         }
-        // Help is handled inside authorize, not dispatched to a job.
-        assert!(
-            ci_command.contains(&format!(
-                "steps.authorize.outputs.kind == '{}'",
-                crate::ci::origin::CommandKind::Help.as_str()
-            )),
-            "ci-command-run.yml never replies to help"
-        );
+        for kind in [
+            crate::ci::origin::CommandKind::Help,
+            crate::ci::origin::CommandKind::Plan,
+        ] {
+            assert!(
+                ci_command.contains(&format!(
+                    "steps.authorize.outputs.kind == '{}'",
+                    kind.as_str()
+                )),
+                "ci-command-run.yml never replies to {}",
+                kind.as_str()
+            );
+        }
         for output in ["kind=", "commentId=", "pullRequest=", "headSha="] {
             assert!(
                 ci_command.contains(&format!(
@@ -5001,6 +5020,14 @@ mod untrusted {
             ClapClassifier.classify("build core").unwrap(),
             CommandKind::Build
         );
+        assert!(matches!(
+            parse("build core --plan").unwrap(),
+            UntrustedCommand::Plan(_)
+        ));
+        assert_eq!(
+            ClapClassifier.classify("build core --plan").unwrap(),
+            CommandKind::Plan
+        );
 
         let UntrustedCommand::Request(request) = parse("build core --blocked=skip").unwrap()
         else {
@@ -5017,7 +5044,6 @@ mod untrusted {
             "build core --push-cache",
             "build core --on ec2:host",
             "build core --json",
-            "build core --plan",
             "build core --inputs-only",
             "spot packagesByProfile.zlib --junit-out out.xml",
         ] {

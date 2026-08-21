@@ -163,10 +163,10 @@ const LEAVES: &[LeafPolicy] = &[
             "overrides",
             "from_pr",
             "blocked",
+            "plan",
         ],
         terminal_args: &[
             "on",
-            "plan",
             "json",
             "run_dir",
             "junit_out",
@@ -187,10 +187,10 @@ const LEAVES: &[LeafPolicy] = &[
             "from_source",
             "target_only",
             "blocked",
+            "plan",
         ],
         terminal_args: &[
             "on",
-            "plan",
             "json",
             "run_dir",
             "junit_out",
@@ -201,15 +201,8 @@ const LEAVES: &[LeafPolicy] = &[
     },
     LeafPolicy {
         path: &["diff"],
-        shared_args: &["content_diff", "blocked", "words"],
-        terminal_args: &[
-            "plan",
-            "json",
-            "run_dir",
-            "junit_out",
-            "push_cache",
-            "inputs_only",
-        ],
+        shared_args: &["content_diff", "blocked", "plan", "words"],
+        terminal_args: &["json", "run_dir", "junit_out", "push_cache", "inputs_only"],
         comment_args: &[],
     },
     LeafPolicy {
@@ -561,6 +554,7 @@ mod tests {
             "--blocked",
             "/wasinix versions bump",
             "--changed",
+            "--plan",
         ] {
             assert!(help.contains(text), "missing {text}: {help}");
         }
@@ -599,5 +593,10 @@ mod tests {
             let error = super::validate_terminal(&matches).unwrap_err().to_string();
             assert!(error.contains("comment only"), "{error}");
         }
+        let mut parser = super::terminal_command();
+        let matches = parser
+            .try_get_matches_from_mut(["wasinix", "build", "core", "--plan"])
+            .unwrap();
+        super::validate_terminal(&matches).unwrap();
     }
 }

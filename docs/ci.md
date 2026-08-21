@@ -121,6 +121,10 @@ authorizes it (the shared grammar, a live write-permission check, PR state),
 `ci command` runs it, and the reply is keyed to the commenting comment. Every
 malformed or unauthorized command gets a reply.
 
+`--plan` resolves the request and replies with its pinned request and task
+list from the authorization job. It does not start a durable run or enter the
+report publisher, because no build tasks or report exist.
+
 `/wasinix bisect <target> --good <ref> --bad <ref> -- build <selectors>` runs on
 the runner like every other comment command, so its predicate is a case pinned
 there and it cannot name a builder. `--reverse` asks the other question, where
