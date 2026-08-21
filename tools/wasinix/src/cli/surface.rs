@@ -35,6 +35,16 @@ fn terminal_only(matches: &clap::ArgMatches, ids: &[&str]) -> Result<()> {
     Ok(())
 }
 
+const MUTATION_EFFECTS: &[&str] = &[
+    "commit",
+    "pr",
+    "branch",
+    "repository",
+    "base",
+    "fork",
+    "json",
+];
+
 pub(crate) fn parse_comment(words: &[String]) -> Result<Cli> {
     let mut command = Cli::command();
     let matches = command
@@ -62,6 +72,21 @@ pub(crate) fn parse_comment(words: &[String]) -> Result<Cli> {
         "bisect" => {
             terminal_only(args, &["run_dir"])?;
         }
+        "update" => {
+            terminal_only(args, MUTATION_EFFECTS)?;
+            terminal_only(args, &["expect"])?;
+        }
+        "versions" => {
+            let (verb, args) = args
+                .subcommand()
+                .ok_or_else(|| Error::Request("versions names no command".into()))?;
+            if verb != "bump" {
+                return Err(Error::Request(format!("versions {verb} is terminal only")));
+            }
+            terminal_only(args, MUTATION_EFFECTS)?;
+            terminal_only(args, &["changed_from"])?;
+        }
+        "regenerate" | "fmt" | "help" => {}
         "ci" => return Err(Error::Request("ci is CI only".into())),
         _ => return Err(Error::Request(format!("{name} is terminal only"))),
     }

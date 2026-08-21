@@ -30,7 +30,8 @@ pub(crate) use surface::Surface;
     version,
     about = "Tooling for the wasinix package repository.",
     subcommand_required = true,
-    arg_required_else_help = true
+    arg_required_else_help = true,
+    disable_help_subcommand = true
 )]
 pub struct Cli {
     /// Show raw child output and echoes
@@ -136,6 +137,15 @@ pub enum CommandTree {
         #[arg(value_enum)]
         shell: clap_complete::Shell,
     },
+    /// Discard a managed pull-request branch and replay its recipe
+    #[command(hide = true)]
+    Regenerate,
+    /// Format a pull-request branch and commit the result
+    #[command(hide = true)]
+    Fmt,
+    /// Show help for the active command surface
+    #[command(name = "help", hide = true)]
+    SurfaceHelp,
 }
 
 #[derive(clap::Args)]
@@ -1603,6 +1613,14 @@ fn run(command: CommandTree) -> Result<CommandStatus> {
         CommandTree::Versions(command) => update::run_versions(command),
         CommandTree::Remote(command) => remote::run(command),
         CommandTree::Ci(command) => ci_command(command),
+        CommandTree::Regenerate | CommandTree::Fmt => {
+            crate::support::error::request_error("this command is comment only")
+        }
+        CommandTree::SurfaceHelp => {
+            use clap::CommandFactory;
+            ui::output(<Cli as CommandFactory>::command().render_long_help());
+            Ok(CommandStatus::SUCCESS)
+        }
     }
 }
 

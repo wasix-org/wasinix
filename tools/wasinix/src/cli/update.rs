@@ -162,7 +162,7 @@ pub enum VersionsCommand {
     /// Bump publication release counters (+wasix.N)
     Bump {
         /// Packages, optionally @<version>
-        #[arg(required_unless_present = "changed_from")]
+        #[arg(required_unless_present_any = ["changed_from", "changed"])]
         specs: Vec<String>,
         /// Bump every version a package serves, not just its only one
         #[arg(long)]
@@ -170,6 +170,9 @@ pub enum VersionsCommand {
         /// Select served versions whose publication derivations changed from REF
         #[arg(long, value_name = "REF", conflicts_with_all = ["specs", "all_versions"])]
         changed_from: Option<String>,
+        /// Select versions changed from the verified pull request base
+        #[arg(long, conflicts_with_all = ["specs", "all_versions", "changed_from"])]
+        changed: bool,
         #[command(flatten)]
         mode: MutationMode,
     },
@@ -450,8 +453,12 @@ pub fn run_versions(command: VersionsCommand) -> Result<CommandStatus> {
             specs,
             all_versions,
             changed_from,
+            changed,
             mode,
         } => {
+            if changed {
+                return request_error("--changed is comment only; use --changed-from REF");
+            }
             let recipe = crate::cli::untrusted::MutationCommand::Bump {
                 specs: specs.clone(),
                 all_versions,
