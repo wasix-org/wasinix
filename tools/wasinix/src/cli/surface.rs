@@ -1,5 +1,6 @@
 use clap::{CommandFactory, FromArgMatches};
 
+use crate::github::sanitize::Markdown;
 use crate::support::error::{Error, Result};
 
 use super::Cli;
@@ -305,6 +306,53 @@ fn reject_unavailable(policy: &CommandPolicy, path: &str) -> Result<()> {
     }
 }
 
+fn command_at<'a>(mut command: &'a clap::Command, path: &[&str]) -> &'a clap::Command {
+    for segment in path {
+        command = command
+            .find_subcommand(segment)
+            .expect("surface policy names a missing command");
+    }
+    command
+}
+
+pub(crate) fn comment_help() -> Markdown {
+    let command = Cli::command();
+    let entries = LEAVES.iter().map(|leaf| {
+        let mut projected = command_at(&command, leaf.path)
+            .clone()
+            .bin_name(format!("/wasinix {}", leaf.path.join(" ")));
+        for id in leaf.terminal_args.iter().chain(ROOT_TERMINAL_ARGS) {
+            if projected.get_arguments().any(|arg| arg.get_id() == *id) {
+                projected = projected.mut_arg(*id, |arg| arg.hide(true));
+            }
+        }
+        let usage = projected
+            .render_usage()
+            .to_string()
+            .trim_start_matches("Usage: ")
+            .to_string();
+        let about = projected
+            .get_about()
+            .map(ToString::to_string)
+            .unwrap_or_default();
+        let help = projected.render_long_help().to_string();
+        Markdown::concat([
+            Markdown::constant("<details><summary>"),
+            Markdown::code(&usage),
+            Markdown::constant(": "),
+            Markdown::text(&about),
+            Markdown::constant("</summary>\n\n"),
+            Markdown::fenced(&help, "text"),
+            Markdown::constant("</details>\n"),
+        ])
+    });
+    Markdown::constant("### `/wasinix` commands\n\n")
+        .push(Markdown::join(entries, "\n"))
+        .push(Markdown::constant(
+            "\n\nAny line of a comment works; the command runs against this pull request.\n",
+        ))
+}
+
 pub(crate) fn parse_comment(words: &[String]) -> Result<Cli> {
     let mut command = Cli::command();
     let matches = command
@@ -395,6 +443,27 @@ mod tests {
             assert!(super::MUTATION_EFFECTS
                 .iter()
                 .all(|effect| leaf.terminal_args.contains(effect)));
+        }
+    }
+
+    #[test]
+    fn comment_help_is_projected_from_comment_policy() {
+        let help = super::comment_help().into_string();
+        for text in [
+            "/wasinix build",
+            "--blocked",
+            "/wasinix versions bump",
+            "--changed",
+        ] {
+            assert!(help.contains(text), "missing {text}: {help}");
+        }
+        for text in [
+            "--run-dir",
+            "--changed-from",
+            "/wasinix jobs",
+            "/wasinix ci",
+        ] {
+            assert!(!help.contains(text), "included {text}: {help}");
         }
     }
 }
