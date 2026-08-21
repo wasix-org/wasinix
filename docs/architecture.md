@@ -74,8 +74,16 @@ nix-eval-jobs, and OpenSSH system boundaries. `wasinix` is the compatibility
 package that also carries optional registry and publication helpers. The
 `wasinix-capability-*` outputs expose each optional helper separately. A core
 launcher binds capability resolution to its own flake source and lock; a bare
-development binary uses its checkout. Resolution permits substitution or a
-remote builder but sets Nix's local build capacity to zero.
+development binary may use its PATH and otherwise uses its checkout. Only the
+full compatibility launcher marks its optional PATH entries as coming from the
+same locked package set; core never prefers ambient helpers. Resolution permits
+substitution or a remote builder but sets Nix's local build capacity to zero.
+
+After parsing, commands conservatively declare the optional helpers they may
+need. One owned background worker realises that set as a batch while command
+setup continues. First use waits for the same result; command exit cancels and
+reaps unfinished speculation, and an unused prewarm failure does not change the
+command result.
 
 CA derivations are not used because caches cannot reliably distribute or
 authenticate realisations

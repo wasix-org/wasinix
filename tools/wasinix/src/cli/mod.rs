@@ -470,6 +470,72 @@ pub enum CiCommand {
     },
 }
 
+impl CommandTree {
+    fn anticipated_capabilities(&self) -> Vec<crate::support::capability::Capability> {
+        use crate::support::capability::Capability::{Aws, Python, Rclone, Wasmer};
+
+        match self {
+            CommandTree::Cargo(command) => match command {
+                registries::CargoCommand::Serve { .. } => vec![Python, Wasmer],
+                registries::CargoCommand::Publish { dry_run: false, .. } => vec![Python],
+                registries::CargoCommand::Publish { dry_run: true, .. } => Vec::new(),
+                registries::CargoCommand::Preview { dry_run: false, .. } => {
+                    vec![Python, Wasmer]
+                }
+                registries::CargoCommand::Preview { dry_run: true, .. } => vec![Python],
+            },
+            CommandTree::Wasmer(command) => match command {
+                registries::WasmerCommand::Serve { .. }
+                | registries::WasmerCommand::Publish { dry_run: true, .. }
+                | registries::WasmerCommand::Preview { dry_run: true, .. } => Vec::new(),
+                registries::WasmerCommand::Publish { dry_run: false, .. }
+                | registries::WasmerCommand::Preview { dry_run: false, .. } => vec![Wasmer],
+            },
+            CommandTree::Python(command) => match command {
+                registries::PythonCommand::Serve { .. } => vec![Python],
+                registries::PythonCommand::Publish { .. } => vec![Python, Rclone, Wasmer],
+                registries::PythonCommand::Preview { .. } => vec![Wasmer],
+                registries::PythonCommand::CountNatives { .. } => Vec::new(),
+                registries::PythonCommand::Coverage { .. }
+                | registries::PythonCommand::Survey { .. } => vec![Python],
+            },
+            CommandTree::Publish { .. } => vec![Python, Rclone, Wasmer],
+            CommandTree::Preview(args) if args.status.is_none() && args.dry_run => vec![Python],
+            CommandTree::Preview(args) if args.status.is_none() => vec![Python, Wasmer],
+            CommandTree::Serve { .. } => vec![Python, Wasmer],
+            CommandTree::Ci(CiCommand::Publish {
+                dry_run: false,
+                baseline,
+                failure_logs,
+                ..
+            }) if *baseline || *failure_logs => vec![Aws],
+            CommandTree::Ci(CiCommand::StepTimings {
+                publish: true,
+                dry_run: false,
+                ..
+            }) => vec![Aws],
+            CommandTree::Build(_)
+            | CommandTree::Spot(_)
+            | CommandTree::Diff(_)
+            | CommandTree::Bisect(_)
+            | CommandTree::Jobs { .. }
+            | CommandTree::Doctor
+            | CommandTree::Timings(_)
+            | CommandTree::Cache(_)
+            | CommandTree::Run(_)
+            | CommandTree::Preview(_)
+            | CommandTree::Update(_)
+            | CommandTree::Versions(_)
+            | CommandTree::Remote(_)
+            | CommandTree::Ci(_)
+            | CommandTree::Completions { .. }
+            | CommandTree::Regenerate
+            | CommandTree::Fmt
+            | CommandTree::SurfaceHelp => Vec::new(),
+        }
+    }
+}
+
 /// A pattern segment containing a glob character matches like a build
 /// selector; a bare one matches by substring, and the segments slide over
 /// the address, so `hydra` finds `pythonWheels.py313.hydra-core` without
@@ -1755,11 +1821,68 @@ pub fn main() -> std::process::ExitCode {
         ColorMode::Always => crate::support::terminal::ColorChoice::Always,
         ColorMode::Never => crate::support::terminal::ColorChoice::Never,
     });
-    match run(cli.command) {
+    let prewarm = match crate::support::capability::prewarm(
+        cli.command.anticipated_capabilities(),
+    ) {
+        Ok(prewarm) => prewarm,
+        Err(error) => {
+            ui::report_error(&error);
+            return error.status().into();
+        }
+    };
+    let result = run(cli.command);
+    drop(prewarm);
+    match result {
         Ok(status) => status.into(),
         Err(error) => {
             ui::report_error(&error);
             error.status().into()
         }
+    }
+}
+
+#[cfg(test)]
+mod capability_tests {
+    use clap::Parser;
+
+    use super::Cli;
+    use crate::support::capability::Capability;
+
+    fn anticipated(args: &[&str]) -> Vec<Capability> {
+        Cli::try_parse_from(args)
+            .unwrap()
+            .command
+            .anticipated_capabilities()
+    }
+
+    #[test]
+    fn parsed_commands_anticipate_only_their_possible_helpers() {
+        assert_eq!(
+            anticipated(&["wasinix", "python", "publish"]),
+            vec![Capability::Python, Capability::Rclone, Capability::Wasmer]
+        );
+        assert_eq!(
+            anticipated(&["wasinix", "python", "coverage"]),
+            vec![Capability::Python]
+        );
+        assert_eq!(
+            anticipated(&["wasinix", "python", "survey", "refresh"]),
+            vec![Capability::Python]
+        );
+        assert_eq!(
+            anticipated(&["wasinix", "cargo", "publish", "--dry-run"]),
+            Vec::new()
+        );
+        assert_eq!(
+            anticipated(&[
+                "wasinix",
+                "ci",
+                "publish",
+                "--run-dir",
+                "run",
+                "--failure-logs",
+            ]),
+            vec![Capability::Aws]
+        );
     }
 }
