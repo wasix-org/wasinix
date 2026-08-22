@@ -12,9 +12,10 @@ helpers.libTweaks {
     ./patches/rustfs-manifest.patch
     ./patches/rustfs-code.patch
   ];
-  # Nixpkgs's private console derivation uses target stdenv and cannot evaluate
-  # for WASI. The core S3 server does not require embedded console assets.
-  postPatch = _: "";
+  # Nixpkgs builds the console with pnpm under the target stdenv, so it throws
+  # ("unsupported os WasiP1") on evaluation. The core S3 server does not need
+  # the embedded console assets, so postPatch copies in an empty tree.
+  console = final.buildPackages.emptyDirectory;
 
   # ftps/webdav are default protocol-server features pulling libunftp +
   # dav-server, both deeply unix. Keep the core S3 build.
