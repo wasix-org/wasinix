@@ -1,0 +1,22 @@
+--- a/sapi/cli/php_cli.c
++++ b/sapi/cli/php_cli.c
+@@ -610 +610 @@
+-	zend_try {
++	zend_first_try {
+@@ -1318 +1317,0 @@
+-	zend_first_try {
+@@ -1320 +1319 @@
+-		if (sapi_module == &cli_sapi_module) {
++	if (sapi_module == &cli_sapi_module) {
+@@ -1322 +1321 @@
+-			exit_status = do_cli(argc, argv);
++		exit_status = do_cli(argc, argv);
+@@ -1324,3 +1323,3 @@
+-		} else {
+-			exit_status = do_cli_server(argc, argv);
+-		}
++	} else {
++		exit_status = do_cli_server(argc, argv);
++	}
+@@ -1328 +1326,0 @@
+-	} zend_end_try();
