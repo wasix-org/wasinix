@@ -107,6 +107,40 @@
   extendPackage = package: attrs:
     package.overrideAttrs (old: extendAttrs old attrs);
 
+  extendPythonPackage = repair: package: attrs: let
+    buildAttrs = [
+      "patches"
+      "pname"
+      "postBuild"
+      "postPatch"
+      "preBuild"
+      "prePatch"
+      "src"
+      "version"
+    ];
+    changesBuild = lib.any (name: builtins.hasAttr name attrs) buildAttrs;
+    extended = extendPackage package attrs;
+    stamped =
+      if changesBuild
+      then
+        extended.overrideAttrs (old: let
+          passthru = old.passthru or {};
+          wasinix = passthru.wasinix or {};
+        in {
+          passthru =
+            passthru
+            // {
+              wasinix =
+                wasinix
+                // {
+                  publication = (wasinix.publication or {}) // {supersedesPyPI = true;};
+                };
+            };
+        })
+      else extended;
+  in
+    repair stamped;
+
   wasmRename = {
     wasmName,
     posixAlias ? false,
@@ -188,6 +222,7 @@
 
   unitResult = {
     context,
+    extendPackageFor ? extendPackage,
     file,
     name,
     previous ? null,
@@ -212,7 +247,7 @@
     exposeExtendedPackage = attrs:
       if !previousAvailable
       then throw "${name}: exposeExtendedPackage requires a preceding package"
-      else exposePackage (extendPackage previous attrs);
+      else exposePackage (extendPackageFor previous attrs);
     exposeExtendedPackages = updates:
       lib.mapAttrs (
         resultName: update:
@@ -220,7 +255,7 @@
           then throw "${name}: exposeExtendedPackages requires preceding package '${resultName}'"
           else if builtins.isFunction update
           then update previousSet.${resultName}
-          else extendPackage previousSet.${resultName} update
+          else extendPackageFor previousSet.${resultName} update
       )
       updates;
     value =
@@ -393,13 +428,14 @@
         })
         // {versions = {};}));
 in rec {
-  inherit address addressSegment buildHostPypaTools callWith callWithLabel discoverUnits dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix dropSphinxDocs extendAttrs extensionContextsAttr historyBaseAttr historyOverlaysAttr linkInputs loadPackageOverlays loadTestDirectory machineMetadata mergeScript packageForEntry packageMetadata registryAttr replaceInputsByName stampPackage unitOverlaysAttr unitResult wasmRename;
+  inherit address addressSegment buildHostPypaTools callWith callWithLabel discoverUnits dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix dropSphinxDocs extendAttrs extendPythonPackage extensionContextsAttr historyBaseAttr historyOverlaysAttr linkInputs loadPackageOverlays loadTestDirectory machineMetadata mergeScript packageForEntry packageMetadata registryAttr replaceInputsByName stampPackage unitOverlaysAttr unitResult wasmRename;
 
   inherit extendPackage;
 
   loadPackageOverlay = {
     contextFor,
     dir,
+    extendPackageFor ? extendPackage,
     expose ? [],
   }: final: prev: let
     instantiate = unit: final': prev': let
@@ -409,6 +445,7 @@ in rec {
     in
       unitResult {
         inherit (unit) file name;
+        inherit extendPackageFor;
         context = contextFor {
           final = final';
           prev = prev';

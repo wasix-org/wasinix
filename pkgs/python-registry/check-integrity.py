@@ -77,7 +77,7 @@ def check_views(root: Path, wheels: list[tuple[str, Path]]) -> None:
     the resolver silently takes upstream's build of something we patched.
 
     A tweak that only skips a test leaves the wheel identical to upstream's, so
-    it does not qualify; pkgs/lib/default.nix decides that."""
+    it does not qualify; Python package construction decides that."""
     simple = root / "simple"
     provenance = json.loads((root / "provenance.json").read_text())
     expected = {

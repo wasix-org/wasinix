@@ -18,6 +18,8 @@
     name = "existing";
     buildInputs = [];
   };
+  pythonBuildEdit = projectLib.extendPythonPackage (package: package) previous {patches = ["fix.patch"];};
+  pythonTestEdit = projectLib.extendPythonPackage (package: package) previous {doCheck = false;};
   newRecipe = mkPackage {name = "new";};
   familyA = mkPackage {name = "family-a";};
   familyB = mkPackage {name = "family-b";};
@@ -725,6 +727,8 @@ in {
       exposed = exposedUnits.dependency.name;
       missingExposureFails = !(force missingExposure).success;
       wasmRename = lib.hasInfix "tool.wasm" ((projectLib.wasmRename {wasmName = "tool";} (mkPackage {name = "tool";})).postInstall);
+      buildEditSupersedesPyPI = pythonBuildEdit.passthru.wasinix.publication.supersedesPyPI;
+      testEditSupersedesPyPI = pythonTestEdit.passthru.wasinix.publication.supersedesPyPI or false;
     };
     expected = {
       names = ["existing" "family-a" "family-b" "new"];
@@ -737,6 +741,8 @@ in {
       exposed = "dependency";
       missingExposureFails = true;
       wasmRename = true;
+      buildEditSupersedesPyPI = true;
+      testEditSupersedesPyPI = false;
     };
   };
 

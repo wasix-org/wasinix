@@ -156,8 +156,9 @@ line naming a published wheel, which is how `wasmerio/wasmer-compat` decides
 which projects the index covers.
 
 `simple/` lists the projects PyPI cannot supply: those shipping a
-platform-tagged wheel, and those with an overlay entry here, whose build differs
-from upstream's. Point a resolver at it as the priority index beside PyPI:
+platform-tagged wheel, and those whose package unit changes their source,
+version, patches, or build hooks. Test-only changes do not qualify. Point a
+resolver at it as the priority index beside PyPI:
 
 ```sh
 uv pip compile pyproject.toml --universal \
