@@ -21,12 +21,20 @@
     inherit (package) src;
     inherit patches;
   };
-  cargoArtifacts = package.cargoArtifacts.overrideAttrs (_old: {
+  cargoArtifacts = package.cargoArtifacts.overrideAttrs (old: {
     inherit src;
     patches = [];
+    postInstall =
+      (old.postInstall or "")
+      + ''
+        install -Dm644 target/release/build/wasmer-c-api-*/out/wasmer.h "$out/wasmer.h"
+      '';
   });
 in
   exposeExtendedPackage {
     inherit src cargoArtifacts;
     patches = [];
+    postBuild = ''
+      install -Dm644 ${cargoArtifacts}/wasmer.h lib/c-api/wasmer.h
+    '';
   }
