@@ -1,7 +1,6 @@
 host = [
   "pkgs/cargo-registry/make-sparse-index.py",
   "pkgs/cargo-registry/publish-crate.py",
-  "pkgs/overlay/packages/icu/sync-versions.py",
   "pkgs/overlay/packages/yq-go/update-vendor-hash.py",
   "pkgs/overlay/python-packages/ddtrace/update.sh",
   "pkgs/overlay/python-packages/tree-sitter-grammars/update.sh",

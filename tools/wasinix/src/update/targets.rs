@@ -120,17 +120,37 @@ struct Declaration {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PostUpdateHook {
     pub name: String,
-    pub command: Vec<String>,
-    pub command_drv_paths: Vec<String>,
+    pub action: PostUpdateAction,
     pub version: String,
 }
 
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub enum PostUpdateAction {
+    Command {
+        command: Vec<String>,
+        command_drv_paths: Vec<String>,
+    },
+    SyncAttrList(crate::update::sync::AttrList),
+}
+
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PostUpdateDeclaration {
-    command: Vec<String>,
-    command_drv_paths: Vec<String>,
+    action: PostUpdateAction,
     version: String,
+}
+
+pub(crate) fn declared_post_update_hook(attr: &str, value: &Value) -> Result<PostUpdateHook> {
+    let declaration: PostUpdateDeclaration = crate::support::json::from_value(
+        value.clone(),
+        &format!("postUpdateHooks.{attr}"),
+    )?;
+    Ok(PostUpdateHook {
+        name: attr.rsplit('.').next().unwrap_or(attr).to_string(),
+        action: declaration.action,
+        version: declaration.version,
+    })
 }
 
 /// meta.position under a flake evaluation is inside the source store copy.
@@ -206,20 +226,13 @@ pub fn discovered_targets(repo: &Path) -> Result<Vec<Target>> {
     Ok(dedupe(targets))
 }
 
-/// Package-declared post-update commands, deduped across the profile attrs.
+/// Package-declared post-update operations, deduped across profile attrs.
 pub fn discovered_post_update_hooks() -> Result<Vec<PostUpdateHook>> {
     let declared = eval(&Flake::default(), "postUpdateHooks", None)?;
     let mut hooks: BTreeMap<String, PostUpdateHook> = BTreeMap::new();
     for (attr, value) in declared.as_object().into_iter().flatten() {
-        let declaration: PostUpdateDeclaration =
-            crate::support::json::from_value(value.clone(), &format!("postUpdateHooks.{attr}"))?;
-        let name = attr.rsplit('.').next().unwrap_or(attr).to_string();
-        let hook = PostUpdateHook {
-            name: name.clone(),
-            command: declaration.command,
-            command_drv_paths: declaration.command_drv_paths,
-            version: declaration.version,
-        };
+        let hook = declared_post_update_hook(attr, value)?;
+        let name = hook.name.clone();
         if let Some(previous) = hooks.insert(name.clone(), hook.clone()) {
             if previous != hook {
                 return request_error(format!(
@@ -233,15 +246,9 @@ pub fn discovered_post_update_hooks() -> Result<Vec<PostUpdateHook>> {
 
 pub fn all_targets(repo: &Path) -> Result<Vec<Target>> {
     let mut targets = discovered_targets(repo)?;
-    let lock_path = repo.join("flake.lock");
-    let lock: Value = crate::support::json::read(&lock_path)?;
-    let root = lock["root"].as_str().unwrap_or("root");
     for mut target in builtin_targets() {
         if target.backend == Backend::FlakeInput {
-            let node = lock["nodes"][root]["inputs"][&target.input]
-                .as_str()
-                .unwrap_or(&target.input);
-            let locked = &lock["nodes"][node]["locked"];
+            let locked = crate::update::flake_lock::locked_input(repo, &target.input)?;
             target.version = locked["rev"].as_str().unwrap_or_default().to_string();
             target.source = match locked["type"].as_str() {
                 Some("github") => Some(serde_json::json!({
