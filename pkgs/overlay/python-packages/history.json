@@ -259,6 +259,14 @@
       "vendorLayout": {
         "lockInPackage": true
       }
+    },
+    "0.16.0": {
+      "hash": "sha256-EpAMw7cdPg0cux6MAoe0iWmBy5vI07QAShk0avTbpW0=",
+      "note": "openai >=3.3.0 requires jiter>=0.16.0, which nixpkgs has not reached; upstream commits no lock, so locks/0.16.0.lock carries the release's own",
+      "tag": "v0.16.0",
+      "vendorLayout": {
+        "lockInPackage": true
+      }
     }
   },
   "langchain": {
