@@ -6,15 +6,19 @@
   profiles = import ../profiles.nix;
   nativePackageRecipes = import ../native;
   compatibility = import ../lib {inherit lib;};
-in {
-  mkProject = {
+  constructProject = includeWasinix: {
     system,
     importNixpkgs,
     extensions ? [],
+    projectionRules ? {},
     ci ? {},
   }: let
-    project = projectApi.mkProject {
-      inherit system importNixpkgs extensions ci;
+    constructor =
+      if includeWasinix
+      then projectApi.mkProject
+      else projectApi.mkEmptyProject;
+    project = constructor {
+      inherit system importNixpkgs extensions projectionRules ci;
     };
 
     constructionFor = nativePkgs: let
@@ -137,11 +141,115 @@ in {
         withRuntime = rawWasm.withRuntime runtime;
       };
     };
+    builtInExtension = import ../extension.nix {
+      inherit (projectApi) loadPackageOverlays;
+    };
+    wasinixProjectionRules = {
+      cargoRegistryArtifact = {
+        entry,
+        packageSets,
+        ...
+      } @ args: ((import ../artifacts/cargo.nix {
+          inherit lib;
+          inherit ((constructionFor packageSets.native)) mkCargoRegistry;
+        })
+          .registryArtifact
+        args);
+      wasmerArtifacts = {
+        entry,
+        packages,
+        packageSets,
+        ...
+      } @ args: ((import ../artifacts/wasmer.nix {
+          inherit lib;
+          inherit ((constructionFor packageSets.native)) makeWasmerPackage webcIdent;
+        })
+          .wasmerArtifacts
+        args);
+      wasmerCommands = {
+        entry,
+        packages,
+        packageSets,
+        ...
+      } @ args: ((import ../artifacts/wasmer.nix {
+          inherit lib;
+          inherit ((constructionFor packageSets.native)) makeWasmerPackage webcIdent;
+        })
+          .wasmerCommands
+        args);
+      inherit
+        (import ../checks/behavior.nix {
+          inherit lib;
+          projectLib = import ./lib.nix {inherit lib;};
+        })
+        packagedBehavior
+        ;
+      pythonWheelArtifacts = {
+        entry,
+        packages,
+        packageSets,
+        ...
+      } @ args: ((import ../artifacts/python.nix {
+          inherit lib;
+          inherit ((constructionFor packageSets.native)) mkPythonRegistry mkPythonWheels;
+        })
+          .wheelArtifacts
+        args);
+      pythonRegistryArtifact = {
+        entry,
+        packages,
+        packageSets,
+        ...
+      } @ args: ((import ../artifacts/python.nix {
+          inherit lib;
+          inherit ((constructionFor packageSets.native)) mkPythonRegistry mkPythonWheels;
+        })
+          .registryArtifact
+        args);
+      inherit
+        (import ../artifacts/python.nix {
+          inherit lib;
+          mkPythonRegistry = null;
+          mkPythonWheels = null;
+        })
+        artifactTests
+        ;
+      packageLink = {
+        entry,
+        packages,
+        packageSets,
+        ...
+      } @ args: ((import ../checks/link.nix {
+          inherit lib;
+          inherit ((constructionFor packageSets.native)) linkCheck;
+        })
+          .packageLink
+        args);
+      packageAbi = {
+        entry,
+        packageSets,
+        profileSets,
+        ...
+      } @ args: ((import ../checks/abi.nix {
+          inherit lib;
+          inherit ((constructionFor packageSets.native)) abiCheck;
+        })
+          .packageAbi
+        args);
+      capturedSuite = {
+        entry,
+        packageSets,
+        ...
+      } @ args: ((import ../checks/captured.nix {
+          inherit lib;
+          inherit ((constructionFor packageSets.native)) emulatedChecks;
+        })
+          .capturedSuite
+        args);
+    };
     projectApi = import ./default.nix {
-      inherit lib profiles;
-      builtInExtension = import ../extension.nix {
-        inherit (projectApi) loadPackageOverlays;
-      };
+      inherit lib profiles builtInExtension;
+      projectionRules = wasinixProjectionRules;
       crossSystemFor = _profile: spec:
         {
           config = "wasm32-unknown-wasi";
@@ -198,109 +306,6 @@ in {
           package
         else package;
       harnessesFor = {nativeRaw, ...}: (constructionFor nativeRaw).harnesses;
-      projectionRules = {
-        cargoRegistryArtifact = {
-          entry,
-          packageSets,
-          ...
-        } @ args: ((import ../artifacts/cargo.nix {
-            inherit lib;
-            inherit ((constructionFor packageSets.native)) mkCargoRegistry;
-          })
-            .registryArtifact
-          args);
-        wasmerArtifacts = {
-          entry,
-          packages,
-          packageSets,
-          ...
-        } @ args: ((import ../artifacts/wasmer.nix {
-            inherit lib;
-            inherit ((constructionFor packageSets.native)) makeWasmerPackage webcIdent;
-          })
-            .wasmerArtifacts
-          args);
-        wasmerCommands = {
-          entry,
-          packages,
-          packageSets,
-          ...
-        } @ args: ((import ../artifacts/wasmer.nix {
-            inherit lib;
-            inherit ((constructionFor packageSets.native)) makeWasmerPackage webcIdent;
-          })
-            .wasmerCommands
-          args);
-        inherit
-          (import ../checks/behavior.nix {
-            inherit lib;
-            projectLib = import ./lib.nix {inherit lib;};
-          })
-          packagedBehavior
-          ;
-        pythonWheelArtifacts = {
-          entry,
-          packages,
-          packageSets,
-          ...
-        } @ args: ((import ../artifacts/python.nix {
-            inherit lib;
-            inherit ((constructionFor packageSets.native)) mkPythonRegistry mkPythonWheels;
-          })
-            .wheelArtifacts
-          args);
-        pythonRegistryArtifact = {
-          entry,
-          packages,
-          packageSets,
-          ...
-        } @ args: ((import ../artifacts/python.nix {
-            inherit lib;
-            inherit ((constructionFor packageSets.native)) mkPythonRegistry mkPythonWheels;
-          })
-            .registryArtifact
-          args);
-        inherit
-          (import ../artifacts/python.nix {
-            inherit lib;
-            mkPythonRegistry = null;
-            mkPythonWheels = null;
-          })
-          artifactTests
-          ;
-        packageLink = {
-          entry,
-          packages,
-          packageSets,
-          ...
-        } @ args: ((import ../checks/link.nix {
-            inherit lib;
-            inherit ((constructionFor packageSets.native)) linkCheck;
-          })
-            .packageLink
-          args);
-        packageAbi = {
-          entry,
-          packageSets,
-          profileSets,
-          ...
-        } @ args: ((import ../checks/abi.nix {
-            inherit lib;
-            inherit ((constructionFor packageSets.native)) abiCheck;
-          })
-            .packageAbi
-          args);
-        capturedSuite = {
-          entry,
-          packageSets,
-          ...
-        } @ args: ((import ../checks/captured.nix {
-            inherit lib;
-            inherit ((constructionFor packageSets.native)) emulatedChecks;
-          })
-            .capturedSuite
-          args);
-      };
       pythonSetsFor = {wasixRaw, ...}: {
         py313 = {
           pkgs = wasixRaw.exnrefEhpic;
@@ -315,4 +320,7 @@ in {
     };
   in
     project;
+in {
+  mkEmptyProject = constructProject false;
+  mkProject = constructProject true;
 }
