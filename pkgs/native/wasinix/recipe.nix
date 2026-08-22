@@ -17,10 +17,18 @@
   writeShellApplication,
 }: let
   commandAliases = ["build" "spot" "diff" "run" "remote" "ci"];
+  source = lib.fileset.toSource {
+    root = ../../..;
+    fileset = lib.fileset.unions [
+      ../../../schema/project.json
+      ../../../tools/wasinix
+    ];
+  };
   unwrapped = rustPlatform.buildRustPackage {
     pname = "wasinix";
     version = "0.1.0";
-    src = ../../../tools/wasinix;
+    src = source;
+    sourceRoot = "${source.name}/tools/wasinix";
     cargoLock.lockFile = ../../../tools/wasinix/Cargo.lock;
     doCheck = true;
     nativeCheckInputs = [gitMinimal nixVersions.latest];
