@@ -27,6 +27,7 @@
 }: let
   projectLib = import ./lib.nix {inherit lib;};
   schema = builtins.fromJSON (builtins.readFile ../../schema/project.json);
+  extendPythonPackage = projectLib.extendPythonPackage repairPythonPackage;
 
   validateExtension = extension: let
     id = extension.id or null;
@@ -119,6 +120,7 @@
         projectLib.loadPackageOverlay {
           inherit contextFor;
           dir = declared.directory;
+          extendPackageFor = extendPythonPackage;
           expose = declared.expose or [];
         }
       else throw "Wasinix extension '${extension.id}' Python lane is not an overlay";
