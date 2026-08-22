@@ -390,6 +390,24 @@ derivation complexity.
 Adopt Crane only when it materially improves incremental builds without
 obscuring the dependency graph or invalidation boundaries.
 
+The experiment on 2026-08-23 used nixbuild.net with local build slots disabled.
+The remote scheduler varied between two and eight CPUs, so the phase timings
+are directional rather than a controlled benchmark. A Rust-only
+`buildRustPackage` rebuild spent 55.26 seconds compiling and 25.88 seconds
+compiling tests. Crane reused its dependency artifact and spent 35.93 seconds
+on the package and 27.13 seconds on tests. Splitting the package and test
+derivations then let those independent phases run concurrently; the observed
+remote jobs finished in 44 and 55 seconds. A fixture-only change invalidates
+only the test source, while a lock-file change explicitly invalidates the
+dependency artifact.
+
+The cold Crane graph exposed 27 derivations, mostly vendored Cargo packages,
+and the dependency artifact took 43 seconds with six CPUs and 131 seconds with
+two. That cold cost is cacheable until `Cargo.lock` changes. The incremental
+reduction and the narrower production-source boundary justified adopting the
+split, while keeping the dependency, package, and repository-test derivations
+named separately in the flake.
+
 ## Completion criteria
 
 The plan is complete when:

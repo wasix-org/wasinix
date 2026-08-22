@@ -16,6 +16,9 @@
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    crane = {
+      url = "github:ipetkov/crane/v0.23.3";
+    };
     ghc-wasm-meta = {
       # The official read-only mirror of gitlab.haskell.org/haskell-wasm:
       # same commits, narHash-verified, and CI already depends on github,
@@ -30,6 +33,7 @@
     nixpkgs,
     wasmer,
     treefmt-nix,
+    crane,
     ghc-wasm-meta,
     ...
   }: let
@@ -179,17 +183,49 @@
       "${context}: duplicate jobs (${lib.concatStringsSep ", " duplicates})"
       (lib.foldl' (acc: set: acc // set) {} sets);
     treefmtCheck = treefmtEval.config.build.check self;
-    # The orchestrator binary. Vanilla nixpkgs Rust: this is the tool that
-    # tests the wasix toolchain, so it must not depend on it.
-    wasinixUnwrapped = wasix.pkgs.rustPlatform.buildRustPackage {
+    # The orchestrator uses the host Rust toolchain: it tests the wasix
+    # toolchain, so it must not depend on it.
+    craneLib = crane.mkLib wasix.pkgs;
+    wasinixCargoArgs = {
       pname = "wasinix";
       version = "0.1.0";
       src = ./tools/wasinix;
-      cargoLock.lockFile = ./tools/wasinix/Cargo.lock;
-      doCheck = true;
-      nativeCheckInputs = with wasix.pkgs; [gitMinimal nixVersions.latest];
-      meta.mainProgram = "wasinix";
+      strictDeps = true;
+      cargoLock = ./tools/wasinix/Cargo.lock;
     };
+    wasinixCargoArtifacts = craneLib.buildDepsOnly wasinixCargoArgs;
+    wasinixUnwrapped = craneLib.buildPackage (wasinixCargoArgs
+      // {
+        cargoArtifacts = wasinixCargoArtifacts;
+        doCheck = false;
+        meta.mainProgram = "wasinix";
+      });
+    wasinixHelperFiles =
+      lib.concatLists (builtins.attrValues
+        (builtins.fromTOML (builtins.readFile ./pkgs/helper-boundaries.toml)));
+    wasinixTestSource = lib.fileset.toSource {
+      root = ./.;
+      fileset = lib.fileset.unions (
+        [
+          ./.github
+          ./flake.nix
+          ./pkgs/helper-boundaries.toml
+          ./tools/wasinix
+        ]
+        ++ map (path: ./. + "/${path}") wasinixHelperFiles
+      );
+    };
+    wasinixTests = craneLib.cargoTest (wasinixCargoArgs
+      // {
+        src = wasinixTestSource;
+        cargoToml = ./tools/wasinix/Cargo.toml;
+        cargoArtifacts = wasinixCargoArtifacts;
+        nativeCheckInputs = with wasix.pkgs; [gitMinimal nixVersions.latest];
+        postUnpack = ''
+          cd $sourceRoot/tools/wasinix
+          sourceRoot="."
+        '';
+      });
     wasinixCoreInputs = with wasix.pkgs; [
       bash
       coreutils
@@ -491,7 +527,7 @@
     checksBySet = {
       core = mergeDisjoint "checksBySet.core" [
         {
-          wasinix = wasinixUnwrapped;
+          wasinix = wasinixTests;
           wasinix-core-closure = wasinixCoreClosureCheck;
           wasinix-helper-boundaries = helperBoundaryCheck;
           wasinix-interface = wasinixInterfaceCheck;
