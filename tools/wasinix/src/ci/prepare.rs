@@ -113,20 +113,39 @@ pub fn load(run_dir: &Path) -> Result<Loaded> {
 /// Adopt a published evaluation for one case when its materialized tree has
 /// one. The tree is the honest key (patches and overrides produce their own),
 /// so any case qualifies; coverage still has to include the selection.
+enum Reuse {
+    Reused,
+    Missing(String),
+}
+
+impl Reuse {
+    fn reused(&self) -> bool {
+        matches!(self, Reuse::Reused)
+    }
+
+    fn headline(&self) -> String {
+        match self {
+            Reuse::Reused => "published evaluation reused".to_string(),
+            Reuse::Missing(reason) => format!("not reused: {reason}"),
+        }
+    }
+}
+
 fn reuse_case(
     case: &crate::ci::types::Build<crate::ci::types::RevSource>,
     tree: &str,
     target: &Path,
     template: &str,
     baseline: bool,
-) -> Result<bool> {
-    let label = format!("evaluation reuse ({})", case.case_id());
-    let Some(published) = crate::ci::baseline::fetch(tree, template, Some(&label)) else {
-        return Ok(false);
+) -> Result<Reuse> {
+    let published = match crate::ci::baseline::fetch(tree, template) {
+        crate::ci::baseline::Fetch::Found(published) => published,
+        crate::ci::baseline::Fetch::Missing(reason) => return Ok(Reuse::Missing(reason)),
     };
     if !crate::ci::baseline::covers(case, &published) {
-        crate::support::ui::fact(&label, "off (published run does not cover this selection)");
-        return Ok(false);
+        return Ok(Reuse::Missing(
+            "published run does not cover this selection".to_string(),
+        ));
     }
     // A baseline is the status quo, failures included. Anything else is
     // being tested: adopting a red map would make one flaky failure stick to
@@ -138,8 +157,9 @@ fn reuse_case(
             .flatten()
             .any(|(_, status)| *status != crate::support::atoms::JobStatus::Success)
     {
-        crate::support::ui::fact(&label, "off (published run has failures; rebuilding)");
-        return Ok(false);
+        return Ok(Reuse::Missing(
+            "published run has failures; rebuilding".to_string(),
+        ));
     }
     if let Err(error) = crate::ci::baseline::materialize(target, &published) {
         // A half-written case directory would read as a real result later.
@@ -147,8 +167,7 @@ fn reuse_case(
         let _ = std::fs::remove_file(status_path(target));
         return Err(error);
     }
-    crate::support::ui::fact(&label, format!("on (tree {tree})"));
-    Ok(true)
+    Ok(Reuse::Reused)
 }
 
 pub fn prepare_all(repo: &Path, request: &ResolvedRequest, run_dir: &Path) -> Result<Loaded> {
@@ -178,8 +197,10 @@ pub fn prepare_all_with(
         ));
     }
     crate::support::fs::create_dir_all(run_dir)?;
+    let mut tracker = crate::ci::events::Tracker::new(run_dir)?;
     let cases = request.cases();
     let mut reused: Vec<String> = Vec::new();
+    let reuse_baselines = !crate::support::env::no_baseline_reuse()?;
 
     let request_value = crate::support::schema::to_value(request)?;
     let mut prepared_cases = Vec::new();
@@ -193,27 +214,40 @@ pub fn prepare_all_with(
         // itself in a request that did not name its cases.
         case_value["caseId"] = Value::String(case_id.clone());
         let prepared_dir = case_dir(run_dir, &case_id).join("prepared");
-        crate::support::ui::fact(
-            "materializing",
-            format!("{case_id} at {}", case.source().rev.short()),
-        );
-        let manifest = write_materialization(repo, *case, &case_value, &prepared_dir)?;
-        prepared_cases.push(crate::support::json::read::<Value>(
-            &prepared_dir.join("request.json"),
-        )?);
-        if !crate::support::env::no_baseline_reuse()? {
+        let (manifest, prepared_case) = tracker.phase(
+            format!("prepare.{case_id}.materialize"),
+            format!("{case_id}: Materializing {}", case.source().rev.short()),
+            || {
+                let manifest = write_materialization(repo, *case, &case_value, &prepared_dir)?;
+                let prepared_case = crate::support::json::read::<Value>(
+                    &prepared_dir.join("request.json"),
+                )?;
+                Ok((manifest, prepared_case))
+            },
+            |_| "source materialized".to_string(),
+        )?;
+        prepared_cases.push(prepared_case);
+        if reuse_baselines {
             if let crate::ci::types::CaseRef::Build(build) = case {
                 let baseline = match &request.action {
                     RequestAction::Diff(diff) => diff.baseline == case_id,
                     _ => false,
                 };
-                if reuse_case(
-                    build,
-                    &manifest.tree,
-                    &case_dir(run_dir, &case_id),
-                    map_template,
-                    baseline,
-                )? {
+                let reuse = tracker.phase(
+                    format!("prepare.{case_id}.baseline"),
+                    format!("{case_id}: Baseline reuse"),
+                    || {
+                        reuse_case(
+                            build,
+                            &manifest.tree,
+                            &case_dir(run_dir, &case_id),
+                            map_template,
+                            baseline,
+                        )
+                    },
+                    Reuse::headline,
+                )?;
+                if reuse.reused() {
                     reused.push(case_id);
                 }
             }
@@ -229,9 +263,15 @@ pub fn prepare_all_with(
             document = prepared_cases.into_iter().next().unwrap();
         }
     }
-    crate::support::json::write(&request_path(run_dir), &document)?;
     let preparation = Preparation { reused };
-    crate::support::schema::write(&preparation_path(run_dir), &preparation)?;
-
-    load(run_dir)
+    tracker.phase(
+        "prepare.plan",
+        "Generating the run plan",
+        || {
+            crate::support::json::write(&request_path(run_dir), &document)?;
+            crate::support::schema::write(&preparation_path(run_dir), &preparation)?;
+            load(run_dir)
+        },
+        |loaded| format!("{} tasks planned", loaded.plan().tasks.len()),
+    )
 }

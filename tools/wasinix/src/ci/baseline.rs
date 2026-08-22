@@ -12,9 +12,6 @@ use crate::support::atoms::JobAddr;
 use crate::support::capability::Capability;
 use crate::support::error::Result;
 
-/// A published baseline, or `None` with the reason surfaced: an absent or
-/// incompatible baseline degrades to building the base side, never to a red
-/// run and never silently.
 /// The template the production reuse path fetches; tests substitute a local
 /// server's.
 pub fn map_url_template() -> String {
@@ -24,13 +21,16 @@ pub fn map_url_template() -> String {
     )
 }
 
+pub enum Fetch {
+    Found(EvalMap),
+    Missing(String),
+}
+
 /// Fetch the map published for a git tree object id. The tree determines the
 /// evaluation, so the key verifies itself: no run can publish under a tree
 /// it did not build. A template without a scheme is read from the
-/// filesystem, which the tests use. A label narrates why a fetch came back
-/// empty; a caller walking a range counts the misses instead, since most
-/// commits never published one.
-pub fn fetch(tree: &str, url_template: &str, label: Option<&str>) -> Option<EvalMap> {
+/// filesystem, which the tests use.
+pub fn fetch(tree: &str, url_template: &str) -> Fetch {
     let url = url_template.replace("{tree}", tree);
     let value = if url.contains("://") {
         crate::support::http::get_json(&url)
@@ -40,34 +40,22 @@ pub fn fetch(tree: &str, url_template: &str, label: Option<&str>) -> Option<Eval
     let value = match value {
         Ok(value) => value,
         Err(error) => {
-            reason(label, format!("off ({error})"));
-            return None;
+            return Fetch::Missing(error.to_string());
         }
     };
     let published: EvalMap = match crate::support::schema::from_value(value, &url) {
         Ok(published) => published,
         Err(error) => {
-            reason(label, format!("off ({error})"));
-            return None;
+            return Fetch::Missing(error.to_string());
         }
     };
     // Coverage makes a partial or interrupted build distinguishable from a
     // complete baseline. A status map alone cannot: it may contain just the
     // jobs that happened to finish before cancellation.
     if published.status.is_none() || published.coverage.is_empty() {
-        reason(
-            label,
-            "off (published map carries no status coverage)".into(),
-        );
-        return None;
+        return Fetch::Missing("published map carries no status coverage".into());
     }
-    Some(published)
-}
-
-fn reason(label: Option<&str>, detail: String) {
-    if let Some(label) = label {
-        crate::support::ui::fact(label, detail);
-    }
+    Fetch::Found(published)
 }
 
 /// Lay a fetched baseline out as if its tasks had run in this run directory.

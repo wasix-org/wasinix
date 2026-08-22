@@ -832,30 +832,37 @@ fn inconclusive(
 }
 
 fn in_progress(report: &Report, snapshot: Option<&Snapshot>, links: &Links) -> Markdown {
-    // Before the plan exists there are no phases to count, and the title is
-    // the run's own last word ("materializing: case at abc1234"). Without
-    // it the heading says only "building" for the minutes a worktree and
-    // its overrides take.
+    // Preparation phases carry no job count, and the title names their
+    // current operation. Without it the heading says only "building" for
+    // the minutes a worktree and its overrides take.
     let counts = match snapshot {
         Some(snapshot) => {
-            // The planned total, known once the phases opened; before that
-            // the bare count is all there is.
             let total: usize = snapshot.phases.iter().filter_map(|phase| phase.jobs).sum();
-            let done = if total > 0 {
-                format!("{}/{total} jobs done", snapshot.completed_jobs)
-            } else {
-                format!("{} jobs done", snapshot.completed_jobs)
-            };
-            let mut parts = vec![Markdown::text(&done)];
+            let mut parts = Vec::new();
+            if total > 0 {
+                parts.push(Markdown::text(&format!(
+                    "{}/{total} jobs done",
+                    snapshot.completed_jobs
+                )));
+            } else if snapshot.completed_jobs > 0 {
+                parts.push(Markdown::text(&format!(
+                    "{} jobs done",
+                    snapshot.completed_jobs
+                )));
+            }
             if snapshot.failed_jobs > 0 {
                 parts.push(Markdown::text(&format!("{} failed", snapshot.failed_jobs)));
             }
-            Markdown::constant(" · ").push(Markdown::join(parts, " · "))
+            if parts.is_empty() {
+                Markdown::new()
+            } else {
+                Markdown::constant(" · ").push(Markdown::join(parts, " · "))
+            }
         }
         None => Markdown::new(),
     };
-    // With no phases yet, the title is the run's own last word; with them,
-    // "building" plus the counts says more.
+    // Before task phases, the title is the run's current preparation work;
+    // once tasks exist, "building" plus the counts says more.
     let what = if report.tasks.is_empty() && !report.title.is_empty() {
         Markdown::text(&report.title)
     } else {

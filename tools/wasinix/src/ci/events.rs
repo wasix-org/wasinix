@@ -412,6 +412,46 @@ impl Tracker {
         Ok(())
     }
 
+    pub fn phase<T>(
+        &mut self,
+        task_id: impl Into<String>,
+        label: impl Into<String>,
+        work: impl FnOnce() -> Result<T>,
+        headline: impl FnOnce(&T) -> String,
+    ) -> Result<T> {
+        let task_id = task_id.into();
+        self.record(Event::PhaseStarted {
+            at: crate::support::time::unix_secs(),
+            task_id: task_id.clone(),
+            label: label.into(),
+            jobs: None,
+        })?;
+        match work() {
+            Ok(value) => {
+                self.record(Event::PhaseFinished {
+                    at: crate::support::time::unix_secs(),
+                    task_id,
+                    status: TaskStatus::Success,
+                    headline: headline(&value),
+                })?;
+                Ok(value)
+            }
+            Err(error) => {
+                let finished = self.record(Event::PhaseFinished {
+                    at: crate::support::time::unix_secs(),
+                    task_id,
+                    status: TaskStatus::Failure,
+                    headline: crate::support::error::brief(&error, 200),
+                });
+                crate::support::error::finalize(
+                    Err(error),
+                    finished,
+                    "could not finish phase",
+                )
+            }
+        }
+    }
+
     pub fn snapshot(&self) -> Snapshot {
         self.reducer.snapshot.clone()
     }

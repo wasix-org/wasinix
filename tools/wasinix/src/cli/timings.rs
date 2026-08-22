@@ -167,8 +167,12 @@ fn published(repo: &std::path::Path, repository: Option<&str>, ran: &[Ran]) -> V
         .map(|ran| Published {
             // The eval map is keyed by tree and the steps by revision: the
             // tree determines the evaluation, while a run belongs to a commit.
-            map: tree_of(repo, repository, &ran.rev)
-                .and_then(|tree| crate::ci::baseline::fetch(&tree, &map_template, None)),
+            map: tree_of(repo, repository, &ran.rev).and_then(|tree| {
+                match crate::ci::baseline::fetch(&tree, &map_template) {
+                    crate::ci::baseline::Fetch::Found(mapping) => Some(mapping),
+                    crate::ci::baseline::Fetch::Missing(_) => None,
+                }
+            }),
             steps: crate::ci::steps::fetch(&ran.rev, &step_template),
             rev: ran.rev.clone(),
             event: ran.event.clone(),

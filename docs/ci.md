@@ -49,7 +49,9 @@ fixes) joins when results land.
 
 Progress is an append-only `events.jsonl`; the snapshot is derived from it, not
 maintained beside it. Every progress view (the terminal ladder, `run watch`,
-`run logs --follow`, a remote observer) replays that one stream.
+`run logs --follow`, a remote observer) replays that one stream. Case
+materialization, baseline reuse, and plan generation appear there before the
+first build task starts.
 
 Task and durable-run transcripts retain at most 64 MiB each by default: their
 opening context and newest output, with the omitted byte count between them. A
