@@ -1,0 +1,6 @@
+diff --git a/ext/fileinfo/libmagic/fsmagic.c b/ext/fileinfo/libmagic/fsmagic.c
+--- a/ext/fileinfo/libmagic/fsmagic.c
++++ b/ext/fileinfo/libmagic/fsmagic.c
+@@ -171 +171 @@ file_fsmagic(struct magic_set *ms, const char *fn, zend_stat_t *sb)
+-#ifdef	S_IFIFO
++#if defined(S_IFIFO) && !defined(__wasi__)
