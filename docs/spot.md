@@ -35,9 +35,9 @@ base.
 
 ## The model
 
-Everything comes from base. Selected source packages come from your working
-tree instead, and the targets are always selected. That is the whole idea: pick
-what rebuilds, and the rest is the cache.
+Everything comes from base. Selected source packages come from your working tree
+instead, and the targets are always selected. That is the whole idea: pick what
+rebuilds, and the rest is the cache.
 
 A selected package is built from your edited definition, but its inputs still
 resolve to base apart from any input also selected. So selecting `zlib` with
@@ -45,16 +45,16 @@ target `curl` rebuilds curl and your zlib against an otherwise base world.
 
 ## Choosing the cut with --from-source
 
-`--from-source` names ordinary CI selectors whose packages remain on the
-working tree (repeatable):
+`--from-source` names ordinary CI selectors whose packages remain on the working
+tree (repeatable):
 
-| selector                                       | selects                              |
-| ---------------------------------------------- | ------------------------------------ |
+| selector                                       | selects                             |
+| ---------------------------------------------- | ----------------------------------- |
 | `toolchain`                                    | all catalogued toolchain packages   |
-| `cc`                                           | the C/C++ toolchain packages         |
-| `rust`                                         | the Rust toolchain packages          |
-| `haskell`                                      | the catalogued Haskell package jobs  |
-| a package selector, e.g. `packages.wasix.zlib` | that package                         |
+| `cc`                                           | the C/C++ toolchain packages        |
+| `rust`                                         | the Rust toolchain packages         |
+| `haskell`                                      | the catalogued Haskell package jobs |
+| a package selector, e.g. `packages.wasix.zlib` | that package                        |
 
 The default is `toolchain`, so a plain toolchain experiment needs no flags;
 `--target-only` selects nothing beyond the targets themselves, isolating a
@@ -62,8 +62,8 @@ package edit from any toolchain difference on your branch.
 
 - `exnrefEh.zlib` with no flag selects the toolchain packages, so a wasixcc,
   sysroot, rustc, or ghc edit reaches the target with nothing to configure.
-- `--from-source packages.wasix.zlib exnrefEh.curl` selects a zlib edit, the "edit
-  a common dependency, test one package" case.
+- `--from-source packages.wasix.zlib exnrefEh.curl` selects a zlib edit, the
+  "edit a common dependency, test one package" case.
 - `--from-source rust exnrefEh.ripgrep` selects only the Rust packages, so a
   rustc change is tested against the base C world.
 
@@ -84,10 +84,10 @@ spot this run: 8 to build
 ```
 
 `this run` is the experiment's cost: the targets rebuilt from your tree, plus
-any selected dependency whose output your change moved. `base rev` checks `--base`;
-it is the same targets built at the base commit, and should be 0, because a
-CI-built base is entirely fetchable. A nonzero `base rev` means much of
-`this run` is just rebuilding base, so pick a better revision.
+any selected dependency whose output your change moved. `base rev` checks
+`--base`; it is the same targets built at the base commit, and should be 0,
+because a CI-built base is entirely fetchable. A nonzero `base rev` means much
+of `this run` is just rebuilding base, so pick a better revision.
 
 The splice refuses to build when every target already equals base, since a
 change that never reaches a target would look green while testing nothing.

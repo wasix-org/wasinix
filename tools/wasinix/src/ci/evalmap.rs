@@ -516,9 +516,7 @@ impl EvalMap {
                 }
             }
             if !matched {
-                return request_error(format!(
-                    "selector {spec:?} selects no catalogued packages"
-                ));
+                return request_error(format!("selector {spec:?} selects no catalogued packages"));
             }
         }
         Ok(sources)

@@ -137,29 +137,29 @@ in
   in {
     name = "tree-sitter-${lang}";
     value = packages.sameProfile.buildPythonPackage ({
-      pname = "tree-sitter-${lang}";
-      inherit (spec) version;
-      pyproject = true;
+        pname = "tree-sitter-${lang}";
+        inherit (spec) version;
+        pyproject = true;
 
-      src =
-        if spec ? owner
-        then
-          pkgs.fetchFromGitHub {
-            inherit (spec) owner hash;
-            repo = "tree-sitter-${lang}";
-            tag = "v${spec.version}";
-          }
-        else
-          packages.sameProfile.fetchPypi {
-            pname = "tree_sitter_${lang}";
-            inherit (spec) version hash;
-          };
+        src =
+          if spec ? owner
+          then
+            pkgs.fetchFromGitHub {
+              inherit (spec) owner hash;
+              repo = "tree-sitter-${lang}";
+              tag = "v${spec.version}";
+            }
+          else
+            packages.sameProfile.fetchPypi {
+              pname = "tree_sitter_${lang}";
+              inherit (spec) version hash;
+            };
 
-      build-system = [packages.sameProfile.setuptools];
+        build-system = [packages.sameProfile.setuptools];
 
-      pythonImportsCheck = ["tree_sitter_${lang}"];
+        pythonImportsCheck = ["tree_sitter_${lang}"];
 
-      passthru.updateScript = [(pkgs.lib.getExe updater) lang];
-    }
-    // pkgs.lib.optionalAttrs (spec ? postPatch) {inherit (spec) postPatch;});
+        passthru.updateScript = [(pkgs.lib.getExe updater) lang];
+      }
+      // pkgs.lib.optionalAttrs (spec ? postPatch) {inherit (spec) postPatch;});
   }) (builtins.attrNames grammars))
