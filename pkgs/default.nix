@@ -72,6 +72,15 @@
     }
     ./lib/wasix-crate-patches;
 
+  cargoRegistryWire = pkgs.rustPlatform.buildRustPackage {
+    pname = "cargo-registry-wire";
+    version = "0.1.0";
+    src = ../tools/wasinix/cargo-registry-wire;
+    cargoLock.lockFile = ../tools/wasinix/cargo-registry-wire/Cargo.lock;
+    doCheck = true;
+    meta.mainProgram = "cargo-registry-wire";
+  };
+
   wasixRustPlatform = import ./set/rust-platform.nix {
     inherit lib pkgsCross crateEdits;
     inherit (toolchain) wasixRustToolchain wasixcc cargoWasix binaryen;
@@ -505,7 +514,7 @@
   # (only ever wasm on Edge); its end-to-end serve check lives with that package
   # (overlay/packages/cargo-registry/tests), and the serve app runs the same wasm.
   cargoRegistry = import ./cargo-registry {
-    inherit pkgs lib mkTestGroup crateEdits;
+    inherit pkgs lib mkTestGroup crateEdits cargoRegistryWire;
   };
 
   makeWasmerPackage = pkgs.callPackage ./wasmer/make-wasmer-package.nix {
@@ -569,5 +578,5 @@ in {
   preferredProfilePackages = preferredProfilePackagesWithWebc;
   inherit shippedCommands wasmerPackages wasmerPackageInventory toolchainTestPkgs abiChecks evalSanity;
   inherit libraryTestPkgs;
-  inherit pythonWheels pythonRegistry cargoRegistry pythonClosureTests;
+  inherit pythonWheels pythonRegistry cargoRegistry cargoRegistryWire pythonClosureTests;
 }

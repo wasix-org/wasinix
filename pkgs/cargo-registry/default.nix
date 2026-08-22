@@ -9,6 +9,7 @@
   pkgs,
   lib,
   crateEdits,
+  cargoRegistryWire,
   mkTestGroup,
 }: let
   relPrefix = "cargoRegistry.crates.";
@@ -138,14 +139,6 @@
         name = "manifest.json";
         path = pkgs.writeText "manifest.json" (builtins.toJSON manifest);
       }
-      {
-        name = "publish-crate.py";
-        path = ./publish-crate.py;
-      }
-      {
-        name = "make-sparse-index.py";
-        path = ./make-sparse-index.py;
-      }
     ]
   );
 
@@ -168,7 +161,7 @@
   ) (lib.attrNames rels);
 
   tests = import ./tests.nix {
-    inherit pkgs lib registry manifest;
+    inherit pkgs lib registry manifest cargoRegistryWire;
   };
 in
   registry.overrideAttrs (o: {

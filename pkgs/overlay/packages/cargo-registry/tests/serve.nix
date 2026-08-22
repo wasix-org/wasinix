@@ -54,7 +54,7 @@
       tar czf "probe-0.1.0+wasix.1.crate" "probe-0.1.0+wasix.1"
 
       # Cargo's publish wire format: <u32 len><json meta><u32 len><.crate>.
-      # Inlined (see publish-crate.py) since a zero-dep crate's metadata is trivial.
+      # Inlined since a zero-dependency crate's publish metadata is trivial.
       python3 - "$base" "$token" "probe-0.1.0+wasix.1.crate" <<'PY'
       import json, pathlib, struct, sys, urllib.request
       base, token, crate = sys.argv[1], sys.argv[2], sys.argv[3]

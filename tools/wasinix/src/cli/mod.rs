@@ -478,13 +478,12 @@ impl CommandTree {
 
         match self {
             CommandTree::Cargo(command) => match command {
-                registries::CargoCommand::Serve { .. } => vec![Python, Wasmer],
-                registries::CargoCommand::Publish { dry_run: false, .. } => vec![Python],
-                registries::CargoCommand::Publish { dry_run: true, .. } => Vec::new(),
+                registries::CargoCommand::Serve { .. } => vec![Wasmer],
+                registries::CargoCommand::Publish { .. } => Vec::new(),
                 registries::CargoCommand::Preview { dry_run: false, .. } => {
-                    vec![Python, Wasmer]
+                    vec![Wasmer]
                 }
-                registries::CargoCommand::Preview { dry_run: true, .. } => vec![Python],
+                registries::CargoCommand::Preview { dry_run: true, .. } => Vec::new(),
             },
             CommandTree::Wasmer(command) => match command {
                 registries::WasmerCommand::Serve { .. }
@@ -1896,6 +1895,14 @@ mod capability_tests {
         assert_eq!(
             anticipated(&["wasinix", "cargo", "publish", "--dry-run"]),
             Vec::new()
+        );
+        assert_eq!(
+            anticipated(&["wasinix", "cargo", "serve"]),
+            vec![Capability::Wasmer]
+        );
+        assert_eq!(
+            anticipated(&["wasinix", "cargo", "preview", "app"]),
+            vec![Capability::Wasmer]
         );
         assert_eq!(
             anticipated(&[

@@ -58,8 +58,8 @@ wasinix cargo publish [--registry <url>] [--mint <built>] [--dry-run] [name[@ver
 ```
 
 Publishes the minted crates the deployed overlay registry
-(cargo-registry.wasix.org) lacks, using the mint's own `publish-crate.py` wire
-implementation, and reports one plan row per crate (`--json` for the document).
+(cargo-registry.wasix.org) lacks, using the shared Cargo registry wire library,
+and reports one plan row per crate (`--json` for the document).
 Idempotent by checksum against the live sparse index: an absent version
 publishes, identical bytes skip, and different bytes fail naming the
 `wasinix versions bump cargoRegistry.crates.<name>@<version>` that mints a fresh
@@ -74,6 +74,11 @@ PR comment names the registry spelling to resolve against it. A static index
 cannot pass entries through to crates.io, so it is consumed as a separate
 registry rather than a crates-io replacement; that is enough for reviewing
 individual crates.
+
+`cargo-registry-wire` owns the normalized-manifest translation used by both
+publishing and sparse previews. It is a narrow package because derivation tests
+also render sparse indexes; those tests must not depend on the main CLI and
+rebuild when unrelated orchestration code changes.
 
 ## Registry history
 

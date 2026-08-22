@@ -20,6 +20,10 @@ const TOKEN: &str = "wasix_local";
 /// The deployed overlay registry the publish and preview cells default to.
 pub const DEPLOYED_REGISTRY: &str = "https://cargo-registry.wasix.org";
 
+fn wire<T>(result: cargo_registry_wire::Result<T>) -> Result<T> {
+    result.map_err(|error| crate::support::error::Error::Failure(error.to_string()))
+}
+
 fn nix_build(installable: &str) -> Result<PathBuf> {
     let paths = crate::support::nix::Invocation::flake("build", installable)
         .args(["-L", "--no-link"])
@@ -53,16 +57,7 @@ struct MintCrate {
 }
 
 /// The sparse-index file for a crate, per cargo's registry layout.
-pub fn index_path(name: &str) -> String {
-    let name = name.to_lowercase();
-    match name.len() {
-        0 => name,
-        1 => format!("1/{name}"),
-        2 => format!("2/{name}"),
-        3 => format!("3/{}/{name}", &name[..1]),
-        _ => format!("{}/{}/{name}", &name[..2], &name[2..4]),
-    }
-}
+pub use cargo_registry_wire::index_path;
 
 /// The cksum the index serves for one version, from the newline-delimited
 /// entry lines. A malformed line is an error, never "not published".
@@ -162,11 +157,6 @@ fn select(entries: &[MintCrate], specs: &[String]) -> Result<Vec<MintCrate>> {
     Ok(selected)
 }
 
-fn sha256_hex(path: &std::path::Path) -> Result<String> {
-    let bytes = std::fs::read(path).map_err(|error| crate::support::error::io(path, error))?;
-    Ok(format!("{:x}", Sha256::digest(&bytes)))
-}
-
 pub struct PublishOptions {
     /// The deployed registry's base URL.
     pub registry: String,
@@ -194,14 +184,12 @@ pub fn publish(options: PublishOptions) -> Result<(PublishReport, CommandStatus)
         return request_error("the mint holds no crates; nothing to publish");
     }
     let base = options.registry.trim_end_matches('/').to_string();
-    let publisher = mint.join("publish-crate.py");
-
     let mut token: Option<String> = None;
     let mut worst = CommandStatus::SUCCESS;
     let mut outcomes = Vec::new();
     for entry in &selected {
         let file = mint.join("crates").join(&entry.crate_file);
-        let local = sha256_hex(&file)?;
+        let local = wire(cargo_registry_wire::sha256_hex(&file))?;
         let index = crate::support::http::get_text_optional(&format!(
             "{base}/{}",
             index_path(&entry.name)
@@ -241,25 +229,14 @@ pub fn publish(options: PublishOptions) -> Result<(PublishReport, CommandStatus)
                         )
                     })?);
                 }
-                let mut cmd = Capability::Python.command()?;
-                cmd.arg(&publisher)
-                    .arg(&file)
-                    .arg(&base)
-                    .arg(token.as_deref().expect("token was just demanded"));
                 // One bad crate must not abort the rest; the failure lands in
                 // the report and the exit code.
-                match crate::support::tools::status(&mut cmd) {
-                    Ok(status) if status.success() => {
-                        (Action::Publish, "published".to_string(), true)
-                    }
-                    Ok(status) => {
-                        worst = worst.max(CommandStatus::FAILURE);
-                        (
-                            Action::Publish,
-                            format!("publish exited {}", status.code().unwrap_or(1)),
-                            false,
-                        )
-                    }
+                match cargo_registry_wire::publish(
+                    &file,
+                    &base,
+                    token.as_deref().expect("token was just demanded"),
+                ) {
+                    Ok(_) => (Action::Publish, "published".to_string(), true),
                     Err(error) => {
                         worst = worst.max(CommandStatus::FAILURE);
                         (Action::Publish, format!("publish failed: {error}"), false)
@@ -386,8 +363,6 @@ pub fn start(options: ServeOptions) -> Result<Running> {
     };
     let manifest: Value = crate::support::json::read(&registry.join("manifest.json"))?;
     let wasm = server_path.join("bin/wasix-cargo-registry.wasm");
-    let publisher = registry.join("publish-crate.py");
-
     // The mint is the point of serving; an empty one must not report itself
     // live and answer every resolve from crates.io.
     let mut crates: Vec<PathBuf> = std::fs::read_dir(registry.join("crates"))
@@ -445,12 +420,7 @@ pub fn start(options: ServeOptions) -> Result<Running> {
     wait_ready(&base, &mut server.process)?;
 
     for path in &crates {
-        let mut cmd = Capability::Python.command()?;
-        cmd.arg(&publisher).arg(path).args([&base, TOKEN]);
-        let status = crate::support::tools::status(&mut cmd)?;
-        if !status.success() {
-            return request_error(format!("publishing {} failed", path.display()));
-        }
+        wire(cargo_registry_wire::publish(path, &base, TOKEN))?;
     }
 
     let limits = manifest["shadowLimits"]
@@ -497,15 +467,10 @@ pub struct PreviewOptions {
 }
 
 fn sparse_site(mint: &Path, site: &Path, base_url: &str, only: &[String]) -> Result<()> {
-    let mut cmd = Capability::Python.command()?;
-    cmd.arg(mint.join("make-sparse-index.py"))
-        .arg(mint)
-        .arg(site)
-        .args(["--base-url", base_url]);
-    for spec in only {
-        cmd.args(["--only", spec]);
-    }
-    crate::support::tools::checked_status(&mut cmd, "generating the sparse index")
+    wire(cargo_registry_wire::sparse_index(
+        mint, site, base_url, only,
+    ))?;
+    Ok(())
 }
 
 /// Deploy the mint (or its diff against a base mint) as a static sparse
