@@ -13,14 +13,17 @@ static REPOSITORY: LazyLock<regex::Regex> = LazyLock::new(|| {
 
 pub const ARTIFACT_CI_RUN: &str = "ci-run";
 pub const OUTPUT_BIN: &str = "bin";
+pub const OUTPUT_BASE_REF: &str = "baseRef";
 pub const OUTPUT_COMMENT_ID: &str = "commentId";
 pub const OUTPUT_HEAD_SHA: &str = "headSha";
 pub const OUTPUT_KIND: &str = "kind";
 pub const OUTPUT_MATRIX: &str = "matrix";
 pub const OUTPUT_PULL_REQUEST: &str = "pullRequest";
+pub const OUTPUT_PROCEED: &str = "proceed";
 pub const OUTPUT_REPORTED: &str = "reported";
 pub const OUTPUT_RUN_DIR: &str = "runDir";
 pub const OUTPUT_RUN_ID: &str = "runId";
+pub const OUTPUT_TAG: &str = "tag";
 
 pub fn is_repository(value: &str) -> bool {
     REPOSITORY.is_match(value)
@@ -62,6 +65,168 @@ pub fn open_pull_request(
             "GitHub returned {} open pull requests for {head_repository}@{head_sha}",
             matches.len()
         ))),
+    }
+}
+
+pub struct PreviewContext {
+    pub proceed: bool,
+    pub pull_request: Option<u64>,
+    pub head_sha: Option<crate::support::atoms::Rev>,
+    pub base_ref: Option<String>,
+    pub tag: Option<String>,
+    pub note: Option<String>,
+}
+
+impl PreviewContext {
+    pub fn outputs(&self) -> Vec<(&'static str, String)> {
+        vec![
+            (OUTPUT_PROCEED, self.proceed.to_string()),
+            (
+                OUTPUT_PULL_REQUEST,
+                self.pull_request
+                    .map(|number| number.to_string())
+                    .unwrap_or_default(),
+            ),
+            (
+                OUTPUT_HEAD_SHA,
+                self.head_sha
+                    .as_ref()
+                    .map(|sha| sha.full().to_string())
+                    .unwrap_or_default(),
+            ),
+            (OUTPUT_BASE_REF, self.base_ref.clone().unwrap_or_default()),
+            (OUTPUT_TAG, self.tag.clone().unwrap_or_default()),
+        ]
+    }
+}
+
+pub fn preview_context(
+    api: &dyn crate::github::client::Api,
+    repository: &str,
+    event: &serde_json::Value,
+) -> Result<PreviewContext> {
+    if !is_repository(repository) {
+        return Err(Error::Request("repository must be OWNER/REPO".into()));
+    }
+    let (pull_request, head_sha) = if event["workflow_run"].is_object() {
+        let run = &event["workflow_run"];
+        if run["event"] != "pull_request" || run["conclusion"] != "success" {
+            return Ok(no_preview(None, None, None));
+        }
+        let head_sha = crate::support::atoms::Rev::parse(
+            run["head_sha"]
+                .as_str()
+                .ok_or_else(|| Error::Failure("workflow run has no head SHA".into()))?,
+        )?;
+        let head_repository = run["head_repository"]["full_name"]
+            .as_str()
+            .ok_or_else(|| Error::Failure("workflow run has no head repository".into()))?;
+        if head_repository != repository {
+            return Ok(no_preview(None, Some(head_sha), None));
+        }
+        let pull_request = open_pull_request(api, repository, &head_sha, head_repository)?;
+        (pull_request, head_sha)
+    } else {
+        let pull = &event["pull_request"];
+        let number = pull["number"]
+            .as_u64()
+            .filter(|number| *number > 0)
+            .ok_or_else(|| Error::Failure("pull request event has no positive number".into()))?;
+        let head_sha = crate::support::atoms::Rev::parse(
+            pull["head"]["sha"]
+                .as_str()
+                .ok_or_else(|| Error::Failure("pull request event has no head SHA".into()))?,
+        )?;
+        let head_repository = pull["head"]["repo"]["full_name"]
+            .as_str()
+            .ok_or_else(|| Error::Failure("pull request event has no head repository".into()))?;
+        if event["action"] != "labeled"
+            || event["label"]["name"] != "preview"
+            || head_repository != repository
+        {
+            return Ok(no_preview(Some(number), Some(head_sha), None));
+        }
+        let runs = api.get(&format!(
+            "repos/{repository}/actions/workflows/build.yml/runs?head_sha={}&per_page=1",
+            head_sha.full()
+        ))?;
+        let runs = runs["workflow_runs"]
+            .as_array()
+            .ok_or_else(|| Error::Failure("GitHub workflow runs response is not a list".into()))?;
+        let green = runs.first().and_then(|run| run["conclusion"].as_str()) == Some("success");
+        if !green {
+            return Ok(no_preview(
+                Some(number),
+                Some(head_sha.clone()),
+                Some(format!(
+                    "Build for {} is not green yet; its workflow run will retry the preview",
+                    head_sha.full()
+                )),
+            ));
+        }
+        (Some(number), head_sha)
+    };
+
+    let Some(pull_request) = pull_request else {
+        return Ok(no_preview(None, Some(head_sha), None));
+    };
+    let pull = api.get(&format!("repos/{repository}/pulls/{pull_request}"))?;
+    let live_number = pull["number"]
+        .as_u64()
+        .filter(|number| *number > 0)
+        .ok_or_else(|| Error::Failure("GitHub pull request has no positive number".into()))?;
+    let state = pull["state"]
+        .as_str()
+        .ok_or_else(|| Error::Failure("GitHub pull request has no state".into()))?;
+    let live_sha = pull["head"]["sha"]
+        .as_str()
+        .ok_or_else(|| Error::Failure("GitHub pull request has no head SHA".into()))?;
+    let live_repository = pull["head"]["repo"]["full_name"]
+        .as_str()
+        .ok_or_else(|| Error::Failure("GitHub pull request has no head repository".into()))?;
+    let labels = pull["labels"]
+        .as_array()
+        .ok_or_else(|| Error::Failure("GitHub pull request has no label list".into()))?;
+    let labeled = labels
+        .iter()
+        .any(|label| label["name"].as_str() == Some("preview"));
+    if live_number != pull_request
+        || state != "open"
+        || live_sha != head_sha.full()
+        || live_repository != repository
+        || !labeled
+    {
+        return Ok(no_preview(Some(pull_request), Some(head_sha), None));
+    }
+    let base_ref = pull["base"]["ref"]
+        .as_str()
+        .filter(|base| !base.is_empty())
+        .ok_or_else(|| Error::Failure("GitHub pull request has no base ref".into()))?
+        .to_string();
+    // The g makes an all-digit SHA prefix with a leading zero valid semver.
+    let tag = format!("pr{pull_request}.g{}", &head_sha.full()[..7]);
+    Ok(PreviewContext {
+        proceed: true,
+        pull_request: Some(pull_request),
+        head_sha: Some(head_sha),
+        base_ref: Some(base_ref),
+        tag: Some(tag),
+        note: None,
+    })
+}
+
+fn no_preview(
+    pull_request: Option<u64>,
+    head_sha: Option<crate::support::atoms::Rev>,
+    note: Option<String>,
+) -> PreviewContext {
+    PreviewContext {
+        proceed: false,
+        pull_request,
+        head_sha,
+        base_ref: None,
+        tag: None,
+        note,
     }
 }
 
@@ -160,5 +325,94 @@ mod tests {
             pull(4, "open", sha.full(), "fork/repo"),
         ]));
         assert!(open_pull_request(&ambiguous, "base/repo", &sha, "fork/repo").is_err());
+    }
+
+    struct Routes(std::collections::BTreeMap<String, serde_json::Value>);
+
+    impl crate::github::client::Api for Routes {
+        fn get(&self, path: &str) -> Result<serde_json::Value> {
+            self.0
+                .get(path)
+                .cloned()
+                .ok_or_else(|| Error::Failure(format!("unexpected GitHub path {path}")))
+        }
+    }
+
+    #[test]
+    fn a_labeled_preview_requires_a_green_build_and_live_matching_pr() {
+        let sha = "b".repeat(40);
+        let event = serde_json::json!({
+            "action": "labeled",
+            "label": {"name": "preview"},
+            "pull_request": {
+                "number": 7,
+                "head": {"sha": sha, "repo": {"full_name": "base/repo"}},
+            },
+        });
+        let pull = serde_json::json!({
+            "number": 7,
+            "state": "open",
+            "head": {"sha": sha, "repo": {"full_name": "base/repo"}},
+            "base": {"ref": "main"},
+            "labels": [{"name": "preview"}],
+        });
+        let build_path =
+            format!("repos/base/repo/actions/workflows/build.yml/runs?head_sha={sha}&per_page=1");
+        let api = Routes(std::collections::BTreeMap::from([
+            (
+                build_path.clone(),
+                serde_json::json!({"workflow_runs": [{"conclusion": "success"}]}),
+            ),
+            ("repos/base/repo/pulls/7".into(), pull),
+        ]));
+        let context = preview_context(&api, "base/repo", &event).unwrap();
+        assert!(context.proceed);
+        assert_eq!(context.base_ref.as_deref(), Some("main"));
+        assert_eq!(context.tag.as_deref(), Some("pr7.gbbbbbbb"));
+
+        let waiting = Routes(std::collections::BTreeMap::from([(
+            build_path,
+            serde_json::json!({"workflow_runs": []}),
+        )]));
+        let context = preview_context(&waiting, "base/repo", &event).unwrap();
+        assert!(!context.proceed);
+        assert!(context.note.unwrap().contains("not green yet"));
+    }
+
+    #[test]
+    fn a_completed_build_resolves_its_exact_open_labeled_pull_request() {
+        let sha = "c".repeat(40);
+        let event = serde_json::json!({
+            "workflow_run": {
+                "event": "pull_request",
+                "conclusion": "success",
+                "head_sha": sha,
+                "head_repository": {"full_name": "base/repo"},
+            },
+        });
+        let api = Routes(std::collections::BTreeMap::from([
+            (
+                format!("repos/base/repo/commits/{sha}/pulls?per_page=100&page=1"),
+                serde_json::json!([{
+                    "number": 8,
+                    "state": "open",
+                    "head": {"sha": sha, "repo": {"full_name": "base/repo"}},
+                }]),
+            ),
+            (
+                "repos/base/repo/pulls/8".into(),
+                serde_json::json!({
+                    "number": 8,
+                    "state": "open",
+                    "head": {"sha": sha, "repo": {"full_name": "base/repo"}},
+                    "base": {"ref": "main"},
+                    "labels": [{"name": "preview"}],
+                }),
+            ),
+        ]));
+        let context = preview_context(&api, "base/repo", &event).unwrap();
+        assert!(context.proceed);
+        assert_eq!(context.pull_request, Some(8));
+        assert_eq!(context.tag.as_deref(), Some("pr8.gccccccc"));
     }
 }
