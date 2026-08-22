@@ -189,6 +189,10 @@ in {
           ++ lib.optional (lib.versionAtLeast spec.version "8.2" && lib.versionOlder spec.version "8.4") ./patches/php-fd-table-size-pre84.patch
           ++ lib.optional (lib.versionOlder spec.version "8.2") ./patches/php-fd-table-size-pre82.patch
           ++ lib.optional (lib.versionOlder spec.version "8.2") ./patches/php-fopencookie-seeker-pre82.patch
+          ++ [
+            ./patches/php-fileinfo-disable-fifo.patch
+            ./patches/php-mysqlnd-localhost-tcp.patch
+          ]
           ++ lib.optional (lib.versionAtLeast spec.version "8.2") ./patches/php-zend-allocator-madvise.patch
           ++ lib.optional (lib.versionOlder spec.version "8.2") ./patches/php-zend-allocator-madvise-pre82.patch
           ++ lib.optional (lib.versionAtLeast spec.version "8.4") ./patches/php-posix-spawn-proc-open.patch

@@ -1,0 +1,16 @@
+diff --git a/ext/mysqlnd/mysqlnd_connection.c b/ext/mysqlnd/mysqlnd_connection.c
+--- a/ext/mysqlnd/mysqlnd_connection.c
++++ b/ext/mysqlnd/mysqlnd_connection.c
+@@ -528 +528,7 @@ MYSQLND_METHOD(mysqlnd_conn_data, get_scheme)(MYSQLND_CONN_DATA * conn, MYSQLND_
+-	if (hostname.l == sizeof("localhost") - 1 && !strncasecmp(hostname.s, "localhost", hostname.l)) {
++	if (hostname.l == sizeof("localhost") - 1 && !strncasecmp(hostname.s, "localhost", hostname.l)) {
++#ifdef __wasi__
++		if (!port) {
++			port = 3306;
++		}
++		transport.l = mnd_sprintf(&transport.s, 0, "tcp://127.0.0.1:%u", port);
++#else
+@@ -535 +541,2 @@ MYSQLND_METHOD(mysqlnd_conn_data, get_scheme)(MYSQLND_CONN_DATA * conn, MYSQLND_
+-		*unix_socket = TRUE;
++		*unix_socket = TRUE;
++#endif
