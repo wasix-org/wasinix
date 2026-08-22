@@ -466,7 +466,8 @@ in rec {
         inherit lib;
         packages = {
           native = nativeForContext;
-          inherit wasix python preferred;
+          inherit wasix preferred;
+          python = python // lib.optionalAttrs (preferredPythonInterpreter != null) {preferred = python.${preferredPythonInterpreter};};
           sameProfile = projectedPackageSet scope variant final;
         };
         commands = commandsView;
@@ -526,6 +527,15 @@ in rec {
         profiles.profiles;
 
       pythonSpecs = pythonSetsFor {inherit project nativeRaw wasixRaw;};
+      preferredPythonInterpreters = lib.attrNames (lib.filterAttrs (_: spec: spec.preferred or false) pythonSpecs);
+      preferredPythonInterpreter =
+        if preferredPythonInterpreters == []
+        then null
+        else builtins.head preferredPythonInterpreters;
+      pythonPreferenceValid =
+        lib.throwIf (lib.length preferredPythonInterpreters > 1)
+        "multiple preferred Python interpreters: ${lib.concatStringsSep ", " preferredPythonInterpreters}"
+        true;
       pythonRaw = lib.mapAttrs (interpreter: spec: (lib.foldl' (
           packageSet: extension:
             if (extension.overlays or {}) ? python
@@ -890,7 +900,8 @@ in rec {
       in
         projectedPackageFor "wasix" {inherit profile;} wasixRaw.${profile} name wasixRaw.${profile}.${name});
       packageViews = {
-        inherit native wasix python preferred;
+        inherit native wasix preferred;
+        python = python // lib.optionalAttrs (preferredPythonInterpreter != null) {preferred = python.${preferredPythonInterpreter};};
       };
       artifactsView = lib.foldl' lib.recursiveUpdate {} (map (entry:
         lib.setAttrByPath ([entry.artifactKind] ++ entry.projectionPath) entry.artifact)
@@ -939,6 +950,7 @@ in rec {
     in
       assert wasixShapesValid;
       assert pythonShapesValid;
+      assert pythonPreferenceValid;
       assert projectValid;
       assert nativeInterfacesValid;
       assert aliasesValid; {

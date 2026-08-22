@@ -190,6 +190,7 @@
       py = {
         pkgs = wasixRaw.default;
         packageSet = mkPythonSet [];
+        preferred = true;
       };
     };
     nativePackageInterfacesFor = {project, ...}: {
@@ -940,6 +941,7 @@ in {
       runnerName = project.runners.rawWasm.unbound.name;
       profileNames = project.packages.wasix.default.uses-inherited.passthru.profileNames;
       pythonNames = lib.attrNames project.packages.python.py;
+      preferredPythonName = project.packages.python.preferred.corePython.name;
       pythonSource = project.packages.python.py.uses-python.passthru.wasinix.source;
       pythonContextName = project.packages.python.py.contextProof.name;
       repairedPythonModules = pythonRepairProject.packages.python.py.repairPython.passthru.requiredPythonModules;
@@ -1015,6 +1017,7 @@ in {
       runnerName = "raw-wasm-unbound";
       profileNames = ["alternate" "default"];
       pythonNames = ["contextProof" "corePython" "inheritedPython" "uses-python"];
+      preferredPythonName = "core-python";
       pythonSource = "consumer";
       pythonContextName = "top-owned-";
       repairedPythonModules = ["dependency"];

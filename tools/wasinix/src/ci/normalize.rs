@@ -108,7 +108,7 @@ pub fn resolve_pull_request(spec: &str, context: &Context<'_>) -> Result<PullReq
 pub fn update_sources(repo: &Path) -> Result<HashMap<String, Vec<String>>> {
     let declarations = crate::support::nix::eval(
         &crate::support::nix::Flake(&repo.display().to_string()),
-        "internals.updates.updateScripts",
+        "internals.repository.updates.updateScripts",
         None,
     )?;
     let mut sources: HashMap<String, Vec<String>> = Default::default();
