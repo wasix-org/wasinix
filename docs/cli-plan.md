@@ -43,6 +43,9 @@ Classify each helper before changing its language or location:
 A dedicated helper may remain shell or Python when that is the smallest clear
 implementation. A Rust helper has its own source boundary and, when sharing the
 CLI lock file would cause broad invalidation, its own crate and lock file.
+`pkgs/helper-boundaries.toml` classifies every shell, Python, or JavaScript
+helper by this role; adding or removing one without updating the inventory
+fails the CLI corpus tests.
 
 An evaluated derivation-graph check protects nominated foundational roots from
 direct or transitive dependencies on `wasinix` or `wasinix-core`. Legitimate
