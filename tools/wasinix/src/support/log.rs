@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
+use crate::support::atoms::Bytes;
 use crate::support::error::{io, request_error, Result};
 use crate::support::schema::Document;
 
@@ -21,12 +22,75 @@ const LIVE_MARKER: &[u8] =
 pub struct Retention {
     pub original_bytes: u64,
     pub retained_bytes: u64,
+    pub omitted_bytes: u64,
     pub truncated: bool,
 }
 
 impl Document for Retention {
     const KIND: &'static str = "logRetention";
-    const SCHEMA: u32 = 1;
+    const SCHEMA: u32 = 2;
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Summary {
+    pub log_count: usize,
+    pub truncated_count: usize,
+    pub original_bytes: Bytes,
+    pub retained_bytes: Bytes,
+    pub omitted_bytes: Bytes,
+}
+
+impl Summary {
+    pub fn is_empty(&self) -> bool {
+        self.log_count == 0
+    }
+}
+
+pub fn summarize(root: &Path) -> Result<Summary> {
+    let mut summary = Summary::default();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && dir == root => {
+                return Ok(summary);
+            }
+            Err(error) => return Err(io(&dir, error)),
+        };
+        for entry in entries {
+            let entry = entry.map_err(|error| io(&dir, error))?;
+            let path = entry.path();
+            let kind = entry.file_type().map_err(|error| io(&path, error))?;
+            if kind.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            if !kind.is_file()
+                || !path
+                    .file_name()
+                    .is_some_and(|name| name.to_string_lossy().ends_with(".retention.json"))
+            {
+                continue;
+            }
+            let retention: Retention = crate::support::schema::read(&path)?;
+            summary.log_count += 1;
+            summary.truncated_count += usize::from(retention.truncated);
+            summary.original_bytes.0 = summary
+                .original_bytes
+                .0
+                .saturating_add(retention.original_bytes);
+            summary.retained_bytes.0 = summary
+                .retained_bytes
+                .0
+                .saturating_add(retention.retained_bytes);
+            summary.omitted_bytes.0 = summary
+                .omitted_bytes
+                .0
+                .saturating_add(retention.omitted_bytes);
+        }
+    }
+    Ok(summary)
 }
 
 pub fn retention_path(path: &Path) -> PathBuf {
@@ -151,11 +215,14 @@ impl BoundedLog {
         self.finished = true;
         let mut head = self.head.take().expect("unfinished log has a head");
         let mut tail = self.tail.take().expect("unfinished log has a tail");
-        let truncated = self.original_bytes > self.head_bytes + self.tail_bytes;
+        let omitted_bytes = self.original_bytes - self.head_bytes - self.tail_bytes;
+        let truncated = omitted_bytes > 0;
         if truncated {
-            let omitted = self.original_bytes - self.head_bytes - self.tail_bytes;
-            writeln!(head, "\n--- wasinix omitted {omitted} log bytes ---\n")
-                .map_err(|error| io(&self.path, error))?;
+            writeln!(
+                head,
+                "\n--- wasinix omitted {omitted_bytes} log bytes ---\n"
+            )
+            .map_err(|error| io(&self.path, error))?;
         }
         if self.tail_bytes > 0 {
             let start = if self.tail_bytes == self.tail_limit {
@@ -186,6 +253,7 @@ impl BoundedLog {
             retained_bytes: std::fs::metadata(&self.path)
                 .map_err(|error| io(&self.path, error))?
                 .len(),
+            omitted_bytes,
             truncated,
         };
         crate::support::schema::write(&retention_path(&self.path), &retention)?;
@@ -306,6 +374,7 @@ mod tests {
         assert!(output.len() <= 2048);
         assert_eq!(retention.original_bytes, 4096);
         assert_eq!(retention.retained_bytes, output.len() as u64);
+        assert_eq!(retention.omitted_bytes, 2560);
         assert!(retention.truncated);
         let persisted: super::Retention =
             crate::support::schema::read(&super::retention_path(&path)).unwrap();
@@ -346,5 +415,28 @@ mod tests {
         );
         assert!(retention.truncated);
         assert!(finished.len() <= 2048);
+    }
+
+    #[test]
+    fn summaries_fold_every_retention_document_under_a_run() {
+        let scratch = crate::support::fs::Scratch::create("wasinix-log-summary-test").unwrap();
+        let first = scratch.path().join("cases/a/build.log");
+        let second = scratch.path().join("run.log");
+        let mut large = super::BoundedLog::with_limit(&first, 2048).unwrap();
+        large.write_all(&vec![b'x'; 4096]).unwrap();
+        let large = large.finish().unwrap();
+        let mut small = super::BoundedLog::with_limit(&second, 2048).unwrap();
+        small.write_all(b"small\n").unwrap();
+        let small = small.finish().unwrap();
+
+        let summary = super::summarize(scratch.path()).unwrap();
+        assert_eq!(summary.log_count, 2);
+        assert_eq!(summary.truncated_count, 1);
+        assert_eq!(summary.original_bytes.0, 4102);
+        assert_eq!(
+            summary.retained_bytes.0,
+            large.retained_bytes + small.retained_bytes
+        );
+        assert_eq!(summary.omitted_bytes.0, large.omitted_bytes);
     }
 }

@@ -45,7 +45,7 @@
     ],
     "contentDiff": false
   },
-  "schema": 2,
+  "schema": 3,
   "tasks": [
     {
       "case": "candidate-1",

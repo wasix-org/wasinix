@@ -76,6 +76,7 @@ pub fn load(run_dir: &Path) -> Result<Rendered> {
         crate::ci::report::from_run_state(&run, tail.as_deref())
     };
     report.command = origin_command(run_dir);
+    report.attach_log_retention(run_dir)?;
     let mut fragments =
         crate::ci::report::fragments_under(&crate::ci::prepare::fragments_dir(run_dir))?;
     if let Some(fragment) = synthesized {
@@ -110,11 +111,13 @@ pub(crate) fn load_running(
         // should see: materializing a worktree and resolving overrides runs
         // for minutes before the first phase opens.
         let tail = crate::runs::log_tail(run_dir, 4_000);
+        let mut report = crate::ci::report::Report {
+            command: origin_command(run_dir),
+            ..crate::ci::report::starting(tail.as_deref())
+        };
+        report.attach_log_retention(run_dir)?;
         return Ok(Some(Rendered {
-            report: crate::ci::report::Report {
-                command: origin_command(run_dir),
-                ..crate::ci::report::starting(tail.as_deref())
-            },
+            report,
             fragments: BTreeMap::new(),
             snapshot: None,
         }));
@@ -123,7 +126,7 @@ pub(crate) fn load_running(
     let fragments =
         crate::ci::report::fragments_under(&crate::ci::prepare::fragments_dir(run_dir))?;
     let snapshot = crate::ci::events::fold_snapshot(events);
-    let report = crate::ci::report::fold(
+    let mut report = crate::ci::report::fold(
         &loaded.plan(),
         &fragments,
         crate::ci::report::FoldContext {
@@ -135,6 +138,7 @@ pub(crate) fn load_running(
             comparisons: crate::ci::compare::project(run_dir, &loaded.request, false)?,
         },
     );
+    report.attach_log_retention(run_dir)?;
     Ok(Some(Rendered {
         report: crate::ci::report::Report {
             command: origin_command(run_dir),
