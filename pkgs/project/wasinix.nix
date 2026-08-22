@@ -1,7 +1,8 @@
 {
   lib,
   ghcWasm,
-  wasmerRuntime ? null,
+  wasmerPackage ? null,
+  wasmerRevision ? "dirty",
 }: let
   profiles = import ../profiles.nix;
   nativePackageRecipes = import ../native;
@@ -23,10 +24,7 @@
 
     constructionFor = nativePkgs: let
       rawWasm = import ../runners/raw-wasm.nix {pkgs = nativePkgs;};
-      runtime =
-        if wasmerRuntime == null
-        then nativePkgs.wasmer
-        else wasmerRuntime;
+      runtime = nativePkgs.wasmer;
       referenceScanner = nativePkgs.callPackage ../lib/check-reference-scanner.nix {};
       helpers = import ../lib {
         inherit lib referenceScanner;
@@ -285,7 +283,15 @@
         nativeRaw,
         ...
       }:
-        lib.optionals (scope == "wasix") [
+        lib.optionals (includeWasinix && scope == "native" && wasmerPackage != null) [
+          (_final: _previous: {
+            wasmer = import ../native/wasmer/input.nix {
+              wasmer = wasmerPackage;
+              revision = wasmerRevision;
+            };
+          })
+        ]
+        ++ lib.optionals (scope == "wasix") [
           (nativePackageRecipes.overlay {nativeNixUpdateScript = nativeRaw.nix-update-script;})
           (constructionFor nativeRaw).wasixInfrastructureOverlay
         ];
