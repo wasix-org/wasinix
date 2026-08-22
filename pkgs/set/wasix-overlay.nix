@@ -121,6 +121,14 @@
     };
   };
 
+  phpExtensionSets = lib.listToAttrs (map (name:
+    lib.nameValuePair "${name}Extensions" (
+      if isWasixHost
+      then lib.recurseIntoAttrs final.${name}.extensions
+      else {}
+    ))
+  (["php"] ++ builtins.attrNames (import ../overlays/p/php/versions.nix)));
+
   # `final.haskellPackages`, like nixpkgs' top-level attr: the toolchain's base
   # wasi set plus the per-package overrides in ./haskell-packages (loaded like
   # this directory, the way python3.pkgs takes packageOverrides from ../python).
@@ -135,7 +143,8 @@
     inherit final helpers wasixRunStub;
   });
 in
-  rustSupport
+  phpExtensionSets
+  // rustSupport
   // goSupport
   // wrapperFix
   // lib.optionalAttrs isWasixHost {
