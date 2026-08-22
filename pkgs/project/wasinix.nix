@@ -12,6 +12,7 @@
     importNixpkgs,
     extensions ? [],
     projectionRules ? {},
+    projectTests ? {},
     ci ? {},
   }: let
     constructor =
@@ -19,7 +20,7 @@
       then projectApi.mkProject
       else projectApi.mkEmptyProject;
     project = constructor {
-      inherit system importNixpkgs extensions projectionRules ci;
+      inherit system importNixpkgs extensions projectionRules projectTests ci;
     };
 
     constructionFor = nativePkgs: let

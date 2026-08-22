@@ -329,12 +329,19 @@ in rec {
     importNixpkgs,
     extensions ? [],
     projectionRules ? {},
+    projectTests ? {},
     ci ? {},
   }: let
     allExtensions = ensureUniqueExtensions (map validateExtension extensions);
     extensionIds = map (extension: extension.id) allExtensions;
     requestedCiSources = ci.sources or (map (extension: extension.id) extensions);
     unknownCiSources = lib.subtractLists extensionIds requestedCiSources;
+    invalidProjectTests = lib.attrNames (lib.filterAttrs (_: test:
+      !lib.isAttrs test
+      || !builtins.isString (test.source or null)
+      || !builtins.isFunction (test.check or null))
+    projectTests);
+    unknownProjectTestSources = lib.subtractLists extensionIds (lib.unique (map (test: test.source) (lib.attrValues projectTests)));
 
     overlaysFor = contextFor: scope: variant: lanes:
       lib.concatMap (
@@ -636,6 +643,32 @@ in rec {
         packages)
       basePython;
       currentPackageEntries = nativeEntries // wasixEntries // pythonEntries;
+      projectTestEntries = lib.mapAttrs' (name: test: let
+        address = projectLib.address "tests" ["project" name];
+        check = test.check project;
+      in
+        lib.nameValuePair address {
+          kind = "test";
+          inherit address check name;
+          testName = name;
+          inherit (test) source;
+          lineage = [test.source];
+          scope = "native";
+          variant = {};
+          instance = {
+            kind = "current";
+            version = toString (test.version or "project");
+          };
+          subject = "project";
+          policy = {
+            aliases = [];
+            shipped = false;
+            ci = test.ci or {};
+            publication = {};
+            retention = null;
+          };
+        })
+      projectTests;
       inheritedPolicy = subject: derivation: let
         own = builtins.removeAttrs (projectLib.packageMetadata derivation) projectLib.machineMetadata;
         subjectCi = subject.policy.ci or {};
@@ -790,7 +823,7 @@ in rec {
         // projected.packages;
       artifactEntries = projected.artifacts;
       commandEntries = projected.commands;
-      testEntries = projected.tests;
+      testEntries = mergeDisjoint "test" [projected.tests projectTestEntries];
       entries = mergeDisjoint "catalog" [projectedPackageEntries artifactEntries commandEntries testEntries];
       aliasClaims = lib.concatMap (entry:
         map (alias: {
@@ -852,7 +885,9 @@ in rec {
         builtins.elem entry.packageSubject ciPackageAddresses)
       artifactEntries;
       ciTestEntries = lib.filterAttrs (_: entry:
-        builtins.elem entry.packageSubject ciPackageAddresses)
+        if entry ? packageSubject
+        then builtins.elem entry.packageSubject ciPackageAddresses
+        else builtins.elem entry.source requestedCiSources)
       testEntries;
       ciEntries = mergeDisjoint "CI job" [ciPackageEntries ciArtifactEntries ciTestEntries];
       selectorSetFor = entry:
@@ -907,5 +942,9 @@ in rec {
   in
     lib.throwIf (unknownCiSources != [])
     "CI selects unknown Wasinix source(s): ${lib.concatStringsSep ", " unknownCiSources}"
-    project;
+    (lib.throwIf (invalidProjectTests != [])
+      "invalid project test declaration(s): ${lib.concatStringsSep ", " invalidProjectTests}"
+      (lib.throwIf (unknownProjectTestSources != [])
+        "project tests select unknown Wasinix source(s): ${lib.concatStringsSep ", " unknownProjectTestSources}"
+        project));
 }

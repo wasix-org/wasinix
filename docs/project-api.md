@@ -45,6 +45,10 @@ The constructor takes:
   Wasinix extension.
 - `projectionRules`: additional named projection rules. Names must be disjoint
   from the built-in rules.
+- `projectTests`: project-level test declarations containing `source`, a lazy
+  `check = project: derivation` function, and optional CI policy. Package and
+  artifact checks should remain projections; this input covers source-wide
+  checks such as formatting.
 - `ci.sources`: registered sources whose packages, artifacts, and tests become
   CI jobs. It defaults to the caller-supplied extension IDs, excluding the
   implicit core extension.
