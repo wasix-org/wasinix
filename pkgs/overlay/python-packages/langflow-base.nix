@@ -6,7 +6,7 @@
 }:
 pyfinal.buildPythonPackage (finalAttrs: {
   pname = "langflow-base";
-  version = "0.11.2";
+  version = "0.11.4";
   format = "wheel";
 
   # The release wheel carries the built Vite frontend. The tagged source does
@@ -18,7 +18,7 @@ pyfinal.buildPythonPackage (finalAttrs: {
     format = "wheel";
     dist = "py3";
     python = "py3";
-    hash = "sha256-q05pC6+nXy7U5NKj261xrX37PdAvmhlJqTsBNfdzqD0=";
+    hash = "sha256-KCyaImTyVPz4vdrQAiLf8PtdK/XxoBBleN4o83dQVME=";
   };
 
   # The wheel hook repacks dependency metadata after patchPhase. Patch the
