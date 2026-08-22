@@ -134,7 +134,9 @@ Workflow step outputs go through `github/actions.rs`: it rejects line breaks in
 scalar values and owns the output and artifact names shared with workflow YAML.
 `ci start` returns a durable run id and directory together, while
 `ci update-matrix` produces the update workflow's target matrix without a
-second JSON translator in shell.
+second JSON translator in shell. `ci pull-request` resolves an exact workflow
+head to at most one open pull request, constrained by both the head repository
+and commit.
 
 `build.yml` runs one CI run per event and publishes through `ci publish`: the
 sticky "Wasinix CI" comment and check run on same-repo events, the step summary

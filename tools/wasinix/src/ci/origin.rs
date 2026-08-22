@@ -9,16 +9,13 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::github::client;
+use crate::github::client::Api;
 use crate::support::atoms::Rev;
 use crate::support::error::{Error, Result, request_error, require};
 use crate::support::schema::{self, Document};
 
 pub const PREFIX: &str = "/wasinix";
 
-pub static REPOSITORY: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,38}/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$").unwrap()
-});
 pub static LOGIN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z0-9][A-Za-z0-9-]{0,38}$").unwrap());
 
@@ -41,7 +38,7 @@ pub fn validate(value: &Value, allowed_owner: Option<&str>) -> Result<Origin> {
     let origin: Origin = schema::from_value(value.clone(), "CI command origin")
         .map_err(|error| Error::Request(format!("invalid CI command origin: {error}")))?;
     require(
-        REPOSITORY.is_match(&origin.repository),
+        crate::github::actions::is_repository(&origin.repository),
         "invalid CI command origin: repository must be OWNER/REPO",
     )?;
     if let Some(owner) = allowed_owner {
@@ -68,21 +65,6 @@ pub fn validate(value: &Value, allowed_owner: Option<&str>) -> Result<Origin> {
         "invalid CI command origin: actor must be a GitHub login",
     )?;
     Ok(origin)
-}
-
-/// A GitHub reader, so verification can be tested without the network.
-pub trait Api {
-    fn get(&self, path: &str) -> Result<Value>;
-}
-
-pub struct Rest {
-    pub token: Option<String>,
-}
-
-impl Api for Rest {
-    fn get(&self, path: &str) -> Result<Value> {
-        client::Client::new(self.token.as_deref()).get(path)
-    }
 }
 
 /// What a command is, decided by the one grammar. The CLI layer provides the
@@ -256,7 +238,7 @@ pub fn authorize(
         .as_str()
         .unwrap_or_default();
     require(
-        REPOSITORY.is_match(repository),
+        crate::github::actions::is_repository(repository),
         "invalid CI comment: repository must be OWNER/REPO",
     )?;
     let actor = event["comment"]["user"]["login"]

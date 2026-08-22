@@ -372,9 +372,7 @@ pub fn mutate(repo: &Path, origin_doc: &Path, out_dir: &Path) -> Result<()> {
     // caller's directory.
     let out_dir = &crate::support::fs::absolute(out_dir)?;
     let command: crate::ci::origin::Command = crate::support::schema::read(origin_doc)?;
-    let api = crate::ci::origin::Rest {
-        token: crate::github::client::token(),
-    };
+    let api = crate::github::client::Client::new(None);
     crate::ci::origin::verify(
         &command.origin,
         &command.command,
@@ -529,11 +527,10 @@ pub fn mutate_publish(repo: &Path, out_dir: &Path) -> Result<()> {
     if !context.origin.repository.eq_ignore_ascii_case(&current) {
         return request_error(format!("mutation publishes are accepted only on {current}"));
     }
-    let token = crate::github::client::token()
-        .ok_or_else(|| Error::Request("publishing a mutation needs GITHUB_TOKEN".into()))?;
-    let api = crate::ci::origin::Rest {
-        token: Some(token.clone()),
-    };
+    let token = crate::github::client::token().ok_or_else(|| {
+        Error::Request("publishing a mutation needs GITHUB_TOKEN".into())
+    })?;
+    let api = crate::github::client::Client::new(Some(&token));
     crate::ci::origin::verify(
         &context.origin,
         &context.command,

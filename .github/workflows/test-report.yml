@@ -31,6 +31,19 @@ jobs:
       - name: Set up Nix
         uses: ./.github/actions/setup-nix
 
+      - name: Resolve pull request
+        id: context
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+        run: >-
+          nix run .#wasinix -- ci pull-request
+          --repository "$GITHUB_REPOSITORY"
+          --head-sha "$HEAD_SHA"
+          --head-repository "$HEAD_REPOSITORY"
+          --github-output "$GITHUB_OUTPUT"
+
       # a run cancelled early may lack the artifact; the report then has
       # nothing to say and the step below is skipped
       - name: Download run
@@ -55,13 +68,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
+          PULL_REQUEST: ${{ steps.context.outputs.pullRequest }}
         run: |
-          pull_request=$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/pulls" \
-            --jq "[.[] | select(.state == \"open\" and .head.sha == \"$HEAD_SHA\" and .head.repo.full_name == \"$HEAD_REPO\")][0].number // empty")
           comment=()
-          if [ -n "$pull_request" ]; then comment=(--comment --pull-request "$pull_request"); fi
+          if [ -n "$PULL_REQUEST" ]; then comment=(--comment --pull-request "$PULL_REQUEST"); fi
           nix run .#wasinix -- ci publish --run-dir run-dir \
             --sha "$HEAD_SHA" \
             --run-url "$RUN_URL" \
