@@ -12,11 +12,11 @@ use crate::support::nix::Invocation;
 use crate::support::process::CommandStatus;
 
 pub struct Options {
-    /// `<profile>.<attr>` paths into nixpkgsByProfile.
+    /// `<profile>.<attr>` target paths into the raw WASIX package sets.
     pub targets: Vec<String>,
     /// Pristine revision to pin below the targets.
     pub base: String,
-    pub source_owners: Vec<String>,
+    pub sources: Vec<String>,
     pub dry_run: bool,
     /// Extra arguments for the underlying `nix build`.
     pub nix_args: Vec<String>,
@@ -53,6 +53,10 @@ pub(crate) fn nix_list(values: &[String]) -> Result<String> {
     Ok(format!("[{}]", quoted.join(" ")))
 }
 
+pub(crate) fn nix_string_list(values: &[String]) -> String {
+    serde_json::to_string(values).expect("a list of strings always serializes")
+}
+
 /// The splice's own arguments, shared by every phase of a run.
 fn splice_args(repo: &Path, workdir: &Path, rev: &str, options: &Options) -> Result<Vec<String>> {
     Ok(vec![
@@ -72,8 +76,8 @@ fn splice_args(repo: &Path, workdir: &Path, rev: &str, options: &Options) -> Res
         "root".to_string(),
         workdir.to_string_lossy().to_string(),
         "--arg".to_string(),
-        "keep".to_string(),
-        nix_list(&options.source_owners)?,
+        "sources".to_string(),
+        nix_string_list(&options.sources),
     ])
 }
 
@@ -145,10 +149,10 @@ pub fn build(repo: &Path, workdir: &Path, options: &Options, route: &Route) -> R
     crate::support::ui::fact("spot base", &rev);
     crate::support::ui::fact(
         "spot source",
-        if options.source_owners.is_empty() {
+        if options.sources.is_empty() {
             "target-only".to_string()
         } else {
-            options.source_owners.join(",")
+            options.sources.join(",")
         },
     );
 

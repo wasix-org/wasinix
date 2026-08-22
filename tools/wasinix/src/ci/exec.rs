@@ -388,6 +388,7 @@ fn evaluate(
     let mut mapping = EvalMap::from_jobs(case.source.rev.clone(), &jobs);
     let catalog = selector_catalog(worktree, route)?.into_map();
     mapping.info = catalog.info;
+    mapping.packages = catalog.packages;
     mapping.sets = catalog.sets;
     mapping.groups = catalog.groups;
     let map_path = crate::ci::prepare::eval_map_path(&case_dir(ctx.run_dir, case_id));
@@ -448,7 +449,7 @@ pub fn spot_probe(ctx: &Context, case: &Spot<RevSource>) -> Result<()> {
                 .base
                 .clone()
                 .unwrap_or_else(|| case.source.rev.full().to_string()),
-            source_owners: mapping.resolve_spot_sources(&case.from_source)?,
+            sources: mapping.resolve_packages(&case.from_source)?,
             dry_run: true,
             nix_args: Vec::new(),
         },
@@ -472,7 +473,7 @@ fn spot(
         selector_catalog(worktree, route)?.into_map()
     };
     let targets = mapping.resolve_spot_targets(&case.targets)?;
-    let source_owners = mapping.resolve_spot_sources(&case.from_source)?;
+    let sources = mapping.resolve_packages(&case.from_source)?;
     let result = crate::nix::spot::build(
         ctx.runner_root,
         worktree,
@@ -482,7 +483,7 @@ fn spot(
                 .base
                 .clone()
                 .unwrap_or_else(|| case.source.rev.full().to_string()),
-            source_owners,
+            sources,
             dry_run: false,
             nix_args: Vec::new(),
         },

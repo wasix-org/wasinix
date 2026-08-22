@@ -421,7 +421,7 @@ mod plan {
 }
 
 mod evalmap {
-    use crate::ci::evalmap::{EvalMap, JobInfo, SelectorCatalog};
+    use crate::ci::evalmap::{CatalogJob, EvalMap, JobInfo, SelectorCatalog, SelectorGroup};
     use crate::support::atoms::JobAddr;
 
     fn map() -> EvalMap {
@@ -473,6 +473,48 @@ mod evalmap {
         let omitted = map().omitted_by_tags(&[]);
         assert_eq!(omitted["benchmark"], [JobAddr("checks.bench-heavy".into())]);
         assert!(map().omitted_by_tags(&["benchmark".into()]).is_empty());
+    }
+
+    #[test]
+    fn spot_groups_resolve_to_their_regular_catalog_packages() {
+        let mut mapping = map();
+        mapping.packages.insert(
+            JobAddr("packages.wasix.eh.zlib".into()),
+            CatalogJob {
+                kind: "package".into(),
+                name: "zlib".into(),
+                ..CatalogJob::default()
+            },
+        );
+        mapping.packages.insert(
+            JobAddr("packages.wasix.exnrefEh.zlib".into()),
+            CatalogJob {
+                kind: "package".into(),
+                name: "zlib".into(),
+                ..CatalogJob::default()
+            },
+        );
+        mapping.groups.insert(
+            "toolchain".into(),
+            SelectorGroup {
+                jobs: vec!["packages.wasix.eh.zlib".into()],
+            },
+        );
+        assert_eq!(
+            mapping
+                .resolve_packages(&["toolchain".into()])
+                .unwrap(),
+            ["packages.wasix.eh.zlib"]
+        );
+        assert_eq!(
+            mapping
+                .resolve_packages(&["packages.wasix.zlib".into()])
+                .unwrap(),
+            [
+                "packages.wasix.eh.zlib",
+                "packages.wasix.exnrefEh.zlib"
+            ]
+        );
     }
 
     #[test]
@@ -6739,7 +6781,7 @@ mod content {
 }
 
 mod spot {
-    use crate::nix::spot::nix_list;
+    use crate::nix::spot::{nix_list, nix_string_list};
 
     #[test]
     fn attr_lists_refuse_anything_that_could_escape_the_literal() {
@@ -6748,6 +6790,14 @@ mod spot {
         for hostile in ["a\"b", "a\\b", "${x}.zlib"] {
             assert!(nix_list(&[hostile.to_string()]).is_err(), "{hostile}");
         }
+    }
+
+    #[test]
+    fn catalog_addresses_are_encoded_as_nix_strings() {
+        assert_eq!(
+            nix_string_list(&[r#"packages.wasix.exnrefEh["dot.name"]"#.into()]),
+            r#"["packages.wasix.exnrefEh[\"dot.name\"]"]"#
+        );
     }
 }
 

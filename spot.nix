@@ -4,24 +4,47 @@
 {
   base,
   targets,
-  keep ? null,
+  sources ? null,
   system ? "x86_64-linux",
   root ? toString ./.,
 }: let
   flakeAt = ref: builtins.getFlake "git+file://${root}${ref}";
   workFlake = flakeAt "";
+  workProject = workFlake.legacyPackages.${system};
   baseProject = (flakeAt "?rev=${base}").legacyPackages.${system};
   inherit (workFlake.inputs.nixpkgs) lib;
   profiles = import ./pkgs/profiles.nix;
+  baseNative = baseProject.internals.packageSets.nativeRaw;
   baseByProfile = baseProject.internals.packageSets.wasixRaw;
-  toolchainNames = ["stdenv" "rustPlatform" "haskellPackages"];
+  nativeNames = builtins.attrNames baseProject.packages.native;
   packageNames = lib.unique (lib.concatMap builtins.attrNames (builtins.attrValues baseProject.packages.wasix));
-  knownNames = packageNames ++ toolchainNames;
-  keepNames =
-    if keep == null
-    then toolchainNames
-    else keep;
-  unknownKeep = lib.filter (name: !(builtins.elem name knownNames)) keepNames;
+  defaultSources = lib.filter (address: builtins.hasAttr address workProject.ci.catalog.packages) workProject.ci.catalog.selectors.groups.toolchain.jobs;
+  sourceAddresses =
+    if sources == null
+    then defaultSources
+    else sources;
+
+  sourceFor = address: let
+    entry = workProject.catalog.entries.${address} or null;
+    supported = entry != null && entry.kind == "package" && entry.instance.kind == "current" && builtins.elem entry.scope ["native" "wasix"];
+  in {
+    inherit address entry;
+    error =
+      if entry == null
+      then "unknown source package '${address}'"
+      else if !supported
+      then "source '${address}' is not a current native or WASIX package"
+      else null;
+  };
+  selectedSources = map sourceFor sourceAddresses;
+  nativeSourceNames = lib.unique (map (source: source.entry.name) (lib.filter (source: source.error == null && source.entry.scope == "native") selectedSources));
+  wasixSourceNamesFor = profile:
+    lib.unique (map (source: source.entry.name) (lib.filter (source:
+      source.error
+      == null
+      && source.entry.scope == "wasix"
+      && source.entry.variant.profile == profile)
+    selectedSources));
 
   parse = target: let
     path = lib.splitString "." target;
@@ -42,15 +65,19 @@
   };
   parsed = map parse targets;
   errors =
-    lib.optional (unknownKeep != []) "unknown keep name(s): ${lib.concatStringsSep ", " unknownKeep}"
+    lib.filter (error: error != null) (map (source: source.error) selectedSources)
     ++ lib.filter (error: error != null) (map (target: target.error) parsed);
   targetNamesFor = profile:
     map (target: target.name) (lib.filter (target: target.profile == profile) parsed);
-  unpinnedFor = profile: lib.unique (keepNames ++ targetNamesFor profile);
-  pinOverlayFor = profile: final: previous:
+  unpinnedFor = profile: lib.unique (wasixSourceNamesFor profile ++ targetNamesFor profile);
+  nativePinOverlay = _final: _previous:
+    lib.genAttrs
+    (lib.filter (name: !(builtins.elem name nativeSourceNames)) nativeNames)
+    (name: baseNative.${name});
+  pinOverlayFor = profile: _final: previous:
     lib.optionalAttrs (previous.stdenv.hostPlatform.isWasix or false)
     (lib.genAttrs
-      (lib.filter (name: !(builtins.elem name (unpinnedFor profile))) knownNames)
+      (lib.filter (name: !(builtins.elem name (unpinnedFor profile))) packageNames)
       (name: baseByProfile.${profile}.${name} or previous.${name}));
   profileForCrossSystem = crossSystem:
     profiles.profileOf {
@@ -65,8 +92,12 @@
         // {
           overlays =
             (args.overlays or [])
-            ++ lib.optionals (args ? crossSystem) [
-              (pinOverlayFor (profileForCrossSystem args.crossSystem))
+            ++ [
+              (
+                if args ? crossSystem
+                then pinOverlayFor (profileForCrossSystem args.crossSystem)
+                else nativePinOverlay
+              )
             ];
         }
       );
@@ -91,8 +122,7 @@ in
     baseDrv = map (result: result.baseDrv) results;
     report = {
       inherit base;
-      keep = keepNames;
-      keptToolchains = lib.filter (name: builtins.elem name keepNames) toolchainNames;
+      sources = sourceAddresses;
       changed = lib.any (result: result.changed) results;
       targets =
         map (result: {

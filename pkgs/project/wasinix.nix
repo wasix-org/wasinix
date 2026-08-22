@@ -32,7 +32,7 @@
             project = baseProject;
           }
           // repository);
-    project =
+    repositoryProject =
       if repositoryInfo == null
       then baseProject
       else
@@ -40,6 +40,34 @@
         // {
           internals = baseProject.internals // {repository = repositoryInfo;};
         };
+    builtInSelectorGroups =
+      if includeWasinix
+      then
+        import ./selectors.nix {
+          inherit lib;
+          project = repositoryProject;
+        }
+      else {};
+    duplicateSelectorGroups = lib.intersectLists (lib.attrNames builtInSelectorGroups) (lib.attrNames (ci.groups or {}));
+    project =
+      lib.throwIf (duplicateSelectorGroups != [])
+      "CI selector group(s) duplicate Wasinix defaults: ${lib.concatStringsSep ", " duplicateSelectorGroups}"
+      (repositoryProject
+        // {
+          ci =
+            repositoryProject.ci
+            // {
+              catalog =
+                repositoryProject.ci.catalog
+                // {
+                  selectors =
+                    repositoryProject.ci.catalog.selectors
+                    // {
+                      groups = builtInSelectorGroups // (ci.groups or {});
+                    };
+                };
+            };
+        });
 
     constructionFor = nativePkgs: let
       rawWasm = import ../runners/raw-wasm.nix {pkgs = nativePkgs;};
