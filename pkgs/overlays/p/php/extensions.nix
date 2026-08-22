@@ -1,12 +1,14 @@
 {
   final,
   lib,
+  phpVersion,
 }: let
   getDev = lib.getDev;
+  extensionPassthru = attrs: attrs // {inherit phpVersion;};
 in {
   imagick =
     final.buildPackages.runCommand "php-extension-imagick-3.8.1" {
-      passthru = {
+      passthru = extensionPassthru {
         extensionName = "imagick";
         configureFlag = "--with-imagick";
         buildInputs = [final.imagemagick];
@@ -31,7 +33,7 @@ in {
 
   igbinary =
     final.buildPackages.runCommand "php-extension-igbinary-edda7101" {
-      passthru = {
+      passthru = extensionPassthru {
         extensionName = "igbinary";
         configureFlag = "--enable-igbinary";
       };
