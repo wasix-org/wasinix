@@ -6,19 +6,19 @@
 }:
 pyfinal.buildPythonPackage (finalAttrs: {
   pname = "langflow";
-  version = "1.12.0.dev34";
+  version = "1.11.4";
   pyproject = true;
 
   src = final.fetchFromGitHub {
     owner = "langflow-ai";
     repo = "langflow";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-TXXUzDpkfrDXKzoqJnQDPrJuqUGZg/hUP0kr1Zug9/8=";
+    hash = "sha256-pC1+vUNTXdeYbsJXNZarntYNLvBr4iI7bLwnfe6D9Qw=";
   };
 
   postPatch = ''
     substituteInPlace pyproject.toml \
-      --replace-fail '"langflow-base[complete]>=0.11.2",' '"langflow-base>=0.11.2",'
+      --replace-fail '"langflow-base[complete]>=0.11.4",' '"langflow-base>=0.11.4",'
   '';
 
   pythonRemoveDeps = [
@@ -48,7 +48,8 @@ pyfinal.buildPythonPackage (finalAttrs: {
 
   pythonImportsCheck = ["langflow"];
 
-  passthru.updateScript = nix-update-script {extraArgs = ["--flake"];};
+  # Upstream tags every prerelease as v<x>.<y>.<z>.dev<n>; only take releases.
+  passthru.updateScript = nix-update-script {extraArgs = ["--flake" "--version-regex" "^v([0-9.]+)$"];};
   passthru.wasix.updateNotes = [
     {message = "langflow: coordinate langflow, langflow-base, and lfx versions when updating.";}
     {message = "langflow: recheck the removed lfx provider bundles on bump.";}

@@ -5,7 +5,7 @@
 }:
 pyfinal.buildPythonPackage (finalAttrs: {
   pname = "lfx";
-  version = "1.11.2";
+  version = "1.11.4";
   format = "wheel";
 
   src = pyfinal.fetchPypi {
@@ -13,7 +13,7 @@ pyfinal.buildPythonPackage (finalAttrs: {
     format = "wheel";
     dist = "py3";
     python = "py3";
-    hash = "sha256-E+GV5mu03+h6qyngnYfguvXieB/uosxjysa0CrKSnWE=";
+    hash = "sha256-tMUCuNDANZnZ+lkzrBsYbpRQ5hxLKMlCQOpFmWRWBdk=";
   };
 
   # The pinned set intentionally follows newer compatible releases than the
