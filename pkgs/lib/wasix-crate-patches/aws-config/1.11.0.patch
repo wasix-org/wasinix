@@ -1,0 +1,33 @@
+--- a/src/credential_process.rs
++++ b/src/credential_process.rs
+@@ -109,6 +109,7 @@
+             command.args(["-c", self.command.unredacted()]);
+             command
+         };
++        #[cfg(not(all(target_os = "wasi", target_vendor = "wasmer")))]
+         let output = tokio::process::Command::from(command)
+             .output()
+             .await
+@@ -117,6 +118,22 @@
+                     "Error retrieving credentials from external process: {e}",
+                 ))
+             })?;
++        #[cfg(all(target_os = "wasi", target_vendor = "wasmer"))]
++        let output = tokio::task::spawn_blocking(move || {
++            let mut command = command;
++            command.output()
++        })
++        .await
++        .map_err(|e| {
++            CredentialsError::provider_error(format!(
++                "Error waiting for external credentials process: {e}",
++            ))
++        })?
++        .map_err(|e| {
++            CredentialsError::provider_error(format!(
++                "Error retrieving credentials from external process: {e}",
++            ))
++        })?;
+ 
+         // Security: command arguments can be logged at trace level
+         tracing::trace!(command = ?self.command, status = ?output.status, "executed command (unredacted)");
