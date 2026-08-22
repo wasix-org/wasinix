@@ -501,19 +501,14 @@ mod evalmap {
             },
         );
         assert_eq!(
-            mapping
-                .resolve_packages(&["toolchain".into()])
-                .unwrap(),
+            mapping.resolve_packages(&["toolchain".into()]).unwrap(),
             ["packages.wasix.eh.zlib"]
         );
         assert_eq!(
             mapping
                 .resolve_packages(&["packages.wasix.zlib".into()])
                 .unwrap(),
-            [
-                "packages.wasix.eh.zlib",
-                "packages.wasix.exnrefEh.zlib"
-            ]
+            ["packages.wasix.eh.zlib", "packages.wasix.exnrefEh.zlib"]
         );
     }
 

@@ -62,9 +62,9 @@ The constructor takes:
 - `ci.sources`: registered sources whose packages, artifacts, and tests become
   CI jobs. It defaults to the caller-supplied extension IDs, excluding the
   implicit core extension.
-- `ci.groups`: additional named selector groups. A group declares its `jobs`
-  as catalog addresses. Every consumer resolves those addresses through the
-  same catalog.
+- `ci.groups`: additional named selector groups. A group declares its `jobs` as
+  catalog addresses. Every consumer resolves those addresses through the same
+  catalog.
 
 A single pre-instantiated `pkgs` value is not sufficient. The constructor must
 instantiate a native set and one cross set for each WASIX profile with the same
@@ -516,9 +516,9 @@ retained derivations in its `versions` namespace. To instantiate one, the rule:
 4. validates the resulting version;
 5. returns the result as a package projection.
 
-The projection engine recursively projects those results. History therefore
-uses the same rule registration and entry context as a consumer-supplied
-package projection; the engine has no separate historical test path.
+The projection engine recursively projects those results. History therefore uses
+the same rule registration and entry context as a consumer-supplied package
+projection; the engine has no separate historical test path.
 
 The instance visible during replay is:
 
@@ -620,8 +620,8 @@ Every rule declares the typed namespaces it can produce and returns a possibly
 empty attrset containing those namespaces. `versions` contains package
 projections; `artifacts`, `commands`, and `tests` contain their corresponding
 entry kinds. Results merge disjointly within each namespace; collisions,
-undeclared outputs, and invalid payloads are errors. A bare function is shorthand
-for a rule declaring `artifacts`, `commands`, and `tests`.
+undeclared outputs, and invalid payloads are errors. A bare function is
+shorthand for a rule declaring `artifacts`, `commands`, and `tests`.
 
 Artifacts are distributable derivation projections. WebCs, wheels, registries,
 and similar outputs live under their subject entry and in a global view indexed
@@ -724,8 +724,8 @@ under the extension's central `checks/` area. Generated tests belong to the
 project test catalog; they are not attached back to packages as an authoritative
 `passthru.tests` tree.
 
-All applicable checks are constructed for current and historical instances.
-The history projection stamps its package results with a gated tag such as
+All applicable checks are constructed for current and historical instances. The
+history projection stamps its package results with a gated tag such as
 `history-tests`, which ordinary policy inheritance carries to their artifacts
 and tests. Normal CI does not execute them, and a direct selection still
 requires enabling the tag. Other expensive properties add their own tags rather
