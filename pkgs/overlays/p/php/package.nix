@@ -43,13 +43,6 @@ in {
       cp -a ${getLib final.openldap}/lib/. "$out/lib/"
     '';
 
-    extensionPackages = import ./extensions.nix {inherit final lib;};
-
-    defaultExtensions = with extensionPackages; [
-      igbinary
-      imagick
-    ];
-
     baseBuildInputs = [
       final.brotli
       final.boost
@@ -130,9 +123,22 @@ in {
       ++ lib.optional (lib.versionAtLeast spec.version "8.0") "--disable-opcache-jit"
       ++ lib.optional (lib.versionAtLeast spec.version "8.1") "--enable-fiber-asm";
 
-    mkPhp = webcName: spec: int64: history: extensions: let
+    defaultExtensionSelector = {enabled, ...}: enabled;
+
+    mkPhp = webcName: spec: int64: history: extensionSelector: let
       serverSnapshot = lib.versionAtLeast spec.version "8.1";
-      enabledExtensions = lib.unique extensions;
+      extensionPackages = import ./extensions.nix {
+        inherit final lib;
+        phpVersion = spec.version;
+      };
+      defaultExtensions = with extensionPackages; [
+        igbinary
+        imagick
+      ];
+      enabledExtensions = lib.unique (extensionSelector {
+        enabled = defaultExtensions;
+        all = extensionPackages;
+      });
       extensionBuildInputs = lib.concatMap (extension: extension.buildInputs or []) enabledExtensions;
       extensionEnv = lib.foldl' lib.recursiveUpdate {} (map (extension: extension.env or {}) enabledExtensions);
       upstreamBaseline =
@@ -318,10 +324,11 @@ in {
           extensions = extensionPackages;
           inherit enabledExtensions;
           withExtensions = selector:
-            mkPhp webcName spec int64 history (selector {
-              enabled = enabledExtensions;
-              all = extensionPackages;
-            });
+            mkPhp webcName spec int64 history ({all, ...}:
+              selector {
+                enabled = enabledExtensions;
+                inherit all;
+              });
           wasix = {
             emulatedCheck = {
               ciTags = ["slow-tests"];
@@ -388,9 +395,9 @@ in {
         };
       });
   in let
-    php32 = lib.mapAttrs (name: spec: mkPhp "php-32" spec false (name != "php85") defaultExtensions) versions;
+    php32 = lib.mapAttrs (name: spec: mkPhp "php-32" spec false (name != "php85") defaultExtensionSelector) versions;
     php64 = lib.mapAttrs' (name: spec:
-      lib.nameValuePair "${name}-int64" (mkPhp "php-64" spec true (name != "php85") defaultExtensions))
+      lib.nameValuePair "${name}-int64" (mkPhp "php-64" spec true (name != "php85") defaultExtensionSelector))
     versions;
   in
     php32

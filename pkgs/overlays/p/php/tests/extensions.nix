@@ -4,19 +4,36 @@
   testLib,
   ...
 }: let
-  extensionSetNames = ["php"] ++ builtins.attrNames (import ../versions.nix);
+  versionNames = builtins.attrNames (import ../versions.nix);
+  extensionSetNames = ["php"] ++ versionNames;
+  extensionVersionsMatch = php:
+    builtins.all (extension: extension.phpVersion == php.version) (builtins.attrValues php.extensions);
   extensionSetsMatch = builtins.all (name: let
     alias = crossPkgs.${"${name}Extensions"};
-    extensions = crossPkgs.${name}.extensions;
+    php = crossPkgs.${name};
+    extensions = php.extensions;
   in
     alias.recurseForDerivations
+    && extensionVersionsMatch php
     && toString alias.igbinary == toString extensions.igbinary
     && toString alias.imagick == toString extensions.imagick)
   extensionSetNames;
-  phpIgbinaryOnly = crossPkgs.php85.withExtensions ({all, ...}: [all.igbinary]);
-  phpInt64IgbinaryOnly = crossPkgs.php85-int64.withExtensions ({all, ...}: [all.igbinary]);
+  int64ExtensionVersionsMatch = builtins.all (name: extensionVersionsMatch crossPkgs.${"${name}-int64"}) versionNames;
+  phpWithoutExtensions = crossPkgs.php85.withExtensions (_: []);
+  phpInt64WithoutExtensions = crossPkgs.php85-int64.withExtensions (_: []);
+  phpIgbinaryOnly = phpWithoutExtensions.withExtensions ({
+    enabled,
+    all,
+  }:
+    enabled ++ [all.igbinary]);
+  phpInt64IgbinaryOnly = phpInt64WithoutExtensions.withExtensions ({
+    enabled,
+    all,
+  }:
+    enabled ++ [all.igbinary]);
 in
-  assert extensionSetsMatch; {
+  assert extensionSetsMatch;
+  assert int64ExtensionVersionsMatch; {
     package-sets = testLib.mkScriptRun {
       name = "php-extension-package-sets";
       packages = [];

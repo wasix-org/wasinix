@@ -223,9 +223,11 @@ php.withExtensions ({enabled, all}: enabled ++ [all.igbinary])
 `php.extensions` contains the available extension source packages and
 `php.enabledExtensions` contains the current selection. The top-level
 `phpExtensions` alias mirrors `php.extensions`; versioned aliases such as
-`php84Extensions` mirror the matching interpreter. Dependencies declared by an
-extension must come from the same-profile `final` package set. Keep the source,
-configure flag, build inputs, and cross-build environment together in
+`php84Extensions` mirror the matching interpreter. Each set receives
+`phpVersion`, so an extension can select a compatible source or patch for that
+interpreter. Dependencies declared by an extension must come from the
+same-profile `final` package set. Keep the source, configure flag, build inputs,
+and cross-build environment together in
 `pkgs/overlays/p/php/extensions.nix`.
 
 The `php-int64` and versioned `php*-int64` attributes keep the wasm32 pointer
