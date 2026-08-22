@@ -109,17 +109,27 @@ pub(crate) fn load_running(
     if !crate::ci::prepare::preparation_path(run_dir).exists() {
         // No plan yet, but the run is doing something the pull request
         // should see: materializing a worktree and resolving overrides runs
-        // for minutes before the first phase opens.
+        // for minutes before the first task opens.
         let tail = crate::runs::log_tail(run_dir, 4_000);
+        let snapshot = (!events.is_empty()).then(|| crate::ci::events::fold_snapshot(events));
         let mut report = crate::ci::report::Report {
             command: origin_command(run_dir),
             ..crate::ci::report::starting(tail.as_deref())
         };
+        if let Some(snapshot) = &snapshot {
+            report.started_at = snapshot.started_at;
+            if let Some(phase) = snapshot.phases.last() {
+                report.title = phase
+                    .headline
+                    .clone()
+                    .unwrap_or_else(|| phase.label.clone());
+            }
+        }
         report.attach_log_retention(run_dir)?;
         return Ok(Some(Rendered {
             report,
             fragments: BTreeMap::new(),
-            snapshot: None,
+            snapshot,
         }));
     }
     let loaded = crate::ci::prepare::load(run_dir)?;

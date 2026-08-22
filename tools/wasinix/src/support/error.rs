@@ -74,6 +74,16 @@ pub fn require(condition: bool, message: impl Into<String>) -> Result<()> {
     }
 }
 
+pub fn finalize<T>(result: Result<T>, finished: Result<()>, context: &str) -> Result<T> {
+    match (result, finished) {
+        (result, Ok(())) => result,
+        (Ok(_), Err(error)) => Err(error),
+        (Err(error), Err(finish_error)) => Err(Error::Failure(format!(
+            "{error}; {context}: {finish_error}"
+        ))),
+    }
+}
+
 /// One line of an error, short enough for a table cell or a summary line.
 pub fn brief(error: &Error, limit: usize) -> String {
     error
@@ -103,4 +113,21 @@ pub fn tail(text: &str, limit: usize) -> String {
         _ => start,
     };
     text[start..].to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{finalize, Error, Result};
+
+    #[test]
+    fn finalization_preserves_both_failures() {
+        let result: Result<()> = Err(Error::Request("primary".to_string()));
+        let finished = Err(Error::Failure("secondary".to_string()));
+        assert_eq!(
+            finalize(result, finished, "could not finish")
+                .unwrap_err()
+                .to_string(),
+            "primary; could not finish: secondary"
+        );
+    }
 }

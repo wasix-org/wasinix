@@ -750,13 +750,7 @@ pub(crate) fn drive(drive: Drive<'_>) -> Result<CommandStatus> {
             Err(_) => (crate::support::atoms::RunState::Failed, Some(1)),
         };
         let finished = crate::runs::record_finished(&drive.run_dir, state, exit_code);
-        outcome = match (outcome, finished) {
-            (result, Ok(())) => result,
-            (Ok(_), Err(error)) => Err(error),
-            (Err(error), Err(finish_error)) => Err(crate::support::error::Error::Failure(format!(
-                "{error}; could not finish run: {finish_error}"
-            ))),
-        };
+        outcome = crate::support::error::finalize(outcome, finished, "could not finish run");
     }
 
     if let Some(stop) = stop {

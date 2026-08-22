@@ -1831,6 +1831,31 @@ mod events {
         let resumed = Tracker::new(scratch.path()).unwrap();
         assert_eq!(resumed.snapshot(), tracker.snapshot());
     }
+
+    #[test]
+    fn a_tracked_phase_closes_on_failure() {
+        let scratch = Scratch::create("wasinix-test").unwrap();
+        let mut tracker = Tracker::new(scratch.path()).unwrap();
+        let result = tracker.phase(
+            "prepare.case",
+            "Preparing case",
+            || -> crate::support::error::Result<()> {
+                crate::support::error::request_error("materialization failed")
+            },
+            |_| "prepared".to_string(),
+        );
+        assert!(result.is_err());
+        let events = read_all(scratch.path()).unwrap();
+        assert!(matches!(events[0], Event::PhaseStarted { .. }));
+        assert!(matches!(
+            &events[1],
+            Event::PhaseFinished {
+                status: TaskStatus::Failure,
+                headline,
+                ..
+            } if headline == "materialization failed"
+        ));
+    }
 }
 
 mod exec {
@@ -7541,6 +7566,27 @@ mod prepare {
                 .iter()
                 .any(|t| t.task_id == "case.core")
         );
+        let phase_events: Vec<(String, bool)> = crate::ci::events::read_all(&run_dir)
+            .unwrap()
+            .iter()
+            .filter_map(|event| match event {
+                crate::ci::events::Event::PhaseStarted { task_id, .. } => {
+                    Some((task_id.clone(), true))
+                }
+                crate::ci::events::Event::PhaseFinished { task_id, .. } => {
+                    Some((task_id.clone(), false))
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(phase_events.starts_with(&[
+            ("prepare.case.materialize".to_string(), true),
+            ("prepare.case.materialize".to_string(), false),
+        ]));
+        assert!(phase_events.ends_with(&[
+            ("prepare.plan".to_string(), true),
+            ("prepare.plan".to_string(), false),
+        ]));
 
         let loaded = load(&run_dir).unwrap();
         assert_eq!(loaded.plan().tasks.len(), prepared.plan().tasks.len());
@@ -7682,6 +7728,21 @@ mod prepare {
             .expect("a run without a plan still publishes");
         assert!(starting.report.conclusion.is_none());
         assert!(starting.report.tasks.is_empty());
+
+        let preparing_events = [
+            Event::RunStarted { at: 1, pid: 7 },
+            Event::PhaseStarted {
+                at: 2,
+                task_id: "prepare.case.materialize".into(),
+                label: "case: Materializing abc1234".into(),
+                jobs: None,
+            },
+        ];
+        let preparing = crate::github::publish::load_running(&run_dir, &preparing_events)
+            .unwrap()
+            .expect("preparation progress publishes");
+        assert_eq!(preparing.report.title, "case: Materializing abc1234");
+        assert_eq!(preparing.snapshot.unwrap().last_event_at, Some(2));
 
         prepare_all(&repo, &request, &run_dir).unwrap();
         let events = [Event::RunStarted { at: 1, pid: 7 }];
