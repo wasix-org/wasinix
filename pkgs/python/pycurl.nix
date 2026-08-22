@@ -18,7 +18,7 @@ exposeExtendedPackage {
     [ "$1" = "--libs" ] && set -- --static-libs
     exec @curlConfig@ "$@"
     EOF
-    sed -i 's/^    //; s|@curlConfig@|${lib.getDev pkgs.curl}/bin/curl-config|' \
+    sed -i 's/^    //; s|@curlConfig@|${lib.getExe' (lib.getDev pkgs.curl) "curl-config"}|' \
       "$TMPDIR/curl-config-static/curl-config"
     chmod +x "$TMPDIR/curl-config-static/curl-config"
     export PYCURL_CURL_CONFIG="$TMPDIR/curl-config-static/curl-config"

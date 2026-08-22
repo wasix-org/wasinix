@@ -10,7 +10,7 @@
   pkgs,
 }:
 exposeExtendedPackage {
-  env.GEOS_CONFIG = "${pkgs.geos}/bin/geos-config";
+  env.GEOS_CONFIG = pkgs.lib.getExe' pkgs.geos "geos-config";
   env.NIX_LDFLAGS = "-lc++ -lc++abi -lunwind";
   # Replaces nixpkgs' preCheck: its `cd $out` breaks in the run-only check
   # derivation, where $out is unwritten; resolve the installed tree off the

@@ -27,7 +27,7 @@
 in
   exposeExtendedPackage ({
       env = {
-        CC = "${pkgs.stdenv.cc}/bin/${pkgs.stdenv.cc.targetPrefix}cc";
+        CC = lib.getExe' pkgs.stdenv.cc "${pkgs.stdenv.cc.targetPrefix}cc";
         OPENSSL_NO_VENDOR = "1";
         CFLAGS = "-fwasm-exceptions";
         # The extension links through rustc's own wasm rust-lld, which keeps

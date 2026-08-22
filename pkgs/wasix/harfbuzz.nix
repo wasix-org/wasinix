@@ -28,7 +28,7 @@ exposePackage (
     # WASIX_WASMER. Keep it local to avoid set-wide target execution.
     wasixExeWrapper = packages.sameProfile.buildPackages.writeText "wasix-exe-wrapper-cross.ini" ''
       [binaries]
-      exe_wrapper = '${runners.rawWasm.unbound}/bin/wasix-run'
+      exe_wrapper = '${lib.getExe runners.rawWasm.unbound}'
 
       [properties]
       skip_sanity_check = true

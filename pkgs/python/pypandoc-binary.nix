@@ -20,7 +20,7 @@ exposePackage (
       # cross-build); drop the check.
       substituteInPlace setup.py \
         --replace-fail "setup_requires=pypandoc.__setup_requires__," ""
-      install -Dm755 ${packages.preferred.pandoc}/bin/pandoc.wasm pypandoc/files/pandoc
+      install -Dm755 ${packages.sameProfile.lib.getExe' packages.preferred.pandoc "pandoc.wasm"} pypandoc/files/pandoc
     '';
   }
 )

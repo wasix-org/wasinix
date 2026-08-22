@@ -22,7 +22,7 @@ exposePackage (
       # defines; wasm-ld rejects the duplicates GNU ld would first-wins. gawk's
       # objects come before libc, so it keeps using the regex it was built against.
       env.NIX_LDFLAGS = "--allow-multiple-definition";
-      # git's shell subcommands run ${gawk}/bin/awk, so that name has to survive
+      # Git's shell subcommands run awk by its store path, so that name has to survive
       # the *.wasm rename; the versioned copy is dead weight.
       passthru.wasmer.entrypoint = "gawk";
       passthru.wasmer.commands = [

@@ -8,7 +8,7 @@
   lib,
   dropSphinxDocs,
 }: let
-  nativePgConfig = "${pkgs.buildPackages.libpq.pg_config}/bin/pg_config";
+  nativePgConfig = lib.getExe' pkgs.buildPackages.libpq.pg_config "pg_config";
   wasixDev = lib.getDev pkgs.libpq;
   wasixLib = lib.getLib pkgs.libpq;
   pgConfigWrapper = pkgs.buildPackages.writeShellScriptBin "pg_config" ''
@@ -28,7 +28,7 @@ in
       postPatch = _: ''
         substituteInPlace setup.py \
           --replace-fail "self.pg_config_exe = self.build_ext.pg_config" \
-                         'self.pg_config_exe = "${pgConfigWrapper}/bin/pg_config"'
+                         'self.pg_config_exe = "${lib.getExe pgConfigWrapper}"'
       '';
     }
   )

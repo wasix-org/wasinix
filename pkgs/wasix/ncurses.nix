@@ -10,7 +10,7 @@
 }:
 exposePackage (
   let
-    buildCc = "${packages.sameProfile.buildPackages.stdenv.cc}/bin/cc";
+    buildCc = packages.sameProfile.lib.getExe' packages.sameProfile.buildPackages.stdenv.cc "cc";
   in
     extendPackage (package.override {
       enableStatic = true;

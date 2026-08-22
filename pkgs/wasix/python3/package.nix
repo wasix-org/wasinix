@@ -23,7 +23,7 @@
         SSL_CERT_DIR = "/etc/ssl/certs";
         # getpath can't resolve argv0 (no PATH in the guest), leaving sys.executable
         # empty, which breaks subprocess([sys.executable, ..]) and spawn.
-        PYTHONEXECUTABLE = "${py}/bin/python${pyVer}.wasm";
+        PYTHONEXECUTABLE = lib.getExe' py "python${pyVer}.wasm";
       };
     };
     py =
@@ -206,7 +206,7 @@
         # ac_sys_system stays WASI. Setup.local forces the modules configure marks n/a.
         postPatch = ''
                   substituteInPlace Lib/subprocess.py \
-                    --replace-fail '${packages.sameProfile.buildPackages.bashNonInteractive}/bin/sh' '${packages.preferred.bash}/bin/sh'
+                    --replace-fail '${lib.getExe' packages.sameProfile.buildPackages.bashNonInteractive "sh"}' '${lib.getExe' packages.preferred.bash "sh"}'
 
                   substituteInPlace configure.ac \
                     --replace-fail ' -lwasi-emulated-signal -lwasi-emulated-getpid -lwasi-emulated-process-clocks' \
@@ -278,7 +278,7 @@
           # bundles is pure python, so unpack that instead.
           whl=$(echo "$out"/lib/python${pyVer}/ensurepip/_bundled/pip-*.whl)
           [ -f "$whl" ] || { echo "no bundled pip wheel in $out" >&2; exit 1; }
-          ${packages.sameProfile.buildPackages.python3}/bin/python3 -m zipfile -e "$whl" \
+          ${lib.getExe packages.sameProfile.buildPackages.python3} -m zipfile -e "$whl" \
             "$out/lib/python${pyVer}/site-packages"
 
           for f in \

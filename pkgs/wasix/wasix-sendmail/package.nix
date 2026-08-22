@@ -24,12 +24,22 @@ exposePackage (
         owner = "sendmail";
         name = "sendmail";
       };
-      updateScript = pkgs.nix-update-script {extraArgs = ["--flake"];};
+      updateScript = {
+        command = pkgs.nix-update-script {extraArgs = ["--flake"];};
+        accepts = ["release" "revision"];
+        source = {
+          kind = "github";
+          owner = "wasix-org";
+          repo = "wasix-sendmail";
+        };
+      };
     };
 
     meta = {
       description = "Sendmail-compatible email sender with multiple backends";
+      longDescription = "A sendmail-compatible command-line email sender with configurable delivery backends.";
       homepage = "https://github.com/wasix-org/wasix-sendmail";
+      changelog = "https://github.com/wasix-org/wasix-sendmail/releases/tag/v${finalAttrs.version}";
       license = packages.sameProfile.lib.licenses.agpl3Only;
       mainProgram = "sendmail";
     };

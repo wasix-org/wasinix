@@ -6,13 +6,13 @@
   pkgs,
 }:
 exposePackage (
-  packages.sameProfile.buildPythonPackage rec {
+  packages.sameProfile.buildPythonPackage (finalAttrs: {
     pname = "envier";
     version = "0.6.1";
     pyproject = true;
 
     src = packages.sameProfile.fetchPypi {
-      inherit pname version;
+      inherit (finalAttrs) pname version;
       hash = "sha256-MwmgG7PYhQyeejGlFm1ag2hG2y+uy3m5yzJlTdUMqfk=";
     };
 
@@ -22,5 +22,5 @@ exposePackage (
     ];
 
     passthru.updateScript = pkgs.buildPackages.nix-update-script {extraArgs = ["--flake"];};
-  }
+  })
 )
