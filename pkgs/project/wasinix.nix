@@ -145,6 +145,16 @@
       inherit (projectApi) loadPackageOverlays;
     };
     wasinixProjectionRules = {
+      historyVersions = {
+        namespaces = ["versions"];
+        project = {
+          entry,
+          instantiateVersions,
+          ...
+        }: {
+          versions = instantiateVersions entry;
+        };
+      };
       cargoRegistryArtifact = {
         entry,
         packageSets,

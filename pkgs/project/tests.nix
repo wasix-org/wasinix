@@ -229,6 +229,16 @@
   behaviorProjectionRules = import ../checks/behavior.nix {
     inherit lib projectLib;
   };
+  historyProjectionRules.historyVersions = {
+    namespaces = ["versions"];
+    project = {
+      entry,
+      instantiateVersions,
+      ...
+    }: {
+      versions = instantiateVersions entry;
+    };
+  };
   fakeTestLib = {
     defaultForwardEnv = ["HOME"];
     defaultTimeout = 300;
@@ -265,6 +275,7 @@
   projectApi = import ./default.nix (projectApiArgs
     // {
       projectionRules = {
+        inherit (historyProjectionRules) historyVersions;
         probe = {
           entry,
           packages,
@@ -425,11 +436,11 @@
     importNixpkgs = fakeImportNixpkgs;
     extensions = [pythonRepairExtension];
   };
-  wasmerProjectApi = import ./default.nix (projectApiArgs // {projectionRules = wasmerProjectionRules;});
+  wasmerProjectApi = import ./default.nix (projectApiArgs // {projectionRules = historyProjectionRules // wasmerProjectionRules;});
   behaviorProjectApi = import ./default.nix (projectApiArgs
     // {
       harnessesFor = _args: fakeHarnesses;
-      projectionRules = wasmerProjectionRules // behaviorProjectionRules;
+      projectionRules = historyProjectionRules // wasmerProjectionRules // behaviorProjectionRules;
     });
   wasmerExtension = {
     id = "wasmer-fixture";
@@ -627,7 +638,7 @@
     importNixpkgs = fakeImportNixpkgs;
   };
   projectWithProjectionRules = projectionRules:
-    (import ./default.nix (projectApiArgs // {inherit projectionRules;})).mkProject {
+    (import ./default.nix (projectApiArgs // {projectionRules = historyProjectionRules // projectionRules;})).mkProject {
       system = "test-system";
       importNixpkgs = fakeImportNixpkgs;
       extensions = [consumerExtension];

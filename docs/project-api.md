@@ -486,14 +486,19 @@ History initially supports packages adapted from `prev` and Python packages
 adapted from their immediate `prev`. Shared-recipe history is useful but is not
 required for v1.
 
-To instantiate a historical package, the constructor:
+The built-in history projection applies to current package entries and returns
+retained derivations in its `versions` namespace. To instantiate one, the rule:
 
 1. replaces the unit's `package` argument with the upstream package rebased to
    the retained source pin;
 2. stamps the requested instance;
 3. replays the owning package unit or overlay;
 4. validates the resulting version;
-5. catalogs the result like any other package.
+5. returns the result as a package projection.
+
+The projection engine recursively projects those results. History therefore
+uses the same rule registration and entry context as a consumer-supplied
+package projection; the engine has no separate historical test path.
 
 The instance visible during replay is:
 
@@ -550,16 +555,26 @@ The general construction operation maps a catalog entry to typed projections:
 
 ```nix
 projectionRules.wasmerArtifacts = {
-  entry,
-  artifacts,
-  ...
-}:
-  lib.optionalAttrs (entry.policy.shipped or false) {
-    artifacts = {
-      pkg = pkgDerivation;
-      webc = webcDerivation;
+  namespaces = ["artifacts"];
+  project = {
+    entry,
+    artifacts,
+    ...
+  }:
+    lib.optionalAttrs (entry.policy.shipped or false) {
+      artifacts = {
+        pkg = pkgDerivation;
+        webc = webcDerivation;
+      };
     };
+};
+
+projectionRules.historyVersions = {
+  namespaces = ["versions"];
+  project = {entry, instantiateVersions, ...}: {
+    versions = instantiateVersions entry;
   };
+};
 
 projectionRules.wasmerCommands = {entry, ...}:
   lib.optionalAttrs (entry.kind == "artifact" && entry.artifactKind == "webc") {
@@ -576,10 +591,12 @@ projectionRules.packagedBehavior = {entry, harnesses, ...}:
   };
 ```
 
-Every rule returns a possibly empty attrset containing any of `artifacts`,
-`commands`, and `tests`. Results merge disjointly within each namespace;
-collisions and invalid payloads are errors. This is one projection mechanism,
-not separate artifact and check APIs.
+Every rule declares the typed namespaces it can produce and returns a possibly
+empty attrset containing those namespaces. `versions` contains package
+projections; `artifacts`, `commands`, and `tests` contain their corresponding
+entry kinds. Results merge disjointly within each namespace; collisions,
+undeclared outputs, and invalid payloads are errors. A bare function is shorthand
+for a rule declaring `artifacts`, `commands`, and `tests`.
 
 Artifacts are distributable derivation projections. WebCs, wheels, registries,
 and similar outputs live under their subject entry and in a global view indexed
@@ -683,10 +700,11 @@ project test catalog; they are not attached back to packages as an authoritative
 `passthru.tests` tree.
 
 All applicable checks are constructed for current and historical instances.
-Historical test jobs receive a central gated tag such as `history-tests`, so
-normal CI does not execute them. A direct selection still requires enabling the
-tag. Other expensive properties add their own tags rather than replacing the
-history tag.
+The history projection stamps its package results with a gated tag such as
+`history-tests`, which ordinary policy inheritance carries to their artifacts
+and tests. Normal CI does not execute them, and a direct selection still
+requires enabling the tag. Other expensive properties add their own tags rather
+than replacing the history tag.
 
 Checks use the highest meaningful end-to-end layer:
 
