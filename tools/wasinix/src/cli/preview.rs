@@ -21,6 +21,43 @@ pub(crate) fn preview_app(name: &str, pull_request: u64) -> String {
     format!("{name}-pr{pull_request}")
 }
 
+fn app_is_missing(stderr: &[u8], app: &str) -> bool {
+    let expected = format!("error: Could not find app '{app}'");
+    String::from_utf8_lossy(stderr)
+        .lines()
+        .any(|line| line.trim() == expected)
+}
+
+fn delete_app(app: &str, registry: &str) -> Result<()> {
+    ui::fact("deleting preview app", app);
+    let mut delete = Capability::Wasmer.command()?;
+    delete
+        .args(["app", "delete", app])
+        .args(["--registry", registry, "--non-interactive"])
+        .env("NO_COLOR", "1");
+    let output = crate::support::tools::output(&mut delete)?;
+    if output.status.success() {
+        ui::result(format!("deleted {app}"));
+        return Ok(());
+    }
+    if app_is_missing(&output.stderr, app) {
+        ui::note(format!("{app} does not exist"));
+        return Ok(());
+    }
+    crate::support::tools::check_output(&delete, &format!("deleting preview app {app}"), output)?;
+    Ok(())
+}
+
+pub fn cleanup(namespace: &str, pull_request: u64, registry: &str) -> Result<()> {
+    for name in [PYTHON_PREVIEW_APP, CARGO_PREVIEW_APP] {
+        delete_app(
+            &format!("{namespace}/{}", preview_app(name, pull_request)),
+            registry,
+        )?;
+    }
+    Ok(())
+}
+
 #[derive(Clone, Copy, PartialEq, clap::ValueEnum)]
 pub enum Status {
     /// The claim posted before the long work, so the PR shows it is coming
@@ -331,5 +368,24 @@ pub fn run(args: PreviewArgs) -> Result<CommandStatus> {
             }
             Err(error)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::app_is_missing;
+
+    #[test]
+    fn only_the_named_missing_app_is_ignored() {
+        let app = "owner/python-registry-pr42";
+        assert!(app_is_missing(
+            b"Looking up the app...\nerror: Could not find app 'owner/python-registry-pr42'\n",
+            app,
+        ));
+        assert!(!app_is_missing(
+            b"error: Could not find app 'owner/python-registry-pr43'\n",
+            app,
+        ));
+        assert!(!app_is_missing(b"error: authentication failed\n", app));
     }
 }

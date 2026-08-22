@@ -425,7 +425,7 @@ pub fn checked_output_timeout(
     }
 }
 
-fn check_output(cmd: &Command, context: &str, output: Output) -> Result<Vec<u8>> {
+pub(crate) fn check_output(cmd: &Command, context: &str, output: Output) -> Result<Vec<u8>> {
     if output.status.success() {
         return Ok(output.stdout);
     }

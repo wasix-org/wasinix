@@ -335,6 +335,15 @@ pub enum CiCommand {
         #[arg(long)]
         github_output: PathBuf,
     },
+    /// Delete a pull request's ephemeral registry apps
+    PreviewCleanup {
+        #[arg(long)]
+        namespace: String,
+        #[arg(long)]
+        pull_request: u64,
+        #[arg(long)]
+        registry: String,
+    },
     /// Prepare and execute a resolved request in one payload, which is the
     /// command durable runs supervise
     Run {
@@ -559,6 +568,7 @@ impl CommandTree {
                 dry_run: false,
                 ..
             }) => vec![Aws],
+            CommandTree::Ci(CiCommand::PreviewCleanup { .. }) => vec![Wasmer],
             CommandTree::Build(_)
             | CommandTree::Spot(_)
             | CommandTree::Diff(_)
@@ -1449,6 +1459,14 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             }
             Ok(CommandStatus::SUCCESS)
         }
+        CiCommand::PreviewCleanup {
+            namespace,
+            pull_request,
+            registry,
+        } => {
+            preview::cleanup(&namespace, pull_request, &registry)?;
+            Ok(CommandStatus::SUCCESS)
+        }
         CiCommand::Run {
             request,
             run_dir,
@@ -2030,6 +2048,20 @@ mod capability_tests {
 
     #[test]
     fn parsed_commands_anticipate_only_their_possible_helpers() {
+        assert_eq!(
+            anticipated(&[
+                "wasinix",
+                "ci",
+                "preview-cleanup",
+                "--namespace",
+                "kilyanni",
+                "--pull-request",
+                "7",
+                "--registry",
+                "wasmer.io",
+            ]),
+            vec![Capability::Wasmer]
+        );
         assert_eq!(
             anticipated(&["wasinix", "python", "publish"]),
             vec![Capability::Python, Capability::Rclone, Capability::Wasmer]
