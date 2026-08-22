@@ -57,6 +57,9 @@ neighboring `*.retention.json` records original and retained bytes. Set
 `WASINIX_LOG_BYTES` to a positive byte limit when a runner needs another cap.
 `run status` and `run report` aggregate those facts into log count and produced,
 retained, and omitted bytes; the JSON and human output use the same summary.
+When a run finishes, its completed transcripts are compacted fairly to 256 MiB
+in total. Small transcripts remain whole before larger ones share the remaining
+space. `WASINIX_RUN_LOG_BYTES` sets another positive byte limit for the run.
 
 The verdict has four values. A green run passes; a red run has a failed
 required gate or a comparison with regressions. Removed jobs stay in the

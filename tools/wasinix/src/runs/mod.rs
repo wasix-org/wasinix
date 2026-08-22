@@ -189,6 +189,10 @@ pub fn record_started(run_dir: &Path) -> Result<()> {
 /// when the run was never supervised (a bare `ci exec` directory), so every
 /// finished run directory is observable.
 pub fn record_finished(run_dir: &Path, state: RunState, exit_code: Option<u8>) -> Result<()> {
+    let max_log_bytes = crate::support::env::run_log_bytes()?
+        .map(|bytes| bytes as u64)
+        .unwrap_or(crate::support::log::DEFAULT_RUN_MAX_BYTES);
+    crate::support::log::enforce_budget(run_dir, max_log_bytes)?;
     let mut run: Run = schema::read(&run_dir.join(RUN_FILE)).unwrap_or_default();
     run.state = state;
     run.exit_code = exit_code;
