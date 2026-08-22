@@ -5208,6 +5208,33 @@ mod corpus {
             build.contains("name: ci-run") && report.contains("name: ci-run"),
             "the ci-run artifact name drifted between build.yml and test-report.yml"
         );
+        let build_artifact = build.find("id: run_artifact").unwrap();
+        let build_baseline = build.find("id: baseline").unwrap();
+        let build_gc = build
+            .find("run gc --max-age-days 0")
+            .expect("build.yml does not collect its durable runs");
+        assert!(
+            build_gc > build_artifact && build_gc > build_baseline,
+            "build.yml collects a run before its artifact and baseline are durable"
+        );
+        assert!(
+            build.contains("steps.run_artifact.outcome == 'success'")
+                && build.contains("steps.baseline.outcome == 'success'"),
+            "build.yml cleanup is not gated on durable publication"
+        );
+        let command_artifact = ci_command.find("id: run_artifact").unwrap();
+        let command_gc = ci_command
+            .find("run gc --max-age-days 0")
+            .expect("ci-command-run.yml does not collect its durable runs");
+        assert!(
+            command_gc > command_artifact,
+            "ci-command-run.yml collects a failed run before preserving it"
+        );
+        assert!(
+            ci_command.contains("steps.report.outcome == 'success'")
+                && ci_command.contains("steps.run_artifact.outcome == 'success'"),
+            "ci-command-run.yml cleanup is not gated on durable publication"
+        );
     }
 
     /// The cache identity (key, substituter, bucket) lives in support/nix.rs

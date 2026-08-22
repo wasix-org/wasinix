@@ -217,12 +217,21 @@ jobs:
       # The runner takes the run directory with it; on failure it is the
       # only evidence of what happened inside the run.
       - name: Share the run directory
+        id: run_artifact
         if: failure() && steps.run.outputs.dir != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: failed-run
           path: ${{ steps.run.outputs.dir }}
-          if-no-files-found: ignore
+          if-no-files-found: error
+
+      - name: Collect durable runs
+        if:
+          ${{ always() && steps.run.outputs.dir != '' &&
+          ((steps.run.outcome == 'success' && steps.report.outcome == 'success') ||
+          (steps.run.outcome != 'success' &&
+          steps.run_artifact.outcome == 'success')) }}
+        run: nix run .#wasinix -- run gc --max-age-days 0
 
   # No push credential here: the PR tree's own update scripts execute in
   # this job, and all they can reach is the bundle it leaves behind.

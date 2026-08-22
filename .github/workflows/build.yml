@@ -142,6 +142,7 @@ jobs:
       # consumed by test-report.yml (workflow_run, so fork PRs get the check
       # run and sticky comment too) and kept for debugging
       - name: Upload run
+        id: run_artifact
         if: always() && steps.run.conclusion != 'skipped'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -184,6 +185,7 @@ jobs:
       # re-push of an identical tree start warm. Fork PRs have no credentials
       # and skip.
       - name: Publish baseline
+        id: baseline
         if: always() && steps.run.conclusion != 'skipped'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
@@ -196,6 +198,13 @@ jobs:
             exit 0
           fi
           nix run .#wasinix -- ci publish --run-dir "$RUN_DIR" --baseline
+
+      - name: Collect durable runs
+        if:
+          ${{ always() && steps.run_artifact.outcome == 'success' &&
+          (steps.baseline.outcome == 'success' ||
+          steps.baseline.outcome == 'skipped') }}
+        run: nix run .#wasinix -- run gc --max-age-days 0
 
   # Which step was slow, per job, without opening any log. Every run
   # publishes its record, the way the baseline does: the builds that cost
