@@ -194,6 +194,7 @@
           inherit lib;
           projectLib = import ./lib.nix {inherit lib;};
         })
+        packageBehavior
         packagedBehavior
         ;
       pythonWheelArtifacts = {
