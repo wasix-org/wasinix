@@ -49,6 +49,71 @@ impl Context<'_> {
 
 const EXCERPT_LINES: usize = 120;
 
+#[derive(Default)]
+struct Artifacts {
+    files: BTreeMap<PathBuf, u64>,
+    total_bytes: u64,
+}
+
+impl Artifacts {
+    fn record(&mut self, path: &Path) -> Result<()> {
+        let metadata = std::fs::metadata(path).map_err(|error| io(path, error))?;
+        let previous = self.files.get(path).copied().unwrap_or(0);
+        let total_bytes = self
+            .total_bytes
+            .checked_sub(previous)
+            .and_then(|total| total.checked_add(metadata.len()))
+            .ok_or_else(|| Error::Failure("artifact byte count overflowed u64".to_string()))?;
+        self.files.insert(path.to_path_buf(), metadata.len());
+        self.total_bytes = total_bytes;
+        Ok(())
+    }
+
+    fn record_log(&mut self, path: &Path) -> Result<()> {
+        self.record(path)?;
+        self.record(&crate::support::log::retention_path(path))
+    }
+
+    fn add_shared(&mut self, bytes: u64) -> Result<()> {
+        self.total_bytes = self.total_bytes.checked_add(bytes).ok_or_else(|| {
+            Error::Failure("shared artifact byte count overflowed u64".to_string())
+        })?;
+        Ok(())
+    }
+
+    fn bytes(&self) -> u64 {
+        self.total_bytes
+    }
+}
+
+#[cfg(test)]
+mod artifact_tests {
+    use super::Artifacts;
+
+    #[test]
+    fn accounting_tracks_owned_files_once() {
+        let scratch = crate::support::fs::Scratch::create("wasinix-test").unwrap();
+        let path = scratch.path().join("artifact");
+        std::fs::write(&path, b"first").unwrap();
+        let mut artifacts = Artifacts::default();
+        artifacts.record(&path).unwrap();
+        artifacts.record(&path).unwrap();
+        artifacts.add_shared(2).unwrap();
+        assert_eq!(artifacts.bytes(), 7);
+
+        std::fs::write(&path, b"replacement").unwrap();
+        artifacts.record(&path).unwrap();
+        assert_eq!(artifacts.bytes(), 13);
+    }
+
+    #[test]
+    fn task_accounting_does_not_scan_the_run_tree() {
+        let source = include_str!("exec.rs");
+        let scan = ["tree_", "bytes("].concat();
+        assert!(!source.contains(&scan));
+    }
+}
+
 /// The tail of a log as fragment content. The full file stays in the run
 /// directory; the fragment carries what a report can show inline.
 fn excerpt(path: &Path) -> LogExcerpt {
@@ -73,7 +138,11 @@ fn excerpt_of(text: &str) -> LogExcerpt {
 /// Run a command, teeing its output to a log file. Build logs are the
 /// evidence a failure report is made of, so they are kept even when the
 /// console is not.
-fn run_logged(cmd: &mut Command, log_path: &Path) -> Result<CommandStatus> {
+fn run_logged(
+    cmd: &mut Command,
+    log_path: &Path,
+    artifacts: &mut Artifacts,
+) -> Result<CommandStatus> {
     use std::io::{BufRead, BufReader, Write};
     let log = crate::support::log::SharedLog::create(log_path)?;
     let echo = crate::support::ui::verbosity() == crate::support::ui::Verbosity::Verbose;
@@ -104,6 +173,7 @@ fn run_logged(cmd: &mut Command, log_path: &Path) -> Result<CommandStatus> {
     )?;
     let status = completion.value().status;
     log.finish()?;
+    artifacts.record_log(log_path)?;
     Ok(CommandStatus::from_exit(status))
 }
 
@@ -112,7 +182,11 @@ struct LoggedOutput {
     stdout: Vec<u8>,
 }
 
-fn output_logged(cmd: &mut Command, log_path: &Path) -> Result<LoggedOutput> {
+fn output_logged(
+    cmd: &mut Command,
+    log_path: &Path,
+    artifacts: &mut Artifacts,
+) -> Result<LoggedOutput> {
     use std::io::Read;
     let log = crate::support::log::BoundedLog::create(log_path)?;
     let output = crate::support::tools::piped(
@@ -133,6 +207,7 @@ fn output_logged(cmd: &mut Command, log_path: &Path) -> Result<LoggedOutput> {
         },
     )?
     .value();
+    artifacts.record_log(log_path)?;
     Ok(LoggedOutput {
         status: output.status,
         stdout: output.stdout,
@@ -157,7 +232,13 @@ pub(crate) fn fixed_output_derivations(graph: &Value) -> Vec<String> {
     paths
 }
 
-fn treefmt(worktree: &Path, case_id: &str, route: &Route, log: &Path) -> Result<Fragment> {
+fn treefmt(
+    worktree: &Path,
+    case_id: &str,
+    route: &Route,
+    log: &Path,
+    artifacts: &mut Artifacts,
+) -> Result<Fragment> {
     let _lease = route.acquire()?;
     let mut cmd = crate::support::nix::Invocation::flake(
         "build",
@@ -167,7 +248,7 @@ fn treefmt(worktree: &Path, case_id: &str, route: &Route, log: &Path) -> Result<
     .workdir(worktree)
     .route(route)?
     .command()?;
-    let status = run_logged(&mut cmd, log)?;
+    let status = run_logged(&mut cmd, log, artifacts)?;
 
     let mut fragment = Fragment::new(
         format!("{case_id}.treefmt"),
@@ -192,7 +273,13 @@ fn treefmt(worktree: &Path, case_id: &str, route: &Route, log: &Path) -> Result<
 
 /// Warm the evaluation's fixed-output inputs so the offline evaluation and
 /// the build behind it never fetch.
-fn eval_inputs(ctx: &Context, worktree: &Path, case_id: &str, route: &Route) -> Result<Fragment> {
+fn eval_inputs(
+    ctx: &Context,
+    worktree: &Path,
+    case_id: &str,
+    route: &Route,
+    artifacts: &mut Artifacts,
+) -> Result<Fragment> {
     let _lease = route.acquire()?;
     let logs = crate::ci::prepare::logs_dir(&case_dir(ctx.run_dir, case_id)).join("eval-inputs");
     let attr = format!(
@@ -202,7 +289,7 @@ fn eval_inputs(ctx: &Context, worktree: &Path, case_id: &str, route: &Route) -> 
     let jobs_path = logs.join("jobs.jsonl");
     let evaluate_log = logs.join("evaluate.log");
     let mut failure: Option<(String, PathBuf)> = None;
-    let status = match evaljobs::run(&evaljobs::RunRequest {
+    let evaluation = evaljobs::run(&evaljobs::RunRequest {
         workdir: worktree,
         flake: &attr,
         jobs_path: &jobs_path,
@@ -213,7 +300,10 @@ fn eval_inputs(ctx: &Context, worktree: &Path, case_id: &str, route: &Route) -> 
         // nothing here.
         check_cache: false,
         route,
-    })? {
+    })?;
+    artifacts.record(&jobs_path)?;
+    artifacts.record_log(&evaluate_log)?;
+    let status = match evaluation {
         Some(error) => {
             failure = Some((error, evaluate_log.clone()));
             CommandStatus::FAILURE
@@ -228,6 +318,7 @@ fn eval_inputs(ctx: &Context, worktree: &Path, case_id: &str, route: &Route) -> 
             drvs.dedup();
             let drv_file = logs.join("job-derivations.txt");
             crate::support::fs::write(&drv_file, (drvs.join("\n") + "\n").as_bytes())?;
+            artifacts.record(&drv_file)?;
 
             let mut show = crate::support::nix::Invocation::plain("derivation show")
                 .args(["--recursive", "--stdin"])
@@ -236,7 +327,7 @@ fn eval_inputs(ctx: &Context, worktree: &Path, case_id: &str, route: &Route) -> 
                 .route(route)?
                 .command()?;
             let derivations_log = logs.join("derivations.log");
-            let shown = output_logged(&mut show, &derivations_log)?;
+            let shown = output_logged(&mut show, &derivations_log, artifacts)?;
             if !shown.status.success() {
                 failure = Some((
                     "could not inspect evaluation inputs".to_string(),
@@ -252,6 +343,7 @@ fn eval_inputs(ctx: &Context, worktree: &Path, case_id: &str, route: &Route) -> 
                 let fetches = fixed_output_derivations(&graph);
                 let fetch_file = logs.join("fixed-output-derivations.txt");
                 crate::support::fs::write(&fetch_file, (fetches.join("\n") + "\n").as_bytes())?;
+                artifacts.record(&fetch_file)?;
                 if fetches.is_empty() {
                     CommandStatus::SUCCESS
                 } else {
@@ -263,7 +355,7 @@ fn eval_inputs(ctx: &Context, worktree: &Path, case_id: &str, route: &Route) -> 
                         .route(route)?
                         .command()?;
                     let fetch_log = logs.join("fetch.log");
-                    let status = run_logged(&mut build, &fetch_log)?;
+                    let status = run_logged(&mut build, &fetch_log, artifacts)?;
                     if !status.is_success() {
                         failure =
                             Some(("could not fetch evaluation inputs".to_string(), fetch_log));
@@ -318,6 +410,7 @@ fn evaluate(
     worktree: &Path,
     case: &Build<RevSource>,
     route: &Route,
+    artifacts: &mut Artifacts,
 ) -> Result<Fragment> {
     let _lease = route.acquire()?;
     let case_id = case.case_id();
@@ -327,17 +420,21 @@ fn evaluate(
         crate::support::nix::SYSTEM
     );
     let eval_log = maps.join("eval.log");
-    if let Some(error) = evaljobs::run(&evaljobs::RunRequest {
+    let jobs_path = crate::ci::prepare::eval_jobs_path(&case_dir(ctx.run_dir, case_id));
+    let evaluation = evaljobs::run(&evaljobs::RunRequest {
         workdir: worktree,
         flake: &attr,
-        jobs_path: &crate::ci::prepare::eval_jobs_path(&case_dir(ctx.run_dir, case_id)),
+        jobs_path: &jobs_path,
         stderr_log: &eval_log,
         offline: true,
         // Offline, so a cache-status query cannot reach a substituter; the
         // build's --skip-cached decides what to rebuild instead.
         check_cache: false,
         route,
-    })? {
+    })?;
+    artifacts.record(&jobs_path)?;
+    artifacts.record_log(&eval_log)?;
+    if let Some(error) = evaluation {
         // No map is written: a broken evaluation must never become a base
         // for someone else to diff against.
         return Ok(Fragment::new(
@@ -350,18 +447,15 @@ fn evaluate(
         .with_data(FragmentData::Log(excerpt_of(&error))));
     }
 
-    let jobs = evaljobs::parse_file(&crate::support::fs::read_to_string(
-        &crate::ci::prepare::eval_jobs_path(&case_dir(ctx.run_dir, case_id)),
-    )?)?;
+    let jobs = evaljobs::parse_file(&crate::support::fs::read_to_string(&jobs_path)?)?;
     let mut mapping = EvalMap::from_jobs(case.source.rev.clone(), &jobs);
     let catalog = selector_catalog(worktree, route)?;
     mapping.info = catalog.info;
     mapping.sets = catalog.sets;
     mapping.groups = catalog.groups;
-    schema::write(
-        &crate::ci::prepare::eval_map_path(&case_dir(ctx.run_dir, case_id)),
-        &mapping,
-    )?;
+    let map_path = crate::ci::prepare::eval_map_path(&case_dir(ctx.run_dir, case_id));
+    schema::write(&map_path, &mapping)?;
+    artifacts.record(&map_path)?;
     mapping.record_completions();
 
     let omitted_by_tags: BTreeMap<String, usize> = mapping
@@ -434,6 +528,7 @@ fn spot(
     case_id: &str,
     case: &Spot<RevSource>,
     route: &Route,
+    artifacts: &mut Artifacts,
 ) -> Result<Fragment> {
     let mapping = {
         let _lease = route.acquire()?;
@@ -473,20 +568,24 @@ fn spot(
     } else {
         JobStatus::Failure
     };
+    let status_path = crate::ci::prepare::status_path(&paths);
     schema::write(
-        &crate::ci::prepare::status_path(&paths),
+        &status_path,
         &JobStatuses {
             statuses: jobs.keys().map(|job| (job.clone(), job_status)).collect(),
         },
     )?;
+    artifacts.record(&status_path)?;
+    let map_path = crate::ci::prepare::eval_map_path(&paths);
     schema::write(
-        &crate::ci::prepare::eval_map_path(&paths),
+        &map_path,
         &EvalMap {
             rev: Some(case.source.rev.clone()),
             jobs,
             ..EvalMap::default()
         },
     )?;
+    artifacts.record(&map_path)?;
     Ok(Fragment::new(
         format!("{case_id}.spot"),
         format!("{case_id}: Spot"),
@@ -893,6 +992,7 @@ fn run_build_tasks(
     let mut worst = CommandStatus::SUCCESS;
     let mut results: BTreeMap<String, PathBuf> = BTreeMap::new();
     let mut union_logs: Vec<PathBuf> = Vec::new();
+    let mut union_artifacts = Artifacts::default();
     // Merged across placement groups: one task's jobs can span builders.
     let mut plan = crate::nix::buildset::PlanCensus::new();
     let union_started = Instant::now();
@@ -923,11 +1023,12 @@ fn run_build_tasks(
         }
         let mut liveness = Liveness::new(stall_after);
         let mut building: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        let result_file = build_dir.join("results.xml");
         let status = crate::nix::buildset::build_union(
             crate::nix::buildset::UnionRequest {
                 cases: union_cases,
                 work_dir: &build_dir,
-                result_file: build_dir.join("results.xml"),
+                result_file: result_file.clone(),
                 route: &route,
                 // The build tail is a few long compiles; jobs default to
                 // the machine's parallelism, with WASINIX_MAX_JOBS as the
@@ -973,6 +1074,9 @@ fn run_build_tasks(
                 }
             },
         )?;
+        union_artifacts.record(&result_file)?;
+        union_artifacts.record(&build_dir.join("build-results.jsonl"))?;
+        union_artifacts.record_log(&build_dir.join("build-union.log"))?;
         // The per-job facts are the verdict; a failing driver status with
         // every selected job reporting success is a teardown anomaly worth
         // recording.
@@ -995,7 +1099,13 @@ fn run_build_tasks(
         .filter_map(|path| std::fs::read_to_string(path).ok())
         .flat_map(|text| crate::nix::buildset::builder_failures(&text))
         .collect();
-    for spec in specs {
+    let shared_bytes = union_artifacts.bytes();
+    let task_count = specs.len() as u64;
+    for (index, spec) in specs.into_iter().enumerate() {
+        let mut artifacts = Artifacts::default();
+        artifacts.add_shared(
+            shared_bytes / task_count + u64::from((index as u64) < shared_bytes % task_count),
+        )?;
         let paths = case_dir(ctx.run_dir, &spec.case);
         let junit =
             crate::ci::prepare::junit_dir(&paths).join(format!("{}.xml", spec.target.as_str()));
@@ -1003,15 +1113,27 @@ fn run_build_tasks(
             .get(&spec.case)
             .ok_or_else(|| Error::Failure(format!("{}: no union results", spec.case)))?;
         project_junit(source, &junit, &spec.case, &spec.jobs, &jobs)?;
+        artifacts.record(&junit)?;
         let mapping = maps.get(&spec.case).expect("spec map was loaded");
+        let logs_dir = crate::ci::prepare::logs_dir(&paths).join(spec.target.as_str());
         let mut build_facts = facts::ingest(
-            &[junit],
+            &[junit.clone()],
             Some(&crate::ci::prepare::eval_jobs_path(&paths)),
             &mapping.info,
             cutoff,
-            &crate::ci::prepare::logs_dir(&paths).join(spec.target.as_str()),
+            &logs_dir,
             &reported,
         )?;
+        if build_facts.complete {
+            artifacts.record(&logs_dir.join("manifest.json"))?;
+        }
+        for log in build_facts
+            .failures
+            .iter()
+            .filter_map(|failure| failure.log.as_ref())
+        {
+            artifacts.record(&logs_dir.join(&log.path))?;
+        }
         // The ingest classifies each failure: jobs that never ran because
         // something below them failed first are blocked, not failing, so a
         // task whose only losses are blocked carries that distinct outcome.
@@ -1065,29 +1187,27 @@ fn run_build_tasks(
         });
         let headline =
             crate::support::ui::counts(&build_facts.census.as_ref().expect("just set").parts());
-        worst = worst.max(finish_task(
-            ctx,
-            tracker,
-            Fragment::new(
-                spec.task_id.clone(),
-                spec.label.clone(),
-                spec.kind,
-                status,
-                headline,
-            )
-            .with_data(FragmentData::Build(build_facts)),
-            Some((union_started.elapsed(), 0)),
-        )?
-        .exit(request.blocked));
+        worst = worst.max(
+            finish_task(
+                ctx,
+                tracker,
+                Fragment::new(
+                    spec.task_id.clone(),
+                    spec.label.clone(),
+                    spec.kind,
+                    status,
+                    headline,
+                )
+                .with_data(FragmentData::Build(build_facts)),
+                Some((union_started.elapsed(), artifacts.bytes())),
+            )?
+            .exit(request.blocked),
+        );
     }
     Ok(worst)
 }
 
-fn content(
-    ctx: &Context,
-    request: &ResolvedRequest,
-    candidate_id: &str,
-) -> Result<Fragment> {
+fn content(ctx: &Context, request: &ResolvedRequest, candidate_id: &str) -> Result<Fragment> {
     let RequestAction::Diff(diff) = &request.action else {
         return request_error("content requires a diff request");
     };
@@ -1155,6 +1275,7 @@ fn run_phase(
     request: &ResolvedRequest,
     case_id: &str,
     phase: Phase,
+    artifacts: &mut Artifacts,
 ) -> Result<Fragment> {
     if phase == Phase::Content {
         return content(ctx, request, case_id);
@@ -1175,15 +1296,17 @@ fn run_phase(
             let log = crate::ci::prepare::logs_dir(&case_dir(ctx.run_dir, case_id))
                 .join("treefmt")
                 .join("treefmt.log");
-            treefmt(worktree.path(), case_id, &route, &log)
+            treefmt(worktree.path(), case_id, &route, &log, artifacts)
         }
         (Phase::EvalInputs, CaseRef::Build(_)) => {
-            eval_inputs(ctx, worktree.path(), case_id, &route)
+            eval_inputs(ctx, worktree.path(), case_id, &route, artifacts)
         }
         (Phase::EvalInputs, CaseRef::Spot(_)) => request_error("eval-inputs phase on a spot case"),
-        (Phase::Eval, CaseRef::Build(build)) => evaluate(ctx, worktree.path(), build, &route),
+        (Phase::Eval, CaseRef::Build(build)) => {
+            evaluate(ctx, worktree.path(), build, &route, artifacts)
+        }
         (Phase::Spot, CaseRef::Spot(spot_case)) => {
-            spot(ctx, worktree.path(), case_id, spot_case, &route)
+            spot(ctx, worktree.path(), case_id, spot_case, &route, artifacts)
         }
         (Phase::Spot, CaseRef::Build(_)) => request_error("spot phase on a build case"),
         (Phase::Build { .. }, CaseRef::Build(_)) => {
@@ -1207,10 +1330,7 @@ pub(crate) fn fatal(phase: Phase) -> bool {
     matches!(phase, Phase::EvalInputs | Phase::Eval)
 }
 
-pub(crate) fn classify_build_outcome(
-    unsuccessful: usize,
-    blocked: usize,
-) -> (usize, TaskStatus) {
+pub(crate) fn classify_build_outcome(unsuccessful: usize, blocked: usize) -> (usize, TaskStatus) {
     assert!(
         blocked <= unsuccessful,
         "blocked jobs cannot exceed unsuccessful jobs"
@@ -1368,10 +1488,8 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
             jobs: None,
         })?;
         let started = Instant::now();
-        // Telemetry only: an unreadable directory must not strand the phase
-        // this loop just opened.
-        let bytes_before = crate::support::fs::tree_bytes(ctx.run_dir).unwrap_or(0);
-        let fragment = match run_phase(ctx, request, &task.case, task.phase) {
+        let mut artifacts = Artifacts::default();
+        let fragment = match run_phase(ctx, request, &task.case, task.phase, &mut artifacts) {
             Ok(fragment) => fragment,
             Err(error) => {
                 crate::support::ui::error(format!("{}: {error}", task.task_id));
@@ -1388,12 +1506,7 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
             ctx,
             &mut tracker,
             fragment,
-            Some((
-                started.elapsed(),
-                crate::support::fs::tree_bytes(ctx.run_dir)
-                    .unwrap_or(bytes_before)
-                    .saturating_sub(bytes_before),
-            )),
+            Some((started.elapsed(), artifacts.bytes())),
         )?;
         let task_status = status.exit(request.blocked);
         worst = worst.max(task_status);
