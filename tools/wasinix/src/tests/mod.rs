@@ -1824,10 +1824,12 @@ mod events {
             .unwrap();
         let snapshot = crate::ci::events::read_snapshot(scratch.path()).unwrap();
         assert_eq!(snapshot.failed_jobs, 1);
-        assert_eq!(read_all(scratch.path()).unwrap().len(), 2);
+        let events = read_all(scratch.path()).unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(tracker.snapshot(), fold_snapshot(&events));
         // A new tracker over the same dir resumes from the recorded stream.
         let resumed = Tracker::new(scratch.path()).unwrap();
-        assert_eq!(resumed.snapshot().failed_jobs, 1);
+        assert_eq!(resumed.snapshot(), tracker.snapshot());
     }
 }
 
