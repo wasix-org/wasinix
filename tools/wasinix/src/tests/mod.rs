@@ -3684,7 +3684,7 @@ mod update {
     use crate::update::history::substitute_version;
     use crate::update::retention::retention_crossed;
     use crate::update::select::target_requests;
-    use crate::update::targets::{Backend, Target, domain};
+    use crate::update::targets::{Backend, PostUpdateAction, Target, domain};
 
     fn flake_target(name: &str) -> Target {
         Target {
@@ -3882,6 +3882,34 @@ mod update {
             target.attr
         );
         assert_eq!(target.file, "pkgs/products/wasix-sysroot/libc.nix");
+    }
+
+    #[test]
+    fn attr_list_hooks_parse_the_flakes_tagged_operation() {
+        let value = serde_json::json!({
+            "action": {
+                "kind": "syncAttrList",
+                "input": "nixpkgs",
+                "attrPath": "legacyPackages.${system}",
+                "match": "^icu([0-9]+)$",
+                "capture": 1,
+                "probe": "version",
+                "sort": "numeric",
+                "destination": "pkgs/overlay/packages/icu/versions.nix"
+            },
+            "version": "78.3"
+        });
+        let hook = crate::update::targets::declared_post_update_hook(
+            "packagesByProfile.eh.icu",
+            &value,
+        )
+        .unwrap();
+        assert_eq!(hook.name, "icu");
+        let PostUpdateAction::SyncAttrList(spec) = hook.action else {
+            panic!("expected syncAttrList")
+        };
+        assert_eq!(spec.attr_path, "legacyPackages.${system}");
+        assert_eq!(spec.pattern, "^icu([0-9]+)$");
     }
 
     #[test]

@@ -44,9 +44,29 @@ registry-history retention (keep the outgoing version rebuildable when a bump
 crosses a major, or per `passthru.wasix.retention`: `minor` for
 latest-per-minor, `none` to opt out), the rels.json prune (drop keys nothing
 serves), and finally the `passthru.wasix.postUpdateHook`s, which re-sync state
-derived from pins. Hooks run only when their package version changes and receive
-the old and new versions as their final two arguments. `wasinix update hooks`
-runs every hook without version arguments to request an unconditional repair.
+derived from pins. Hooks run only when their package version changes;
+`wasinix update hooks` requests an unconditional repair. A command hook receives
+the old and new versions as its final two arguments. A generated attribute list
+uses a typed rule instead:
+
+```nix
+postUpdateHook.syncAttrList = {
+  input = "nixpkgs";
+  attrPath = "legacyPackages.\${system}";
+  match = "^icu([0-9]+)$";
+  capture = 1;
+  probe = "version";
+  sort = "numeric";
+  destination = "pkgs/overlay/packages/icu/versions.nix";
+};
+```
+
+The rule evaluates the named attrset directly from the locked input, keeps
+matching attributes whose optional probe evaluates, and renders the captures as
+a canonical Nix string list. `capture = 0` keeps the full attribute name;
+positive captures use regex group numbering. Attribute and probe paths accept
+only dotted components and the literal `${system}` placeholder, and the
+destination must stay inside the checkout.
 
 History retention and rel pruning run after every changed target because each
 can move a served version. Retention fetches and hashes the outgoing release, so

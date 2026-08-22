@@ -11,7 +11,7 @@ use crate::support::ui;
 use crate::update::backends;
 use crate::update::changeset::{ChangeSet, Entry, EntryKind, FailedStep, Unchanged};
 use crate::update::retention::{self, Versions};
-use crate::update::targets::{self, PostUpdateHook, Target};
+use crate::update::targets::{self, PostUpdateAction, PostUpdateHook, Target};
 use crate::update::{Mode, select};
 
 pub struct Options {
@@ -74,20 +74,32 @@ fn run_post_update_hook(
     versions: Option<(&str, &str)>,
 ) -> Result<Option<String>> {
     ui::fact("hook", &hook.name);
-    let cmd = post_update_command(repo, &hook.command, versions);
-    backends::realise_command(&hook.name, &cmd, &hook.command_drv_paths)?;
-    let (code, stdout, stderr) = backends::run_capturing(repo, &cmd, &[])?;
-    ui::raw(&stderr);
-    backends::echo(&stdout);
-    if code != 0 {
-        let detail = if stderr.trim().is_empty() {
-            stdout.trim()
-        } else {
-            stderr.trim()
-        };
-        return request_error(format!("{} exited {code}:\n{detail}", hook.command[0]));
+    match &hook.action {
+        PostUpdateAction::Command {
+            command,
+            command_drv_paths,
+        } => {
+            let cmd = post_update_command(repo, command, versions);
+            backends::realise_command(&hook.name, &cmd, command_drv_paths)?;
+            let (code, stdout, stderr) = backends::run_capturing(repo, &cmd, &[])?;
+            ui::raw(&stderr);
+            backends::echo(&stdout);
+            if code != 0 {
+                let detail = if stderr.trim().is_empty() {
+                    stdout.trim()
+                } else {
+                    stderr.trim()
+                };
+                return request_error(format!("{} exited {code}:\n{detail}", command[0]));
+            }
+            Ok(stdout.trim().lines().last().map(str::to_string))
+        }
+        PostUpdateAction::SyncAttrList(spec) => {
+            let outcome = crate::update::sync::run(repo, spec)?;
+            ui::result(&outcome.detail);
+            Ok(Some(outcome.detail))
+        }
     }
-    Ok(stdout.trim().lines().last().map(str::to_string))
 }
 
 fn changed_hooks(
@@ -365,8 +377,10 @@ mod tests {
     fn hook(name: &str, command: &str, version: &str) -> PostUpdateHook {
         PostUpdateHook {
             name: name.into(),
-            command: vec![command.into()],
-            command_drv_paths: Vec::new(),
+            action: PostUpdateAction::Command {
+                command: vec![command.into()],
+                command_drv_paths: Vec::new(),
+            },
             version: version.into(),
         }
     }

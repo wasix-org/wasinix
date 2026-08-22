@@ -928,42 +928,46 @@
         in
           lib.concatMapAttrs scriptOf ciSets.all;
 
-        # passthru.wasix.postUpdateHook: a command the update driver runs when
-        # its package version moves. In-tree only; the driver dedupes repeats.
+        # passthru.wasix.postUpdateHook: an operation the update driver runs
+        # when its package version moves. In-tree only; repeats are deduped.
         postUpdateHooks = let
           srcRoot = toString self;
           hookOf = attr: drv: let
             h = (drv.passthru.wasix or {}).postUpdateHook or null;
-            command =
-              if h == null
-              then null
-              else map toString (lib.toList h);
-            commandDrvPaths =
-              if h == null
-              then null
-              else commandDrvsOf (lib.toList h);
             pos = builtins.unsafeGetAttrPos "wasix" (drv.passthru or {});
-            ours =
-              command
+            eligible = builtins.tryEval (
+              h
               != null
-              && command != []
               && pos != null
-              && lib.hasPrefix srcRoot pos.file;
-            entry = builtins.tryEval (
-              let
-                v = lib.optionalAttrs ours {
-                  ${attr} = {
-                    inherit command commandDrvPaths;
-                    version = toString drv.version;
-                  };
-                };
-              in
-                builtins.deepSeq v v
+              && lib.hasPrefix srcRoot pos.file
             );
+            ours = eligible.success && eligible.value;
+            action =
+              if lib.isAttrs h && !lib.isDerivation h
+              then
+                if builtins.attrNames h == ["syncAttrList"]
+                then
+                  if h.syncAttrList ? kind
+                  then throw "syncAttrList cannot declare its operation kind"
+                  else h.syncAttrList // {kind = "syncAttrList";}
+                else throw "postUpdateHook attribute sets must contain only syncAttrList"
+              else let
+                command = map toString (lib.toList h);
+              in
+                if command == []
+                then throw "postUpdateHook commands cannot be empty"
+                else {
+                  kind = "command";
+                  inherit command;
+                  commandDrvPaths = commandDrvsOf (lib.toList h);
+                };
           in
-            if entry.success
-            then entry.value
-            else {};
+            lib.optionalAttrs ours {
+              ${attr} = {
+                inherit action;
+                version = toString drv.version;
+              };
+            };
         in
           lib.concatMapAttrs hookOf ciSets.all;
       };

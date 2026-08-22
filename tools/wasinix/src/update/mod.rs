@@ -5,12 +5,14 @@ pub mod backends;
 pub mod changeset;
 pub mod cratepins;
 pub mod drive;
+pub mod flake_lock;
 pub mod history;
 pub mod managed;
 pub mod rels;
 pub mod request;
 pub mod retention;
 pub mod select;
+pub mod sync;
 pub mod targets;
 
 pub use request::{Mode, REQUEST_ENV, Request};
