@@ -658,10 +658,7 @@ pub(crate) struct Drive<'a> {
     pub finish: Finish,
 }
 
-/// The one execution path: prepare (or load), decide the cache, run the
-/// plan, finish. Host routing is the terminal entry's decision before this;
-/// a driven run never re-ships.
-pub(crate) fn drive(drive: Drive<'_>) -> Result<CommandStatus> {
+fn drive_run(drive: &Drive<'_>) -> Result<CommandStatus> {
     let loaded = match &drive.source {
         Source::Parse { request, origin } => {
             let context = normalize::Context {
@@ -696,24 +693,11 @@ pub(crate) fn drive(drive: Drive<'_>) -> Result<CommandStatus> {
         run_dir: &drive.run_dir,
         push_cache,
     };
-    let status = if drive.follow {
-        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let follower = {
-            let run_dir = drive.run_dir.clone();
-            let stop = std::sync::Arc::clone(&stop);
-            std::thread::spawn(move || super::render::follow(&run_dir, &stop))
-        };
-        let status = crate::ci::exec::run_tasks(&context, &loaded, &only);
-        stop.store(true, std::sync::atomic::Ordering::Relaxed);
-        if let Ok(Err(error)) = follower.join() {
-            ui::warning(format!("progress rendering stopped: {error}"));
-        }
-        status?
-    } else {
-        crate::ci::exec::run_tasks(&context, &loaded, &only)?
-    };
+    crate::ci::exec::run_tasks(&context, &loaded, &only)
+}
 
-    if matches!(drive.only, TaskFilter::All) {
+fn finish_output(drive: &Drive<'_>) -> Result<()> {
+    if matches!(&drive.only, TaskFilter::All) {
         match &drive.finish {
             Finish::Interactive { junit_out, json } => {
                 if let Some(out) = junit_out {
@@ -732,6 +716,60 @@ pub(crate) fn drive(drive: Drive<'_>) -> Result<CommandStatus> {
             Finish::Silent => {}
         }
     }
+    Ok(())
+}
+
+/// The one execution path: prepare (or load), decide the cache, run the
+/// plan, finish. Host routing is the terminal entry's decision before this;
+/// a driven run never re-ships.
+pub(crate) fn drive(drive: Drive<'_>) -> Result<CommandStatus> {
+    let standalone = !drive.run_dir.join(crate::runs::RUN_FILE).exists();
+    if standalone {
+        crate::runs::record_started(&drive.run_dir)?;
+    }
+
+    let (stop, follower) = if drive.follow {
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let follower = {
+            let run_dir = drive.run_dir.clone();
+            let stop = std::sync::Arc::clone(&stop);
+            std::thread::spawn(move || super::render::follow(&run_dir, &stop))
+        };
+        (Some(stop), Some(follower))
+    } else {
+        (None, None)
+    };
+
+    let mut outcome = drive_run(&drive);
+    if standalone {
+        let (state, exit_code) = match &outcome {
+            Ok(status) if status.is_success() => {
+                (crate::support::atoms::RunState::Complete, Some(status.code()))
+            }
+            Ok(status) => (crate::support::atoms::RunState::Failed, Some(status.code())),
+            Err(_) => (crate::support::atoms::RunState::Failed, Some(1)),
+        };
+        let finished = crate::runs::record_finished(&drive.run_dir, state, exit_code);
+        outcome = match (outcome, finished) {
+            (result, Ok(())) => result,
+            (Ok(_), Err(error)) => Err(error),
+            (Err(error), Err(finish_error)) => Err(crate::support::error::Error::Failure(format!(
+                "{error}; could not finish run: {finish_error}"
+            ))),
+        };
+    }
+
+    if let Some(stop) = stop {
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+    if let Some(follower) = follower {
+        if let Ok(Err(error)) = follower.join() {
+            ui::warning(format!("progress rendering stopped: {error}"));
+        }
+    }
+
+    let status = outcome?;
+    finish_output(&drive)?;
     Ok(status)
 }
 

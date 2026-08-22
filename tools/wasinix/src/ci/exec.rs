@@ -1402,12 +1402,6 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
     tasks.sort_by_key(|task| task.order);
 
     let mut tracker = Tracker::new(ctx.run_dir)?;
-    // A supervisor owns the run lifecycle events when there is one; a
-    // standalone execution records its own.
-    let standalone = !ctx.run_dir.join(crate::runs::RUN_FILE).exists();
-    if standalone {
-        crate::runs::record_started(ctx.run_dir)?;
-    }
 
     let mut broken: Vec<String> = Vec::new();
     let mut worst = CommandStatus::SUCCESS;
@@ -1515,20 +1509,6 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
         }
     }
 
-    let finish = |_tracker: &mut Tracker, status: CommandStatus| -> Result<()> {
-        if standalone {
-            crate::runs::record_finished(
-                ctx.run_dir,
-                if status.is_success() {
-                    crate::support::atoms::RunState::Complete
-                } else {
-                    crate::support::atoms::RunState::Failed
-                },
-                Some(status.code()),
-            )?;
-        }
-        Ok(())
-    };
     if !only.is_empty() {
         // A single task reports through its fragment; the report describes
         // the whole run, and folding it here would describe one in progress.
@@ -1537,7 +1517,6 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
         } else {
             CommandStatus::FAILURE
         };
-        finish(&mut tracker, status)?;
         return Ok(status);
     }
 
@@ -1556,6 +1535,5 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
     );
     schema::write(&crate::ci::prepare::report_path(ctx.run_dir), &report)?;
     let status = report.command_status();
-    finish(&mut tracker, status)?;
     Ok(status)
 }

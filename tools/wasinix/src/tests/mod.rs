@@ -2045,6 +2045,53 @@ mod cli {
             .command
     }
 
+    fn failing_prepared_drive(
+        run_dir: &std::path::Path,
+    ) -> crate::support::error::Result<crate::support::process::CommandStatus> {
+        crate::cli::request::drive(crate::cli::request::Drive {
+            repo: run_dir,
+            source: crate::cli::request::Source::Prepared,
+            run_dir: run_dir.to_path_buf(),
+            cache: crate::cli::request::CacheIntent::Off,
+            only: crate::cli::request::TaskFilter::All,
+            follow: false,
+            finish: crate::cli::request::Finish::Silent,
+        })
+    }
+
+    #[test]
+    fn a_standalone_drive_closes_a_preparation_failure() {
+        let scratch = crate::support::fs::Scratch::create("wasinix-test").unwrap();
+        let run_dir = scratch.path().join("run");
+        assert!(failing_prepared_drive(&run_dir).is_err());
+        let run = crate::runs::observed(&run_dir).unwrap();
+        assert_eq!(run.state, crate::support::atoms::RunState::Failed);
+        assert_eq!(run.exit_code, Some(1));
+        let events = crate::ci::events::read_all(&run_dir).unwrap();
+        assert!(matches!(
+            events.first(),
+            Some(crate::ci::events::Event::RunStarted { .. })
+        ));
+        assert!(matches!(
+            events.last(),
+            Some(crate::ci::events::Event::RunFinished { .. })
+        ));
+    }
+
+    #[test]
+    fn a_supervised_drive_does_not_duplicate_lifecycle_events() {
+        let scratch = crate::support::fs::Scratch::create("wasinix-test").unwrap();
+        let run_dir = scratch.path().join("run");
+        crate::runs::record_started(&run_dir).unwrap();
+        assert!(failing_prepared_drive(&run_dir).is_err());
+        let events = crate::ci::events::read_all(&run_dir).unwrap();
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            events[0],
+            crate::ci::events::Event::RunStarted { .. }
+        ));
+    }
+
     #[test]
     fn job_patterns_slide_and_mix_substring_with_glob() {
         use crate::cli::job_pattern_matches;
