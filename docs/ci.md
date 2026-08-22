@@ -124,7 +124,9 @@ the retained newest output when the command ends.
 `run gc` combines explicit `--max-age-days`, `--max-count`, and `--max-bytes`
 limits. It never collects a recorded active run or one protected by `run pin`;
 `--dry-run` and `--json` expose the same selection without deleting it. There
-is no implicit retention limit.
+is no implicit retention limit. Ephemeral workflow runners collect final runs
+only after their report or run-directory artifact is durable; failed command
+runs keep their directory until its artifact upload succeeds.
 
 ## GitHub
 
