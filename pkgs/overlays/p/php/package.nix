@@ -171,6 +171,7 @@ in {
       ++ lib.optional (lib.versionAtLeast spec.version "8.1") "--enable-fiber-asm";
 
     mkPhp = webcName: spec: int64: history: extensions: let
+      serverSnapshot = lib.versionAtLeast spec.version "8.1";
       enabledExtensions = lib.unique extensions;
       extensionBuildInputs = lib.concatMap (extension: extension.buildInputs or []) enabledExtensions;
       extensionEnv = lib.foldl' lib.recursiveUpdate {} (map (extension: extension.env or {}) enabledExtensions);
@@ -211,6 +212,17 @@ in {
             )
           ]
           ++ lib.optional int64 ./patches/php-wasix-int64.patch
+          ++ lib.optional (serverSnapshot && lib.versionOlder spec.version "8.5") ./patches/php81-84-cli-server-snapshot.patch
+          ++ lib.optional (lib.versionAtLeast spec.version "8.5") ./patches/php85-cli-server-snapshot.patch
+          ++ lib.optional serverSnapshot (
+            if lib.versionOlder spec.version "8.2"
+            then ./patches/php81-server-snapshot.patch
+            else if lib.versionOlder spec.version "8.3"
+            then ./patches/php82-server-snapshot.patch
+            else if lib.versionOlder spec.version "8.4"
+            then ./patches/php83-server-snapshot.patch
+            else ./patches/php84-server-snapshot.patch
+          )
           ++ lib.optional (lib.versionAtLeast spec.version "8.1") ./patches/php-zend-extensions-wasi.patch
           ++ lib.optional (lib.versionOlder spec.version "8.5") ./patches/php-opcache-optional-sys-ipc.patch
           ++ lib.optional (lib.versionAtLeast spec.version "8.4") ./patches/php-fd-table-size.patch
@@ -306,6 +318,8 @@ in {
             WASIXCC_WASM_OPT_FLAGS =
               if lib.versionOlder spec.version "8.0"
               then "--pass-arg=max-func-params@32:--fpcast-emu:-O2"
+              else if serverSnapshot
+              then "--experimental-new-eh:--asyncify:--pass-arg=asyncify-imports@wasix_32v1.proc_snapshot:--pass-arg=asyncify-ignore-indirect:-O2"
               else "--experimental-new-eh:-O2";
             ac_cv_lib_pq_PQchangePassword = "yes";
             ac_cv_lib_pq_PQencryptPasswordConn = "yes";
