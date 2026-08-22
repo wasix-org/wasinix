@@ -52,6 +52,10 @@ direct or transitive dependencies on `wasinix` or `wasinix-core`. Legitimate
 leaf exceptions are named explicitly. Source filtering also ensures that a CLI
 presentation change cannot alter a helper derivation's source hash.
 
+The `wasinix-helper-boundaries` check exports the transitive graphs of the
+toolchain roots and narrow Python indexer from their `.drv` files. It therefore
+checks the dependency boundary without building those roots.
+
 ## One grammar and three surfaces
 
 There is one Clap command tree and one typed command AST. Delete the parallel
