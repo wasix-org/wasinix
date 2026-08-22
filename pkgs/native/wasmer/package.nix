@@ -1,6 +1,7 @@
 {
   exposeExtendedPackage,
   package,
+  pkgs,
 }: let
   patches = [
     ../../../patches/wasmer-signal-inherit-on-fork.patch
@@ -15,10 +16,17 @@
     ../../../patches/wasmer-dev-fd.patch
     ../../../patches/wasmer-epoll-stale-handler-deadlock.patch
   ];
+  src = pkgs.applyPatches {
+    name = "${package.name}-patched-source";
+    inherit (package) src;
+    inherit patches;
+  };
+  cargoArtifacts = package.cargoArtifacts.overrideAttrs (_old: {
+    inherit src;
+    patches = [];
+  });
 in
   exposeExtendedPackage {
-    inherit patches;
-    cargoArtifacts = package.cargoArtifacts.overrideAttrs (old: {
-      patches = (old.patches or []) ++ patches;
-    });
+    inherit src cargoArtifacts;
+    patches = [];
   }
