@@ -5146,6 +5146,70 @@ mod corpus {
         assert!(found.is_empty(), "{}", found.join("\n"));
     }
 
+    /// Every shell, Python, or JavaScript helper has one build-graph role.
+    /// Explicit paths make adding one fail until its invalidation boundary
+    /// has been chosen; grouped roles let Nix consume the same inventory.
+    #[test]
+    fn every_helper_has_one_build_graph_role() {
+        #[derive(serde::Deserialize)]
+        struct Boundaries {
+            host: Vec<String>,
+            foundational: Vec<String>,
+            leaf: Vec<String>,
+            research: Vec<String>,
+        }
+
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let manifest = root.join("pkgs/helper-boundaries.toml");
+        if !manifest.is_file() {
+            return;
+        }
+        let boundaries: Boundaries =
+            toml::from_str(&std::fs::read_to_string(&manifest).unwrap()).unwrap();
+        let mut classified = std::collections::BTreeMap::new();
+        for (role, paths) in [
+            ("host", boundaries.host),
+            ("foundational", boundaries.foundational),
+            ("leaf", boundaries.leaf),
+            ("research", boundaries.research),
+        ] {
+            for path in paths {
+                assert!(
+                    classified.insert(path.clone(), role).is_none(),
+                    "{path} has more than one helper role"
+                );
+            }
+        }
+
+        let mut pending = vec![root.clone()];
+        let mut helpers = std::collections::BTreeSet::new();
+        while let Some(dir) = pending.pop() {
+            for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+                let path = entry.path();
+                let relative = path.strip_prefix(&root).unwrap();
+                if path.is_dir() {
+                    if relative == std::path::Path::new(".git")
+                        || relative == std::path::Path::new("tools/wasinix/target")
+                    {
+                        continue;
+                    }
+                    pending.push(path);
+                    continue;
+                }
+                if path.extension().is_some_and(|extension| {
+                    matches!(extension.to_str(), Some("py" | "sh" | "js" | "mjs"))
+                }) {
+                    helpers.insert(relative.to_string_lossy().to_string());
+                }
+            }
+        }
+        let classified: std::collections::BTreeSet<String> = classified.into_keys().collect();
+        let missing: Vec<&String> = helpers.difference(&classified).collect();
+        let stale: Vec<&String> = classified.difference(&helpers).collect();
+        assert!(missing.is_empty(), "unclassified helpers: {missing:?}");
+        assert!(stale.is_empty(), "missing classified helpers: {stale:?}");
+    }
+
     /// The strings that couple the binary to its workflows: the authorize
     /// outputs and kind values ci-command.yml dispatches on, the per-PR
     /// preview app names preview-cleanup.yml deletes, and the artifact name
