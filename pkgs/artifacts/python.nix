@@ -140,7 +140,11 @@ in {
         };
       };
     in {
-      artifacts.registry = registry;
+      artifacts.registry = {
+        artifact = registry;
+        name = "python";
+        projectionPath = ["python"];
+      };
     });
 
   artifactTests = {entry, ...}:

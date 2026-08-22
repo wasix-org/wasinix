@@ -82,7 +82,7 @@ Take the shipped set from every interpreter, since a `publishOnce` entry appears
 under only one:
 
 ```
-nix eval --json .#legacyPackages.x86_64-linux.artifacts.registry.python314.wheels \
+nix eval --json .#legacyPackages.x86_64-linux.artifacts.registry.python.wheels \
   --apply 'ws: builtins.concatLists (map builtins.attrNames (builtins.attrValues ws))'
 ```
 

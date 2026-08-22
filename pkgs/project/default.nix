@@ -261,9 +261,17 @@
       && command.name == name
       && lib.isDerivation (command.artifact or null)
       && builtins.isString (command.entrypoint or null);
+    validArtifact = artifact:
+      lib.isDerivation artifact
+      || (
+        lib.isAttrs artifact
+        && lib.isDerivation (artifact.artifact or null)
+        && lib.isList (artifact.projectionPath or null)
+        && lib.all builtins.isString artifact.projectionPath
+      );
     invalidFor = namespace: values:
       if namespace == "artifacts"
-      then lib.filterAttrs (_: artifact: !lib.isDerivation artifact) values
+      then lib.filterAttrs (_: artifact: !validArtifact artifact) values
       else if namespace == "commands"
       then lib.filterAttrs (name: command: !validCommand name command) values
       else lib.filterAttrs (_: value: !lib.isDerivation value) values;
@@ -735,17 +743,27 @@ in rec {
               projectionPath = baseEntry.projectionPath ++ ["versions" version];
             }))
           versionOutputs.versions);
-        artifactNodes = lib.mapAttrs (kind: artifact:
-          projectEntry {
-            kind = "artifact";
-            address = projectLib.address "artifacts" ([kind] ++ baseEntry.projectionPath);
-            artifactKind = kind;
-            inherit artifact;
-            inherit (baseEntry) name preferred projectionPath definition source lineage scope variant instance;
-            subject = baseEntry.address;
-            packageSubject = baseEntry.packageSubject or baseEntry.address;
-            policy = inheritedPolicy baseEntry artifact;
-          })
+        artifactNodes = lib.mapAttrs (kind: declared: let
+          artifact =
+            if lib.isDerivation declared
+            then declared
+            else declared.artifact;
+          projectionPath =
+            if lib.isDerivation declared
+            then baseEntry.projectionPath
+            else declared.projectionPath;
+        in
+          projectEntry ({
+              kind = "artifact";
+              address = projectLib.address "artifacts" ([kind] ++ projectionPath);
+              artifactKind = kind;
+              inherit artifact projectionPath;
+              inherit (baseEntry) name preferred definition source lineage scope variant instance;
+              subject = baseEntry.address;
+              packageSubject = baseEntry.packageSubject or baseEntry.address;
+              policy = inheritedPolicy baseEntry artifact;
+            }
+            // lib.optionalAttrs (!lib.isDerivation declared && declared ? name) {inherit (declared) name;}))
         outputs.artifacts;
         relativeArtifacts = lib.mapAttrs (_: node: node.value) artifactNodes;
         versions = lib.optionalAttrs (versionNodes != {}) {

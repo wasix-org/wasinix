@@ -17,7 +17,7 @@ use crate::support::nix::{Flake, eval};
 /// package name, and that name may itself hold a dot (`python3.14`), so the
 /// segments are cut here rather than by splitting the key.
 const ROOTS: [&str; 3] = [
-    "artifacts.registry.python314.wheels",
+    "artifacts.registry.python.wheels",
     "artifacts.webc",
     "artifacts.registry.cargo-registry.crates",
 ];

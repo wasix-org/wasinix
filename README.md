@@ -20,7 +20,7 @@ nix build .#legacyPackages.x86_64-linux.packages.native.wasixcc    # the C/C++ d
 nix build .#legacyPackages.x86_64-linux.packages.wasix.eh.anybuild # WASIX shared recipe
 nix build .#legacyPackages.x86_64-linux.packages.wasix.exnrefEh.zlib # a library
 nix build .#legacyPackages.x86_64-linux.artifacts.wheel-py314.numpy # a wheel
-nix build .#legacyPackages.x86_64-linux.artifacts.registry.python314 # static wheel index
+nix build .#legacyPackages.x86_64-linux.artifacts.registry.python # static wheel index
 
 nix run .#wasinix -- update --all         # bump the source pins
 ```

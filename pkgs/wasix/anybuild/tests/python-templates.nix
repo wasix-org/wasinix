@@ -22,7 +22,7 @@
   inherit (pkgs) lib;
 
   examples = "${pkgs.anybuild.src}/examples";
-  pythonRegistry = artifacts.registry.python314;
+  pythonRegistry = artifacts.registry.python;
   wasmerRuntime = runners.rawWasm.withRuntime.wasmer;
   bash = packages.preferred.bash.artifacts;
 
