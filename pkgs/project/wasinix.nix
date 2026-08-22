@@ -144,6 +144,10 @@
     builtInExtension = import ../extension.nix {
       inherit (projectApi) loadPackageOverlays;
     };
+    historyLib = import ./history.nix {
+      inherit lib;
+      projectLib = import ./lib.nix {inherit lib;};
+    };
     wasinixProjectionRules = {
       historyVersions = {
         namespaces = ["versions"];
@@ -303,6 +307,14 @@
         "wasix-sysroot".profiles =
           nativeRaw."wasix-sysroot".passthru.variants;
       };
+      projectionContextFor =
+        if includeWasinix
+        then historyLib.projectionContextFor
+        else _args: {};
+      validateProject =
+        if includeWasinix
+        then historyLib.validateProject
+        else _args: true;
       packageTransformFor = {
         scope,
         variant,

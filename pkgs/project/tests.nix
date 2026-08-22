@@ -148,6 +148,14 @@
       }
       overlays);
 
+  testHistoryLib = import ./history.nix {
+    inherit lib projectLib;
+    rebasePackageOverride = version: _spec: package:
+      package.overrideAttrs (_: {
+        inherit version;
+        name = "${package.name}-${version}";
+      });
+  };
   projectApiArgs = {
     inherit lib;
     profiles = {
@@ -197,11 +205,7 @@
     runnersFor = _args: {
       rawWasm.unbound = mkPackage {name = "raw-wasm-unbound";};
     };
-    rebasePackage = version: _spec: package:
-      package.overrideAttrs (_: {
-        inherit version;
-        name = "${package.name}-${version}";
-      });
+    inherit (testHistoryLib) projectionContextFor validateProject;
   };
   fakeWebcIdent = package: {
     name = package.passthru.wasmer.name or package.pname or package.name;
