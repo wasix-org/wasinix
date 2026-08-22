@@ -31,6 +31,8 @@ pub struct JobInfo {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subject: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_subject: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub test_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub test_family: Option<String>,
@@ -63,8 +65,6 @@ pub struct JobInfo {
     pub test_expectation: Option<TestExpectation>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spot_target: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub spot_owner: Option<String>,
 }
 
 fn yes() -> bool {
@@ -76,8 +76,6 @@ fn yes() -> bool {
 pub struct SelectorGroup {
     #[serde(default)]
     pub jobs: Vec<String>,
-    #[serde(default)]
-    pub spot_owners: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -122,6 +120,8 @@ pub struct CatalogJob {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subject: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_subject: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub test_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub artifact_kind: Option<String>,
@@ -133,8 +133,6 @@ pub struct CatalogJob {
     pub policy: CatalogPolicy,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spot_target: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub spot_owner: Option<String>,
 }
 
 impl CatalogJob {
@@ -149,6 +147,7 @@ impl CatalogJob {
         JobInfo {
             display_name: Some(self.name.clone()),
             subject: self.subject.or(Some(self.name)),
+            package_subject: self.package_subject,
             test_name: self.test_name,
             variant,
             artifact_kind: self.artifact_kind,
@@ -163,7 +162,6 @@ impl CatalogJob {
             tags: self.policy.ci.tags,
             content_diff: !is_test,
             spot_target: self.spot_target,
-            spot_owner: self.spot_owner,
             ..JobInfo::default()
         }
     }
@@ -185,6 +183,8 @@ pub struct SelectorCatalog {
     #[serde(default)]
     pub jobs: BTreeMap<JobAddr, CatalogJob>,
     #[serde(default)]
+    pub packages: BTreeMap<JobAddr, CatalogJob>,
+    #[serde(default)]
     pub selectors: CatalogSelectors,
 }
 
@@ -202,6 +202,7 @@ impl SelectorCatalog {
                 .map(|address| (address, String::new()))
                 .collect(),
             info,
+            packages: self.packages,
             sets: self.selectors.sets,
             groups: self.selectors.groups,
             ..EvalMap::default()
@@ -229,6 +230,8 @@ pub struct EvalMap {
     pub errors: BTreeMap<JobAddr, String>,
     #[serde(default)]
     pub info: BTreeMap<JobAddr, JobInfo>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub packages: BTreeMap<JobAddr, CatalogJob>,
     #[serde(default)]
     pub sets: BTreeMap<String, Vec<String>>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -406,10 +409,19 @@ impl EvalMap {
         let mut jobs = Vec::new();
         for spec in requested {
             if let Some(group) = self.groups.get(spec) {
-                if group.jobs.is_empty() {
+                let available: Vec<String> = group
+                    .jobs
+                    .iter()
+                    .filter(|job| {
+                        let address = JobAddr((*job).clone());
+                        self.jobs.contains_key(&address) || self.errors.contains_key(&address)
+                    })
+                    .cloned()
+                    .collect();
+                if available.is_empty() {
                     return request_error(format!("CI selector group {spec:?} has no jobs"));
                 }
-                extend_unique(&mut jobs, &group.jobs);
+                extend_unique(&mut jobs, &available);
                 continue;
             }
             if spec == "all" {
@@ -458,37 +470,58 @@ impl EvalMap {
         Ok(targets)
     }
 
-    pub fn resolve_spot_sources(&self, requested: &[String]) -> Result<Vec<String>> {
-        let mut owners = Vec::new();
+    pub fn resolve_packages(&self, requested: &[String]) -> Result<Vec<String>> {
+        let mut sources = Vec::new();
+        let mut domain = Domain::new("the package catalog");
+        for (address, package) in &self.packages {
+            let path = naming::split(address.as_str())?;
+            domain.add_path(
+                path.clone(),
+                address.as_str(),
+                naming::axis_of(&path),
+                package.policy.aliases.clone(),
+            );
+        }
         for spec in requested {
-            if let Some(group) = self.groups.get(spec) {
-                if group.spot_owners.is_empty() {
-                    return request_error(format!(
-                        "CI selector group {spec:?} has no Spot source projection"
-                    ));
+            let members = if let Some(group) = self.groups.get(spec) {
+                group.jobs.clone()
+            } else if spec == "all" {
+                self.sets.values().flatten().cloned().collect()
+            } else if let Some(set) = self.sets.get(spec) {
+                set.clone()
+            } else {
+                let parsed = naming::parse(spec)?;
+                if parsed.value.is_some() {
+                    return request_error(format!("{spec}: a selected package takes no version"));
                 }
-                extend_unique(&mut owners, &group.spot_owners);
-                continue;
-            }
-            let jobs = self.resolve_jobs(std::slice::from_ref(spec))?;
+                domain
+                    .resolve(&parsed)?
+                    .into_iter()
+                    .map(|resolved| resolved.key)
+                    .collect()
+            };
             let mut matched = false;
-            for job in jobs {
-                if let Some(owner) = self
-                    .info
-                    .get(job.as_str())
-                    .and_then(|info| info.spot_owner.as_ref())
-                {
+            for member in members {
+                let address = JobAddr(member.clone());
+                let package = if self.packages.contains_key(&address) {
+                    Some(member.as_str())
+                } else {
+                    self.info
+                        .get(&address)
+                        .and_then(|info| info.package_subject.as_deref())
+                };
+                if let Some(package) = package {
                     matched = true;
-                    push_unique(&mut owners, owner);
+                    push_unique(&mut sources, package);
                 }
             }
             if !matched {
                 return request_error(format!(
-                    "spot source {spec:?} selects no cross-package CI jobs"
+                    "selector {spec:?} selects no catalogued packages"
                 ));
             }
         }
-        Ok(owners)
+        Ok(sources)
     }
 
     /// The identity a publication carries: version plus release counter, which

@@ -195,7 +195,6 @@
     // lib.optionalAttrs (entry ? testName) {inherit (entry) testName;}
     // lib.optionalAttrs (entry.kind == "package" && entry.scope == "wasix") {
       spotTarget = "${entry.variant.profile}.${entry.name}";
-      spotOwner = entry.name;
     };
 
   aliasAddressesFor = entry: let
@@ -928,6 +927,7 @@ in rec {
         else builtins.elem entry.source requestedCiSources)
       testEntries;
       ciEntries = mergeDisjoint "CI job" [ciPackageEntries ciArtifactEntries ciTestEntries];
+      selectablePackageEntries = lib.filterAttrs (_: entry: entry.instance.kind == "current") projectedPackageEntries;
       selectorSetFor = entry:
         if
           entry.scope
@@ -968,9 +968,10 @@ in rec {
           catalog = {
             schemaVersion = project.schemaVersion;
             jobs = lib.mapAttrs (_: serializableEntry) ciEntries;
+            packages = lib.mapAttrs (_: serializableEntry) selectablePackageEntries;
             selectors = {
               sets = selectorSets;
-              groups = {};
+              groups = ci.groups or {};
             };
           };
         };

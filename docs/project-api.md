@@ -62,6 +62,9 @@ The constructor takes:
 - `ci.sources`: registered sources whose packages, artifacts, and tests become
   CI jobs. It defaults to the caller-supplied extension IDs, excluding the
   implicit core extension.
+- `ci.groups`: additional named selector groups. A group declares its `jobs`
+  as catalog addresses. Every consumer resolves those addresses through the
+  same catalog.
 
 A single pre-instantiated `pkgs` value is not sufficient. The constructor must
 instantiate a native set and one cross set for each WASIX profile with the same
@@ -468,7 +471,9 @@ A package entry has this shape:
 `project.catalog.entries.<address>` contains full Nix records, including
 derivations, helper values, and the entry-relative `artifacts`, `commands`, and
 `tests` projections. `ci.catalog` is its serializable CI projection; it is not a
-second catalog.
+second catalog. Its source-filtered `jobs` are evaluable CI work, while
+`packages` retains the current package domain needed to resolve selectors in
+downstream projects.
 
 Addresses are canonical structured-project paths. Examples include:
 

@@ -429,7 +429,12 @@
     system = "test-system";
     importNixpkgs = fakeImportNixpkgs;
     extensions = [consumerExtension unitExtension pythonContextExtension];
-    ci.sources = ["consumer"];
+    ci = {
+      sources = ["consumer"];
+      groups.fixture = {
+        jobs = ["packages.wasix.alternate.consumer"];
+      };
+    };
   };
   definitionProject = projectApi.mkProject {
     system = "test-system";
@@ -962,6 +967,8 @@ in {
       ciJobNames = lib.attrNames project.ci.jobs;
       catalogJobNames = lib.attrNames project.ci.catalog.jobs;
       selectorNames = lib.attrNames project.ci.catalog.selectors.sets;
+      selectorGroupNames = lib.attrNames project.ci.catalog.selectors.groups;
+      selectablePackageNames = lib.attrNames project.ci.catalog.packages;
       selectorsCoverJobs =
         lib.sort builtins.lessThan (lib.unique (lib.concatLists (lib.attrValues project.ci.catalog.selectors.sets)))
         == lib.sort builtins.lessThan (lib.attrNames project.ci.jobs);
@@ -1082,6 +1089,29 @@ in {
         ''tests.packages.wasix.default.core.versions["0.9"].probe''
       ];
       selectorNames = ["packages" "python"];
+      selectorGroupNames = ["fixture"];
+      selectablePackageNames = [
+        "packages.native.core"
+        "packages.python.py.contextProof"
+        "packages.python.py.corePython"
+        "packages.python.py.inheritedPython"
+        "packages.python.py.uses-python"
+        "packages.wasix.alternate.broken"
+        "packages.wasix.alternate.ciNarrow"
+        "packages.wasix.alternate.consumer"
+        "packages.wasix.alternate.core"
+        "packages.wasix.alternate.limited"
+        "packages.wasix.alternate.topOwned"
+        "packages.wasix.alternate.uses-inherited"
+        ''packages.wasix.alternate["dot.name"]''
+        "packages.wasix.default.broken"
+        "packages.wasix.default.ciNarrow"
+        "packages.wasix.default.consumer"
+        "packages.wasix.default.core"
+        "packages.wasix.default.topOwned"
+        "packages.wasix.default.uses-inherited"
+        ''packages.wasix.default["dot.name"]''
+      ];
       selectorsCoverJobs = true;
       brokenCiAbsent = true;
       testNames = [

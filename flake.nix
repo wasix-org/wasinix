@@ -97,67 +97,6 @@
             text = "exec wasinix ${name} \"$@\"";
           }
       );
-    allCiCatalog = project.ci.catalog.jobs;
-    jobsForSubjects = subjects:
-      map (entry: entry.address) (lib.filter (entry:
-        builtins.elem (entry.packageSubject or entry.address) subjects)
-      (builtins.attrValues allCiCatalog));
-    nativeSubjects = names: map (name: "packages.native.${name}") names;
-    toolchainNames = [
-      "cargo-wasix"
-      "cargo-wasix-unwrapped"
-      "wasix-flang"
-      "wasix-llvm"
-      "wasix-rust"
-      "wasix-sysroot"
-      "wasix-tinygo"
-      "wasixcc"
-      "wasixcc-unwrapped"
-    ];
-    ccNames = [
-      "wasix-flang"
-      "wasix-llvm"
-      "wasix-sysroot"
-      "wasix-tinygo"
-      "wasixcc"
-      "wasixcc-unwrapped"
-    ];
-    rustNames = ["cargo-wasix" "cargo-wasix-unwrapped" "wasix-rust"];
-    selectorGroups = {
-      toolchain = {
-        jobs = jobsForSubjects (nativeSubjects toolchainNames);
-        spotOwners = ["stdenv" "rustPlatform" "haskellPackages"];
-      };
-      cc = {
-        jobs = jobsForSubjects (nativeSubjects ccNames);
-        spotOwners = ["stdenv"];
-      };
-      rust = {
-        jobs = jobsForSubjects (nativeSubjects rustNames);
-        spotOwners = ["rustPlatform"];
-      };
-      haskell = {
-        jobs = jobsForSubjects (map (profile: "packages.wasix.${profile}.pandoc") (builtins.attrNames project.packages.wasix));
-        spotOwners = ["haskellPackages"];
-      };
-      emulated = {
-        jobs = map (entry: entry.address) (lib.filter (entry: entry.testName or null == "captured") (builtins.attrValues allCiCatalog));
-        spotOwners = [];
-      };
-    };
-    systemProject =
-      project
-      // {
-        ci =
-          project.ci
-          // {
-            catalog =
-              project.ci.catalog
-              // {
-                selectors.groups = selectorGroups;
-              };
-          };
-      };
   in {
     lib = projectApi;
     formatter.${system} = treefmtEval.config.build.wrapper;
@@ -167,8 +106,8 @@
         program = lib.getExe command;
       })
       commands;
-    legacyPackages.${system} = systemProject;
-    checks.${system} = systemProject.tests;
+    legacyPackages.${system} = project;
+    checks.${system} = project.tests;
     packages.${system} = {
       default = wasinix;
       inherit wasinix;
