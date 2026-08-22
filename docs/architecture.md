@@ -59,10 +59,11 @@ supported build, while `packages.preferred.<name>` projects each package's
 preferred profile. The latter is useful for runtime commands and artifacts but
 is not a coherent package set for linked dependencies.
 
-Buildable LLVM, Rust, wasixcc, sysroot, cargo registry, and anybuild values are
-ordinary packages under `packages.native`. Profile-specific stdenvs and language
-builders hang from the native package that owns them, for example
-`packages.native.wasixcc.profiles.<profile>.stdenv`.
+Buildable LLVM, Rust, GHC, wasixcc, sysroot, cargo registry, and anybuild values
+are ordinary packages under `packages.native`. Profile-specific stdenvs and
+language builders hang from the native package that owns them, for example
+`packages.native.wasixcc.profiles.<profile>.stdenv` and
+`packages.native.wasi-ghc.haskellPackages`.
 
 ## Webc packaging
 

@@ -3,10 +3,15 @@
   project,
 }: let
   catalog = project.catalog.entries;
-  jobsForSubjects = subjects:
-    map (entry: entry.address) (lib.filter (entry:
+  jobsForSubjects = group: subjects: let
+    catalogSubjects = map (entry: entry.packageSubject or entry.address) (builtins.attrValues catalog);
+    unknown = lib.subtractLists catalogSubjects subjects;
+  in
+    lib.throwIf (unknown != [])
+    "CI selector group '${group}' names unknown package subject(s): ${lib.concatStringsSep ", " unknown}"
+    (map (entry: entry.address) (lib.filter (entry:
       builtins.elem (entry.packageSubject or entry.address) subjects)
-    (builtins.attrValues catalog));
+    (builtins.attrValues catalog)));
   nativeSubjects = names: map (name: "packages.native.${name}") names;
   pandocSubjects = map (profile: "packages.wasix.${profile}.pandoc") (builtins.attrNames project.packages.wasix);
   toolchainNames = [
@@ -19,6 +24,7 @@
     "wasix-tinygo"
     "wasixcc"
     "wasixcc-unwrapped"
+    "wasi-ghc"
   ];
   ccNames = [
     "wasix-flang"
@@ -31,16 +37,16 @@
   rustNames = ["cargo-wasix" "cargo-wasix-unwrapped" "wasix-rust"];
 in {
   toolchain = {
-    jobs = jobsForSubjects (nativeSubjects toolchainNames);
+    jobs = jobsForSubjects "toolchain" (nativeSubjects toolchainNames);
   };
   cc = {
-    jobs = jobsForSubjects (nativeSubjects ccNames);
+    jobs = jobsForSubjects "cc" (nativeSubjects ccNames);
   };
   rust = {
-    jobs = jobsForSubjects (nativeSubjects rustNames);
+    jobs = jobsForSubjects "rust" (nativeSubjects rustNames);
   };
   haskell = {
-    jobs = jobsForSubjects pandocSubjects;
+    jobs = jobsForSubjects "haskell" (["packages.native.wasi-ghc"] ++ pandocSubjects);
   };
   emulated = {
     jobs = map (entry: entry.address) (lib.filter (entry: entry.testName or null == "captured") (builtins.attrValues catalog));

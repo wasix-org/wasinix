@@ -77,10 +77,7 @@
         inherit lib referenceScanner;
         snapshotZstd = nativePkgs.zstd;
       };
-      toolchain = import ../toolchain {
-        pkgs = nativePkgs;
-        inherit ghcWasm;
-      };
+      toolchain = import ../toolchain {pkgs = nativePkgs;};
       rustCrossPkgs = importNixpkgs {
         localSystem = {inherit system;};
         crossSystem = {
@@ -181,6 +178,7 @@
         };
     in {
       inherit abiCheck emulatedChecks harnesses linkCheck makeWasmerPackage mkCargoRegistry mkPythonRegistry mkPythonWheels mkWasixStdenv testLib wasixInfrastructureOverlay webcIdent;
+      inherit (toolchain) haskell;
       runners.rawWasm = {
         inherit (rawWasm) unbound;
         withRuntime = rawWasm.withRuntime runtime;
@@ -331,13 +329,20 @@
         nativeRaw,
         ...
       }:
-        lib.optionals (includeWasinix && scope == "native" && wasmerPackage != null) [
-          (_final: _previous: {
-            wasmer = import ../native/wasmer/input.nix {
-              wasmer = wasmerPackage;
-              revision = wasmerRevision;
-            };
-          })
+        lib.optionals (includeWasinix && scope == "native") [
+          (final: _previous:
+            {
+              wasi-ghc = import ../native/wasi-ghc/input.nix {
+                inherit ghcWasm;
+                pkgs = final;
+              };
+            }
+            // lib.optionalAttrs (wasmerPackage != null) {
+              wasmer = import ../native/wasmer/input.nix {
+                wasmer = wasmerPackage;
+                revision = wasmerRevision;
+              };
+            })
         ]
         ++ lib.optionals (scope == "wasix") [
           (nativePackageRecipes.overlay {nativeNixUpdateScript = nativeRaw.nix-update-script;})
@@ -360,6 +365,10 @@
           profiles.profiles;
         "wasix-sysroot".profiles =
           nativeRaw."wasix-sysroot".passthru.variants;
+        "wasi-ghc" = {
+          inherit ((constructionFor nativeRaw).haskell) lib;
+          haskellPackages = (constructionFor nativeRaw).haskell.packages;
+        };
       };
       projectionContextFor =
         if includeWasinix

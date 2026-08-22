@@ -1,10 +1,7 @@
 # The wasix toolchain, built from source: LLVM fork, per-variant sysroot, and the
 # wrappers driving them. `haskell` is a separate wasi toolchain; see haskell/.
-{
-  pkgs,
-  ghcWasm,
-}: let
-  haskell = import ./haskell {inherit pkgs ghcWasm;};
+{pkgs}: let
+  haskell = import ./haskell {inherit pkgs;};
   inherit (pkgs.wasix-llvm.passthru) llvm llvmVersion monorepoSrc version;
   llvmTree = pkgs.wasix-llvm;
   llvmMonorepoSrc = monorepoSrc;
