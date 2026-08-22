@@ -31,6 +31,42 @@
   extendPythonPackage = projectLib.extendPythonPackage repairPythonPackage;
   defaultExtensions = lib.optional (builtInExtension != null) builtInExtension;
   defaultProjectionRules = projectionRules;
+  extensionError = extension: message:
+    throw "Wasinix extension '${extension.id}' ${message}";
+
+  declaredOverlayFor = {
+    contextFor,
+    declared,
+    extension,
+    label,
+    applyFunction ? function: function,
+    extendPackageFor ? null,
+  }:
+    if builtins.isFunction declared
+    then applyFunction declared
+    else if lib.isAttrs declared && declared.__wasinixPackageDirectory or false
+    then
+      projectLib.loadPackageOverlay ({
+          inherit contextFor;
+          dir = declared.directory;
+          expose = declared.expose or [];
+        }
+        // lib.optionalAttrs (extendPackageFor != null) {inherit extendPackageFor;})
+    else extensionError extension "${label} is not an overlay";
+
+  registerExtensionOverlay = {
+    declared,
+    extension,
+    overlay,
+  }:
+    projectLib.registerOverlay {
+      inherit overlay;
+      definition =
+        if lib.isAttrs declared
+        then declared.definition or null
+        else null;
+      source = extension.id;
+    };
 
   validateExtension = extension: let
     id = extension.id or null;
@@ -64,17 +100,10 @@
     variant,
   }: let
     declared = (extension.overlays or {}).${lane} or (_final: _prev: {});
-    rawOverlay =
-      if builtins.isFunction declared
-      then declared
-      else if lib.isAttrs declared && declared.__wasinixPackageDirectory or false
-      then
-        projectLib.loadPackageOverlay {
-          inherit contextFor;
-          dir = declared.directory;
-          expose = declared.expose or [];
-        }
-      else throw "Wasinix extension '${extension.id}' overlay lane '${lane}' is not an overlay";
+    rawOverlay = declaredOverlayFor {
+      inherit contextFor declared extension;
+      label = "overlay lane '${lane}'";
+    };
     overlay = final: previous:
       lib.mapAttrs (name: value:
         if lib.isDerivation value
@@ -92,14 +121,7 @@
         || previous.stdenv.hostPlatform.isWasix or false
       ) (rawOverlay final previous));
   in
-    projectLib.registerOverlay {
-      inherit overlay;
-      definition =
-        if lib.isAttrs declared
-        then declared.definition or null
-        else null;
-      source = extension.id;
-    };
+    registerExtensionOverlay {inherit declared extension overlay;};
 
   captureExtensionContext = extension: final: prev: {
     ${projectLib.extensionContextsAttr} =
@@ -115,18 +137,12 @@
   }: let
     declared = (extension.overlays or {}).python;
     enclosingContext = enclosingPkgs.${projectLib.extensionContextsAttr}.${extension.id};
-    rawOverlay =
-      if builtins.isFunction declared
-      then declared enclosingContext.final enclosingContext.prev
-      else if lib.isAttrs declared && declared.__wasinixPackageDirectory or false
-      then
-        projectLib.loadPackageOverlay {
-          inherit contextFor;
-          dir = declared.directory;
-          extendPackageFor = extendPythonPackage;
-          expose = declared.expose or [];
-        }
-      else throw "Wasinix extension '${extension.id}' Python lane is not an overlay";
+    rawOverlay = declaredOverlayFor {
+      inherit contextFor declared extension;
+      label = "Python lane";
+      applyFunction = function: function enclosingContext.final enclosingContext.prev;
+      extendPackageFor = extendPythonPackage;
+    };
     overlay = final: previous:
       lib.optionalAttrs (previous.python.stdenv.hostPlatform.isWasix or false)
       (lib.mapAttrs (name: value:
@@ -142,14 +158,7 @@
         else value)
       (rawOverlay final previous));
   in
-    projectLib.registerOverlay {
-      inherit overlay;
-      definition =
-        if lib.isAttrs declared
-        then declared.definition or null
-        else null;
-      source = extension.id;
-    };
+    registerExtensionOverlay {inherit declared extension overlay;};
 
   packageEntry = {
     address,
