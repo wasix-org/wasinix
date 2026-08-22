@@ -70,6 +70,13 @@ let
       version = "0.24.2";
       hash = "sha256-jI7yzcoHS/tNxUqJI4aD1rdEZV3jMn1GZD0J+81Dyf0=";
       owner = "tree-sitter";
+      # setuptools rejects the metadata with "`project.license` must be valid
+      # exactly by one definition": upstream put the license filename where an
+      # SPDX identifier belongs. LICENSE is the MIT text.
+      postPatch = ''
+        substituteInPlace pyproject.toml \
+          --replace-fail 'license = "LICENSE"' 'license = "MIT"'
+      '';
     };
     powershell = {
       version = "0.26.4";
@@ -133,30 +140,31 @@ in {
       spec = grammars.${lang};
     in {
       name = "tree-sitter-${lang}";
-      value = pyfinal.buildPythonPackage {
-        pname = "tree-sitter-${lang}";
-        inherit (spec) version;
-        pyproject = true;
+      value = pyfinal.buildPythonPackage ({
+          pname = "tree-sitter-${lang}";
+          inherit (spec) version;
+          pyproject = true;
 
-        src =
-          if spec ? owner
-          then
-            final.fetchFromGitHub {
-              inherit (spec) owner hash;
-              repo = "tree-sitter-${lang}";
-              tag = "v${spec.version}";
-            }
-          else
-            pyfinal.fetchPypi {
-              pname = "tree_sitter_${lang}";
-              inherit (spec) version hash;
-            };
+          src =
+            if spec ? owner
+            then
+              final.fetchFromGitHub {
+                inherit (spec) owner hash;
+                repo = "tree-sitter-${lang}";
+                tag = "v${spec.version}";
+              }
+            else
+              pyfinal.fetchPypi {
+                pname = "tree_sitter_${lang}";
+                inherit (spec) version hash;
+              };
 
-        build-system = [pyfinal.setuptools];
+          build-system = [pyfinal.setuptools];
 
-        pythonImportsCheck = ["tree_sitter_${lang}"];
+          pythonImportsCheck = ["tree_sitter_${lang}"];
 
-        passthru.updateScript = [(final.lib.getExe updater) lang];
-      };
+          passthru.updateScript = [(final.lib.getExe updater) lang];
+        }
+        // final.lib.optionalAttrs (spec ? postPatch) {inherit (spec) postPatch;});
     }) (builtins.attrNames grammars));
 }
