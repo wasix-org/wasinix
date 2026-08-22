@@ -133,12 +133,13 @@
       programs = {
         alejandra.enable = true; # nix
         ruff-format.enable = true; # python
+        # shell
         shfmt = {
           enable = true;
           indent_size = 2;
         };
         taplo.enable = true; # toml
-        clang-format.enable = true; # c/c++ (.clang-format pins the style)
+        clang-format.enable = true; # c/c++
         # json stays out, as the only json in this repo is machine-generated
         prettier = {
           enable = true;
@@ -147,6 +148,7 @@
         rustfmt.enable = true;
       };
     };
+    treefmtCheck = treefmtEval.config.build.check self;
 
     mergeDisjoint = context: sets: let
       names = lib.concatMap builtins.attrNames sets;
@@ -158,7 +160,7 @@
       lib.throwIf (duplicates != [])
       "${context}: duplicate jobs (${lib.concatStringsSep ", " duplicates})"
       (lib.foldl' (acc: set: acc // set) {} sets);
-    treefmtCheck = treefmtEval.config.build.check self;
+
     # The orchestrator binary. Vanilla nixpkgs Rust: this is the tool that
     # tests the wasix toolchain, so it must not depend on it.
     wasinixUnwrapped = pkgs.rustPlatform.buildRustPackage {
