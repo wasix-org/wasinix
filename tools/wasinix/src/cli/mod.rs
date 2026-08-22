@@ -315,6 +315,17 @@ pub enum CiCommand {
         #[arg(long)]
         github_output: PathBuf,
     },
+    /// Find the one open pull request for a workflow run's exact head
+    PullRequest {
+        #[arg(long)]
+        repository: String,
+        #[arg(long)]
+        head_sha: String,
+        #[arg(long)]
+        head_repository: String,
+        #[arg(long)]
+        github_output: PathBuf,
+    },
     /// Prepare and execute a resolved request in one payload, which is the
     /// command durable runs supervise
     Run {
@@ -1386,6 +1397,33 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             ui::output(matrix);
             Ok(CommandStatus::SUCCESS)
         }
+        CiCommand::PullRequest {
+            repository,
+            head_sha,
+            head_repository,
+            github_output,
+        } => {
+            let head_sha = crate::support::atoms::Rev::parse(&head_sha)?;
+            let client = crate::github::client::Client::new(None);
+            let pull_request = crate::github::actions::open_pull_request(
+                &client,
+                &repository,
+                &head_sha,
+                &head_repository,
+            )?;
+            crate::github::actions::append(
+                &github_output,
+                &[(
+                    crate::github::actions::OUTPUT_PULL_REQUEST,
+                    pull_request.map(|number| number.to_string()).unwrap_or_default(),
+                )],
+            )?;
+            match pull_request {
+                Some(number) => ui::fact("pull request", number),
+                None => ui::note("no matching open pull request"),
+            }
+            Ok(CommandStatus::SUCCESS)
+        }
         CiCommand::Run {
             request,
             run_dir,
@@ -1598,9 +1636,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             out,
         } => {
             let event: serde_json::Value = crate::support::json::read(&event)?;
-            let api = crate::ci::origin::Rest {
-                token: crate::github::client::token(),
-            };
+            let api = crate::github::client::Client::new(None);
             let command = crate::ci::origin::authorize(
                 &event,
                 &api,
@@ -1646,9 +1682,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             // materialization has no plan and no request, and its report
             // could not say which command it was.
             schema::write(&run_dir.join(crate::runs::ORIGIN_FILE), &command)?;
-            let api = crate::ci::origin::Rest {
-                token: crate::github::client::token(),
-            };
+            let api = crate::github::client::Client::new(None);
             // Re-verify against live GitHub state: the comment, its author's
             // permission, and the PR head must still be what was authorized.
             crate::ci::origin::verify(

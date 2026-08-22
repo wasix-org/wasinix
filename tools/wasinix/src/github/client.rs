@@ -7,6 +7,12 @@ use crate::support::error::{Error, Result};
 
 const API: &str = "https://api.github.com";
 
+/// A GitHub reader boundary, so live-state decisions can be tested without
+/// the network.
+pub trait Api {
+    fn get(&self, path: &str) -> Result<Value>;
+}
+
 pub fn token() -> Option<String> {
     crate::support::env::github_token()
 }
@@ -102,28 +108,38 @@ impl Client {
         self.send_retrying("PATCH", path, Some(body))
     }
 
-    /// Every page of a list endpoint, flattened. Callers apply their own
-    /// match rule to the complete list, so "first match" means first across
-    /// all pages for every caller.
+    /// Every page of a list endpoint, flattened.
     pub(in crate::github) fn paginate(&self, path: &str) -> Result<Vec<Value>> {
-        let mut items = Vec::new();
-        for page in 1..=100u32 {
-            let separator = if path.contains('?') { '&' } else { '?' };
-            let value = self.get(&format!("{path}{separator}per_page=100&page={page}"))?;
-            let batch = match value.as_array() {
-                Some(batch) => batch.clone(),
-                None => {
-                    return Err(Error::Failure(format!(
-                        "GitHub {path} page {page} is not a list"
-                    )));
-                }
-            };
-            let done = batch.len() < 100;
-            items.extend(batch);
-            if done {
-                break;
-            }
-        }
-        Ok(items)
+        paginate(self, path)
     }
+}
+
+impl Api for Client {
+    fn get(&self, path: &str) -> Result<Value> {
+        Client::get(self, path)
+    }
+}
+
+pub fn paginate(api: &dyn Api, path: &str) -> Result<Vec<Value>> {
+    let mut items = Vec::new();
+    for page in 1..=100u32 {
+        let separator = if path.contains('?') { '&' } else { '?' };
+        let value = api.get(&format!("{path}{separator}per_page=100&page={page}"))?;
+        let batch = match value.as_array() {
+            Some(batch) => batch.clone(),
+            None => {
+                return Err(Error::Failure(format!(
+                    "GitHub {path} page {page} is not a list"
+                )))
+            }
+        };
+        let done = batch.len() < 100;
+        items.extend(batch);
+        if done {
+            return Ok(items);
+        }
+    }
+    Err(Error::Failure(format!(
+        "GitHub {path} exceeds the 100-page safety limit"
+    )))
 }

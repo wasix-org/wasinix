@@ -492,8 +492,9 @@ mod evalmap {
 
 mod authorization {
     use crate::ci::origin::{
-        Api, Classifier, CommandKind, Origin, authorize, extract_command, validate, verify,
+        Classifier, CommandKind, Origin, authorize, extract_command, validate, verify,
     };
+    use crate::github::client::Api;
     use crate::support::error::{Result, request_error};
     use crate::support::schema;
     use serde_json::{Value, json};
@@ -4660,6 +4661,7 @@ mod corpus {
             "ci nix-config",
             "ci start",
             "ci update-matrix",
+            "ci pull-request",
             "ci run",
             "ci remote",
             "ci observe",
@@ -4769,6 +4771,7 @@ mod corpus {
             "ci run --request r.json --run-dir d",
             "ci start --github-output outputs -- wasinix ci run --request r.json --run-dir d",
             "ci update-matrix --targets wasmer --github-output outputs",
+            "ci pull-request --repository base/repo --head-sha aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --head-repository fork/repo --github-output outputs",
             "ci prepare --request r.json --run-dir d",
             "ci exec --run-dir d --task case.eval",
             "ci command --origin o.json --run-dir d --push-cache",
@@ -5379,6 +5382,12 @@ mod corpus {
         assert_eq!(
             field(field(step(job(&report, "report"), "download"), "with"), "name").as_str(),
             Some(crate::github::actions::ARTIFACT_CI_RUN)
+        );
+        assert_eq!(
+            field(step(job(&report, "report"), "context"), "run").as_str(),
+            Some(
+                "nix run .#wasinix -- ci pull-request --repository \"$GITHUB_REPOSITORY\" --head-sha \"$HEAD_SHA\" --head-repository \"$HEAD_REPOSITORY\" --github-output \"$GITHUB_OUTPUT\""
+            )
         );
 
         let build_job = job(&build, "build");
