@@ -4,13 +4,14 @@
   pkgs,
 }:
 exposePackage (
-  packages.sameProfile.buildPythonPackage rec {
+  packages.sameProfile.buildPythonPackage (finalAttrs: {
     pname = "lfx";
     version = "1.11.4";
     format = "wheel";
 
     src = packages.sameProfile.fetchPypi {
-      inherit pname version format;
+      inherit (finalAttrs) pname version;
+      format = "wheel";
       dist = "py3";
       python = "py3";
       hash = "sha256-tMUCuNDANZnZ+lkzrBsYbpRQ5hxLKMlCQOpFmWRWBdk=";
@@ -77,5 +78,5 @@ exposePackage (
     passthru.wasinix.update.notes = [
       {message = "lfx: recheck markitdown once pypdfium2 supports WASIX source builds.";}
     ];
-  }
+  })
 )

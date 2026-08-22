@@ -15,9 +15,9 @@ exposeExtendedPackage {
       case "$_path" in *-preshed-*/lib/python*/site-packages) _site="$_path"; break ;; esac
     done
     [ -n "$_site" ] || exit 1
-    ${pkgs.buildPackages.coreutils}/bin/cp -r "$_site/preshed" "$NIX_BUILD_TOP/preshed"
-    ${pkgs.buildPackages.coreutils}/bin/chmod -R u+w "$NIX_BUILD_TOP/preshed"
-    ${pkgs.buildPackages.coreutils}/bin/cp -r "$_source_tests/." "$NIX_BUILD_TOP/preshed/tests/"
+    ${pkgs.lib.getExe' pkgs.buildPackages.coreutils "cp"} -r "$_site/preshed" "$NIX_BUILD_TOP/preshed"
+    ${pkgs.lib.getExe' pkgs.buildPackages.coreutils "chmod"} -R u+w "$NIX_BUILD_TOP/preshed"
+    ${pkgs.lib.getExe' pkgs.buildPackages.coreutils "cp"} -r "$_source_tests/." "$NIX_BUILD_TOP/preshed/tests/"
     export PYTHONPATH="$NIX_BUILD_TOP:$PYTHONPATH"
     pytestFlagsArray=("$NIX_BUILD_TOP/preshed/tests")
     cd "$NIX_BUILD_TOP"

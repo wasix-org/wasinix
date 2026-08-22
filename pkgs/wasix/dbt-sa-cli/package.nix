@@ -7,14 +7,14 @@
   packages,
 }:
 exposePackage (
-  packages.sameProfile.rustPlatform.buildRustPackage rec {
+  packages.sameProfile.rustPlatform.buildRustPackage (finalAttrs: {
     pname = "dbt-sa-cli";
     version = "2.0.0-alpha.5";
 
     src = packages.sameProfile.fetchFromGitHub {
       owner = "dbt-labs";
       repo = "dbt-core";
-      tag = "v${version}";
+      tag = "v${finalAttrs.version}";
       hash = "sha256-ewetmvf31eVLFw5v7N/nGYxkO5TrA5eRxt2vi8puVAM=";
     };
 
@@ -48,7 +48,7 @@ exposePackage (
     # dbt-state's build script generates prost bindings, so protoc runs on the
     # build host; prost-build looks it up by env before PATH.
     nativeBuildInputs = [packages.sameProfile.buildPackages.protobuf];
-    env.PROTOC = "${packages.sameProfile.buildPackages.protobuf}/bin/protoc";
+    env.PROTOC = packages.sameProfile.lib.getExe' packages.sameProfile.buildPackages.protobuf "protoc";
 
     doCheck = false;
 
@@ -57,9 +57,12 @@ exposePackage (
     passthru.wasix.preferredProfile = "eh";
 
     meta = {
-      description = "dbt Fusion engine CLI, built to WASIX";
+      description = "dbt Fusion engine CLI";
+      longDescription = "The dbt Fusion command-line engine for parsing, compiling, and running dbt projects.";
       homepage = "https://github.com/dbt-labs/dbt-core";
+      changelog = "https://github.com/dbt-labs/dbt-core/releases/tag/v${finalAttrs.version}";
+      license = packages.sameProfile.lib.licenses.asl20;
       mainProgram = "dbt-sa-cli";
     };
-  }
+  })
 )

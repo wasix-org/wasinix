@@ -6,7 +6,7 @@
   pkgs,
 }:
 exposePackage (
-  packages.sameProfile.buildPythonPackage rec {
+  packages.sameProfile.buildPythonPackage (finalAttrs: {
     pname = "cachebox";
     version = "6.2.1";
     pyproject = true;
@@ -14,12 +14,12 @@ exposePackage (
     src = pkgs.fetchFromGitHub {
       owner = "awolverp";
       repo = "cachebox";
-      tag = "v${version}";
+      tag = "v${finalAttrs.version}";
       hash = "sha256-kUrBegGA5z4WvaCoJ83jGxuHUWB8ZP1Z9SKi4rK0uoc=";
     };
 
     cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
-      inherit src;
+      inherit (finalAttrs) src;
       hash = "sha256-JNo0Qagoh1PZNh18xZzF0NWg1l7l/RDu/Bw10jMdFaw=";
     };
 
@@ -29,5 +29,5 @@ exposePackage (
       pkgs.pkgsBuildHost.rustPlatform.cargoSetupHook
       pkgs.rustPlatform.maturinBuildHook
     ];
-  }
+  })
 )

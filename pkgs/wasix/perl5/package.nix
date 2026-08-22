@@ -18,7 +18,7 @@ exposePackage (
         # scripts and build tooling reach bin/perl by that name
         posixAlias = true;
       } (extendPackage (package.override {
-          # ${coreutils}/bin/pwd is a runtime path baked into Cwd, and coreutils
+          # The coreutils pwd executable is a runtime path baked into Cwd, and coreutils
           # builds at the off profile only.
           coreutils = packages.preferred.coreutils;
           # the module set is built against `self`, so without this every perl module
@@ -33,7 +33,7 @@ exposePackage (
             ./patches/cross-perl-stubs.patch
           ];
           postPatch = ''
-            ${packages.sameProfile.buildPackages.perl}/bin/perl -Icnf/stub -MList::Util=pairs,reduce -e '
+            ${packages.sameProfile.lib.getExe packages.sameProfile.buildPackages.perl} -Icnf/stub -MList::Util=pairs,reduce -e '
               my ($pair) = pairs(key => "value");
               my $reduced = reduce { (defined $a ? $a : "x") . $b } undef, "y";
               die "List::Util stub mismatch\n"

@@ -20,7 +20,7 @@ exposePackage (
     postFixup = "";
     postPatch = ''
       patchShebangs Configure
-      substituteInPlace config --replace-quiet '/usr/bin/env' '${packages.sameProfile.buildPackages.coreutils}/bin/env'
+      substituteInPlace config --replace-quiet '/usr/bin/env' '${packages.sameProfile.lib.getExe' packages.sameProfile.buildPackages.coreutils "env"}'
     '';
     configurePhase = ''
       runHook preConfigure

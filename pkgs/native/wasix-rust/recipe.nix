@@ -286,8 +286,8 @@ in
         "--build=${buildTriple}"
         "--host=${hostTriple}"
         "--target=${targetTriples}"
-        "--set=build.rustc=${bootstrap}/bin/rustc"
-        "--set=build.cargo=${bootstrap}/bin/cargo"
+        "--set=build.rustc=${lib.getExe' bootstrap "rustc"}"
+        "--set=build.cargo=${lib.getExe' bootstrap "cargo"}"
         "--enable-extended"
         "--tools=cargo"
         # The WASIX target selects the self-contained linker flavor, including
@@ -315,18 +315,18 @@ in
         "--disable-docs"
       ]
       ++ optionals (!hostedOnWasix) [
-        "--set=target.${hostTriple}.cc=${stdenv.cc}/bin/cc"
-        "--set=target.${hostTriple}.cxx=${stdenv.cc}/bin/c++"
-        "--set=target.${hostTriple}.linker=${stdenv.cc}/bin/cc"
+        "--set=target.${hostTriple}.cc=${lib.getExe' stdenv.cc "cc"}"
+        "--set=target.${hostTriple}.cxx=${lib.getExe' stdenv.cc "c++"}"
+        "--set=target.${hostTriple}.linker=${lib.getExe' stdenv.cc "cc"}"
       ]
       ++ optionals hostedOnWasix [
         # This setting is global: native bootstrap needs X86 while the hosted
         # compiler needs WebAssembly. No other backend is used.
         "--set=llvm.targets=X86;WebAssembly"
         "--set=llvm.experimental-targets="
-        "--set=target.${hostTriple}.cc=${wasiSdk}/bin/${hostTriple}-clang"
-        "--set=target.${hostTriple}.cxx=${wasiSdk}/bin/${hostTriple}-clang++"
-        "--set=target.${hostTriple}.linker=${wasiSdk}/bin/${hostTriple}-clang++"
+        "--set=target.${hostTriple}.cc=${lib.getExe' wasiSdk "${hostTriple}-clang"}"
+        "--set=target.${hostTriple}.cxx=${lib.getExe' wasiSdk "${hostTriple}-clang++"}"
+        "--set=target.${hostTriple}.linker=${lib.getExe' wasiSdk "${hostTriple}-clang++"}"
         "--set=target.${hostTriple}.wasi-root=${wasixSysrootEh}"
         "--set=target.${hostTriple}.optimized-compiler-builtins=false"
       ]
@@ -397,7 +397,7 @@ in
       updateScript = {
         name = "wasix-rust";
         attrPath = "packages.native.wasix-rust";
-        command = ["${updateWrapper}/bin/wasix-rust-update"] ++ nix-update-script {extraArgs = ["--flake"];};
+        command = [(lib.getExe updateWrapper)] ++ nix-update-script {extraArgs = ["--flake"];};
         accepts = ["release" "revision"];
         source = {
           kind = "github";
@@ -419,7 +419,9 @@ in
         if hostedOnWasix
         then "WASIX-hosted Rust toolchain (rustc + cargo + WASIX std), built from source"
         else "WASIX Rust toolchain (rustc + cargo + wasix std), built from source";
+      longDescription = "A Rust compiler and Cargo toolchain with WASIX standard libraries, built from the WASIX Rust fork.";
       homepage = "https://github.com/wasix-org/rust";
+      changelog = "https://github.com/wasix-org/rust/tree/v${version}";
       license = with licenses; [mit asl20];
       platforms = ["x86_64-linux"];
     };

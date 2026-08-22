@@ -20,10 +20,10 @@ use crate::support::ui;
 /// deliberate choice: wasmer.io is production, wasmer.fun staging,
 /// wasmer.wtf dev.
 pub fn registry(flag: Option<&str>) -> String {
-    flag.map(str::to_string)
-        .unwrap_or_else(|| crate::support::env::wasmer_registry().expect("a set registry is unicode"))
+    flag.map(str::to_string).unwrap_or_else(|| {
+        crate::support::env::wasmer_registry().expect("a set registry is unicode")
+    })
 }
-
 
 /// The built index, or a fresh one when the caller named none.
 fn registry_path(given: Option<PathBuf>) -> Result<PathBuf> {
@@ -34,9 +34,12 @@ fn registry_path(given: Option<PathBuf>) -> Result<PathBuf> {
         "build",
         project_installable(".", "artifacts.registry.python314"),
     )
-        .arg("--no-link")
-        .out_paths("building the index")?;
-    Ok(paths.into_iter().next_back().expect("out_paths is non-empty"))
+    .arg("--no-link")
+    .out_paths("building the index")?;
+    Ok(paths
+        .into_iter()
+        .next_back()
+        .expect("out_paths is non-empty"))
 }
 
 pub struct Preview {
@@ -67,6 +70,11 @@ pub struct Index {
     pub effects: crate::support::effects::Effects,
     /// The checkout, which holds the app config and the publisher.
     pub repo: PathBuf,
+    /// Upload the pages even when no wheel is new: they answer to the index
+    /// generator rather than to the wheel set.
+    pub refresh_listings: bool,
+    /// Withdraw the pages of projects that no longer belong in simple/.
+    pub withdraw_stale: bool,
 }
 
 /// The rclone config section the credentials come as. A volume without an S3
@@ -166,6 +174,12 @@ pub fn publish_index(request: Index) -> Result<CommandStatus> {
         .args(["--rev", &request.rev]);
     if request.effects.is_dry_run() {
         publish.arg("--dry-run");
+    }
+    if request.refresh_listings {
+        publish.arg("--refresh-listings");
+    }
+    if request.withdraw_stale {
+        publish.arg("--withdraw-stale");
     }
     publish
         .env("RCLONE_CONFIG", &config)
@@ -497,12 +511,12 @@ fn dists(flake: &Flake<'_>) -> Result<BTreeMap<String, Value>> {
     // consumers outside nix.
     let raw = eval(flake, "artifacts.registry.python314.distsJson", None)?;
     let parsed: Value = match raw.as_str() {
-        Some(text) => serde_json::from_str(text).map_err(|source| {
-            crate::support::error::Error::Json {
+        Some(text) => {
+            serde_json::from_str(text).map_err(|source| crate::support::error::Error::Json {
                 path: "<artifacts.registry.python314.distsJson>".into(),
                 source,
-            }
-        })?,
+            })?
+        }
         None => raw,
     };
     Ok(parsed

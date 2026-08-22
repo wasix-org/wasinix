@@ -4,7 +4,7 @@
   pkgs,
 }:
 exposePackage (
-  packages.sameProfile.buildPythonPackage rec {
+  packages.sameProfile.buildPythonPackage (finalAttrs: {
     pname = "langflow-base";
     version = "0.11.4";
     format = "wheel";
@@ -14,7 +14,8 @@ exposePackage (
     # wheel's cross build.
     src = packages.sameProfile.fetchPypi {
       pname = "langflow_base";
-      inherit version format;
+      inherit (finalAttrs) version;
+      format = "wheel";
       dist = "py3";
       python = "py3";
       hash = "sha256-KCyaImTyVPz4vdrQAiLf8PtdK/XxoBBleN4o83dQVME=";
@@ -26,11 +27,11 @@ exposePackage (
       wheelFile=$(find dist -name '*.whl' -print -quit)
       unpacked=$TMPDIR/langflow-a2a-patch
       mkdir "$unpacked"
-      ${packages.sameProfile.python.pythonOnBuildForHost.pkgs.wheel}/bin/wheel unpack --dest "$unpacked" "$wheelFile"
-      packageRoot="$unpacked/langflow_base-${version}"
+      ${packages.sameProfile.lib.getExe packages.sameProfile.python.pythonOnBuildForHost.pkgs.wheel} unpack --dest "$unpacked" "$wheelFile"
+      packageRoot="$unpacked/langflow_base-${finalAttrs.version}"
       patch -d "$packageRoot" -p1 < ${./langflow-base-optional-routes.patch}
       mv "$wheelFile" "$TMPDIR/langflow-base-original.whl"
-      ${packages.sameProfile.python.pythonOnBuildForHost.pkgs.wheel}/bin/wheel pack --dest dist "$packageRoot"
+      ${packages.sameProfile.lib.getExe packages.sameProfile.python.pythonOnBuildForHost.pkgs.wheel} pack --dest dist "$packageRoot"
     '';
 
     pythonRelaxDeps = true;
@@ -142,5 +143,5 @@ exposePackage (
       {message = "langflow-base: recheck the removed provider integrations on bump.";}
       {message = "langflow-base: recheck the optional A2A, knowledge-base, and memory routes on bump.";}
     ];
-  }
+  })
 )

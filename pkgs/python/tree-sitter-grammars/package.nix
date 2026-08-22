@@ -159,7 +159,7 @@ in
 
       pythonImportsCheck = ["tree_sitter_${lang}"];
 
-      passthru.updateScript = ["${updater}/bin/update-tree-sitter-grammars" lang];
+      passthru.updateScript = [(pkgs.lib.getExe updater) lang];
     }
     // pkgs.lib.optionalAttrs (spec ? postPatch) {inherit (spec) postPatch;});
   }) (builtins.attrNames grammars))

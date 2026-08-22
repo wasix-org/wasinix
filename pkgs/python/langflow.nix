@@ -4,7 +4,7 @@
   pkgs,
 }:
 exposePackage (
-  packages.sameProfile.buildPythonPackage rec {
+  packages.sameProfile.buildPythonPackage (finalAttrs: {
     pname = "langflow";
     version = "1.11.4";
     pyproject = true;
@@ -12,7 +12,7 @@ exposePackage (
     src = pkgs.fetchFromGitHub {
       owner = "langflow-ai";
       repo = "langflow";
-      tag = "v${version}";
+      tag = "v${finalAttrs.version}";
       hash = "sha256-pC1+vUNTXdeYbsJXNZarntYNLvBr4iI7bLwnfe6D9Qw=";
     };
 
@@ -54,5 +54,5 @@ exposePackage (
       {message = "langflow: coordinate langflow, langflow-base, and lfx versions when updating.";}
       {message = "langflow: recheck the removed lfx provider bundles on bump.";}
     ];
-  }
+  })
 )

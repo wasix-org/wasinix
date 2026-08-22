@@ -8,8 +8,8 @@
   pkgs,
   lib,
 }: let
-  cc = "${pkgs.stdenv.cc}/bin/${pkgs.stdenv.cc.targetPrefix}cc";
-  cxx = "${pkgs.stdenv.cc}/bin/${pkgs.stdenv.cc.targetPrefix}c++";
+  cc = lib.getExe' pkgs.stdenv.cc "${pkgs.stdenv.cc.targetPrefix}cc";
+  cxx = lib.getExe' pkgs.stdenv.cc "${pkgs.stdenv.cc.targetPrefix}c++";
 in
   exposeExtendedPackage {
     # tokio's rt-multi-thread + signal are unsupported on wasm (compile_error!); sync

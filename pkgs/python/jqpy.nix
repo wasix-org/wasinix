@@ -10,18 +10,18 @@
   pkgs,
 }:
 exposePackage (
-  packages.sameProfile.buildPythonPackage rec {
+  packages.sameProfile.buildPythonPackage (finalAttrs: {
     pname = "jqpy";
     version = "1.0.0";
     pyproject = true;
 
     src = packages.sameProfile.fetchPypi {
-      inherit pname version;
+      inherit (finalAttrs) pname version;
       hash = "sha256-Cnhpuu3AgeEJnzhyeqfnbZJk+XLeZcdmGztnyCHQMh0=";
     };
 
     build-system = [packages.sameProfile.flit-core];
 
     passthru.updateScript = pkgs.buildPackages.nix-update-script {extraArgs = ["--flake"];};
-  }
+  })
 )

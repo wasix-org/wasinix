@@ -16,7 +16,11 @@
       '';
       meta = {
         description = "ICU ${v} locale data archive, mounted at the compiled-in default /share/icu/${icu.version}";
+        longDescription = "The locale and internationalization data archive consumed by ICU ${v}.";
+        homepage = "https://icu.unicode.org/";
+        changelog = "https://github.com/unicode-org/icu/tree/release-${lib.replaceStrings ["."] ["-"] icu.version}";
         license = lib.licenses.icu;
+        platforms = lib.platforms.all;
       };
       passthru.wasinix.shipped = true;
       # No auto-retention: each icu major is already a first-class attr

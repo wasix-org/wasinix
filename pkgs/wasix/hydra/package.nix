@@ -64,7 +64,7 @@ exposePackage (
         # cmmg.pl writes pure perl sources, but MakeMaker's $(PERL) is the cross
         # build's miniperl, which cannot load the XS List::Util the generator wants.
         ClassMethodMaker = pprev.ClassMethodMaker.overrideAttrs (o: {
-          makeFlags = (o.makeFlags or []) ++ ["PERL=${packages.sameProfile.buildPackages.perl}/bin/perl"];
+          makeFlags = (o.makeFlags or []) ++ ["PERL=${packages.sameProfile.lib.getExe packages.sameProfile.buildPackages.perl}"];
         });
         # Makefile.PL loads Text::CSV to read its version and Text::CSV_PP reaches
         # for the XS module B. Class::MethodMaker above ships XS and cannot take
