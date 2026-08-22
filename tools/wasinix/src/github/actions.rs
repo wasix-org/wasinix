@@ -11,6 +11,7 @@ static REPOSITORY: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,38}/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$").unwrap()
 });
 
+#[cfg(test)]
 pub const ARTIFACT_CI_RUN: &str = "ci-run";
 pub const OUTPUT_BIN: &str = "bin";
 pub const OUTPUT_BASE_REF: &str = "baseRef";

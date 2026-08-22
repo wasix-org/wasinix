@@ -26,6 +26,7 @@ struct CommandPolicy {
 
 struct LeafPolicy {
     path: &'static [&'static str],
+    #[cfg(test)]
     shared_args: &'static [&'static str],
     terminal_args: &'static [&'static str],
     comment_args: &'static [&'static str],
@@ -143,6 +144,7 @@ const VERSION_COMMANDS: &[CommandPolicy] = &[
 
 const ROOT_TERMINAL_ARGS: &[&str] = &["verbose", "quiet", "color"];
 
+#[cfg(test)]
 const MUTATION_EFFECTS: &[&str] = &[
     "commit",
     "pr",
@@ -156,6 +158,7 @@ const MUTATION_EFFECTS: &[&str] = &[
 const LEAVES: &[LeafPolicy] = &[
     LeafPolicy {
         path: &["build"],
+        #[cfg(test)]
         shared_args: &[
             "selectors",
             "enabled_tags",
@@ -177,6 +180,7 @@ const LEAVES: &[LeafPolicy] = &[
     },
     LeafPolicy {
         path: &["spot"],
+        #[cfg(test)]
         shared_args: &[
             "selectors",
             "enabled_tags",
@@ -201,12 +205,14 @@ const LEAVES: &[LeafPolicy] = &[
     },
     LeafPolicy {
         path: &["diff"],
+        #[cfg(test)]
         shared_args: &["content_diff", "blocked", "plan", "words"],
         terminal_args: &["json", "run_dir", "junit_out", "push_cache", "inputs_only"],
         comment_args: &[],
     },
     LeafPolicy {
         path: &["bisect"],
+        #[cfg(test)]
         shared_args: &[
             "target",
             "good",
@@ -221,6 +227,7 @@ const LEAVES: &[LeafPolicy] = &[
     },
     LeafPolicy {
         path: &["update"],
+        #[cfg(test)]
         shared_args: &["targets", "all"],
         terminal_args: &[
             "expect",
@@ -236,6 +243,7 @@ const LEAVES: &[LeafPolicy] = &[
     },
     LeafPolicy {
         path: &["versions", "bump"],
+        #[cfg(test)]
         shared_args: &["specs", "all_versions"],
         terminal_args: &[
             "changed_from",
@@ -251,18 +259,21 @@ const LEAVES: &[LeafPolicy] = &[
     },
     LeafPolicy {
         path: &["regenerate"],
+        #[cfg(test)]
         shared_args: &[],
         terminal_args: &[],
         comment_args: &[],
     },
     LeafPolicy {
         path: &["fmt"],
+        #[cfg(test)]
         shared_args: &[],
         terminal_args: &[],
         comment_args: &[],
     },
     LeafPolicy {
         path: &["help"],
+        #[cfg(test)]
         shared_args: &[],
         terminal_args: &[],
         comment_args: &[],

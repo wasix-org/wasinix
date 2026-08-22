@@ -464,6 +464,7 @@ pub fn checked_status(cmd: &mut Command, context: &str) -> Result<()> {
     }
 }
 
+#[cfg(test)]
 pub fn checked_text(cmd: &mut Command, context: &str) -> Result<String> {
     let bytes = checked_output(cmd, context)?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
