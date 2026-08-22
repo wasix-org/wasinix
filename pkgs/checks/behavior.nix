@@ -2,6 +2,33 @@
   lib,
   projectLib,
 }: {
+  packageBehavior = {
+    artifacts,
+    commands,
+    entry,
+    harnesses,
+    packageForEntry,
+    packages,
+    pkgs,
+    runners,
+    ...
+  }:
+    lib.optionalAttrs (
+      entry.kind
+      == "package"
+      && entry.policy.checks.behavior or false
+      && entry.definition != null
+      && entry.definition.directory != null
+      && builtins.pathExists (entry.definition.directory + "/tests")
+    ) {
+      tests = projectLib.loadTestDirectory {
+        dir = entry.definition.directory + "/tests";
+        context = {
+          inherit artifacts commands entry harnesses packageForEntry packages pkgs runners;
+        };
+      };
+    };
+
   packagedBehavior = {
     artifacts,
     commands,

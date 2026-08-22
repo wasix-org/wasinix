@@ -47,7 +47,6 @@
     };
     pkgs = project.internals.packageSets.nativeRaw;
     inherit (pkgs) lib;
-    wasmerRuntime = project.packages.native.wasmer;
     wasixLib = import ./pkgs/lib {inherit lib;};
 
     treefmtEval = treefmt-nix.lib.evalModule pkgs {
@@ -85,55 +84,8 @@
       "${context}: duplicate jobs (${lib.concatStringsSep ", " duplicates})"
       (lib.foldl' (acc: set: acc // set) {} sets);
 
-    # The orchestrator binary. Vanilla nixpkgs Rust: this is the tool that
-    # tests the wasix toolchain, so it must not depend on it.
-    wasinixUnwrapped = pkgs.rustPlatform.buildRustPackage {
-      pname = "wasinix";
-      version = "0.1.0";
-      src = ./tools/wasinix;
-      cargoLock.lockFile = ./tools/wasinix/Cargo.lock;
-      doCheck = true;
-      nativeCheckInputs = with pkgs; [gitMinimal nixVersions.latest];
-      meta.mainProgram = "wasinix";
-    };
-    # Every command is runnable from the same installed closure, so a remote
-    # host reached with `nix run .#wasinix` needs no ambient tools.
-    wasinixLauncher = pkgs.writeShellApplication {
-      name = "wasinix";
-      inheritPath = false;
-      runtimeInputs = with pkgs; [
-        awscli2
-        bash
-        coreutils
-        git
-        nix-eval-jobs
-        nixVersions.latest
-        openssh
-        python3
-        rclone
-        wasmerRuntime
-      ];
-      # Update scripts re-enter `wasinix`, so the launcher's own bin dir joins
-      # the PATH it hands them.
-      text = ''
-        PATH="''${0%/*}:$PATH" exec ${lib.getExe wasinixUnwrapped} "$@"
-      '';
-    };
-    wasinix = pkgs.symlinkJoin {
-      name = "wasinix";
-      paths = [wasinixLauncher];
-      nativeBuildInputs = [pkgs.installShellFiles];
-      postBuild = ''
-        installShellCompletion --cmd wasinix \
-          --bash <(${lib.getExe wasinixUnwrapped} completions bash) \
-          --fish <(${lib.getExe wasinixUnwrapped} completions fish) \
-          --zsh <(${lib.getExe wasinixUnwrapped} completions zsh)
-      '';
-      meta.mainProgram = "wasinix";
-    };
-    # One alias per top-level command; the interface check keeps this list and
-    # the CLI from drifting apart.
-    commandAliases = ["build" "spot" "diff" "run" "remote" "ci"];
+    wasinix = project.packages.native.wasinix;
+    commandAliases = wasinix.commandAliases;
     commands =
       {
         default = wasinix;
@@ -148,206 +100,8 @@
             text = "exec wasinix ${name} \"$@\"";
           }
       );
-    wasinixInterfaceCheck =
-      pkgs.runCommand "wasinix-interface-check" {
-        nativeBuildInputs = builtins.attrValues commands;
-      } ''
-        wasinix --help >/dev/null
-        for command in ${lib.escapeShellArgs commandAliases}; do
-          "$command" --help >/dev/null
-        done
-        for shell in bash fish zsh; do
-          wasinix completions "$shell" >/dev/null
-        done
-        touch "$out"
-      '';
-    sourceShapeCheck =
-      pkgs.runCommand "wasinix-source-shape-check" {
-        nativeBuildInputs = [pkgs.ripgrep];
-      } ''
-        if rg -n \
-          'passthru\.wasix\.(shipped|ciProfiles|ciTags|emulatedCheck|installCheck|interpreterSpecific|publication|retention|smokeTest|testExpectation|updateNotes|postUpdateHook)|passthru\.wasmer\.(aliases|smokeArgs)|\bwasix\.(shipped|interpreterSpecific|retention|updateNotes|postUpdateHook)|helpers\.libTweaks|\blibTweaks\s*=' \
-          ${self}/pkgs; then
-          echo "A removed Wasinix source shape is still in use" >&2
-          exit 1
-        fi
-        touch "$out"
-      '';
-    # End to end for `wasinix cargo publish`: the real wasm server under
-    # wasmer, a fabricated one-crate mint, then dry-run inertness, publish,
-    # checksum idempotence, the conflict remedy, and a cargo consume over
-    # sparse+loopback.
-    wasinixCargoPublishCheck =
-      pkgs.runCommandCC "wasinix-cargo-publish-check" {
-        nativeBuildInputs = [
-          wasinixUnwrapped
-          wasmerRuntime
-          pkgs.python3
-          pkgs.cargo
-          pkgs.rustc
-          pkgs.curl
-          pkgs.gnutar
-          pkgs.gzip
-          pkgs.writableTmpDirAsHomeHook
-        ];
-        publisher = ./pkgs/cargo-registry/publish-crate.py;
-        server = project.packages.preferred.cargo-registry;
-      } ''
-        set -u
-        port=8733
-        base="http://127.0.0.1:$port"
-        token=wasix_test
-        export WASMER_DIR="$PWD/.wasmer"
-
-        # A one-crate mint in the manifest shape the real mint emits; $2
-        # varies the payload so a second mint conflicts by checksum.
-        make_mint() {
-          mkdir -p "$1/work/probe-0.1.0+wasix.1/src" "$1/crates"
-          cat > "$1/work/probe-0.1.0+wasix.1/Cargo.toml" <<'EOF'
-        [package]
-        name = "probe"
-        version = "0.1.0+wasix.1"
-        edition = "2021"
-        EOF
-          printf 'pub fn ok() -> u32 { %s }\n' "$2" > "$1/work/probe-0.1.0+wasix.1/src/lib.rs"
-          tar czf "$1/crates/probe-0.1.0+wasix.1.crate" -C "$1/work" "probe-0.1.0+wasix.1"
-          rm -r "$1/work"
-          cp "$publisher" "$1/publish-crate.py"
-          cat > "$1/manifest.json" <<'EOF'
-        {"crates":[{"crate":"probe","wasixVersion":"0.1.0+wasix.1","crateFile":"probe-0.1.0+wasix.1.crate","upstream":"0.1.0","rel":1}],"shadowLimits":[],"excluded":[],"unpinned":[],"stray":[]}
-        EOF
-        }
-        make_mint mint1 42
-        make_mint mint2 43
-
-        mkdir -p data
-        wasmer run "$server/bin/wasix-cargo-registry.wasm"           --net --enable-threads           --volume "$PWD/data:/data"           --env "REGISTRY_LISTEN_ADDR=0.0.0.0:$port"           --env "REGISTRY_BASE_URL=$base"           --env "REGISTRY_AUTH_TOKEN_HASHES=$(printf %s "$token" | sha256sum | cut -d' ' -f1)"           --env "REGISTRY_STORAGE_PATH=/data" &
-        server_pid=$!
-        trap 'kill $server_pid 2>/dev/null || true' EXIT
-        for _ in $(seq 1 150); do
-          kill -0 $server_pid 2>/dev/null || { echo "server exited early" >&2; exit 1; }
-          curl -fsS "$base/config.json" >/dev/null 2>&1 && break
-          sleep 0.2
-        done
-        curl -fsS "$base/config.json" >/dev/null
-
-        # A dry run needs no token and writes nothing.
-        wasinix cargo publish --mint mint1 --registry "$base" --dry-run
-        if curl -fsS "$base/pr/ob/probe" 2>/dev/null | grep -q '"vers"'; then
-          echo "dry run published" >&2; exit 1
-        fi
-
-        WASIX_CARGO_TOKEN=$token wasinix cargo publish --mint mint1 --registry "$base"
-        curl -fsS "$base/pr/ob/probe" | grep -q '"vers":"0.1.0+wasix.1"'
-
-        # Idempotence: the second run skips by checksum and needs no token.
-        wasinix cargo publish --mint mint1 --registry "$base" --json > again.json
-        python3 - <<'PY'
-        import json
-        report = json.load(open("again.json"))
-        [outcome] = report["outcomes"]
-        assert outcome["action"] == "skip", outcome
-        assert not outcome["published"], outcome
-        PY
-
-        # Same version, different bytes: a conflict naming the rel-bump
-        # remedy, and no republish, even under --dry-run.
-        for extra in "" "--dry-run"; do
-          if WASIX_CARGO_TOKEN=$token wasinix cargo publish --mint mint2               --registry "$base" $extra > conflict.txt; then
-            echo "conflicting publish succeeded" >&2; exit 1
-          fi
-          grep -q 'versions bump artifacts.registry.cargo-registry.crates.probe@0.1.0' conflict.txt
-        done
-
-        # The published crate resolves and compiles through the sparse index.
-        mkdir -p app/src app/.cargo
-        cat > app/Cargo.toml <<'EOF'
-        [package]
-        name = "consume"
-        version = "0.0.0"
-        edition = "2021"
-        [dependencies]
-        probe = "0.1.0"
-        EOF
-        cat > app/.cargo/config.toml <<EOF
-        [source.crates-io]
-        replace-with = "wasix"
-        [source.wasix]
-        registry = "sparse+$base/"
-        EOF
-        echo 'fn main() { assert_eq!(probe::ok(), 42); }' > app/src/main.rs
-        ( cd app && CARGO_HOME="$PWD/../cargo-home" cargo run --quiet )
-        touch "$out"
-      '';
-    # `wasinix wasmer serve` from prebuilt webcs (no nix in the sandbox):
-    # the merged tree runs a shipped command fully offline through the
-    # WASMER_FLAGS the --exec contract sets.
-    wasinixWasmerServeCheck =
-      pkgs.runCommand "wasinix-wasmer-serve-check" {
-        nativeBuildInputs = [wasinixUnwrapped wasmerRuntime pkgs.writableTmpDirAsHomeHook];
-        bashWebc = project.artifacts.webc.bash;
-        bashDeps = project.artifacts.pkg.bash.depTree;
-      } ''
-        export WASMER_DIR="$PWD/.wasmer"
-        wasinix wasmer serve --webc "$bashWebc" --webc "$bashDeps" --out tree -- sh -c '
-          set -eu
-          file=$(ls tree/wasmer/bash)
-          ref="wasmer/bash@''${file%.webc}"
-          # shellcheck disable=SC2086
-          out=$(wasmer run $WASMER_FLAGS "$ref" -- -c "echo served-offline")
-          [ "$out" = served-offline ]
-        '
-        touch "$out"
-      '';
-    # The meta serve fan-out: all three registries live at once, probed
-    # through one --exec, torn down by one exit.
-    wasinixServeAllCheck =
-      pkgs.runCommand "wasinix-serve-all-check" {
-        nativeBuildInputs = [
-          wasinixUnwrapped
-          wasmerRuntime
-          pkgs.python3
-          pkgs.curl
-          pkgs.gnutar
-          pkgs.gzip
-          pkgs.writableTmpDirAsHomeHook
-        ];
-        publisher = ./pkgs/cargo-registry/publish-crate.py;
-        server = project.packages.preferred.cargo-registry;
-        bashWebc = project.artifacts.webc.bash;
-      } ''
-        export WASMER_DIR="$PWD/.wasmer"
-        mkdir -p mint/work/probe-0.1.0+wasix.1/src mint/crates index/simple
-        cat > mint/work/probe-0.1.0+wasix.1/Cargo.toml <<'EOF'
-        [package]
-        name = "probe"
-        version = "0.1.0+wasix.1"
-        edition = "2021"
-        EOF
-        echo 'pub fn ok() {}' > mint/work/probe-0.1.0+wasix.1/src/lib.rs
-        tar czf mint/crates/probe-0.1.0+wasix.1.crate -C mint/work probe-0.1.0+wasix.1
-        rm -r mint/work
-        cp "$publisher" mint/publish-crate.py
-        cat > mint/manifest.json <<'EOF'
-        {"crates":[{"crate":"probe","wasixVersion":"0.1.0+wasix.1","crateFile":"probe-0.1.0+wasix.1.crate","upstream":"0.1.0","rel":1}],"shadowLimits":[],"excluded":[],"unpinned":[],"stray":[]}
-        EOF
-        echo '<html></html>' > index/simple/index.html
-        wasinix serve --mint mint --index index --server "$server" --webc "$bashWebc" -- sh -c '
-          set -eu
-          curl -fsS http://127.0.0.1:8319/config.json >/dev/null
-          curl -fsS http://127.0.0.1:8318/simple/ >/dev/null
-          case "$WASMER_FLAGS" in *--include-webc*) : ;; *) echo "no webc tree in WASMER_FLAGS" >&2; exit 1 ;; esac
-        '
-        touch "$out"
-      '';
     repositoryChecks = {
       "tests.project.treefmt" = treefmtCheck;
-      "tests.project.wasinix" = wasinixUnwrapped;
-      "tests.project.wasinix-interface" = wasinixInterfaceCheck;
-      "tests.project.wasinix-source-shape" = sourceShapeCheck;
-      "tests.project.wasinix-cargo-publish" = wasinixCargoPublishCheck;
-      "tests.project.wasinix-wasmer-serve" = wasinixWasmerServeCheck;
-      "tests.project.wasinix-serve-all" = wasinixServeAllCheck;
     };
     repositoryCatalogEntries =
       lib.mapAttrs (address: check: {
@@ -631,7 +385,7 @@
         project.packages.preferred.ncurses
         pkgs.gnumake
         pkgs.pkg-config
-        wasmerRuntime
+        project.packages.native.wasmer
         pkgs.nix-eval-jobs
         pkgs.nixVersions.latest
       ];
