@@ -204,6 +204,10 @@ pub fn log_bytes() -> Result<Option<usize>> {
     positive("WASINIX_LOG_BYTES")
 }
 
+pub fn run_log_bytes() -> Result<Option<usize>> {
+    positive("WASINIX_RUN_LOG_BYTES")
+}
+
 pub fn no_baseline_reuse() -> Result<bool> {
     flag("CI_NO_BASELINE_REUSE")
 }

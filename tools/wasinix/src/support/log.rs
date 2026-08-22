@@ -12,6 +12,7 @@ use crate::support::error::{io, request_error, Result};
 use crate::support::schema::Document;
 
 const DEFAULT_MAX_BYTES: u64 = 64 * 1024 * 1024;
+pub(crate) const DEFAULT_RUN_MAX_BYTES: u64 = 256 * 1024 * 1024;
 const HEAD_BYTES: u64 = 1024 * 1024;
 const MARKER_RESERVE: u64 = 512;
 const LIVE_MARKER: &[u8] =
@@ -23,12 +24,14 @@ pub struct Retention {
     pub original_bytes: u64,
     pub retained_bytes: u64,
     pub omitted_bytes: u64,
+    pub head_bytes: u64,
+    pub tail_bytes: u64,
     pub truncated: bool,
 }
 
 impl Document for Retention {
     const KIND: &'static str = "logRetention";
-    const SCHEMA: u32 = 2;
+    const SCHEMA: u32 = 3;
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -47,14 +50,20 @@ impl Summary {
     }
 }
 
-pub fn summarize(root: &Path) -> Result<Summary> {
-    let mut summary = Summary::default();
+struct RetainedLog {
+    path: PathBuf,
+    retention_path: PathBuf,
+    retention: Retention,
+}
+
+fn retained_logs(root: &Path) -> Result<Vec<RetainedLog>> {
+    let mut logs = Vec::new();
     let mut pending = vec![root.to_path_buf()];
     while let Some(dir) = pending.pop() {
         let entries = match std::fs::read_dir(&dir) {
             Ok(entries) => entries,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound && dir == root => {
-                return Ok(summary);
+                return Ok(logs);
             }
             Err(error) => return Err(io(&dir, error)),
         };
@@ -74,23 +83,160 @@ pub fn summarize(root: &Path) -> Result<Summary> {
                 continue;
             }
             let retention: Retention = crate::support::schema::read(&path)?;
-            summary.log_count += 1;
-            summary.truncated_count += usize::from(retention.truncated);
-            summary.original_bytes.0 = summary
-                .original_bytes
-                .0
-                .saturating_add(retention.original_bytes);
-            summary.retained_bytes.0 = summary
-                .retained_bytes
-                .0
-                .saturating_add(retention.retained_bytes);
-            summary.omitted_bytes.0 = summary
-                .omitted_bytes
-                .0
-                .saturating_add(retention.omitted_bytes);
+            let name = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .strip_suffix(".retention.json")
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    crate::support::error::Error::Failure(format!(
+                        "{} is not a retention sidecar",
+                        path.display()
+                    ))
+                })?;
+            logs.push(RetainedLog {
+                path: path.with_file_name(name),
+                retention_path: path,
+                retention,
+            });
         }
     }
-    Ok(summary)
+    logs.sort_by(|left, right| left.path.cmp(&right.path));
+    Ok(logs)
+}
+
+fn summarize_logs(logs: &[RetainedLog]) -> Summary {
+    let mut summary = Summary::default();
+    for log in logs {
+        let retention = &log.retention;
+        summary.log_count += 1;
+        summary.truncated_count += usize::from(retention.truncated);
+        summary.original_bytes.0 = summary
+            .original_bytes
+            .0
+            .saturating_add(retention.original_bytes);
+        summary.retained_bytes.0 = summary
+            .retained_bytes
+            .0
+            .saturating_add(retention.retained_bytes);
+        summary.omitted_bytes.0 = summary
+            .omitted_bytes
+            .0
+            .saturating_add(retention.omitted_bytes);
+    }
+    summary
+}
+
+pub fn summarize(root: &Path) -> Result<Summary> {
+    Ok(summarize_logs(&retained_logs(root)?))
+}
+
+fn fair_limits(sizes: &[u64], budget: u64) -> Vec<u64> {
+    let mut order: Vec<usize> = (0..sizes.len()).collect();
+    order.sort_by_key(|index| (sizes[*index], *index));
+    let mut limits = vec![0; sizes.len()];
+    let mut remaining = budget;
+    for (position, index) in order.iter().enumerate() {
+        let count = (order.len() - position) as u64;
+        let share = remaining / count;
+        if sizes[*index] <= share {
+            limits[*index] = sizes[*index];
+            remaining -= sizes[*index];
+            continue;
+        }
+        let extra = remaining % count;
+        for (offset, index) in order[position..].iter().enumerate() {
+            limits[*index] = share + u64::from((offset as u64) < extra);
+        }
+        break;
+    }
+    limits
+}
+
+fn omission_marker(bytes: u64) -> Vec<u8> {
+    format!("\n--- wasinix omitted {bytes} log bytes ---\n\n").into_bytes()
+}
+
+fn compact(log: &mut RetainedLog, limit: u64) -> Result<()> {
+    if log.retention.retained_bytes <= limit {
+        return Ok(());
+    }
+    let source = std::fs::read(&log.path).map_err(|error| io(&log.path, error))?;
+    let retained_data = log
+        .retention
+        .head_bytes
+        .checked_add(log.retention.tail_bytes)
+        .ok_or_else(|| {
+            crate::support::error::Error::Failure(format!(
+                "{} retention byte count overflowed u64",
+                log.retention_path.display()
+            ))
+        })?;
+    if source.len() as u64 != log.retention.retained_bytes
+        || retained_data > source.len() as u64
+        || retained_data > log.retention.original_bytes
+    {
+        return request_error(format!(
+            "{} does not match {}",
+            log.path.display(),
+            log.retention_path.display()
+        ));
+    }
+
+    let mut data_limit = limit;
+    let (head_bytes, tail_bytes, marker) = loop {
+        let kept = fair_limits(
+            &[log.retention.head_bytes, log.retention.tail_bytes],
+            data_limit,
+        );
+        let omitted = log.retention.original_bytes - kept[0] - kept[1];
+        let marker = (omitted > 0).then(|| omission_marker(omitted));
+        let marker_bytes = marker.as_ref().map_or(0, |marker| marker.len() as u64);
+        if kept[0] + kept[1] + marker_bytes <= limit {
+            break (kept[0], kept[1], marker.unwrap_or_default());
+        }
+        if marker_bytes > limit {
+            break (0, 0, Vec::new());
+        }
+        data_limit = limit - marker_bytes;
+    };
+
+    let mut output = Vec::with_capacity((head_bytes + tail_bytes) as usize + marker.len());
+    output.extend_from_slice(&source[..head_bytes as usize]);
+    output.extend_from_slice(&marker);
+    if tail_bytes > 0 {
+        output.extend_from_slice(&source[source.len() - tail_bytes as usize..]);
+    }
+    crate::support::fs::write_atomic(&log.path, &output)?;
+    log.retention.head_bytes = head_bytes;
+    log.retention.tail_bytes = tail_bytes;
+    log.retention.retained_bytes = output.len() as u64;
+    log.retention.omitted_bytes = log.retention.original_bytes - head_bytes - tail_bytes;
+    log.retention.truncated = log.retention.omitted_bytes > 0;
+    crate::support::schema::write(&log.retention_path, &log.retention)
+}
+
+pub(crate) fn enforce_budget(root: &Path, max_bytes: u64) -> Result<Summary> {
+    let mut logs = retained_logs(root)?;
+    let total = logs.iter().try_fold(0u64, |total, log| {
+        total
+            .checked_add(log.retention.retained_bytes)
+            .ok_or_else(|| crate::support::error::Error::Failure("log bytes overflowed u64".into()))
+    })?;
+    if total > max_bytes {
+        let limits = fair_limits(
+            &logs
+                .iter()
+                .map(|log| log.retention.retained_bytes)
+                .collect::<Vec<_>>(),
+            max_bytes,
+        );
+        for (log, limit) in logs.iter_mut().zip(limits) {
+            compact(log, limit)?;
+        }
+    }
+    Ok(summarize_logs(&logs))
 }
 
 pub fn retention_path(path: &Path) -> PathBuf {
@@ -218,11 +364,8 @@ impl BoundedLog {
         let omitted_bytes = self.original_bytes - self.head_bytes - self.tail_bytes;
         let truncated = omitted_bytes > 0;
         if truncated {
-            writeln!(
-                head,
-                "\n--- wasinix omitted {omitted_bytes} log bytes ---\n"
-            )
-            .map_err(|error| io(&self.path, error))?;
+            head.write_all(&omission_marker(omitted_bytes))
+                .map_err(|error| io(&self.path, error))?;
         }
         if self.tail_bytes > 0 {
             let start = if self.tail_bytes == self.tail_limit {
@@ -254,6 +397,8 @@ impl BoundedLog {
                 .map_err(|error| io(&self.path, error))?
                 .len(),
             omitted_bytes,
+            head_bytes: self.head_bytes,
+            tail_bytes: self.tail_bytes,
             truncated,
         };
         crate::support::schema::write(&retention_path(&self.path), &retention)?;
@@ -438,5 +583,40 @@ mod tests {
             large.retained_bytes + small.retained_bytes
         );
         assert_eq!(summary.omitted_bytes.0, large.omitted_bytes);
+    }
+
+    #[test]
+    fn fair_limits_keep_small_logs_before_sharing_the_rest() {
+        assert_eq!(super::fair_limits(&[100, 10, 100], 100), [45, 10, 45]);
+    }
+
+    #[test]
+    fn a_run_budget_compacts_large_logs_and_leaves_small_ones_whole() {
+        let scratch = crate::support::fs::Scratch::create("wasinix-log-budget-test").unwrap();
+        let small_path = scratch.path().join("small.log");
+        let large_path = scratch.path().join("nested/large.log");
+        let small_input = vec![b's'; 600];
+        let large_input: Vec<u8> = (0..4096).map(|index| (index % 251) as u8).collect();
+
+        let mut small = super::BoundedLog::with_limit(&small_path, 2048).unwrap();
+        small.write_all(&small_input).unwrap();
+        small.finish().unwrap();
+        let mut large = super::BoundedLog::with_limit(&large_path, 2048).unwrap();
+        large.write_all(&large_input).unwrap();
+        large.finish().unwrap();
+
+        let summary = super::enforce_budget(scratch.path(), 1600).unwrap();
+        let compacted = std::fs::read(&large_path).unwrap();
+        assert_eq!(std::fs::read(&small_path).unwrap(), small_input);
+        assert!(compacted.starts_with(&large_input[..384]));
+        assert!(large_input.ends_with(&compacted[compacted.len() - 500..]));
+        assert!(summary.retained_bytes.0 <= 1600);
+        assert_eq!(summary.original_bytes.0, 4696);
+        assert!(summary.omitted_bytes.0 > 0);
+
+        let before = compacted;
+        let repeated = super::enforce_budget(scratch.path(), 1600).unwrap();
+        assert_eq!(std::fs::read(&large_path).unwrap(), before);
+        assert_eq!(repeated, summary);
     }
 }
