@@ -1,32 +1,3 @@
---- a/crates/ecstore/src/client/api_get_object_file.rs
-+++ b/crates/ecstore/src/client/api_get_object_file.rs
-@@ -15,7 +15,7 @@
- use std::io;
- use std::path::{Path, PathBuf};
- 
--#[cfg(not(windows))]
-+#[cfg(unix)]
- use std::os::unix::fs::PermissionsExt;
- 
- use tokio::fs::{self, OpenOptions};
-@@ -40,7 +40,7 @@
-     {
-         fs::create_dir_all(parent).await?;
- 
--        #[cfg(not(windows))]
-+        #[cfg(unix)]
-         {
-             let mut permissions = fs::metadata(parent).await?.permissions();
-             permissions.set_mode(0o700);
-@@ -59,7 +59,7 @@
-     let mut options = OpenOptions::new();
-     options.create(true).read(true).write(true);
- 
--    #[cfg(not(windows))]
-+    #[cfg(unix)]
-     options.mode(0o600);
- 
-     options.open(file_part_path).await
 --- a/crates/ecstore/src/disk/fs.rs
 +++ b/crates/ecstore/src/disk/fs.rs
 @@ -50,7 +50,7 @@
@@ -49,13 +20,14 @@
          return false;
 --- a/crates/ecstore/src/disk/os.rs
 +++ b/crates/ecstore/src/disk/os.rs
-@@ -760,7 +760,40 @@
-         Ok(handles)
+@@ -2764,7 +2764,41 @@
+         Ok(guard)
      }
  
 -    #[cfg(all(not(unix), not(windows)))]
 +    #[cfg(target_os = "wasi")]
 +    {
++        let _ = publication_root;
 +        let mut current = base_dir.to_path_buf();
 +        let metadata = std::fs::symlink_metadata(&current)?;
 +        if metadata.file_type().is_symlink() || !metadata.is_dir() {
@@ -89,9 +61,9 @@
 +
 +    #[cfg(all(not(unix), not(windows), not(target_os = "wasi")))]
      {
-         let _ = relative;
+         let _ = (relative, publication_root);
          Err(io::Error::new(
-@@ -886,6 +919,12 @@
+@@ -2890,6 +2924,12 @@
      if matches!(err.raw_os_error(), Some(libc::ENOTEMPTY) | Some(libc::EEXIST)) {
          return true;
      }
@@ -106,7 +78,7 @@
  
 --- a/crates/ecstore/src/layout/endpoints.rs
 +++ b/crates/ecstore/src/layout/endpoints.rs
-@@ -1631,7 +1631,7 @@
+@@ -1669,7 +1669,7 @@
          };
          let canonical_path = canonical.to_string_lossy().into_owned();
          diagnostic.canonical_path = Some(canonical_path.clone());
@@ -117,7 +89,7 @@
          }
 --- a/crates/ecstore/src/store/init.rs
 +++ b/crates/ecstore/src/store/init.rs
-@@ -344,8 +344,12 @@
+@@ -336,8 +336,12 @@
                          retry_delay_secs = interval,
                          "Retrying storage format load"
                      );
@@ -155,21 +127,21 @@
 +mod wasi;
 +
  #[cfg(target_os = "linux")]
- pub use linux::{check_cross_device_mounts, get_drive_stats, get_info, get_physical_device_ids, same_disk};
+ pub use linux::{check_cross_device_mounts, get_drive_stats, get_info, get_physical_device_ids, is_mount_point, same_disk};
  
-@@ -34,6 +37,9 @@
-     check_cross_device_mounts, get_drive_stats, get_info, get_physical_device_ids, get_volume_serial_number, same_disk,
+@@ -35,6 +38,9 @@
+     same_disk,
  };
  
 +#[cfg(all(not(unix), not(windows)))]
-+pub use wasi::{check_cross_device_mounts, get_drive_stats, get_info, get_physical_device_ids, same_disk};
++pub use wasi::{check_cross_device_mounts, get_drive_stats, get_info, get_physical_device_ids, is_mount_point, same_disk};
 +
  #[derive(Debug, Default, PartialEq)]
  pub struct IOStats {
      pub read_ios: u64,
 --- a/crates/utils/src/os/wasi.rs
 +++ b/crates/utils/src/os/wasi.rs
-@@ -0,0 +1,39 @@
+@@ -0,0 +1,43 @@
 +// Copyright 2024 RustFS Team
 +//
 +// Licensed under the Apache License, Version 2.0 (the "License");
@@ -195,6 +167,10 @@
 +}
 +
 +pub fn same_disk(_disk1: &str, _disk2: &str) -> std::io::Result<bool> {
++    Ok(false)
++}
++
++pub fn is_mount_point(_path: &Path) -> std::io::Result<bool> {
 +    Ok(false)
 +}
 +
@@ -297,7 +273,7 @@
  }
 --- a/rustfs/src/server/http.rs
 +++ b/rustfs/src/server/http.rs
-@@ -438,6 +438,15 @@
+@@ -563,6 +563,15 @@
  
      // The listening address and port are obtained from the parameters
      let listener = {
@@ -313,7 +289,7 @@
          let mut server_addr = server_addr;
  
          // Try to create a socket for the address family; if that fails, fallback to IPv4.
-@@ -594,6 +603,7 @@
+@@ -719,6 +728,7 @@
              socket.listen(backlog)?;
          }
          TcpListener::from_std(socket.into())?
