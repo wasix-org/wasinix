@@ -129,6 +129,8 @@ structural boundary can express the rule.
   constructor for the context it lands in; `Markdown::constant` takes `'static`,
   so runtime text cannot skip sanitizing. `Registry::upsert` owns the comment
   budget; `github/client.rs` restricts post/patch to the github module.
+- `github/actions.rs`: the scalar GitHub Actions output writer and the workflow
+  output and artifact names; parsed-YAML tests pin each consumer field.
 - `cli/request.rs::drive`: the one prepare-execute-finish path, with
   `cache_policy` as the one cache decision and `ui::emit(JsonArg)` as the one
   machine-output exit. `Effects{Apply,DryRun}` gates every outward writer at the

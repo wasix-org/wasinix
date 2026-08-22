@@ -298,6 +298,23 @@ pub enum CiCommand {
     /// Print the nix config block workflows install, from the constants the
     /// binary trusts, so the cache identity has one home
     NixConfig,
+    /// Start a durable run and expose its handle to a workflow step
+    Start {
+        /// Where runId and runDir are appended ($GITHUB_OUTPUT)
+        #[arg(long)]
+        github_output: PathBuf,
+        #[arg(trailing_var_arg = true, required = true)]
+        command: Vec<String>,
+    },
+    /// Produce the update workflow's one-entry-per-target matrix
+    UpdateMatrix {
+        /// Space-separated target names; blank discovers every target
+        #[arg(long, default_value = "")]
+        targets: String,
+        /// Where matrix is appended ($GITHUB_OUTPUT)
+        #[arg(long)]
+        github_output: PathBuf,
+    },
     /// Prepare and execute a resolved request in one payload, which is the
     /// command durable runs supervise
     Run {
@@ -361,6 +378,9 @@ pub enum CiCommand {
         /// Render every surface but write none of them
         #[arg(long)]
         dry_run: bool,
+        /// Append reported=true after every requested surface succeeds
+        #[arg(long, conflicts_with = "watch")]
+        github_output: Option<PathBuf>,
         /// Upsert the PR comment
         #[arg(long)]
         comment: bool,
@@ -1297,11 +1317,73 @@ fn ci_bisect(
     Ok(CommandStatus::SUCCESS)
 }
 
+pub(crate) fn update_matrix(names: Vec<String>) -> Result<String> {
+    #[derive(serde::Serialize)]
+    struct Entry {
+        name: String,
+    }
+
+    let names: std::collections::BTreeSet<String> = names.into_iter().collect();
+    if names.is_empty() {
+        return crate::support::error::request_error("the update matrix has no targets");
+    }
+    serde_json::to_string(
+        &names
+            .into_iter()
+            .map(|name| Entry { name })
+            .collect::<Vec<_>>(),
+    )
+    .map_err(|source| crate::support::error::Error::Json {
+        path: "update matrix".into(),
+        source,
+    })
+}
+
 fn ci_command(command: CiCommand) -> Result<CommandStatus> {
     let repo = crate::support::git::repo_root()?;
     match command {
         CiCommand::NixConfig => {
             ui::output(crate::support::nix::nix_config());
+            Ok(CommandStatus::SUCCESS)
+        }
+        CiCommand::Start {
+            github_output,
+            command,
+        } => {
+            payload_check(&command[0], crate::support::env::on_path(&command[0]))?;
+            let run_id = runs::start(&command)?;
+            let run_dir = runs::dir_of(&run_id)?;
+            crate::github::actions::append(
+                &github_output,
+                &[
+                    (crate::github::actions::OUTPUT_RUN_ID, run_id.clone()),
+                    (
+                        crate::github::actions::OUTPUT_RUN_DIR,
+                        run_dir.display().to_string(),
+                    ),
+                ],
+            )?;
+            ui::result(format!("{run_id}\t{}", run_dir.display()));
+            Ok(CommandStatus::SUCCESS)
+        }
+        CiCommand::UpdateMatrix {
+            targets,
+            github_output,
+        } => {
+            let names = if targets.trim().is_empty() {
+                crate::update::targets::all_targets(&repo)?
+                    .into_iter()
+                    .map(|target| target.name)
+                    .collect()
+            } else {
+                targets.split_whitespace().map(str::to_string).collect()
+            };
+            let matrix = update_matrix(names)?;
+            crate::github::actions::append(
+                &github_output,
+                &[(crate::github::actions::OUTPUT_MATRIX, matrix.clone())],
+            )?;
+            ui::output(matrix);
             Ok(CommandStatus::SUCCESS)
         }
         CiCommand::Run {
@@ -1386,6 +1468,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             surface,
             sha,
             dry_run,
+            github_output,
             comment,
             check,
             step_summary,
@@ -1500,6 +1583,12 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             if let Some(path) = step_summary {
                 crate::github::publish::step_summary(&rendered, &target, &path, effects)?;
             }
+            if let Some(path) = github_output {
+                crate::github::actions::append(
+                    &path,
+                    &[(crate::github::actions::OUTPUT_REPORTED, "true".into())],
+                )?;
+            }
             Ok(CommandStatus::SUCCESS)
         }
         CiCommand::Origin {
@@ -1508,7 +1597,6 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             github_output,
             out,
         } => {
-            use std::io::Write;
             let event: serde_json::Value = crate::support::json::read(&event)?;
             let api = crate::ci::origin::Rest {
                 token: crate::github::client::token(),
@@ -1521,19 +1609,26 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             )?;
             schema::write(&out, &command)?;
             if let Some(path) = github_output {
-                let mut file = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&path)
-                    .map_err(|e| crate::support::error::io(&path, e))?;
-                for line in [
-                    format!("kind={}", command.kind),
-                    format!("commentId={}", command.origin.comment_id),
-                    format!("pullRequest={}", command.origin.pull_request),
-                    format!("headSha={}", command.origin.head_sha),
-                ] {
-                    writeln!(file, "{line}").map_err(|e| crate::support::error::io(&path, e))?;
-                }
+                let bin = crate::support::env::current_exe()?;
+                crate::github::actions::append(
+                    &path,
+                    &[
+                        (crate::github::actions::OUTPUT_BIN, bin.display().to_string()),
+                        (crate::github::actions::OUTPUT_KIND, command.kind.to_string()),
+                        (
+                            crate::github::actions::OUTPUT_COMMENT_ID,
+                            command.origin.comment_id.to_string(),
+                        ),
+                        (
+                            crate::github::actions::OUTPUT_PULL_REQUEST,
+                            command.origin.pull_request.to_string(),
+                        ),
+                        (
+                            crate::github::actions::OUTPUT_HEAD_SHA,
+                            command.origin.head_sha.to_string(),
+                        ),
+                    ],
+                )?;
             }
             ui::fact(
                 "authorized",

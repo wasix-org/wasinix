@@ -41,20 +41,11 @@ jobs:
 
       - name: List targets
         id: list
-        shell: bash
         env:
           TARGETS: ${{ github.event.inputs.targets }}
-        run: |
-          if [ -n "$TARGETS" ]; then
-            matrix=$(jq -cn --arg t "$TARGETS" '$t | split(" ") | map(select(. != "")) | unique | map({name: .})')
-            if [ "$matrix" = "[]" ]; then
-              echo "no targets parsed from targets='$TARGETS'" >&2
-              exit 1
-            fi
-          else
-            matrix=$(nix run .#wasinix -- update list --json | jq -c '.targets | map({name: .})')
-          fi
-          echo "matrix=$matrix" >>"$GITHUB_OUTPUT"
+        run:
+          nix run .#wasinix -- ci update-matrix --targets "$TARGETS"
+          --github-output "$GITHUB_OUTPUT"
 
   update:
     name: bump ${{ matrix.job.name }}

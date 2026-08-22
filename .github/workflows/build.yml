@@ -101,7 +101,7 @@ jobs:
           push_cache=()
           if [ -n "$NIX_SIGNING_KEY" ]; then push_cache=(--push-cache); fi
           if [ "$GITHUB_EVENT_NAME" = push ]; then
-            echo "dir=run-dir" >> "$GITHUB_OUTPUT"
+            echo "runDir=run-dir" >> "$GITHUB_OUTPUT"
             nix run .#wasinix -- build all --on local --run-dir run-dir \
               "${push_cache[@]}"
           else
@@ -111,13 +111,13 @@ jobs:
             # payload verbatim, so the payload names the binary itself.
             # Only the baseline (main's commit) is trusted; the candidate is not.
             bin="$(nix build .#wasinix --no-link --print-out-paths)/bin/wasinix"
-            id=$("$bin" run start -- "$bin" -v diff --content-diff \
+            IFS=$'\t' read -r id dir < <("$bin" ci start \
+              --github-output "$GITHUB_OUTPUT" -- \
+              "$bin" -v diff --content-diff \
               --run-dir '{run-dir}' \
               "${push_cache[@]}" \
               build all --at "$BASE_SHA" --on local \
               --vs build all --on local)
-            dir=$("$bin" run status "$id" --json | jq -r .runDir)
-            echo "dir=$dir" >> "$GITHUB_OUTPUT"
             if [ "$CAN_WRITE" = true ]; then
               comment=()
               if [ -n "$PULL_REQUEST" ]; then comment=(--comment --pull-request "$PULL_REQUEST"); fi
@@ -147,7 +147,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ci-run
-          path: ${{ steps.run.outputs.dir }}
+          path: ${{ steps.run.outputs.runDir }}
           if-no-files-found: error
 
       # post the check run + sticky comment directly: bot-created PRs (the
@@ -163,7 +163,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           PULL_REQUEST: ${{ github.event.pull_request.number }}
-          RUN_DIR: ${{ steps.run.outputs.dir }}
+          RUN_DIR: ${{ steps.run.outputs.runDir }}
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
@@ -191,7 +191,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
-          RUN_DIR: ${{ steps.run.outputs.dir }}
+          RUN_DIR: ${{ steps.run.outputs.runDir }}
         run: |
           if [ -z "$AWS_ACCESS_KEY_ID" ]; then
             echo "no credentials; skipping"
@@ -200,6 +200,7 @@ jobs:
           nix run .#wasinix -- ci publish --run-dir "$RUN_DIR" --baseline
 
       - name: Collect durable runs
+        id: collect
         if:
           ${{ always() && steps.run_artifact.outcome == 'success' &&
           (steps.baseline.outcome == 'success' ||

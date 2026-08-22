@@ -23,5 +23,8 @@ toml = "0.8"
 ureq = { version = "2", features = ["json"] }
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 
+[dev-dependencies]
+serde_yaml_ng = "0.10"
+
 [profile.release]
 strip = true
