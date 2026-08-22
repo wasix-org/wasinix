@@ -4663,6 +4663,7 @@ mod corpus {
             "ci update-matrix",
             "ci pull-request",
             "ci preview-context",
+            "ci preview-cleanup",
             "ci run",
             "ci remote",
             "ci observe",
@@ -4774,6 +4775,7 @@ mod corpus {
             "ci update-matrix --targets wasmer --github-output outputs",
             "ci pull-request --repository base/repo --head-sha aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --head-repository fork/repo --github-output outputs",
             "ci preview-context --repository base/repo --event event.json --github-output outputs",
+            "ci preview-cleanup --namespace kilyanni --pull-request 7 --registry wasmer.io",
             "ci prepare --request r.json --run-dir d",
             "ci exec --run-dir d --task case.eval",
             "ci command --origin o.json --run-dir d --push-cache",
@@ -5432,12 +5434,12 @@ mod corpus {
 
         let cleanup = read("preview-cleanup.yml");
         let delete = step(job(&cleanup, "cleanup"), "delete_apps");
-        let delete_command = format!(
-            "for app in {} {}; do\n  nix shell .#wasmer --accept-flake-config -c wasmer app delete \\\n    \"$NAMESPACE/$app-pr${{PR}}\" --registry \"$WASMER_REGISTRY\" --non-interactive \\\n    || echo \"no $app preview app to delete\"\ndone\n",
-            crate::cli::preview::PYTHON_PREVIEW_APP,
-            crate::cli::preview::CARGO_PREVIEW_APP,
+        assert_eq!(
+            field(delete, "run").as_str(),
+            Some(
+                "nix run .#wasinix -- ci preview-cleanup \\\n  --namespace \"$NAMESPACE\" --pull-request \"$PR\" --registry \"$WASMER_REGISTRY\"\n"
+            )
         );
-        assert_eq!(field(delete, "run").as_str(), Some(delete_command.as_str()));
 
         let preview = read("preview.yml");
         let preview_job = job(&preview, "preview");

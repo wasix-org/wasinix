@@ -41,8 +41,5 @@ jobs:
       - name: Delete apps
         id: delete_apps
         run: |
-          for app in python-registry cargo-registry; do
-            nix shell .#wasmer --accept-flake-config -c wasmer app delete \
-              "$NAMESPACE/$app-pr${PR}" --registry "$WASMER_REGISTRY" --non-interactive \
-              || echo "no $app preview app to delete"
-          done
+          nix run .#wasinix -- ci preview-cleanup \
+            --namespace "$NAMESPACE" --pull-request "$PR" --registry "$WASMER_REGISTRY"
