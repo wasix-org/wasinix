@@ -440,6 +440,15 @@
     importNixpkgs = fakeImportNixpkgs;
     extensions = [pythonRepairExtension];
   };
+  projectTestProject = projectApi.mkProject {
+    system = "test-system";
+    importNixpkgs = fakeImportNixpkgs;
+    ci.sources = ["wasinix"];
+    projectTests.format = {
+      source = "wasinix";
+      check = _project: mkPackage {name = "format";};
+    };
+  };
   wasmerProjectApi = import ./default.nix (projectApiArgs // {projectionRules = historyProjectionRules // wasmerProjectionRules;});
   behaviorProjectApi = import ./default.nix (projectApiArgs
     // {
@@ -986,6 +995,8 @@ in {
       invalidCiProfileFails = !(force invalidCiProfileProject.ci).success;
       invalidNativeInterfaceFails = !(force invalidNativeInterfaceProject).success;
       emptyProjectSource = emptyProject.packages.native.core.passthru.wasinix.source;
+      projectTestName = projectTestProject.tests."tests.project.format".name;
+      projectTestSerializable = !(projectTestProject.ci.catalog.jobs."tests.project.format" ? check);
     };
     expected = {
       schemaVersion = 1;
@@ -1105,6 +1116,8 @@ in {
       invalidCiProfileFails = true;
       invalidNativeInterfaceFails = true;
       emptyProjectSource = "empty";
+      projectTestName = "format";
+      projectTestSerializable = true;
     };
   };
 }

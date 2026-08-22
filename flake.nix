@@ -44,6 +44,10 @@
       inherit system;
       importNixpkgs = args: import nixpkgs args;
       ci.sources = ["wasinix"];
+      projectTests.treefmt = {
+        source = "wasinix";
+        check = _project: treefmtCheck;
+      };
     };
     pkgs = project.internals.packageSets.nativeRaw;
     inherit (pkgs) lib;
@@ -73,17 +77,6 @@
     };
     treefmtCheck = treefmtEval.config.build.check self;
 
-    mergeDisjoint = context: sets: let
-      names = lib.concatMap builtins.attrNames sets;
-      duplicates =
-        lib.attrNames
-        (lib.filterAttrs (_: occurrences: lib.length occurrences > 1)
-          (lib.groupBy (name: name) names));
-    in
-      lib.throwIf (duplicates != [])
-      "${context}: duplicate jobs (${lib.concatStringsSep ", " duplicates})"
-      (lib.foldl' (acc: set: acc // set) {} sets);
-
     wasinix = project.packages.native.wasinix;
     commandAliases = wasinix.commandAliases;
     commands =
@@ -100,39 +93,8 @@
             text = "exec wasinix ${name} \"$@\"";
           }
       );
-    repositoryChecks = {
-      "tests.project.treefmt" = treefmtCheck;
-    };
-    repositoryCatalogEntries =
-      lib.mapAttrs (address: check: {
-        kind = "test";
-        inherit address check;
-        name = lib.last (lib.splitString "." address);
-        testName = lib.last (lib.splitString "." address);
-        source = "wasinix";
-        lineage = ["wasinix"];
-        scope = "native";
-        variant = {};
-        instance = {
-          kind = "current";
-          version = toString (check.version or check.name);
-        };
-        subject = "project";
-        packageSubject = "project";
-        policy = {
-          aliases = [];
-          shipped = false;
-          ci = {};
-          publication = {};
-          retention = null;
-        };
-      })
-      repositoryChecks;
-    repositoryCiCatalog =
-      lib.mapAttrs (_: entry: builtins.removeAttrs entry ["check"])
-      repositoryCatalogEntries;
-    allCiJobs = mergeDisjoint "project CI jobs" [project.ci.jobs repositoryChecks];
-    allCiCatalog = mergeDisjoint "project CI catalog" [project.ci.catalog.jobs repositoryCiCatalog];
+    allCiJobs = project.ci.jobs;
+    allCiCatalog = project.ci.catalog.jobs;
     jobsForSubjects = subjects:
       map (entry: entry.address) (lib.filter (entry:
         builtins.elem (entry.packageSubject or entry.address) subjects)
@@ -332,8 +294,8 @@
     systemProject =
       project
       // {
-        tests = project.tests // repositoryChecks;
-        catalog.entries = project.catalog.entries // repositoryCatalogEntries;
+        tests = project.tests;
+        catalog.entries = project.catalog.entries;
         internals =
           project.internals
           // {
@@ -356,7 +318,7 @@
                 selectors.sets =
                   project.ci.catalog.selectors.sets
                   // {
-                    core = (project.ci.catalog.selectors.sets.core or []) ++ builtins.attrNames repositoryChecks;
+                    core = project.ci.catalog.selectors.sets.core or [];
                   };
                 selectors.groups = selectorGroups;
               };
