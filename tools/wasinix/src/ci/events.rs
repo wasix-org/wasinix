@@ -268,15 +268,19 @@ impl Document for Snapshot {
     const SCHEMA: u32 = 1;
 }
 
-pub fn fold_snapshot(events: &[Event]) -> Snapshot {
-    let mut snapshot = Snapshot::default();
-    let mut phases: BTreeMap<String, usize> = BTreeMap::new();
-    for event in events {
-        snapshot.last_event_at = Some(event.at());
+#[derive(Default)]
+struct SnapshotReducer {
+    snapshot: Snapshot,
+    phases: BTreeMap<String, usize>,
+}
+
+impl SnapshotReducer {
+    fn apply(&mut self, event: &Event) {
+        self.snapshot.last_event_at = Some(event.at());
         match event {
             Event::RunStarted { at, .. } => {
-                snapshot.state = RunState::Running;
-                snapshot.started_at = Some(*at);
+                self.snapshot.state = RunState::Running;
+                self.snapshot.started_at = Some(*at);
             }
             Event::PhaseStarted {
                 task_id,
@@ -284,9 +288,9 @@ pub fn fold_snapshot(events: &[Event]) -> Snapshot {
                 jobs,
                 ..
             } => {
-                let index = snapshot.phases.len();
-                phases.insert(task_id.clone(), index);
-                snapshot.phases.push(PhaseSnapshot {
+                let index = self.snapshot.phases.len();
+                self.phases.insert(task_id.clone(), index);
+                self.snapshot.phases.push(PhaseSnapshot {
                     task_id: task_id.clone(),
                     label: label.clone(),
                     status: TaskStatus::Pending,
@@ -303,9 +307,9 @@ pub fn fold_snapshot(events: &[Event]) -> Snapshot {
                 // A finish for a phase that never started (a recovery path
                 // that failed before its PhaseStarted) still appears, rather
                 // than vanishing from the ladder.
-                let index = *phases.entry(task_id.clone()).or_insert_with(|| {
-                    let index = snapshot.phases.len();
-                    snapshot.phases.push(PhaseSnapshot {
+                let index = *self.phases.entry(task_id.clone()).or_insert_with(|| {
+                    let index = self.snapshot.phases.len();
+                    self.snapshot.phases.push(PhaseSnapshot {
                         task_id: task_id.clone(),
                         label: task_id.clone(),
                         status: TaskStatus::Pending,
@@ -314,16 +318,16 @@ pub fn fold_snapshot(events: &[Event]) -> Snapshot {
                     });
                     index
                 });
-                snapshot.phases[index].status = *status;
-                snapshot.phases[index].headline = Some(headline.clone());
+                self.snapshot.phases[index].status = *status;
+                self.snapshot.phases[index].headline = Some(headline.clone());
             }
             Event::JobStarted { job, .. } => {
-                if !snapshot.building.contains(job) {
-                    snapshot.building.push(job.clone());
+                if !self.snapshot.building.contains(job) {
+                    self.snapshot.building.push(job.clone());
                     // Bounded in case a finish event is ever lost; the live
                     // set is limited by max-jobs anyway.
-                    if snapshot.building.len() > 64 {
-                        snapshot.building.remove(0);
+                    if self.snapshot.building.len() > 64 {
+                        self.snapshot.building.remove(0);
                     }
                 }
             }
@@ -333,16 +337,16 @@ pub fn fold_snapshot(events: &[Event]) -> Snapshot {
                 cached,
                 ..
             } => {
-                snapshot.building.retain(|started| started != job);
-                snapshot.completed_jobs += 1;
+                self.snapshot.building.retain(|started| started != job);
+                self.snapshot.completed_jobs += 1;
                 if *cached {
-                    snapshot.cached_jobs += 1;
+                    self.snapshot.cached_jobs += 1;
                 }
                 if *status == JobStatus::Failure {
-                    snapshot.failed_jobs += 1;
-                    snapshot.recent_failures.push(job.clone());
-                    if snapshot.recent_failures.len() > 20 {
-                        snapshot.recent_failures.remove(0);
+                    self.snapshot.failed_jobs += 1;
+                    self.snapshot.recent_failures.push(job.clone());
+                    if self.snapshot.recent_failures.len() > 20 {
+                        self.snapshot.recent_failures.remove(0);
                     }
                 }
             }
@@ -350,12 +354,23 @@ pub fn fold_snapshot(events: &[Event]) -> Snapshot {
             Event::RunFinished {
                 state, exit_code, ..
             } => {
-                snapshot.state = *state;
-                snapshot.exit_code = *exit_code;
+                self.snapshot.state = *state;
+                self.snapshot.exit_code = *exit_code;
             }
         }
     }
-    snapshot
+
+    fn from_events(events: &[Event]) -> SnapshotReducer {
+        let mut reducer = SnapshotReducer::default();
+        for event in events {
+            reducer.apply(event);
+        }
+        reducer
+    }
+}
+
+pub fn fold_snapshot(events: &[Event]) -> Snapshot {
+    SnapshotReducer::from_events(events).snapshot
 }
 
 /// Appends events and keeps the derived snapshot fresh: on every phase
@@ -363,7 +378,7 @@ pub fn fold_snapshot(events: &[Event]) -> Snapshot {
 /// second, so a 5000-job build does not write 5000 snapshots.
 pub struct Tracker {
     run_dir: PathBuf,
-    events: Vec<Event>,
+    reducer: SnapshotReducer,
     last_write: Option<Instant>,
 }
 
@@ -372,7 +387,7 @@ impl Tracker {
         let events = read_all(run_dir)?;
         Ok(Tracker {
             run_dir: run_dir.to_path_buf(),
-            events,
+            reducer: SnapshotReducer::from_events(&events),
             last_write: None,
         })
     }
@@ -386,7 +401,7 @@ impl Tracker {
                 ..
             } | Event::Heartbeat { .. }
         );
-        self.events.push(event);
+        self.reducer.apply(&event);
         if urgent
             || self
                 .last_write
@@ -398,11 +413,11 @@ impl Tracker {
     }
 
     pub fn snapshot(&self) -> Snapshot {
-        fold_snapshot(&self.events)
+        self.reducer.snapshot.clone()
     }
 
     pub fn write_snapshot(&mut self) -> Result<()> {
-        crate::support::schema::write(&self.run_dir.join(SNAPSHOT), &self.snapshot())?;
+        crate::support::schema::write(&self.run_dir.join(SNAPSHOT), &self.reducer.snapshot)?;
         self.last_write = Some(Instant::now());
         Ok(())
     }
