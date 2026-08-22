@@ -105,7 +105,9 @@ in {
 
       # A served project the templates reach for, proving the configured URL is
       # the index itself and not just a string anybuild echoed back.
-      curl -fsS ${indexUrl}/pydantic-core/ | grep -q wasix_wasm32 \
+      # Not a pipe: grep -q closes it early and pipefail fails on curl's EPIPE.
+      curl -fsS ${indexUrl}/pydantic-core/ > pydantic-core.html
+      grep -q wasix_wasm32 pydantic-core.html \
         || { echo "anybuild: the served index has no wasix wheels for pydantic-core" >&2; exit 1; }
       echo "ok: $overlay templates point at the served index"
     '';
