@@ -330,6 +330,11 @@
         name = "base-replacement";
         version = "0.1";
       };
+      writeText = name: text:
+        mkPackage {
+          inherit name;
+          passthru = {inherit text;};
+        };
       stdenv.hostPlatform.isWasix = args ? crossSystem;
     };
   in
@@ -944,6 +949,7 @@ in {
       focusedHelper = project.packages.wasix.default.uses-inherited.passthru.usedFocusedHelper;
       runnerContextName = project.packages.wasix.default.uses-inherited.passthru.runnerContextName;
       runnerName = project.runners.rawWasm.unbound.name;
+      ifdProbe = project.probes.ifd.passthru.text;
       profileNames = project.packages.wasix.default.uses-inherited.passthru.profileNames;
       pythonNames = lib.attrNames project.packages.python.py;
       preferredPythonName = project.packages.python.preferred.corePython.name;
@@ -1022,6 +1028,7 @@ in {
       focusedHelper = true;
       runnerContextName = "raw-wasm-unbound";
       runnerName = "raw-wasm-unbound";
+      ifdProbe = "ok";
       profileNames = ["alternate" "default"];
       pythonNames = ["contextProof" "corePython" "inheritedPython" "uses-python"];
       preferredPythonName = "core-python";

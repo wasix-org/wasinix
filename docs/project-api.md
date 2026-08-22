@@ -83,6 +83,7 @@ The result starts with:
   commands = ...;
   artifacts = ...;
   runners = ...;
+  probes = ...;
   tests = ...;
   ci = ...;
 }
@@ -92,6 +93,9 @@ The CLI evaluates `schemaVersion` before interpreting the rest of the project
 and reports an unsupported-version error on mismatch. A serialized projection,
 such as `ci.catalog`, repeats the value from this single project constant so it
 can be consumed independently.
+
+`probes.ifd` is a tiny text derivation used by `wasinix remote doctor --ifd` to
+verify that a remote store can build a path which local evaluation then reads.
 
 There is no compatibility layer for the current internal flake attributes. No
 external stable API depends on them.
@@ -251,7 +255,7 @@ uses. The context includes:
 - `packages.sameProfile`: the immediate recursive package set.
 - `packages.preferred`: the attribute-wise projection of each package's
   preferred WASIX profile.
-- `commands`, `artifacts`, `harnesses`, and `runners`.
+- `commands`, `artifacts`, `harnesses`, `runners`, and `probes`.
 - `extendPackage` and the other focused package helpers.
 
 A package-unit invocation additionally supplies `package`, the preceding value
@@ -691,6 +695,7 @@ common projection dependencies, not a test-owned API:
 - `commands`;
 - entry-relative and global `artifacts` views;
 - `harnesses`;
+- `probes`;
 - `pkgs`, the native package set for host-side fixtures.
 
 The package-unit argument `package` remains distinct: it is the preceding
