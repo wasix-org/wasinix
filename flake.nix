@@ -34,88 +34,11 @@
     ...
   }: let
     system = "x86_64-linux";
-    wasmerPatches = [
-      # proc_fork must inherit the parent's signal dispositions; see WASIX-TODO.md
-      ./patches/wasmer-signal-inherit-on-fork.patch
-      # futex_wake dropped a wake when the first waiter was still
-      # mid-registration (Some(None)), starving a genuinely-sleeping waiter;
-      # deadlocked tokio multi-thread spawn+blocking (e.g. rustfs server).
-      ./patches/wasmer-futex-wake-lost-wakeup.patch
-      # fd_datasync/fd_sync denied with EACCES when path_open's rights
-      # delegation masked the implied FD_DATASYNC/FD_SYNC off files under
-      # mapped host dirs; rustfs object writes (fdatasync durability) 500'd.
-      ./patches/wasmer-fd-sync-rights-durability.patch
-      # fd_sync/fd_datasync refused a directory fd with EISDIR, which every
-      # caller that fsyncs a directory after a rename hits (initdb).
-      ./patches/wasmer-fd-sync-directory.patch
-      # Host hard links and their rename/unlink cache entries are broken.
-      ./patches/wasmer-path-rename-hardlink.patch
-      # fd_readdir cookies must remain valid while callers delete entries.
-      ./patches/wasmer-fd-readdir-stable-cookie.patch
-      # fd_filestat_get served a cached size that a rename left too large, so a
-      # read_exact sized from it hit UnexpectedEof; rustfs failed to delete an
-      # object whose metadata it had rewritten smaller.
-      ./patches/wasmer-fd-filestat-stale-size.patch
-      # isatty must be false for redirected stdio; see WASIX-TODO.md
-      ./patches/wasmer-isatty-non-tty-unknown.patch
-      # terminal programs need TERM; see WASIX-TODO.md
-      ./patches/wasmer-forward-term-on-tty.patch
-      # /dev/fd/<n> is the caller's fd n, which bash needs for <(...); see WASIX-TODO.md
-      ./patches/wasmer-dev-fd.patch
-      ./patches/wasmer-epoll-stale-handler-deadlock.patch
-    ];
-    wasmerRuntime = wasmer.packages.${system}.wasmer.overrideAttrs (old: {
-      patches = (old.patches or []) ++ wasmerPatches;
-      # The inherited artifact contains unpatched workspace crates and can
-      # retain their rlibs and vtables after source patches are applied.
-      cargoArtifacts = null;
-      # tokio::fs::File stays Busy when a blocking op is cancelled, so the next op
-      # re-polls a finished JoinHandle and panics ("JoinHandle polled after
-      # completion") onto guest stderr, failing checks that diff guest output.
-      cargoVendorDir = old.cargoVendorDir.overrideAttrs (o: {
-        nativeBuildInputs = (o.nativeBuildInputs or []) ++ [nixpkgs.legacyPackages.${system}.jq];
-        buildCommand =
-          o.buildCommand
-          + ''
-            registry=$(echo "$out"/*/)
-            registry=''${registry%/}
-            crates=$(readlink -f "$registry")
-            rm "$registry"
-            mkdir "$registry"
-            for crate in "$crates"/*; do
-              ln -s "$(readlink -f "$crate")" "$registry/$(basename "$crate")"
-            done
-
-            tokio="$registry/tokio-1.53.1"
-            if [ ! -L "$tokio" ]; then
-              echo "wasmer no longer vendors tokio 1.53.1; recheck patches/tokio-fs-file-no-poison-on-cancel.patch" >&2
-              exit 1
-            fi
-            rm "$tokio"
-            cp -rL "$crates/tokio-1.53.1" "$tokio"
-            chmod -R u+w "$tokio"
-            patch -p2 -d "$tokio" -i ${./patches/tokio-fs-file-no-poison-on-cancel.patch}
-            jq '.files = {}' "$tokio/.cargo-checksum.json" > "$tokio/.cargo-checksum.json.new"
-            mv "$tokio/.cargo-checksum.json.new" "$tokio/.cargo-checksum.json"
-          '';
-      });
-      passthru =
-        (old.passthru or {})
-        // {
-          wasinix.update = {
-            # upstream's version stands still across our rev bumps
-            noteVersion = "${old.version}-${wasmer.shortRev or "dirty"}";
-            notes = [
-              {message = "recheck and drop any Wasmer patches that landed upstream; see WASIX-TODO.md";}
-              {message = "check whether tokio PR 8291 landed in the vendored tokio; if so drop patches/tokio-fs-file-no-poison-on-cancel.patch and the patched cargoVendorDir (WASIX-TODO.md)";}
-            ];
-          };
-        };
-    });
     projectApi = import ./pkgs/project/wasinix.nix {
       lib = nixpkgs.lib;
       ghcWasm = ghc-wasm-meta.packages.${system};
-      inherit wasmerRuntime;
+      wasmerPackage = wasmer.packages.${system}.wasmer;
+      wasmerRevision = wasmer.shortRev or "dirty";
     };
     project = projectApi.mkProject {
       inherit system;
@@ -124,6 +47,7 @@
     };
     pkgs = project.internals.packageSets.nativeRaw;
     inherit (pkgs) lib;
+    wasmerRuntime = project.packages.native.wasmer;
     wasixLib = import ./pkgs/lib {inherit lib;};
 
     treefmtEval = treefmt-nix.lib.evalModule pkgs {
