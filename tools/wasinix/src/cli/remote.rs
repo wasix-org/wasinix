@@ -9,6 +9,8 @@ use crate::support::error::{Result, request_error};
 use crate::support::process::CommandStatus;
 use crate::support::{schema, table, ui};
 
+const IFD_PROBE_ATTR: &str = "probes.ifd";
+
 #[derive(clap::Subcommand)]
 pub enum RemoteCommand {
     /// List configured remotes and their capabilities
@@ -162,12 +164,9 @@ fn doctor(repo: &Path, remote: Option<&str>, ifd: bool) -> Result<CommandStatus>
         if ifd {
             let route = Route::Store(builder.clone());
             let probe = format!(
-                ".#legacyPackages.{}.remoteIfdProbe",
-                crate::support::nix::SYSTEM
-            );
-            let result = format!(
-                ".#legacyPackages.{}.remoteIfdProbeResult",
-                crate::support::nix::SYSTEM
+                ".#legacyPackages.{}.{}",
+                crate::support::nix::SYSTEM,
+                IFD_PROBE_ATTR
             );
             let built = crate::support::nix::Invocation::flake("build", &probe)
                 .arg("--no-link")
@@ -177,7 +176,8 @@ fn doctor(repo: &Path, remote: Option<&str>, ifd: bool) -> Result<CommandStatus>
             if !built.is_success() {
                 return request_error("IFD probe derivation failed to build");
             }
-            let output = crate::support::nix::Invocation::flake("eval", &result)
+            let output = crate::support::nix::Invocation::flake("eval", &probe)
+                .apply("builtins.readFile")
                 .raw()
                 .offline()
                 .workdir(repo)

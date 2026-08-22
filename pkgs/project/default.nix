@@ -447,6 +447,7 @@ in rec {
         artifacts = artifactsView;
         harnesses = harnessesView;
         runners = runnersView;
+        probes = probesView;
         inherit profileSets;
         inherit (profiles) profileOf;
         profileTraitsOf = platform: profiles.sysrootEncodings.${profiles.profileOf platform};
@@ -581,6 +582,7 @@ in rec {
       };
       harnessesView = harnessesFor callbackArgs;
       runnersView = runnersFor callbackArgs;
+      probesView.ifd = nativeRaw.writeText "wasinix-ifd-probe" "ok";
       contextForEntry = entry: let
         selected =
           if entry.scope == "native"
@@ -943,6 +945,7 @@ in rec {
         artifacts = artifactsView;
         harnesses = harnessesView;
         runners = runnersView;
+        probes = probesView;
         tests = lib.mapAttrs (_: entry: entry.check) testEntries;
         catalog = {inherit entries;};
         ci = {
