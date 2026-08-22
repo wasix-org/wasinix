@@ -48,62 +48,34 @@ jobs:
       # stop-gap until an org-owned namespace exists
       NAMESPACE: kilyanni
     steps:
-      # Both trigger shapes funnel into PR/HEAD_SHA/BASE_REF + a proceed flag:
-      # the workflow_run path resolves the PR from the run's head sha and
-      # requires the `preview` label; the labeled path requires the head
-      # sha's Build to have already succeeded.
+      # Default-branch code resolves the trigger before the untrusted PR head
+      # is checked out. A non-preview event pays setup but publishes nothing.
+      - name: Checkout adapter
+        id: adapter_checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Nix
+        id: adapter_setup
+        uses: ./.github/actions/setup-nix
+
       - name: Resolve context
         id: ctx
         env:
-          GH_TOKEN: ${{ github.token }}
-          WR_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          WR_HEAD_REPO:
-            ${{ github.event.workflow_run.head_repository.full_name }}
-          EVENT_PR: ${{ github.event.pull_request.number }}
-          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          proceed=false pr="" head_sha="" base_ref=""
-          if [ "$GITHUB_EVENT_NAME" = workflow_run ]; then
-            head_sha="$WR_HEAD_SHA"
-            if [ "$WR_HEAD_REPO" = "$GITHUB_REPOSITORY" ]; then
-              pr=$(gh api "repos/$GITHUB_REPOSITORY/commits/$head_sha/pulls" \
-                --jq '[.[] | select(.state == "open")][0].number // empty')
-            fi
-          else
-            pr="$EVENT_PR"
-            head_sha="$EVENT_HEAD_SHA"
-            conclusion=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow Build \
-              --commit "$head_sha" --json conclusion --jq '.[0].conclusion // empty')
-            if [ "$conclusion" != success ]; then
-              echo "Build for $head_sha is not green yet; its workflow_run event will pick this up"
-              pr=""
-            fi
-          fi
-          if [ -n "$pr" ]; then
-            labeled=$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" \
-              --json state,isCrossRepository,labels \
-              --jq 'select(.state == "OPEN" and (.isCrossRepository | not))
-                    | .labels[].name | select(. == "preview")' | head -1)
-            if [ -n "$labeled" ]; then
-              proceed=true
-              base_ref=$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" \
-                --json baseRefName --jq .baseRefName)
-            fi
-          fi
-          echo "proceed=$proceed" >>"$GITHUB_OUTPUT"
-          {
-            echo "PR=$pr"
-            echo "HEAD_SHA=$head_sha"
-            echo "BASE_REF=$base_ref"
-          } >>"$GITHUB_ENV"
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          nix run .#wasinix -- ci preview-context
+          --repository "$GITHUB_REPOSITORY"
+          --event "$GITHUB_EVENT_PATH"
+          --github-output "$GITHUB_OUTPUT"
 
       - name: Checkout
+        id: head_checkout
         if: steps.ctx.outputs.proceed == 'true'
         uses: actions/checkout@v4
         with:
           # the real head commit, not the merge ref: the preview provenance
           # records a rev consumers can fetch
-          ref: ${{ env.HEAD_SHA }}
+          ref: ${{ steps.ctx.outputs.headSha }}
 
       - name: Select wasmer registry
         if: steps.ctx.outputs.proceed == 'true'
@@ -115,21 +87,12 @@ jobs:
           token-dev: ${{ secrets.WASMER_TOKEN_DEV }}
 
       - name: Checkout base
+        id: base_checkout
         if: steps.ctx.outputs.proceed == 'true'
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.BASE_REF }}
+          ref: ${{ steps.ctx.outputs.baseRef }}
           path: base
-
-      - name: Set up Nix
-        if: steps.ctx.outputs.proceed == 'true'
-        uses: ./.github/actions/setup-nix
-
-      # the g prefix keeps the sha segment alphanumeric: an all-digit sha
-      # with a leading zero is invalid semver (the registry rejects it)
-      - name: Preview tag
-        if: steps.ctx.outputs.proceed == 'true'
-        run: echo "TAG=pr${PR}.g${HEAD_SHA:0:7}" >>"$GITHUB_ENV"
 
       # claims the comment before the long part, so the PR shows the preview
       # is coming (and, on failure, that it was attempted)
@@ -137,6 +100,9 @@ jobs:
         if: steps.ctx.outputs.proceed == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.ctx.outputs.headSha }}
+          PR: ${{ steps.ctx.outputs.pullRequest }}
+          TAG: ${{ steps.ctx.outputs.tag }}
         run: |
           nix run .#wasinix --option accept-flake-config true -- \
             preview "$TAG" --status building \
@@ -144,9 +110,13 @@ jobs:
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 
       - name: Publish preview
+        id: publish_preview
         if: steps.ctx.outputs.proceed == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.ctx.outputs.headSha }}
+          PR: ${{ steps.ctx.outputs.pullRequest }}
+          TAG: ${{ steps.ctx.outputs.tag }}
         run: |
           nix run .#wasinix --option accept-flake-config true -- \
             preview "$TAG" --base base \
@@ -161,6 +131,9 @@ jobs:
         if: failure() && steps.ctx.outputs.proceed == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.ctx.outputs.headSha }}
+          PR: ${{ steps.ctx.outputs.pullRequest }}
+          TAG: ${{ steps.ctx.outputs.tag }}
         run: |
           nix run .#wasinix --option accept-flake-config true -- \
             preview "$TAG" --status failed \

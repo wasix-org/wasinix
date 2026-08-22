@@ -326,6 +326,15 @@ pub enum CiCommand {
         #[arg(long)]
         github_output: PathBuf,
     },
+    /// Resolve and verify a preview workflow trigger against live PR state
+    PreviewContext {
+        #[arg(long)]
+        repository: String,
+        #[arg(long)]
+        event: PathBuf,
+        #[arg(long)]
+        github_output: PathBuf,
+    },
     /// Prepare and execute a resolved request in one payload, which is the
     /// command durable runs supervise
     Run {
@@ -1421,6 +1430,22 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             match pull_request {
                 Some(number) => ui::fact("pull request", number),
                 None => ui::note("no matching open pull request"),
+            }
+            Ok(CommandStatus::SUCCESS)
+        }
+        CiCommand::PreviewContext {
+            repository,
+            event,
+            github_output,
+        } => {
+            let event: serde_json::Value = crate::support::json::read(&event)?;
+            let client = crate::github::client::Client::new(None);
+            let context = crate::github::actions::preview_context(&client, &repository, &event)?;
+            crate::github::actions::append(&github_output, &context.outputs())?;
+            if let Some(note) = &context.note {
+                ui::note(note);
+            } else {
+                ui::fact("preview", if context.proceed { "ready" } else { "not requested" });
             }
             Ok(CommandStatus::SUCCESS)
         }

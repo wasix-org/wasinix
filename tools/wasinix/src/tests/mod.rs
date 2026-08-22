@@ -4662,6 +4662,7 @@ mod corpus {
             "ci start",
             "ci update-matrix",
             "ci pull-request",
+            "ci preview-context",
             "ci run",
             "ci remote",
             "ci observe",
@@ -4772,6 +4773,7 @@ mod corpus {
             "ci start --github-output outputs -- wasinix ci run --request r.json --run-dir d",
             "ci update-matrix --targets wasmer --github-output outputs",
             "ci pull-request --repository base/repo --head-sha aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --head-repository fork/repo --github-output outputs",
+            "ci preview-context --repository base/repo --event event.json --github-output outputs",
             "ci prepare --request r.json --run-dir d",
             "ci exec --run-dir d --task case.eval",
             "ci command --origin o.json --run-dir d --push-cache",
@@ -5436,6 +5438,41 @@ mod corpus {
             crate::cli::preview::CARGO_PREVIEW_APP,
         );
         assert_eq!(field(delete, "run").as_str(), Some(delete_command.as_str()));
+
+        let preview = read("preview.yml");
+        let preview_job = job(&preview, "preview");
+        assert!(
+            step_index(preview_job, "adapter_checkout")
+                < step_index(preview_job, "adapter_setup")
+                && step_index(preview_job, "adapter_setup") < step_index(preview_job, "ctx")
+                && step_index(preview_job, "ctx") < step_index(preview_job, "head_checkout"),
+            "preview context must run from default-branch code before the PR checkout"
+        );
+        assert_eq!(
+            field(step(preview_job, "ctx"), "run").as_str(),
+            Some(
+                "nix run .#wasinix -- ci preview-context --repository \"$GITHUB_REPOSITORY\" --event \"$GITHUB_EVENT_PATH\" --github-output \"$GITHUB_OUTPUT\""
+            )
+        );
+        assert_eq!(
+            field(field(step(preview_job, "head_checkout"), "with"), "ref").as_str(),
+            Some("${{ steps.ctx.outputs.headSha }}")
+        );
+        assert_eq!(
+            field(field(step(preview_job, "base_checkout"), "with"), "ref").as_str(),
+            Some("${{ steps.ctx.outputs.baseRef }}")
+        );
+        let publish_env = field(step(preview_job, "publish_preview"), "env");
+        for (name, output) in [
+            ("HEAD_SHA", crate::github::actions::OUTPUT_HEAD_SHA),
+            ("PR", crate::github::actions::OUTPUT_PULL_REQUEST),
+            ("TAG", crate::github::actions::OUTPUT_TAG),
+        ] {
+            assert_eq!(
+                field(publish_env, name).as_str(),
+                Some(format!("${{{{ steps.ctx.outputs.{output} }}}}").as_str())
+            );
+        }
     }
 
     /// The cache identity (key, substituter, bucket) lives in support/nix.rs
