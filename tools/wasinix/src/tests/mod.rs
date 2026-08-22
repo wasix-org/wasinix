@@ -4853,6 +4853,24 @@ mod corpus {
         offenders
     }
 
+    #[derive(serde::Deserialize)]
+    struct HelperBoundaries {
+        host: Vec<String>,
+        foundational: Vec<String>,
+        leaf: Vec<String>,
+        research: Vec<String>,
+    }
+
+    fn helper_boundaries() -> Option<(std::path::PathBuf, HelperBoundaries)> {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let manifest = root.join("pkgs/helper-boundaries.toml");
+        manifest.is_file().then(|| {
+            let boundaries =
+                toml::from_str(&std::fs::read_to_string(&manifest).unwrap()).unwrap();
+            (root, boundaries)
+        })
+    }
+
     /// Results flow through the ui module; a stray print bypasses verbosity,
     /// stream discipline, and the JSON error contract.
     #[test]
@@ -5151,21 +5169,9 @@ mod corpus {
     /// has been chosen; grouped roles let Nix consume the same inventory.
     #[test]
     fn every_helper_has_one_build_graph_role() {
-        #[derive(serde::Deserialize)]
-        struct Boundaries {
-            host: Vec<String>,
-            foundational: Vec<String>,
-            leaf: Vec<String>,
-            research: Vec<String>,
-        }
-
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let manifest = root.join("pkgs/helper-boundaries.toml");
-        if !manifest.is_file() {
+        let Some((root, boundaries)) = helper_boundaries() else {
             return;
-        }
-        let boundaries: Boundaries =
-            toml::from_str(&std::fs::read_to_string(&manifest).unwrap()).unwrap();
+        };
         let mut classified = std::collections::BTreeMap::new();
         for (role, paths) in [
             ("host", boundaries.host),
@@ -5208,6 +5214,31 @@ mod corpus {
         let stale: Vec<&String> = classified.difference(&helpers).collect();
         assert!(missing.is_empty(), "unclassified helpers: {missing:?}");
         assert!(stale.is_empty(), "missing classified helpers: {stale:?}");
+    }
+
+    /// Foundational and leaf helpers keep a source boundary outside the main
+    /// CLI. Host orchestration may move into Rust; build helpers are invoked
+    /// through their narrowly sourced outputs instead of their repository file.
+    #[test]
+    fn build_helpers_stay_out_of_cli_sources() {
+        let Some((_, boundaries)) = helper_boundaries() else {
+            return;
+        };
+        let protected = boundaries.foundational.iter().chain(&boundaries.leaf);
+        let sources = sources(false);
+        let mut found = Vec::new();
+        for path in protected {
+            let name = std::path::Path::new(path)
+                .file_name()
+                .unwrap()
+                .to_string_lossy();
+            for (source, text) in &sources {
+                if text.contains(path) || text.contains(name.as_ref()) {
+                    found.push(format!("{source}: references {path}"));
+                }
+            }
+        }
+        assert!(found.is_empty(), "{}", found.join("\n"));
     }
 
     /// The strings that couple the binary to its workflows: the authorize

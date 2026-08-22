@@ -124,13 +124,21 @@
           (lib.attrNames rels.${key})))
   ) (lib.attrNames rels);
 
+  indexer = pkgs.writeShellApplication {
+    name = "wasinix-python-index";
+    runtimeInputs = [pkgs.python3];
+    text = ''
+      exec python3 ${./make-index.py} "$@"
+    '';
+  };
+
   registry =
     pkgs.runCommand "wasix-python-registry" {
-      nativeBuildInputs = [pkgs.python3];
+      nativeBuildInputs = [indexer];
       distsJson = builtins.toJSON wheelDists;
       passAsFile = ["distsJson"];
     } ''
-      python3 ${./make-index.py} "$distsJsonPath" "$out"
+      wasinix-python-index "$distsJsonPath" "$out"
     '';
 
   # e2e/import tests run on the default python webc, installing from the merged index.
@@ -147,7 +155,7 @@ in
       (o.passthru or {})
       // {
         tests = mkTestGroup "python-registry" {behavior = tests;};
-        inherit wheelVersions wheels published;
+        inherit indexer wheelVersions wheels published;
         wasix.updateNotes = lib.optional (staleRels != []) {
           message = "rels.json has stale keys (${lib.concatStringsSep ", " staleRels}); nix run .#update -- nixpkgs drops them";
           when = _: _: true;

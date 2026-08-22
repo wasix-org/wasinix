@@ -16,6 +16,7 @@ use crate::support::error::{Error, Result};
 pub enum Capability {
     Aws,
     Python,
+    PythonIndex,
     Rclone,
     Wasmer,
 }
@@ -38,6 +39,11 @@ impl Capability {
                 name: "Python",
                 output: "wasinix-capability-python",
                 executable: "python3",
+            },
+            Capability::PythonIndex => Spec {
+                name: "Python registry indexer",
+                output: "wasinix-capability-python-index",
+                executable: "wasinix-python-index",
             },
             Capability::Rclone => Spec {
                 name: "rclone",
@@ -414,6 +420,7 @@ mod tests {
         let capabilities = [
             Capability::Aws,
             Capability::Python,
+            Capability::PythonIndex,
             Capability::Rclone,
             Capability::Wasmer,
         ];
