@@ -4658,6 +4658,8 @@ mod corpus {
             "remote field",
             "remote init",
             "ci nix-config",
+            "ci start",
+            "ci update-matrix",
             "ci run",
             "ci remote",
             "ci observe",
@@ -4725,6 +4727,16 @@ mod corpus {
         }
     }
 
+    #[test]
+    fn update_matrix_is_sorted_deduplicated_and_never_empty() {
+        assert_eq!(
+            crate::cli::update_matrix(vec!["zlib".into(), "brotli".into(), "zlib".into()])
+                .unwrap(),
+            r#"[{"name":"brotli"},{"name":"zlib"}]"#
+        );
+        assert!(crate::cli::update_matrix(Vec::new()).is_err());
+    }
+
     /// Every spelling an alias, doc, or self-invocation uses must parse; a
     /// retired spelling must not quietly come back.
     #[test]
@@ -4755,6 +4767,8 @@ mod corpus {
             "remote field store",
             "remote init",
             "ci run --request r.json --run-dir d",
+            "ci start --github-output outputs -- wasinix ci run --request r.json --run-dir d",
+            "ci update-matrix --targets wasmer --github-output outputs",
             "ci prepare --request r.json --run-dir d",
             "ci exec --run-dir d --task case.eval",
             "ci command --origin o.json --run-dir d --push-cache",
@@ -5269,95 +5283,150 @@ mod corpus {
         assert!(found.is_empty(), "{}", found.join("\n"));
     }
 
-    /// The strings that couple the binary to its workflows: the authorize
-    /// outputs and kind values ci-command.yml dispatches on, the per-PR
-    /// preview app names preview-cleanup.yml deletes, and the artifact name
-    /// test-report.yml downloads from build.yml. A drifted spelling would
-    /// fail silently (a job that never matches, an app never cleaned), so
-    /// the coupling is pinned here instead.
+    /// Workflow fields coupled to the binary are read as YAML nodes. This
+    /// distinguishes a live output, condition, or action input from the same
+    /// words in a comment or an unrelated shell fragment.
     #[test]
     fn workflow_couplings_match_the_binary() {
+        fn field<'a>(
+            value: &'a serde_yaml_ng::Value,
+            name: &str,
+        ) -> &'a serde_yaml_ng::Value {
+            value
+                .as_mapping()
+                .unwrap()
+                .get(serde_yaml_ng::Value::String(name.into()))
+                .unwrap_or_else(|| panic!("missing YAML field {name}"))
+        }
+        fn job<'a>(
+            workflow: &'a serde_yaml_ng::Value,
+            name: &str,
+        ) -> &'a serde_yaml_ng::Value {
+            field(field(workflow, "jobs"), name)
+        }
+        fn step<'a>(job: &'a serde_yaml_ng::Value, id: &str) -> &'a serde_yaml_ng::Value {
+            field(job, "steps")
+                .as_sequence()
+                .unwrap()
+                .iter()
+                .find(|step| {
+                    step.as_mapping().and_then(|step| {
+                        step.get(serde_yaml_ng::Value::String("id".into()))
+                            .and_then(serde_yaml_ng::Value::as_str)
+                    }) == Some(id)
+                })
+                .unwrap_or_else(|| panic!("missing workflow step {id}"))
+        }
+        fn step_index(job: &serde_yaml_ng::Value, id: &str) -> usize {
+            field(job, "steps")
+                .as_sequence()
+                .unwrap()
+                .iter()
+                .position(|candidate| std::ptr::eq(candidate, step(job, id)))
+                .unwrap()
+        }
+
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.github");
         if !root.is_dir() {
             return;
         }
-        let read = |name: &str| std::fs::read_to_string(root.join("workflows").join(name)).unwrap();
+        let read = |name: &str| -> serde_yaml_ng::Value {
+            serde_yaml_ng::from_str(
+                &std::fs::read_to_string(root.join("workflows").join(name)).unwrap(),
+            )
+            .unwrap()
+        };
         let ci_command = read("ci-command-run.yml");
-        for kind in [
-            crate::ci::origin::CommandKind::Build,
-            crate::ci::origin::CommandKind::Mutation,
+        let authorize = job(&ci_command, "authorize");
+        for output in [
+            crate::github::actions::OUTPUT_KIND,
+            crate::github::actions::OUTPUT_COMMENT_ID,
+            crate::github::actions::OUTPUT_PULL_REQUEST,
+            crate::github::actions::OUTPUT_HEAD_SHA,
         ] {
-            assert!(
-                ci_command.contains(&format!(
-                    "needs.authorize.outputs.kind == '{}'",
-                    kind.as_str()
-                )),
-                "ci-command-run.yml dispatches no job for kind {}",
-                kind.as_str()
+            assert_eq!(
+                field(field(authorize, "outputs"), output).as_str(),
+                Some(format!("${{{{ steps.authorize.outputs.{output} }}}}").as_str())
             );
         }
-        for kind in [
-            crate::ci::origin::CommandKind::Help,
-            crate::ci::origin::CommandKind::Plan,
-        ] {
-            assert!(
-                ci_command.contains(&format!(
-                    "steps.authorize.outputs.kind == '{}'",
-                    kind.as_str()
-                )),
-                "ci-command-run.yml never replies to {}",
-                kind.as_str()
-            );
-        }
-        for output in ["kind=", "commentId=", "pullRequest=", "headSha="] {
-            assert!(
-                ci_command.contains(&format!(
-                    "steps.authorize.outputs.{}",
-                    output.trim_end_matches('=')
-                )),
-                "ci-command-run.yml does not consume authorize output {output}"
-            );
-        }
-        let cleanup = read("preview-cleanup.yml");
-        for app in ["python-registry", "cargo-registry"] {
-            assert!(
-                cleanup.contains(app),
-                "preview-cleanup.yml no longer deletes the {app} preview app"
-            );
-        }
+        assert_eq!(
+            field(job(&ci_command, "build"), "if").as_str(),
+            Some("needs.authorize.outputs.kind == 'build'")
+        );
+        assert_eq!(
+            field(job(&ci_command, "mutate"), "if").as_str(),
+            Some(
+                "needs.authorize.outputs.kind == 'mutation' && github.repository == 'wasix-org/wasinix'"
+            )
+        );
+        let direct = field(authorize, "steps")
+            .as_sequence()
+            .unwrap()
+            .iter()
+            .find(|candidate| field(candidate, "name").as_str() == Some("Reply direct command"))
+            .unwrap();
+        assert_eq!(
+            field(direct, "if").as_str(),
+            Some("steps.authorize.outputs.kind == 'help' || steps.authorize.outputs.kind == 'plan'")
+        );
+
         let build = read("build.yml");
         let report = read("test-report.yml");
-        assert!(
-            build.contains("name: ci-run") && report.contains("name: ci-run"),
-            "the ci-run artifact name drifted between build.yml and test-report.yml"
+        assert_eq!(
+            field(field(step(job(&build, "build"), "run_artifact"), "with"), "name").as_str(),
+            Some(crate::github::actions::ARTIFACT_CI_RUN)
         );
-        let build_artifact = build.find("id: run_artifact").unwrap();
-        let build_baseline = build.find("id: baseline").unwrap();
-        let build_gc = build
-            .find("run gc --max-age-days 0")
-            .expect("build.yml does not collect its durable runs");
+        assert_eq!(
+            field(field(step(job(&report, "report"), "download"), "with"), "name").as_str(),
+            Some(crate::github::actions::ARTIFACT_CI_RUN)
+        );
+
+        let build_job = job(&build, "build");
         assert!(
-            build_gc > build_artifact && build_gc > build_baseline,
+            step_index(build_job, "collect") > step_index(build_job, "run_artifact")
+                && step_index(build_job, "collect") > step_index(build_job, "baseline"),
             "build.yml collects a run before its artifact and baseline are durable"
         );
-        assert!(
-            build.contains("steps.run_artifact.outcome == 'success'")
-                && build.contains("steps.baseline.outcome == 'success'"),
-            "build.yml cleanup is not gated on durable publication"
+        assert_eq!(
+            field(step(build_job, "collect"), "if").as_str(),
+            Some(
+                "${{ always() && steps.run_artifact.outcome == 'success' && (steps.baseline.outcome == 'success' || steps.baseline.outcome == 'skipped') }}"
+            )
         );
-        let command_artifact = ci_command.find("id: run_artifact").unwrap();
-        let command_gc = ci_command
-            .find("run gc --max-age-days 0")
-            .expect("ci-command-run.yml does not collect its durable runs");
+
+        let command_job = job(&ci_command, "build");
         assert!(
-            command_gc > command_artifact,
+            step_index(command_job, "collect") > step_index(command_job, "run_artifact"),
             "ci-command-run.yml collects a failed run before preserving it"
         );
-        assert!(
-            ci_command.contains("steps.report.outcome == 'success'")
-                && ci_command.contains("steps.run_artifact.outcome == 'success'"),
-            "ci-command-run.yml cleanup is not gated on durable publication"
+        assert_eq!(
+            field(step(command_job, "collect"), "if").as_str(),
+            Some(
+                "${{ always() && steps.run.outputs.runDir != '' && ((steps.run.outcome == 'success' && steps.report.outcome == 'success') || (steps.run.outcome != 'success' && steps.run_artifact.outcome == 'success')) }}"
+            )
         );
+
+        let update = read("update.yml");
+        let targets = job(&update, "targets");
+        assert_eq!(
+            field(field(targets, "outputs"), crate::github::actions::OUTPUT_MATRIX).as_str(),
+            Some("${{ steps.list.outputs.matrix }}")
+        );
+        assert_eq!(
+            field(step(targets, "list"), "run").as_str(),
+            Some(
+                "nix run .#wasinix -- ci update-matrix --targets \"$TARGETS\" --github-output \"$GITHUB_OUTPUT\""
+            )
+        );
+
+        let cleanup = read("preview-cleanup.yml");
+        let delete = step(job(&cleanup, "cleanup"), "delete_apps");
+        let delete_command = format!(
+            "for app in {} {}; do\n  nix shell .#wasmer --accept-flake-config -c wasmer app delete \\\n    \"$NAMESPACE/$app-pr${{PR}}\" --registry \"$WASMER_REGISTRY\" --non-interactive \\\n    || echo \"no $app preview app to delete\"\ndone\n",
+            crate::cli::preview::PYTHON_PREVIEW_APP,
+            crate::cli::preview::CARGO_PREVIEW_APP,
+        );
+        assert_eq!(field(delete, "run").as_str(), Some(delete_command.as_str()));
     }
 
     /// The cache identity (key, substituter, bucket) lives in support/nix.rs

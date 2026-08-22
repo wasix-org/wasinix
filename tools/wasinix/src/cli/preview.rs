@@ -14,6 +14,13 @@ use crate::support::error::{Error, Result};
 use crate::support::process::CommandStatus;
 use crate::support::ui;
 
+pub(crate) const CARGO_PREVIEW_APP: &str = "cargo-registry";
+pub(crate) const PYTHON_PREVIEW_APP: &str = "python-registry";
+
+pub(crate) fn preview_app(name: &str, pull_request: u64) -> String {
+    format!("{name}-pr{pull_request}")
+}
+
 #[derive(Clone, Copy, PartialEq, clap::ValueEnum)]
 pub enum Status {
     /// The claim posted before the long work, so the PR shows it is coming
@@ -265,7 +272,7 @@ fn publish(args: &PreviewArgs, repo: &Path) -> Result<()> {
         } else {
             let url = python::preview(python::Preview {
                 site,
-                app: format!("python-registry-pr{pull_request}"),
+                app: preview_app(PYTHON_PREVIEW_APP, pull_request),
                 owner: namespace.clone(),
                 registry: args.registry.clone(),
             })?;
@@ -281,7 +288,7 @@ fn publish(args: &PreviewArgs, repo: &Path) -> Result<()> {
         app: args
             .surface
             .pull_request
-            .map(|pull_request| format!("cargo-registry-pr{pull_request}")),
+            .map(|pull_request| preview_app(CARGO_PREVIEW_APP, pull_request)),
         owner: namespace.clone(),
         registry: args.registry.clone(),
         mint: None,

@@ -240,6 +240,7 @@ implementations are gone.
 | Diagnostics | Execution result and log-retention policy | Bounded failure fixtures |
 | Artifact sizes | Artifact writers | Accounting-total tests |
 | GitHub publication | One surface publisher | Permission and sanitizer types |
+| GitHub Actions outputs | `github/actions.rs` | Scalar validation and parsed workflow tests |
 | Workflow coupling | Shared metadata or parsed structures | Structural workflow tests |
 | Build helpers | Per-purpose helper derivations | Derivation-graph checks |
 

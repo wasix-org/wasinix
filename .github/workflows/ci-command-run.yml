@@ -69,7 +69,6 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           bin="$(nix build .#wasinix --no-link --print-out-paths)/bin/wasinix"
-          echo "bin=$bin" >> "$GITHUB_OUTPUT"
           set +e
           "$bin" ci origin \
             --event "$GITHUB_EVENT_PATH" \
@@ -171,12 +170,12 @@ jobs:
           # hold the run's own words, not substitution noise.
           bin="$(nix build .#wasinix --no-link --print-out-paths)/bin/wasinix"
           exec 2> >(tee run-error.txt >&2)
-          id=$("$bin" run start -- "$bin" ci command \
+          IFS=$'\t' read -r id dir < <("$bin" ci start \
+            --github-output "$GITHUB_OUTPUT" -- \
+            "$bin" ci command \
             --origin origin-command.json \
             --run-dir '{run-dir}' \
             "${push_cache[@]}")
-          dir=$("$bin" run status "$id" --json | jq -r .runDir)
-          echo "dir=$dir" >> "$GITHUB_OUTPUT"
           "$bin" ci publish --run-dir "$dir" --watch \
             --sha "$HEAD_SHA" \
             --pull-request "$PULL_REQUEST" \
@@ -188,7 +187,7 @@ jobs:
       - name: Post report
         id: report
         if:
-          always() && steps.run.conclusion != 'skipped' && steps.run.outputs.dir
+          always() && steps.run.conclusion != 'skipped' && steps.run.outputs.runDir
           != ''
         shell: bash
         env:
@@ -196,15 +195,15 @@ jobs:
           HEAD_SHA: ${{ needs.authorize.outputs.headSha }}
           PULL_REQUEST: ${{ needs.authorize.outputs.pullRequest }}
           COMMENT_ID: ${{ needs.authorize.outputs.commentId }}
-          RUN_DIR: ${{ steps.run.outputs.dir }}
+          RUN_DIR: ${{ steps.run.outputs.runDir }}
         run: |
           nix run .#wasinix -- ci publish --run-dir "$RUN_DIR" \
             --sha "$HEAD_SHA" \
             --pull-request "$PULL_REQUEST" \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --comment --reply-to "$COMMENT_ID" \
-            --step-summary "$GITHUB_STEP_SUMMARY"
-          echo "reported=true" >> "$GITHUB_OUTPUT"
+            --step-summary "$GITHUB_STEP_SUMMARY" \
+            --github-output "$GITHUB_OUTPUT"
 
       - name: Share the failure detail
         if: failure()
@@ -218,16 +217,17 @@ jobs:
       # only evidence of what happened inside the run.
       - name: Share the run directory
         id: run_artifact
-        if: failure() && steps.run.outputs.dir != ''
+        if: failure() && steps.run.outputs.runDir != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: failed-run
-          path: ${{ steps.run.outputs.dir }}
+          path: ${{ steps.run.outputs.runDir }}
           if-no-files-found: error
 
       - name: Collect durable runs
+        id: collect
         if:
-          ${{ always() && steps.run.outputs.dir != '' &&
+          ${{ always() && steps.run.outputs.runDir != '' &&
           ((steps.run.outcome == 'success' && steps.report.outcome == 'success') ||
           (steps.run.outcome != 'success' &&
           steps.run_artifact.outcome == 'success')) }}
