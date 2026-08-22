@@ -94,18 +94,23 @@
 
   laneOverlay = {
     contextFor,
+    declared,
+    enabled ? _previous: true,
     extension,
-    lane,
+    label,
+    applyFunction ? function: function,
+    extendPackageFor ? null,
+    preparePackage ? package: package,
     scope,
     variant,
   }: let
-    declared = (extension.overlays or {}).${lane} or (_final: _prev: {});
     rawOverlay = declaredOverlayFor {
       inherit contextFor declared extension;
-      label = "overlay lane '${lane}'";
+      inherit label applyFunction extendPackageFor;
     };
     overlay = final: previous:
-      lib.mapAttrs (name: value:
+      lib.optionalAttrs (enabled previous)
+      (lib.mapAttrs (name: value:
         if lib.isDerivation value
         then
           packageTransformFor {
@@ -113,13 +118,9 @@
             packageSet = previous;
           }
           name
-          value
+          (preparePackage value)
         else value)
-      (lib.optionalAttrs (
-        lane
-        != "wasix"
-        || previous.stdenv.hostPlatform.isWasix or false
-      ) (rawOverlay final previous));
+      (rawOverlay final previous));
   in
     registerExtensionOverlay {inherit declared extension overlay;};
 
@@ -128,37 +129,6 @@
       (prev.${projectLib.extensionContextsAttr} or {})
       // {${extension.id} = {inherit final prev;};};
   };
-
-  pythonLaneOverlay = {
-    contextFor,
-    enclosingPkgs,
-    extension,
-    interpreter,
-  }: let
-    declared = (extension.overlays or {}).python;
-    enclosingContext = enclosingPkgs.${projectLib.extensionContextsAttr}.${extension.id};
-    rawOverlay = declaredOverlayFor {
-      inherit contextFor declared extension;
-      label = "Python lane";
-      applyFunction = function: function enclosingContext.final enclosingContext.prev;
-      extendPackageFor = extendPythonPackage;
-    };
-    overlay = final: previous:
-      lib.optionalAttrs (previous.python.stdenv.hostPlatform.isWasix or false)
-      (lib.mapAttrs (name: value:
-        if lib.isDerivation value
-        then
-          packageTransformFor {
-            scope = "python";
-            variant = {inherit interpreter;};
-            packageSet = previous;
-          }
-          name
-          (repairPythonPackage value)
-        else value)
-      (rawOverlay final previous));
-  in
-    registerExtensionOverlay {inherit declared extension overlay;};
 
   packageEntry = {
     address,
@@ -365,9 +335,13 @@ in rec {
           [
             (captureExtensionContext extension)
           ]
-          ++ map (lane:
+          ++ map (lane: let
+            declared = (extension.overlays or {}).${lane} or (_final: _prev: {});
+          in
             laneOverlay {
-              inherit contextFor extension lane scope variant;
+              inherit contextFor declared extension scope variant;
+              enabled = previous: lane != "wasix" || (previous.stdenv.hostPlatform.isWasix or false);
+              label = "overlay lane '${lane}'";
             })
           lanes
       )
@@ -538,11 +512,20 @@ in rec {
       pythonRaw = lib.mapAttrs (interpreter: spec: (lib.foldl' (
           packageSet: extension:
             if (extension.overlays or {}) ? python
-            then
-              extendPythonSet packageSet (pythonLaneOverlay {
+            then let
+              enclosingContext = spec.pkgs.${projectLib.extensionContextsAttr}.${extension.id};
+            in
+              extendPythonSet packageSet (laneOverlay {
                 contextFor = contextFor "python" {inherit interpreter;} spec.pkgs;
-                enclosingPkgs = spec.pkgs;
-                inherit extension interpreter;
+                declared = extension.overlays.python;
+                enabled = previous: previous.python.stdenv.hostPlatform.isWasix or false;
+                inherit extension;
+                label = "Python lane";
+                applyFunction = function: function enclosingContext.final enclosingContext.prev;
+                extendPackageFor = extendPythonPackage;
+                preparePackage = repairPythonPackage;
+                scope = "python";
+                variant = {inherit interpreter;};
               })
             else packageSet
         )
