@@ -135,3 +135,7 @@ structural boundary can express the rule.
   write itself.
 - `cli/update.rs::MutationMode` + `conclude`: every tree mutation's flags and
   exit; `update/managed.rs` is the managed-PR record.
+- `cargo-registry-wire`: the Cargo publish payload and sparse-index record come
+  from one normalized-manifest translation. The narrow crate is also the
+  derivation-facing binary, so foundational checks never depend on the main
+  CLI.

@@ -6,6 +6,7 @@
   lib,
   registry,
   manifest,
+  cargoRegistryWire,
 }: let
   # Zero-dep, so consume resolves offline. Its patch adds the `dl` target env
   # (our -dl triple); the `dl` marker in the built crate proves the patch applied.
@@ -148,11 +149,11 @@ in {
   # template, the +-in-filename URLs, the prefix layout, and the entry shape.
   sparse =
     pkgs.runCommandCC "cargo-registry-test-sparse" {
-      nativeBuildInputs = [pkgs.cargo pkgs.rustc pkgs.python3 pkgs.curl pkgs.writableTmpDirAsHomeHook];
+      nativeBuildInputs = [cargoRegistryWire pkgs.cargo pkgs.rustc pkgs.python3 pkgs.curl pkgs.writableTmpDirAsHomeHook];
     } ''
       port=8737
       base="http://127.0.0.1:$port"
-      python3 "${registry}/make-sparse-index.py" "${registry}" site --base-url "$base" \
+      cargo-registry-wire sparse-index "${registry}" site --base-url "$base" \
         --only "${probe.crate}@${probeEntry.wasixVersion}"
       python3 -m http.server --directory site "$port" &
       server=$!
