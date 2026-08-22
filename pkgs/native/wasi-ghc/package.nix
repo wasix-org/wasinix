@@ -1,0 +1,5 @@
+{
+  exposePackage,
+  package,
+}:
+exposePackage package
