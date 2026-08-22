@@ -65,7 +65,7 @@ in {
     pythonTag ? null,
   }: let
     name = drv.pname or drv.name;
-    rel = (rels."artifacts.registry.python314.wheels.${name}" or {}).${drv.version} or 1;
+    rel = (rels."artifacts.registry.python.wheels.${name}" or {}).${drv.version} or 1;
     requiresPython = requiresPythonOf variants;
   in
     pkgs.runCommand "${name}-${drv.version}+wasix.${toString rel}-published" {

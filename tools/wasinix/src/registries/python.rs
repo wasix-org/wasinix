@@ -32,7 +32,7 @@ fn registry_path(given: Option<PathBuf>) -> Result<PathBuf> {
     }
     let paths = crate::support::nix::Invocation::flake(
         "build",
-        project_installable(".", "artifacts.registry.python314"),
+        project_installable(".", "artifacts.registry.python"),
     )
     .arg("--no-link")
     .out_paths("building the index")?;
@@ -509,11 +509,11 @@ fn webc_drvs_apply() -> String {
 fn dists(flake: &Flake<'_>) -> Result<BTreeMap<String, Value>> {
     // distsJson is a JSON string, not a structure: it is written for
     // consumers outside nix.
-    let raw = eval(flake, "artifacts.registry.python314.distsJson", None)?;
+    let raw = eval(flake, "artifacts.registry.python.distsJson", None)?;
     let parsed: Value = match raw.as_str() {
         Some(text) => {
             serde_json::from_str(text).map_err(|source| crate::support::error::Error::Json {
-                path: "<artifacts.registry.python314.distsJson>".into(),
+                path: "<artifacts.registry.python.distsJson>".into(),
                 source,
             })?
         }

@@ -2,7 +2,7 @@
 # python versions: each wheel carries its cp313/cp314 tag in the filename, so one index serves both
 # and a resolver picks the file matching the running interpreter.
 #
-#   nix build .#legacyPackages.x86_64-linux.artifacts.registry.python314
+#   nix build .#legacyPackages.x86_64-linux.artifacts.registry.python
 #   pip install --index-url file://$(readlink -f result)/all/simple numpy
 {
   pkgs,
@@ -21,7 +21,7 @@
   # The wheels carry their own release (pkgs/python-publish.nix). Revision
   # state is read only to report keys no served version claims.
   rels = builtins.fromJSON (builtins.readFile ../../release-revisions.json);
-  relPrefix = "artifacts.registry.python314.wheels.";
+  relPrefix = "artifacts.registry.python.wheels.";
   inherit (import ../python-publish.nix {inherit pkgs lib;}) publishOf interpreters;
 
   # Repo-relative "path:line" of the package definition, for the index's
@@ -64,7 +64,7 @@
       # across py313/py314 nor with a served history version of itself:
       # `nix build github:wasix-org/wasinix/<rev>#legacyPackages.x86_64-linux.${attr}`
       # rebuilds it.
-      attr = ''artifacts.registry.python314.published.${pv}.${name}."${version}"'';
+      attr = ''artifacts.registry.python.published.${pv}.${name}."${version}"'';
       drvPath = builtins.unsafeDiscardStringContext drv.drvPath;
       source = sourceOf drv;
       # our build differs from upstream's, so PyPI cannot stand in for it

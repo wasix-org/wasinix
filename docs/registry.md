@@ -130,7 +130,7 @@ after a pin bump.
 
 All shipped wheels, plus their transitive python deps, are published as a static
 PEP 503 "simple" index:
-`.#legacyPackages.x86_64-linux.artifacts.registry.python314`
+`.#legacyPackages.x86_64-linux.artifacts.registry.python`
 (`pkgs/python-registry/`). Serve the output from any static file host, or
 install directly:
 
@@ -189,7 +189,7 @@ serving this index over loopback.
 Every wheel is published as `<version>+wasix.<rel>`, a PEP 440 local version.
 `rel` counts our builds of one upstream version and comes from the root
 `release-revisions.json`, keyed by attr path
-(`artifacts.registry.python314.wheels.<pname>`, or `artifacts.webc.<name>` for
+(`artifacts.registry.python.wheels.<pname>`, or `artifacts.webc.<name>` for
 webcs) then version, default 1. It is shared across python versions, since the
 cp tag already keeps filenames distinct.
 
@@ -199,7 +199,7 @@ upstream version bump resets it by key miss, as `wasinix update` drops the stale
 key. For a deliberate whole-registry rebuild:
 
 ```sh
-wasinix versions bump --all-versions 'artifacts.registry.python314.wheels.*'
+wasinix versions bump --all-versions 'artifacts.registry.python.wheels.*'
 ```
 
 That flag also bumps every served history version, so it stays explicit.
@@ -216,7 +216,7 @@ runtime update, and the volume keeps its original artifact in that case. Bump
 the rel only when that rebuilt wheel is itself a release.
 
 GitHub Pages behaves differently: it is always deployed from the fresh
-`legacyPackages.x86_64-linux.artifacts.registry.python314` result, so it is a
+`legacyPackages.x86_64-linux.artifacts.registry.python` result, so it is a
 bleeding-edge snapshot and may serve new bytes under an existing filename. Use
 the volume-backed index for immutable, reproducible installs.
 

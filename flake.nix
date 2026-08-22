@@ -143,7 +143,7 @@
       };
     };
     publicationInfo = let
-      registry = project.artifacts.registry.python314;
+      registry = project.artifacts.registry.python;
       cargoRegistryArtifact = project.artifacts.registry.cargo-registry;
       firstChangelog = derivations:
         lib.findFirst (value: value != null) null
@@ -173,7 +173,7 @@
         lib.concatMap (perInterpreter: lib.attrValues (perInterpreter.${name} or {}))
         (lib.attrValues registry.wheels);
       wheelInfo = lib.mapAttrs' (name: _:
-        lib.nameValuePair "artifacts.registry.python314.wheels.${name}" (informationFor {
+        lib.nameValuePair "artifacts.registry.python.wheels.${name}" (informationFor {
           kind = "wheel";
           versionOf = derivation: derivation.version;
           derivations = wheelDerivations name;

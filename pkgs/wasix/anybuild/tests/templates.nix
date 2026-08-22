@@ -16,7 +16,7 @@
 }: let
   inherit (pkgs) lib;
   examples = "${(packageForEntry packages entry).src}/examples";
-  pythonRegistry = artifacts.registry.python314;
+  pythonRegistry = artifacts.registry.python;
 
   # Providers whose plan carries the wasix wheel index (python.bzl's cross
   # steps, and mkdocs which builds on them).
