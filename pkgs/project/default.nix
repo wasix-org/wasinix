@@ -160,17 +160,7 @@
     variant,
   }: let
     metadata = projectLib.packageMetadata package;
-    basePolicy = builtins.removeAttrs metadata projectLib.machineMetadata;
-    policy =
-      if metadata.instance.kind == "history"
-      then
-        basePolicy
-        // {
-          ci =
-            (basePolicy.ci or {})
-            // {tags = lib.unique ((basePolicy.ci.tags or []) ++ ["history-tests"]);};
-        }
-      else basePolicy;
+    policy = builtins.removeAttrs metadata projectLib.machineMetadata;
   in {
     kind = "package";
     inherit address name package preferred projectionPath scope variant;
@@ -220,17 +210,40 @@
     then map addressFor (lib.unique (lib.filter (alias: alias != entry.name) aliases))
     else [];
 
-  projectionsFor = context: entry: let
-    namespaces = ["artifacts" "commands" "tests"];
+  projectionsFor = {
+    context,
+    entry,
+    namespaces ? ["artifacts" "commands" "tests"],
+  }: let
+    knownNamespaces = ["artifacts" "commands" "tests" "versions"];
     resultFor = ruleName: rule: let
-      result = projectLib.callWith (context // {inherit entry;}) rule;
-      unknown = lib.subtractLists namespaces (lib.attrNames result);
+      declaredNamespaces =
+        if builtins.isFunction rule
+        then ["artifacts" "commands" "tests"]
+        else rule.namespaces or [];
+      function =
+        if builtins.isFunction rule
+        then rule
+        else rule.project or null;
+      unknownDeclared = lib.subtractLists knownNamespaces declaredNamespaces;
+      applies = lib.intersectLists namespaces declaredNamespaces != [];
+      result =
+        if applies && builtins.isFunction function
+        then projectLib.callWith (context // {inherit entry;}) function
+        else {};
+      unknown = lib.subtractLists declaredNamespaces (lib.attrNames result);
     in
-      lib.throwIf (!lib.isAttrs result)
-      "projection rule '${ruleName}' must return an attribute set"
-      (lib.throwIf (unknown != [])
-        "projection rule '${ruleName}' returned unknown namespace(s): ${lib.concatStringsSep ", " unknown}"
-        result);
+      lib.throwIf (declaredNamespaces == [])
+      "projection rule '${ruleName}' must declare at least one namespace"
+      (lib.throwIf (unknownDeclared != [])
+        "projection rule '${ruleName}' declares unknown namespace(s): ${lib.concatStringsSep ", " unknownDeclared}"
+        (lib.throwIf (!builtins.isFunction function)
+          "projection rule '${ruleName}' has no project function"
+          (lib.throwIf (!lib.isAttrs result)
+            "projection rule '${ruleName}' must return an attribute set"
+            (lib.throwIf (unknown != [])
+              "projection rule '${ruleName}' returned undeclared namespace(s): ${lib.concatStringsSep ", " unknown}"
+              result))));
     results = lib.mapAttrs resultFor projectionRules;
     validCommand = name: command:
       lib.isAttrs command
@@ -243,7 +256,7 @@
       then lib.filterAttrs (_: artifact: !lib.isDerivation artifact) values
       else if namespace == "commands"
       then lib.filterAttrs (name: command: !validCommand name command) values
-      else lib.filterAttrs (_: test: !lib.isDerivation test) values;
+      else lib.filterAttrs (_: value: !lib.isDerivation value) values;
     mergeNamespace = namespace: state: ruleName: result: let
       values = result.${namespace} or {};
       invalid = invalidFor namespace values;
@@ -253,7 +266,9 @@
         then "artifact"
         else if namespace == "commands"
         then "command"
-        else "test";
+        else if namespace == "tests"
+        then "test"
+        else "package version";
     in
       lib.throwIf (!lib.isAttrs values)
       "projection rule '${ruleName}' returned non-attribute namespace '${namespace}'"
@@ -461,29 +476,32 @@ in rec {
           // {${name} = result;})
         initial
         overlays;
-        result = replayed.${name};
+        replayResult = replayed.${name};
+        result = replayResult.overrideAttrs (old: let
+          oldPassthru = old.passthru or {};
+          oldWasinix = oldPassthru.wasinix or {};
+          oldCi = oldWasinix.ci or {};
+        in {
+          passthru =
+            oldPassthru
+            // {
+              wasinix =
+                oldWasinix
+                // {
+                  ci = oldCi // {tags = lib.unique ((oldCi.tags or []) ++ ["history-tests"]);};
+                };
+            };
+        });
       in
         lib.throwIf (toString result.version != version)
         "${source}.${name}: history requested ${version}, but replay produced ${toString result.version}"
         result;
 
-      packageViewFor = scope: variant: finalSet: name: package:
-        package
-        // {
-          versions = lib.mapAttrs (version: spec:
-            (replayHistory {
-              inherit finalSet name package scope spec variant version;
-            })
-            // {versions = {};})
-          (historySpecsFor scope name package);
-        };
-
       packageSetView = scope: variant: finalSet:
-        lib.mapAttrs (name: package: packageViewFor scope variant finalSet name package)
-        (projectLib.registeredPackages finalSet);
+        projectLib.registeredPackages finalSet;
 
       projectedPackageFor = scope: variant: finalSet: name: rawPackage: let
-        package = packageViewFor scope variant finalSet name rawPackage;
+        package = rawPackage;
         address =
           if scope == "native"
           then projectLib.address "packages" ["native" name]
@@ -676,6 +694,19 @@ in rec {
       in
         contextFor entry.scope entry.variant selected.enclosing {inherit (selected) final;}
         // {
+          instantiateVersions = _candidate:
+            lib.optionalAttrs (
+              entry.kind
+              == "package"
+              && entry.instance.kind == "current"
+            )
+            (lib.mapAttrs (version: spec:
+              replayHistory {
+                finalSet = selected.final;
+                inherit version spec;
+                inherit (entry) name package scope variant;
+              })
+            (historySpecsFor entry.scope entry.name entry.package));
           packageSets = {
             native = nativeRaw;
             wasix = wasixRaw;
@@ -723,19 +754,6 @@ in rec {
         packages)
       basePython;
       currentPackageEntries = nativeEntries // wasixEntries // pythonEntries;
-      historyEntries = lib.concatMapAttrs (_: entry:
-        lib.mapAttrs' (version: package: let
-          address = "${entry.address}.versions${projectLib.addressSegment version}";
-        in
-          lib.nameValuePair address (packageEntry {
-            inherit address package;
-            inherit (entry) name preferred;
-            projectionPath = entry.projectionPath ++ ["versions" version];
-            inherit (entry) scope variant;
-          }))
-        entry.package.versions)
-      currentPackageEntries;
-      packageEntries = currentPackageEntries // historyEntries;
       inheritedPolicy = subject: derivation: let
         own = builtins.removeAttrs (projectLib.packageMetadata derivation) projectLib.machineMetadata;
         subjectCi = subject.policy.ci or {};
@@ -758,12 +776,41 @@ in rec {
         "duplicate ${label} address(es): ${lib.concatStringsSep ", " duplicates}"
         (builtins.listToAttrs entries);
       mergeProjectionCollections = collections: {
+        packages = mergeDisjoint "package" (map (collection: collection.packages) collections);
         artifacts = mergeDisjoint "artifact" (map (collection: collection.artifacts) collections);
         commands = mergeDisjoint "command" (map (collection: collection.commands) collections);
         tests = mergeDisjoint "test" (map (collection: collection.tests) collections);
       };
       projectEntry = baseEntry: let
-        outputs = projectionsFor (contextForEntry entry) entry;
+        projectionContext = contextForEntry baseEntry;
+        versionOutputs = projectionsFor {
+          context = projectionContext;
+          entry = baseEntry;
+          namespaces = ["versions"];
+        };
+        outputs = projectionsFor {
+          context = projectionContext;
+          inherit entry;
+        };
+        versionNodes =
+          lib.throwIf (
+            versionOutputs.versions
+            != {}
+            && (
+              baseEntry.kind
+              != "package"
+              || baseEntry.instance.kind != "current"
+            )
+          )
+          "projection of ${baseEntry.address} returned package versions for a non-current package"
+          (lib.mapAttrs (version: package:
+            projectEntry (packageEntry {
+              address = "${baseEntry.address}.versions${projectLib.addressSegment version}";
+              inherit package;
+              inherit (baseEntry) name preferred scope variant;
+              projectionPath = baseEntry.projectionPath ++ ["versions" version];
+            }))
+          versionOutputs.versions);
         artifactNodes = lib.mapAttrs (kind: artifact:
           projectEntry {
             kind = "artifact";
@@ -777,10 +824,8 @@ in rec {
           })
         outputs.artifacts;
         relativeArtifacts = lib.mapAttrs (_: node: node.value) artifactNodes;
-        versions = lib.optionalAttrs (baseEntry.kind == "package" && baseEntry.instance.kind == "current") {
-          versions = lib.mapAttrs (version: _:
-            projectedPackageNodes.${"${baseEntry.address}.versions${projectLib.addressSegment version}"}.value)
-          baseEntry.package.versions;
+        versions = lib.optionalAttrs (versionNodes != {}) {
+          versions = lib.mapAttrs (_: node: node.value) versionNodes;
         };
         relative = {
           artifacts = relativeArtifacts;
@@ -803,6 +848,7 @@ in rec {
             else {artifact = value;}
           );
         ownArtifacts = lib.mapAttrs' (_: node: lib.nameValuePair node.entry.address node.entry) artifactNodes;
+        ownVersions = lib.mapAttrs' (_: node: lib.nameValuePair node.entry.address node.entry) versionNodes;
         ownCommands = lib.mapAttrs' (name: command: let
           commandVersion =
             if (command.version or "") != ""
@@ -842,21 +888,24 @@ in rec {
             policy = inheritedPolicy baseEntry check;
           })
         outputs.tests;
-        descendants = mergeProjectionCollections (map (node: node.descendants) (lib.attrValues artifactNodes));
+        descendants = mergeProjectionCollections (map (node: node.descendants) (lib.attrValues versionNodes ++ lib.attrValues artifactNodes));
       in {
         inherit entry value;
         descendants = mergeProjectionCollections [
           descendants
           {
+            packages = ownVersions;
             artifacts = ownArtifacts;
             commands = ownCommands;
             tests = ownTests;
           }
         ];
       };
-      projectedPackageNodes = lib.mapAttrs (_: projectEntry) packageEntries;
-      projectedPackageEntries = lib.mapAttrs (_: node: node.entry) projectedPackageNodes;
+      projectedPackageNodes = lib.mapAttrs (_: projectEntry) currentPackageEntries;
       projected = mergeProjectionCollections (map (node: node.descendants) (lib.attrValues projectedPackageNodes));
+      projectedPackageEntries =
+        lib.mapAttrs (_: node: node.entry) projectedPackageNodes
+        // projected.packages;
       artifactEntries = projected.artifacts;
       commandEntries = projected.commands;
       testEntries = projected.tests;
