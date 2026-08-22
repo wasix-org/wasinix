@@ -28,6 +28,12 @@ wasinix.lib.mkProject {
 `mkProject` returns the structured project, not complete flake outputs. A flake
 may construct several projects and expose them under different attributes.
 
+`mkProject` is `mkEmptyProject` with the Wasinix extension and projection rules
+prepended. Wasinix itself uses this composed constructor. `mkEmptyProject` is
+the lower-level mechanism for projects that need the structured catalog without
+the Wasinix package collection; it receives every extension and projection rule
+explicitly.
+
 The constructor takes:
 
 - `system`: the local evaluation system.
@@ -37,6 +43,8 @@ The constructor takes:
   configuration and ordinary overlays, but must preserve the supplied values.
 - `extensions`: ordered registered overlay bundles added after the built-in
   Wasinix extension.
+- `projectionRules`: additional named projection rules. Names must be disjoint
+  from the built-in rules.
 - `ci.sources`: registered sources whose packages, artifacts, and tests become
   CI jobs. It defaults to the caller-supplied extension IDs, excluding the
   implicit core extension.

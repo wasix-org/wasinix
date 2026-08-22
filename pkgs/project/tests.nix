@@ -397,6 +397,18 @@
       };
     };
   };
+  emptyExtension = {
+    id = "empty";
+    overlays.shared = _final: _previous: {
+      core = mkPackage {name = "empty-core";};
+      only = mkPackage {name = "only";};
+    };
+  };
+  emptyProject = projectApi.mkEmptyProject {
+    system = "test-system";
+    importNixpkgs = fakeImportNixpkgs;
+    extensions = [emptyExtension];
+  };
   project = projectApi.mkProject {
     system = "test-system";
     importNixpkgs = fakeImportNixpkgs;
@@ -958,6 +970,7 @@ in {
       invalidProfileFails = !(force invalidProfileProject).success;
       invalidCiProfileFails = !(force invalidCiProfileProject.ci).success;
       invalidNativeInterfaceFails = !(force invalidNativeInterfaceProject).success;
+      emptyProjectSource = emptyProject.packages.native.core.passthru.wasinix.source;
     };
     expected = {
       schemaVersion = 1;
@@ -1076,6 +1089,7 @@ in {
       invalidProfileFails = true;
       invalidCiProfileFails = true;
       invalidNativeInterfaceFails = true;
+      emptyProjectSource = "empty";
     };
   };
 }

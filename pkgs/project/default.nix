@@ -1,14 +1,14 @@
 {
   lib,
   profiles,
-  builtInExtension,
+  builtInExtension ? null,
+  projectionRules ? {},
   crossSystemFor,
   configFor ? _args: {},
   setOverlaysFor ? _args: [],
   nativePackageInterfacesFor ? _args: {},
   harnessesFor ? _args: {},
   runnersFor ? _args: {},
-  projectionRules ? {},
   pythonSetsFor ? _args: {},
   packageTransformFor ? _args: _name: package: package,
   extendPythonSet ? packageSet: overlay: packageSet.overrideScope overlay,
@@ -28,6 +28,8 @@
   projectLib = import ./lib.nix {inherit lib;};
   schema = builtins.fromJSON (builtins.readFile ../../schema/project.json);
   extendPythonPackage = projectLib.extendPythonPackage repairPythonPackage;
+  defaultExtensions = lib.optional (builtInExtension != null) builtInExtension;
+  defaultProjectionRules = projectionRules;
 
   validateExtension = extension: let
     id = extension.id or null;
@@ -285,13 +287,35 @@
 in rec {
   inherit (projectLib) extendPackage loadPackageOverlays;
 
-  mkProject = {
+  mkProject = args @ {
+    extensions ? [],
+    projectionRules ? {},
+    ci ? {},
+    ...
+  }: let
+    duplicates = lib.intersectLists (lib.attrNames defaultProjectionRules) (lib.attrNames projectionRules);
+  in
+    lib.throwIf (duplicates != [])
+    "projection rule(s) replace project defaults: ${lib.concatStringsSep ", " duplicates}"
+    (mkEmptyProject (args
+      // {
+        extensions = defaultExtensions ++ extensions;
+        projectionRules = defaultProjectionRules // projectionRules;
+        ci =
+          ci
+          // {
+            sources = ci.sources or (map (extension: extension.id) extensions);
+          };
+      }));
+
+  mkEmptyProject = {
     system,
     importNixpkgs,
     extensions ? [],
+    projectionRules ? {},
     ci ? {},
   }: let
-    allExtensions = ensureUniqueExtensions (map validateExtension ([builtInExtension] ++ extensions));
+    allExtensions = ensureUniqueExtensions (map validateExtension extensions);
     extensionIds = map (extension: extension.id) allExtensions;
     historyTables = lib.listToAttrs (map (extension:
       lib.nameValuePair extension.id
