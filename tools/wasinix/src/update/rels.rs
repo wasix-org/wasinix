@@ -60,22 +60,22 @@ pub fn store(repo: &Path, rels: &Rels) -> Result<()> {
 
 pub fn served() -> Result<Served> {
     crate::support::json::from_value(
-        eval(&Flake::default(), "internals.publication.versions", None)?,
-        "internals.publication.versions",
+        eval(&Flake::default(), "internals.repository.publication.versions", None)?,
+        "internals.repository.publication.versions",
     )
 }
 
 pub fn info() -> Result<BTreeMap<String, Info>> {
     crate::support::json::from_value(
-        eval(&Flake::default(), "internals.publication.info", None)?,
-        "internals.publication.info",
+        eval(&Flake::default(), "internals.repository.publication.info", None)?,
+        "internals.repository.publication.info",
     )
 }
 
 fn info_from(flake: &Flake<'_>) -> Result<BTreeMap<String, Info>> {
     crate::support::json::from_value(
-        eval(flake, "internals.publication.info", None)?,
-        "internals.publication.info",
+        eval(flake, "internals.repository.publication.info", None)?,
+        "internals.repository.publication.info",
     )
 }
 

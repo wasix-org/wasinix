@@ -13,15 +13,33 @@
     extensions ? [],
     projectionRules ? {},
     projectTests ? {},
+    repository ? null,
     ci ? {},
   }: let
     constructor =
       if includeWasinix
       then projectApi.mkProject
       else projectApi.mkEmptyProject;
-    project = constructor {
+    baseProject = constructor {
       inherit system importNixpkgs extensions projectionRules projectTests ci;
     };
+    repositoryInfo =
+      if repository == null
+      then null
+      else
+        import ./repository.nix ({
+            inherit lib;
+            project = baseProject;
+          }
+          // repository);
+    project =
+      if repositoryInfo == null
+      then baseProject
+      else
+        baseProject
+        // {
+          internals = baseProject.internals // {repository = repositoryInfo;};
+        };
 
     constructionFor = nativePkgs: let
       rawWasm = import ../runners/raw-wasm.nix {pkgs = nativePkgs;};
@@ -344,6 +362,7 @@
         py314 = {
           pkgs = wasixRaw.exnrefEhpic;
           packageSet = wasixRaw.exnrefEhpic.python314.pkgs;
+          preferred = true;
         };
       };
       runnersFor = {nativeRaw, ...}: (constructionFor nativeRaw).runners;

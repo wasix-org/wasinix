@@ -22,6 +22,11 @@ wasinix.lib.mkProject {
     );
   extensions = [myExtension];
   ci.sources = ["my-project"];
+  repository = {
+    source = "my-project";
+    root = self;
+    revisionsFile = ./release-revisions.json;
+  };
 }
 ```
 
@@ -49,6 +54,11 @@ The constructor takes:
   `check = project: derivation` function, and optional CI policy. Package and
   artifact checks should remain projections; this input covers source-wide
   checks such as formatting.
+- `repository`: optional ownership information for update and publication
+  collection. Its `source` selects catalogued packages, `root` bounds update
+  declarations to the repository, and `revisionsFile` supplies release state.
+  The resulting revisions, publication inventory, update scripts, notes, and
+  hooks live under `internals.repository`.
 - `ci.sources`: registered sources whose packages, artifacts, and tests become
   CI jobs. It defaults to the caller-supplied extension IDs, excluding the
   implicit core extension.
@@ -465,6 +475,7 @@ Addresses are canonical structured-project paths. Examples include:
 ```text
 packages.wasix.exnrefEh.zlib
 packages.python.py314.numpy
+packages.python.preferred.numpy
 packages.native.wasix-llvm
 tests.packages.wasix.exnrefEh.zlib.abi
 artifacts.webc.git
@@ -526,7 +537,12 @@ packages.wasix.<profile>.jq.versions."1.6"
 packages.python.py314.numpy.versions."2.1.3"
 packages.wasix.<profile>.jq
 packages.python.py314.numpy
+packages.python.preferred.numpy
 ```
+
+One Python interpreter spec may set `preferred = true`. Its package set is
+available as `packages.python.preferred`, independently of the interpreter's
+versioned key.
 
 Construction and test code use contextual views when the profile is relative to
 the entry being constructed or checked:

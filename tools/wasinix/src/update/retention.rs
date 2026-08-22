@@ -99,7 +99,7 @@ struct VersionState {
 
 fn version_apply(include_notes: bool) -> String {
     let notes = if include_notes {
-        "let n = builtins.tryEval p.internals.updates.updateNotes.versions; in { ok = n.success; value = if n.success then n.value else {}; }"
+        "let n = builtins.tryEval p.internals.repository.updates.updateNotes.versions; in { ok = n.success; value = if n.success then n.value else {}; }"
     } else {
         "{ ok = true; value = {}; }"
     };
@@ -307,7 +307,7 @@ pub struct Note {
 fn fired_notes_once(repo: &Path, priors: &Value) -> Result<Value> {
     let output = crate::support::nix::Invocation::flake(
         "eval",
-        format!(".#legacyPackages.{SYSTEM}.internals.updates.updateNotes.fired"),
+        format!(".#legacyPackages.{SYSTEM}.internals.repository.updates.updateNotes.fired"),
     )
     .json()
     .impure()
@@ -318,11 +318,9 @@ fn fired_notes_once(repo: &Path, priors: &Value) -> Result<Value> {
     if !output.status.is_success() {
         return request_error(format!("note check failed: {}", output.stderr.trim()));
     }
-    serde_json::from_slice(&output.stdout).map_err(|source| {
-        crate::support::error::Error::Json {
-            path: "<internals.updates.updateNotes.fired>".into(),
-            source,
-        }
+    serde_json::from_slice(&output.stdout).map_err(|source| crate::support::error::Error::Json {
+        path: "<internals.repository.updates.updateNotes.fired>".into(),
+        source,
     })
 }
 
@@ -370,7 +368,7 @@ mod tests {
              artifacts.wheel-py313.demo = {{ version = \"1\"; passthru.wasinix.retention = \"minor\"; }}; \
              artifacts.wheel-py314 = {{}}; \
              packages.preferred.cli = {{ version = \"2\"; passthru.wasinix = {{ shipped = true; retention = \"major\"; }}; }}; \
-             internals.updates.updateNotes.versions.cli = \"2\"; \
+             internals.repository.updates.updateNotes.versions.cli = \"2\"; \
              }}; in ({}) p",
             version_apply(true)
         );
