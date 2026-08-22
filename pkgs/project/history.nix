@@ -1,7 +1,11 @@
-{lib}: let
+{
+  lib,
+  projectLib ? import ./lib.nix {inherit lib;},
+  rebasePackageOverride ? null,
+}: let
   historyMeta = ["note" "variants" "cargoHash" "vendorLayout"];
 
-  rebasePackage = version: spec: package: let
+  defaultRebasePackage = version: spec: package: let
     fetchArgs = builtins.removeAttrs spec historyMeta;
     # fetchurl has no override interface, so release tarballs replace the
     # fixed-output fields directly.
@@ -46,7 +50,145 @@
   in
     # Package units commonly call override before adding their adaptation.
     # Re-pin after each such call so it cannot restore the current source.
-    pinned // {override = args: rebasePackage version spec (package.override args);};
+    pinned // {override = args: defaultRebasePackage version spec (package.override args);};
+  rebasePackage =
+    if rebasePackageOverride == null
+    then defaultRebasePackage
+    else rebasePackageOverride;
+
+  historyTablesFor = extensions:
+    lib.listToAttrs (map (extension:
+      lib.nameValuePair extension.id
+      (lib.mapAttrs (_: path: builtins.fromJSON (builtins.readFile path)) (extension.history or {})))
+    extensions);
+
+  historyDeclarationsFor = historyTables: extensions: scope:
+    lib.concatMap (extension:
+      map (name: {
+        inherit name;
+        source = extension.id;
+      })
+      (lib.attrNames ((historyTables.${extension.id} or {}).${scope} or {})))
+    extensions;
+
+  validateHistory = historyTables: extensions: scope: packageSet: let
+    declarations = historyDeclarationsFor historyTables extensions scope;
+    grouped = lib.groupBy (declaration: declaration.name) declarations;
+    duplicates = lib.attrNames (lib.filterAttrs (_: values: lib.length values > 1) grouped);
+    invalid = lib.filter (declaration: let
+      package = packageSet.${declaration.name} or null;
+    in
+      package
+      == null
+      || (projectLib.packageMetadata package).source or null != declaration.source)
+    declarations;
+  in
+    lib.throwIf (duplicates != [])
+    "multiple Wasinix sources retain history for ${scope} package(s): ${lib.concatStringsSep ", " duplicates}"
+    (lib.throwIf (invalid != [])
+      "${scope} history does not match its current package owner: ${lib.concatStringsSep ", " (map (declaration: "${declaration.source}.${declaration.name}") invalid)}"
+      true);
+
+  validateProject = {
+    extensions,
+    packageSets,
+    ...
+  }: let
+    historyTables = historyTablesFor extensions;
+  in
+    lib.all (validateHistory historyTables extensions "wasix") (lib.attrValues packageSets.wasix)
+    && lib.all (validateHistory historyTables extensions "python") (lib.attrValues packageSets.python);
+
+  projectionContextFor = {
+    entry,
+    extensions,
+    finalSet,
+    packageTransformFor,
+    repairPythonPackage,
+    ...
+  }: let
+    historyTables = historyTablesFor extensions;
+    specs = ((historyTables.${entry.source} or {}).${entry.scope} or {}).${entry.name} or {};
+    replay = version: spec: let
+      metadata = projectLib.packageMetadata entry.package;
+      baseSet = metadata.${projectLib.historyBaseAttr};
+      overlays = metadata.${projectLib.historyOverlaysAttr};
+      rebased =
+        lib.throwIf (!(baseSet ? ${entry.name}))
+        "${entry.source}.${entry.name}: history requires a preceding package to rebase"
+        (rebasePackage version spec baseSet.${entry.name});
+      normalize = packageSet: candidate:
+        packageTransformFor {
+          inherit (entry) scope variant;
+          inherit packageSet;
+        }
+        entry.name
+        (
+          if entry.scope == "python"
+          then repairPythonPackage candidate
+          else candidate
+        );
+      initial = baseSet // {${entry.name} = normalize baseSet rebased;};
+      replayed = lib.foldl' (previous: layer: let
+        next =
+          previous
+          // (projectLib.registerOverlay {
+              inherit (layer) definition overlay;
+              source = entry.source;
+              instanceFor = resultName: result:
+                if resultName == entry.name
+                then {
+                  kind = "history";
+                  inherit version;
+                }
+                else
+                  (projectLib.packageMetadata
+                    result).instance or {
+                    kind = "current";
+                    version = toString (result.version or result.name);
+                  };
+            }
+            finalSet
+            previous);
+        candidate = next.${entry.name};
+        pinned =
+          if toString candidate.version == version
+          then candidate
+          else rebasePackage version spec candidate;
+      in
+        next
+        // {${entry.name} = normalize previous pinned;})
+      initial
+      overlays;
+      replayResult = replayed.${entry.name};
+      result = replayResult.overrideAttrs (old: let
+        oldPassthru = old.passthru or {};
+        oldWasinix = oldPassthru.wasinix or {};
+        oldCi = oldWasinix.ci or {};
+      in {
+        passthru =
+          oldPassthru
+          // {
+            wasinix =
+              oldWasinix
+              // {
+                ci = oldCi // {tags = lib.unique ((oldCi.tags or []) ++ ["history-tests"]);};
+              };
+          };
+      });
+    in
+      lib.throwIf (toString result.version != version)
+      "${entry.source}.${entry.name}: history requested ${version}, but replay produced ${toString result.version}"
+      result;
+  in {
+    instantiateVersions = _candidate:
+      lib.optionalAttrs (
+        entry.kind
+        == "package"
+        && entry.instance.kind == "current"
+      )
+      (lib.mapAttrs replay specs);
+  };
 in {
-  inherit historyMeta rebasePackage;
+  inherit historyMeta projectionContextFor rebasePackage validateProject;
 }

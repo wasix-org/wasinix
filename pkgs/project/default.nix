@@ -9,6 +9,8 @@
   nativePackageInterfacesFor ? _args: {},
   harnessesFor ? _args: {},
   runnersFor ? _args: {},
+  projectionContextFor ? _args: {},
+  validateProject ? _args: true,
   pythonSetsFor ? _args: {},
   packageTransformFor ? _args: _name: package: package,
   extendPythonSet ? packageSet: overlay: packageSet.overrideScope overlay,
@@ -23,7 +25,6 @@
           };
       })
     else package,
-  rebasePackage ? (import ./history.nix {inherit lib;}).rebasePackage,
 }: let
   projectLib = import ./lib.nix {inherit lib;};
   schema = builtins.fromJSON (builtins.readFile ../../schema/project.json);
@@ -332,10 +333,6 @@ in rec {
   }: let
     allExtensions = ensureUniqueExtensions (map validateExtension extensions);
     extensionIds = map (extension: extension.id) allExtensions;
-    historyTables = lib.listToAttrs (map (extension:
-      lib.nameValuePair extension.id
-      (lib.mapAttrs (_: path: builtins.fromJSON (builtins.readFile path)) (extension.history or {})))
-    allExtensions);
     requestedCiSources = ci.sources or (map (extension: extension.id) extensions);
     unknownCiSources = lib.subtractLists extensionIds requestedCiSources;
 
@@ -411,92 +408,6 @@ in rec {
       in
         !attempted.success || attempted.value;
 
-      historySpecsFor = scope: name: package: let
-        source = (projectLib.packageMetadata package).source;
-      in
-        ((historyTables.${source} or {}).${scope} or {}).${name} or {};
-
-      replayHistory = {
-        finalSet,
-        name,
-        package,
-        scope,
-        spec,
-        variant,
-        version,
-      }: let
-        metadata = projectLib.packageMetadata package;
-        source = metadata.source;
-        baseSet = metadata.${projectLib.historyBaseAttr};
-        overlays = metadata.${projectLib.historyOverlaysAttr};
-        rebased =
-          lib.throwIf (!(baseSet ? ${name}))
-          "${source}.${name}: history requires a preceding package to rebase"
-          (rebasePackage version spec baseSet.${name});
-        normalize = packageSet: candidate:
-          packageTransformFor {
-            inherit scope variant packageSet;
-          }
-          name
-          (
-            if scope == "python"
-            then repairPythonPackage candidate
-            else candidate
-          );
-        initial = baseSet // {${name} = normalize baseSet rebased;};
-        replayed = lib.foldl' (previous: layer: let
-          next =
-            previous
-            // (projectLib.registerOverlay {
-                inherit (layer) definition overlay;
-                inherit source;
-                instanceFor = resultName: result:
-                  if resultName == name
-                  then {
-                    kind = "history";
-                    inherit version;
-                  }
-                  else
-                    (projectLib.packageMetadata
-                      result).instance or {
-                      kind = "current";
-                      version = toString (result.version or result.name);
-                    };
-              }
-              finalSet
-              previous);
-          candidate = next.${name};
-          pinned =
-            if toString candidate.version == version
-            then candidate
-            else rebasePackage version spec candidate;
-          result = normalize previous pinned;
-        in
-          next
-          // {${name} = result;})
-        initial
-        overlays;
-        replayResult = replayed.${name};
-        result = replayResult.overrideAttrs (old: let
-          oldPassthru = old.passthru or {};
-          oldWasinix = oldPassthru.wasinix or {};
-          oldCi = oldWasinix.ci or {};
-        in {
-          passthru =
-            oldPassthru
-            // {
-              wasinix =
-                oldWasinix
-                // {
-                  ci = oldCi // {tags = lib.unique ((oldCi.tags or []) ++ ["history-tests"]);};
-                };
-            };
-        });
-      in
-        lib.throwIf (toString result.version != version)
-        "${source}.${name}: history requested ${version}, but replay produced ${toString result.version}"
-        result;
-
       packageSetView = scope: variant: finalSet:
         projectLib.registeredPackages finalSet;
 
@@ -526,33 +437,6 @@ in rec {
           then projectedPackageFor scope variant finalSet name package
           else package)
         finalSet;
-
-      historyDeclarationsFor = scope:
-        lib.concatMap (extension:
-          map (name: {
-            inherit name;
-            source = extension.id;
-          })
-          (lib.attrNames ((historyTables.${extension.id} or {}).${scope} or {})))
-        allExtensions;
-
-      validateHistory = scope: packageSet: let
-        declarations = historyDeclarationsFor scope;
-        grouped = lib.groupBy (declaration: declaration.name) declarations;
-        duplicates = lib.attrNames (lib.filterAttrs (_: values: lib.length values > 1) grouped);
-        invalid = lib.filter (declaration: let
-          package = packageSet.${declaration.name} or null;
-        in
-          package
-          == null
-          || (projectLib.packageMetadata package).source or null != declaration.source)
-        declarations;
-      in
-        lib.throwIf (duplicates != [])
-        "multiple Wasinix sources retain history for ${scope} package(s): ${lib.concatStringsSep ", " duplicates}"
-        (lib.throwIf (invalid != [])
-          "${scope} history does not match its current package owner: ${lib.concatStringsSep ", " (map (declaration: "${declaration.source}.${declaration.name}") invalid)}"
-          true);
 
       contextFor = scope: variant: enclosingPkgs: {final, ...}: {
         inherit lib;
@@ -635,8 +519,6 @@ in rec {
 
       wasixShapesValid = validateVariantShapes "WASIX" extensionIds wasixRaw;
       pythonShapesValid = validateVariantShapes "Python" extensionIds pythonRaw;
-      wasixHistoryValid = lib.all (packageSet: validateHistory "wasix" packageSet) (lib.attrValues wasixRaw);
-      pythonHistoryValid = lib.all (packageSet: validateHistory "python" packageSet) (lib.attrValues pythonRaw);
 
       nativePackageInterfaces = nativePackageInterfacesFor {
         inherit project nativeRaw wasixRaw pythonRaw;
@@ -659,6 +541,14 @@ in rec {
       basePython = lib.mapAttrs (interpreter: packageSet:
         packageSetView "python" {inherit interpreter;} packageSet)
       pythonRaw;
+      projectValid = validateProject {
+        extensions = allExtensions;
+        packageSets = {
+          native = nativeRaw;
+          wasix = wasixRaw;
+          python = pythonRaw;
+        };
+      };
       allWasixNames = lib.unique (lib.concatMap projectLib.registeredNames (lib.attrValues wasixRaw));
       preferredProfileNameFor = name: let
         defaultProfile = profiles.defaultProfileName or null;
@@ -693,20 +583,12 @@ in rec {
           };
       in
         contextFor entry.scope entry.variant selected.enclosing {inherit (selected) final;}
+        // (projectionContextFor {
+          extensions = allExtensions;
+          finalSet = selected.final;
+          inherit entry packageTransformFor repairPythonPackage;
+        })
         // {
-          instantiateVersions = _candidate:
-            lib.optionalAttrs (
-              entry.kind
-              == "package"
-              && entry.instance.kind == "current"
-            )
-            (lib.mapAttrs (version: spec:
-              replayHistory {
-                finalSet = selected.final;
-                inherit version spec;
-                inherit (entry) name package scope variant;
-              })
-            (historySpecsFor entry.scope entry.name entry.package));
           packageSets = {
             native = nativeRaw;
             wasix = wasixRaw;
@@ -995,8 +877,7 @@ in rec {
     in
       assert wasixShapesValid;
       assert pythonShapesValid;
-      assert wasixHistoryValid;
-      assert pythonHistoryValid;
+      assert projectValid;
       assert nativeInterfacesValid;
       assert aliasesValid; {
         schemaVersion = schema.version;
