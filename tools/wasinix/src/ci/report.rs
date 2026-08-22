@@ -239,14 +239,24 @@ pub struct Report {
     /// never resolved.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub command: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "crate::support::log::Summary::is_empty"
+    )]
+    pub log_retention: crate::support::log::Summary,
 }
 
 impl Document for Report {
     const KIND: &'static str = "report";
-    const SCHEMA: u32 = 2;
+    const SCHEMA: u32 = 3;
 }
 
 impl Report {
+    pub fn attach_log_retention(&mut self, run_dir: &Path) -> Result<()> {
+        self.log_retention = crate::support::log::summarize(run_dir)?;
+        Ok(())
+    }
+
     pub fn blocked_policy(&self) -> BlockedPolicy {
         self.request
             .as_ref()
@@ -521,6 +531,7 @@ pub fn fold(plan: &Plan, fragments: &BTreeMap<String, Fragment>, context: FoldCo
         comparisons: context.comparisons,
         request: context.request,
         command: None,
+        log_retention: Default::default(),
     }
 }
 
@@ -604,6 +615,7 @@ pub fn starting(log_tail: Option<&str>) -> Report {
         comparisons: Vec::new(),
         request: None,
         command: None,
+        log_retention: Default::default(),
     }
 }
 
@@ -649,5 +661,6 @@ pub fn from_run_state(run: &crate::runs::Run, log_tail: Option<&str>) -> Report 
         comparisons: Vec::new(),
         request: None,
         command: None,
+        log_retention: Default::default(),
     }
 }

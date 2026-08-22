@@ -55,6 +55,8 @@ Task and durable-run transcripts retain at most 64 MiB each by default: their
 opening context and newest output, with the omitted byte count between them. A
 neighboring `*.retention.json` records original and retained bytes. Set
 `WASINIX_LOG_BYTES` to a positive byte limit when a runner needs another cap.
+`run status` and `run report` aggregate those facts into log count and produced,
+retained, and omitted bytes; the JSON and human output use the same summary.
 
 The verdict has four values. A green run passes; a red run has a failed
 required gate or a comparison with regressions. Removed jobs stay in the

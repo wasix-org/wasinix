@@ -2282,6 +2282,21 @@ mod markdown {
     }
 
     #[test]
+    fn report_surfaces_show_retained_and_omitted_log_bytes() {
+        let (mut report, fragments) = scenarios::green();
+        report.log_retention = crate::support::log::Summary {
+            log_count: 3,
+            truncated_count: 1,
+            original_bytes: crate::support::atoms::Bytes(8192),
+            retained_bytes: crate::support::atoms::Bytes(2048),
+            omitted_bytes: crate::support::atoms::Bytes(6144),
+        };
+        let body = comment(&report, &fragments, None, &links()).into_string();
+        assert!(body.contains("2.0 KiB logs retained"), "{body}");
+        assert!(body.contains("6.0 KiB log output omitted"), "{body}");
+    }
+
+    #[test]
     fn hostile_input_matches_its_goldens() {
         let (report, fragments) = scenarios::hostile();
         check_text(
@@ -2385,6 +2400,7 @@ mod markdown {
             comparisons: Vec::new(),
             request: None,
             command: None,
+            log_retention: Default::default(),
         };
         let body = comment(&report, &Default::default(), None, &links()).into_string();
         assert!(body.contains("checks.cli-behavior-find"), "{body}");

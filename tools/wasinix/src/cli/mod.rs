@@ -927,18 +927,20 @@ fn run_command(command: RunCommand) -> Result<CommandStatus> {
                 run: runs::Run,
                 run_dir: PathBuf,
                 pinned: bool,
+                log_retention: crate::support::log::Summary,
                 #[serde(default, skip_serializing_if = "Option::is_none")]
                 snapshot: Option<crate::ci::events::Snapshot>,
             }
             impl schema::Document for RunStatus {
                 const KIND: &'static str = "runStatus";
-                const SCHEMA: u32 = 2;
+                const SCHEMA: u32 = 3;
             }
             ui::emit(
                 &json,
                 &RunStatus {
                     run,
                     pinned: runs::is_pinned(&run_dir)?,
+                    log_retention: crate::support::log::summarize(&run_dir)?,
                     run_dir,
                     snapshot,
                 },
@@ -946,6 +948,17 @@ fn run_command(command: RunCommand) -> Result<CommandStatus> {
                     let mut parts = vec![status.run.state.to_string()];
                     if status.pinned {
                         parts.push("pinned".into());
+                    }
+                    if !status.log_retention.is_empty() {
+                        parts.push(format!(
+                            "{} logs, {} retained, {} produced",
+                            status.log_retention.log_count,
+                            status.log_retention.retained_bytes,
+                            status.log_retention.original_bytes
+                        ));
+                        if status.log_retention.omitted_bytes.0 > 0 {
+                            parts.push(format!("{} omitted", status.log_retention.omitted_bytes));
+                        }
                     }
                     if let Some(snapshot) = &status.snapshot {
                         parts.push(format!("{} jobs done", snapshot.completed_jobs));
@@ -973,7 +986,8 @@ fn run_command(command: RunCommand) -> Result<CommandStatus> {
         RunCommand::Report { run_id, json } => {
             let run_dir = runs::dir_of(&run_id)?;
             let path = crate::ci::prepare::report_path(&run_dir);
-            let report: crate::ci::report::Report = schema::read(&path)?;
+            let mut report: crate::ci::report::Report = schema::read(&path)?;
+            report.attach_log_retention(&run_dir)?;
             ui::emit(&json, &report, |report| {
                 render::finished_report(report);
             })?;

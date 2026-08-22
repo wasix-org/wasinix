@@ -303,6 +303,17 @@ pub(crate) fn test_summary(label: &str, tests: &[&TestResult]) -> Option<String>
 /// Render the stable, folded answer shared by direct builds and `run report`.
 pub fn finished_report(report: &Report) {
     crate::support::ui::result(&report.title);
+    if !report.log_retention.is_empty() {
+        let mut parts = vec![
+            format!("{} logs", report.log_retention.log_count),
+            format!("{} retained", report.log_retention.retained_bytes),
+            format!("{} produced", report.log_retention.original_bytes),
+        ];
+        if report.log_retention.omitted_bytes.0 > 0 {
+            parts.push(format!("{} omitted", report.log_retention.omitted_bytes));
+        }
+        crate::support::ui::result(format!("logs: {}", crate::support::ui::counts(&parts)));
+    }
     let tests: Vec<&TestResult> = report.tests.values().flatten().collect();
     if let Some(line) = test_summary("tests", &tests) {
         crate::support::ui::result(line);

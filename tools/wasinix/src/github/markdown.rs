@@ -339,6 +339,18 @@ fn footer(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Links
             format::duration(seconds)
         )));
     }
+    if !report.log_retention.is_empty() {
+        trailing.push(Markdown::text(&format!(
+            "{} logs retained",
+            report.log_retention.retained_bytes
+        )));
+        if report.log_retention.omitted_bytes.0 > 0 {
+            trailing.push(Markdown::text(&format!(
+                "{} log output omitted",
+                report.log_retention.omitted_bytes
+            )));
+        }
+    }
     if let Some(url) = &links.run_url {
         trailing.push(Markdown::html_link("full pipeline", url));
     }
