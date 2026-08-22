@@ -576,9 +576,8 @@ pub fn preview_index(
 
     let dists = scratch.join("dists.json");
     crate::support::json::write(&dists, &Value::Array(suffixed))?;
-    let mut index = Capability::Python.command()?;
+    let mut index = Capability::PythonIndex.command()?;
     index
-        .arg(repo.join("pkgs/python-registry/make-index.py"))
         .arg(&dists)
         .arg(site)
         .current_dir(repo);

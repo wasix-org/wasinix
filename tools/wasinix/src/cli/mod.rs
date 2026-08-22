@@ -472,7 +472,9 @@ pub enum CiCommand {
 
 impl CommandTree {
     fn anticipated_capabilities(&self) -> Vec<crate::support::capability::Capability> {
-        use crate::support::capability::Capability::{Aws, Python, Rclone, Wasmer};
+        use crate::support::capability::Capability::{
+            Aws, Python, PythonIndex, Rclone, Wasmer,
+        };
 
         match self {
             CommandTree::Cargo(command) => match command {
@@ -494,14 +496,18 @@ impl CommandTree {
             CommandTree::Python(command) => match command {
                 registries::PythonCommand::Serve { .. } => vec![Python],
                 registries::PythonCommand::Publish { .. } => vec![Python, Rclone, Wasmer],
-                registries::PythonCommand::Preview { .. } => vec![Wasmer],
+                registries::PythonCommand::Preview { .. } => vec![PythonIndex, Wasmer],
                 registries::PythonCommand::CountNatives { .. } => Vec::new(),
                 registries::PythonCommand::Coverage { .. }
                 | registries::PythonCommand::Survey { .. } => vec![Python],
             },
             CommandTree::Publish { .. } => vec![Python, Rclone, Wasmer],
-            CommandTree::Preview(args) if args.status.is_none() && args.dry_run => vec![Python],
-            CommandTree::Preview(args) if args.status.is_none() => vec![Python, Wasmer],
+            CommandTree::Preview(args) if args.status.is_none() && args.dry_run => {
+                vec![Python, PythonIndex]
+            }
+            CommandTree::Preview(args) if args.status.is_none() => {
+                vec![Python, PythonIndex, Wasmer]
+            }
             CommandTree::Serve { .. } => vec![Python, Wasmer],
             CommandTree::Ci(CiCommand::Publish {
                 dry_run: false,
@@ -1874,6 +1880,10 @@ mod capability_tests {
         assert_eq!(
             anticipated(&["wasinix", "python", "publish"]),
             vec![Capability::Python, Capability::Rclone, Capability::Wasmer]
+        );
+        assert_eq!(
+            anticipated(&["wasinix", "python", "preview", "site", "app"]),
+            vec![Capability::PythonIndex, Capability::Wasmer]
         );
         assert_eq!(
             anticipated(&["wasinix", "python", "coverage"]),

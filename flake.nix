@@ -201,12 +201,14 @@
     wasinixOptionalInputs = with wasix.pkgs; [
       awscli2
       python3
+      wasix.pythonRegistry.indexer
       rclone
       wasmerRuntime
     ];
     wasinixCapabilities = {
       aws = wasix.pkgs.awscli2;
       python = wasix.pkgs.python3;
+      python-index = wasix.pythonRegistry.indexer;
       rclone = wasix.pkgs.rclone;
       wasmer = wasmerRuntime;
     };
@@ -966,6 +968,7 @@
       wasinix-core = wasinixCore;
       wasinix-capability-aws = wasinixCapabilities.aws;
       wasinix-capability-python = wasinixCapabilities.python;
+      wasinix-capability-python-index = wasinixCapabilities.python-index;
       wasinix-capability-rclone = wasinixCapabilities.rclone;
       wasinix-capability-wasmer = wasinixCapabilities.wasmer;
       # the webc packages and the merged registry live under legacyPackages
