@@ -864,6 +864,19 @@ fn group_dir(on: Option<&str>) -> String {
     on.unwrap_or("default").replace([':', '/'], "-")
 }
 
+fn build_process_diagnostic(message: String, affected_jobs: Vec<JobAddr>) -> facts::Diagnostic {
+    facts::Diagnostic {
+        severity: if affected_jobs.is_empty() {
+            facts::DiagnosticSeverity::Warning
+        } else {
+            facts::DiagnosticSeverity::Error
+        },
+        title: facts::BUILD_PROCESS_ERROR_TITLE.to_string(),
+        message,
+        affected_jobs,
+    }
+}
+
 fn find_build_case<'a>(
     request: &'a ResolvedRequest,
     case_id: &str,
@@ -895,12 +908,7 @@ fn run_build_tasks(
             continue;
         };
         if broken.contains(&task.case) {
-            tracker.record(Event::PhaseStarted {
-                at: unix_secs(),
-                task_id: task.task_id.clone(),
-                label: task.label.clone(),
-                jobs: None,
-            })?;
+            start_task(tracker, &task.task_id, &task.label, None)?;
             finish_task(
                 ctx,
                 tracker,
@@ -970,12 +978,7 @@ fn run_build_tasks(
         }
     }
     for spec in &specs {
-        tracker.record(Event::PhaseStarted {
-            at: unix_secs(),
-            task_id: spec.task_id.clone(),
-            label: spec.label.clone(),
-            jobs: Some(spec.jobs.len()),
-        })?;
+        start_task(tracker, &spec.task_id, &spec.label, Some(spec.jobs.len()))?;
     }
 
     let mut groups: BTreeMap<Option<String>, Vec<String>> = BTreeMap::new();
@@ -992,7 +995,7 @@ fn run_build_tasks(
     let mut worst = CommandStatus::SUCCESS;
     let mut results: BTreeMap<String, PathBuf> = BTreeMap::new();
     let mut union_logs: Vec<PathBuf> = Vec::new();
-    let mut union_errors: BTreeMap<String, String> = BTreeMap::new();
+    let mut build_process_errors: BTreeMap<String, String> = BTreeMap::new();
     let mut union_artifacts = Artifacts::default();
     // Merged across placement groups: one task's jobs can span builders.
     let mut plan = crate::nix::buildset::PlanCensus::new();
@@ -1070,7 +1073,10 @@ fn run_build_tasks(
                             })?;
                         }
                     } else if notable_output(&line) {
-                        crate::support::ui::note(line);
+                        tracker.record(Event::Output {
+                            at: unix_secs(),
+                            line,
+                        })?;
                     }
                     Ok(())
                 }
@@ -1085,16 +1091,23 @@ fn run_build_tasks(
         if !status.is_success() {
             let error = crate::support::fs::read_to_string(&build_dir.join("build-union.log"))
                 .map(|log| crate::ci::report::log_headline(&log))?;
-            for case_id in case_ids {
-                union_errors.insert(case_id, error.clone());
-            }
-            tracker.record(Event::Warning {
+            let affected_jobs: Vec<JobAddr> = jobs
+                .iter()
+                .filter(|(job, state)| {
+                    case_ids
+                        .iter()
+                        .any(|case_id| job.starts_with(&format!("{case_id}::")))
+                        && state.status != Some(JobStatus::Success)
+                })
+                .map(|(job, _)| JobAddr(job.clone()))
+                .collect();
+            tracker.record(Event::Diagnostic {
                 at: unix_secs(),
-                message: format!(
-                    "the build process for {} exited nonzero; per-job results decide the verdict",
-                    group_dir(on.as_deref())
-                ),
+                diagnostic: build_process_diagnostic(error.clone(), affected_jobs),
             })?;
+            for case_id in case_ids {
+                build_process_errors.insert(case_id, error.clone());
+            }
         }
     }
 
@@ -1131,13 +1144,17 @@ fn run_build_tasks(
             &logs_dir,
             &reported,
         )?;
-        if build_facts
-            .failures
-            .iter()
-            .any(|failure| failure.message.as_deref() == Some(crate::ci::facts::NO_BUILD_LOG))
-        {
-            build_facts.union_error = union_errors.get(&spec.case).cloned();
-        }
+        let diagnostic = build_process_errors.get(&spec.case).map(|message| {
+            let affected_jobs: Vec<JobAddr> = build_facts
+                .failures
+                .iter()
+                .filter(|failure| {
+                    failure.message.as_deref() == Some(crate::ci::facts::NO_BUILD_LOG)
+                })
+                .map(|failure| failure.job.clone())
+                .collect();
+            build_process_diagnostic(message.clone(), affected_jobs)
+        });
         if build_facts.complete {
             artifacts.record(&logs_dir.join("manifest.json"))?;
         }
@@ -1201,18 +1218,22 @@ fn run_build_tasks(
         });
         let headline =
             crate::support::ui::counts(&build_facts.census.as_ref().expect("just set").parts());
+        let mut fragment = Fragment::new(
+            spec.task_id.clone(),
+            spec.label.clone(),
+            spec.kind,
+            status,
+            headline,
+        )
+        .with_data(FragmentData::Build(build_facts));
+        if let Some(diagnostic) = diagnostic {
+            fragment = fragment.with_diagnostic(diagnostic);
+        }
         worst = worst.max(
             finish_task(
                 ctx,
                 tracker,
-                Fragment::new(
-                    spec.task_id.clone(),
-                    spec.label.clone(),
-                    spec.kind,
-                    status,
-                    headline,
-                )
-                .with_data(FragmentData::Build(build_facts)),
+                fragment,
                 Some((union_started.elapsed(), artifacts.bytes())),
             )?
             .exit(request.blocked),
@@ -1383,6 +1404,20 @@ fn finish_task(
     Ok(fragment.status)
 }
 
+fn start_task(
+    tracker: &mut Tracker,
+    task_id: &str,
+    label: &str,
+    jobs: Option<usize>,
+) -> Result<()> {
+    tracker.record(Event::PhaseStarted {
+        at: unix_secs(),
+        task_id: task_id.to_string(),
+        label: label.to_string(),
+        jobs,
+    })
+}
+
 /// Walk the plan in this process. `only` names the tasks to run, in plan
 /// order; empty means all of them, which is the only case that also folds the
 /// run's report.
@@ -1430,7 +1465,6 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
                 Ok(status) => status,
                 Err(error) => {
                     let detail = error.to_string();
-                    crate::support::ui::error(format!("build union: {detail}"));
                     // Every planned build task still ends through the gate,
                     // so none is left with a started phase that never
                     // finishes.
@@ -1459,12 +1493,7 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
             continue;
         }
         if broken.contains(&task.case) && blocked_by_case_failure(task.phase) {
-            tracker.record(Event::PhaseStarted {
-                at: unix_secs(),
-                task_id: task.task_id.clone(),
-                label: task.label.clone(),
-                jobs: None,
-            })?;
+            start_task(&mut tracker, &task.task_id, &task.label, None)?;
             finish_task(
                 ctx,
                 &mut tracker,
@@ -1489,26 +1518,18 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
         {
             continue;
         }
-        tracker.record(Event::PhaseStarted {
-            at: unix_secs(),
-            task_id: task.task_id.clone(),
-            label: task.label.clone(),
-            jobs: None,
-        })?;
+        start_task(&mut tracker, &task.task_id, &task.label, None)?;
         let started = Instant::now();
         let mut artifacts = Artifacts::default();
         let fragment = match run_phase(ctx, request, &task.case, task.phase, &mut artifacts) {
             Ok(fragment) => fragment,
-            Err(error) => {
-                crate::support::ui::error(format!("{}: {error}", task.task_id));
-                Fragment::new(
-                    task.task_id.clone(),
-                    task.label.clone(),
-                    task.kind,
-                    TaskStatus::Failure,
-                    crate::support::error::brief(&error, 200),
-                )
-            }
+            Err(error) => Fragment::new(
+                task.task_id.clone(),
+                task.label.clone(),
+                task.kind,
+                TaskStatus::Failure,
+                crate::support::error::brief(&error, 200),
+            ),
         };
         let status = finish_task(
             ctx,

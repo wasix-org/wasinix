@@ -9,7 +9,7 @@ use std::time::Duration;
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::ci::events::{self, Event};
-use crate::ci::facts::{TestOutcome, TestResult};
+use crate::ci::facts::{Diagnostic, DiagnosticSeverity, TestOutcome, TestResult};
 use crate::ci::report::Report;
 use crate::support::atoms::{JobStatus, TaskStatus};
 use crate::support::error::Result;
@@ -19,6 +19,12 @@ use crate::support::terminal::interactive;
 /// How many failure-detail lines one job may print.
 const FAILURE_DETAIL_LINES: usize = 6;
 const MILESTONE_EVERY: usize = 50;
+const LIVENESS_SECONDS: u64 = 60;
+
+struct ActivePhase {
+    label: String,
+    started_at: u64,
+}
 
 pub struct LineRenderer {
     started_at: Option<u64>,
@@ -28,9 +34,9 @@ pub struct LineRenderer {
     failed: usize,
     /// Start order, so the named few are the longest-running builds.
     building: Vec<String>,
-    /// PhaseStarted stamps by task id, so the finish line can say how long
-    /// the task took.
-    phase_started: std::collections::BTreeMap<String, u64>,
+    phases: std::collections::BTreeMap<String, ActivePhase>,
+    last_liveness_at: Option<u64>,
+    unexplained_failures: usize,
 }
 
 pub(crate) fn glyph(status: TaskStatus) -> &'static str {
@@ -41,6 +47,28 @@ pub(crate) fn glyph(status: TaskStatus) -> &'static str {
         TaskStatus::Skipped | TaskStatus::Deferred => "·",
         TaskStatus::Pending => "·",
     }
+}
+
+pub(crate) fn diagnostic_lines(diagnostic: &Diagnostic) -> Vec<String> {
+    let glyph = match diagnostic.severity {
+        DiagnosticSeverity::Warning => "warning:",
+        DiagnosticSeverity::Error => "✗",
+    };
+    let mut lines = vec![format!("{glyph} {}", diagnostic.title)];
+    lines.extend(
+        diagnostic
+            .message
+            .lines()
+            .take(FAILURE_DETAIL_LINES)
+            .map(|line| format!("  │ {line}")),
+    );
+    if !diagnostic.affected_jobs.is_empty() {
+        lines.push(format!(
+            "  │ {} jobs did not complete",
+            diagnostic.affected_jobs.len()
+        ));
+    }
+    lines
 }
 
 impl LineRenderer {
@@ -66,7 +94,9 @@ impl LineRenderer {
             completed: 0,
             failed: 0,
             building: Vec::new(),
-            phase_started: std::collections::BTreeMap::new(),
+            phases: std::collections::BTreeMap::new(),
+            last_liveness_at: None,
+            unexplained_failures: 0,
         }
     }
 
@@ -97,18 +127,39 @@ impl LineRenderer {
 
     /// [`counts`](Self::counts) plus the builds in flight, for the lines
     /// describing a run still going.
-    fn progress(&self) -> String {
+    fn progress(&self, at: u64) -> String {
         let counts = self.counts();
-        if self.building.is_empty() {
-            return counts;
-        }
-        let names: Vec<&str> = self.building.iter().map(String::as_str).collect();
-        let building = format!("building {}", format::some(&names, 3));
-        if counts.is_empty() {
-            building
+        let work = if !self.building.is_empty() {
+            let names: Vec<&str> = self.building.iter().map(String::as_str).collect();
+            format!("building {}", format::some(&names, 3))
+        } else if let Some(phase) = self.phases.values().min_by_key(|phase| phase.started_at) {
+            let label = if self.phases.len() == 1 {
+                phase.label.clone()
+            } else {
+                format!("{} phases running", self.phases.len())
+            };
+            format!(
+                "{label} · running for {}",
+                format::duration(at.saturating_sub(phase.started_at) as f64)
+            )
         } else {
-            crate::support::ui::counts(&[counts, building])
+            String::new()
+        };
+        if counts.is_empty() {
+            work
+        } else if work.is_empty() {
+            counts
+        } else {
+            crate::support::ui::counts(&[counts, work])
         }
+    }
+
+    fn diagnostic_lines(&self, at: u64, diagnostic: &Diagnostic) -> Vec<String> {
+        let mut lines = diagnostic_lines(diagnostic);
+        if let Some(first) = lines.first_mut() {
+            *first = format!("{} {first}", self.stamp(at));
+        }
+        lines
     }
 
     /// The lines one event adds, so a test can replay a recorded stream and
@@ -122,7 +173,8 @@ impl LineRenderer {
             // Once-a-minute liveness with fresh counts, in quiet stretches
             // and through chatty compiles alike.
             Event::Heartbeat { at, detail } => {
-                let mut progress = self.progress();
+                self.last_liveness_at = Some(*at);
+                let mut progress = self.progress(*at);
                 if let Some(detail) = detail {
                     if progress.is_empty() {
                         progress = detail.clone();
@@ -151,7 +203,13 @@ impl LineRenderer {
                 task_id,
             } => {
                 self.total_jobs += jobs.unwrap_or(0);
-                self.phase_started.insert(task_id.clone(), *at);
+                self.phases.insert(
+                    task_id.clone(),
+                    ActivePhase {
+                        label: label.clone(),
+                        started_at: *at,
+                    },
+                );
                 let size = jobs
                     .map(|jobs| format!(" · {jobs} jobs"))
                     .unwrap_or_default();
@@ -164,12 +222,12 @@ impl LineRenderer {
                 task_id,
             } => {
                 let took = self
-                    .phase_started
+                    .phases
                     .remove(task_id)
                     .map(|started| {
                         format!(
                             " · took {}",
-                            format::duration(at.saturating_sub(started) as f64)
+                            format::duration(at.saturating_sub(started.started_at) as f64)
                         )
                     })
                     .unwrap_or_default();
@@ -190,6 +248,10 @@ impl LineRenderer {
                 self.building.retain(|started| started != job.as_str());
                 if *status == JobStatus::Failure {
                     self.failed += 1;
+                    if error.as_deref() == Some(crate::ci::facts::NO_BUILD_LOG) {
+                        self.unexplained_failures += 1;
+                        return Vec::new();
+                    }
                     let mut lines = vec![format!("{} ✗ {job}", self.stamp(*at))];
                     if let Some(error) = error {
                         lines.extend(
@@ -201,7 +263,7 @@ impl LineRenderer {
                     }
                     lines
                 } else if self.completed.is_multiple_of(MILESTONE_EVERY) && self.bar.is_none() {
-                    vec![format!("{} {}", self.stamp(*at), self.progress())]
+                    vec![format!("{} {}", self.stamp(*at), self.progress(*at))]
                 } else {
                     Vec::new()
                 }
@@ -209,17 +271,32 @@ impl LineRenderer {
             Event::Warning { at, message } => {
                 vec![format!("{} warning: {message}", self.stamp(*at))]
             }
+            Event::Output { at, line } => vec![format!("{} {line}", self.stamp(*at))],
+            Event::Diagnostic { at, diagnostic } => {
+                self.unexplained_failures = 0;
+                self.diagnostic_lines(*at, diagnostic)
+            }
             Event::RunFinished { at, state, .. } => {
+                let mut lines = Vec::new();
+                if self.unexplained_failures > 0 {
+                    lines.push(format!(
+                        "{} ✗ {} jobs failed before producing a log",
+                        self.stamp(*at),
+                        self.unexplained_failures
+                    ));
+                    self.unexplained_failures = 0;
+                }
                 let mut parts = vec![state.to_string()];
                 let counts = self.counts();
                 if !counts.is_empty() {
                     parts.push(counts);
                 }
-                vec![format!(
+                lines.push(format!(
                     "{} {}",
                     self.stamp(*at),
                     crate::support::ui::counts(&parts)
-                )]
+                ));
+                lines
             }
         }
     }
@@ -229,7 +306,42 @@ impl LineRenderer {
             self.line(line);
         }
         if let Some(bar) = &self.bar {
-            bar.set_message(self.progress());
+            bar.set_message(self.progress(event.at()));
+        }
+    }
+
+    pub(crate) fn lines_for_tick(&mut self, at: u64) -> Vec<String> {
+        if let Some(bar) = &self.bar {
+            bar.set_message(self.progress(at));
+            return Vec::new();
+        }
+        if self.phases.is_empty()
+            || self
+                .last_liveness_at
+                .is_some_and(|last| at.saturating_sub(last) < LIVENESS_SECONDS)
+        {
+            return Vec::new();
+        }
+        let started = self
+            .phases
+            .values()
+            .map(|phase| phase.started_at)
+            .min()
+            .unwrap_or(at);
+        if at.saturating_sub(started) < LIVENESS_SECONDS {
+            return Vec::new();
+        }
+        self.last_liveness_at = Some(at);
+        let progress = self.progress(at);
+        (!progress.is_empty())
+            .then(|| format!("{} {progress}", self.stamp(at)))
+            .into_iter()
+            .collect()
+    }
+
+    pub(crate) fn tick(&mut self, at: u64) {
+        for line in self.lines_for_tick(at) {
+            self.line(line);
         }
     }
 
@@ -251,6 +363,7 @@ pub fn follow(run_dir: &Path, stop: &AtomicBool) -> Result<()> {
             for event in fresh {
                 renderer.event(event);
             }
+            renderer.tick(crate::support::time::unix_secs());
             Ok(())
         },
         || Ok(stop.load(Ordering::Relaxed)),
@@ -269,6 +382,7 @@ pub fn watch(run_dir: &Path) -> Result<()> {
             for event in fresh {
                 renderer.event(event);
             }
+            renderer.tick(crate::support::time::unix_secs());
             Ok(())
         },
         // A lost run never writes RunFinished; the observed record says so.
@@ -303,6 +417,11 @@ pub(crate) fn test_summary(label: &str, tests: &[&TestResult]) -> Option<String>
 /// Render the stable, folded answer shared by direct builds and `run report`.
 pub fn finished_report(report: &Report) {
     crate::support::ui::result(&report.title);
+    for diagnostic in &report.diagnostics {
+        for line in diagnostic_lines(diagnostic) {
+            crate::support::ui::result(format!("  {line}"));
+        }
+    }
     if !report.log_retention.is_empty() {
         let mut parts = vec![
             format!("{} logs", report.log_retention.log_count),

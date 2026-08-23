@@ -51,7 +51,13 @@ Progress is an append-only `events.jsonl`; the snapshot is derived from it, not
 maintained beside it. Every progress view (the terminal ladder, `run watch`,
 `run logs --follow`, a remote observer) replays that one stream. Case
 materialization, baseline reuse, and plan generation appear there before the
-first build task starts.
+first build task starts. A phase start records its name and time, so a quiet
+tool still renders as the active phase with increasing elapsed time.
+
+Task diagnostics live on their fragments regardless of task kind. The fold
+deduplicates shared diagnostics and their affected jobs into the report; final
+terminal and GitHub surfaces render that report instead of re-reading task
+facts.
 
 Task and durable-run transcripts retain at most 64 MiB each by default: their
 opening context and newest output, with the omitted byte count between them. A

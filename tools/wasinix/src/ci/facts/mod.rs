@@ -16,6 +16,24 @@ use crate::support::atoms::{Bytes, DurationSecs, JobAddr};
 use crate::support::error::Result;
 
 pub const NO_BUILD_LOG: &str = "build failed before producing a log";
+pub const BUILD_PROCESS_ERROR_TITLE: &str = "Build process error";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DiagnosticSeverity {
+    Warning,
+    Error,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Diagnostic {
+    pub severity: DiagnosticSeverity,
+    pub title: String,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub affected_jobs: Vec<JobAddr>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -170,8 +188,6 @@ pub struct BuildFacts {
     pub build_seconds_by_drv: BTreeMap<String, f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub census: Option<JobCensus>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub union_error: Option<String>,
 }
 
 /// Where a build task's selected jobs went, in job addresses. The plan half
@@ -334,6 +350,5 @@ pub fn ingest(
         build_seconds: metrics.build_seconds,
         build_seconds_by_drv: metrics.build_seconds_by_drv,
         census: None,
-        union_error: None,
     })
 }
