@@ -1,0 +1,23 @@
+--- a/Zend/zend_portability.h
++++ b/Zend/zend_portability.h
+@@ -167,6 +167,9 @@
+ # define DL_UNLOAD					FreeLibrary
+ # define DL_HANDLE					HMODULE
+ # define ZEND_EXTENSIONS_SUPPORT	1
++#elif defined(__wasi__)
++# define DL_HANDLE					void *
++# define ZEND_EXTENSIONS_SUPPORT	1
+ #else
+ # define DL_HANDLE					void *
+ # define ZEND_EXTENSIONS_SUPPORT	0
+--- a/Zend/zend_extensions.c
++++ b/Zend/zend_extensions.c
+@@ -27 +27 @@ int zend_load_extension(const char *path)
+-#if ZEND_EXTENSIONS_SUPPORT
++#if ZEND_EXTENSIONS_SUPPORT && !defined(__wasi__)
+@@ -54 +54 @@ int zend_load_extension_handle(DL_HANDLE handle, const char *path)
+-#if ZEND_EXTENSIONS_SUPPORT
++#if ZEND_EXTENSIONS_SUPPORT && !defined(__wasi__)
+@@ -222 +222 @@ void zend_extension_dtor(zend_extension *extension)
+-#if ZEND_EXTENSIONS_SUPPORT && !ZEND_DEBUG
++#if ZEND_EXTENSIONS_SUPPORT && !ZEND_DEBUG && !defined(__wasi__)

@@ -13,6 +13,10 @@ in
     pkgs.lib.nameValuePair "${attr}-process" (testLib.mkWasixRun {
       name = "${attr}-process";
       wasixPkgs = [wasmerPkgs.${attr}];
+      broken =
+        if attr == "php74"
+        then "the off-profile runtime reports a spawned guest's exit status as 45"
+        else null;
       script = ''
         php -r '
           $descriptors = [
