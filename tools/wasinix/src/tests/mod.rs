@@ -5171,6 +5171,16 @@ mod corpus {
         assert!(found.is_empty(), "{}", found.join("\n"));
     }
 
+    #[test]
+    fn evaluations_keep_their_derivations_rooted() {
+        let source = sources(false)
+            .into_iter()
+            .find(|(path, _)| path == "nix/evaljobs.rs")
+            .unwrap()
+            .1;
+        assert_eq!(source.matches("\"--gc-roots-dir\"").count(), 1);
+    }
+
     /// git runs through support::git (repo named on every call, three-way
     /// exits preserved); ssh and scp through the builder (deadlines, logging).
     #[test]
