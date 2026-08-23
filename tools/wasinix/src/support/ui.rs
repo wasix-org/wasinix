@@ -135,6 +135,12 @@ pub fn fact(key: &str, value: impl std::fmt::Display) {
     }
 }
 
+pub fn verbose_fact(key: &str, value: impl std::fmt::Display) {
+    if verbosity() == Verbosity::Verbose {
+        eprintln!("{key}: {value}");
+    }
+}
+
 /// A result line on stdout; part of the command's answer.
 pub fn result(line: impl std::fmt::Display) {
     println!("{line}");

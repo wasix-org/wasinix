@@ -370,7 +370,7 @@ pub(crate) fn run_directory(chosen: &Option<PathBuf>) -> Result<PathBuf> {
         ));
         match std::fs::create_dir(&run_dir) {
             Ok(()) => {
-                ui::fact("run directory", run_dir.display());
+                ui::verbose_fact("run directory", run_dir.display());
                 return Ok(run_dir);
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
@@ -382,6 +382,35 @@ pub(crate) fn run_directory(chosen: &Option<PathBuf>) -> Result<PathBuf> {
 
 /// The request header: what each case is, where it runs.
 fn case_facts(resolved: &ResolvedRequest) {
+    let heading = match &resolved.action {
+        RequestAction::Build(build) => {
+            let selected = if build.selectors.len() == 1 && build.selectors[0].name == "all" {
+                "all jobs".to_string()
+            } else {
+                build
+                    .selectors
+                    .iter()
+                    .map(|selector| selector.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+            format!(
+                "Building {selected} on {}",
+                build.on.as_deref().unwrap_or("the default runner")
+            )
+        }
+        RequestAction::Spot(spot) => format!(
+            "Building {} with spot on {}",
+            spot.targets.join(", "),
+            spot.on.as_deref().unwrap_or("the default runner")
+        ),
+        RequestAction::Diff(diff) => format!("Comparing {} cases", diff.cases.len()),
+    };
+    ui::note(heading);
+
+    if ui::verbosity() != ui::Verbosity::Verbose {
+        return;
+    }
     for case in resolved.cases() {
         let mut parts = vec![match case {
             crate::ci::types::CaseRef::Build(build) => format!(
@@ -462,19 +491,25 @@ fn plan(repo: &Path, resolved: &ResolvedRequest, mode: &ModeArgs) -> Result<Comm
 /// whole report document on stdout. A run that ended without a report (a
 /// cancel, a dead supervisor) already had its state reported, so a missing
 /// report is a note, not an error.
-pub(crate) fn report_result(run_dir: &Path) -> Result<()> {
+pub(crate) fn report_result(run_dir: &Path, view: super::render::ReportView<'_>) -> Result<()> {
     let path = crate::ci::prepare::report_path(run_dir);
     if !path.exists() {
         ui::note("the run ended without a report");
         // The log's last words are the only evidence such a run leaves.
-        if let Some(tail) = crate::runs::log_tail(run_dir, 800) {
-            ui::note(tail);
+        if ui::verbosity() == ui::Verbosity::Verbose {
+            if let Some(tail) = crate::runs::log_tail(run_dir, 800) {
+                ui::note(tail);
+            }
+        }
+        if matches!(view, super::render::ReportView::Build(_)) {
+            let run = crate::support::shell::quote(&run_dir.to_string_lossy());
+            ui::result(format!("Inspect logs: wasinix run logs {run}"));
         }
         return Ok(());
     }
     let mut report: crate::ci::report::Report = schema::read(&path)?;
     report.attach_log_retention(run_dir)?;
-    super::render::finished_report(&report);
+    super::render::finished_report(&report, view);
     Ok(())
 }
 
@@ -563,7 +598,7 @@ pub(crate) fn run_on_host(
     if matches!(cache, CacheIntent::Push) {
         payload_tail.push("--push-cache".to_string());
     }
-    let mut renderer = crate::cli::render::LineRenderer::new();
+    let mut renderer = crate::cli::render::LineRenderer::for_build();
     let status = crate::runs::remote::run(crate::runs::remote::Request {
         repo,
         builder,
@@ -709,10 +744,13 @@ fn finish_output(drive: &Drive<'_>) -> Result<()> {
                     )?;
                     ui::emit_value(json, &report, || {})?;
                 } else {
-                    report_result(&drive.run_dir)?;
+                    report_result(
+                        &drive.run_dir,
+                        super::render::ReportView::Build(&drive.run_dir),
+                    )?;
                 }
             }
-            Finish::Headline => report_result(&drive.run_dir)?,
+            Finish::Headline => report_result(&drive.run_dir, super::render::ReportView::Stored)?,
             Finish::Silent => {}
         }
     }
@@ -788,7 +826,7 @@ fn drive_terminal(repo: &Path, request: ParsedRequest, mode: &ModeArgs) -> Resul
         if let Some(out) = &mode.junit_out {
             export_junit(&run_dir, out)?;
         }
-        report_result(&run_dir)?;
+        report_result(&run_dir, super::render::ReportView::Build(&run_dir))?;
         return Ok(status);
     }
     drive(Drive {

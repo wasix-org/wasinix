@@ -133,7 +133,7 @@ fn plan_evaluation<S>(builder: &mut Builder, case: &Build<S>, gate_builds: bool)
     let id = case.case_id();
     builder.push(
         format!("{id}.eval-inputs"),
-        format!("{id}: Evaluation inputs"),
+        format!("{id}: Preparing evaluation inputs"),
         TaskKind::Eval,
         id,
         Phase::EvalInputs,
@@ -141,7 +141,7 @@ fn plan_evaluation<S>(builder: &mut Builder, case: &Build<S>, gate_builds: bool)
     );
     builder.push(
         format!("{id}.eval"),
-        format!("{id}: Evaluation"),
+        format!("{id}: Evaluating jobs"),
         TaskKind::Eval,
         id,
         Phase::Eval,

@@ -367,7 +367,7 @@ fn eval_inputs(
     };
     let mut fragment = Fragment::new(
         format!("{case_id}.eval-inputs"),
-        format!("{case_id}: Evaluation inputs"),
+        format!("{case_id}: Preparing evaluation inputs"),
         TaskKind::Eval,
         if status.is_success() {
             TaskStatus::Success
@@ -377,7 +377,7 @@ fn eval_inputs(
         failure
             .as_ref()
             .map(|(headline, _)| headline.as_str())
-            .unwrap_or("evaluation inputs are warm"),
+            .unwrap_or("evaluation inputs are ready"),
     );
     if let Some((_, log)) = &failure {
         fragment = fragment.with_data(FragmentData::Log(excerpt(log)));
@@ -439,7 +439,7 @@ fn evaluate(
         // for someone else to diff against.
         return Ok(Fragment::new(
             format!("{case_id}.eval"),
-            format!("{case_id}: Evaluation"),
+            format!("{case_id}: Evaluating jobs"),
             TaskKind::Eval,
             TaskStatus::Failure,
             "could not evaluate CI jobs",
@@ -476,7 +476,7 @@ fn evaluate(
     let headline = crate::support::ui::counts(&parts);
     Ok(Fragment::new(
         format!("{case_id}.eval"),
-        format!("{case_id}: Evaluation"),
+        format!("{case_id}: Evaluating jobs"),
         TaskKind::Eval,
         TaskStatus::Success,
         headline,

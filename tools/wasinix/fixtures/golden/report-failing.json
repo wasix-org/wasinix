@@ -70,7 +70,7 @@
       "gate": true,
       "headline": "ok",
       "kind": "eval",
-      "label": "case: Evaluation inputs",
+      "label": "case: Preparing evaluation inputs",
       "status": "success",
       "taskId": "case.eval-inputs"
     },
@@ -81,7 +81,7 @@
       "gate": true,
       "headline": "ok",
       "kind": "eval",
-      "label": "case: Evaluation",
+      "label": "case: Evaluating jobs",
       "status": "success",
       "taskId": "case.eval"
     },

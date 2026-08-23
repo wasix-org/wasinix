@@ -220,7 +220,10 @@ pub enum RunCommand {
     },
     /// Print a run's log tail, optionally following until it finishes
     Logs {
-        #[arg(add = clap_complete::ArgValueCandidates::new(run_id_candidates))]
+        #[arg(
+            value_name = "RUN",
+            add = clap_complete::ArgValueCandidates::new(run_id_candidates)
+        )]
         run_id: String,
         #[arg(long)]
         follow: bool,
@@ -234,7 +237,10 @@ pub enum RunCommand {
     },
     /// List the run's build failures with their causes
     Failures {
-        #[arg(add = clap_complete::ArgValueCandidates::new(run_id_candidates))]
+        #[arg(
+            value_name = "RUN",
+            add = clap_complete::ArgValueCandidates::new(run_id_candidates)
+        )]
         run_id: String,
         #[command(flatten)]
         json: ui::JsonArg,
@@ -1042,7 +1048,7 @@ fn run_command(command: RunCommand) -> Result<CommandStatus> {
             let mut report: crate::ci::report::Report = schema::read(&path)?;
             report.attach_log_retention(&run_dir)?;
             ui::emit(&json, &report, |report| {
-                render::finished_report(report);
+                render::finished_report(report, render::ReportView::Stored);
             })?;
             Ok(CommandStatus::SUCCESS)
         }

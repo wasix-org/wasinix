@@ -85,6 +85,13 @@ pub fn run_ids() -> Vec<String> {
 }
 
 pub fn dir_of(run_id: &str) -> Result<PathBuf> {
+    let supplied = PathBuf::from(run_id);
+    if supplied.is_absolute() || supplied.components().count() > 1 {
+        if !supplied.join(RUN_FILE).exists() {
+            return missing(format!("{} is not a run directory", supplied.display()));
+        }
+        return Ok(supplied);
+    }
     let dir = registry()?.join(run_id);
     if !dir.join(RUN_FILE).exists() {
         return missing(format!(

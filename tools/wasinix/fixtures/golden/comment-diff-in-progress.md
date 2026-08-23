@@ -14,4 +14,4 @@
 
 </details>
 
-<sub>candidate-1: Formatting ✅ · Evaluation inputs ✅ · Evaluation ✅ · Core ⏳<br>baseline: Evaluation inputs ✅ · Evaluation ✅ · Core ⏳</sub>
+<sub>candidate-1: Formatting ✅ · Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ⏳<br>baseline: Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ⏳</sub>
