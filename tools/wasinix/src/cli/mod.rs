@@ -843,6 +843,7 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
                 offline: false,
                 check_cache: false,
                 selected: Some(&selected),
+                job_errors: crate::nix::evaljobs::JobErrors::Collect,
                 route: &route,
             })? {
                 return Err(crate::support::error::Error::Failure(format!(

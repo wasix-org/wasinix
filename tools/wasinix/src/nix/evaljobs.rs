@@ -1,7 +1,7 @@
 //! Running nix-eval-jobs and parsing its JSON-lines format, in exactly one
 //! place.
 
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 
 use serde::Deserialize;
@@ -68,7 +68,14 @@ pub struct RunRequest<'a> {
     pub check_cache: bool,
     /// Exact catalog addresses to retain. `None` evaluates every job.
     pub selected: Option<&'a [String]>,
+    pub job_errors: JobErrors,
     pub route: &'a Route,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JobErrors {
+    Collect,
+    FailFast,
 }
 
 const SELECT_FILE_FLAG: &str = "--select-file";
@@ -85,6 +92,34 @@ pub(crate) fn selection_function(names: &[String]) -> Result<String> {
     Ok(format!(
         "jobs: let names = builtins.fromJSON {names}; in builtins.listToAttrs (map (name: {{ inherit name; value = jobs.${{name}}; }}) names)"
     ))
+}
+
+pub(crate) fn stream_jobs(
+    reader: &mut impl BufRead,
+    writer: &mut impl Write,
+    jobs_path: &Path,
+    job_errors: JobErrors,
+) -> Result<Option<String>> {
+    let mut line = String::new();
+    loop {
+        line.clear();
+        if reader
+            .read_line(&mut line)
+            .map_err(|error| io(jobs_path, error))?
+            == 0
+        {
+            return Ok(None);
+        }
+        writer
+            .write_all(line.as_bytes())
+            .map_err(|error| io(jobs_path, error))?;
+        if job_errors == JobErrors::FailFast && !line.trim().is_empty() {
+            let job = parse_line(&line)?;
+            if let Some(error) = &job.error {
+                return Ok(Some(format!("{}: {}", job.name(), error_excerpt(&error))));
+            }
+        }
+    }
 }
 
 /// Run nix-eval-jobs into `jobs_path`, teeing its diagnostics to `stderr_log`.
@@ -141,10 +176,15 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
     let mut jobs_file =
         std::fs::File::create(request.jobs_path).map_err(|e| io(request.jobs_path, e))?;
     let stderr_log = crate::support::log::BoundedLog::create(request.stderr_log)?;
+    let mut job_error = None;
     let completion = invocation.run_piped(
-        |mut stdout| {
-            std::io::copy(&mut stdout, &mut jobs_file)
-                .map_err(|error| io(request.jobs_path, error))?;
+        |stdout| {
+            job_error = stream_jobs(
+                &mut BufReader::new(stdout),
+                &mut jobs_file,
+                request.jobs_path,
+                request.job_errors,
+            )?;
             jobs_file
                 .flush()
                 .map_err(|error| io(request.jobs_path, error))
@@ -156,6 +196,9 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
             Ok(())
         },
     )?;
+    if let Some(error) = job_error {
+        return Ok(Some(error));
+    }
     let timed_out = matches!(completion, crate::support::tools::Completion::TimedOut(_));
     let status = completion.value();
     if timed_out {
