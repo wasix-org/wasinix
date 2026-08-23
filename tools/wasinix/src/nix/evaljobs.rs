@@ -66,7 +66,23 @@ pub struct RunRequest<'a> {
     /// trip over thousands of jobs, so it is only worth it when a caller
     /// reads the status (the build's push list); warming inputs does not.
     pub check_cache: bool,
+    /// Exact catalog addresses to retain. `None` evaluates every job.
+    pub selected: Option<&'a [String]>,
     pub route: &'a Route,
+}
+
+pub(crate) fn selection_function(names: &[String]) -> Result<String> {
+    let names = serde_json::to_string(names).map_err(|source| Error::Json {
+        path: "<CI job selection>".into(),
+        source,
+    })?;
+    let names = serde_json::to_string(&names).map_err(|source| Error::Json {
+        path: "<CI job selection>".into(),
+        source,
+    })?;
+    Ok(format!(
+        "jobs: let names = builtins.fromJSON {names}; in builtins.listToAttrs (map (name: {{ inherit name; value = jobs.${{name}}; }}) names)"
+    ))
 }
 
 /// Run nix-eval-jobs into `jobs_path`, teeing its diagnostics to `stderr_log`.
@@ -75,6 +91,12 @@ pub struct RunRequest<'a> {
 pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
     let limits = request.route.limits()?;
     let timeout = limits.timeout;
+    let gc_roots = request
+        .jobs_path
+        .parent()
+        .unwrap_or(request.workdir)
+        .join("gc-roots");
+    crate::support::fs::create_dir_all(&gc_roots)?;
     // The workers race to fetch a workdir flake: the first records its final
     // narHash while another may still re-fetch the locked rev through the
     // archive path, and the two disagree on a tree carrying a submodule
@@ -90,12 +112,16 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
     // package definition.
     let mut invocation = crate::support::nix::Invocation::eval_jobs()
         .accepts_flake_config()
-        .args(["--flake", request.flake, "--meta"])
+        .args(["--flake", request.flake, "--meta", "--repair"])
+        .args(["--gc-roots-dir", &gc_roots.to_string_lossy()])
         .args(["--workers", &limits.workers.to_string()])
         .args(["--max-memory-size", &limits.memory.to_string()])
         .workdir(request.workdir)
         .timeout(timeout)
         .route(request.route)?;
+    if let Some(selected) = request.selected {
+        invocation = invocation.args(["--select", &selection_function(selected)?]);
+    }
     if request.check_cache {
         invocation = invocation.arg("--check-cache-status");
     }

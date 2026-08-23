@@ -829,6 +829,12 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
                 ".#legacyPackages.{}.ci.jobs",
                 crate::support::nix::SYSTEM
             );
+            let catalog = crate::ci::exec::selector_catalog(worktree.path(), &route)?.into_map();
+            let selected: Vec<String> = if selectors.is_empty() {
+                catalog.jobs.keys().map(|job| job.0.clone()).collect()
+            } else {
+                catalog.resolve_jobs(&selectors)?
+            };
             if let Some(error) = crate::nix::evaljobs::run(&crate::nix::evaljobs::RunRequest {
                 workdir: worktree.path(),
                 flake: &attr,
@@ -836,6 +842,7 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
                 stderr_log: &scratch.path().join("evaluate.log"),
                 offline: false,
                 check_cache: false,
+                selected: Some(&selected),
                 route: &route,
             })? {
                 return Err(crate::support::error::Error::Failure(format!(
@@ -844,7 +851,12 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
             }
             let jobs =
                 crate::nix::evaljobs::parse_file(&crate::support::fs::read_to_string(&jobs_path)?)?;
-            crate::ci::evalmap::EvalMap::from_jobs(rev, &jobs)
+            let mut mapping = crate::ci::evalmap::EvalMap::from_jobs(rev, &jobs);
+            mapping.info = catalog.info;
+            mapping.packages = catalog.packages;
+            mapping.sets = catalog.sets;
+            mapping.groups = catalog.groups;
+            mapping
         }
     };
     drop(worktree);

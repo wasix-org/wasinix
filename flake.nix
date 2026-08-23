@@ -107,7 +107,7 @@
       })
       commands;
     legacyPackages.${system} = project;
-    checks.${system} = project.tests;
+    checks.${system} = project.tests // {treefmt = treefmtCheck;};
     packages.${system} = {
       default = wasinix;
       inherit wasinix;

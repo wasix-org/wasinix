@@ -230,16 +230,21 @@ fn treefmt(
 fn eval_inputs(
     ctx: &Context,
     worktree: &Path,
-    case_id: &str,
+    case: &Build<RevSource>,
     route: &Route,
     artifacts: &mut Artifacts,
 ) -> Result<Fragment> {
     let _lease = route.acquire()?;
+    let case_id = case.case_id();
     let logs = crate::ci::prepare::logs_dir(&case_dir(ctx.run_dir, case_id)).join("eval-inputs");
     let attr = format!(
         ".#legacyPackages.{}.ci.jobs",
         crate::support::nix::SYSTEM
     );
+    let catalog = selector_catalog(worktree, route)?.into_map();
+    let selected: Vec<String> = crate::ci::compare::selected(case, &catalog)?
+        .into_iter()
+        .collect();
     let jobs_path = logs.join("jobs.jsonl");
     let evaluate_log = logs.join("evaluate.log");
     let mut failure: Option<(String, PathBuf)> = None;
@@ -253,6 +258,7 @@ fn eval_inputs(
         // over thousands of jobs is the eval-inputs bottleneck and buys
         // nothing here.
         check_cache: false,
+        selected: Some(&selected),
         route,
     })?;
     artifacts.record(&jobs_path)?;
@@ -284,7 +290,10 @@ fn eval_inputs(
     Ok(fragment)
 }
 
-fn selector_catalog(worktree: &Path, route: &Route) -> Result<crate::ci::evalmap::SelectorCatalog> {
+pub(crate) fn selector_catalog(
+    worktree: &Path,
+    route: &Route,
+) -> Result<crate::ci::evalmap::SelectorCatalog> {
     let bytes = crate::support::nix::Invocation::flake(
         "eval",
         format!(
@@ -293,7 +302,6 @@ fn selector_catalog(worktree: &Path, route: &Route) -> Result<crate::ci::evalmap
         ),
     )
     .json()
-    .offline()
     .workdir(worktree)
     .timeout(route.limits()?.timeout)
     .route(route)?
@@ -356,6 +364,10 @@ fn evaluate(
         ".#legacyPackages.{}.ci.jobs",
         crate::support::nix::SYSTEM
     );
+    let catalog = selector_catalog(worktree, route)?.into_map();
+    let selected: Vec<String> = crate::ci::compare::selected(case, &catalog)?
+        .into_iter()
+        .collect();
     let eval_log = maps.join("eval.log");
     let jobs_path = crate::ci::prepare::eval_jobs_path(&case_dir(ctx.run_dir, case_id));
     let evaluation = evaljobs::run(&evaljobs::RunRequest {
@@ -367,6 +379,7 @@ fn evaluate(
         // Offline, so a cache-status query cannot reach a substituter; the
         // build's --skip-cached decides what to rebuild instead.
         check_cache: false,
+        selected: Some(&selected),
         route,
     })?;
     artifacts.record(&jobs_path)?;
@@ -386,7 +399,6 @@ fn evaluate(
 
     let jobs = evaljobs::parse_file(&crate::support::fs::read_to_string(&jobs_path)?)?;
     let mut mapping = EvalMap::from_jobs(case.source.rev.clone(), &jobs);
-    let catalog = selector_catalog(worktree, route)?.into_map();
     mapping.info = catalog.info;
     mapping.packages = catalog.packages;
     mapping.sets = catalog.sets;
@@ -1264,8 +1276,8 @@ fn run_phase(
                 .join("treefmt.log");
             treefmt(worktree.path(), case_id, &route, &log, artifacts)
         }
-        (Phase::EvalInputs, CaseRef::Build(_)) => {
-            eval_inputs(ctx, worktree.path(), case_id, &route, artifacts)
+        (Phase::EvalInputs, CaseRef::Build(build)) => {
+            eval_inputs(ctx, worktree.path(), build, &route, artifacts)
         }
         (Phase::EvalInputs, CaseRef::Spot(_)) => request_error("eval-inputs phase on a spot case"),
         (Phase::Eval, CaseRef::Build(build)) => {
