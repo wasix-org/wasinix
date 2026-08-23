@@ -810,6 +810,7 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
     let repo = crate::support::git::repo_root()?;
     let (worktree, rev, tree) = crate::ci::workspace::working_worktree(&repo)?;
     let route = crate::nix::route::Route::from_on(&repo, Some("local"))?;
+    let mut evaluation_scratch = None;
     let map = match recorded_eval(&tree)? {
         Some((run_id, map)) => {
             ui::fact("evaluation", format!("recorded by run {run_id}"));
@@ -820,10 +821,8 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
                 "evaluation",
                 "none recorded for this tree; evaluating locally",
             );
-            let scratch = crate::support::env::temp_dir()
-                .join(format!("wasinix-cache-push-{}", std::process::id()));
-            crate::support::fs::create_dir_all(&scratch)?;
-            let jobs_path = scratch.join("jobs.jsonl");
+            let scratch = crate::support::fs::Scratch::create("wasinix-cache-push")?;
+            let jobs_path = scratch.path().join("jobs.jsonl");
             let attr = format!(
                 ".#legacyPackages.{}.ciSets.all",
                 crate::support::nix::SYSTEM
@@ -832,7 +831,7 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
                 workdir: worktree.path(),
                 flake: &attr,
                 jobs_path: &jobs_path,
-                stderr_log: &scratch.join("evaluate.log"),
+                stderr_log: &scratch.path().join("evaluate.log"),
                 offline: false,
                 check_cache: false,
                 route: &route,
@@ -843,6 +842,7 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
             }
             let jobs =
                 crate::nix::evaljobs::parse_file(&crate::support::fs::read_to_string(&jobs_path)?)?;
+            evaluation_scratch = Some(scratch);
             crate::ci::evalmap::EvalMap::from_jobs(rev, &jobs)
         }
     };
@@ -870,6 +870,7 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
     }
 
     let report = crate::nix::buildset::push_prebuilt(&outputs_by_drv, &route)?;
+    drop(evaluation_scratch);
     ui::emit(
         &json,
         &CachePush {
