@@ -3180,6 +3180,28 @@ mod markdown {
     }
 
     #[test]
+    fn the_check_run_names_a_shared_build_process_error_once() {
+        let (mut report, mut fragments) = scenarios::failing();
+        for fragment in fragments.values_mut() {
+            if let Some(crate::ci::report::FragmentData::Build(facts)) = &mut fragment.data {
+                facts.union_error =
+                    Some("error: path '/nix/store/missing-input' is not valid".to_string());
+            }
+        }
+        let duplicate = fragments["case.core"].clone();
+        fragments.insert("case.packages".to_string(), duplicate);
+        let explained = check(&report, &fragments, &links()).summary;
+        assert!(!explained.contains("missing-input"), "{explained}");
+        for failure in report.failures.values_mut().flatten() {
+            failure.message = Some(crate::ci::facts::NO_BUILD_LOG.to_string());
+        }
+        let summary = check(&report, &fragments, &links()).summary;
+        assert!(summary.contains("Build process error"), "{summary}");
+        assert!(summary.contains("missing-input"), "{summary}");
+        assert_eq!(summary.matches("missing-input").count(), 1, "{summary}");
+    }
+
+    #[test]
     fn the_step_summary_carries_what_the_comment_caps() {
         let (report, fragments) = scenarios::failing();
         let text = step_summary(&report, &fragments, &links()).into_string();
