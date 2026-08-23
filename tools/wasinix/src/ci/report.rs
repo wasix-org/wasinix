@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::ci::compare::{Comparison, VersionUpdate};
 
 use crate::ci::contentdiff::ContentSummary;
-use crate::ci::facts::{BuildFacts, Failure, TestResult};
+use crate::ci::facts::{BuildFacts, Diagnostic, Failure, TestResult};
 use crate::ci::plan::{Plan, Task, TaskKind};
 use crate::ci::types::ResolvedRequest;
 use crate::support::atoms::{BlockedPolicy, Bytes, DurationSecs, Rev, TaskStatus};
@@ -75,6 +75,8 @@ pub struct Fragment {
     pub headline: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data: Option<FragmentData>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<Diagnostic>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub elapsed_seconds: Option<DurationSecs>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -105,6 +107,7 @@ impl Fragment {
             status,
             headline: headline.into(),
             data: None,
+            diagnostics: Vec::new(),
             elapsed_seconds: None,
             artifact_bytes: None,
         }
@@ -112,6 +115,11 @@ impl Fragment {
 
     pub fn with_data(mut self, data: FragmentData) -> Fragment {
         self.data = Some(data);
+        self
+    }
+
+    pub fn with_diagnostic(mut self, diagnostic: Diagnostic) -> Fragment {
+        self.diagnostics.push(diagnostic);
         self
     }
 
@@ -222,6 +230,8 @@ pub struct Report {
     /// Per build task, the Failure atoms it produced.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub failures: BTreeMap<String, Vec<Failure>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<Diagnostic>,
     /// Per build task, the package tests it ran and their declared outcomes.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub tests: BTreeMap<String, Vec<TestResult>>,
@@ -495,6 +505,28 @@ pub fn fold(plan: &Plan, fragments: &BTreeMap<String, Fragment>, context: FoldCo
             _ => None,
         })
         .collect();
+    let mut diagnostics: Vec<Diagnostic> = Vec::new();
+    for diagnostic in views
+        .iter()
+        .filter(|view| view.task.enabled)
+        .filter_map(|view| view.fragment)
+        .flat_map(|fragment| &fragment.diagnostics)
+    {
+        match diagnostics.iter_mut().find(|existing| {
+            existing.severity == diagnostic.severity
+                && existing.title == diagnostic.title
+                && existing.message == diagnostic.message
+        }) {
+            Some(existing) => existing
+                .affected_jobs
+                .extend(diagnostic.affected_jobs.iter().cloned()),
+            None => diagnostics.push(diagnostic.clone()),
+        }
+    }
+    for diagnostic in &mut diagnostics {
+        diagnostic.affected_jobs.sort();
+        diagnostic.affected_jobs.dedup();
+    }
     let tests = views
         .iter()
         .filter(|view| view.task.enabled)
@@ -523,6 +555,7 @@ pub fn fold(plan: &Plan, fragments: &BTreeMap<String, Fragment>, context: FoldCo
         annotations,
         tasks,
         failures,
+        diagnostics,
         tests,
         version_updates,
         comparisons: context.comparisons,
@@ -607,6 +640,7 @@ pub fn starting(log_tail: Option<&str>) -> Report {
         annotations: Vec::new(),
         tasks: Vec::new(),
         failures: BTreeMap::new(),
+        diagnostics: Vec::new(),
         tests: BTreeMap::new(),
         version_updates: BTreeMap::new(),
         comparisons: Vec::new(),
@@ -653,6 +687,7 @@ pub fn from_run_state(run: &crate::runs::Run, log_tail: Option<&str>) -> Report 
         annotations: Vec::new(),
         tasks,
         failures: std::collections::BTreeMap::new(),
+        diagnostics: Vec::new(),
         tests: std::collections::BTreeMap::new(),
         version_updates: std::collections::BTreeMap::new(),
         comparisons: Vec::new(),

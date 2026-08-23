@@ -133,6 +133,13 @@ fn failures(report: &Report) -> Vec<(&str, &Failure)> {
         .iter()
         .flat_map(|(task, failures)| failures.iter().map(move |failure| (task.as_str(), failure)))
         .filter(|(_, failure)| failure.cause != FailureCause::Transitive)
+        .filter(|(_, failure)| {
+            failure.message.as_deref() != Some(crate::ci::facts::NO_BUILD_LOG)
+                || !report
+                    .diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.affected_jobs.contains(&failure.job))
+        })
         .collect()
 }
 
@@ -287,33 +294,27 @@ fn failure_table(rows: &[(&str, &Failure)], links: &Links, cap: usize) -> Markdo
     table
 }
 
-fn union_errors(report: &Report, fragments: &BTreeMap<String, Fragment>) -> Markdown {
-    let failures: Vec<&Failure> = report.failures.values().flatten().collect();
-    let only_no_log = failures
-        .iter()
-        .any(|failure| failure.message.as_deref() == Some(crate::ci::facts::NO_BUILD_LOG))
-        && failures.iter().all(|failure| {
-            failure.cause == FailureCause::Transitive
-                || failure.message.as_deref() == Some(crate::ci::facts::NO_BUILD_LOG)
-        });
-    if !only_no_log {
-        return Markdown::new();
+fn diagnostics(report: &Report) -> Markdown {
+    let mut body = Markdown::new();
+    for diagnostic in &report.diagnostics {
+        body = Markdown::concat([
+            body,
+            Markdown::constant("**"),
+            Markdown::text(&diagnostic.title),
+            Markdown::constant("**\n\n"),
+            Markdown::fenced(&diagnostic.message, "text"),
+        ]);
+        if !diagnostic.affected_jobs.is_empty() {
+            body = Markdown::concat([
+                body,
+                Markdown::constant("\n"),
+                plural(diagnostic.affected_jobs.len(), "job"),
+                Markdown::constant(" did not complete\n"),
+            ]);
+        }
+        body = body.push(Markdown::constant("\n"));
     }
-    let errors: std::collections::BTreeSet<&str> = fragments
-        .values()
-        .filter_map(|fragment| match &fragment.data {
-            Some(FragmentData::Build(facts)) => facts.union_error.as_deref(),
-            _ => None,
-        })
-        .collect();
-    if errors.is_empty() {
-        return Markdown::new();
-    }
-    Markdown::concat([
-        Markdown::constant("**Build process error**\n\n"),
-        Markdown::fenced(&errors.into_iter().collect::<Vec<_>>().join("\n"), "text"),
-        Markdown::constant("\n"),
-    ])
+    body
 }
 
 /// The phase ladder: one line per case with the case named once, and the
@@ -681,6 +682,7 @@ fn green(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Links)
         jobs,
         links.heading_suffix(),
         Markdown::constant("\n\n"),
+        diagnostics(report),
         comparison_block(report),
         footer(report, fragments, links),
         Markdown::constant("\n"),
@@ -751,6 +753,7 @@ fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
         what,
         links.heading_suffix(),
         Markdown::constant("\n\n"),
+        diagnostics(report),
     ]);
     if primary.is_empty() {
         // A regression can be a job that never ran, whose failure atom is
@@ -833,6 +836,7 @@ fn inconclusive(
         links.heading_suffix(),
         Markdown::constant("\n\n"),
         Markdown::constant(lead),
+        diagnostics(report),
     ]);
     let all = failures(report);
     if !all.is_empty() {
@@ -926,6 +930,23 @@ fn in_progress(report: &Report, snapshot: Option<&Snapshot>, links: &Links) -> M
     // The comment is edited in place, so absolute wall-clock tells a reader
     // whether the run is live in a way "building" alone cannot.
     let mut trailing = Vec::new();
+    if let Some(phase) = snapshot.and_then(|snapshot| {
+        snapshot
+            .phases
+            .iter()
+            .rev()
+            .find(|phase| phase.status == TaskStatus::Pending)
+    }) {
+        let label = match phase.started_at {
+            Some(started) => format!(
+                "{} since {}",
+                phase.label,
+                crate::support::time::wall_clock_utc(started)
+            ),
+            None => phase.label.clone(),
+        };
+        trailing.push(Markdown::text(&label));
+    }
     if let Some(at) = snapshot.and_then(|snapshot| snapshot.last_event_at) {
         trailing.push(Markdown::text(&format!(
             "updated {}",
@@ -969,7 +990,7 @@ pub fn check(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Li
             title
         }
     };
-    let mut summary = union_errors(report, fragments);
+    let mut summary = diagnostics(report);
     if !all.is_empty() {
         summary = summary
             .push(failure_table(&all, links, FAILURE_ROWS))

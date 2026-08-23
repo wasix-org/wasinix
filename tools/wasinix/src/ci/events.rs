@@ -10,6 +10,7 @@ use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
+use crate::ci::facts::Diagnostic;
 use crate::support::atoms::{DurationSecs, JobAddr, JobStatus, RunState, TaskStatus};
 use crate::support::error::{Error, Result, io};
 use crate::support::schema::Document;
@@ -57,6 +58,10 @@ pub enum Event {
     #[serde(rename_all = "camelCase")]
     Warning { at: u64, message: String },
     #[serde(rename_all = "camelCase")]
+    Output { at: u64, line: String },
+    #[serde(rename_all = "camelCase")]
+    Diagnostic { at: u64, diagnostic: Diagnostic },
+    #[serde(rename_all = "camelCase")]
     Heartbeat {
         at: u64,
         /// What the run is doing when no job is in flight, or nothing.
@@ -81,6 +86,8 @@ impl Event {
             | Event::JobStarted { at, .. }
             | Event::JobFinished { at, .. }
             | Event::Warning { at, .. }
+            | Event::Output { at, .. }
+            | Event::Diagnostic { at, .. }
             | Event::Heartbeat { at, .. }
             | Event::RunFinished { at, .. } => *at,
         }
@@ -234,6 +241,8 @@ pub struct PhaseSnapshot {
     pub label: String,
     pub status: TaskStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub headline: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub jobs: Option<usize>,
@@ -283,6 +292,7 @@ impl SnapshotReducer {
                 self.snapshot.started_at = Some(*at);
             }
             Event::PhaseStarted {
+                at,
                 task_id,
                 label,
                 jobs,
@@ -294,6 +304,7 @@ impl SnapshotReducer {
                     task_id: task_id.clone(),
                     label: label.clone(),
                     status: TaskStatus::Pending,
+                    started_at: Some(*at),
                     headline: None,
                     jobs: *jobs,
                 });
@@ -313,6 +324,7 @@ impl SnapshotReducer {
                         task_id: task_id.clone(),
                         label: task_id.clone(),
                         status: TaskStatus::Pending,
+                        started_at: Some(event.at()),
                         headline: None,
                         jobs: None,
                     });
@@ -350,7 +362,10 @@ impl SnapshotReducer {
                     }
                 }
             }
-            Event::Warning { .. } | Event::Heartbeat { .. } => {}
+            Event::Warning { .. }
+            | Event::Output { .. }
+            | Event::Diagnostic { .. }
+            | Event::Heartbeat { .. } => {}
             Event::RunFinished {
                 state, exit_code, ..
             } => {

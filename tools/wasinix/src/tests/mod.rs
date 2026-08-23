@@ -1806,6 +1806,7 @@ mod events {
         assert_eq!(snapshot.recent_failures, [JobAddr("checks.zlib".into())]);
         assert_eq!(snapshot.phases.len(), 2);
         assert_eq!(snapshot.phases[0].status, TaskStatus::Success);
+        assert_eq!(snapshot.phases[1].started_at, Some(3));
         assert_eq!(snapshot.phases[1].jobs, Some(40));
         let done = fold_snapshot(
             &events
@@ -2475,6 +2476,7 @@ mod markdown {
                     log: None,
                 }],
             )]),
+            diagnostics: Vec::new(),
             tests: std::collections::BTreeMap::new(),
             version_updates: std::collections::BTreeMap::new(),
             comparisons: Vec::new(),
@@ -3150,6 +3152,7 @@ mod markdown {
                 task_id: "case.core".into(),
                 label: "case: Core".into(),
                 status: crate::support::atoms::TaskStatus::Pending,
+                started_at: Some(1_755_000_000),
                 headline: None,
                 jobs: Some(7228),
             }],
@@ -3181,24 +3184,31 @@ mod markdown {
 
     #[test]
     fn the_check_run_names_a_shared_build_process_error_once() {
-        let (mut report, mut fragments) = scenarios::failing();
-        for fragment in fragments.values_mut() {
-            if let Some(crate::ci::report::FragmentData::Build(facts)) = &mut fragment.data {
-                facts.union_error =
-                    Some("error: path '/nix/store/missing-input' is not valid".to_string());
-            }
-        }
-        let duplicate = fragments["case.core"].clone();
-        fragments.insert("case.packages".to_string(), duplicate);
-        let explained = check(&report, &fragments, &links()).summary;
-        assert!(!explained.contains("missing-input"), "{explained}");
+        let (mut report, fragments) = scenarios::failing();
         for failure in report.failures.values_mut().flatten() {
             failure.message = Some(crate::ci::facts::NO_BUILD_LOG.to_string());
         }
+        report.diagnostics.push(crate::ci::facts::Diagnostic {
+            severity: crate::ci::facts::DiagnosticSeverity::Error,
+            title: "Build process error".to_string(),
+            message: "error: path '/nix/store/missing-input' is not valid".to_string(),
+            affected_jobs: report
+                .failures
+                .values()
+                .flatten()
+                .map(|failure| failure.job.clone())
+                .collect(),
+        });
         let summary = check(&report, &fragments, &links()).summary;
         assert!(summary.contains("Build process error"), "{summary}");
         assert!(summary.contains("missing-input"), "{summary}");
         assert_eq!(summary.matches("missing-input").count(), 1, "{summary}");
+        let comment = comment(&report, &fragments, None, &links()).into_string();
+        assert!(comment.contains("missing-input"), "{comment}");
+        assert_eq!(comment.matches("missing-input").count(), 1, "{comment}");
+        let terminal = crate::cli::render::diagnostic_lines(&report.diagnostics[0]).join("\n");
+        assert!(terminal.contains("missing-input"), "{terminal}");
+        assert!(terminal.contains("2 jobs did not complete"), "{terminal}");
     }
 
     #[test]
@@ -3488,7 +3498,7 @@ mod surfaces {
 
 mod render {
     use crate::ci::events::Event;
-    use crate::ci::facts::{TestOutcome, TestResult};
+    use crate::ci::facts::{Diagnostic, DiagnosticSeverity, TestOutcome, TestResult};
     use crate::cli::render::{LineRenderer, test_summary};
     use crate::support::atoms::{DurationSecs, JobAddr, JobStatus, RunState, TaskStatus};
 
@@ -3608,6 +3618,77 @@ mod render {
             }),
             [
                 "[+7m 0s] 50/100 jobs · building checks.curl, checks.zlib · dependencies: llvm, wasix-libc +2"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_quiet_phase_reports_elapsed_time_without_another_event() {
+        let mut renderer = LineRenderer::with_spinner(false);
+        assert_eq!(
+            renderer.lines_for(&Event::PhaseStarted {
+                at: 100,
+                task_id: "case.treefmt".into(),
+                label: "case: Formatting".into(),
+                jobs: None,
+            }),
+            ["[+0s] case: Formatting"]
+        );
+        assert!(renderer.lines_for_tick(159).is_empty());
+        assert_eq!(
+            renderer.lines_for_tick(160),
+            ["[+1m 0s] case: Formatting · running for 1m 0s"]
+        );
+        assert!(renderer.lines_for_tick(219).is_empty());
+        assert_eq!(
+            renderer.lines_for_tick(220),
+            ["[+2m 0s] case: Formatting · running for 2m 0s"]
+        );
+        renderer.lines_for(&Event::PhaseFinished {
+            at: 225,
+            task_id: "case.treefmt".into(),
+            status: TaskStatus::Success,
+            headline: "formatting is clean".into(),
+        });
+        assert!(renderer.lines_for_tick(280).is_empty());
+    }
+
+    #[test]
+    fn one_process_diagnostic_replaces_repeated_missing_logs() {
+        let mut renderer = LineRenderer::with_spinner(false);
+        renderer.lines_for(&Event::RunStarted { at: 100, pid: 1 });
+        for job in ["checks.one", "checks.two", "checks.three"] {
+            assert!(
+                renderer
+                    .lines_for(&Event::JobFinished {
+                        at: 101,
+                        job: JobAddr(job.into()),
+                        status: JobStatus::Failure,
+                        cached: false,
+                        duration_seconds: None,
+                        error: Some(crate::ci::facts::NO_BUILD_LOG.into()),
+                    })
+                    .is_empty()
+            );
+        }
+        let lines = renderer.lines_for(&Event::Diagnostic {
+            at: 102,
+            diagnostic: Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                title: "Build process error".into(),
+                message: "error: remote store disconnected".into(),
+                affected_jobs: ["checks.one", "checks.two", "checks.three"]
+                    .into_iter()
+                    .map(|job| JobAddr(job.into()))
+                    .collect(),
+            },
+        });
+        assert_eq!(
+            lines,
+            [
+                "[+2s] ✗ Build process error",
+                "  │ error: remote store disconnected",
+                "  │ 3 jobs did not complete",
             ]
         );
     }
@@ -5100,6 +5181,8 @@ mod corpus {
             "Event::JobStarted",
             "Event::JobFinished",
             "Event::Warning",
+            "Event::Output",
+            "Event::Diagnostic",
             "Event::Heartbeat",
             "Event::RunFinished",
         ];
@@ -5118,16 +5201,19 @@ mod corpus {
         assert!(found.is_empty(), "{}", found.join("\n"));
     }
 
-    /// finish_task is the one place a task ends: the only fragment write and
-    /// the only PhaseFinished emission, so a result and its ladder close can
-    /// never diverge. Counted in exec.rs, banned everywhere else, so a new
-    /// emitter in another module cannot slip past the gate.
+    /// Task phase boundaries pass through one start and one finish gate. The
+    /// finish gate owns both the fragment write and PhaseFinished emission.
     #[test]
     fn tasks_finish_through_one_gate() {
         let exec = std::fs::read_to_string(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ci/exec.rs"),
         )
         .unwrap();
+        assert_eq!(
+            exec.matches("Event::PhaseStarted").count(),
+            1,
+            "task PhaseStarted is emitted only by start_task"
+        );
         assert_eq!(
             exec.matches("Event::PhaseFinished").count(),
             1,
@@ -5154,6 +5240,17 @@ mod corpus {
             &[&emit, &write, &write_method],
         );
         assert!(found.is_empty(), "{}", found.join("\n"));
+    }
+
+    #[test]
+    fn task_execution_does_not_bypass_the_event_stream() {
+        let exec = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ci/exec.rs"),
+        )
+        .unwrap();
+        for call in ["ui::note", "ui::error"] {
+            assert!(!exec.contains(call), "ci/exec.rs directly calls {call}");
+        }
     }
 
     /// Display, Debug, and the serde wire spelling are one name per state,
@@ -6310,6 +6407,40 @@ mod fold {
         );
         let report = fold(&plan, &fragments, FoldContext::default());
         assert_eq!(report.failures["case.core"][0].job.as_str(), "checks.zlib");
+    }
+
+    #[test]
+    fn diagnostics_flow_from_fragments_and_merge_affected_jobs() {
+        use crate::ci::facts::{Diagnostic, DiagnosticSeverity};
+
+        let request = Request::build(build("case"), Default::default());
+        let plan = plan_of(&request, None, &[]);
+        let mut fragments = all_green(&plan);
+        for (task_id, kind, job) in [
+            ("case.core", TaskKind::Build, "checks.zlib"),
+            ("case.eval", TaskKind::Eval, "packages.curl"),
+        ] {
+            let diagnostic = Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                title: "Build process error".into(),
+                message: "error: remote store disconnected".into(),
+                affected_jobs: vec![JobAddr(job.into())],
+            };
+            fragments.insert(
+                task_id.into(),
+                fragment(task_id, kind, TaskStatus::Failure, "1 failed")
+                    .with_diagnostic(diagnostic),
+            );
+        }
+        let report = fold(&plan, &fragments, FoldContext::default());
+        assert_eq!(report.diagnostics.len(), 1);
+        assert_eq!(
+            report.diagnostics[0].affected_jobs,
+            [
+                JobAddr("checks.zlib".into()),
+                JobAddr("packages.curl".into())
+            ]
+        );
     }
 
     #[test]
