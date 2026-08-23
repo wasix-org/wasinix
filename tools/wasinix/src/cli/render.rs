@@ -271,7 +271,7 @@ impl LineRenderer {
             Event::Warning { at, message } => {
                 vec![format!("{} warning: {message}", self.stamp(*at))]
             }
-            Event::Output { at, line } => vec![format!("{} {line}", self.stamp(*at))],
+            Event::LegacyOutput { .. } => Vec::new(),
             Event::Diagnostic { at, diagnostic } => {
                 self.unexplained_failures = 0;
                 self.diagnostic_lines(*at, diagnostic)

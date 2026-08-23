@@ -57,8 +57,9 @@ pub enum Event {
     },
     #[serde(rename_all = "camelCase")]
     Warning { at: u64, message: String },
-    #[serde(rename_all = "camelCase")]
-    Output { at: u64, line: String },
+    /// Kept to read schema 1 runs; raw process output belongs in logs.
+    #[serde(rename = "output", rename_all = "camelCase")]
+    LegacyOutput { at: u64, line: String },
     #[serde(rename_all = "camelCase")]
     Diagnostic { at: u64, diagnostic: Diagnostic },
     #[serde(rename_all = "camelCase")]
@@ -86,7 +87,7 @@ impl Event {
             | Event::JobStarted { at, .. }
             | Event::JobFinished { at, .. }
             | Event::Warning { at, .. }
-            | Event::Output { at, .. }
+            | Event::LegacyOutput { at, .. }
             | Event::Diagnostic { at, .. }
             | Event::Heartbeat { at, .. }
             | Event::RunFinished { at, .. } => *at,
@@ -378,7 +379,7 @@ impl SnapshotReducer {
                 }
             }
             Event::Warning { .. }
-            | Event::Output { .. }
+            | Event::LegacyOutput { .. }
             | Event::Diagnostic { .. }
             | Event::Heartbeat { .. } => {}
             Event::RunFinished {

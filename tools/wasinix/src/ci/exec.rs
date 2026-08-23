@@ -791,14 +791,6 @@ impl Liveness {
     }
 }
 
-fn notable_output(line: &str) -> bool {
-    let trimmed = line.trim_start();
-    trimmed.starts_with("ERROR:")
-        || trimmed.starts_with("WARN:")
-        || trimmed.starts_with("error:")
-        || trimmed.starts_with("warning:")
-}
-
 /// Split the union junit back into one case-and-target file, backfilling
 /// selected jobs the build never reported so absence reads as failure, never
 /// as clean.
@@ -1072,11 +1064,6 @@ fn run_build_tasks(
                                 job: JobAddr(attr.to_string()),
                             })?;
                         }
-                    } else if notable_output(&line) {
-                        tracker.record(Event::Output {
-                            at: unix_secs(),
-                            line,
-                        })?;
                     }
                     Ok(())
                 }
