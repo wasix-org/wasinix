@@ -75,12 +75,16 @@ pub enum Route {
 }
 
 impl Route {
+    pub fn local() -> Result<Route> {
+        Ok(Route::Local(EvaluationLimits::local()?))
+    }
+
     /// Resolve `--on`: `local`, a remote name, or `<remote>:<route>`. Absent
     /// means the configured default remote on its default route.
     pub fn from_on(repo: &Path, on: Option<&str>) -> Result<Route> {
         let (selected, requested) = match on {
             None => (None, None),
-            Some("local") => return Ok(Route::Local(EvaluationLimits::local()?)),
+            Some("local") => return Route::local(),
             Some(spec) => match spec.split_once(':') {
                 Some((name, route)) => (Some(name), Some(RouteKind::parse(route)?)),
                 None => (Some(spec), None),

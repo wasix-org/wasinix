@@ -45,7 +45,9 @@ a signing key present, pushes completed work to the cache the GitHub builders
 consume. Running it before CI warms the PR build. Store paths are
 input-addressed and baselines are keyed by the materialized git tree, so every
 keyed run pushes what it builds and no run can publish under a key it did not
-produce.
+produce. The pinned formatting check always runs locally; routing its tiny build
+remotely would transfer the whole source closure before doing a few seconds of
+work.
 
 Work built without `--push-cache` is pushed retroactively by
 `wasinix cache push [selectors]`: it reuses the working tree's recorded
