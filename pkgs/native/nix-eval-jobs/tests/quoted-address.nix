@@ -8,7 +8,8 @@
       nativeBuildInputs = [entry.package pkgs.python3 pkgs.writableTmpDirAsHomeHook];
     } ''
       nix-eval-jobs --expr --no-instantiate --workers 1 \
-        '{ "tests.packages.requests.versions.\"2.32.3\".behavior" = derivation { name = "probe"; system = builtins.currentSystem; builder = ":"; }; }' \
+        --select 'jobs: let names = builtins.fromJSON "[\"tests.packages.requests.versions.\\\"2.32.3\\\".behavior\"]"; in builtins.listToAttrs (map (name: { inherit name; value = jobs.''${name}; }) names)' \
+        '{ "tests.packages.requests.versions.\"2.32.3\".behavior" = derivation { name = "probe"; system = builtins.currentSystem; builder = ":"; }; ignored = derivation { name = "ignored"; system = builtins.currentSystem; builder = ":"; }; }' \
         > jobs.jsonl
       python3 - <<'PY'
       import json

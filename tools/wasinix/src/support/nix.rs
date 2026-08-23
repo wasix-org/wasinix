@@ -28,6 +28,29 @@ pub fn project_installable(flake: &str, path: &str) -> String {
     format!("{flake}#{}", project_attr(path))
 }
 
+pub(crate) fn copy_paths_invocation(route: &Route, paths: &std::path::Path) -> Option<Invocation> {
+    let Some(store) = route.store() else {
+        return None;
+    };
+    Some(
+        Invocation::plain("copy")
+            .args(["--to", &store, "--substitute-on-destination", "--stdin"])
+            .stdin(paths),
+    )
+}
+
+pub(crate) fn copy_paths_to_store(
+    route: &Route,
+    paths: &std::path::Path,
+    context: &str,
+) -> Result<()> {
+    let Some(invocation) = copy_paths_invocation(route, paths) else {
+        return Ok(());
+    };
+    invocation.checked_output(context)?;
+    Ok(())
+}
+
 /// The shared binary cache, spelled once: rotating the key or moving the
 /// bucket is an edit here and nowhere else. The workflows read the same
 /// values through the nix-config emitter.

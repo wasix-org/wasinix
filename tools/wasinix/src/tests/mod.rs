@@ -1381,13 +1381,40 @@ mod route {
     }
 
     #[test]
-    fn builder_evaluation_disables_local_build_slots() {
+    fn only_store_routes_copy_evaluated_derivations() {
+        let scratch = crate::support::fs::Scratch::create("wasinix-test").unwrap();
+        let paths = scratch.path().join("derivations.txt");
+        std::fs::write(&paths, "/nix/store/example.drv\n").unwrap();
+        let command = crate::support::nix::copy_paths_invocation(&Route::Store(builder()), &paths)
+            .unwrap()
+            .command()
+            .unwrap();
+        assert_eq!(
+            args(&command),
+            [
+                "copy",
+                "--to",
+                "ssh-ng://builder@example",
+                "--substitute-on-destination",
+                "--stdin"
+            ]
+        );
+        assert!(
+            crate::support::nix::copy_paths_invocation(&Route::Builder(builder()), &paths)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn builder_evaluation_uses_the_daemon_store_and_disables_local_build_slots() {
         let route = Route::Builder(builder());
         let mut command = Command::new("nix-eval-jobs");
         route.configure_eval_jobs(&mut command).unwrap();
         assert_eq!(
             args(&command),
             [
+                "--eval-store",
+                "auto",
                 "--option",
                 "builders",
                 "ssh-ng://builder@example x86_64-linux",
@@ -8306,6 +8333,16 @@ mod buildset {
     }
 
     #[test]
+    fn eval_jobs_selection_preserves_literal_catalog_addresses() {
+        let address = r#"tests.packages.requests.versions."2.32.3".behavior"#;
+        let select = evaljobs::selection_function(&[address.to_string()]).unwrap();
+        assert_eq!(
+            select,
+            r#"jobs: let names = builtins.fromJSON "[\"tests.packages.requests.versions.\\\"2.32.3\\\".behavior\"]"; in builtins.listToAttrs (map (name: { inherit name; value = jobs.${name}; }) names)"#,
+        );
+    }
+
+    #[test]
     fn the_eval_error_excerpt_starts_at_the_root_cause() {
         let trace = "warning: unknown setting\n\
             error: worker error: error:\n\
@@ -8611,7 +8648,9 @@ mod workspace {
 }
 
 mod baseline {
-    use crate::ci::baseline::{covers, expected_jobs, missing_status, publish_document};
+    use crate::ci::baseline::{
+        covers, expected_jobs, missing_status, publish_document, publish_from_run,
+    };
     use crate::ci::evalmap::{EvalMap, StatusMap};
     use crate::ci::types::{Build, RevSource, Selector, SelectorKind};
     use crate::support::atoms::{JobAddr, JobStatus, Rev};
@@ -8671,6 +8710,17 @@ mod baseline {
         let document = publish_document(&mapping, &complete, &coverage, &Default::default(), &[]);
         assert!(covers(&selected, &document));
         assert!(!covers(&case(&["one", "two", "three"]), &document));
+    }
+
+    #[test]
+    fn publishing_skips_a_case_without_an_evaluation_map() {
+        let scratch = crate::support::fs::Scratch::create("wasinix-test").unwrap();
+        publish_from_run(
+            scratch.path(),
+            "candidate",
+            crate::support::effects::Effects::DryRun,
+        )
+        .unwrap();
     }
 }
 

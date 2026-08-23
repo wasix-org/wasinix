@@ -661,6 +661,17 @@ pub fn build_union(
         }))?;
     }
 
+    let drv_file = work_dir.join("job-derivations.txt");
+    crate::support::fs::write(
+        &drv_file,
+        (jobs.keys().cloned().collect::<Vec<_>>().join("\n") + "\n").as_bytes(),
+    )?;
+    crate::support::nix::copy_paths_to_store(
+        request.route,
+        &drv_file,
+        "copying evaluated jobs to the build store",
+    )?;
+
     let key = if request.push {
         SigningKey::take()?
     } else {

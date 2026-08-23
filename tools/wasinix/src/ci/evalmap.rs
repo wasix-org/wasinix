@@ -274,6 +274,14 @@ impl Document for EvalMap {
 }
 
 impl EvalMap {
+    fn catalog_jobs(&self) -> Box<dyn Iterator<Item = &JobAddr> + '_> {
+        if self.info.is_empty() {
+            Box::new(self.jobs.keys().chain(self.errors.keys()))
+        } else {
+            Box::new(self.info.keys())
+        }
+    }
+
     /// Every name a selector completer should offer, or None for a map too
     /// narrow to describe the world (a spot case carries only its own jobs
     /// and must not shrink the recorded set).
@@ -285,7 +293,7 @@ impl EvalMap {
             std::iter::once("all")
                 .chain(self.sets.keys().map(String::as_str))
                 .chain(self.groups.keys().map(String::as_str))
-                .chain(self.jobs.keys().map(JobAddr::as_str))
+                .chain(self.catalog_jobs().map(JobAddr::as_str))
                 .collect(),
         )
     }
@@ -351,7 +359,7 @@ impl EvalMap {
     /// say "N jobs omitted: tags X, Y" instead of omitting silently.
     pub fn omitted_by_tags(&self, enabled: &[String]) -> BTreeMap<String, Vec<JobAddr>> {
         let mut omitted: BTreeMap<String, Vec<JobAddr>> = BTreeMap::new();
-        for job in self.jobs.keys() {
+        for job in self.catalog_jobs() {
             for tag in self.missing_tags(&job.0, enabled) {
                 omitted.entry(tag).or_default().push(job.clone());
             }
@@ -386,7 +394,7 @@ impl EvalMap {
     /// The jobs this evaluation found, as addresses.
     pub fn job_domain(&self) -> Result<Domain> {
         let mut domain = Domain::new("the evaluated job list");
-        for name in self.jobs.keys().chain(self.errors.keys()) {
+        for name in self.catalog_jobs() {
             let path = naming::split(&name.0)?;
             let axis = naming::axis_of(&path);
             let aliases = self

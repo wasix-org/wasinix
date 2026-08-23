@@ -107,13 +107,20 @@ pub fn publish_from_run(
     effects: crate::support::effects::Effects,
 ) -> Result<()> {
     let paths = crate::ci::prepare::case_dir(run_dir, case_id);
+    let eval_map = crate::ci::prepare::eval_map_path(&paths);
+    if !eval_map.exists() {
+        crate::support::ui::fact(
+            "baseline",
+            format!("skipped ({case_id}: evaluation did not produce a map)"),
+        );
+        return Ok(());
+    }
     // The key is the materialized tree's object id, recorded at prepare
     // time, so a patched or overridden run publishes under its own tree and
     // can never claim a commit's.
     let manifest: crate::ci::workspace::Materialization =
         crate::support::schema::read(&paths.join("prepared/materialization.json"))?;
-    let mapping: EvalMap =
-        crate::support::schema::read(&crate::ci::prepare::eval_map_path(&paths))?;
+    let mapping: EvalMap = crate::support::schema::read(&eval_map)?;
     let rev = mapping.rev.clone().ok_or_else(|| {
         crate::support::error::Error::Failure(
             "the eval map names no revision to publish under".into(),

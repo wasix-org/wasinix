@@ -182,8 +182,8 @@ impl Route {
 
     pub fn configure_eval_jobs(&self, command: &mut Command) -> Result<()> {
         self.no_host("nix-eval-jobs")?;
+        command.args(["--eval-store", "auto"]);
         if let Route::Store(builder) = self {
-            command.args(["--eval-store", "auto"]);
             command.args(["--option", "store", &builder.store()]);
         }
         command.args(self.build_nix_options());
