@@ -58,16 +58,16 @@ pub fn progress_noise(line: &str) -> bool {
 }
 
 /// The nix config block workflows install, from the same constants the
-/// binary trusts. min-free/max-free (10 GiB floor, 50 GiB target, in bytes)
-/// let the daemon garbage-collect mid-build instead of filling the runner
-/// disk; a collected path re-substitutes from the cache.
+/// binary trusts. Automatic GC preserves runner headroom; keep-outputs
+/// protects build-time dependencies while it runs.
 pub fn nix_config() -> String {
     format!(
         "extra-substituters = {CACHE_SUBSTITUTER}\n\
          extra-trusted-public-keys = {CACHE_PUBLIC_KEY}\n\
          trusted-users = root runner\n\
          min-free = 10737418240\n\
-         max-free = 53687091200\n"
+         max-free = 53687091200\n\
+         keep-outputs = true\n"
     )
 }
 
