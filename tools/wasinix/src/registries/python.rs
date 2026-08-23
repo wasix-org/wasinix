@@ -10,8 +10,8 @@ use std::process::Command;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::support::error::{io, request_error, Result};
-use crate::support::nix::{eval, Flake};
+use crate::support::error::{Result, io, request_error};
+use crate::support::nix::{Flake, eval};
 use crate::support::process::CommandStatus;
 use crate::support::ui;
 

@@ -20,8 +20,8 @@ persistent local limits (`max_jobs`, `eval_workers`, `eval_memory`, and a
 
 Every remote profile needs a useful `description`: its intended workload,
 availability or wake-up step, and constraints such as cost or capacity.
-`wasinix remote list` presents that text to people and agents before they
-choose `--on <remote>`.
+`wasinix remote list` presents that text to people and agents before they choose
+`--on <remote>`.
 
 ## Push credentials
 

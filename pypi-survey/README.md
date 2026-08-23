@@ -51,18 +51,18 @@ generated, not vendored in this copy; regenerate them with the reproduce steps.
 ## Reproducing
 
 The coverage inputs need python3 (stdlib + `packaging`), ~55 MB of PyPI JSON
-metadata cache, and ~15 min. Refresh them explicitly, because this contacts
-PyPI and rewrites vendored survey data:
+metadata cache, and ~15 min. Refresh them explicitly, because this contacts PyPI
+and rewrites vendored survey data:
 
 ```
 wasinix python survey refresh --cutoff 10000
 ```
 
 The wrapper runs metadata fetch, wheel-tag classification (including
-`native_optional.json`), sdist-only refinement, and dependency-closure
-analysis. It uses the tracked `data/top.json` traffic snapshot; replacing that
-ranking from top-pypi is a separate survey update. The remaining scripts
-regenerate the research report and flame chart:
+`native_optional.json`), sdist-only refinement, and dependency-closure analysis.
+It uses the tracked `data/top.json` traffic snapshot; replacing that ranking
+from top-pypi is a separate survey update. The remaining scripts regenerate the
+research report and flame chart:
 
 ```
 python3 scripts/wheel_inspect.py 10000     # ranged-HTTP wheel inspection (no full downloads)
