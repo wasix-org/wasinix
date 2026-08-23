@@ -113,6 +113,7 @@ impl LineRenderer {
     /// The spinner decision made explicit: a spinner absorbs the milestone
     /// lines, and a nix sandbox runs builders on a pseudoterminal, so a test
     /// pinning the narration must choose line mode rather than detect it.
+    #[cfg(test)]
     pub(crate) fn with_spinner(spinner: bool) -> LineRenderer {
         LineRenderer::with_options(spinner, Narration::Watch)
     }
