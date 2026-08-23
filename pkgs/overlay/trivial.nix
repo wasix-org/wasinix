@@ -6,6 +6,7 @@
   "bzip2"
   "editline" # nix repl
   "expat"
+  "giflib"
   "jansson"
   "lcms2" # pillow's ImageCms
   "libb2"
