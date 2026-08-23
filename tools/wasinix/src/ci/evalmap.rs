@@ -383,13 +383,11 @@ impl EvalMap {
         Ok(jobs)
     }
 
-    /// The jobs this evaluation found, as addresses. A flat job name is the
-    /// segments joined, so splitting it back is exact for every root whose
-    /// names hold no dot, and the joined form is accepted for the rest.
-    pub fn job_domain(&self) -> Domain {
+    /// The jobs this evaluation found, as addresses.
+    pub fn job_domain(&self) -> Result<Domain> {
         let mut domain = Domain::new("the evaluated job list");
         for name in self.jobs.keys().chain(self.errors.keys()) {
-            let path: Vec<String> = name.0.split('.').map(str::to_string).collect();
+            let path = naming::split(&name.0)?;
             let axis = naming::axis_of(&path);
             let aliases = self
                 .info
@@ -398,14 +396,14 @@ impl EvalMap {
                 .unwrap_or_default();
             domain.add_path(path, &name.0, axis, aliases);
         }
-        domain
+        Ok(domain)
     }
 
     /// The job names a request's addresses select. An address naming one
     /// package across a variant axis selects every build of it, which is how
     /// `packages.wasix.zlib` covers every supported profile.
     pub fn resolve_jobs(&self, requested: &[String]) -> Result<Vec<String>> {
-        let domain = self.job_domain();
+        let domain = self.job_domain()?;
         let mut jobs = Vec::new();
         for spec in requested {
             if let Some(group) = self.groups.get(spec) {
