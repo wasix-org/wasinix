@@ -94,6 +94,21 @@ impl Event {
     }
 }
 
+/// A live view of an event stream. Time is an input beside events: a quiet
+/// process still has progress to render, and every transport supplies its own
+/// polling cadence.
+pub trait ProgressSink {
+    fn event(&mut self, event: &Event);
+    fn tick(&mut self, at: u64);
+
+    fn observe(&mut self, events: &[Event]) {
+        for event in events {
+            self.event(event);
+        }
+        self.tick(crate::support::time::unix_secs());
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 struct Line {
     schema: u32,

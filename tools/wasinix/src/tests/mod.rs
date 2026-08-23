@@ -5212,6 +5212,18 @@ mod corpus {
         assert!(found.is_empty(), "{}", found.join("\n"));
     }
 
+    /// A remote observer polls independently of the event stream, so its
+    /// progress boundary must carry the clock as well as events.
+    #[test]
+    fn remote_progress_cannot_be_event_only() {
+        let remote = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/runs/remote.rs"),
+        )
+        .unwrap();
+        assert!(!remote.contains("FnMut(&Event)"));
+        assert!(remote.contains("progress.tick(crate::support::time::unix_secs())"));
+    }
+
     /// Task phase boundaries pass through one start and one finish gate. The
     /// finish gate owns both the fragment write and PhaseFinished emission.
     #[test]
