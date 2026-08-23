@@ -1056,6 +1056,13 @@ fn run_build_tasks(
                 crate::nix::buildset::StreamEvent::Heartbeat { recent_deps } => {
                     liveness.heartbeat(tracker, &building, &recent_deps)
                 }
+                crate::nix::buildset::StreamEvent::Recovery { path } => {
+                    liveness.activity();
+                    tracker.record(Event::Warning {
+                        at: unix_secs(),
+                        message: format!("Nix lost store input {path}; restoring it"),
+                    })
+                }
                 crate::nix::buildset::StreamEvent::Output(line) => {
                     if let Some(attr) = building_attr(&line) {
                         if jobs.contains_key(attr) && building.insert(attr.to_string()) {

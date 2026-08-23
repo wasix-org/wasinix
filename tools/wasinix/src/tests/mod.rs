@@ -7607,7 +7607,8 @@ mod table {
 
 mod buildset {
     use crate::nix::buildset::{
-        dry_run_plan, failure_excerpt_from_log, prebuilt_partition, realise_building_drv,
+        MISSING_PATH_REPAIRS, MissingPathRepairs, RealiseFailure, dry_run_plan,
+        failure_excerpt_from_log, prebuilt_partition, realise_building_drv, realise_failure,
     };
 
     #[test]
@@ -7787,6 +7788,13 @@ mod buildset {
         assert!(bad["error"].as_str().unwrap().contains("doom"), "{bad}");
         let junit = std::fs::read_to_string(scratch.path().join("first/results.xml")).unwrap();
         assert!(junit.contains("case::ok"), "{junit}");
+        let roots: Vec<std::path::PathBuf> =
+            std::fs::read_dir(scratch.path().join("first/.store-roots"))
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .collect();
+        assert!(!roots.is_empty());
+        assert!(roots.iter().all(|root| root.is_symlink()));
 
         // The rerun finds the built output valid and reports it cached; the
         // failure builds again and fails again.
@@ -7811,6 +7819,52 @@ mod buildset {
             Some("/nix/store/abc-zlib.drv")
         );
         assert_eq!(realise_failed_drv("error: dependency failed"), None);
+    }
+
+    #[test]
+    fn invalid_store_paths_are_typed_and_repaired_once() {
+        let path = "/nix/store/nyk0dzdf89jq4skvn3c6nc35x7kgv6rx-bzip2-static-1.0.8";
+        assert_eq!(
+            realise_failure(&format!("error: path '{path}' is not valid")),
+            Some(RealiseFailure::MissingStorePath(path.to_string()))
+        );
+        assert_eq!(
+            realise_failure("error: path '/tmp/input' is not valid"),
+            None
+        );
+        assert_eq!(
+            realise_failure("error: path '/nix/store/hash/name' is not valid"),
+            None
+        );
+
+        let mut repairs = MissingPathRepairs::new();
+        repairs.claim(path).unwrap();
+        assert!(
+            repairs
+                .claim(path)
+                .unwrap_err()
+                .to_string()
+                .contains("same invalid store path again")
+        );
+    }
+
+    #[test]
+    fn invalid_store_path_recovery_is_bounded() {
+        let mut repairs = MissingPathRepairs::new();
+        for index in 0..MISSING_PATH_REPAIRS {
+            repairs
+                .claim(&format!("/nix/store/{index:032}-input"))
+                .unwrap();
+        }
+        assert!(
+            repairs
+                .claim("/nix/store/99999999999999999999999999999999-input")
+                .unwrap_err()
+                .to_string()
+                .contains(&format!(
+                    "more than {MISSING_PATH_REPAIRS} invalid store paths"
+                ))
+        );
     }
 }
 
