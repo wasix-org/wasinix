@@ -363,11 +363,10 @@
         };
     });
 
-  # History wheels (<attr>-<version>): the entry's older releases, minted in the
-  # python set as <attr>_<version> by rebasing the src (load-packages.nix history,
-  # driven by python/history.json). Never noarch. `spec.variants` is the
-  # generic history gate (see load-packages.nix): the build variants an entry is
-  # limited to; for this set a variant IS an interpreter (pyKey), default both.
+  # History wheels (<attr>-<version>): the entry's older releases, rebased by
+  # project history from python/history.json. Never noarch. `spec.variants` is
+  # the generic history gate: the build variants an entry is limited to; for
+  # this set a variant IS an interpreter (pyKey), default both.
   # A worklist entry reads the same `variants` gate as a history entry, for a
   # package one interpreter cannot run (cramjam's pyo3 predates 3.14).
   allVariants = ["py313" "py314" "noarch"];
