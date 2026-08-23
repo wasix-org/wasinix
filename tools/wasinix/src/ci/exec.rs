@@ -992,11 +992,13 @@ fn run_build_tasks(
     let mut worst = CommandStatus::SUCCESS;
     let mut results: BTreeMap<String, PathBuf> = BTreeMap::new();
     let mut union_logs: Vec<PathBuf> = Vec::new();
+    let mut union_errors: BTreeMap<String, String> = BTreeMap::new();
     let mut union_artifacts = Artifacts::default();
     // Merged across placement groups: one task's jobs can span builders.
     let mut plan = crate::nix::buildset::PlanCensus::new();
     let union_started = Instant::now();
     for (on, cases) in groups {
+        let case_ids = cases.clone();
         let route = Route::from_on(ctx.runner_root, on.as_deref())?;
         let _lease = route.acquire()?;
         let limits = route.limits()?;
@@ -1081,6 +1083,11 @@ fn run_build_tasks(
         // every selected job reporting success is a teardown anomaly worth
         // recording.
         if !status.is_success() {
+            let error = crate::support::fs::read_to_string(&build_dir.join("build-union.log"))
+                .map(|log| crate::ci::report::log_headline(&log))?;
+            for case_id in case_ids {
+                union_errors.insert(case_id, error.clone());
+            }
             tracker.record(Event::Warning {
                 at: unix_secs(),
                 message: format!(
@@ -1124,6 +1131,13 @@ fn run_build_tasks(
             &logs_dir,
             &reported,
         )?;
+        if build_facts
+            .failures
+            .iter()
+            .any(|failure| failure.message.as_deref() == Some(crate::ci::facts::NO_BUILD_LOG))
+        {
+            build_facts.union_error = union_errors.get(&spec.case).cloned();
+        }
         if build_facts.complete {
             artifacts.record(&logs_dir.join("manifest.json"))?;
         }

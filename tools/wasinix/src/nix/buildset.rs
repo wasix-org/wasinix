@@ -945,7 +945,7 @@ pub fn build_union(
         let error = if timed_out {
             "the build timed out before this job finished".to_string()
         } else {
-            "build failed before producing a log".to_string()
+            crate::ci::facts::NO_BUILD_LOG.to_string()
         };
         failures += emit_failure(
             &drv,

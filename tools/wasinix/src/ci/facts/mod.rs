@@ -15,6 +15,8 @@ use crate::ci::evalmap::JobInfo;
 use crate::support::atoms::{Bytes, DurationSecs, JobAddr};
 use crate::support::error::Result;
 
+pub const NO_BUILD_LOG: &str = "build failed before producing a log";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FailureCause {
@@ -168,6 +170,8 @@ pub struct BuildFacts {
     pub build_seconds_by_drv: BTreeMap<String, f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub census: Option<JobCensus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub union_error: Option<String>,
 }
 
 /// Where a build task's selected jobs went, in job addresses. The plan half
@@ -330,5 +334,6 @@ pub fn ingest(
         build_seconds: metrics.build_seconds,
         build_seconds_by_drv: metrics.build_seconds_by_drv,
         census: None,
+        union_error: None,
     })
 }

@@ -287,6 +287,35 @@ fn failure_table(rows: &[(&str, &Failure)], links: &Links, cap: usize) -> Markdo
     table
 }
 
+fn union_errors(report: &Report, fragments: &BTreeMap<String, Fragment>) -> Markdown {
+    let failures: Vec<&Failure> = report.failures.values().flatten().collect();
+    let only_no_log = failures
+        .iter()
+        .any(|failure| failure.message.as_deref() == Some(crate::ci::facts::NO_BUILD_LOG))
+        && failures.iter().all(|failure| {
+            failure.cause == FailureCause::Transitive
+                || failure.message.as_deref() == Some(crate::ci::facts::NO_BUILD_LOG)
+        });
+    if !only_no_log {
+        return Markdown::new();
+    }
+    let errors: std::collections::BTreeSet<&str> = fragments
+        .values()
+        .filter_map(|fragment| match &fragment.data {
+            Some(FragmentData::Build(facts)) => facts.union_error.as_deref(),
+            _ => None,
+        })
+        .collect();
+    if errors.is_empty() {
+        return Markdown::new();
+    }
+    Markdown::concat([
+        Markdown::constant("**Build process error**\n\n"),
+        Markdown::fenced(&errors.into_iter().collect::<Vec<_>>().join("\n"), "text"),
+        Markdown::constant("\n"),
+    ])
+}
+
 /// The phase ladder: one line per case with the case named once, and the
 /// run-level facts on a final line, all inside one small-print block.
 fn ladder<'a>(
@@ -940,9 +969,11 @@ pub fn check(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Li
             title
         }
     };
-    let mut summary = Markdown::new();
+    let mut summary = union_errors(report, fragments);
     if !all.is_empty() {
-        summary = failure_table(&all, links, FAILURE_ROWS).push(Markdown::constant("\n"));
+        summary = summary
+            .push(failure_table(&all, links, FAILURE_ROWS))
+            .push(Markdown::constant("\n"));
     }
     summary = summary.push(footer(report, fragments, links));
     Check {
