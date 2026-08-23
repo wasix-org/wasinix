@@ -259,6 +259,7 @@ fn eval_inputs(
         // nothing here.
         check_cache: false,
         selected: Some(&selected),
+        job_errors: evaljobs::JobErrors::FailFast,
         route,
     })?;
     artifacts.record(&jobs_path)?;
@@ -380,6 +381,7 @@ fn evaluate(
         // build's --skip-cached decides what to rebuild instead.
         check_cache: false,
         selected: Some(&selected),
+        job_errors: evaljobs::JobErrors::Collect,
         route,
     })?;
     artifacts.record(&jobs_path)?;

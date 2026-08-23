@@ -8361,6 +8361,50 @@ mod buildset {
     }
 
     #[test]
+    fn input_warming_stops_at_the_first_job_error() {
+        let input = concat!(
+            "{\"attrPath\":[\"good\"],\"drvPath\":\"/nix/store/good.drv\"}\n",
+            "{\"attrPath\":[\"bad\"],\"error\":\"error: hash mismatch\"}\n",
+            "{\"attrPath\":[\"later\"],\"drvPath\":\"/nix/store/later.drv\"}\n",
+        );
+        let mut output = Vec::new();
+        let error = evaljobs::stream_jobs(
+            &mut std::io::Cursor::new(input),
+            &mut output,
+            std::path::Path::new("jobs.jsonl"),
+            evaljobs::JobErrors::FailFast,
+        )
+        .unwrap();
+
+        assert_eq!(error.as_deref(), Some("bad: error: hash mismatch"));
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains("good"));
+        assert!(output.contains("bad"));
+        assert!(!output.contains("later"));
+    }
+
+    #[test]
+    fn regular_evaluation_collects_job_errors() {
+        let input = concat!(
+            "{\"attrPath\":[\"bad\"],\"error\":\"error: hash mismatch\"}\n",
+            "{\"attrPath\":[\"later\"],\"drvPath\":\"/nix/store/later.drv\"}\n",
+        );
+        let mut output = Vec::new();
+        let error = evaljobs::stream_jobs(
+            &mut std::io::Cursor::new(input),
+            &mut output,
+            std::path::Path::new("jobs.jsonl"),
+            evaljobs::JobErrors::Collect,
+        )
+        .unwrap();
+
+        assert_eq!(error, None);
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains("bad"));
+        assert!(output.contains("later"));
+    }
+
+    #[test]
     fn the_dry_run_plan_partitions_in_every_phrasing() {
         let plural = "these 2 derivations will be built:\n  /nix/store/a.drv\n  /nix/store/b.drv\nthese 3 paths will be fetched (1.0 MiB download, 2.0 MiB unpacked):\n  /nix/store/c\n  /nix/store/d\n  /nix/store/e\n";
         let plan = dry_run_plan(plural).unwrap();
