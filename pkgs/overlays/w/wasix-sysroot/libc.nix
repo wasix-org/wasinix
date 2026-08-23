@@ -121,7 +121,8 @@ in
     # defensive callers. tzname, inet-addr and sched unhide declarations sitting
     # behind __wasilibc_unmodified_upstream while the symbols themselves link, so a
     # consumer naming one gets "undeclared identifier"; inet-addr also adds musl's
-    # inet_addr.c, missing from the Makefile source list.
+    # inet_addr.c, missing from the Makefile source list. fcntl-locking exposes the
+    # record-lock API but returns ENOSYS until Wasmer provides shared lock state.
     # xsi-signal is the same unhiding for the XSI signal calls (siginterrupt and
     # friends), which are built on sigaction.
     patches = [
@@ -153,7 +154,6 @@ in
       rm -rf tools/wasi-headers/WASI tools/wasix-headers/WASI
       cp -r --no-preserve=mode,ownership ${wasiWitx}  tools/wasi-headers/WASI
       cp -r --no-preserve=mode,ownership ${wasixWitx} tools/wasix-headers/WASI
-      patch -d tools/wasix-headers/WASI -p1 < ${./wasix-witx-file-locking.patch}
       cp tools/wasix-headers/Cargo.lock tools/wasi-headers/Cargo.lock
       mkdir -p .cargo
       cp ${cargoConfig} .cargo/config.toml

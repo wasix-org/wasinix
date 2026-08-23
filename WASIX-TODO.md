@@ -459,6 +459,23 @@ current toolchain before relying on it.
   glibc/musl on FPUs without directed rounding or exceptions. Downstream then
   compiles unchanged.
 
+### POSIX advisory record locking is not implemented 🟡
+
+- Symptom: `flock()` is declared but absent from `libc.a`; the
+  `F_GETLK`/`F_SETLK`/`F_SETLKW` commands return `ENOSYS`.
+- Consequence: PHP's `flock()` reports failure. SQLite WAL, `fs2`, and other
+  consumers cannot safely coordinate access between WASIX processes.
+- Workaround: package-local stubs return `ENOSYS` where a program only needs to
+  link. PHP does not claim or test locking support. Consumers that require
+  exclusion must serialize access another way.
+- Fix: land shared advisory-lock state and `flock`/`fcntl` syscalls in Wasmer
+  proper, then wire them through wasix-libc. POSIX record locks are process
+  owned and released when that process closes any descriptor for the file; BSD
+  locks follow the lifetime shared by duplicated file descriptions. Blocking
+  operations must integrate with WASIX suspension, and runtime tests must cover
+  conflicts, unlocks, descriptor duplication, close, fork, and spawn. Only then
+  should PHP enable and test `flock()`.
+
 ### `fd_sync`/`fd_datasync` refused a directory fd 🟢
 
 - `fd_sync` and `fd_datasync` answered `Errno::Isdir` for `Kind::Dir` (and
