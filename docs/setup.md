@@ -18,6 +18,11 @@ with `wasinix remote doctor --ifd`. The `[local]` table in the same file holds
 persistent local limits (`max_jobs`, `eval_workers`, `eval_memory`, and a
 `capacity` bounding concurrent local runs).
 
+Every remote profile needs a useful `description`: its intended workload,
+availability or wake-up step, and constraints such as cost or capacity.
+`wasinix remote list` presents that text to people and agents before they
+choose `--on <remote>`.
+
 ## Push credentials
 
 `NIX_SIGNING_KEY` plus S3 credentials (`AWS_ACCESS_KEY_ID`,
@@ -34,10 +39,12 @@ empty catalog by design.
 
 ## For agents
 
-On first wasinix use in an environment, run `wasinix doctor` and read the table
-instead of probing by trial and error. Ask the user only for what the machine
-cannot answer: which remote to build on, and whether they hold the push
-credentials; save both answers to memory, per the "ask where to build once" rule
-in `docs/building.md`. Do not read the CLI's source to learn its behavior;
+On first wasinix use in an environment, run `wasinix doctor`, then
+`wasinix remote list`, and read their output instead of probing by trial and
+error. When configuring a remote, make its description answer where work goes,
+how to wake it, and what constraints apply. Ask the user only for what the
+machine cannot answer, including push credentials. Their persistent routing
+preferences belong in the gitignored `AGENTS.override.md`; it overrides the
+repository's defaults. Do not read the CLI's source to learn its behavior;
 `--help` on any verb and the docs table in `README.md` are the supported
 surfaces.

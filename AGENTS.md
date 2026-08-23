@@ -60,6 +60,13 @@ be replaced by rule:
 - "Done" is judged per rule, not per arm: green call sites with an unenforced
   rule between them are not done.
 
+## Personal execution preferences
+
+The gitignored `AGENTS.override.md` is the user's personal addendum. It
+overrides this file's defaults about where work runs. Before choosing a
+configured remote, run `wasinix remote list`: each builder's description is the
+source of truth for its intended work, availability, and constraints.
+
 ## The three that get violated most
 
 These are in the docs, and are repeated here only because they are the ones most
@@ -69,10 +76,11 @@ often missed:
   of taste. Verbose, changelog-style, context-assuming comments are the single
   most repeated complaint about AI-authored code in this repo. Re-read them
   against your final diff, not against your intent while writing.
-- **Never build locally.** `docs/building.md`. Heavy builds go to the remote
-  builder. `--builders ""` means "build on the user's desktop" and will thrash
-  it into swap. A wide nix-eval-jobs fan-out does the same through RAM, so cap
-  its workers. Read a failing log rather than rebuilding to see the error.
+- **Never build locally.** `docs/building.md`. Heavy builds go to a remote
+  builder. `--builders ""` means "build on the user's desktop" and will
+  potentially thrash it into swap. A wide nix-eval-jobs fan-out does the same
+  through RAM, so cap its workers. Read a failing log rather than rebuilding to
+  see the error.
 - **Fix the root cause.** `docs/style.md`. Excluding, skipping, or marking
   broken to go green is the user's call, never yours, and they can only make it
   once you have said what it costs.

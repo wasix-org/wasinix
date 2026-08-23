@@ -216,7 +216,7 @@ const TEMPLATE: &str = r#"# Builders shared by this developer's worktrees. `wasi
 # default = "ec2"
 #
 # [remotes.ec2]
-# description = "what this machine is for"
+# description = "workload; availability or wake: <command>; cost or capacity"
 # host = "user@host.example.com"
 # key = "~/.ssh/id_ed25519"
 # # ssh host key: base64 over the "type key" line (nix builders form) or the

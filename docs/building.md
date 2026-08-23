@@ -150,11 +150,12 @@ failure link rather than a log; use the EC2 builder or
 The rest of this page assumes a person at a terminal. Three things work
 differently without one.
 
-**Ask where to build before you build, once, and remember the answer.** The
-right route depends on hardware you cannot see: how much they want built, and
-whether that goes to a local machine, a remote builder, one of several, or a PR
-so CI does it. Ask, then save the answer to memory. Re-ask only when it stops
-fitting, such as a builder that is no longer reachable.
+**Read the configured routes before you build.** `wasinix remote list` presents
+each remote's intended workload, availability, and constraints. The user's
+gitignored `AGENTS.override.md` can override the repository default for their
+own infrastructure. Ask only when neither answers whether the work should go
+locally, to a remote builder, or to CI; re-ask when the configured route no
+longer fits, such as a builder that is unreachable.
 
 **A long build cannot live inside a single tool call**, and it must not be a raw
 `... &`. Start it as a durable run and inspect the run record, which is

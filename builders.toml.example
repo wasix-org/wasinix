@@ -1,7 +1,9 @@
 default = "ec2"
 
 [remotes.ec2]
-description = "24/7 online box; prefer this remote when a lease is free"
+# `wasinix remote list` shows this verbatim. Name the workload, availability,
+# and constraints so an agent can choose the route without guessing.
+description = "24/7 host builder for CI-scale work; 32 slots"
 host = "nixremote@example"
 key = "~/.ssh/nixremote_ed25519"
 # Pin the host's ssh key (a known_hosts public-key line); without it the
@@ -21,7 +23,7 @@ substituters = ["https://nix-cache.wasix.org"]
 trusted_public_keys = ["wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI="]
 
 [remotes.nixbuild]
-description = "nixbuild.net instance; billed by usage and dynamically scaling"
+description = "Metered elastic store for isolated Nix builds; avoid wide sweeps"
 host = "account@nixbuild.net"
 key = "~/.ssh/nixbuild"
 capabilities = ["store"]
