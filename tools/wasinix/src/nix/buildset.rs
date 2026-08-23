@@ -541,7 +541,6 @@ pub fn push_prebuilt(
 }
 
 const BUILD_ATTEMPTS: usize = 3;
-pub(crate) const MISSING_PATH_REPAIRS: usize = 8;
 const STORE_ROOTS_DIR: &str = ".store-roots";
 
 #[derive(Debug, PartialEq, Eq)]
@@ -647,11 +646,6 @@ impl MissingPathRepairs {
         if self.attempted.contains(path) {
             return Err(crate::support::error::Error::Failure(format!(
                 "Nix reported the same invalid store path again after recovery: {path}"
-            )));
-        }
-        if self.attempted.len() >= MISSING_PATH_REPAIRS {
-            return Err(crate::support::error::Error::Failure(format!(
-                "Nix reported more than {MISSING_PATH_REPAIRS} invalid store paths in one build"
             )));
         }
         self.attempted.insert(path.to_string());
