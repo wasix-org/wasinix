@@ -1054,16 +1054,16 @@ in {
         "packages.python.py.inheritedPython"
         ''packages.python.py.inheritedPython.versions."0.8"''
         "packages.python.py.uses-python"
+        ''packages.wasix.alternate."dot.name"''
         "packages.wasix.alternate.consumer"
         "packages.wasix.alternate.core"
         ''packages.wasix.alternate.core.versions."0.9"''
         "packages.wasix.alternate.limited"
-        ''packages.wasix.alternate."dot.name"''
+        ''packages.wasix.default."dot.name"''
         "packages.wasix.default.ciNarrow"
         "packages.wasix.default.consumer"
         "packages.wasix.default.core"
         ''packages.wasix.default.core.versions."0.9"''
-        ''packages.wasix.default."dot.name"''
         "tests.artifacts.bundle.consumer.packaged"
         "tests.packages.wasix.alternate.consumer.probe"
         "tests.packages.wasix.alternate.core.probe"
@@ -1077,16 +1077,16 @@ in {
         "packages.python.py.inheritedPython"
         ''packages.python.py.inheritedPython.versions."0.8"''
         "packages.python.py.uses-python"
+        ''packages.wasix.alternate."dot.name"''
         "packages.wasix.alternate.consumer"
         "packages.wasix.alternate.core"
         ''packages.wasix.alternate.core.versions."0.9"''
         "packages.wasix.alternate.limited"
-        ''packages.wasix.alternate."dot.name"''
+        ''packages.wasix.default."dot.name"''
         "packages.wasix.default.ciNarrow"
         "packages.wasix.default.consumer"
         "packages.wasix.default.core"
         ''packages.wasix.default.core.versions."0.9"''
-        ''packages.wasix.default."dot.name"''
         "tests.artifacts.bundle.consumer.packaged"
         "tests.packages.wasix.alternate.consumer.probe"
         "tests.packages.wasix.alternate.core.probe"
@@ -1103,6 +1103,7 @@ in {
         "packages.python.py.corePython"
         "packages.python.py.inheritedPython"
         "packages.python.py.uses-python"
+        ''packages.wasix.alternate."dot.name"''
         "packages.wasix.alternate.broken"
         "packages.wasix.alternate.ciNarrow"
         "packages.wasix.alternate.consumer"
@@ -1110,14 +1111,13 @@ in {
         "packages.wasix.alternate.limited"
         "packages.wasix.alternate.topOwned"
         "packages.wasix.alternate.uses-inherited"
-        ''packages.wasix.alternate."dot.name"''
+        ''packages.wasix.default."dot.name"''
         "packages.wasix.default.broken"
         "packages.wasix.default.ciNarrow"
         "packages.wasix.default.consumer"
         "packages.wasix.default.core"
         "packages.wasix.default.topOwned"
         "packages.wasix.default.uses-inherited"
-        ''packages.wasix.default."dot.name"''
       ];
       selectorsCoverJobs = true;
       brokenCiAbsent = true;
