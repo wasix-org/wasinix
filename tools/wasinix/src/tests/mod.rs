@@ -1674,6 +1674,20 @@ mod events {
     }
 
     #[test]
+    fn schema_one_output_events_remain_readable() {
+        let scratch = Scratch::create("wasinix-test").unwrap();
+        std::fs::write(
+            scratch.path().join(FILE),
+            "{\"schema\":1,\"event\":\"output\",\"at\":2,\"line\":\"warning: noisy\"}\n",
+        )
+        .unwrap();
+        assert!(matches!(
+            read_all(scratch.path()).unwrap().as_slice(),
+            [Event::LegacyOutput { at: 2, line }] if line == "warning: noisy"
+        ));
+    }
+
+    #[test]
     fn a_torn_tail_line_waits_and_a_torn_middle_line_fails() {
         let scratch = Scratch::create("wasinix-test").unwrap();
         append(
@@ -3537,6 +3551,19 @@ mod render {
     }
 
     #[test]
+    fn legacy_process_output_is_not_terminal_progress() {
+        let mut renderer = LineRenderer::with_spinner(false);
+        assert!(
+            renderer
+                .lines_for(&Event::LegacyOutput {
+                    at: 100,
+                    line: "warning: noisy".into(),
+                })
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn a_recorded_stream_narrates_with_elapsed_stamps() {
         let events = [
             Event::RunStarted { at: 100, pid: 1 },
@@ -5192,7 +5219,7 @@ mod corpus {
             "Event::JobStarted",
             "Event::JobFinished",
             "Event::Warning",
-            "Event::Output",
+            "Event::LegacyOutput",
             "Event::Diagnostic",
             "Event::Heartbeat",
             "Event::RunFinished",
@@ -5222,6 +5249,17 @@ mod corpus {
         .unwrap();
         assert!(!remote.contains("FnMut(&Event)"));
         assert!(remote.contains("progress.tick(crate::support::time::unix_secs())"));
+    }
+
+    /// Raw process output is retained in build logs. The event stream carries
+    /// typed progress and diagnostics, not stderr selected by text prefixes.
+    #[test]
+    fn raw_build_output_stays_out_of_run_events() {
+        let exec = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ci/exec.rs"),
+        )
+        .unwrap();
+        assert!(!exec.contains("Event::LegacyOutput"));
     }
 
     /// Task phase boundaries pass through one start and one finish gate. The
