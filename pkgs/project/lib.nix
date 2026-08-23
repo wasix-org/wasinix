@@ -325,7 +325,7 @@
   addressSegment = segment:
     if builtins.match "[A-Za-z_][A-Za-z0-9_'-]*" segment != null
     then ".${segment}"
-    else "[${builtins.toJSON segment}]";
+    else ".${builtins.toJSON segment}";
 
   address = root: segments:
     root + lib.concatMapStrings addressSegment segments;

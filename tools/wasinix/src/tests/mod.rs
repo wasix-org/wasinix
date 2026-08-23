@@ -89,6 +89,17 @@ mod naming {
         let spec = parse(r#"artifacts.webc."python3.14""#).unwrap();
         assert_eq!(spec.segments, ["artifacts", "webc", "python3.14"]);
         assert_eq!(render(&spec.segments), r#"artifacts.webc."python3.14""#);
+        let version = parse(r#"packages.python.py314.numpy.versions."2.1.3""#).unwrap();
+        assert_eq!(
+            render(&version.segments),
+            r#"packages.python.py314.numpy.versions."2.1.3""#
+        );
+        assert_eq!(
+            render(&["versions".into(), "25".into()]),
+            r#"versions."25""#
+        );
+        let escaped = vec!["packages".into(), "a\"b".into()];
+        assert_eq!(split(&render(&escaped)).unwrap(), escaped);
         assert!(split(r#"a."b"#).is_err());
     }
 
@@ -6790,8 +6801,8 @@ mod spot {
     #[test]
     fn catalog_addresses_are_encoded_as_nix_strings() {
         assert_eq!(
-            nix_string_list(&[r#"packages.wasix.exnrefEh["dot.name"]"#.into()]),
-            r#"["packages.wasix.exnrefEh[\"dot.name\"]"]"#
+            nix_string_list(&[r#"packages.wasix.exnrefEh."dot.name""#.into()]),
+            r#"["packages.wasix.exnrefEh.\"dot.name\""]"#
         );
     }
 }

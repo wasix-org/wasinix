@@ -1,0 +1,92 @@
+diff --git a/src/worker.cc b/src/worker.cc
+--- a/src/worker.cc
++++ b/src/worker.cc
+@@ -7,1 +7,2 @@
+ #include <nix/expr/attr-path.hh>
++#include <nix/expr/print.hh>
+@@ -40,1 +41,1 @@
+-#include <numeric>
++#include <sstream>
+@@ -123,11 +125,12 @@
+ auto attrPathJoin(nlohmann::json input) -> std::string {
+-    return std::accumulate(
+-        input.begin(), input.end(), std::string(),
+-        [](const std::string &acc, std::string str) -> std::basic_string<char> {
+-            // Escape token if containing dots
+-            if (str.find('.') != std::string::npos) {
+-                str = "\"" + str + "\"";
+-            }
+-            return acc.empty() ? str : acc + "." + str;
+-        });
++    std::ostringstream joined;
++    bool first = true;
++    for (const auto &element : input) {
++        if (!first) {
++            joined << '.';
++        }
++        nix::printAttributeName(joined, element.get<std::string>());
++        first = false;
++    }
++    return joined.str();
+ }
+@@ -134,0 +138,25 @@
++auto findAlongAttrPathComponents(nix::EvalState &state,
++                                 const nlohmann::json &path,
++                                 nix::Bindings &autoArgs, nix::Value &root,
++                                 const std::string &renderedPath)
++    -> nix::Value * {
++    auto *value = &root;
++    for (const auto &element : path) {
++        auto *called = state.allocValue();
++        state.autoCallFunction(autoArgs, *value, *called);
++        state.forceAttrs(*called, nix::noPos,
++                         "while evaluating selection path '" + renderedPath +
++                             "'");
++
++        const auto name = element.get<std::string>();
++        auto attr = called->attrs()->get(state.symbols.create(name));
++        if (!attr) {
++            throw nix::AttrPathNotFound(
++                "attribute '%1%' in selection path '%2%' not found", name,
++                renderedPath);
++        }
++        value = &*attr->value;
++    }
++    return value;
++}
++
+@@ -367,4 +392,3 @@
+         try {
+-            auto *vTmp =
+-                nix::findAlongAttrPath(state, attrPathS, autoArgs, *vRoot)
+-                    .first;
++            auto *vTmp = findAlongAttrPathComponents(state, path, autoArgs,
++                                                     *vRoot, attrPathS);
+diff --git a/tests-functional/assets/ci.nix b/tests-functional/assets/ci.nix
+--- a/tests-functional/assets/ci.nix
++++ b/tests-functional/assets/ci.nix
+@@ -60,1 +60,11 @@
++  ''tests.packages.requests.versions."2.32.3".behavior'' = derivation {
++    name = "quoted-attribute";
++    inherit system;
++    builder = "/bin/sh";
++    args = [
++      "-c"
++      "echo 'quoted' > $out"
++    ];
++  };
++
+   package-with-deps = derivation {
+diff --git a/tests-functional/test_eval.py b/tests-functional/test_eval.py
+--- a/tests-functional/test_eval.py
++++ b/tests-functional/test_eval.py
+@@ -50,1 +50,1 @@
+-        assert len(results) == 4
++        assert len(results) == 5
+@@ -63,1 +63,6 @@
++        quoted = 'tests.packages.requests.versions."2.32.3".behavior'
++        quoted_job = by_attr[json.dumps(quoted)]
++        assert quoted_job["name"] == "quoted-attribute"
++        assert quoted_job["attrPath"] == [quoted]
++
+         package_with_deps = by_attr["package-with-deps"]

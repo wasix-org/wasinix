@@ -19,32 +19,62 @@ use std::collections::BTreeMap;
 
 use crate::support::error::{Result, request_error};
 
-/// Split an address into segments, honouring the quoting Nix itself uses for a
-/// segment that holds a dot (`artifacts.webc."python3.14"`).
+/// Split an address into segments, honouring quoted Nix attribute names.
 pub fn split(address: &str) -> Result<Vec<String>> {
     let mut segments = Vec::new();
-    let mut current = String::new();
-    let mut quoted = false;
-    let mut chars = address.chars().peekable();
-    while let Some(c) = chars.next() {
-        match c {
-            '"' => quoted = !quoted,
-            '.' if !quoted => {
-                if current.is_empty() {
-                    return request_error(format!("{address:?}: empty path segment"));
+    let bytes = address.as_bytes();
+    let mut start = 0;
+    while start < bytes.len() {
+        if bytes[start] == b'.' {
+            return request_error(format!("{address:?}: empty path segment"));
+        }
+        let (segment, end) = if bytes[start] == b'"' {
+            let mut end = start + 1;
+            let mut escaped = false;
+            while end < bytes.len() {
+                match bytes[end] {
+                    b'"' if !escaped => break,
+                    b'\\' if !escaped => escaped = true,
+                    _ => escaped = false,
                 }
-                segments.push(std::mem::take(&mut current));
+                end += 1;
             }
-            _ => current.push(c),
+            if end == bytes.len() {
+                return request_error(format!("{address:?}: unbalanced quote"));
+            }
+            let quoted = &address[start..=end];
+            let segment: String = serde_json::from_str(quoted).map_err(|_| {
+                crate::support::error::Error::Request(format!(
+                    "{address:?}: invalid quoted path segment"
+                ))
+            })?;
+            (segment, end + 1)
+        } else {
+            let end = address[start..]
+                .find('.')
+                .map(|offset| start + offset)
+                .unwrap_or(bytes.len());
+            let segment = &address[start..end];
+            if segment.contains('"') {
+                return request_error(format!("{address:?}: quote inside bare path segment"));
+            }
+            (segment.to_string(), end)
+        };
+        if segment.is_empty() {
+            return request_error(format!("{address:?}: empty path segment"));
         }
-        if chars.peek().is_none() && quoted {
-            return request_error(format!("{address:?}: unbalanced quote"));
+        segments.push(segment);
+        if end == bytes.len() {
+            break;
         }
+        if bytes[end] != b'.' || end + 1 == bytes.len() {
+            return request_error(format!("{address:?}: expected dot between path segments"));
+        }
+        start = end + 1;
     }
-    if current.is_empty() {
+    if segments.is_empty() {
         return request_error(format!("{address:?}: empty path segment"));
     }
-    segments.push(current);
     Ok(segments)
 }
 
@@ -53,10 +83,17 @@ pub fn render(segments: &[String]) -> String {
     segments
         .iter()
         .map(|segment| {
-            if segment.contains('.') {
-                format!("\"{segment}\"")
-            } else {
+            let mut chars = segment.chars();
+            let valid = chars
+                .next()
+                .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
+                && chars.all(|character| {
+                    character.is_ascii_alphanumeric() || matches!(character, '_' | '-' | '\'')
+                });
+            if valid {
                 segment.clone()
+            } else {
+                serde_json::to_string(segment).expect("serializing a string cannot fail")
             }
         })
         .collect::<Vec<_>>()

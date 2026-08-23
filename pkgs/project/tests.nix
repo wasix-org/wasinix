@@ -820,7 +820,7 @@ in {
     expr = {
       file = toString definitionProject.catalog.entries."packages.wasix.default.existing".definition.file;
       directory = toString definitionProject.catalog.entries."packages.wasix.default.family-a".definition.directory;
-      historyFile = toString definitionProject.catalog.entries.${''packages.wasix.default.existing.versions["0.1"]''}.definition.file;
+      historyFile = toString definitionProject.catalog.entries.${''packages.wasix.default.existing.versions."0.1"''}.definition.file;
       rawOverlay = project.catalog.entries."packages.wasix.default.core".definition;
     };
     expected = {
@@ -845,11 +845,11 @@ in {
   behaviorChecks = {
     expr = {
       current = behaviorProject.tests."tests.artifacts.webc.behavior.packaged".name;
-      history = behaviorProject.tests.${''tests.artifacts.webc.behavior.versions["0.9"].packaged''}.name;
+      history = behaviorProject.tests.${''tests.artifacts.webc.behavior.versions."0.9".packaged''}.name;
       currentCommand = map (package: package.name) behaviorProject.artifacts.webc.behavior.tests.packaged.passthru.harnessArgs.wasixPkgs;
       historyCommand = map (package: package.name) behaviorProject.artifacts.webc.behavior.versions."0.9".tests.packaged.passthru.harnessArgs.wasixPkgs;
       script = behaviorProject.artifacts.webc.behavior.tests.packaged.passthru.harnessArgs.script;
-      historyTags = behaviorProject.ci.catalog.jobs.${''tests.artifacts.webc.behavior.versions["0.9"].packaged''}.policy.ci.tags;
+      historyTags = behaviorProject.ci.catalog.jobs.${''tests.artifacts.webc.behavior.versions."0.9".packaged''}.policy.ci.tags;
       definition = toString behaviorProject.catalog.entries."artifacts.webc.behavior".definition.directory;
       nonDerivationFails =
         !(force (projectLib.loadTestDirectory {
@@ -917,7 +917,7 @@ in {
       commandAddresses = [
         "commands.auto"
         "commands.core"
-        ''commands.core.versions["0.9"]''
+        ''commands.core.versions."0.9"''
         "commands.dependency.from.explicit"
         "commands.first"
         "commands.second"
@@ -967,8 +967,8 @@ in {
       commandName = project.commands.consumer.name;
       artifactTestName = project.tests."tests.artifacts.bundle.consumer.packaged".name;
       artifactTestSubject = project.ci.catalog.jobs."tests.artifacts.bundle.consumer.packaged".subject;
-      historyTags = project.ci.catalog.jobs."packages.wasix.default.core.versions[\"0.9\"]".policy.ci.tags;
-      historyTestTags = project.ci.catalog.jobs."tests.packages.wasix.default.core.versions[\"0.9\"].probe".policy.ci.tags;
+      historyTags = project.ci.catalog.jobs.${''packages.wasix.default.core.versions."0.9"''}.policy.ci.tags;
+      historyTestTags = project.ci.catalog.jobs.${''tests.packages.wasix.default.core.versions."0.9".probe''}.policy.ci.tags;
       ciSources = project.ci.sources;
       ciJobNames = lib.attrNames project.ci.jobs;
       catalogJobNames = lib.attrNames project.ci.catalog.jobs;
@@ -996,7 +996,7 @@ in {
       historyProjections = {
         current = historyProjectionProject.artifacts.retained.core.name;
         history = historyProjectionProject.artifacts.retained.core.versions."0.9".name;
-        test = historyProjectionProject.tests.${''tests.artifacts.retained.core.versions["0.9"].inspect''}.name;
+        test = historyProjectionProject.tests.${''tests.artifacts.retained.core.versions."0.9".inspect''}.name;
       };
       invalidProjectionFails = !(force invalidProjectionProject.tests).success;
       invalidArtifactFails = !(force invalidArtifactProject.artifacts).success;
@@ -1052,48 +1052,48 @@ in {
       ciJobNames = [
         "artifacts.bundle.consumer"
         "packages.python.py.inheritedPython"
-        ''packages.python.py.inheritedPython.versions["0.8"]''
+        ''packages.python.py.inheritedPython.versions."0.8"''
         "packages.python.py.uses-python"
         "packages.wasix.alternate.consumer"
         "packages.wasix.alternate.core"
-        ''packages.wasix.alternate.core.versions["0.9"]''
+        ''packages.wasix.alternate.core.versions."0.9"''
         "packages.wasix.alternate.limited"
-        ''packages.wasix.alternate["dot.name"]''
+        ''packages.wasix.alternate."dot.name"''
         "packages.wasix.default.ciNarrow"
         "packages.wasix.default.consumer"
         "packages.wasix.default.core"
-        ''packages.wasix.default.core.versions["0.9"]''
-        ''packages.wasix.default["dot.name"]''
+        ''packages.wasix.default.core.versions."0.9"''
+        ''packages.wasix.default."dot.name"''
         "tests.artifacts.bundle.consumer.packaged"
         "tests.packages.wasix.alternate.consumer.probe"
         "tests.packages.wasix.alternate.core.probe"
-        ''tests.packages.wasix.alternate.core.versions["0.9"].probe''
+        ''tests.packages.wasix.alternate.core.versions."0.9".probe''
         "tests.packages.wasix.default.consumer.probe"
         "tests.packages.wasix.default.core.probe"
-        ''tests.packages.wasix.default.core.versions["0.9"].probe''
+        ''tests.packages.wasix.default.core.versions."0.9".probe''
       ];
       catalogJobNames = [
         "artifacts.bundle.consumer"
         "packages.python.py.inheritedPython"
-        ''packages.python.py.inheritedPython.versions["0.8"]''
+        ''packages.python.py.inheritedPython.versions."0.8"''
         "packages.python.py.uses-python"
         "packages.wasix.alternate.consumer"
         "packages.wasix.alternate.core"
-        ''packages.wasix.alternate.core.versions["0.9"]''
+        ''packages.wasix.alternate.core.versions."0.9"''
         "packages.wasix.alternate.limited"
-        ''packages.wasix.alternate["dot.name"]''
+        ''packages.wasix.alternate."dot.name"''
         "packages.wasix.default.ciNarrow"
         "packages.wasix.default.consumer"
         "packages.wasix.default.core"
-        ''packages.wasix.default.core.versions["0.9"]''
-        ''packages.wasix.default["dot.name"]''
+        ''packages.wasix.default.core.versions."0.9"''
+        ''packages.wasix.default."dot.name"''
         "tests.artifacts.bundle.consumer.packaged"
         "tests.packages.wasix.alternate.consumer.probe"
         "tests.packages.wasix.alternate.core.probe"
-        ''tests.packages.wasix.alternate.core.versions["0.9"].probe''
+        ''tests.packages.wasix.alternate.core.versions."0.9".probe''
         "tests.packages.wasix.default.consumer.probe"
         "tests.packages.wasix.default.core.probe"
-        ''tests.packages.wasix.default.core.versions["0.9"].probe''
+        ''tests.packages.wasix.default.core.versions."0.9".probe''
       ];
       selectorNames = ["packages" "python"];
       selectorGroupNames = ["fixture"];
@@ -1110,14 +1110,14 @@ in {
         "packages.wasix.alternate.limited"
         "packages.wasix.alternate.topOwned"
         "packages.wasix.alternate.uses-inherited"
-        ''packages.wasix.alternate["dot.name"]''
+        ''packages.wasix.alternate."dot.name"''
         "packages.wasix.default.broken"
         "packages.wasix.default.ciNarrow"
         "packages.wasix.default.consumer"
         "packages.wasix.default.core"
         "packages.wasix.default.topOwned"
         "packages.wasix.default.uses-inherited"
-        ''packages.wasix.default["dot.name"]''
+        ''packages.wasix.default."dot.name"''
       ];
       selectorsCoverJobs = true;
       brokenCiAbsent = true;
@@ -1125,10 +1125,10 @@ in {
         "tests.artifacts.bundle.consumer.packaged"
         "tests.packages.wasix.alternate.consumer.probe"
         "tests.packages.wasix.alternate.core.probe"
-        ''tests.packages.wasix.alternate.core.versions["0.9"].probe''
+        ''tests.packages.wasix.alternate.core.versions."0.9".probe''
         "tests.packages.wasix.default.consumer.probe"
         "tests.packages.wasix.default.core.probe"
-        ''tests.packages.wasix.default.core.versions["0.9"].probe''
+        ''tests.packages.wasix.default.core.versions."0.9".probe''
       ];
       testSubject = "packages.wasix.default.consumer";
       testContextName = "probe-consumer-default-0.9";
