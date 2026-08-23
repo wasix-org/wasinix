@@ -150,10 +150,11 @@
 
   testHistoryLib = import ./history.nix {
     inherit lib projectLib;
-    rebasePackageOverride = version: _spec: package:
-      package.overrideAttrs (_: {
+    rebasePackageOverride = version: spec: package:
+      package.overrideAttrs (old: {
         inherit version;
         name = "${package.name}-${version}";
+        passthru = (old.passthru or {}) // {inherit spec;};
       });
   };
   projectApiArgs = {
@@ -821,12 +822,33 @@ in {
       file = toString definitionProject.catalog.entries."packages.wasix.default.existing".definition.file;
       directory = toString definitionProject.catalog.entries."packages.wasix.default.family-a".definition.directory;
       historyFile = toString definitionProject.catalog.entries.${''packages.wasix.default.existing.versions."0.1"''}.definition.file;
+      historyVendorPostPatch = definitionProject.packages.wasix.default.existing.versions."0.1".passthru.spec.vendorLayout.postPatch;
+      historyVendorLockFileRemoved = !(definitionProject.packages.wasix.default.existing.versions."0.1".passthru.spec.vendorLayout ? lockFile);
+      historyVendorMissingDefinitionFails =
+        !(force (testHistoryLib.resolveHistoryLockFile {
+          definition = null;
+          label = "fixture.package 0.1";
+          spec.vendorLayout.lockFile = "locks/0.1.lock";
+        })).success;
+      historyVendorConflictFails =
+        !(force (testHistoryLib.resolveHistoryLockFile {
+          definition.file = ./tests/units/existing.nix;
+          label = "fixture.package 0.1";
+          spec.vendorLayout = {
+            lockFile = "locks/0.1.lock";
+            postPatch = "false";
+          };
+        })).success;
       rawOverlay = project.catalog.entries."packages.wasix.default.core".definition;
     };
     expected = {
       file = toString ./tests/units/existing.nix;
       directory = toString ./tests/units/family;
       historyFile = toString ./tests/units/existing.nix;
+      historyVendorPostPatch = "cp ${./tests/units/locks/0.1.lock} Cargo.lock";
+      historyVendorLockFileRemoved = true;
+      historyVendorMissingDefinitionFails = true;
+      historyVendorConflictFails = true;
       rawOverlay = null;
     };
   };

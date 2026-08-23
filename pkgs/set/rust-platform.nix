@@ -198,7 +198,7 @@
   # multi-position splice (jiter, pulled in as a propagated dep). Match the
   # functor shape so the splice stays consistent.
   patchedPlatform = base.overrideScope (final: _: let
-    # wasixRebuildVendor: the versioned-history rebase (pkgs/lib/load-packages.nix)
+    # wasixRebuildVendor: the versioned-history rebase (pkgs/project/history.nix)
     # calls this to re-vendor a pinned older src (patchInPlace keeps raw's
     # vendorStaging, but the rebase re-runs the wrapper so an older release's
     # layout, such as a lock that moved to src/rust, is handled by re-deciding

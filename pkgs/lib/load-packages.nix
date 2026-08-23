@@ -138,24 +138,14 @@ in {
       };
     historyDrv = name: version: spec0: let
       s = sourceOf name;
-      # A release whose own lock does not resolve its manifest vendors from one
-      # kept beside the package file, which is the only thing that knows where
-      # its sources live; the entry names it relative to there.
-      lockFile = spec0.vendorLayout.lockFile or null;
-      spec =
-        if lockFile == null
-        then spec0
-        else
-          lib.throwIf (s.file == null)
-          "load-packages: '${name}' names a vendorLayout lockFile but has no package file to resolve it against"
-          (lib.throwIf (spec0.vendorLayout ? postPatch)
-            "load-packages: '${name}' sets both vendorLayout.lockFile and vendorLayout.postPatch; lockFile is written as the postPatch that copies it"
-            (spec0
-              // {
-                vendorLayout =
-                  builtins.removeAttrs spec0.vendorLayout ["lockFile"]
-                  // {postPatch = "cp ${builtins.dirOf s.file + "/${lockFile}"} Cargo.lock";};
-              }));
+      spec = historyLib.resolveHistoryLockFile {
+        definition =
+          if s.file == null
+          then null
+          else {file = s.file;};
+        label = "load-packages: '${name}' ${version}";
+        spec = spec0;
+      };
       built = s.fn (callArgs // {${historyFrom} = rebaseHistory callArgs.${historyFrom} name version spec;});
       # Rebasing the set only reaches a package file that derives from
       # `${historyFrom}.<name>`. A file that spells its own version and src (a

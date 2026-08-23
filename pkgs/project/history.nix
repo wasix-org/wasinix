@@ -5,6 +5,27 @@
 }: let
   historyMeta = ["note" "variants" "cargoHash" "vendorLayout"];
 
+  resolveHistoryLockFile = {
+    definition,
+    label,
+    spec,
+  }: let
+    lockFile = spec.vendorLayout.lockFile or null;
+  in
+    if lockFile == null
+    then spec
+    else
+      lib.throwIf (definition == null || (definition.file or null) == null)
+      "${label}: history vendorLayout.lockFile requires a package definition"
+      (lib.throwIf (spec.vendorLayout ? postPatch)
+        "${label}: history vendorLayout sets both lockFile and postPatch"
+        (spec
+          // {
+            vendorLayout =
+              builtins.removeAttrs spec.vendorLayout ["lockFile"]
+              // {postPatch = "cp ${builtins.dirOf definition.file + "/${lockFile}"} Cargo.lock";};
+          }));
+
   defaultRebasePackage = version: spec: package: let
     fetchArgs = builtins.removeAttrs spec historyMeta;
     # fetchurl has no override interface, so release tarballs replace the
@@ -109,7 +130,12 @@
   }: let
     historyTables = historyTablesFor extensions;
     specs = ((historyTables.${entry.source} or {}).${entry.scope} or {}).${entry.name} or {};
-    replay = version: spec: let
+    replay = version: rawSpec: let
+      spec = resolveHistoryLockFile {
+        definition = entry.definition or null;
+        label = "${entry.source}.${entry.name} ${version}";
+        spec = rawSpec;
+      };
       metadata = projectLib.packageMetadata entry.package;
       baseSet = metadata.${projectLib.historyBaseAttr};
       overlays = metadata.${projectLib.historyOverlaysAttr};
@@ -190,5 +216,5 @@
       (lib.mapAttrs replay specs);
   };
 in {
-  inherit historyMeta projectionContextFor rebasePackage validateProject;
+  inherit historyMeta projectionContextFor rebasePackage resolveHistoryLockFile validateProject;
 }

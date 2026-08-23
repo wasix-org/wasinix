@@ -55,7 +55,7 @@ exposePackage (
       # locks/: a release whose own lock does not resolve its manifest vendors from
       # one generated here, named for the release, which its history entry vendors
       # from too. The rebase reaches this file with the version only in the build
-      # environment (pkgs/lib/load-packages.nix).
+      # environment (pkgs/project/history.nix).
       # settings/: 4.x moved the package under ddtrace/internal.
       # cmake and patchelf: build requirements we satisfy from nixpkgs, spelled
       # with an environment marker in one release and bare in another, and listed

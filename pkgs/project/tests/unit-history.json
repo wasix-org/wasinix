@@ -1,5 +1,9 @@
 {
   "existing": {
-    "0.1": {}
+    "0.1": {
+      "vendorLayout": {
+        "lockFile": "locks/0.1.lock"
+      }
+    }
   }
 }

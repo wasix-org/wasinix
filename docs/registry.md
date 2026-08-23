@@ -91,9 +91,11 @@ versions rebuildable, using one table per package set:
 
 Tables are keyed `{<attr>: {<version>: <spec>}}`. A spec contains the fields for
 the package's existing source fetcher: `{version, hash}`, `{tag|rev, hash}`, or
-`{url, hash}`. Rust packages may add `cargoHash`; `note` and `variants` are
-optional. A wheel uses `variants`, such as `["py313"]`, when an entry applies to
-only some interpreters.
+`{url, hash}`. Rust packages may add `cargoHash`. A release that needs a lock
+kept beside its package unit sets `vendorLayout.lockFile` relative to that
+unit's file; the constructor applies it while regenerating the retained cargo
+vendor. `note` and `variants` are optional. A wheel uses `variants`, such as
+`["py313"]`, when an entry applies to only some interpreters.
 
 The project constructor rebases the preceding package to each retained source,
 replays its registered package unit, and catalogs the result like a current
