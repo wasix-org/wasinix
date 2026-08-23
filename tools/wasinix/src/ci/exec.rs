@@ -1321,7 +1321,7 @@ fn run_phase(
         .into_iter()
         .find(|case| case.case_id() == case_id)
         .ok_or_else(|| Error::Request(format!("unknown case {case_id:?}")))?;
-    let route = Route::from_on(ctx.runner_root, case.placement())?;
+    let route = task_route(ctx.runner_root, phase, case.placement())?;
     let patch = case_dir(ctx.run_dir, case_id)
         .join("prepared")
         .join(PATCH_FILE);
@@ -1351,6 +1351,13 @@ fn run_phase(
             request_error("build phase on a spot case")
         }
         (Phase::Content, _) => unreachable!("handled above"),
+    }
+}
+
+pub(crate) fn task_route(repo: &Path, phase: Phase, placement: Option<&str>) -> Result<Route> {
+    match phase {
+        Phase::Treefmt => Route::local(),
+        _ => Route::from_on(repo, placement),
     }
 }
 

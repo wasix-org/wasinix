@@ -1932,6 +1932,17 @@ mod exec {
     }
 
     #[test]
+    fn formatting_ignores_remote_placement() {
+        let route = crate::ci::exec::task_route(
+            std::path::Path::new("/repo-with-no-builder-config"),
+            Phase::Treefmt,
+            Some("missing-remote"),
+        )
+        .unwrap();
+        assert!(matches!(route, crate::nix::route::Route::Local(_)));
+    }
+
+    #[test]
     fn build_outcomes_distinguish_blocked_jobs_from_direct_failures() {
         assert_eq!(classify_build_outcome(1, 1), (0, TaskStatus::Blocked));
         assert_eq!(classify_build_outcome(8, 8), (0, TaskStatus::Blocked));
