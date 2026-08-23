@@ -71,6 +71,8 @@ pub struct RunRequest<'a> {
     pub route: &'a Route,
 }
 
+const SELECT_FILE_FLAG: &str = "--select-file";
+
 pub(crate) fn selection_function(names: &[String]) -> Result<String> {
     let names = serde_json::to_string(names).map_err(|source| Error::Json {
         path: "<CI job selection>".into(),
@@ -107,6 +109,11 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
             .workdir(request.workdir)
             .checked_output("prefetching the case worktree")?;
     }
+    for path in [request.jobs_path, request.stderr_log] {
+        if let Some(parent) = path.parent() {
+            crate::support::fs::create_dir_all(parent)?;
+        }
+    }
     // nix-eval-jobs comes from PATH so a run does not fetch the registry's
     // channel tarball. meta.position anchors failure annotations at the
     // package definition.
@@ -120,18 +127,16 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
         .timeout(timeout)
         .route(request.route)?;
     if let Some(selected) = request.selected {
-        invocation = invocation.args(["--select", &selection_function(selected)?]);
+        let selection_path = request.jobs_path.with_extension("selection.nix");
+        crate::support::fs::write(&selection_path, selection_function(selected)?.as_bytes())?;
+        let selection_path = crate::support::fs::absolute(&selection_path)?;
+        invocation = invocation.args([SELECT_FILE_FLAG, &selection_path.to_string_lossy()]);
     }
     if request.check_cache {
         invocation = invocation.arg("--check-cache-status");
     }
     if request.offline {
         invocation = invocation.option("offline", "true");
-    }
-    for path in [request.jobs_path, request.stderr_log] {
-        if let Some(parent) = path.parent() {
-            crate::support::fs::create_dir_all(parent)?;
-        }
     }
     let mut jobs_file =
         std::fs::File::create(request.jobs_path).map_err(|e| io(request.jobs_path, e))?;
