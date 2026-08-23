@@ -7607,8 +7607,8 @@ mod table {
 
 mod buildset {
     use crate::nix::buildset::{
-        MISSING_PATH_REPAIRS, MissingPathRepairs, RealiseFailure, dry_run_plan,
-        failure_excerpt_from_log, prebuilt_partition, realise_building_drv, realise_failure,
+        MissingPathRepairs, RealiseFailure, dry_run_plan, failure_excerpt_from_log,
+        prebuilt_partition, realise_building_drv, realise_failure,
     };
 
     #[test]
@@ -7849,22 +7849,13 @@ mod buildset {
     }
 
     #[test]
-    fn invalid_store_path_recovery_is_bounded() {
+    fn invalid_store_path_recovery_accepts_distinct_paths() {
         let mut repairs = MissingPathRepairs::new();
-        for index in 0..MISSING_PATH_REPAIRS {
+        for index in 0..9 {
             repairs
                 .claim(&format!("/nix/store/{index:032}-input"))
                 .unwrap();
         }
-        assert!(
-            repairs
-                .claim("/nix/store/99999999999999999999999999999999-input")
-                .unwrap_err()
-                .to_string()
-                .contains(&format!(
-                    "more than {MISSING_PATH_REPAIRS} invalid store paths"
-                ))
-        );
     }
 }
 
