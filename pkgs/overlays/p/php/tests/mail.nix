@@ -16,6 +16,10 @@ in
       nativePkgs = [pkgs.gnugrep];
       wasixPkgs = [wasmerPkgs.${attr}];
       forwardEnv = testLib.defaultForwardEnv ++ ["SENDMAIL_FILE_PATH"];
+      broken =
+        if attr == "php74"
+        then "the off-profile runtime surfaces the spawned sendmail guest's exit as an unhandled exception"
+        else null;
       script = ''
         export SENDMAIL_FILE_PATH="$WASIX_TEST_ROOT/mail.txt"
         php -r 'exit(mail("recipient@example.com", "PHP subject", "PHP body") ? 0 : 1);'

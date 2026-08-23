@@ -190,6 +190,7 @@ in {
             else ./patches/php84-server-snapshot.patch
           )
           ++ lib.optional (lib.versionAtLeast spec.version "8.1") ./patches/php-zend-extensions-wasi.patch
+          ++ lib.optional (lib.versionOlder spec.version "8.0") ./patches/php74-zend-extensions-wasi.patch
           ++ lib.optional (lib.versionOlder spec.version "8.5") ./patches/php-opcache-optional-sys-ipc.patch
           ++ lib.optional (lib.versionAtLeast spec.version "8.4") ./patches/php-fd-table-size.patch
           ++ lib.optional (lib.versionAtLeast spec.version "8.2" && lib.versionOlder spec.version "8.4") ./patches/php-fd-table-size-pre84.patch
@@ -266,6 +267,7 @@ in {
         doCheck = true;
         checkTarget = "test";
         wasixCheckPrebuild = ":";
+        postBuild = lib.concatMapStringsSep "\n" (extension: extension.crossPostBuild or "") enabledExtensions;
 
         env =
           {

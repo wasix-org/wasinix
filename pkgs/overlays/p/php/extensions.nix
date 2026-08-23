@@ -12,6 +12,10 @@ in {
         extensionName = "imagick";
         configureFlag = "--with-imagick";
         buildInputs = [final.imagemagick];
+        # PECL ships these headers; cross install must not regenerate them with target PHP.
+        crossPostBuild = ''
+          touch ext/imagick/*_arginfo.h
+        '';
         env = {
           IM_IMAGEMAGICK_CFLAGS = "-I${getDev final.imagemagick}/include/ImageMagick -DIM_MAGICKWAND_HEADER_STYLE_SEVEN -DMAGICKCORE_QUANTUM_DEPTH=16 -DMAGICKCORE_HDRI_ENABLE=1 -DMAGICKCORE_CHANNEL_MASK_DEPTH=32";
           IM_IMAGEMAGICK_LIBS = "-lMagickWand-7.Q16HDRI -lMagickCore-7.Q16HDRI -ltiff -lz -ldeflate -ljpeg -llzma -lzstd -lpng16 -lwebpmux -lwebpdemux -lwebp -lsharpyuv -lfreetype -lxml2 -lcurl -lssl -lcrypto";
