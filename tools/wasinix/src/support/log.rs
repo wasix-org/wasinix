@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 
 use crate::support::atoms::Bytes;
-use crate::support::error::{io, request_error, Result};
+use crate::support::error::{Result, io, request_error};
 use crate::support::schema::Document;
 
 const DEFAULT_MAX_BYTES: u64 = 64 * 1024 * 1024;

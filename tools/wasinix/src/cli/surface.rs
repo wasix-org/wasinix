@@ -497,7 +497,7 @@ mod tests {
 
     use clap::CommandFactory;
 
-    use super::{Cli, COMMANDS, LEAVES, ROOT_TERMINAL_ARGS, VERSION_COMMANDS};
+    use super::{COMMANDS, Cli, LEAVES, ROOT_TERMINAL_ARGS, VERSION_COMMANDS};
 
     fn names(values: impl Iterator<Item = impl ToString>) -> BTreeSet<String> {
         values.map(|value| value.to_string()).collect()
@@ -551,9 +551,11 @@ mod tests {
     fn mutation_effects_stay_classified_consistently() {
         for path in [["update"].as_slice(), ["versions", "bump"].as_slice()] {
             let leaf = LEAVES.iter().find(|leaf| leaf.path == path).unwrap();
-            assert!(super::MUTATION_EFFECTS
-                .iter()
-                .all(|effect| leaf.terminal_args.contains(effect)));
+            assert!(
+                super::MUTATION_EFFECTS
+                    .iter()
+                    .all(|effect| leaf.terminal_args.contains(effect))
+            );
         }
     }
 

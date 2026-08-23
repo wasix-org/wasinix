@@ -106,8 +106,8 @@ call site. Each of these ships with its own enforcement (rustc visibility where
 possible, a source-scanning test in `src/tests/mod.rs` otherwise), so bypassing
 one is a compile error or a test failure, not a review comment.
 
-[`cli-plan.md`](cli-plan.md) defines the ordered migration that consolidates
-the current CLI onto these boundaries and replaces textual enforcement where a
+[`cli-plan.md`](cli-plan.md) defines the ordered migration that consolidates the
+current CLI onto these boundaries and replaces textual enforcement where a
 structural boundary can express the rule.
 
 - `support/env.rs`: the process environment, named accessors only.
@@ -139,5 +139,4 @@ structural boundary can express the rule.
   exit; `update/managed.rs` is the managed-PR record.
 - `cargo-registry-wire`: the Cargo publish payload and sparse-index record come
   from one normalized-manifest translation. The narrow crate is also the
-  derivation-facing binary, so foundational checks never depend on the main
-  CLI.
+  derivation-facing binary, so foundational checks never depend on the main CLI.

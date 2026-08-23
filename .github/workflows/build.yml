@@ -203,8 +203,8 @@ jobs:
         id: collect
         if:
           ${{ always() && steps.run_artifact.outcome == 'success' &&
-          (steps.baseline.outcome == 'success' ||
-          steps.baseline.outcome == 'skipped') }}
+          (steps.baseline.outcome == 'success' || steps.baseline.outcome ==
+          'skipped') }}
         run: nix run .#wasinix -- run gc --max-age-days 0
 
   # Which step was slow, per job, without opening any log. Every run

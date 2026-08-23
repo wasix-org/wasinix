@@ -429,9 +429,11 @@ mod tests {
             .map(|capability| capability.spec().output)
             .collect();
         assert_eq!(outputs.len(), capabilities.len());
-        assert!(outputs
-            .iter()
-            .all(|output| output.starts_with("wasinix-capability-")));
+        assert!(
+            outputs
+                .iter()
+                .all(|output| output.starts_with("wasinix-capability-"))
+        );
         let flake = include_str!("../../../../flake.nix");
         for output in outputs {
             assert!(flake.contains(&format!("{output} =")), "{output}");

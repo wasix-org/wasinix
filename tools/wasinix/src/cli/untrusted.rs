@@ -194,12 +194,10 @@ fn shared_command(words: &[String]) -> Result<UntrustedCommand> {
                 predicate,
             })
         }
-        super::CommandTree::Update(args) => {
-            UntrustedCommand::Mutation(MutationCommand::Update {
-                targets: args.targets,
-                all: args.all,
-            })
-        }
+        super::CommandTree::Update(args) => UntrustedCommand::Mutation(MutationCommand::Update {
+            targets: args.targets,
+            all: args.all,
+        }),
         super::CommandTree::Versions(super::update::VersionsCommand::Bump {
             specs,
             all_versions,
@@ -210,9 +208,7 @@ fn shared_command(words: &[String]) -> Result<UntrustedCommand> {
             all_versions,
             changed,
         }),
-        super::CommandTree::Regenerate => {
-            UntrustedCommand::Mutation(MutationCommand::Regenerate)
-        }
+        super::CommandTree::Regenerate => UntrustedCommand::Mutation(MutationCommand::Regenerate),
         super::CommandTree::Fmt => UntrustedCommand::Mutation(MutationCommand::Format),
         super::CommandTree::SurfaceHelp => UntrustedCommand::Help,
         _ => unreachable!("comment surface accepted a non-comment command"),

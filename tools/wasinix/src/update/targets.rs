@@ -142,10 +142,8 @@ struct PostUpdateDeclaration {
 }
 
 pub(crate) fn declared_post_update_hook(attr: &str, value: &Value) -> Result<PostUpdateHook> {
-    let declaration: PostUpdateDeclaration = crate::support::json::from_value(
-        value.clone(),
-        &format!("postUpdateHooks.{attr}"),
-    )?;
+    let declaration: PostUpdateDeclaration =
+        crate::support::json::from_value(value.clone(), &format!("postUpdateHooks.{attr}"))?;
     Ok(PostUpdateHook {
         name: attr.rsplit('.').next().unwrap_or(attr).to_string(),
         action: declaration.action,

@@ -219,9 +219,8 @@ pub fn prepare_all_with(
             format!("{case_id}: Materializing {}", case.source().rev.short()),
             || {
                 let manifest = write_materialization(repo, *case, &case_value, &prepared_dir)?;
-                let prepared_case = crate::support::json::read::<Value>(
-                    &prepared_dir.join("request.json"),
-                )?;
+                let prepared_case =
+                    crate::support::json::read::<Value>(&prepared_dir.join("request.json"))?;
                 Ok((manifest, prepared_case))
             },
             |_| "source materialized".to_string(),

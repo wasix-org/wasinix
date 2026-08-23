@@ -443,11 +443,7 @@ impl Tracker {
                     status: TaskStatus::Failure,
                     headline: crate::support::error::brief(&error, 200),
                 });
-                crate::support::error::finalize(
-                    Err(error),
-                    finished,
-                    "could not finish phase",
-                )
+                crate::support::error::finalize(Err(error), finished, "could not finish phase")
             }
         }
     }

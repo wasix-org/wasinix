@@ -492,7 +492,8 @@ impl Drop for Scratch {
 fn build_webc_sha256(pkg_dir: &Path, pkg: &Package) -> Result<String> {
     let scratch = Scratch::new("build")?;
     let out = scratch.0.join("package.webc");
-    run(Capability::Wasmer.command()?
+    run(Capability::Wasmer
+        .command()?
         .args(["package", "build", "--quiet", "--out"])
         .arg(&out)
         .arg(".")
@@ -1046,7 +1047,8 @@ fn publish_one(
         },
     )?;
     let staged_sha = build_webc_sha256(&staged, pkg)?;
-    run(Capability::Wasmer.command()?
+    run(Capability::Wasmer
+        .command()?
         .args(["publish", "--non-interactive", "--registry", publish_host])
         .current_dir(&staged))?;
     drop(scratch);

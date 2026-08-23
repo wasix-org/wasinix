@@ -283,8 +283,8 @@ pub(crate) fn parse_case(
     case_id: Option<String>,
     surface: super::Surface,
 ) -> Result<Case<RefSource>> {
-    let parsed = CaseCommand::try_parse_from(words)
-        .map_err(|error| Error::Request(error.to_string()))?;
+    let parsed =
+        CaseCommand::try_parse_from(words).map_err(|error| Error::Request(error.to_string()))?;
     let placement = |on: &Option<String>| match (surface, on) {
         (super::Surface::Comment, Some(_)) => request_error("--on is terminal only"),
         (super::Surface::Comment, None) => Ok(Some("local".to_string())),
@@ -743,9 +743,10 @@ pub(crate) fn drive(drive: Drive<'_>) -> Result<CommandStatus> {
     let mut outcome = drive_run(&drive);
     if standalone {
         let (state, exit_code) = match &outcome {
-            Ok(status) if status.is_success() => {
-                (crate::support::atoms::RunState::Complete, Some(status.code()))
-            }
+            Ok(status) if status.is_success() => (
+                crate::support::atoms::RunState::Complete,
+                Some(status.code()),
+            ),
             Ok(status) => (crate::support::atoms::RunState::Failed, Some(status.code())),
             Err(_) => (crate::support::atoms::RunState::Failed, Some(1)),
         };
@@ -848,12 +849,7 @@ pub(crate) fn run_spot(repo: &Path, args: super::SpotArgs) -> Result<CommandStat
         return request_error("--inputs-only applies to build, not spot");
     }
     let request = Request::spot(
-        spot_case(
-            &args.request,
-            &args.spot,
-            args.placement.on.clone(),
-            None,
-        )?,
+        spot_case(&args.request, &args.spot, args.placement.on.clone(), None)?,
         args.outcome.blocked,
     );
     drive_terminal(repo, request, &args.mode)

@@ -63,16 +63,15 @@ When a run finishes, its completed transcripts are compacted fairly to 256 MiB
 in total. Small transcripts remain whole before larger ones share the remaining
 space. `WASINIX_RUN_LOG_BYTES` sets another positive byte limit for the run.
 
-The verdict has four values. A green run passes; a red run has a failed
-required gate or a comparison with regressions. Removed jobs stay in the
-comparison for reviewer information but do not fail it. A diff whose baseline
-could not evaluate concludes **neutral**, never red, because a failure the base
-shares is the status quo, not a regression the change introduced. A selection
-whose jobs could not run because dependencies failed concludes **blocked**.
-Build, spot, diff, and bisect accept `--blocked=fail|skip|good` (default
-`fail`) to map that result to the process, check-run, and bisect outcome; the
-report still says blocked under every policy. A directly selected failure is
-always red.
+The verdict has four values. A green run passes; a red run has a failed required
+gate or a comparison with regressions. Removed jobs stay in the comparison for
+reviewer information but do not fail it. A diff whose baseline could not
+evaluate concludes **neutral**, never red, because a failure the base shares is
+the status quo, not a regression the change introduced. A selection whose jobs
+could not run because dependencies failed concludes **blocked**. Build, spot,
+diff, and bisect accept `--blocked=fail|skip|good` (default `fail`) to map that
+result to the process, check-run, and bisect outcome; the report still says
+blocked under every policy. A directly selected failure is always red.
 
 ## Where the time went
 
@@ -118,25 +117,25 @@ which `run cancel` accepts. The remote supervisor holds one of the builder's
 machines cannot overcommit the host.
 
 A followed run log remains append-only. If its rolling tail begins replacing
-older output, the follower sees a retention marker immediately and receives
-the retained newest output when the command ends.
+older output, the follower sees a retention marker immediately and receives the
+retained newest output when the command ends.
 
 `run gc` combines explicit `--max-age-days`, `--max-count`, and `--max-bytes`
 limits. It never collects a recorded active run or one protected by `run pin`;
-`--dry-run` and `--json` expose the same selection without deleting it. There
-is no implicit retention limit. Ephemeral workflow runners collect final runs
-only after their report or run-directory artifact is durable; failed command
-runs keep their directory until its artifact upload succeeds.
+`--dry-run` and `--json` expose the same selection without deleting it. There is
+no implicit retention limit. Ephemeral workflow runners collect final runs only
+after their report or run-directory artifact is durable; failed command runs
+keep their directory until its artifact upload succeeds.
 
 ## GitHub
 
 Workflow step outputs go through `github/actions.rs`: it rejects line breaks in
 scalar values and owns the output and artifact names shared with workflow YAML.
 `ci start` returns a durable run id and directory together, while
-`ci update-matrix` produces the update workflow's target matrix without a
-second JSON translator in shell. `ci pull-request` resolves an exact workflow
-head to at most one open pull request, constrained by both the head repository
-and commit. `ci preview-context` applies the preview label, same-repository,
+`ci update-matrix` produces the update workflow's target matrix without a second
+JSON translator in shell. `ci pull-request` resolves an exact workflow head to
+at most one open pull request, constrained by both the head repository and
+commit. `ci preview-context` applies the preview label, same-repository,
 live-head, and green-Build gates for both preview trigger shapes.
 
 `build.yml` runs one CI run per event and publishes through `ci publish`: the
@@ -153,9 +152,9 @@ authorizes it (the shared grammar, a live write-permission check, PR state),
 `ci command` runs it, and the reply is keyed to the commenting comment. Every
 malformed or unauthorized command gets a reply.
 
-`--plan` resolves the request and replies with its pinned request and task
-list from the authorization job. It does not start a durable run or enter the
-report publisher, because no build tasks or report exist.
+`--plan` resolves the request and replies with its pinned request and task list
+from the authorization job. It does not start a durable run or enter the report
+publisher, because no build tasks or report exist.
 
 `/wasinix bisect <target> --good <ref> --bad <ref> -- build <selectors>` runs on
 the runner like every other comment command, so its predicate is a case pinned

@@ -487,10 +487,7 @@ impl Builder {
         let deadline = Deadline::Probe;
         let mut cmd = self.ssh()?;
         cmd.arg("true");
-        let status = crate::support::tools::status_timeout(
-            &mut cmd,
-            deadline.timeout(),
-        )?;
+        let status = crate::support::tools::status_timeout(&mut cmd, deadline.timeout())?;
         if !matches!(
             status,
             crate::support::tools::Completion::Finished(status) if status.success()
@@ -584,9 +581,7 @@ impl Deadline {
             Deadline::Probe | Deadline::Poll => 30,
             Deadline::Launch => 1800,
         };
-        crate::support::tools::Timeout::new(
-            std::time::Duration::from_secs(seconds),
-        )
+        crate::support::tools::Timeout::new(std::time::Duration::from_secs(seconds))
     }
 }
 

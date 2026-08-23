@@ -120,8 +120,7 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
         },
         |mut stderr| {
             let mut log = stderr_log;
-            std::io::copy(&mut stderr, &mut log)
-                .map_err(|error| io(request.stderr_log, error))?;
+            std::io::copy(&mut stderr, &mut log).map_err(|error| io(request.stderr_log, error))?;
             log.finish()?;
             Ok(())
         },

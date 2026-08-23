@@ -381,9 +381,9 @@ pub fn fold(plan: &Plan, fragments: &BTreeMap<String, Fragment>, context: FoldCo
     // A gate that ended neither passed nor failed: its work did not happen,
     // so the run answered nothing. Counting it nowhere concluded success and
     // reported a build whose jobs never ran as green.
-    let blocked_gate = views.iter().find(|view| {
-        view.task.enabled && view.task.gate && view.status == TaskStatus::Blocked
-    });
+    let blocked_gate = views
+        .iter()
+        .find(|view| view.task.enabled && view.task.gate && view.status == TaskStatus::Blocked);
     let active_failures = views
         .iter()
         .filter(|view| view.task.enabled && failed(view.status))
@@ -440,10 +440,7 @@ pub fn fold(plan: &Plan, fragments: &BTreeMap<String, Fragment>, context: FoldCo
             .fragment
             .map(|fragment| fragment.headline.clone())
             .unwrap_or_else(|| view.task.label.clone());
-        (
-            Some(Conclusion::Blocked),
-            format!("CI blocked: {detail}"),
-        )
+        (Some(Conclusion::Blocked), format!("CI blocked: {detail}"))
     } else if !plan.tasks.is_empty() || !fragments.is_empty() {
         let title = if advisory_failures > 0 {
             format!("CI passed with {advisory_failures} advisory failures")

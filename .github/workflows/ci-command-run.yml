@@ -91,8 +91,8 @@ jobs:
       # run dir argument is required by the verb and holds only its origin.
       - name: Reply direct command
         if: >-
-          steps.authorize.outputs.kind == 'help' ||
-          steps.authorize.outputs.kind == 'plan'
+          steps.authorize.outputs.kind == 'help' || steps.authorize.outputs.kind
+          == 'plan'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -187,8 +187,8 @@ jobs:
       - name: Post report
         id: report
         if:
-          always() && steps.run.conclusion != 'skipped' && steps.run.outputs.runDir
-          != ''
+          always() && steps.run.conclusion != 'skipped' &&
+          steps.run.outputs.runDir != ''
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -227,10 +227,10 @@ jobs:
       - name: Collect durable runs
         id: collect
         if:
-          ${{ always() && steps.run.outputs.runDir != '' &&
-          ((steps.run.outcome == 'success' && steps.report.outcome == 'success') ||
-          (steps.run.outcome != 'success' &&
-          steps.run_artifact.outcome == 'success')) }}
+          ${{ always() && steps.run.outputs.runDir != '' && ((steps.run.outcome
+          == 'success' && steps.report.outcome == 'success') ||
+          (steps.run.outcome != 'success' && steps.run_artifact.outcome ==
+          'success')) }}
         run: nix run .#wasinix -- run gc --max-age-days 0
 
   # No push credential here: the PR tree's own update scripts execute in

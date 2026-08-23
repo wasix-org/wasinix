@@ -117,7 +117,7 @@ pub fn tail(text: &str, limit: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{finalize, Error, Result};
+    use super::{Error, Result, finalize};
 
     #[test]
     fn finalization_preserves_both_failures() {

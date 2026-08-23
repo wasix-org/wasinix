@@ -144,9 +144,8 @@ pub fn drive(repo: &Path, request: Bisect) -> Result<bisect::Report> {
                 follow: false,
                 finish: super::request::Finish::Silent,
             })?;
-            let report: crate::ci::report::Report = crate::support::schema::read(
-                &crate::ci::prepare::report_path(candidate_dir),
-            )?;
+            let report: crate::ci::report::Report =
+                crate::support::schema::read(&crate::ci::prepare::report_path(candidate_dir))?;
             candidate_outcome(&report)
         },
     )
