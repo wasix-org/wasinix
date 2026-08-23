@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::ci::events::{self, Event};
+use crate::ci::events::{self, ProgressSink};
 use crate::nix::builder::{self, Builder, Deadline};
 use crate::nix::route::{EvaluationLimits, default_eval_workers};
 use crate::runs::{RUN_FILE, Run};
@@ -30,7 +30,7 @@ pub struct Request<'a> {
     /// Local directory the finished run is copied into.
     pub fetch_to: &'a Path,
     /// Sink for the mirrored event stream while the run executes.
-    pub progress: &'a mut dyn FnMut(&Event),
+    pub progress: &'a mut dyn ProgressSink,
     /// Export the local push credentials (signing key, S3) into the remote
     /// run, for a payload that pushes to the cache from the host.
     pub forward_push_credentials: bool,
@@ -253,7 +253,7 @@ pub fn observe(
     builder: &Builder,
     run_dir: &str,
     fetch_to: &Path,
-    progress: &mut dyn FnMut(&Event),
+    progress: &mut dyn ProgressSink,
 ) -> Result<CommandStatus> {
     crate::support::fs::create_dir_all(fetch_to)?;
     // The remote byte position lives in its own sidecar: `fetch_to` can be a
@@ -271,6 +271,7 @@ pub fn observe(
     let mut starting_polls = 0u32;
     loop {
         std::thread::sleep(POLL_INTERVAL);
+        progress.tick(crate::support::time::unix_secs());
         // Quiet by contract: this fires every few seconds for the whole
         // run, and a logged poll would flood the transcript.
         let mut cmd = builder.ssh()?;
@@ -299,7 +300,7 @@ pub fn observe(
             (remote_offset - carry.len() as u64).to_string().as_bytes(),
         )?;
         for event in &fresh {
-            progress(event);
+            progress.event(event);
         }
         let Some(run) = poll.run else {
             continue;

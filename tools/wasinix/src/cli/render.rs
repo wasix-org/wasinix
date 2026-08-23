@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use indicatif::{ProgressBar, ProgressStyle};
 
-use crate::ci::events::{self, Event};
+use crate::ci::events::{self, Event, ProgressSink};
 use crate::ci::facts::{Diagnostic, DiagnosticSeverity, TestOutcome, TestResult};
 use crate::ci::report::Report;
 use crate::support::atoms::{JobStatus, TaskStatus};
@@ -352,6 +352,16 @@ impl LineRenderer {
     }
 }
 
+impl ProgressSink for LineRenderer {
+    fn event(&mut self, event: &Event) {
+        LineRenderer::event(self, event);
+    }
+
+    fn tick(&mut self, at: u64) {
+        LineRenderer::tick(self, at);
+    }
+}
+
 /// Follow a run directory's stream until the run finishes (or `stop` is set
 /// and the stream is drained), rendering as it goes.
 pub fn follow(run_dir: &Path, stop: &AtomicBool) -> Result<()> {
@@ -360,10 +370,7 @@ pub fn follow(run_dir: &Path, stop: &AtomicBool) -> Result<()> {
         run_dir,
         Duration::from_millis(300),
         |fresh| {
-            for event in fresh {
-                renderer.event(event);
-            }
-            renderer.tick(crate::support::time::unix_secs());
+            renderer.observe(fresh);
             Ok(())
         },
         || Ok(stop.load(Ordering::Relaxed)),
@@ -379,10 +386,7 @@ pub fn watch(run_dir: &Path) -> Result<()> {
         run_dir,
         Duration::from_millis(500),
         |fresh| {
-            for event in fresh {
-                renderer.event(event);
-            }
-            renderer.tick(crate::support::time::unix_secs());
+            renderer.observe(fresh);
             Ok(())
         },
         // A lost run never writes RunFinished; the observed record says so.

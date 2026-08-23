@@ -579,7 +579,7 @@ pub(crate) fn run_on_host(
             words
         },
         fetch_to: run_dir,
-        progress: &mut |event| renderer.event(event),
+        progress: &mut renderer,
         forward_push_credentials: matches!(cache, CacheIntent::Push),
     });
     renderer.finish();

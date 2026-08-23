@@ -1524,9 +1524,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             let builder = crate::nix::builder::load(&repo, on.as_deref())?;
             let mut renderer = crate::cli::render::LineRenderer::new();
             let status =
-                crate::runs::remote::observe(&builder, &remote_run_dir, &run_dir, &mut |event| {
-                    renderer.event(event)
-                });
+                crate::runs::remote::observe(&builder, &remote_run_dir, &run_dir, &mut renderer);
             renderer.finish();
             status
         }
@@ -1635,9 +1633,8 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                     &run_dir,
                     std::time::Duration::from_millis(500),
                     |fresh| {
-                        for event in fresh {
-                            renderer.event(event);
-                        }
+                        use crate::ci::events::ProgressSink;
+                        renderer.observe(fresh);
                         watcher.observe(fresh);
                         Ok(())
                     },
