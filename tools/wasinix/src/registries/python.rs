@@ -7,11 +7,11 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::support::error::{Result, io, request_error};
-use crate::support::nix::{Flake, eval};
+use crate::support::error::{io, request_error, Result};
+use crate::support::nix::{eval, Flake};
 use crate::support::process::CommandStatus;
 use crate::support::ui;
 
@@ -311,6 +311,118 @@ pub struct NativeReport {
     pub registry: String,
     pub native: NativeKind,
     pub pure: NativeKind,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoverageTotals {
+    pub buildable: usize,
+    pub blocked: usize,
+    pub out_of_scope: usize,
+    pub unknown: usize,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CoverageSurvey {
+    pub projects: usize,
+    pub downloads: u64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CoveragePublish {
+    pub package: String,
+    pub downloads: u64,
+    pub share: f64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CoverageNative {
+    pub package: String,
+    pub downloads: u64,
+    pub projects: usize,
+    pub scope: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoverageHistory {
+    pub attr: String,
+    pub package: String,
+    pub version: String,
+    pub downloads: u64,
+    pub share: f64,
+    pub project_share: f64,
+    pub native: bool,
+    pub why: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CoverageReport {
+    pub cutoff: usize,
+    pub survey: CoverageSurvey,
+    pub coverage: CoverageTotals,
+    pub publish: Vec<CoveragePublish>,
+    pub native: Vec<CoverageNative>,
+    pub history: Vec<CoverageHistory>,
+}
+
+impl crate::support::schema::Document for CoverageReport {
+    const KIND: &'static str = "pythonCoverage";
+    const SCHEMA: u32 = 1;
+}
+
+pub fn coverage(cutoff: usize, limit: usize) -> Result<CoverageReport> {
+    if !matches!(cutoff, 100 | 1000 | 10000) {
+        return request_error("--cutoff must be 100, 1000, or 10000");
+    }
+    let repo = crate::support::git::repo_root()?;
+    let flake = format!("path:{}", repo.display());
+    let versions = eval(&Flake(&flake), "pythonRegistry.wheelVersions", None)?;
+    let scratch = crate::support::fs::Scratch::create("wasinix-python-coverage")?;
+    let versions_path = scratch.path().join("wheel-versions.json");
+    crate::support::json::write(&versions_path, &versions)?;
+    let mut command = Command::new("python3");
+    command
+        .arg(repo.join("pypi-survey/scripts/coverage.py"))
+        .arg(&versions_path)
+        .args([
+            "--cutoff",
+            &cutoff.to_string(),
+            "--limit",
+            &limit.to_string(),
+        ])
+        .current_dir(&repo);
+    let output = crate::support::tools::checked_output(&mut command, "ranking Python coverage")?;
+    serde_json::from_slice(&output).map_err(|error| {
+        crate::support::error::Error::Failure(format!("invalid Python coverage report: {error}"))
+    })
+}
+
+pub fn refresh_survey(cutoff: usize) -> Result<()> {
+    if !matches!(cutoff, 100 | 1000 | 10000) {
+        return request_error("--cutoff must be 100, 1000, or 10000");
+    }
+    let repo = crate::support::git::repo_root()?;
+    let scripts = repo.join("pypi-survey/scripts");
+    let cutoff = cutoff.to_string();
+    for (script, args) in [
+        ("fetch_meta.py", vec![cutoff.clone()]),
+        ("classify.py", vec![cutoff.clone()]),
+        (
+            "sdist_scan.py",
+            vec!["sdist_only".to_string(), cutoff.clone()],
+        ),
+        ("refine_sdist.py", vec![cutoff.clone()]),
+        ("transitive.py", vec![]),
+    ] {
+        let mut command = Command::new("python3");
+        command
+            .arg(scripts.join(script))
+            .args(args)
+            .current_dir(&repo);
+        crate::support::tools::checked_status(&mut command, "refreshing the PyPI survey")?;
+    }
+    Ok(())
 }
 
 impl crate::support::schema::Document for NativeReport {

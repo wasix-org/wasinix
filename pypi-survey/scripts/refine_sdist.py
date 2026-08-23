@@ -3,8 +3,10 @@
 
 import json
 import os
+import sys
 
-BASE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA = os.path.join(ROOT, "data")
 
 NATIVE_SETUP = {
     "ext_modules",
@@ -71,9 +73,10 @@ def verdict(sig):
 
 
 def main():
-    with open(os.path.join(BASE, f"sdist_scan_sdist_only_10000.json")) as f:
+    cutoff = int(sys.argv[1]) if len(sys.argv) > 1 else 10000
+    with open(os.path.join(DATA, f"sdist_scan_sdist_only_{cutoff}.json")) as f:
         scans = json.load(f)
-    with open(os.path.join(BASE, "classified.json")) as f:
+    with open(os.path.join(DATA, "classified.json")) as f:
         classified = json.load(f)
 
     refined = {}
@@ -87,7 +90,7 @@ def main():
         if v == "unknown":
             unknown.append((classified[key]["rank"], key, why))
         refined[key] = v if v in ("native", "pure") else "unknown_" + v
-    with open(os.path.join(BASE, "sdist_refined.json"), "w") as f:
+    with open(os.path.join(DATA, "sdist_refined.json"), "w") as f:
         json.dump(refined, f, indent=1)
     print(counts)
     print("\nborderline (C sources but no ext_modules signal):")

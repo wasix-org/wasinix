@@ -17,8 +17,9 @@ from packaging.requirements import Requirement, InvalidRequirement
 import fetch_meta
 import classify as classify_mod
 
-BASE = os.path.dirname(os.path.abspath(__file__))
-CACHE = os.path.join(BASE, "cache")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA = os.path.join(ROOT, "data")
+CACHE = os.path.join(ROOT, "cache")
 
 ENV = {
     "python_version": "3.12",
@@ -64,11 +65,11 @@ def deps_of(rec):
 
 
 def main():
-    with open(os.path.join(BASE, "classified.json")) as f:
+    with open(os.path.join(DATA, "classified.json")) as f:
         classified = json.load(f)
     # refined classes for sdist_only packages, if the scan has run
     refined = {}
-    refpath = os.path.join(BASE, "sdist_refined.json")
+    refpath = os.path.join(DATA, "sdist_refined.json")
     if os.path.exists(refpath):
         with open(refpath) as f:
             refined = json.load(f)
@@ -196,8 +197,15 @@ def main():
             "native_direct": nat_direct,
         }
 
-    with open(os.path.join(BASE, "transitive.json"), "w") as f:
+    with open(os.path.join(DATA, "transitive.json"), "w") as f:
         json.dump(out, f, indent=1)
+
+    with open(os.path.join(DATA, "dependencies.json"), "w") as f:
+        json.dump(
+            {key: sorted(value["deps"]) for key, value in sorted(known.items())},
+            f,
+            separators=(",", ":"),
+        )
 
     for cutoff in (100, 1000, 10000):
         subset = [v for v in out.values() if v["rank"] <= cutoff]

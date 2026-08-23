@@ -21,7 +21,9 @@ import urllib.request
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-BASE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA = os.path.join(ROOT, "data")
+CACHE = os.path.join(ROOT, "cache")
 UA = "wasinix-pypi-survey/0.1 (claude@blenderfreaky.de)"
 CHUNK = 128 * 1024
 
@@ -159,7 +161,7 @@ EXTMOD = re.compile(r"\.(cpython-\d+[\w-]*\.so|abi3\.so|pyd|so)$")
 
 
 def inspect_one(key, rec):
-    cache = json.load(open(os.path.join(BASE, "cache", key + ".json")))
+    cache = json.load(open(os.path.join(CACHE, key + ".json")))
     picked = pick_wheel(cache.get("files") or [])
     if not picked:
         return key, {"error": "no_platform_wheel"}
@@ -224,9 +226,9 @@ def inspect_one(key, rec):
 
 def main():
     maxrank = int(sys.argv[1]) if len(sys.argv) > 1 else 10000
-    with open(os.path.join(BASE, "classified.json")) as f:
+    with open(os.path.join(DATA, "classified.json")) as f:
         classified = json.load(f)
-    outpath = os.path.join(BASE, "wheel_inspect.json")
+    outpath = os.path.join(DATA, "wheel_inspect.json")
     results = {}
     if os.path.exists(outpath):
         with open(outpath) as f:

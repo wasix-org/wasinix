@@ -23,7 +23,9 @@ import urllib.request
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-BASE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA = os.path.join(ROOT, "data")
+CACHE = os.path.join(ROOT, "cache")
 UA = "wasinix-pypi-survey/0.1 (claude@blenderfreaky.de)"
 MAX_COMPRESSED = int(os.environ.get("MAX_MB", "40")) * 1024 * 1024
 
@@ -164,9 +166,9 @@ def scan_one(item):
 def main():
     cls = sys.argv[1]
     maxrank = int(sys.argv[2]) if len(sys.argv) > 2 else 10000
-    with open(os.path.join(BASE, "classified.json")) as f:
+    with open(os.path.join(DATA, "classified.json")) as f:
         classified = json.load(f)
-    outpath = os.path.join(BASE, f"sdist_scan_{cls}_{maxrank}.json")
+    outpath = os.path.join(DATA, f"sdist_scan_{cls}_{maxrank}.json")
     results = {}
     if os.path.exists(outpath):
         with open(outpath) as f:
@@ -179,7 +181,7 @@ def main():
         if cls == "sdist_only":
             url, size = rec.get("sdist_url"), rec.get("sdist_size")
         else:
-            cache = json.load(open(os.path.join(BASE, "cache", key + ".json")))
+            cache = json.load(open(os.path.join(CACHE, key + ".json")))
             sd = [f for f in cache.get("files") or [] if f["packagetype"] == "sdist"]
             if not sd:
                 results[key] = {"no_sdist": True}

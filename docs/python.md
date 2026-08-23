@@ -23,4 +23,5 @@ described in [`registry.md`](registry.md#the-python-wheel-index).
 
 For package selection and coverage, see
 [`python-coverage.md`](python-coverage.md). The survey data behind that work is
-in [`../pypi-survey/`](../pypi-survey/).
+in [`../pypi-survey/`](../pypi-survey/). Refresh it with
+`wasinix python survey refresh`, not as part of the offline coverage report.

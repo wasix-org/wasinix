@@ -6,16 +6,17 @@ import os
 import sys
 from collections import Counter
 
-BASE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA = os.path.join(ROOT, "data")
 OUTDIR = sys.argv[1]
 
 import aggregate as ag  # noqa: E402  (prints its report on import; harmless)
 
-classified = json.load(open(os.path.join(BASE, "classified.json")))
-transitive = json.load(open(os.path.join(BASE, "transitive.json")))
-optional = json.load(open(os.path.join(BASE, "native_optional.json")))
+classified = json.load(open(os.path.join(DATA, "classified.json")))
+transitive = json.load(open(os.path.join(DATA, "transitive.json")))
+optional = json.load(open(os.path.join(DATA, "native_optional.json")))
 reach = json.load(open(os.path.join(OUTDIR, "data", "reach.json")))
-top = json.load(open(os.path.join(BASE, "top.json")))
+top = json.load(open(os.path.join(DATA, "top.json")))
 downloads = {
     r["project"].lower().replace("_", "-").replace(".", "-"): r["download_count"]
     for r in top["rows"]

@@ -36,11 +36,13 @@ generated, not vendored in this copy; regenerate them with the reproduce steps.
 | `data/top.json`             | the ranking snapshot (hugovk/top-pypi-packages, 2026-07-01)                                    |
 | `data/classified.json`      | per-package verdict: pure / native (+ final after sdist refinement)                            |
 | `data/transitive.json`      | per-package closure verdict + direct native deps                                               |
+| `data/dependencies.json`    | compact direct runtime dependency graph for offline closure analysis                           |
 | `data/wheel_inspect.json`   | per-native-package: wheel generator, abi, extension count, bundled libs                        |
 | `data/sdist_scan_*.json`    | sdist source-file / build-system scans                                                         |
 | `data/sdist_refined.json`   | native-or-pure verdicts for sdist-only packages (incl. hand overrides)                         |
 | `data/native_optional.json` | native packages that also ship a pure `py3-none-any` fallback wheel                            |
 | `data/reach.json`           | per-native-package: how many top-10k packages pull it (+ download-weighted)                    |
+| `data/out-of-scope.json`    | native package prefixes and names outside WASIX Python coverage scope                          |
 | `data/flame_full.json`      | unpruned flame tree, `c` = packages, `d` = downloads (generated; not vendored)                 |
 | `data/flame_view.json`      | pruned tree embedded in flame.html (generated; not vendored)                                   |
 | `data/page_data.json`       | aggregates embedded in flame.html (generated; not vendored)                                    |
@@ -48,21 +50,32 @@ generated, not vendored in this copy; regenerate them with the reproduce steps.
 
 ## Reproducing
 
-Needs python3 (stdlib + `packaging`), ~55 MB of PyPI JSON metadata cache, ~15
-min:
+The coverage inputs need python3 (stdlib + `packaging`), ~55 MB of PyPI JSON
+metadata cache, and ~15 min. Refresh them explicitly, because this contacts
+PyPI and rewrites vendored survey data:
 
 ```
-python3 scripts/fetch_meta.py 10000        # PyPI JSON metadata -> cache/
-python3 scripts/classify.py 10000          # wheel-tag classification -> classified.json
-python3 scripts/sdist_scan.py sdist_only 10000
-python3 scripts/refine_sdist.py            # sdist-only refinement (edit overrides inside)
-python3 scripts/wheel_inspect.py 10000     # ranged-HTTP wheel inspection (no full downloads)
-python3 scripts/transitive.py              # dep-closure analysis
-python3 scripts/sdist_scan.py native 10000 # language attribution scans
-python3 scripts/build_flame.py OUT         # flame tree + reach
-python3 scripts/prep_report.py OUT         # findings.md + page_data.json
-python3 scripts/gen_page.py OUT            # flame.html from template.html
+wasinix python survey refresh --cutoff 10000
 ```
+
+The wrapper runs metadata fetch, wheel-tag classification (including
+`native_optional.json`), sdist-only refinement, and dependency-closure
+analysis. It uses the tracked `data/top.json` traffic snapshot; replacing that
+ranking from top-pypi is a separate survey update. The remaining scripts
+regenerate the research report and flame chart:
+
+```
+python3 scripts/wheel_inspect.py 10000     # ranged-HTTP wheel inspection (no full downloads)
+python3 scripts/sdist_scan.py native 10000 # language attribution scans
+python3 scripts/build_flame.py data         # flame tree + reach
+python3 scripts/prep_report.py .            # findings.md + page_data.json
+python3 scripts/gen_page.py .               # flame.html from template.html
+```
+
+After a refresh, `wasinix python coverage` combines this survey with the
+repository's served wheel versions and the historical-version survey to rank
+what to publish, build, and retain next. It reads only vendored data; PyPI is
+contacted only by the reproduce pipeline.
 
 ## Method notes & caveats
 

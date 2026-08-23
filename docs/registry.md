@@ -7,9 +7,10 @@ Authoring the package itself is `docs/packaging.md`.
 Each registry is a CLI noun with the same verbs:
 `wasinix cargo|wasmer|python serve` runs one locally, `publish` pushes what is
 missing, `preview` deploys an ephemeral copy; `wasinix python count-natives`
-counts wheels shipping compiled extensions. `wasinix serve` stands all three up
-at once and tears them down together; `--mint`, `--index`, `--server`, and
-`--webc` reuse prebuilt artifacts instead of building fresh.
+counts wheels shipping compiled extensions, and `wasinix python coverage` ranks
+the next Python coverage additions. `wasinix serve` stands all three up at once
+and tears them down together; `--mint`, `--index`, `--server`, and `--webc`
+reuse prebuilt artifacts instead of building fresh.
 
 `wasinix wasmer serve` yields a directory, not a URL: the wasmer CLI has no
 local-HTTP registry mode (`--registry` always resolves a remote GraphQL

@@ -43,6 +43,39 @@ dependencies publish without a worklist entry. Per-package build details live in
 each `pkgs/overlay/packages/<pkg>.nix` /
 `pkgs/overlay/python-packages/<pkg>.nix` and the commit that added it.
 
+## Decide what to add
+
+```
+wasinix python coverage --cutoff 10000
+```
+
+The command evaluates the current registry's served names and versions, then
+ranks three independent worklists from the vendored surveys:
+
+- pure roots whose closure is already buildable but which the registry does not
+  yet publish;
+- native packages in greedy order by the remaining traffic they immediately
+  unblock; and
+- historical versions selected by the version survey but absent from the
+  registry.
+
+`--limit` bounds each section. `--json` returns the same report for scripts. The
+native section excludes closures that reach a package declared in
+`pypi-survey/data/out-of-scope.json`; that file is the policy inventory for the
+categories below.
+
+Refresh the vendored inputs only when intentionally taking a new PyPI metadata
+snapshot:
+
+```
+wasinix python survey refresh --cutoff 10000
+```
+
+It contacts PyPI and rewrites survey data. `python coverage` remains offline
+apart from evaluating the local registry. The refresh uses the tracked traffic
+ranking; update `pypi-survey/data/top.json` separately when taking a new
+download snapshot.
+
 ## Recompute
 
 Take the shipped set from every interpreter, since a `publishOnce` entry appears
@@ -53,11 +86,10 @@ nix eval --json .#legacyPackages.x86_64-linux.pythonRegistry.wheels \
   --apply 'ws: builtins.concatLists (map builtins.attrNames (builtins.attrValues ws))'
 ```
 
-`transitive.json` records each package's DIRECT native deps, not its closure, so
-the blocked set is not a lookup: rebuild the closures from the survey's cached
-PyPI metadata (`pypi-survey/scripts/transitive.py` does the same walk), then
-count a package blocked when its closure holds a native package that is neither
-shipped nor in `native_optional.json`.
+`transitive.json` records each package's DIRECT native deps, not its closure.
+`dependencies.json` is the compact full dependency graph that `transitive.py`
+emits from the metadata cache, so the coverage command can rebuild closures
+without fetching PyPI again.
 
 ## Burn-down
 

@@ -1,0 +1,21 @@
+{
+ "packages": {
+  "llvmlite": "runtime JIT",
+  "numba": "runtime JIT",
+  "ninja": "bundled toolchain",
+  "uv": "bundled toolchain"
+ },
+ "prefixes": {
+  "browser": "browser payload",
+  "cuda-": "GPU/CUDA",
+  "cupy-": "GPU/CUDA",
+  "jax": "runtime JIT",
+  "nvidia-": "GPU/CUDA",
+  "playwright": "browser payload",
+  "pyobjc-": "macOS framework",
+  "rapids-": "GPU/CUDA",
+  "tensorflow": "GPU/CUDA",
+  "torch": "GPU/CUDA",
+  "triton": "GPU/CUDA"
+ }
+}

@@ -6,11 +6,13 @@ import os
 import re
 from collections import Counter, defaultdict
 
-BASE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA = os.path.join(ROOT, "data")
+CACHE = os.path.join(ROOT, "cache")
 
 
 def load(name):
-    p = os.path.join(BASE, name)
+    p = os.path.join(DATA, name)
     return json.load(open(p)) if os.path.exists(p) else {}
 
 
@@ -153,7 +155,8 @@ def abi_kind(abis):
 # cffi users from runtime requires
 cffi_users = set()
 for k in native:
-    rec = load(os.path.join("cache", k + ".json"))
+    with open(os.path.join(CACHE, k + ".json")) as f:
+        rec = json.load(f)
     for r in rec.get("requires_dist") or []:
         if re.match(r"^\s*cffi\b", r) and "extra ==" not in r:
             cffi_users.add(k)

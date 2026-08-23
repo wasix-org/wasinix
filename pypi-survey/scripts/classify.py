@@ -10,8 +10,9 @@ import json
 import os
 import sys
 
-BASE = os.path.dirname(os.path.abspath(__file__))
-CACHE = os.path.join(BASE, "cache")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA = os.path.join(ROOT, "data")
+CACHE = os.path.join(ROOT, "cache")
 
 
 def norm(name: str) -> str:
@@ -60,7 +61,7 @@ def classify(rec):
 
 
 def main():
-    with open(os.path.join(BASE, "top.json")) as f:
+    with open(os.path.join(DATA, "top.json")) as f:
         top = json.load(f)
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 10000
     names = [r["project"] for r in top["rows"]][:n]
@@ -77,8 +78,23 @@ def main():
         cls, extra = classify(rec)
         out[norm(name)] = {"rank": i + 1, "name": name, "class": cls, **extra}
 
-    with open(os.path.join(BASE, "classified.json"), "w") as f:
+    with open(os.path.join(DATA, "classified.json"), "w") as f:
         json.dump(out, f, indent=1)
+
+    optional = []
+    for key, rec in out.items():
+        if rec["class"] != "native":
+            continue
+        with open(os.path.join(CACHE, key + ".json")) as f:
+            files = json.load(f).get("files") or []
+        if any(
+            file["packagetype"] == "bdist_wheel"
+            and wheel_tags(file["filename"])[1:] == (["none"], ["any"])
+            for file in files
+        ):
+            optional.append(key)
+    with open(os.path.join(DATA, "native_optional.json"), "w") as f:
+        json.dump(sorted(optional), f, indent=1)
 
     for cutoff in (100, 1000, 10000):
         subset = [v for v in out.values() if v["rank"] <= cutoff]

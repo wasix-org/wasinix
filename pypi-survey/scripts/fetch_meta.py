@@ -12,8 +12,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from packaging.version import Version, InvalidVersion
 
-BASE = os.path.dirname(os.path.abspath(__file__))
-CACHE = os.path.join(BASE, "cache")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA = os.path.join(ROOT, "data")
+CACHE = os.path.join(ROOT, "cache")
 UA = "wasinix-pypi-survey/0.1 (claude@blenderfreaky.de)"
 
 
@@ -116,7 +117,7 @@ def fetch(name: str):
 
 
 def main():
-    with open(os.path.join(BASE, "top.json")) as f:
+    with open(os.path.join(DATA, "top.json")) as f:
         top = json.load(f)
     names = [r["project"] for r in top["rows"]][: _argn()]
     os.makedirs(CACHE, exist_ok=True)

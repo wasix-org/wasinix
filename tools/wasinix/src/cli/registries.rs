@@ -173,6 +173,32 @@ pub enum PythonCommand {
         #[command(flatten)]
         json: ui::JsonArg,
     },
+    /// Rank the next Python packages and historical versions to cover
+    Coverage {
+        /// Survey cutoff by download rank
+        #[arg(long, default_value_t = 10_000)]
+        cutoff: usize,
+        /// Maximum rows per recommendation section
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+        #[command(flatten)]
+        json: ui::JsonArg,
+    },
+    /// Refresh the vendored PyPI survey data
+    Survey {
+        #[command(subcommand)]
+        command: PythonSurveyCommand,
+    },
+}
+
+#[derive(clap::Subcommand)]
+pub enum PythonSurveyCommand {
+    /// Fetch current package metadata and rebuild coverage inputs
+    Refresh {
+        /// Survey cutoff by download rank
+        #[arg(long, default_value_t = 10_000)]
+        cutoff: usize,
+    },
 }
 
 pub fn run_cargo(command: CargoCommand) -> Result<CommandStatus> {
@@ -363,6 +389,59 @@ pub fn run_python(command: PythonCommand) -> Result<CommandStatus> {
                     }
                 }
             })?;
+            Ok(CommandStatus::SUCCESS)
+        }
+        PythonCommand::Coverage {
+            cutoff,
+            limit,
+            json,
+        } => {
+            let report = python::coverage(cutoff, limit)?;
+            ui::emit(&json, &report, |report| {
+                ui::result(format!(
+                    "top {}: {} buildable · {} blocked · {} out of scope · {} unknown",
+                    report.cutoff,
+                    report.coverage.buildable,
+                    report.coverage.blocked,
+                    report.coverage.out_of_scope,
+                    report.coverage.unknown,
+                ));
+                ui::result("publish next:");
+                for row in &report.publish {
+                    ui::result(format!(
+                        "  {} · {:.2}% · {} downloads",
+                        row.package,
+                        row.share * 100.0,
+                        row.downloads,
+                    ));
+                }
+                ui::result("native next:");
+                for row in &report.native {
+                    ui::result(format!(
+                        "  {} · {} projects · {:.2}% · {} downloads",
+                        row.package,
+                        row.projects,
+                        row.downloads as f64 / report.survey.downloads as f64 * 100.0,
+                        row.downloads,
+                    ));
+                }
+                ui::result("history next:");
+                for row in &report.history {
+                    ui::result(format!(
+                        "  {}=={} · {:.3}% · {}",
+                        row.package,
+                        row.version,
+                        row.share * 100.0,
+                        row.why,
+                    ));
+                }
+            })?;
+            Ok(CommandStatus::SUCCESS)
+        }
+        PythonCommand::Survey {
+            command: PythonSurveyCommand::Refresh { cutoff },
+        } => {
+            python::refresh_survey(cutoff)?;
             Ok(CommandStatus::SUCCESS)
         }
     }

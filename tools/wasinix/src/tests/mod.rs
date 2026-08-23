@@ -4272,6 +4272,8 @@ mod corpus {
             "python publish",
             "python preview",
             "python count-natives",
+            "python coverage",
+            "python survey refresh",
             "publish",
             "preview",
             "serve",
@@ -4416,6 +4418,8 @@ mod corpus {
             "cargo preview cargo-registry-pr9 --base ./base --dry-run",
             "python preview site app-pr-1 --owner wasmer",
             "python count-natives --list",
+            "python coverage --cutoff 1000 --limit 10 --json",
+            "python survey refresh --cutoff 1000",
             "publish --dry-run",
             "completions bash",
         ] {

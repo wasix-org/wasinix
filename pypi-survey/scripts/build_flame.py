@@ -22,21 +22,23 @@ import fetch_meta
 import classify as classify_mod
 from transitive import deps_of, load as load_cache
 
-BASE = os.path.dirname(os.path.abspath(__file__))
-OUT = sys.argv[1] if len(sys.argv) > 1 else BASE
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA = os.path.join(ROOT, "data")
+CACHE = os.path.join(ROOT, "cache")
+OUT = sys.argv[1] if len(sys.argv) > 1 else DATA
 
 
 def main():
-    classified = json.load(open(os.path.join(BASE, "classified.json")))
-    refined = json.load(open(os.path.join(BASE, "sdist_refined.json")))
-    top = json.load(open(os.path.join(BASE, "top.json")))
+    classified = json.load(open(os.path.join(DATA, "classified.json")))
+    refined = json.load(open(os.path.join(DATA, "sdist_refined.json")))
+    top = json.load(open(os.path.join(DATA, "top.json")))
     downloads = {
         fetch_meta.norm(r["project"]): r["download_count"] for r in top["rows"]
     }
 
     # full graph over everything in cache
     graph, cls = {}, {}
-    for fn in os.listdir(os.path.join(BASE, "cache")):
+    for fn in os.listdir(CACHE):
         key = fn[:-5]
         rec = load_cache(key)
         if rec is None or rec.get("error"):
