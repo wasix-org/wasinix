@@ -1,12 +1,19 @@
-# ml-dtypes' setup.py imports numpy at top level for get_include(), which the
-# build host cannot do with the wasm numpy; its C headers are arch-independent.
+# ml-dtypes for wasix (scikit-build-core). find_package(Python) and the
+# CMakeLists' numpy probe both resolve to the build interpreter: pyport.h fatals
+# on wasm32 (LONG_BIT 32), and numpy's 64-bit long mis-sizes npy_intp.
 {
   wasixPython,
   pyprev,
   helpers,
   ...
-}:
-helpers.libTweaks {
-  nativeBuildInputs = [wasixPython.pythonOnBuildForHost.pkgs.numpy];
-}
-pyprev.ml-dtypes
+}: let
+  py = wasixPython;
+in
+  helpers.libTweaks {
+    cmakeFlags = ["-DPython_INCLUDE_DIR=${py.crossIncludeDir}"];
+    postPatch = ''
+      substituteInPlace CMakeLists.txt \
+        --replace-fail 'import numpy; print(numpy.get_include())' "print('${py.pkgs.numpy.crossInclude}')"
+    '';
+  }
+  pyprev.ml-dtypes
