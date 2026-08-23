@@ -9,14 +9,6 @@ runs:
     - name: Remove preinstalled toolchains
       shell: bash
       run: |
-        avail_kb=$(df --output=avail / | tail -1)
-        # A roomy disk skips the sweep: the nix config's min-free/max-free
-        # already guards the tail, and deleting these trees synchronously
-        # costs minutes of inode churn.
-        if [ "$avail_kb" -gt $((80 * 1024 * 1024)) ]; then
-          echo "skipped: $(df -h --output=avail / | tail -1 | tr -d ' ') already free"
-          exit 0
-        fi
         # mv frees each path's namespace instantly (same filesystem); the
         # inode churn of the real deletion runs behind the build.
         trash=$(sudo mktemp -d /trash.XXXXXX)
