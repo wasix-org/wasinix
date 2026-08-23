@@ -244,14 +244,17 @@ mod plan {
     }
 
     fn core_diff() -> Request<RevSource> {
-        Request::diff(Diff {
-            baseline: "baseline".into(),
-            content_diff: false,
-            cases: vec![
-                Case::Build(build("baseline", &["core"])),
-                Case::Build(build("candidate-1", &["core"])),
-            ],
-        }, Default::default())
+        Request::diff(
+            Diff {
+                baseline: "baseline".into(),
+                content_diff: false,
+                cases: vec![
+                    Case::Build(build("baseline", &["core"])),
+                    Case::Build(build("candidate-1", &["core"])),
+                ],
+            },
+            Default::default(),
+        )
     }
 
     #[test]
@@ -283,14 +286,17 @@ mod plan {
 
     #[test]
     fn a_mixed_diff_plans_spot_and_build_as_advisory_cases() {
-        let request = Request::diff(Diff {
-            baseline: "baseline".into(),
-            content_diff: false,
-            cases: vec![
-                Case::Build(build("baseline", &["core"])),
-                Case::Spot(spot("candidate-1", "exnrefEh.zlib")),
-            ],
-        }, Default::default());
+        let request = Request::diff(
+            Diff {
+                baseline: "baseline".into(),
+                content_diff: false,
+                cases: vec![
+                    Case::Build(build("baseline", &["core"])),
+                    Case::Spot(spot("candidate-1", "exnrefEh.zlib")),
+                ],
+            },
+            Default::default(),
+        );
         let plan = plan_of(&request, None, &[]);
         // A failed spot build still lays out its map and statuses, so a
         // failure both sides share stays the comparison's call.
@@ -1123,20 +1129,23 @@ mod compare {
         use crate::ci::types::{Case, Diff, Request};
         let scratch = crate::support::fs::Scratch::create("wasinix-test").unwrap();
         let run_dir = scratch.path();
-        let request = Request::diff(Diff {
-            baseline: "baseline".into(),
-            content_diff: false,
-            cases: vec![
-                Case::Build(Build {
-                    case_id: Some("baseline".into()),
-                    ..case(&["job"])
-                }),
-                Case::Build(Build {
-                    case_id: Some("candidate-1".into()),
-                    ..case(&["job"])
-                }),
-            ],
-        }, Default::default());
+        let request = Request::diff(
+            Diff {
+                baseline: "baseline".into(),
+                content_diff: false,
+                cases: vec![
+                    Case::Build(Build {
+                        case_id: Some("baseline".into()),
+                        ..case(&["job"])
+                    }),
+                    Case::Build(Build {
+                        case_id: Some("candidate-1".into()),
+                        ..case(&["job"])
+                    }),
+                ],
+            },
+            Default::default(),
+        );
         let write_map = |id: &str, drv: &str| {
             let dir = crate::ci::prepare::case_dir(run_dir, id);
             crate::support::fs::create_dir_all(&crate::ci::prepare::maps_dir(&dir)).unwrap();
@@ -1337,9 +1346,7 @@ mod route {
 mod runs {
     use std::time::Duration;
 
-    use crate::runs::{
-        GcPolicy, LOG_FILE, PIN_FILE, RUN_FILE, Run, gc_under, observed, supervise,
-    };
+    use crate::runs::{GcPolicy, LOG_FILE, PIN_FILE, RUN_FILE, Run, gc_under, observed, supervise};
     use crate::support::atoms::RunState;
     use crate::support::fs::Scratch;
     use crate::support::schema;
@@ -2296,9 +2303,7 @@ mod cli {
         let CommandTree::Diff(single) = parse(&["diff", "build", "all"]) else {
             panic!("expected diff");
         };
-        assert!(
-            crate::cli::request::diff_request(&single, crate::cli::Surface::Terminal).is_err()
-        );
+        assert!(crate::cli::request::diff_request(&single, crate::cli::Surface::Terminal).is_err());
     }
 }
 
@@ -3625,7 +3630,10 @@ mod bisect {
                 .as_mut()
                 .expect("scenario records its request")
                 .blocked = policy;
-            assert_eq!(crate::cli::bisect::candidate_outcome(&report).unwrap(), expected);
+            assert_eq!(
+                crate::cli::bisect::candidate_outcome(&report).unwrap(),
+                expected
+            );
         }
     }
 
@@ -3900,11 +3908,9 @@ mod update {
             },
             "version": "78.3"
         });
-        let hook = crate::update::targets::declared_post_update_hook(
-            "packagesByProfile.eh.icu",
-            &value,
-        )
-        .unwrap();
+        let hook =
+            crate::update::targets::declared_post_update_hook("packagesByProfile.eh.icu", &value)
+                .unwrap();
         assert_eq!(hook.name, "icu");
         let PostUpdateAction::SyncAttrList(spec) = hook.action else {
             panic!("expected syncAttrList")
@@ -4734,8 +4740,7 @@ mod corpus {
     #[test]
     fn update_matrix_is_sorted_deduplicated_and_never_empty() {
         assert_eq!(
-            crate::cli::update_matrix(vec!["zlib".into(), "brotli".into(), "zlib".into()])
-                .unwrap(),
+            crate::cli::update_matrix(vec!["zlib".into(), "brotli".into(), "zlib".into()]).unwrap(),
             r#"[{"name":"brotli"},{"name":"zlib"}]"#
         );
         assert!(crate::cli::update_matrix(Vec::new()).is_err());
@@ -4914,8 +4919,7 @@ mod corpus {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let manifest = root.join("pkgs/helper-boundaries.toml");
         manifest.is_file().then(|| {
-            let boundaries =
-                toml::from_str(&std::fs::read_to_string(&manifest).unwrap()).unwrap();
+            let boundaries = toml::from_str(&std::fs::read_to_string(&manifest).unwrap()).unwrap();
             (root, boundaries)
         })
     }
@@ -5295,20 +5299,14 @@ mod corpus {
     /// words in a comment or an unrelated shell fragment.
     #[test]
     fn workflow_couplings_match_the_binary() {
-        fn field<'a>(
-            value: &'a serde_yaml_ng::Value,
-            name: &str,
-        ) -> &'a serde_yaml_ng::Value {
+        fn field<'a>(value: &'a serde_yaml_ng::Value, name: &str) -> &'a serde_yaml_ng::Value {
             value
                 .as_mapping()
                 .unwrap()
                 .get(serde_yaml_ng::Value::String(name.into()))
                 .unwrap_or_else(|| panic!("missing YAML field {name}"))
         }
-        fn job<'a>(
-            workflow: &'a serde_yaml_ng::Value,
-            name: &str,
-        ) -> &'a serde_yaml_ng::Value {
+        fn job<'a>(workflow: &'a serde_yaml_ng::Value, name: &str) -> &'a serde_yaml_ng::Value {
             field(field(workflow, "jobs"), name)
         }
         fn step<'a>(job: &'a serde_yaml_ng::Value, id: &str) -> &'a serde_yaml_ng::Value {
@@ -5374,17 +5372,27 @@ mod corpus {
             .unwrap();
         assert_eq!(
             field(direct, "if").as_str(),
-            Some("steps.authorize.outputs.kind == 'help' || steps.authorize.outputs.kind == 'plan'")
+            Some(
+                "steps.authorize.outputs.kind == 'help' || steps.authorize.outputs.kind == 'plan'"
+            )
         );
 
         let build = read("build.yml");
         let report = read("test-report.yml");
         assert_eq!(
-            field(field(step(job(&build, "build"), "run_artifact"), "with"), "name").as_str(),
+            field(
+                field(step(job(&build, "build"), "run_artifact"), "with"),
+                "name"
+            )
+            .as_str(),
             Some(crate::github::actions::ARTIFACT_CI_RUN)
         );
         assert_eq!(
-            field(field(step(job(&report, "report"), "download"), "with"), "name").as_str(),
+            field(
+                field(step(job(&report, "report"), "download"), "with"),
+                "name"
+            )
+            .as_str(),
             Some(crate::github::actions::ARTIFACT_CI_RUN)
         );
         assert_eq!(
@@ -5422,7 +5430,11 @@ mod corpus {
         let update = read("update.yml");
         let targets = job(&update, "targets");
         assert_eq!(
-            field(field(targets, "outputs"), crate::github::actions::OUTPUT_MATRIX).as_str(),
+            field(
+                field(targets, "outputs"),
+                crate::github::actions::OUTPUT_MATRIX
+            )
+            .as_str(),
             Some("${{ steps.list.outputs.matrix }}")
         );
         assert_eq!(
@@ -5444,8 +5456,7 @@ mod corpus {
         let preview = read("preview.yml");
         let preview_job = job(&preview, "preview");
         assert!(
-            step_index(preview_job, "adapter_checkout")
-                < step_index(preview_job, "adapter_setup")
+            step_index(preview_job, "adapter_checkout") < step_index(preview_job, "adapter_setup")
                 && step_index(preview_job, "adapter_setup") < step_index(preview_job, "ctx")
                 && step_index(preview_job, "ctx") < step_index(preview_job, "head_checkout"),
             "preview context must run from default-branch code before the PR checkout"
@@ -5605,8 +5616,7 @@ mod untrusted {
             CommandKind::Plan
         );
 
-        let UntrustedCommand::Request(request) = parse("build core --blocked=skip").unwrap()
-        else {
+        let UntrustedCommand::Request(request) = parse("build core --blocked=skip").unwrap() else {
             panic!("expected a build request");
         };
         assert_eq!(request.blocked, crate::support::atoms::BlockedPolicy::Skip);
@@ -5626,7 +5636,9 @@ mod untrusted {
             let error = parse(command).unwrap_err().to_string();
             assert!(error.contains("terminal only"), "{command}: {error}");
         }
-        let error = parse("build core --trusted-ref main").unwrap_err().to_string();
+        let error = parse("build core --trusted-ref main")
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("unexpected argument"), "{error}");
     }
 
@@ -5919,14 +5931,17 @@ mod fold {
     }
 
     fn diff_request() -> Request<RevSource> {
-        Request::diff(Diff {
-            baseline: "baseline".into(),
-            content_diff: false,
-            cases: vec![
-                Case::Build(build("baseline")),
-                Case::Build(build("candidate-1")),
-            ],
-        }, Default::default())
+        Request::diff(
+            Diff {
+                baseline: "baseline".into(),
+                content_diff: false,
+                cases: vec![
+                    Case::Build(build("baseline")),
+                    Case::Build(build("candidate-1")),
+                ],
+            },
+            Default::default(),
+        )
     }
 
     fn fragment(task_id: &str, kind: TaskKind, status: TaskStatus, headline: &str) -> Fragment {
@@ -6462,14 +6477,17 @@ mod scenarios {
     }
 
     pub fn infra_neutral() -> (Report, Fragments) {
-        let request = Request::diff(Diff {
-            baseline: "baseline".into(),
-            content_diff: false,
-            cases: vec![
-                Case::Build(build("baseline")),
-                Case::Build(build("candidate-1")),
-            ],
-        }, Default::default());
+        let request = Request::diff(
+            Diff {
+                baseline: "baseline".into(),
+                content_diff: false,
+                cases: vec![
+                    Case::Build(build("baseline")),
+                    Case::Build(build("candidate-1")),
+                ],
+            },
+            Default::default(),
+        );
         let plan = plan_of(&request, Some("golden"), &[]);
         let mut fragments = BTreeMap::new();
         for task in &plan.tasks {
@@ -6509,14 +6527,17 @@ mod scenarios {
     /// rebuilds, version moves, added and removed jobs.
     pub fn diff_green() -> (Report, Fragments) {
         use crate::ci::compare::{BuildDiff, Comparison, EvalDiff, VersionUpdate};
-        let request = Request::diff(Diff {
-            baseline: "baseline".into(),
-            content_diff: false,
-            cases: vec![
-                Case::Build(build("baseline")),
-                Case::Build(build("candidate-1")),
-            ],
-        }, Default::default());
+        let request = Request::diff(
+            Diff {
+                baseline: "baseline".into(),
+                content_diff: false,
+                cases: vec![
+                    Case::Build(build("baseline")),
+                    Case::Build(build("candidate-1")),
+                ],
+            },
+            Default::default(),
+        );
         let plan = plan_of(&request, Some("golden"), &[]);
         let fragments = green_fragments(&plan);
         let comparison = Comparison {
@@ -6571,14 +6592,17 @@ mod scenarios {
     /// added/removed/version story.
     pub fn diff_in_progress() -> (Report, Fragments) {
         use crate::ci::compare::{Comparison, EvalDiff};
-        let request = Request::diff(Diff {
-            baseline: "baseline".into(),
-            content_diff: false,
-            cases: vec![
-                Case::Build(build("baseline")),
-                Case::Build(build("candidate-1")),
-            ],
-        }, Default::default());
+        let request = Request::diff(
+            Diff {
+                baseline: "baseline".into(),
+                content_diff: false,
+                cases: vec![
+                    Case::Build(build("baseline")),
+                    Case::Build(build("candidate-1")),
+                ],
+            },
+            Default::default(),
+        );
         let plan = plan_of(&request, Some("golden"), &[]);
         let mut fragments = BTreeMap::new();
         for task in &plan.tasks {
@@ -7037,7 +7061,7 @@ mod tools {
     use std::time::Duration;
 
     use crate::support::tools::{
-        checked_text, output_timeout, piped, status_timeout, Completion, Timeout,
+        Completion, Timeout, checked_text, output_timeout, piped, status_timeout,
     };
 
     fn read_stream(mut stream: impl Read) -> crate::support::error::Result<Vec<u8>> {
@@ -7070,8 +7094,8 @@ mod tools {
     fn a_command_finishing_before_its_deadline_is_not_timed_out() {
         let mut command = Command::new("sh");
         command.args(["-c", "printf done"]);
-        let completion = output_timeout(&mut command, Timeout::new(Duration::from_secs(1)))
-            .unwrap();
+        let completion =
+            output_timeout(&mut command, Timeout::new(Duration::from_secs(1))).unwrap();
         assert!(matches!(
             completion,
             Completion::Finished(output) if output.status.success() && output.stdout == b"done"
@@ -7808,22 +7832,25 @@ mod prepare {
     #[test]
     fn a_prepared_run_loads_back_with_its_tree_and_plan() {
         let (scratch, repo) = repo();
-        let request = Request::build(Build::<RevSource> {
-            case_id: Some("case".into()),
-            source: RevSource {
-                rev: resolve_rev(&repo, "HEAD").unwrap(),
-                patch: None,
-                working_tree: false,
+        let request = Request::build(
+            Build::<RevSource> {
+                case_id: Some("case".into()),
+                source: RevSource {
+                    rev: resolve_rev(&repo, "HEAD").unwrap(),
+                    patch: None,
+                    working_tree: false,
+                },
+                selectors: vec![Selector {
+                    kind: SelectorKind::Set,
+                    name: "core".into(),
+                }],
+                enabled_tags: Vec::new(),
+                overrides: Vec::new(),
+                from_pr: None,
+                on: None,
             },
-            selectors: vec![Selector {
-                kind: SelectorKind::Set,
-                name: "core".into(),
-            }],
-            enabled_tags: Vec::new(),
-            overrides: Vec::new(),
-            from_pr: None,
-            on: None,
-        }, Default::default());
+            Default::default(),
+        );
         let run_dir = scratch.path().join("run");
         let prepared = prepare_all(&repo, &request, &run_dir).unwrap();
         assert!(
@@ -7881,22 +7908,25 @@ mod prepare {
         let (scratch, repo) = repo();
         // The working tree, not a plain rev: reuse keys on the materialized
         // tree, so a clean checkout matches what a commit's run published.
-        let request = Request::build(Build::<RevSource> {
-            case_id: Some("case".into()),
-            source: RevSource {
-                rev: resolve_rev(&repo, "HEAD").unwrap(),
-                patch: None,
-                working_tree: true,
+        let request = Request::build(
+            Build::<RevSource> {
+                case_id: Some("case".into()),
+                source: RevSource {
+                    rev: resolve_rev(&repo, "HEAD").unwrap(),
+                    patch: None,
+                    working_tree: true,
+                },
+                selectors: vec![Selector {
+                    kind: SelectorKind::Set,
+                    name: "core".into(),
+                }],
+                enabled_tags: Vec::new(),
+                overrides: Vec::new(),
+                from_pr: None,
+                on: None,
             },
-            selectors: vec![Selector {
-                kind: SelectorKind::Set,
-                name: "core".into(),
-            }],
-            enabled_tags: Vec::new(),
-            overrides: Vec::new(),
-            from_pr: None,
-            on: None,
-        }, Default::default());
+            Default::default(),
+        );
         let tree = git(&repo, &["rev-parse", "HEAD^{tree}"]).unwrap();
         let maps = scratch.path().join("maps");
         crate::support::fs::create_dir_all(&maps).unwrap();
@@ -7969,22 +7999,25 @@ mod prepare {
         use crate::ci::events::Event;
         use crate::support::atoms::{RunState, TaskStatus};
         let (scratch, repo) = repo();
-        let request = Request::build(Build::<RevSource> {
-            case_id: Some("case".into()),
-            source: RevSource {
-                rev: resolve_rev(&repo, "HEAD").unwrap(),
-                patch: None,
-                working_tree: false,
+        let request = Request::build(
+            Build::<RevSource> {
+                case_id: Some("case".into()),
+                source: RevSource {
+                    rev: resolve_rev(&repo, "HEAD").unwrap(),
+                    patch: None,
+                    working_tree: false,
+                },
+                selectors: vec![Selector {
+                    kind: SelectorKind::Set,
+                    name: "core".into(),
+                }],
+                enabled_tags: Vec::new(),
+                overrides: Vec::new(),
+                from_pr: None,
+                on: None,
             },
-            selectors: vec![Selector {
-                kind: SelectorKind::Set,
-                name: "core".into(),
-            }],
-            enabled_tags: Vec::new(),
-            overrides: Vec::new(),
-            from_pr: None,
-            on: None,
-        }, Default::default());
+            Default::default(),
+        );
         let run_dir = scratch.path().join("run");
 
         // Before the plan is recorded the run still has something to say:
@@ -8043,22 +8076,25 @@ mod prepare {
     fn a_dirty_working_tree_materializes_under_its_own_tree_id() {
         let (scratch, repo) = repo();
         std::fs::write(repo.join("file"), "two\n").unwrap();
-        let request = Request::build(Build::<RevSource> {
-            case_id: Some("case".into()),
-            source: RevSource {
-                rev: resolve_rev(&repo, "HEAD").unwrap(),
-                patch: None,
-                working_tree: true,
+        let request = Request::build(
+            Build::<RevSource> {
+                case_id: Some("case".into()),
+                source: RevSource {
+                    rev: resolve_rev(&repo, "HEAD").unwrap(),
+                    patch: None,
+                    working_tree: true,
+                },
+                selectors: vec![Selector {
+                    kind: SelectorKind::Set,
+                    name: "core".into(),
+                }],
+                enabled_tags: Vec::new(),
+                overrides: Vec::new(),
+                from_pr: None,
+                on: None,
             },
-            selectors: vec![Selector {
-                kind: SelectorKind::Set,
-                name: "core".into(),
-            }],
-            enabled_tags: Vec::new(),
-            overrides: Vec::new(),
-            from_pr: None,
-            on: None,
-        }, Default::default());
+            Default::default(),
+        );
         let run_dir = scratch.path().join("run");
         prepare_all(&repo, &request, &run_dir).unwrap();
         let manifest: crate::ci::workspace::Materialization =

@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use crate::support::error::{request_error, Error, Result};
+use crate::support::error::{Error, Result, request_error};
 
 fn node_reference(lock: &Value, reference: &Value) -> Result<String> {
     if let Some(node) = reference.as_str() {
@@ -113,10 +113,7 @@ mod tests {
             }"#,
         )
         .unwrap();
-        assert_eq!(
-            locked_input(scratch.path(), "alias").unwrap()["rev"],
-            "abc"
-        );
+        assert_eq!(locked_input(scratch.path(), "alias").unwrap()["rev"], "abc");
     }
 
     #[test]

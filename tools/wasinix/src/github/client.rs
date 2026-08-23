@@ -130,7 +130,7 @@ pub fn paginate(api: &dyn Api, path: &str) -> Result<Vec<Value>> {
             None => {
                 return Err(Error::Failure(format!(
                     "GitHub {path} page {page} is not a list"
-                )))
+                )));
             }
         };
         let done = batch.len() < 100;

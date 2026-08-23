@@ -3,7 +3,7 @@ use std::path::{Component, Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::support::error::{request_error, Error, Result};
+use crate::support::error::{Error, Result, request_error};
 use crate::support::nix::{Invocation, SYSTEM};
 use crate::update::flake_lock;
 
@@ -90,7 +90,11 @@ fn probe_expression(probe: Option<&str>) -> Result<String> {
         return Ok("true".into());
     };
     let probe = attr_path(probe, "probe")?;
-    let probe = probe.split('.').map(nix_string).collect::<Vec<_>>().join(" ");
+    let probe = probe
+        .split('.')
+        .map(nix_string)
+        .collect::<Vec<_>>()
+        .join(" ");
     Ok(format!(
         "let result = builtins.tryEval (builtins.foldl' \
          (value: name: if builtins.isAttrs value && builtins.hasAttr name value \

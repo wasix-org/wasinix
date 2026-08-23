@@ -6,9 +6,9 @@
 mod collection;
 pub mod remote;
 
-pub(crate) use collection::{gc, is_pinned, set_pinned, GcPolicy};
 #[cfg(test)]
 pub(crate) use collection::gc_under;
+pub(crate) use collection::{GcPolicy, gc, is_pinned, set_pinned};
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

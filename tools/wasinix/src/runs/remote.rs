@@ -275,10 +275,7 @@ pub fn observe(
         // run, and a logged poll would flood the transcript.
         let mut cmd = builder.ssh()?;
         cmd.arg(poll_command(run_dir, pid, remote_offset));
-        let output = match tools::output_timeout(
-            &mut cmd,
-            Deadline::Poll.timeout(),
-        ) {
+        let output = match tools::output_timeout(&mut cmd, Deadline::Poll.timeout()) {
             Ok(tools::Completion::Finished(output)) if output.status.success() => output,
             _ => {
                 failures += 1;

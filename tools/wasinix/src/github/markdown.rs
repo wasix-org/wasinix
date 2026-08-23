@@ -826,7 +826,9 @@ fn inconclusive(
     // The pipeline table is what says which task stopped; the compared case
     // keeps its established shape.
     if !comparison {
-        text = text.push(Markdown::constant("\n")).push(details(report, fragments));
+        text = text
+            .push(Markdown::constant("\n"))
+            .push(details(report, fragments));
     }
     text
 }

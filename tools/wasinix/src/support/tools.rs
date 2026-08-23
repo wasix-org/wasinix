@@ -235,9 +235,13 @@ impl Child {
     pub fn wait_timeout(mut self, timeout: Timeout) -> std::io::Result<Completion<ExitStatus>> {
         let inner = self.inner.take().expect("child was already reaped");
         let completion = wait_deadline(inner, timeout, |mut child| child.wait())?;
-        completed(&self.command, self.started, *match &completion {
-            Completion::Finished(status) | Completion::TimedOut(status) => status,
-        });
+        completed(
+            &self.command,
+            self.started,
+            *match &completion {
+                Completion::Finished(status) | Completion::TimedOut(status) => status,
+            },
+        );
         Ok(completion)
     }
 
@@ -353,16 +357,12 @@ where
             None => child.wait().map(Completion::Finished),
         }
         .map_err(|error| Error::Failure(format!("waiting for {}: {error}", rendered(cmd))))?;
-        let stdout = stdout_reader
-            .join()
-            .map_err(|_| {
-                Error::Failure(format!("reading stdout from {} panicked", rendered(cmd)))
-            })??;
-        stderr_reader
-            .join()
-            .map_err(|_| {
-                Error::Failure(format!("reading stderr from {} panicked", rendered(cmd)))
-            })??;
+        let stdout = stdout_reader.join().map_err(|_| {
+            Error::Failure(format!("reading stdout from {} panicked", rendered(cmd)))
+        })??;
+        stderr_reader.join().map_err(|_| {
+            Error::Failure(format!("reading stderr from {} panicked", rendered(cmd)))
+        })??;
         Ok(match completion {
             Completion::Finished(status) => Completion::Finished(Piped { status, stdout }),
             Completion::TimedOut(status) => Completion::TimedOut(Piped { status, stdout }),
@@ -470,11 +470,7 @@ pub fn checked_text(cmd: &mut Command, context: &str) -> Result<String> {
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
-pub fn checked_text_timeout(
-    cmd: &mut Command,
-    context: &str,
-    timeout: Timeout,
-) -> Result<String> {
+pub fn checked_text_timeout(cmd: &mut Command, context: &str, timeout: Timeout) -> Result<String> {
     let bytes = checked_output_timeout(cmd, context, timeout)?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }

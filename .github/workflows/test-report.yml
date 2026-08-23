@@ -36,12 +36,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          HEAD_REPOSITORY:
+            ${{ github.event.workflow_run.head_repository.full_name }}
         run: >-
-          nix run .#wasinix -- ci pull-request
-          --repository "$GITHUB_REPOSITORY"
-          --head-sha "$HEAD_SHA"
-          --head-repository "$HEAD_REPOSITORY"
+          nix run .#wasinix -- ci pull-request --repository "$GITHUB_REPOSITORY"
+          --head-sha "$HEAD_SHA" --head-repository "$HEAD_REPOSITORY"
           --github-output "$GITHUB_OUTPUT"
 
       # a run cancelled early may lack the artifact; the report then has

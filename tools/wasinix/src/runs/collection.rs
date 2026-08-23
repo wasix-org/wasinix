@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::runs::{registry, Run, PIN_FILE, RUN_FILE};
-use crate::support::error::{io, Error, Result};
+use crate::runs::{PIN_FILE, RUN_FILE, Run, registry};
+use crate::support::error::{Error, Result, io};
 use crate::support::schema::{self, Document};
 use crate::support::time::unix_secs;
 

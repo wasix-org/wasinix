@@ -331,8 +331,9 @@ impl Invocation {
         let child = crate::support::tools::spawn(&mut command)?;
         started(child.id());
         let output = match self.timeout {
-            Some(timeout) => child
-                .wait_with_output_timeout(crate::support::tools::Timeout::new(timeout)),
+            Some(timeout) => {
+                child.wait_with_output_timeout(crate::support::tools::Timeout::new(timeout))
+            }
             None => child
                 .wait_with_output()
                 .map(crate::support::tools::Completion::Finished),

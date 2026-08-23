@@ -521,9 +521,7 @@ pub enum CiCommand {
 
 impl CommandTree {
     fn anticipated_capabilities(&self) -> Vec<crate::support::capability::Capability> {
-        use crate::support::capability::Capability::{
-            Aws, Python, PythonIndex, Rclone, Wasmer,
-        };
+        use crate::support::capability::Capability::{Aws, Python, PythonIndex, Rclone, Wasmer};
 
         match self {
             CommandTree::Cargo(command) => match command {
@@ -1208,7 +1206,11 @@ fn run_command(command: RunCommand) -> Result<CommandStatus> {
                 }
                 ui::result(format!(
                     "{} {} runs ({}) · {} retained ({}) · {} active protected · {} pinned protected",
-                    if report.dry_run { "would remove" } else { "removed" },
+                    if report.dry_run {
+                        "would remove"
+                    } else {
+                        "removed"
+                    },
                     report.collected.len(),
                     report.reclaimed_bytes,
                     report.retained_runs,
@@ -1434,7 +1436,9 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 &github_output,
                 &[(
                     crate::github::actions::OUTPUT_PULL_REQUEST,
-                    pull_request.map(|number| number.to_string()).unwrap_or_default(),
+                    pull_request
+                        .map(|number| number.to_string())
+                        .unwrap_or_default(),
                 )],
             )?;
             match pull_request {
@@ -1455,7 +1459,14 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             if let Some(note) = &context.note {
                 ui::note(note);
             } else {
-                ui::fact("preview", if context.proceed { "ready" } else { "not requested" });
+                ui::fact(
+                    "preview",
+                    if context.proceed {
+                        "ready"
+                    } else {
+                        "not requested"
+                    },
+                );
             }
             Ok(CommandStatus::SUCCESS)
         }
@@ -1692,8 +1703,14 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 crate::github::actions::append(
                     &path,
                     &[
-                        (crate::github::actions::OUTPUT_BIN, bin.display().to_string()),
-                        (crate::github::actions::OUTPUT_KIND, command.kind.to_string()),
+                        (
+                            crate::github::actions::OUTPUT_BIN,
+                            bin.display().to_string(),
+                        ),
+                        (
+                            crate::github::actions::OUTPUT_KIND,
+                            command.kind.to_string(),
+                        ),
                         (
                             crate::github::actions::OUTPUT_COMMENT_ID,
                             command.origin.comment_id.to_string(),
@@ -2012,9 +2029,8 @@ pub fn main() -> std::process::ExitCode {
         ColorMode::Always => crate::support::terminal::ColorChoice::Always,
         ColorMode::Never => crate::support::terminal::ColorChoice::Never,
     });
-    let prewarm = match crate::support::capability::prewarm(
-        cli.command.anticipated_capabilities(),
-    ) {
+    let prewarm = match crate::support::capability::prewarm(cli.command.anticipated_capabilities())
+    {
         Ok(prewarm) => prewarm,
         Err(error) => {
             ui::report_error(&error);

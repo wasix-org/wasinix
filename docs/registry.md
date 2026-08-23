@@ -59,9 +59,9 @@ wasinix cargo publish [--registry <url>] [--mint <built>] [--dry-run] [name[@ver
 
 Publishes the minted crates the deployed overlay registry
 (cargo-registry.wasix.org) lacks, using the shared Cargo registry wire library,
-and reports one plan row per crate (`--json` for the document).
-Idempotent by checksum against the live sparse index: an absent version
-publishes, identical bytes skip, and different bytes fail naming the
+and reports one plan row per crate (`--json` for the document). Idempotent by
+checksum against the live sparse index: an absent version publishes, identical
+bytes skip, and different bytes fail naming the
 `wasinix versions bump cargoRegistry.crates.<name>@<version>` that mints a fresh
 publishable version. A live publish needs `WASIX_CARGO_TOKEN` (a token whose
 sha256 is in the deployed server's hash list); dry runs never read it. The
