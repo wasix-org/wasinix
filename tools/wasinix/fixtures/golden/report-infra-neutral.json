@@ -63,7 +63,7 @@
       "gate": false,
       "headline": "x",
       "kind": "eval",
-      "label": "baseline: Evaluation inputs",
+      "label": "baseline: Preparing evaluation inputs",
       "status": "failure",
       "taskId": "baseline.eval-inputs"
     },
@@ -73,7 +73,7 @@
       "gate": false,
       "headline": "x",
       "kind": "eval",
-      "label": "baseline: Evaluation",
+      "label": "baseline: Evaluating jobs",
       "status": "failure",
       "taskId": "baseline.eval"
     },
@@ -83,7 +83,7 @@
       "gate": true,
       "headline": "x",
       "kind": "eval",
-      "label": "candidate-1: Evaluation inputs",
+      "label": "candidate-1: Preparing evaluation inputs",
       "status": "success",
       "taskId": "candidate-1.eval-inputs"
     },
@@ -93,7 +93,7 @@
       "gate": true,
       "headline": "x",
       "kind": "eval",
-      "label": "candidate-1: Evaluation",
+      "label": "candidate-1: Evaluating jobs",
       "status": "success",
       "taskId": "candidate-1.eval"
     },

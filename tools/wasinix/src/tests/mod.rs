@@ -1346,7 +1346,9 @@ mod route {
 mod runs {
     use std::time::Duration;
 
-    use crate::runs::{GcPolicy, LOG_FILE, PIN_FILE, RUN_FILE, Run, gc_under, observed, supervise};
+    use crate::runs::{
+        GcPolicy, LOG_FILE, PIN_FILE, RUN_FILE, Run, dir_of, gc_under, observed, supervise,
+    };
     use crate::support::atoms::RunState;
     use crate::support::fs::Scratch;
     use crate::support::schema;
@@ -1366,6 +1368,16 @@ mod runs {
             },
         )
         .unwrap();
+    }
+
+    #[test]
+    fn run_commands_accept_an_explicit_run_directory() {
+        let scratch = Scratch::create("wasinix-test").unwrap();
+        std::fs::write(scratch.path().join(RUN_FILE), b"run").unwrap();
+        assert_eq!(
+            dir_of(&scratch.path().to_string_lossy()).unwrap(),
+            scratch.path()
+        );
     }
 
     fn stored_run(
@@ -3522,9 +3534,12 @@ mod surfaces {
 }
 
 mod render {
+    use super::scenarios;
     use crate::ci::events::Event;
     use crate::ci::facts::{Diagnostic, DiagnosticSeverity, TestOutcome, TestResult};
-    use crate::cli::render::{LineRenderer, test_summary};
+    use crate::cli::render::{
+        LineRenderer, ReportView, failure_summary, report_lines, report_title, test_summary,
+    };
     use crate::support::atoms::{DurationSecs, JobAddr, JobStatus, RunState, TaskStatus};
 
     #[test]
@@ -3551,6 +3566,31 @@ mod render {
     }
 
     #[test]
+    fn a_build_report_uses_command_language_and_typed_failure_counts() {
+        let report = scenarios::failing().0;
+        assert_eq!(report_title(&report), "Build failed after 1h 0m");
+        assert_eq!(
+            failure_summary(&report).as_deref(),
+            Some("Jobs: 1 failed · 1 blocked")
+        );
+        assert_eq!(
+            report_lines(
+                &report,
+                ReportView::Build(std::path::Path::new("/tmp/run")),
+                false,
+            ),
+            [
+                "",
+                "Build failed after 1h 0m",
+                "Jobs: 1 failed · 1 blocked",
+                "",
+                "Inspect failures: wasinix run failures /tmp/run",
+                "Inspect logs: wasinix run logs /tmp/run",
+            ]
+        );
+    }
+
+    #[test]
     fn legacy_process_output_is_not_terminal_progress() {
         let mut renderer = LineRenderer::with_spinner(false);
         assert!(
@@ -3560,6 +3600,26 @@ mod render {
                     line: "warning: noisy".into(),
                 })
                 .is_empty()
+        );
+    }
+
+    #[test]
+    fn an_expected_baseline_miss_hides_transport_details() {
+        let mut renderer = LineRenderer::with_spinner(false);
+        renderer.lines_for(&Event::PhaseStarted {
+            at: 100,
+            task_id: "prepare.case.baseline".into(),
+            label: "case: Checking previous results".into(),
+            jobs: None,
+        });
+        assert_eq!(
+            renderer.lines_for(&Event::PhaseFinished {
+                at: 101,
+                task_id: "prepare.case.baseline".into(),
+                status: TaskStatus::Success,
+                headline: "not reused: GET https://cache.invalid/map: status code 404".into(),
+            }),
+            ["[+1s] ✓ Checking previous results · no reusable result · took 1s"]
         );
     }
 
@@ -3601,11 +3661,11 @@ mod render {
         assert_eq!(
             lines,
             [
-                "[+0s] case: Core · 40 jobs",
+                "[+0s] Core · 40 jobs",
                 "[+1m 30s] ✗ case::checks.zlib",
                 "  │ builder failed with exit code 1",
-                "[+2m 30s] ✗ case.core · 1 of 40 jobs failed · took 2m 30s",
-                "[+2m 30s] failed · 1/40 jobs · 1 failed",
+                "[+2m 30s] ✗ Core · 1 of 40 jobs failed · took 2m 30s",
+                "[+2m 30s] Run failed · 1/40 jobs · 1 not completed",
             ]
         );
     }
@@ -3670,17 +3730,17 @@ mod render {
                 label: "case: Formatting".into(),
                 jobs: None,
             }),
-            ["[+0s] case: Formatting"]
+            ["[+0s] Formatting"]
         );
         assert!(renderer.lines_for_tick(159).is_empty());
         assert_eq!(
             renderer.lines_for_tick(160),
-            ["[+1m 0s] case: Formatting · running for 1m 0s"]
+            ["[+1m 0s] Formatting · running for 1m 0s"]
         );
         assert!(renderer.lines_for_tick(219).is_empty());
         assert_eq!(
             renderer.lines_for_tick(220),
-            ["[+2m 0s] case: Formatting · running for 2m 0s"]
+            ["[+2m 0s] Formatting · running for 2m 0s"]
         );
         renderer.lines_for(&Event::PhaseFinished {
             at: 225,

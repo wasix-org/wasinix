@@ -309,7 +309,10 @@ pub fn observe(
         if run.state.is_final() {
             // The outcome is reported before the fetch, and the fetch is
             // best-effort, so a retrieval error cannot mask what the run did.
-            crate::support::ui::result(format!("{}: {}", run.run_id, run.state));
+            crate::support::ui::verbose_fact(
+                "remote result",
+                format!("{}: {}", run.run_id, run.state),
+            );
             fetch_best_effort(builder, run_dir, fetch_to);
             return Ok(run.state.exit(run.exit_code));
         }
@@ -345,7 +348,8 @@ pub fn observe(
 /// and observe it to completion.
 pub fn run(request: Request<'_>) -> Result<CommandStatus> {
     let _lease = builder::acquire(request.builder)?;
-    crate::support::ui::fact("shipping checkout", &request.builder.host);
+    crate::support::ui::note(format!("Preparing remote runner {}", request.builder.name));
+    crate::support::ui::verbose_fact("remote host", &request.builder.host);
     let source = flake_source(request.repo)?;
     // The builder's own store URL: a configured store_url override applies
     // here too, not only to the store route.
@@ -429,7 +433,8 @@ pub fn run(request: Request<'_>) -> Result<CommandStatus> {
         .find_map(|line| line.strip_prefix("WASINIX_RUN_DIR "))
         .map(str::to_string)
         .ok_or_else(|| Error::Failure("remote launch reported no run directory".into()))?;
-    crate::support::ui::fact("remote run", format!("{}:{run_dir}", request.builder.host));
+    crate::support::ui::note("Remote build started");
+    crate::support::ui::verbose_fact("remote run", format!("{}:{run_dir}", request.builder.host));
 
     observe(
         request.builder,

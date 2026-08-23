@@ -216,14 +216,14 @@ pub fn prepare_all_with(
         let prepared_dir = case_dir(run_dir, &case_id).join("prepared");
         let (manifest, prepared_case) = tracker.phase(
             format!("prepare.{case_id}.materialize"),
-            format!("{case_id}: Materializing {}", case.source().rev.short()),
+            format!("{case_id}: Preparing source"),
             || {
                 let manifest = write_materialization(repo, *case, &case_value, &prepared_dir)?;
                 let prepared_case =
                     crate::support::json::read::<Value>(&prepared_dir.join("request.json"))?;
                 Ok((manifest, prepared_case))
             },
-            |_| "source materialized".to_string(),
+            |_| "source prepared".to_string(),
         )?;
         prepared_cases.push(prepared_case);
         if reuse_baselines {
@@ -234,7 +234,7 @@ pub fn prepare_all_with(
                 };
                 let reuse = tracker.phase(
                     format!("prepare.{case_id}.baseline"),
-                    format!("{case_id}: Baseline reuse"),
+                    format!("{case_id}: Checking previous results"),
                     || {
                         reuse_case(
                             build,
@@ -265,7 +265,7 @@ pub fn prepare_all_with(
     let preparation = Preparation { reused };
     tracker.phase(
         "prepare.plan",
-        "Generating the run plan",
+        "Planning build",
         || {
             crate::support::json::write(&request_path(run_dir), &document)?;
             crate::support::schema::write(&preparation_path(run_dir), &preparation)?;

@@ -9,8 +9,9 @@ use std::time::Duration;
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::ci::events::{self, Event, ProgressSink};
-use crate::ci::facts::{Diagnostic, DiagnosticSeverity, TestOutcome, TestResult};
-use crate::ci::report::Report;
+use crate::ci::facts::{Diagnostic, DiagnosticSeverity, FailureCause, TestOutcome, TestResult};
+use crate::ci::report::{Conclusion, Report};
+use crate::ci::types::RequestAction;
 use crate::support::atoms::{JobStatus, TaskStatus};
 use crate::support::error::Result;
 use crate::support::format;
@@ -21,6 +22,12 @@ const FAILURE_DETAIL_LINES: usize = 6;
 const MILESTONE_EVERY: usize = 50;
 const LIVENESS_SECONDS: u64 = 60;
 
+#[derive(Clone, Copy)]
+pub(crate) enum Narration {
+    Build,
+    Watch,
+}
+
 struct ActivePhase {
     label: String,
     started_at: u64,
@@ -29,9 +36,11 @@ struct ActivePhase {
 pub struct LineRenderer {
     started_at: Option<u64>,
     bar: Option<ProgressBar>,
+    bar_started: bool,
+    narration: Narration,
     total_jobs: usize,
     completed: usize,
-    failed: usize,
+    incomplete: usize,
     /// Start order, so the named few are the longest-running builds.
     building: Vec<String>,
     phases: std::collections::BTreeMap<String, ActivePhase>,
@@ -47,6 +56,27 @@ pub(crate) fn glyph(status: TaskStatus) -> &'static str {
         TaskStatus::Skipped | TaskStatus::Deferred => "·",
         TaskStatus::Pending => "·",
     }
+}
+
+fn display_label(label: &str) -> String {
+    if crate::support::ui::verbosity() == crate::support::ui::Verbosity::Verbose {
+        return label.to_string();
+    }
+    label.strip_prefix("case: ").unwrap_or(label).to_string()
+}
+
+fn display_headline(task_id: &str, headline: &str) -> String {
+    if crate::support::ui::verbosity() == crate::support::ui::Verbosity::Verbose {
+        return headline.to_string();
+    }
+    if task_id.ends_with(".baseline") {
+        return if headline.starts_with("not reused:") {
+            "no reusable result".to_string()
+        } else {
+            "previous results reused".to_string()
+        };
+    }
+    headline.to_string()
 }
 
 pub(crate) fn diagnostic_lines(diagnostic: &Diagnostic) -> Vec<String> {
@@ -73,26 +103,34 @@ pub(crate) fn diagnostic_lines(diagnostic: &Diagnostic) -> Vec<String> {
 
 impl LineRenderer {
     pub fn new() -> LineRenderer {
-        LineRenderer::with_spinner(interactive())
+        LineRenderer::with_options(interactive(), Narration::Watch)
+    }
+
+    pub(crate) fn for_build() -> LineRenderer {
+        LineRenderer::with_options(interactive(), Narration::Build)
     }
 
     /// The spinner decision made explicit: a spinner absorbs the milestone
     /// lines, and a nix sandbox runs builders on a pseudoterminal, so a test
     /// pinning the narration must choose line mode rather than detect it.
     pub(crate) fn with_spinner(spinner: bool) -> LineRenderer {
+        LineRenderer::with_options(spinner, Narration::Watch)
+    }
+
+    fn with_options(spinner: bool, narration: Narration) -> LineRenderer {
         let bar = spinner.then(|| {
-            let bar = ProgressBar::new_spinner().with_style(
+            ProgressBar::new_spinner().with_style(
                 ProgressStyle::with_template("{spinner} {msg}").expect("the template is static"),
-            );
-            bar.enable_steady_tick(Duration::from_millis(120));
-            bar
+            )
         });
         LineRenderer {
             started_at: None,
             bar,
+            bar_started: false,
+            narration,
             total_jobs: 0,
             completed: 0,
-            failed: 0,
+            incomplete: 0,
             building: Vec::new(),
             phases: std::collections::BTreeMap::new(),
             last_liveness_at: None,
@@ -119,8 +157,8 @@ impl LineRenderer {
         } else if self.completed > 0 {
             parts.push(format!("{} jobs", self.completed));
         }
-        if self.failed > 0 {
-            parts.push(format!("{} failed", self.failed));
+        if self.incomplete > 0 {
+            parts.push(format!("{} not completed", self.incomplete));
         }
         crate::support::ui::counts(&parts)
     }
@@ -134,7 +172,7 @@ impl LineRenderer {
             format!("building {}", format::some(&names, 3))
         } else if let Some(phase) = self.phases.values().min_by_key(|phase| phase.started_at) {
             let label = if self.phases.len() == 1 {
-                phase.label.clone()
+                display_label(&phase.label)
             } else {
                 format!("{} phases running", self.phases.len())
             };
@@ -213,7 +251,11 @@ impl LineRenderer {
                 let size = jobs
                     .map(|jobs| format!(" · {jobs} jobs"))
                     .unwrap_or_default();
-                vec![format!("{} {label}{size}", self.stamp(*at))]
+                vec![format!(
+                    "{} {}{size}",
+                    self.stamp(*at),
+                    display_label(label)
+                )]
             }
             Event::PhaseFinished {
                 at,
@@ -221,9 +263,12 @@ impl LineRenderer {
                 headline,
                 task_id,
             } => {
-                let took = self
-                    .phases
-                    .remove(task_id)
+                let finished = self.phases.remove(task_id);
+                let label = finished
+                    .as_ref()
+                    .map(|phase| display_label(&phase.label))
+                    .unwrap_or_else(|| task_id.clone());
+                let took = finished
                     .map(|started| {
                         format!(
                             " · took {}",
@@ -232,9 +277,10 @@ impl LineRenderer {
                     })
                     .unwrap_or_default();
                 vec![format!(
-                    "{} {} {task_id} · {headline}{took}",
+                    "{} {} {label} · {}{took}",
                     self.stamp(*at),
-                    glyph(*status)
+                    glyph(*status),
+                    display_headline(task_id, headline)
                 )]
             }
             Event::JobFinished {
@@ -247,7 +293,7 @@ impl LineRenderer {
                 self.completed += 1;
                 self.building.retain(|started| started != job.as_str());
                 if *status == JobStatus::Failure {
-                    self.failed += 1;
+                    self.incomplete += 1;
                     if error.as_deref() == Some(crate::ci::facts::NO_BUILD_LOG) {
                         self.unexplained_failures += 1;
                         return Vec::new();
@@ -277,6 +323,9 @@ impl LineRenderer {
                 self.diagnostic_lines(*at, diagnostic)
             }
             Event::RunFinished { at, state, .. } => {
+                if matches!(self.narration, Narration::Build) {
+                    return Vec::new();
+                }
                 let mut lines = Vec::new();
                 if self.unexplained_failures > 0 {
                     lines.push(format!(
@@ -286,7 +335,7 @@ impl LineRenderer {
                     ));
                     self.unexplained_failures = 0;
                 }
-                let mut parts = vec![state.to_string()];
+                let mut parts = vec![format!("Run {state}")];
                 let counts = self.counts();
                 if !counts.is_empty() {
                     parts.push(counts);
@@ -305,14 +354,29 @@ impl LineRenderer {
         for line in self.lines_for(event) {
             self.line(line);
         }
+        if matches!(event, Event::RunFinished { .. }) {
+            if let Some(bar) = self.bar.take() {
+                bar.finish_and_clear();
+            }
+            return;
+        }
         if let Some(bar) = &self.bar {
-            bar.set_message(self.progress(event.at()));
+            let progress = self.progress(event.at());
+            let start = !progress.is_empty() && !self.bar_started;
+            bar.set_message(progress);
+            if start {
+                bar.enable_steady_tick(Duration::from_millis(120));
+                self.bar_started = true;
+            }
         }
     }
 
     pub(crate) fn lines_for_tick(&mut self, at: u64) -> Vec<String> {
         if let Some(bar) = &self.bar {
-            bar.set_message(self.progress(at));
+            let progress = self.progress(at);
+            if !progress.is_empty() {
+                bar.set_message(progress);
+            }
             return Vec::new();
         }
         if self.phases.is_empty()
@@ -365,7 +429,7 @@ impl ProgressSink for LineRenderer {
 /// Follow a run directory's stream until the run finishes (or `stop` is set
 /// and the stream is drained), rendering as it goes.
 pub fn follow(run_dir: &Path, stop: &AtomicBool) -> Result<()> {
-    let mut renderer = LineRenderer::new();
+    let mut renderer = LineRenderer::for_build();
     events::tail(
         run_dir,
         Duration::from_millis(300),
@@ -418,15 +482,79 @@ pub(crate) fn test_summary(label: &str, tests: &[&TestResult]) -> Option<String>
     Some(format!("{label}: {}", crate::support::ui::counts(&parts)))
 }
 
-/// Render the stable, folded answer shared by direct builds and `run report`.
-pub fn finished_report(report: &Report) {
-    crate::support::ui::result(&report.title);
-    for diagnostic in &report.diagnostics {
-        for line in diagnostic_lines(diagnostic) {
-            crate::support::ui::result(format!("  {line}"));
+#[derive(Clone, Copy)]
+pub(crate) enum ReportView<'a> {
+    Build(&'a Path),
+    Stored,
+}
+
+pub(crate) fn report_title(report: &Report) -> String {
+    let subject = match report.request.as_ref().map(|request| &request.action) {
+        Some(RequestAction::Build(_)) => "Build",
+        Some(RequestAction::Spot(_)) => "Spot build",
+        Some(RequestAction::Diff(_)) => "Comparison",
+        None => return report.title.clone(),
+    };
+    let outcome = match report.conclusion {
+        Some(Conclusion::Success) => "succeeded",
+        Some(Conclusion::Failure) => "failed",
+        Some(Conclusion::Neutral) => "inconclusive",
+        Some(Conclusion::Blocked) => "blocked",
+        None => "in progress",
+    };
+    let elapsed = match (report.started_at, report.finished_at) {
+        (Some(started), Some(finished)) => format!(
+            " after {}",
+            format::duration(finished.saturating_sub(started) as f64)
+        ),
+        _ => String::new(),
+    };
+    format!("{subject} {outcome}{elapsed}")
+}
+
+pub(crate) fn failure_summary(report: &Report) -> Option<String> {
+    let mut failed = std::collections::BTreeSet::new();
+    let mut blocked = std::collections::BTreeSet::new();
+    for failure in report.failures.values().flatten() {
+        if failure.cause == FailureCause::Transitive {
+            blocked.insert(failure.job.as_str());
+        } else {
+            failed.insert(failure.job.as_str());
         }
     }
-    if !report.log_retention.is_empty() {
+    let mut parts = Vec::new();
+    if !failed.is_empty() {
+        parts.push(format!("{} failed", failed.len()));
+    }
+    if !blocked.is_empty() {
+        parts.push(format!("{} blocked", blocked.len()));
+    }
+    (!parts.is_empty()).then(|| format!("Jobs: {}", crate::support::ui::counts(&parts)))
+}
+
+fn failed_test_summary(tests: &[&TestResult]) -> Option<String> {
+    let failed = tests
+        .iter()
+        .filter(|test| matches!(test.outcome, TestOutcome::Fail | TestOutcome::Xpass))
+        .count();
+    (failed > 0).then(|| format!("Tests: {failed} failed out of {}", tests.len()))
+}
+
+pub(crate) fn report_lines(report: &Report, view: ReportView<'_>, verbose: bool) -> Vec<String> {
+    let mut lines = Vec::new();
+    if matches!(view, ReportView::Build(_)) {
+        lines.push(String::new());
+    }
+    lines.push(report_title(report));
+    for diagnostic in &report.diagnostics {
+        for line in diagnostic_lines(diagnostic) {
+            lines.push(format!("  {line}"));
+        }
+    }
+    if let Some(line) = failure_summary(report) {
+        lines.push(line);
+    }
+    if verbose && !report.log_retention.is_empty() {
         let mut parts = vec![
             format!("{} logs", report.log_retention.log_count),
             format!("{} retained", report.log_retention.retained_bytes),
@@ -435,46 +563,75 @@ pub fn finished_report(report: &Report) {
         if report.log_retention.omitted_bytes.0 > 0 {
             parts.push(format!("{} omitted", report.log_retention.omitted_bytes));
         }
-        crate::support::ui::result(format!("logs: {}", crate::support::ui::counts(&parts)));
+        lines.push(format!("logs: {}", crate::support::ui::counts(&parts)));
     }
     let tests: Vec<&TestResult> = report.tests.values().flatten().collect();
-    if let Some(line) = test_summary("tests", &tests) {
-        crate::support::ui::result(line);
-    }
-    let upstream: Vec<&TestResult> = tests
-        .iter()
-        .copied()
-        .filter(|test| test.test_name.as_deref() == Some("upstream"))
-        .collect();
-    if let Some(line) = test_summary("upstream", &upstream) {
-        crate::support::ui::result(line);
-    }
-    for (family, label) in [
-        ("library", "upstream libraries"),
-        ("wheel", "upstream wheels"),
-    ] {
-        let family_tests: Vec<&TestResult> = upstream
+    if verbose {
+        if let Some(line) = test_summary("tests", &tests) {
+            lines.push(line);
+        }
+        let upstream: Vec<&TestResult> = tests
             .iter()
             .copied()
-            .filter(|test| test.test_family.as_deref() == Some(family))
+            .filter(|test| test.test_name.as_deref() == Some("upstream"))
             .collect();
-        if let Some(line) = test_summary(label, &family_tests) {
-            crate::support::ui::result(line);
+        if let Some(line) = test_summary("upstream", &upstream) {
+            lines.push(line);
+        }
+        for (family, label) in [
+            ("library", "upstream libraries"),
+            ("wheel", "upstream wheels"),
+        ] {
+            let family_tests: Vec<&TestResult> = upstream
+                .iter()
+                .copied()
+                .filter(|test| test.test_family.as_deref() == Some(family))
+                .collect();
+            if let Some(line) = test_summary(label, &family_tests) {
+                lines.push(line);
+            }
+        }
+    } else if let Some(line) = failed_test_summary(&tests) {
+        lines.push(line);
+    }
+    if matches!(view, ReportView::Stored) || verbose {
+        for task in &report.tasks {
+            if !task.enabled {
+                continue;
+            }
+            let took = task
+                .elapsed_seconds
+                .map(|elapsed| format!(" · took {elapsed}"))
+                .unwrap_or_default();
+            let label = if verbose {
+                task.task_id.clone()
+            } else {
+                display_label(&task.label)
+            };
+            lines.push(format!(
+                "  {} {label}: {}{took}",
+                glyph(task.status),
+                task.headline
+            ));
         }
     }
-    for task in &report.tasks {
-        if !task.enabled {
-            continue;
+    if let ReportView::Build(run_dir) = view {
+        if report.conclusion != Some(Conclusion::Success) {
+            let run = crate::support::shell::quote(&run_dir.to_string_lossy());
+            lines.push(String::new());
+            if !report.failures.is_empty() {
+                lines.push(format!("Inspect failures: wasinix run failures {run}"));
+            }
+            lines.push(format!("Inspect logs: wasinix run logs {run}"));
         }
-        let took = task
-            .elapsed_seconds
-            .map(|elapsed| format!(" · took {elapsed}"))
-            .unwrap_or_default();
-        crate::support::ui::result(format!(
-            "  {} {}: {}{took}",
-            glyph(task.status),
-            task.task_id,
-            task.headline
-        ));
+    }
+    lines
+}
+
+/// Render the stable, folded answer shared by direct builds and `run report`.
+pub(crate) fn finished_report(report: &Report, view: ReportView<'_>) {
+    let verbose = crate::support::ui::verbosity() == crate::support::ui::Verbosity::Verbose;
+    for line in report_lines(report, view, verbose) {
+        crate::support::ui::result(line);
     }
 }
