@@ -10,6 +10,9 @@ lib.extendMkDerivation {
   in {
     nativeBuildInputs = (packageAttrs.nativeBuildInputs or []) ++ [tinygo];
 
+    # tinygo's compile-time interpreter aborts on a 3-minute wall clock, so a
+    # loaded builder fails a compile that succeeds on an idle one. Bound it far
+    # above the slowest real compile instead.
     buildPhase = ''
       runHook preBuild
 
@@ -57,7 +60,7 @@ lib.extendMkDerivation {
           name="''${package##*/}"
         fi
         ${lib.getExe' tinygo "tinygo"} build -target=wasip1 -no-debug \
-          "''${tinygoFlags[@]}" -o "$GOPATH/bin/$name" "$package"
+          -interp-timeout=20m "''${tinygoFlags[@]}" -o "$GOPATH/bin/$name" "$package"
       done
 
       runHook postBuild
