@@ -129,14 +129,14 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
         },
     )?;
     let timed_out = matches!(completion, crate::support::tools::Completion::TimedOut(_));
-    let output = completion.value();
+    let status = completion.value();
     if timed_out {
         return Ok(Some(format!(
             "evaluation timed out after {} seconds",
             timeout.as_secs()
         )));
     }
-    if output.status.success() {
+    if status.success() {
         return Ok(None);
     }
     let stderr = crate::support::fs::tail(request.stderr_log, 256 * 1024)?;

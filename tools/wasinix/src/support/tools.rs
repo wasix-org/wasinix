@@ -91,11 +91,6 @@ pub enum Completion<T> {
     TimedOut(T),
 }
 
-pub struct Piped<T> {
-    pub status: ExitStatus,
-    pub stdout: T,
-}
-
 impl<T> Completion<T> {
     pub fn value(self) -> T {
         match self {
@@ -335,15 +330,12 @@ pub fn spawn_piped(
     Ok((child, readers))
 }
 
-pub fn piped<T>(
+pub fn piped(
     cmd: &mut Command,
     timeout: Option<Timeout>,
-    stdout: impl FnOnce(ChildStdout) -> Result<T> + Send,
+    stdout: impl FnOnce(ChildStdout) -> Result<()> + Send,
     stderr: impl FnOnce(ChildStderr) -> Result<()> + Send,
-) -> Result<Completion<Piped<T>>>
-where
-    T: Send,
-{
+) -> Result<Completion<ExitStatus>> {
     cmd.stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     let mut child = spawn(cmd)?;
@@ -357,16 +349,13 @@ where
             None => child.wait().map(Completion::Finished),
         }
         .map_err(|error| Error::Failure(format!("waiting for {}: {error}", rendered(cmd))))?;
-        let stdout = stdout_reader.join().map_err(|_| {
+        stdout_reader.join().map_err(|_| {
             Error::Failure(format!("reading stdout from {} panicked", rendered(cmd)))
         })??;
         stderr_reader.join().map_err(|_| {
             Error::Failure(format!("reading stderr from {} panicked", rendered(cmd)))
         })??;
-        Ok(match completion {
-            Completion::Finished(status) => Completion::Finished(Piped { status, stdout }),
-            Completion::TimedOut(status) => Completion::TimedOut(Piped { status, stdout }),
-        })
+        Ok(completion)
     })
 }
 
