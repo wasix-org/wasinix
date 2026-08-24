@@ -14,13 +14,13 @@ use std::process::Command;
 use std::sync::LazyLock;
 
 use regex::Regex;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 use crate::support::capability::Capability;
-use crate::support::error::{request_error, Error, Result};
+use crate::support::error::{Error, Result, request_error};
 use crate::support::naming::{self, Domain};
-use crate::support::nix::{project_attr, Flake};
+use crate::support::nix::{Flake, project_attr};
 
 /// The rebuild command doubles as the machine-readable rev record: the
 /// appended block is a pure function of (package dir, rev), so a later run
@@ -83,13 +83,12 @@ fn webc_domain() -> Result<Domain> {
     let named = crate::support::nix::eval(&Flake::default(), "", Some(apply))?;
     let mut domain = Domain::new("the WebC artifact catalog");
     for (webc, info) in named.as_object().into_iter().flatten() {
-        let aliases =
-            info["aliases"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|alias| alias.as_str().map(str::to_string))
-                .collect();
+        let aliases = info["aliases"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|alias| alias.as_str().map(str::to_string))
+            .collect();
         domain.add_path(
             vec!["artifacts".into(), "webc".into(), webc.clone()],
             webc,
@@ -163,8 +162,7 @@ pub(crate) struct ResolvedGraph {
 }
 
 fn resolved_graph() -> Result<ResolvedGraph> {
-    let apply =
-        r#"ps: builtins.mapAttrs (_: p: {
+    let apply = r#"ps: builtins.mapAttrs (_: p: {
           name = "${p.id.owner}/${p.id.name}";
           version = p.id.version;
           dependencies = map (d: {
@@ -211,7 +209,10 @@ fn resolved_graph() -> Result<ResolvedGraph> {
             }
         }
         graph.keys_by_attr.insert(attr.clone(), key.clone());
-        if graph.attrs_by_key.insert(key.clone(), attr.clone()).is_some()
+        if graph
+            .attrs_by_key
+            .insert(key.clone(), attr.clone())
+            .is_some()
             || graph
                 .dependencies
                 .insert(key.clone(), package_dependencies)
@@ -252,9 +253,7 @@ pub(crate) fn include_unpublished_dependencies(
                 continue;
             }
             let Some(attr) = graph.attrs_by_key.get(&dependency) else {
-                return request_error(format!(
-                    "no WebC package artifact for {name}@{version}"
-                ));
+                return request_error(format!("no WebC package artifact for {name}@{version}"));
             };
             attrs.insert(attr.clone());
             pending.push(dependency);
@@ -487,7 +486,8 @@ struct Scratch(PathBuf);
 
 impl Scratch {
     fn new(name: &str) -> Result<Scratch> {
-        let path = crate::support::env::temp_dir().join(format!("publish-webc-{}-{name}", std::process::id()));
+        let path = crate::support::env::temp_dir()
+            .join(format!("publish-webc-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&path);
         crate::support::fs::create_dir_all(&path)?;
         Ok(Scratch(path))
@@ -620,7 +620,9 @@ pub fn provenance(pkg: &Package, rev: &str) -> String {
     let origin = match &pkg.source {
         Some(source) => {
             let (file, line) = source.rsplit_once(':').unwrap_or((source.as_str(), "1"));
-            format!("Built from [{file}](https://github.com/wasix-org/wasinix/blob/{rev}/{file}#L{line})")
+            format!(
+                "Built from [{file}](https://github.com/wasix-org/wasinix/blob/{rev}/{file}#L{line})"
+            )
         }
         None => "Built by [wasinix](https://github.com/wasix-org/wasinix)".to_string(),
     };
@@ -712,12 +714,7 @@ pub fn stage(pkg: &Package, rev: &str, into: &Path, as_: &Staged) -> Result<Path
     Ok(dst)
 }
 
-fn staged_sha256(
-    pkg: &Package,
-    rev: &str,
-    pub_name: &str,
-    pub_version: &str,
-) -> Result<String> {
+fn staged_sha256(pkg: &Package, rev: &str, pub_name: &str, pub_version: &str) -> Result<String> {
     let scratch = Scratch::new("restage")?;
     let batch = BTreeSet::new();
     let staged = stage(
@@ -902,7 +899,10 @@ pub fn publish(options: Options) -> Result<crate::support::process::CommandStatu
     crate::support::ui::fact("packages", ordered.len());
     crate::support::ui::fact(
         "registry",
-        format!("{} (graphql: {graphql_url}, publish: {publish_host})", options.registry),
+        format!(
+            "{} (graphql: {graphql_url}, publish: {publish_host})",
+            options.registry
+        ),
     );
     if options.effects.is_dry_run() {
         crate::support::ui::fact("mode", "dry run; nothing publishes");
@@ -1101,10 +1101,11 @@ pub fn merge_webcs(from: &Path, into: &Path) -> Result<()> {
     }
     let mut pending = vec![from.to_path_buf()];
     while let Some(dir) = pending.pop() {
-        let entries =
-            std::fs::read_dir(&dir).map_err(|e| crate::support::error::io(&dir, e))?;
+        let entries = std::fs::read_dir(&dir).map_err(|e| crate::support::error::io(&dir, e))?;
         for entry in entries {
-            let path = entry.map_err(|e| crate::support::error::io(&dir, e))?.path();
+            let path = entry
+                .map_err(|e| crate::support::error::io(&dir, e))?
+                .path();
             if path.is_dir() {
                 pending.push(path);
                 continue;
@@ -1121,10 +1122,11 @@ fn tree_references(tree: &Path) -> Result<Vec<String>> {
     let mut references = Vec::new();
     let mut pending = vec![tree.to_path_buf()];
     while let Some(dir) = pending.pop() {
-        let entries =
-            std::fs::read_dir(&dir).map_err(|e| crate::support::error::io(&dir, e))?;
+        let entries = std::fs::read_dir(&dir).map_err(|e| crate::support::error::io(&dir, e))?;
         for entry in entries {
-            let path = entry.map_err(|e| crate::support::error::io(&dir, e))?.path();
+            let path = entry
+                .map_err(|e| crate::support::error::io(&dir, e))?
+                .path();
             if path.is_dir() {
                 pending.push(path);
                 continue;
@@ -1138,10 +1140,9 @@ fn tree_references(tree: &Path) -> Result<Vec<String>> {
                 .map(|part| part.as_os_str().to_string_lossy().to_string())
                 .collect();
             references.push(match parts.as_slice() {
-                [owner, name, version] => format!(
-                    "{owner}/{name}@{}",
-                    version.trim_end_matches(".webc")
-                ),
+                [owner, name, version] => {
+                    format!("{owner}/{name}@{}", version.trim_end_matches(".webc"))
+                }
                 _ => relative.display().to_string(),
             });
         }
@@ -1215,10 +1216,7 @@ pub fn materialize(options: ServeOptions) -> Result<PathBuf> {
         let mut installables: Vec<String> = Vec::new();
         for name in &names {
             let quoted = naming::quoted_attr(name)?;
-            installables.push(format!(
-                ".#{}.artifacts.webc.{quoted}",
-                project_attr("")
-            ));
+            installables.push(format!(".#{}.artifacts.webc.{quoted}", project_attr("")));
             if deps[name].as_bool() == Some(true) {
                 installables.push(format!(
                     ".#{}.artifacts.pkg.{quoted}.depTree",

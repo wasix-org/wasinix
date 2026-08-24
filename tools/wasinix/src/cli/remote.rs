@@ -224,6 +224,8 @@ const TEMPLATE: &str = r#"# Builders shared by this developer's worktrees. `wasi
 # host_key = "-"
 # capabilities = ["builder", "store", "host"]
 # capacity = 1
+# eval_workers = 2
+# eval_memory = 16384
 #
 # Limits for `--on local`; each env var (WASINIX_MAX_JOBS, ...) overrides
 # per invocation. capacity bounds concurrent local runs; unset = unlimited.

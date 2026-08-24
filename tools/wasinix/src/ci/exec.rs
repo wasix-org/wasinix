@@ -237,10 +237,7 @@ fn eval_inputs(
     let _lease = route.acquire()?;
     let case_id = case.case_id();
     let logs = crate::ci::prepare::logs_dir(&case_dir(ctx.run_dir, case_id)).join("eval-inputs");
-    let attr = format!(
-        ".#legacyPackages.{}.ci.jobs",
-        crate::support::nix::SYSTEM
-    );
+    let attr = format!(".#legacyPackages.{}.ci.jobs", crate::support::nix::SYSTEM);
     let catalog = selector_catalog(worktree, route)?.into_map();
     let selected: Vec<String> = crate::ci::compare::selected(case, &catalog)?
         .into_iter()
@@ -309,9 +306,9 @@ pub(crate) fn selector_catalog(
     .checked_output("the CI selector catalog")?;
     let catalog: crate::ci::evalmap::SelectorCatalog =
         serde_json::from_slice(&bytes).map_err(|source| Error::Json {
-        path: "<ci.catalog>".into(),
-        source,
-    })?;
+            path: "<ci.catalog>".into(),
+            source,
+        })?;
     let expected = crate::support::schema::project_version();
     if catalog.schema_version != expected {
         return request_error(format!(
@@ -361,10 +358,7 @@ fn evaluate(
     require_project_schema(worktree, route)?;
     let case_id = case.case_id();
     let maps = crate::ci::prepare::maps_dir(&case_dir(ctx.run_dir, case_id));
-    let attr = format!(
-        ".#legacyPackages.{}.ci.jobs",
-        crate::support::nix::SYSTEM
-    );
+    let attr = format!(".#legacyPackages.{}.ci.jobs", crate::support::nix::SYSTEM);
     let catalog = selector_catalog(worktree, route)?.into_map();
     let selected: Vec<String> = crate::ci::compare::selected(case, &catalog)?
         .into_iter()
@@ -617,8 +611,7 @@ pub(crate) fn record_result(
     if !matches!(kind, "BUILD" | "EVAL") {
         return Ok(());
     }
-    // nix-eval-jobs quotes the dotted attr name
-    let Some(attr) = value["attr"].as_str().map(|attr| attr.trim_matches('"')) else {
+    let Some(attr) = value["attr"].as_str().map(crate::nix::evaljobs::attr_name) else {
         return Ok(());
     };
     if !attr.contains("::") {
@@ -629,7 +622,7 @@ pub(crate) fn record_result(
         return Ok(());
     }
     let drv = jobs
-        .get(attr)
+        .get(&attr)
         .map(|job| job.drv.clone())
         .filter(|drv| !drv.is_empty());
     let status = if success {
@@ -640,7 +633,8 @@ pub(crate) fn record_result(
     let matched: Vec<String> = jobs
         .iter()
         .filter(|(key, job)| {
-            key.as_str() == attr || (kind == "BUILD" && drv.as_deref() == Some(job.drv.as_str()))
+            key.as_str() == attr.as_str()
+                || (kind == "BUILD" && drv.as_deref() == Some(job.drv.as_str()))
         })
         .filter(|(_, job)| job.status.is_none())
         .map(|(key, _)| key.clone())
@@ -669,9 +663,10 @@ pub(crate) fn record_result(
 
 /// A build stream line announcing that Nix started a top-level job. The build
 /// observer translates derivation paths back to these union keys.
-pub(crate) fn scheduled_attr(line: &str) -> Option<&str> {
+pub(crate) fn scheduled_attr(line: &str) -> Option<String> {
     line.strip_prefix("  building ")
-        .map(|attr| attr.trim().trim_matches('"'))
+        .map(str::trim)
+        .map(crate::nix::evaljobs::attr_name)
         .filter(|attr| !attr.is_empty())
 }
 
@@ -1016,10 +1011,10 @@ fn run_build_tasks(
                     }),
                 crate::nix::buildset::StreamEvent::Output(line) => {
                     if let Some(attr) = scheduled_attr(&line) {
-                        if jobs.contains_key(attr) && realising.insert(attr.to_string()) {
+                        if jobs.contains_key(&attr) && realising.insert(attr.clone()) {
                             tracker.record(Event::JobStarted {
                                 at: unix_secs(),
-                                job: JobAddr(attr.to_string()),
+                                job: JobAddr(attr),
                             })?;
                         }
                     }

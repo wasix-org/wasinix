@@ -10,9 +10,10 @@ use crate::nix::builder::{self, Builder, Capability, Lease, RouteKind};
 use crate::support::error::{Error, Result, request_error};
 
 pub const DEFAULT_LOCAL_EVAL_WORKERS: usize = 2;
-pub const DEFAULT_REMOTE_EVAL_WORKERS: usize = 4;
-pub const DEFAULT_EVAL_MEMORY: usize = 8192;
-pub const DEFAULT_EVAL_TIMEOUT_SECONDS: u64 = 1800;
+pub const DEFAULT_REMOTE_EVAL_WORKERS: usize = 2;
+pub const DEFAULT_LOCAL_EVAL_MEMORY: usize = 8192;
+pub const DEFAULT_REMOTE_EVAL_MEMORY: usize = 16384;
+pub const DEFAULT_EVAL_TIMEOUT_SECONDS: u64 = 600;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EvaluationLimits {
@@ -30,19 +31,23 @@ impl EvaluationLimits {
                 .unwrap_or(DEFAULT_LOCAL_EVAL_WORKERS),
             memory: crate::support::env::eval_memory()?
                 .or(profile.eval_memory)
-                .unwrap_or(DEFAULT_EVAL_MEMORY),
+                .unwrap_or(DEFAULT_LOCAL_EVAL_MEMORY),
             timeout: evaluation_timeout()?,
         })
     }
 
-    pub fn configured(builder: &Builder, default_workers: usize) -> Result<Self> {
+    pub fn configured(
+        builder: &Builder,
+        default_workers: usize,
+        default_memory: usize,
+    ) -> Result<Self> {
         Ok(Self {
             workers: crate::support::env::eval_workers()?
                 .or(builder.eval_workers)
                 .unwrap_or(default_workers),
             memory: crate::support::env::eval_memory()?
                 .or(builder.eval_memory)
-                .unwrap_or(DEFAULT_EVAL_MEMORY),
+                .unwrap_or(default_memory),
             timeout: evaluation_timeout()?,
         })
     }
@@ -126,12 +131,16 @@ impl Route {
     pub fn limits(&self) -> Result<EvaluationLimits> {
         match self {
             Route::Local(limits) => Ok(*limits),
-            Route::Builder(builder) | Route::Store(builder) => {
-                EvaluationLimits::configured(builder, default_eval_workers(RouteKind::Builder))
-            }
-            Route::Host(builder) => {
-                EvaluationLimits::configured(builder, default_eval_workers(RouteKind::Host))
-            }
+            Route::Builder(builder) | Route::Store(builder) => EvaluationLimits::configured(
+                builder,
+                default_eval_workers(RouteKind::Builder),
+                DEFAULT_LOCAL_EVAL_MEMORY,
+            ),
+            Route::Host(builder) => EvaluationLimits::configured(
+                builder,
+                default_eval_workers(RouteKind::Host),
+                DEFAULT_REMOTE_EVAL_MEMORY,
+            ),
         }
     }
 

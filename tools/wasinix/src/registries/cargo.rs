@@ -135,7 +135,12 @@ fn select(entries: &[MintCrate], specs: &[String]) -> Result<Vec<MintCrate>> {
     names.dedup();
     for name in names {
         domain.add_path(
-            vec!["artifacts".into(), "registry".into(), "cargo-registry".into(), name.into()],
+            vec![
+                "artifacts".into(),
+                "registry".into(),
+                "cargo-registry".into(),
+                name.into(),
+            ],
             name,
             None,
             Vec::new(),

@@ -56,6 +56,21 @@ pub fn parse_file(text: &str) -> Result<Vec<EvalJob>> {
         .collect()
 }
 
+/// Decode JSON-quoted names and Nix's quoted attr display while preserving
+/// names from Wasinix's already-projected JUnit files.
+pub(crate) fn attr_name(raw: &str) -> String {
+    if raw.starts_with('"') {
+        serde_json::from_str(raw).unwrap_or_else(|_| {
+            raw.strip_prefix('"')
+                .and_then(|name| name.strip_suffix('"'))
+                .unwrap_or(raw)
+                .to_string()
+        })
+    } else {
+        raw.to_string()
+    }
+}
+
 pub struct RunRequest<'a> {
     pub workdir: &'a Path,
     pub flake: &'a str,
@@ -122,6 +137,22 @@ pub(crate) fn stream_jobs(
     }
 }
 
+pub(crate) fn archive_inputs_invocation(workdir: &Path) -> crate::support::nix::Invocation {
+    crate::support::nix::Invocation::plain("flake archive")
+        .accepts_flake_config()
+        .operand(".")
+        .workdir(workdir)
+}
+
+pub(crate) fn evaluator_invocation(workdir: &Path) -> crate::support::nix::Invocation {
+    crate::support::nix::Invocation::eval_jobs()
+        .accepts_flake_config()
+        .arg("--meta")
+        // Every worker evaluates independently; a shared SQLite cache only
+        // serializes their writes and emits a busy warning for each collision.
+        .option("eval-cache", "false")
+        .workdir(workdir)
+}
 /// Run nix-eval-jobs into `jobs_path`, teeing its diagnostics to `stderr_log`.
 /// A top-level evaluation failure is returned as text rather than raised: it
 /// is report content, and the caller decides what it fails.
@@ -134,15 +165,13 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
         .unwrap_or(request.workdir)
         .join("gc-roots");
     crate::support::fs::create_dir_all(&gc_roots)?;
-    // The workers race to fetch a workdir flake: the first records its final
-    // narHash while another may still re-fetch the locked rev through the
-    // archive path, and the two disagree on a tree carrying a submodule
-    // gitlink. One prefetch settles the fetch before any worker starts.
+    // Fetch the complete locked input graph before workers fan out. Fetching
+    // only the root leaves inputs such as Wasmer's submodule checkout racing
+    // behind one shared fetch lock across every worker.
     if request.flake.starts_with('.') {
-        crate::support::nix::Invocation::plain("flake prefetch")
-            .accepts_flake_config()
-            .workdir(request.workdir)
-            .checked_output("prefetching the case worktree")?;
+        archive_inputs_invocation(request.workdir)
+            .route(request.route)?
+            .checked_output("archiving the case inputs")?;
     }
     for path in [request.jobs_path, request.stderr_log] {
         if let Some(parent) = path.parent() {
@@ -152,13 +181,11 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
     // nix-eval-jobs comes from PATH so a run does not fetch the registry's
     // channel tarball. meta.position anchors failure annotations at the
     // package definition.
-    let mut invocation = crate::support::nix::Invocation::eval_jobs()
-        .accepts_flake_config()
-        .args(["--flake", request.flake, "--meta", "--repair"])
+    let mut invocation = evaluator_invocation(request.workdir)
+        .args(["--flake", request.flake])
         .args(["--gc-roots-dir", &gc_roots.to_string_lossy()])
         .args(["--workers", &limits.workers.to_string()])
         .args(["--max-memory-size", &limits.memory.to_string()])
-        .workdir(request.workdir)
         .timeout(timeout)
         .route(request.route)?;
     if let Some(selected) = request.selected {
