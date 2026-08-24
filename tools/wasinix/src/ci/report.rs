@@ -175,6 +175,27 @@ pub struct TaskView {
     pub elapsed_seconds: Option<DurationSecs>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub artifact_bytes: Option<Bytes>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub store_available_start_bytes: Option<Bytes>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub store_available_finish_bytes: Option<Bytes>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceUsage {
+    pub automatic_gc_runs: usize,
+    pub automatic_gc_requested_bytes: Bytes,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub minimum_store_available_bytes: Option<Bytes>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub store_total_bytes: Option<Bytes>,
+}
+
+impl ResourceUsage {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.automatic_gc_runs == 0 && self.minimum_store_available_bytes.is_none()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -254,16 +275,70 @@ pub struct Report {
         skip_serializing_if = "crate::support::log::Summary::is_empty"
     )]
     pub log_retention: crate::support::log::Summary,
+    #[serde(default, skip_serializing_if = "ResourceUsage::is_empty")]
+    pub resources: ResourceUsage,
 }
 
 impl Document for Report {
     const KIND: &'static str = "report";
-    const SCHEMA: u32 = 3;
+    const SCHEMA: u32 = 4;
 }
 
 impl Report {
-    pub fn attach_log_retention(&mut self, run_dir: &Path) -> Result<()> {
+    pub fn attach_run_data(&mut self, run_dir: &Path) -> Result<()> {
         self.log_retention = crate::support::log::summarize(run_dir)?;
+        let task_index: BTreeMap<String, usize> = self
+            .tasks
+            .iter()
+            .enumerate()
+            .map(|(index, task)| (task.task_id.clone(), index))
+            .collect();
+        let mut resources = ResourceUsage::default();
+        for event in crate::ci::events::read_all(run_dir)? {
+            match event {
+                crate::ci::events::Event::ResourceSample {
+                    task_id,
+                    boundary,
+                    available_bytes,
+                    total_bytes,
+                    ..
+                } => {
+                    resources.minimum_store_available_bytes = Some(
+                        resources
+                            .minimum_store_available_bytes
+                            .map_or(available_bytes, |minimum| minimum.min(available_bytes)),
+                    );
+                    resources.store_total_bytes = Some(total_bytes);
+                    if let Some(index) = task_index.get(&task_id).copied() {
+                        let task = &mut self.tasks[index];
+                        match boundary {
+                            crate::ci::events::ResourceBoundary::Start => {
+                                task.store_available_start_bytes = Some(available_bytes);
+                            }
+                            crate::ci::events::ResourceBoundary::Finish => {
+                                task.store_available_finish_bytes = Some(available_bytes);
+                            }
+                        }
+                    }
+                }
+                crate::ci::events::Event::AutomaticGc {
+                    requested_bytes, ..
+                } => {
+                    resources.automatic_gc_runs += 1;
+                    resources.automatic_gc_requested_bytes.0 = resources
+                        .automatic_gc_requested_bytes
+                        .0
+                        .checked_add(requested_bytes.0)
+                        .ok_or_else(|| {
+                            Error::Failure(
+                                "automatic GC requested byte count overflowed u64".to_string(),
+                            )
+                        })?;
+                }
+                _ => {}
+            }
+        }
+        self.resources = resources;
         Ok(())
     }
 
@@ -493,6 +568,8 @@ pub fn fold(plan: &Plan, fragments: &BTreeMap<String, Fragment>, context: FoldCo
                 .unwrap_or_default(),
             elapsed_seconds: view.fragment.and_then(|fragment| fragment.elapsed_seconds),
             artifact_bytes: view.fragment.and_then(|fragment| fragment.artifact_bytes),
+            store_available_start_bytes: None,
+            store_available_finish_bytes: None,
         })
         .collect();
     let failures = views
@@ -562,6 +639,7 @@ pub fn fold(plan: &Plan, fragments: &BTreeMap<String, Fragment>, context: FoldCo
         request: context.request,
         command: None,
         log_retention: Default::default(),
+        resources: Default::default(),
     }
 }
 
@@ -647,6 +725,7 @@ pub fn starting(log_tail: Option<&str>) -> Report {
         request: None,
         command: None,
         log_retention: Default::default(),
+        resources: Default::default(),
     }
 }
 
@@ -675,6 +754,8 @@ pub fn from_run_state(run: &crate::runs::Run, log_tail: Option<&str>) -> Report 
                 headline: line,
                 elapsed_seconds: None,
                 artifact_bytes: None,
+                store_available_start_bytes: None,
+                store_available_finish_bytes: None,
             }]
         })
         .unwrap_or_default();
@@ -694,5 +775,6 @@ pub fn from_run_state(run: &crate::runs::Run, log_tail: Option<&str>) -> Report 
         request: None,
         command: None,
         log_retention: Default::default(),
+        resources: Default::default(),
     }
 }

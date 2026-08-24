@@ -318,6 +318,7 @@ impl LineRenderer {
             Event::Warning { at, message } => {
                 vec![format!("{} warning: {message}", self.stamp(*at))]
             }
+            Event::ResourceSample { .. } | Event::AutomaticGc { .. } => Vec::new(),
             Event::LegacyOutput { .. } => Vec::new(),
             Event::Diagnostic { at, diagnostic } => {
                 self.unexplained_failures = 0;
@@ -566,6 +567,24 @@ pub(crate) fn report_lines(report: &Report, view: ReportView<'_>, verbose: bool)
         }
         lines.push(format!("logs: {}", crate::support::ui::counts(&parts)));
     }
+    if verbose && !report.resources.is_empty() {
+        let mut parts = Vec::new();
+        if let Some(available) = report.resources.minimum_store_available_bytes {
+            parts.push(format!("{available} available at low point"));
+        }
+        if let Some(total) = report.resources.store_total_bytes {
+            parts.push(format!("{total} total"));
+        }
+        if report.resources.automatic_gc_runs == 0 {
+            parts.push("automatic GC did not run".to_string());
+        } else {
+            parts.push(format!(
+                "automatic GC ran {} times · {} requested",
+                report.resources.automatic_gc_runs, report.resources.automatic_gc_requested_bytes
+            ));
+        }
+        lines.push(format!("store: {}", crate::support::ui::counts(&parts)));
+    }
     let tests: Vec<&TestResult> = report.tests.values().flatten().collect();
     if verbose {
         if let Some(line) = test_summary("tests", &tests) {
@@ -609,8 +628,21 @@ pub(crate) fn report_lines(report: &Report, view: ReportView<'_>, verbose: bool)
             } else {
                 display_label(&task.label)
             };
+            let space = if verbose {
+                match (
+                    task.store_available_start_bytes,
+                    task.store_available_finish_bytes,
+                ) {
+                    (Some(start), Some(finish)) => {
+                        format!(" · store {start} → {finish} available")
+                    }
+                    _ => String::new(),
+                }
+            } else {
+                String::new()
+            };
             lines.push(format!(
-                "  {} {label}: {}{took}",
+                "  {} {label}: {}{took}{space}",
                 glyph(task.status),
                 task.headline
             ));

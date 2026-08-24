@@ -76,7 +76,7 @@ pub fn load(run_dir: &Path) -> Result<Rendered> {
         crate::ci::report::from_run_state(&run, tail.as_deref())
     };
     report.command = origin_command(run_dir);
-    report.attach_log_retention(run_dir)?;
+    report.attach_run_data(run_dir)?;
     let mut fragments =
         crate::ci::report::fragments_under(&crate::ci::prepare::fragments_dir(run_dir))?;
     if let Some(fragment) = synthesized {
@@ -125,7 +125,7 @@ pub(crate) fn load_running(
                     .unwrap_or_else(|| phase.label.clone());
             }
         }
-        report.attach_log_retention(run_dir)?;
+        report.attach_run_data(run_dir)?;
         return Ok(Some(Rendered {
             report,
             fragments: BTreeMap::new(),
@@ -148,7 +148,7 @@ pub(crate) fn load_running(
             comparisons: crate::ci::compare::project(run_dir, &loaded.request, false)?,
         },
     );
-    report.attach_log_retention(run_dir)?;
+    report.attach_run_data(run_dir)?;
     Ok(Some(Rendered {
         report: crate::ci::report::Report {
             command: origin_command(run_dir),

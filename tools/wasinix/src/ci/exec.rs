@@ -53,6 +53,7 @@ const EXCERPT_LINES: usize = 120;
 struct Artifacts {
     files: BTreeMap<PathBuf, u64>,
     total_bytes: u64,
+    automatic_gc_requested: Vec<u64>,
 }
 
 impl Artifacts {
@@ -83,6 +84,10 @@ impl Artifacts {
 
     fn bytes(&self) -> u64 {
         self.total_bytes
+    }
+
+    fn record_automatic_gc(&mut self, requested: impl IntoIterator<Item = u64>) {
+        self.automatic_gc_requested.extend(requested);
     }
 }
 
@@ -145,8 +150,11 @@ fn run_logged(
 ) -> Result<CommandStatus> {
     use std::io::{BufRead, BufReader, Write};
     let log = crate::support::log::SharedLog::create(log_path)?;
+    let automatic_gc = crate::support::nix::AutomaticGcObserver::default();
     let echo = crate::support::ui::verbosity() == crate::support::ui::Verbosity::Verbose;
-    let copy = |stream: Box<dyn std::io::Read + Send>, mut log: crate::support::log::SharedLog| {
+    let copy = |stream: Box<dyn std::io::Read + Send>,
+                mut log: crate::support::log::SharedLog,
+                automatic_gc: crate::support::nix::AutomaticGcObserver| {
         let mut reader = BufReader::new(stream);
         let mut buffer = Vec::new();
         loop {
@@ -159,6 +167,7 @@ fn run_logged(
             if echo {
                 crate::support::ui::raw(String::from_utf8_lossy(&buffer));
             }
+            automatic_gc.observe(&buffer);
             log.write_all(&buffer)
                 .map_err(|error| io(log_path, error))?;
             buffer.clear();
@@ -168,12 +177,13 @@ fn run_logged(
     let completion = crate::support::tools::piped(
         cmd,
         None,
-        |stream| copy(Box::new(stream), log.clone()),
-        |stream| copy(Box::new(stream), log.clone()),
+        |stream| copy(Box::new(stream), log.clone(), automatic_gc.clone()),
+        |stream| copy(Box::new(stream), log.clone(), automatic_gc.clone()),
     )?;
     let status = completion.value();
     log.finish()?;
     artifacts.record_log(log_path)?;
+    artifacts.record_automatic_gc(automatic_gc.requested_bytes());
     Ok(CommandStatus::from_exit(status))
 }
 
@@ -893,6 +903,11 @@ fn run_build_tasks(
     let union_started = Instant::now();
     for (on, cases) in groups {
         let case_ids = cases.clone();
+        let group_task_ids: Vec<String> = specs
+            .iter()
+            .filter(|spec| case_ids.contains(&spec.case))
+            .map(|spec| spec.task_id.clone())
+            .collect();
         let route = Route::from_on(ctx.runner_root, on.as_deref())?;
         let _lease = route.acquire()?;
         let limits = route.limits()?;
@@ -978,6 +993,12 @@ fn run_build_tasks(
                         message: format!("Nix lost store input {path}; restoring it"),
                     })
                 }
+                crate::nix::buildset::StreamEvent::AutomaticGc { requested_bytes } => tracker
+                    .record(Event::AutomaticGc {
+                        at: unix_secs(),
+                        task_ids: group_task_ids.clone(),
+                        requested_bytes: Bytes(requested_bytes),
+                    }),
                 crate::nix::buildset::StreamEvent::Output(line) => {
                     if let Some(attr) = building_attr(&line) {
                         if jobs.contains_key(attr) && building.insert(attr.to_string()) {
@@ -1145,7 +1166,7 @@ fn run_build_tasks(
                 ctx,
                 tracker,
                 fragment,
-                Some((union_started.elapsed(), artifacts.bytes())),
+                Some(TaskTelemetry::collect(union_started, &artifacts)),
             )?
             .exit(request.blocked),
         );
@@ -1306,12 +1327,24 @@ fn finish_task(
     ctx: &Context,
     tracker: &mut Tracker,
     mut fragment: Fragment,
-    telemetry: Option<(Duration, u64)>,
+    telemetry: Option<TaskTelemetry>,
 ) -> Result<TaskStatus> {
-    if let Some((elapsed, artifact_bytes)) = telemetry {
-        fragment.elapsed_seconds = Some(DurationSecs(elapsed.as_secs_f64()));
-        fragment.artifact_bytes = Some(Bytes(artifact_bytes));
+    if let Some(telemetry) = telemetry {
+        fragment.elapsed_seconds = Some(DurationSecs(telemetry.elapsed.as_secs_f64()));
+        fragment.artifact_bytes = Some(Bytes(telemetry.artifact_bytes));
+        for requested_bytes in telemetry.automatic_gc_requested {
+            tracker.record(Event::AutomaticGc {
+                at: unix_secs(),
+                task_ids: vec![fragment.task_id.clone()],
+                requested_bytes: Bytes(requested_bytes),
+            })?;
+        }
     }
+    record_resource_sample(
+        tracker,
+        &fragment.task_id,
+        crate::ci::events::ResourceBoundary::Finish,
+    )?;
     fragment.write(&ctx.fragment_path(&fragment.task_id))?;
     tracker.record(Event::PhaseFinished {
         at: unix_secs(),
@@ -1333,6 +1366,38 @@ fn start_task(
         task_id: task_id.to_string(),
         label: label.to_string(),
         jobs,
+    })?;
+    record_resource_sample(tracker, task_id, crate::ci::events::ResourceBoundary::Start)
+}
+
+struct TaskTelemetry {
+    elapsed: Duration,
+    artifact_bytes: u64,
+    automatic_gc_requested: Vec<u64>,
+}
+
+impl TaskTelemetry {
+    fn collect(started: Instant, artifacts: &Artifacts) -> TaskTelemetry {
+        TaskTelemetry {
+            elapsed: started.elapsed(),
+            artifact_bytes: artifacts.bytes(),
+            automatic_gc_requested: artifacts.automatic_gc_requested.clone(),
+        }
+    }
+}
+
+fn record_resource_sample(
+    tracker: &mut Tracker,
+    task_id: &str,
+    boundary: crate::ci::events::ResourceBoundary,
+) -> Result<()> {
+    let space = crate::support::fs::space(Path::new("/nix/store"))?;
+    tracker.record(Event::ResourceSample {
+        at: unix_secs(),
+        task_id: task_id.to_string(),
+        boundary,
+        available_bytes: Bytes(space.available),
+        total_bytes: Bytes(space.total),
     })
 }
 
@@ -1453,7 +1518,7 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
             ctx,
             &mut tracker,
             fragment,
-            Some((started.elapsed(), artifacts.bytes())),
+            Some(TaskTelemetry::collect(started, &artifacts)),
         )?;
         let task_status = status.exit(request.blocked);
         worst = worst.max(task_status);
@@ -1474,7 +1539,7 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
     }
 
     let fragments = crate::ci::report::fragments_under(&ctx.fragments())?;
-    let report = crate::ci::report::fold(
+    let mut report = crate::ci::report::fold(
         &plan,
         &fragments,
         crate::ci::report::FoldContext {
@@ -1486,6 +1551,7 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
             comparisons: crate::ci::compare::project(ctx.run_dir, request, true)?,
         },
     );
+    report.attach_run_data(ctx.run_dir)?;
     schema::write(&crate::ci::prepare::report_path(ctx.run_dir), &report)?;
     let status = report.command_status();
     Ok(status)

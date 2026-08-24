@@ -508,7 +508,7 @@ pub(crate) fn report_result(run_dir: &Path, view: super::render::ReportView<'_>)
         return Ok(());
     }
     let mut report: crate::ci::report::Report = schema::read(&path)?;
-    report.attach_log_retention(run_dir)?;
+    report.attach_run_data(run_dir)?;
     super::render::finished_report(&report, view);
     Ok(())
 }

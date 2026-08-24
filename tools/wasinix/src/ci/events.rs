@@ -11,13 +11,20 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 
 use crate::ci::facts::Diagnostic;
-use crate::support::atoms::{DurationSecs, JobAddr, JobStatus, RunState, TaskStatus};
+use crate::support::atoms::{Bytes, DurationSecs, JobAddr, JobStatus, RunState, TaskStatus};
 use crate::support::error::{Error, Result, io};
 use crate::support::schema::Document;
 
-pub const SCHEMA: u32 = 1;
+pub const SCHEMA: u32 = 2;
 pub const FILE: &str = "events.jsonl";
 pub const SNAPSHOT: &str = "snapshot.json";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ResourceBoundary {
+    Start,
+    Finish,
+}
 
 /// One line of `events.jsonl`. Each line carries the schema, so a stream can
 /// be read across a host boundary without out-of-band context.
@@ -40,6 +47,20 @@ pub enum Event {
         task_id: String,
         status: TaskStatus,
         headline: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    ResourceSample {
+        at: u64,
+        task_id: String,
+        boundary: ResourceBoundary,
+        available_bytes: Bytes,
+        total_bytes: Bytes,
+    },
+    #[serde(rename_all = "camelCase")]
+    AutomaticGc {
+        at: u64,
+        task_ids: Vec<String>,
+        requested_bytes: Bytes,
     },
     #[serde(rename_all = "camelCase")]
     JobStarted { at: u64, job: JobAddr },
@@ -84,6 +105,8 @@ impl Event {
             Event::RunStarted { at, .. }
             | Event::PhaseStarted { at, .. }
             | Event::PhaseFinished { at, .. }
+            | Event::ResourceSample { at, .. }
+            | Event::AutomaticGc { at, .. }
             | Event::JobStarted { at, .. }
             | Event::JobFinished { at, .. }
             | Event::Warning { at, .. }
@@ -201,7 +224,7 @@ pub fn read_from(path: &Path, offset: u64) -> Result<(Vec<Event>, u64)> {
             path: path.to_path_buf(),
             source,
         })?;
-        if parsed.schema != SCHEMA {
+        if !(1..=SCHEMA).contains(&parsed.schema) {
             return Err(Error::Failure(format!(
                 "{}: event schema {} is not the supported {SCHEMA}",
                 path.display(),
@@ -381,6 +404,8 @@ impl SnapshotReducer {
             Event::Warning { .. }
             | Event::LegacyOutput { .. }
             | Event::Diagnostic { .. }
+            | Event::ResourceSample { .. }
+            | Event::AutomaticGc { .. }
             | Event::Heartbeat { .. } => {}
             Event::RunFinished {
                 state, exit_code, ..

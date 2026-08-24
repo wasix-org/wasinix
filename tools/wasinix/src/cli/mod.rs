@@ -1047,7 +1047,7 @@ fn run_command(command: RunCommand) -> Result<CommandStatus> {
             let run_dir = runs::dir_of(&run_id)?;
             let path = crate::ci::prepare::report_path(&run_dir);
             let mut report: crate::ci::report::Report = schema::read(&path)?;
-            report.attach_log_retention(&run_dir)?;
+            report.attach_run_data(&run_dir)?;
             ui::emit(&json, &report, |report| {
                 render::finished_report(report, render::ReportView::Stored);
             })?;

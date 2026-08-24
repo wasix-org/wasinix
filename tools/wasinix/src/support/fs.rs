@@ -82,6 +82,50 @@ pub fn tree_bytes(root: &Path) -> Result<u64> {
     Ok(total)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Space {
+    pub available: u64,
+    pub total: u64,
+}
+
+/// Space on the filesystem containing `path`; bind mounts are resolved by
+/// the kernel, so `/nix/store` measures the runner volume Nix actually uses.
+#[cfg(unix)]
+pub fn space(path: &Path) -> Result<Space> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+
+    let path_bytes = path.as_os_str().as_bytes();
+    let c_path = CString::new(path_bytes).map_err(|_| {
+        crate::support::error::Error::Failure(format!(
+            "{}: path contains a null byte",
+            path.display()
+        ))
+    })?;
+    let mut stat = std::mem::MaybeUninit::<libc::statvfs>::uninit();
+    // SAFETY: `c_path` is nul-terminated and `stat` points to writable storage
+    // for the structure libc initializes on success.
+    if unsafe { libc::statvfs(c_path.as_ptr(), stat.as_mut_ptr()) } != 0 {
+        return Err(io(path, std::io::Error::last_os_error()));
+    }
+    // SAFETY: statvfs returned success and initialized the structure.
+    let stat = unsafe { stat.assume_init() };
+    let bytes = |blocks: libc::fsblkcnt_t| -> Result<u64> {
+        u64::from(blocks)
+            .checked_mul(u64::from(stat.f_frsize))
+            .ok_or_else(|| {
+                crate::support::error::Error::Failure(format!(
+                    "{}: filesystem byte count overflowed u64",
+                    path.display()
+                ))
+            })
+    };
+    Ok(Space {
+        available: bytes(stat.f_bavail)?,
+        total: bytes(stat.f_blocks)?,
+    })
+}
+
 #[cfg(unix)]
 pub fn set_mode(path: &Path, mode: u32) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;

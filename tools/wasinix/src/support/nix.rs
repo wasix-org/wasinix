@@ -57,6 +57,54 @@ pub fn progress_noise(line: &str) -> bool {
     .any(|prefix| line.starts_with(prefix))
 }
 
+/// The target Nix announces when automatic GC starts. Nix does not report
+/// the amount eventually reclaimed, so callers must not present this as it.
+pub fn auto_gc_requested_bytes(line: &str) -> Option<u64> {
+    let rest = line.trim_start().strip_prefix("running auto-GC to free ")?;
+    rest.strip_suffix(" bytes")?.parse().ok()
+}
+
+#[derive(Clone, Default)]
+pub struct AutomaticGcObserver(std::sync::Arc<std::sync::Mutex<Vec<u64>>>);
+
+impl AutomaticGcObserver {
+    pub fn observe(&self, line: &[u8]) {
+        if let Some(requested) = auto_gc_requested_bytes(String::from_utf8_lossy(line).trim_end()) {
+            self.0
+                .lock()
+                .expect("automatic GC observations lock was poisoned")
+                .push(requested);
+        }
+    }
+
+    pub fn requested_bytes(&self) -> Vec<u64> {
+        self.0
+            .lock()
+            .expect("automatic GC observations lock was poisoned")
+            .clone()
+    }
+}
+
+#[cfg(test)]
+mod auto_gc_tests {
+    #[test]
+    fn parses_only_the_automatic_gc_announcement() {
+        assert_eq!(
+            super::auto_gc_requested_bytes("running auto-GC to free 10737418240 bytes"),
+            Some(10_737_418_240)
+        );
+        assert_eq!(
+            super::auto_gc_requested_bytes("warning: running auto-GC to free 12 bytes"),
+            None
+        );
+        assert_eq!(super::auto_gc_requested_bytes("deleted 12 bytes"), None);
+
+        let observer = super::AutomaticGcObserver::default();
+        observer.observe(b"running auto-GC to free 42 bytes\n");
+        assert_eq!(observer.requested_bytes(), vec![42]);
+    }
+}
+
 /// The nix config block workflows install, from the same constants the
 /// binary trusts. Automatic GC preserves runner headroom; keep-outputs
 /// protects build-time dependencies while it runs.
