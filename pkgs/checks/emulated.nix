@@ -7,7 +7,7 @@
   pkgs,
   wasixRun,
 }: let
-  xverdict = import ./lib/xverdict.nix;
+  xverdict = import ../lib/xverdict.nix;
   stub = lib.getExe wasixRun.stub;
   wasmer = wasixRun.run.wasmer;
 
@@ -130,6 +130,7 @@
   in ''
     _log="$NIX_BUILD_TOP/check.log"
     set +e
+    set -m
     (
       (
       set -e
@@ -151,12 +152,15 @@
     while kill -0 "$_job" 2>/dev/null; do
       if [ "$(date +%s)" -ge "$_deadline" ]; then
         _timedout=1
-        kill -TERM "$_job" 2>/dev/null; sleep 5; kill -KILL "$_job" 2>/dev/null
+        kill -TERM -- "-$_job" 2>/dev/null
+        sleep 5
+        kill -KILL -- "-$_job" 2>/dev/null
         break
       fi
       sleep 5
     done
     wait "$_job"; _rc=$?
+    set +m
     set -e
 
     if [ -n "$_timedout" ]; then

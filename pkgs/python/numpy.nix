@@ -31,7 +31,16 @@ in
             f:
               lib.versionAtLeast package.version "2.3"
               || f != "-Ddefault_both_libraries=static"
-          ) (old ++ [(lib.mesonBool "allow-noblas" true)]);
+          ) (
+            old
+            ++ [(lib.mesonBool "allow-noblas" true)]
+            ++ lib.optionals (
+              lib.versionAtLeast package.version "2.5"
+              && lib.versionAtLeast packages.sameProfile.python.pythonVersion "3.14"
+            ) [
+              "-Dpython.build_config=${packages.sameProfile.python}/lib/${packages.sameProfile.python.libPrefix}/build-details.json"
+            ]
+          );
         # lib.const = replace, not concat: drop upstream's site.cfg symlink (dead BLAS paths)
         # and its /bin/true→coreutils test rewrite.
         preBuild = lib.const "";

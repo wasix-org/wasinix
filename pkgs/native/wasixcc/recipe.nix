@@ -4,14 +4,15 @@
 {
   lib,
   stdenvNoCC,
+  buildPackages,
   makeWrapper,
-  nix-update-script,
   wasixcc-unwrapped,
   wasix-llvm,
   binaryen,
   wasix-sysroot,
   ...
 }: let
+  inherit (buildPackages) nix-update-script;
   env = import ../../toolchain/env.nix {inherit lib;};
   wasixccUnwrapped = wasixcc-unwrapped;
   wasixLlvm = wasix-llvm;

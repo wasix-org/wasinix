@@ -2,7 +2,7 @@
 # so a wasm target defines neither the loaded library nor a return value. WASIX
 # has dlopen (the libloading floor opens os::unix to it) and reads the same
 # XDG_CONFIG_HOME/HOME, so both gates just need the wasi arm.
-{...}: {
+_: {
   edited = [">=0.22.0"];
   notMinted = "git-sourced via dbt (dbt-labs/arrow-adbc), not crates.io";
 }

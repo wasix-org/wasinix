@@ -13,7 +13,7 @@
   # pyarrow IS an arrow-cpp release: nixpkgs takes `inherit (arrow-cpp) version
   # src`, both from the same apache/arrow tag. So a history pyarrow has to link
   # the same-versioned arrow-cpp mint, which wasix/history.json carries.
-  version = package.version;
+  inherit (package) version;
   isHistory = (package.passthru.wasix.historySpec or null) != null;
   arrowCpp =
     if isHistory

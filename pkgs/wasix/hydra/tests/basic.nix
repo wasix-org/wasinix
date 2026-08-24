@@ -75,10 +75,10 @@ in {
       pg_isready -h 127.0.0.1 -p 55436 -U hydra
       createdb -h 127.0.0.1 -p 55436 -U hydra hydra
       psql -h 127.0.0.1 -p 55436 -U hydra -d hydra -v ON_ERROR_STOP=1 \
-        -f ${hydra}/libexec/hydra/sql/hydra.sql >/dev/null
+        -f ${hydraPackage}/libexec/hydra/sql/hydra.sql >/dev/null
 
       schema_version=1
-      for migration in ${hydra}/libexec/hydra/sql/migrations/upgrade-*.sql; do
+      for migration in ${hydraPackage}/libexec/hydra/sql/migrations/upgrade-*.sql; do
         version=''${migration##*-}
         version=''${version%.sql}
         if [ "$version" -gt "$schema_version" ]; then schema_version=$version; fi

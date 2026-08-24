@@ -5,7 +5,7 @@
   referenceScanner ? null,
   snapshotZstd ? null,
 }: let
-  profilesCfg = import ../profiles.nix;
+  profilesCfg = import ../project/profiles.nix;
   # extendDrv hands the filters below `null` for an attr the package never set.
   orEmpty = xs:
     if xs == null
@@ -162,11 +162,11 @@ in rec {
     w = wasixMetaOf drv;
     supported = w.supportedProfiles or profiles.all;
     preferred =
-      if w ? preferredProfile
-      then w.preferredProfile
-      else if builtins.elem defaultProfileName supported
-      then defaultProfileName
-      else builtins.head supported;
+      w.preferredProfile or (
+        if builtins.elem defaultProfileName supported
+        then defaultProfileName
+        else builtins.head supported
+      );
   in
     lib.throwIf (!(builtins.elem preferred supported))
     "${drv.pname or drv.name}: preferredProfile '${preferred}' is not in supportedProfiles"

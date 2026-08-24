@@ -3,7 +3,7 @@
 # consistently uses async-io and async-global-executor.
 {rewriters, ...}: {
   edited = [">=1.0.0"];
-  forVersion = {...}: {
+  forVersion = _: {
     patchPhase = "${rewriters.wasmerAsNative}";
   };
 }

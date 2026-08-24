@@ -43,11 +43,21 @@ exposePackage (
     };
   in
     wasmRename {wasmName = "ffmpeg";} (extendPackage base {
-      passthru.wasinix.shipped = true;
-      passthru.wasinix.update.notes = [
-        {message = "recheck wasi-target.patch; upstream FFmpeg configure should recognize wasi/wasip1 targets";}
-      ];
-      passthru.wasmer.name = "ffmpeg";
+      passthru = {
+        wasinix = {
+          shipped = true;
+          update.notes = [
+            {message = "recheck wasi-target.patch; upstream FFmpeg configure should recognize wasi/wasip1 targets";}
+          ];
+        };
+        wasmer = {
+          name = "ffmpeg";
+          commands = map (name: {inherit name;}) [
+            "ffmpeg"
+            "ffprobe"
+          ];
+        };
+      };
       patches = [./wasi-target.patch];
       nativeBuildInputs = [packages.sameProfile.disableWasmOptInConfigureHook];
       configureFlags = [

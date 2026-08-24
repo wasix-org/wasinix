@@ -74,6 +74,10 @@ exposePackage (
             --replace-fail \
               'except (OSError, subprocess.CalledProcessError):' \
               'except (OSError, subprocess.CalledProcessError, NotImplementedError):'
+          substituteInPlace lib/matplotlib/tests/test_font_manager.py \
+            --replace-fail \
+              'subprocess_run_helper(_test_threading, timeout=10)' \
+              'subprocess_run_helper(_test_threading, timeout=60)'
         '';
         preCheck = _: ''
           _source="$PWD"

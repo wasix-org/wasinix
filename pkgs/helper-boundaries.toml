@@ -1,38 +1,38 @@
 host = [
-  "pkgs/overlay/packages/yq-go/update-vendor-hash.py",
-  "pkgs/overlay/python-packages/ddtrace/update.sh",
-  "pkgs/overlay/python-packages/tree-sitter-grammars/update.sh",
-  "pkgs/products/anybuild/update-mirror.py",
-  "pkgs/products/cargo-registry/derive-lock.py",
-  "pkgs/products/cargo-registry/update.sh",
-  "pkgs/products/wasix-rust/update.sh",
-  "pkgs/products/wasix-sysroot/update.sh",
+  "pkgs/native/wasix-rust/update.sh",
+  "pkgs/native/wasix-sysroot/update.sh",
+  "pkgs/python/ddtrace/update.sh",
+  "pkgs/python/tree-sitter-grammars/update.sh",
   "pkgs/python-registry/publish.py",
+  "pkgs/shared/anybuild/update-mirror.py",
+  "pkgs/shared/cargo-registry/derive-lock.py",
+  "pkgs/shared/cargo-registry/update.sh",
+  "pkgs/wasix/yq-go/update-vendor-hash.py",
 ]
 
 foundational = [
   "pkgs/cargo-registry/bump-crate-version.py",
   "pkgs/lib/amend-lock.py",
-  "pkgs/products/wasix-rust/merge-cargo-locks.py",
-  "pkgs/products/wasix-sysroot/flang-rt-setup-hook.sh",
-  "pkgs/python-wheel-deps.py",
-  "pkgs/python-wheel-dyn.py",
+  "pkgs/native/wasix-rust/merge-cargo-locks.py",
+  "pkgs/native/wasix-sysroot/flang-rt-setup-hook.sh",
+  "pkgs/python/wheels/check-dependencies.py",
+  "pkgs/python/wheels/check-dynamic-imports.py",
 ]
 
 leaf = [
-  "pkgs/overlay/packages/anybuild/tests/check-cross-install.py",
-  "pkgs/overlay/packages/anybuild/tests/make-mirror-index.py",
-  "pkgs/overlay/packages/python3/tests/ctypes-findlib-check.py",
-  "pkgs/overlay/packages/python3/tests/ipv6-bind-check.py",
-  "pkgs/overlay/packages/python3/tests/mp-context-check.py",
-  "pkgs/overlay/packages/python3/tests/pip-usable-check.py",
-  "pkgs/overlay/packages/python3/tests/spawn-passfd-check.py",
-  "pkgs/overlay/packages/python3/tests/subprocess-opts-check.py",
   "pkgs/python-registry/check-integrity.py",
   "pkgs/python-registry/e2e/main.py",
   "pkgs/python-registry/make-index.py",
   "pkgs/python-registry/publish-wheel.py",
   "pkgs/toolchain/tests/wide-arithmetic-repro.sh",
+  "pkgs/wasix/anybuild/tests/check-cross-install.py",
+  "pkgs/wasix/anybuild/tests/make-mirror-index.py",
+  "pkgs/wasix/python3/tests/ctypes-findlib-check.py",
+  "pkgs/wasix/python3/tests/ipv6-bind-check.py",
+  "pkgs/wasix/python3/tests/mp-context-check.py",
+  "pkgs/wasix/python3/tests/pip-usable-check.py",
+  "pkgs/wasix/python3/tests/spawn-passfd-check.py",
+  "pkgs/wasix/python3/tests/subprocess-opts-check.py",
 ]
 
 research = [

@@ -13,6 +13,8 @@ exposeExtendedPackage {
     # lz4's addopts include -x; maxfail=0 (appended, so it wins) reports every
     # failure in one run
     ++ ["--maxfail=0"];
-  # 22k tests take ~600s idle; the 1200s default is too tight under load
-  passthru.wasinix.checks.captured.timeout = 3600;
+  passthru.wasinix.checks.captured = {
+    shards = 4;
+    timeout = 3600;
+  };
 }

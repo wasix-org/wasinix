@@ -1,5 +1,5 @@
 # Shared wasm32-wasi Fortran cross settings for the host flang.
-{lib}: rec {
+{lib}: {
   # flang rejects clang's -m<feature> spellings, so ABI features go through
   # -Xflang. +exception-handling only sets the feature bit for ABI consistency
   # with the C objects; the emitted code carries no EH instructions.

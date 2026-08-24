@@ -8,7 +8,7 @@
   pkgs,
   pins,
 }: dir: let
-  lib = pkgs.lib;
+  inherit (pkgs) lib;
   rewriters = import (dir + "/rewriters") {inherit pkgs;};
   adds = import (dir + "/adds.nix");
   helpers = import (dir + "/helpers.nix") {inherit lib;};

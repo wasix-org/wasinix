@@ -34,7 +34,7 @@
       copies =
         lib.concatMapStringsSep "\n" (
           f: let
-            name = f.name or (builtins.baseNameOf f.src);
+            name = f.name or (baseNameOf f.src);
           in "install -Dm644 ${f.src} ${pkg}/${name}"
         )
         files;

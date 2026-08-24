@@ -14,7 +14,7 @@
   dropSphinxDocs,
   replaceInputsByName,
 }: let
-  version = package.version;
+  inherit (package) version;
   cryptography =
     if lib.versionOlder version "25"
     then packages.sameProfile.cryptography.versions."43.0.3"

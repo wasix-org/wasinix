@@ -35,6 +35,14 @@ exposeExtendedPackage (
       packages.sameProfile.pyyaml
       packages.sameProfile.typer
     ];
+    pytestFlags = old:
+      (
+        if old == null
+        then []
+        else old
+      )
+      ++ ["--timeout=120"];
+    passthru.wasinix.checks.captured.shards = 4;
     disabledTests = [
       "test_fastapi_cli"
       "test_frontend_respects_root_path"

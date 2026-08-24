@@ -2,9 +2,7 @@
 {
   exposePackage,
   extendPackage,
-  package,
   packages,
-  pkgs,
   wasmRename,
 }:
 exposePackage (

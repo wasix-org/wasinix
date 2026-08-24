@@ -3,7 +3,6 @@
 {
   exposePackage,
   extendPackage,
-  package,
   packages,
   pkgs,
 }:
@@ -36,48 +35,50 @@ exposePackage (
       assert packages.sameProfile.lib.assertMsg (n 3 < 100) "rust: fork revision ${toString (n 3)} overflows its base-100 version slot"; "${toString (n 0)}.${toString (n 1)}.${toString (n 2 * 100 + n 3)}";
   in
     extendPackage runtime {
-      passthru.wasix = {
-        supportedProfiles = ["eh"];
-        preferredProfile = "eh";
-      };
-      passthru.wasinix = {
-        shipped = true;
-        update.notes = [
-          {message = "drop wasix-host-tools.patch once the WASIX Rust target is marked capable of hosting tools upstream";}
-          {message = "recheck the stage-2 output layout on every wasix-org/rust bump";}
-        ];
-      };
-      passthru.wasmer = {
-        name = "rust";
-        entrypoint = "rustc";
-        # The dated fork release is the package version. Fold day and revision
-        # into semver's patch component: 2026-07-07.3 -> 2026.7.703.
-        version = forkVersionToSemver;
-        commands = [
-          {
-            name = "rustc";
-            module = "rustc";
-            wasm = "rustc.wasm";
-            output = "rustc.wasm";
-            mainArgs = ["--sysroot=/rust"];
-          }
-          {
-            name = "cargo";
-            module = "cargo";
-            wasm = "cargo.wasm";
-            output = "cargo.wasm";
-            env = {
-              RUSTC = "/bin/rustc";
-              PATH = "/bin";
-              CARGO_HOME = "/tmp/cargo-home";
-              CARGO_INCREMENTAL = "0";
-              CARGO_BUILD_TARGET = targetTriple;
-              CARGO_TARGET_WASM32_WASMER_WASI_LINKER = "/bin/wasm-ld";
-            };
-          }
-        ];
-        dependencies = [packages.sameProfile.lld];
-        fs."/rust" = runtime;
+      passthru = {
+        wasix = {
+          supportedProfiles = ["eh"];
+          preferredProfile = "eh";
+        };
+        wasinix = {
+          shipped = true;
+          update.notes = [
+            {message = "drop wasix-host-tools.patch once the WASIX Rust target is marked capable of hosting tools upstream";}
+            {message = "recheck the stage-2 output layout on every wasix-org/rust bump";}
+          ];
+        };
+        wasmer = {
+          name = "rust";
+          entrypoint = "rustc";
+          # The dated fork release is the package version. Fold day and revision
+          # into semver's patch component: 2026-07-07.3 -> 2026.7.703.
+          version = forkVersionToSemver;
+          commands = [
+            {
+              name = "rustc";
+              module = "rustc";
+              wasm = "rustc.wasm";
+              output = "rustc.wasm";
+              mainArgs = ["--sysroot=/rust"];
+            }
+            {
+              name = "cargo";
+              module = "cargo";
+              wasm = "cargo.wasm";
+              output = "cargo.wasm";
+              env = {
+                RUSTC = "/bin/rustc";
+                PATH = "/bin";
+                CARGO_HOME = "/tmp/cargo-home";
+                CARGO_INCREMENTAL = "0";
+                CARGO_BUILD_TARGET = targetTriple;
+                CARGO_TARGET_WASM32_WASMER_WASI_LINKER = "/bin/wasm-ld";
+              };
+            }
+          ];
+          dependencies = [packages.sameProfile.lld];
+          fs."/rust" = runtime;
+        };
       };
     }
 )

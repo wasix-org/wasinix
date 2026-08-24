@@ -120,18 +120,22 @@ exposePackage (
     ];
   in
     extendPackage (package.override {gmpSupport = false;}) {
-      passthru.wasinix.shipped = true;
-      passthru.wasix.supportedProfiles = ["off"];
-      passthru.wasmer.entrypoint = "coreutils";
-      passthru.wasmer.commands =
-        [{name = "coreutils";}]
-        ++ map (p: {
-          name = p;
-          module = "coreutils";
-          wasm = "coreutils.wasm";
-          output = "coreutils.wasm";
-        })
-        programs;
+      passthru = {
+        wasinix.shipped = true;
+        wasix.supportedProfiles = ["off"];
+        wasmer = {
+          entrypoint = "coreutils";
+          commands =
+            [{name = "coreutils";}]
+            ++ map (p: {
+              name = p;
+              module = "coreutils";
+              wasm = "coreutils.wasm";
+              output = "coreutils.wasm";
+            })
+            programs;
+        };
+      };
       # libc.a carries a chroot symbol that the link probe finds, but no header
       # declares it, so chroot.c fails to compile. Drop the program instead; wasm
       # has nothing to chroot into. (who/users/pinky drop out on their own, since

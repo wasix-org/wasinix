@@ -3,7 +3,7 @@
 # builders; browserWasm narrows it, identically across the 0.4 and 0.5 lines.
 {rewriters, ...}: {
   edited = ["=0.4.2" ">=0.5.0"];
-  forVersion = {...}: {
+  forVersion = _: {
     patchPhase = "${rewriters.browserWasm}";
   };
 }

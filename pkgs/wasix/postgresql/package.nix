@@ -85,6 +85,45 @@ exposePackage (
         wasmer = {
           entrypoint = "postgres";
           env.PATH = "/bin";
+          commands = map (name:
+            {inherit name;}
+            // packages.sameProfile.lib.optionalAttrs (name == "psql") {global = false;}) [
+            "clusterdb"
+            "createdb"
+            "createuser"
+            "dropdb"
+            "dropuser"
+            "initdb"
+            "oid2name"
+            "pg_amcheck"
+            "pg_archivecleanup"
+            "pg_basebackup"
+            "pg_checksums"
+            "pg_combinebackup"
+            "pg_controldata"
+            "pg_createsubscriber"
+            "pg_ctl"
+            "pg_dump"
+            "pg_dumpall"
+            "pg_isready"
+            "pg_receivewal"
+            "pg_recvlogical"
+            "pg_resetwal"
+            "pg_restore"
+            "pg_rewind"
+            "pg_test_fsync"
+            "pg_test_timing"
+            "pg_upgrade"
+            "pg_verifybackup"
+            "pg_waldump"
+            "pg_walsummary"
+            "pgbench"
+            "postgres"
+            "psql"
+            "reindexdb"
+            "vacuumdb"
+            "vacuumlo"
+          ];
           # popen() runs `/bin/sh -c`, which initdb and pg_ctl use to start the
           # server. icu-data carries the collation archive icu compiles a path to.
           dependencies = [

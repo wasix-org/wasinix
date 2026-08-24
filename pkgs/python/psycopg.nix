@@ -17,7 +17,7 @@
 }:
 exposePackage (
   let
-    stdenv = pkgs.stdenv;
+    inherit (pkgs) stdenv;
     base = package.override {
       stdenv =
         stdenv

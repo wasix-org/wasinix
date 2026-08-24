@@ -1,5 +1,4 @@
 {
-  pkgs,
   entry,
   harnesses,
   helpers,

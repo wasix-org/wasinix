@@ -22,12 +22,12 @@
         (spec
           // {
             vendorLayout =
-              builtins.removeAttrs spec.vendorLayout ["lockFile"]
-              // {postPatch = "cp ${builtins.dirOf definition.file + "/${lockFile}"} Cargo.lock";};
+              removeAttrs spec.vendorLayout ["lockFile"]
+              // {postPatch = "cp ${dirOf definition.file + "/${lockFile}"} Cargo.lock";};
           }));
 
   defaultRebasePackage = version: spec: package: let
-    fetchArgs = builtins.removeAttrs spec historyMeta;
+    fetchArgs = removeAttrs spec historyMeta;
     # fetchurl has no override interface, so release tarballs replace the
     # fixed-output fields directly.
     src =
@@ -37,7 +37,7 @@
         package.src.overrideAttrs (_: {
           urls = [spec.url];
           outputHash = spec.hash;
-          name = builtins.baseNameOf spec.url;
+          name = baseNameOf spec.url;
         });
     # importCargoLock can rebuild from the new lock. fetchCargoVendor instead
     # needs the retained fixed-output hash for its staging derivation.
@@ -149,18 +149,14 @@
           inherit packageSet;
         }
         entry.name
-        (
-          if entry.scope == "python"
-          then repairPythonPackage candidate
-          else candidate
-        );
+        candidate;
       initial = baseSet // {${entry.name} = normalize baseSet rebased;};
       replayed = lib.foldl' (previous: layer: let
         next =
           previous
           // (projectLib.registerOverlay {
               inherit (layer) definition overlay;
-              source = entry.source;
+              inherit (entry) source;
               instanceFor = resultName: result:
                 if resultName == entry.name
                 then {
@@ -186,7 +182,10 @@
         // {${entry.name} = normalize previous pinned;})
       initial
       overlays;
-      replayResult = replayed.${entry.name};
+      replayResult =
+        if entry.scope == "python"
+        then repairPythonPackage replayed.${entry.name}
+        else replayed.${entry.name};
       result = replayResult.overrideAttrs (old: let
         oldPassthru = old.passthru or {};
         oldWasinix = oldPassthru.wasinix or {};

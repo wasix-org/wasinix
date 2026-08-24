@@ -63,10 +63,10 @@ and reports one plan row per crate (`--json` for the document). Idempotent by
 checksum against the live sparse index: an absent version publishes, identical
 bytes skip, and different bytes fail naming the
 `wasinix versions bump artifacts.registry.cargo-registry.crates.<name>@<version>`
-that mints a fresh
-publishable version. A live publish needs `WASIX_CARGO_TOKEN` (a token whose
-sha256 is in the deployed server's hash list); dry runs never read it. The
-`publish-crates` workflow runs the same command, manual dispatch only.
+that mints a fresh publishable version. A live publish needs `WASIX_CARGO_TOKEN`
+(a token whose sha256 is in the deployed server's hash list); dry runs never
+read it. The `publish-crates` workflow runs the same command, manual dispatch
+only.
 
 `wasinix cargo preview` deploys the mint (or, with `--base`, only the crates
 whose minted bytes changed) as a static sparse index on an ephemeral Edge app,

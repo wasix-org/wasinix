@@ -140,9 +140,10 @@
     variant,
   }: let
     metadata = projectLib.packageMetadata package;
-    policy = builtins.removeAttrs metadata projectLib.machineMetadata;
+    policy = removeAttrs metadata projectLib.machineMetadata;
   in {
     kind = "package";
+    build = package;
     inherit address name package preferred projectionPath scope variant;
     inherit (metadata) definition source lineage instance;
     inherit policy;
@@ -193,6 +194,7 @@
     context,
     entry,
     namespaces ? ["artifacts" "commands" "tests"],
+    rules,
   }: let
     knownNamespaces = ["artifacts" "commands" "tests" "versions"];
     resultFor = ruleName: rule: let
@@ -223,7 +225,7 @@
             (lib.throwIf (unknown != [])
               "projection rule '${ruleName}' returned undeclared namespace(s): ${lib.concatStringsSep ", " unknown}"
               result))));
-    results = lib.mapAttrs resultFor projectionRules;
+    results = lib.mapAttrs resultFor rules;
     validCommand = name: command:
       lib.isAttrs command
       && builtins.isString (command.name or null)
@@ -405,10 +407,10 @@ in rec {
       in
         !attempted.success || attempted.value;
 
-      packageSetView = scope: variant: finalSet:
+      packageSetView = _scope: _variant: finalSet:
         projectLib.registeredPackages finalSet;
 
-      projectedPackageFor = scope: variant: finalSet: name: rawPackage: let
+      projectedPackageFor = scope: variant: _finalSet: name: rawPackage: let
         package = rawPackage;
         address =
           if scope == "native"
@@ -474,6 +476,11 @@ in rec {
             nativeRaw = null;
             scope = "native";
             variant = {};
+            packageRecipesOverlay = args:
+              projectLib.loadRecipeOverlay ({
+                  contextFor = contextFor "native" {} null;
+                }
+                // args);
           }
           ++ overlaysFor (contextFor "native" {} null) "native" {} ["shared" "native"];
       };
@@ -494,6 +501,11 @@ in rec {
                   inherit project nativeRaw;
                   scope = "wasix";
                   variant = {inherit profile;};
+                  packageRecipesOverlay = args:
+                    projectLib.loadRecipeOverlay ({
+                        contextFor = contextFor "wasix" {inherit profile;} null;
+                      }
+                      // args);
                 }
                 ++ overlaysFor (contextFor "wasix" {inherit profile;} null) "wasix" {inherit profile;} ["shared" "wasix"];
             }
@@ -660,6 +672,7 @@ in rec {
       in
         lib.nameValuePair address {
           kind = "test";
+          build = check;
           inherit address check name;
           testName = name;
           inherit (test) source;
@@ -680,8 +693,8 @@ in rec {
           };
         })
       projectTests;
-      inheritedPolicy = subject: derivation: let
-        own = builtins.removeAttrs (projectLib.packageMetadata derivation) projectLib.machineMetadata;
+      inheritedPolicy = subject: drv: let
+        own = removeAttrs (projectLib.packageMetadata drv) projectLib.machineMetadata;
         subjectCi = subject.policy.ci or {};
         ownCi = own.ci or {};
       in
@@ -713,10 +726,12 @@ in rec {
           context = projectionContext;
           entry = baseEntry;
           namespaces = ["versions"];
+          rules = projectionRules;
         };
         outputs = projectionsFor {
           context = projectionContext;
           inherit entry;
+          rules = projectionRules;
         };
         versionNodes =
           lib.throwIf (
@@ -751,6 +766,7 @@ in rec {
               kind = "artifact";
               address = projectLib.address "artifacts" ([kind] ++ projectionPath);
               artifactKind = kind;
+              build = artifact;
               inherit artifact projectionPath;
               inherit (baseEntry) name preferred definition source lineage scope variant instance;
               subject = baseEntry.address;
@@ -760,12 +776,17 @@ in rec {
             // lib.optionalAttrs (!lib.isDerivation declared && declared ? name) {inherit (declared) name;}))
         outputs.artifacts;
         relativeArtifacts = lib.mapAttrs (_: node: node.value) artifactNodes;
+        relativeCommands = mergeDisjoint "relative command" (
+          [outputs.commands]
+          ++ map (node: node.entry.commands) (lib.attrValues artifactNodes)
+        );
         versions = lib.optionalAttrs (versionNodes != {}) {
           versions = lib.mapAttrs (_: node: node.value) versionNodes;
         };
         relative = {
           artifacts = relativeArtifacts;
-          inherit (outputs) commands tests;
+          commands = relativeCommands;
+          inherit (outputs) tests;
         };
         value =
           (
@@ -807,7 +828,7 @@ in rec {
             inherit (baseEntry) definition source lineage scope variant instance;
             subject = baseEntry.address;
             packageSubject = baseEntry.packageSubject or baseEntry.address;
-            policy = baseEntry.policy;
+            inherit (baseEntry) policy;
           })
         outputs.commands;
         ownTests = lib.mapAttrs' (name: check: let
@@ -815,6 +836,7 @@ in rec {
         in
           lib.nameValuePair address {
             kind = "test";
+            build = check;
             inherit address check;
             inherit (baseEntry) name;
             testName = name;
@@ -926,12 +948,7 @@ in rec {
       selectorSets =
         lib.mapAttrs (_: selected: map (entry: entry.address) selected)
         (lib.groupBy selectorSetFor (lib.attrValues ciEntries));
-      derivationOf = entry:
-        if entry.kind == "package"
-        then entry.package
-        else if entry.kind == "artifact"
-        then entry.artifact
-        else entry.check;
+      derivationOf = entry: entry.build;
     in
       assert wasixShapesValid;
       assert pythonShapesValid;
@@ -952,7 +969,7 @@ in rec {
           sources = requestedCiSources;
           jobs = lib.mapAttrs (_: derivationOf) ciEntries;
           catalog = {
-            schemaVersion = project.schemaVersion;
+            inherit (project) schemaVersion;
             jobs = lib.mapAttrs (_: serializableEntry) ciEntries;
             packages = lib.mapAttrs (_: serializableEntry) selectablePackageEntries;
             selectors = {

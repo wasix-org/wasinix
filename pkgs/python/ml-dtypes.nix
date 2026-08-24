@@ -11,6 +11,6 @@ in
     cmakeFlags = ["-DPython_INCLUDE_DIR=${py.crossIncludeDir}"];
     postPatch = ''
       substituteInPlace CMakeLists.txt \
-        --replace-fail 'import numpy; print(numpy.get_include())' "print('${py.pkgs.numpy.crossInclude}')"
+        --replace-fail 'import numpy; print(numpy.get_include())' "print('${packages.sameProfile.numpy.crossInclude}')"
     '';
   }

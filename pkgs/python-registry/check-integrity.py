@@ -5,7 +5,7 @@ hash matches data-core-metadata; no wheel on disk is missing from its page;
 packages.json lists exactly the served wheels; and every wheel's Requires-Dist
 is satisfiable from the index alone, on each interpreter the wheel installs on.
 
-Usage: check-integrity.py <registry store path> <python-wheel-deps.py path>
+Usage: check-integrity.py <registry store path> <check-dependencies.py path>
 """
 
 import hashlib

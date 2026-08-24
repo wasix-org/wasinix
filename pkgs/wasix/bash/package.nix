@@ -37,24 +37,29 @@ in
         --replace-fail '#if !defined (HAVE_MKFIFO) && defined (PROCESS_SUBSTITUTION)' \
                        '#if !defined (HAVE_MKFIFO) && defined (PROCESS_SUBSTITUTION) && !defined(__wasi__)'
     '';
-    passthru.wasix.supportedProfiles = ["off"];
-    passthru.wasinix.shipped = true;
-    # Both commands share the one module, so dependents get /bin/sh as well as
-    # /bin/bash and the webc still carries a single wasm. A second command means
-    # wasmer no longer infers one, hence the explicit entrypoint.
-    passthru.wasmer.entrypoint = "bash";
-    # A shell with nothing to run is not a shell: wasmer mounts each dependency
-    # command under /bin, which is where DEFAULT_PATH_VALUE points.
-    passthru.wasmer.dependencies = [packages.preferred.coreutils];
-    passthru.wasmer.commands = [
-      {name = "bash";}
-      {
-        name = "sh";
-        module = "bash";
-        wasm = "bash.wasm";
-        output = "bash.wasm";
-      }
-    ];
+    passthru = {
+      wasix.supportedProfiles = ["off"];
+      wasinix.shipped = true;
+      wasmer = {
+        # Both commands share the one module, so dependents get /bin/sh as well
+        # as /bin/bash and the webc still carries a single wasm. A second command
+        # means wasmer no longer infers one, hence the explicit entrypoint.
+        entrypoint = "bash";
+        # A shell with nothing to run is not a shell: wasmer mounts each
+        # dependency command under /bin, which is where DEFAULT_PATH_VALUE
+        # points.
+        dependencies = [packages.preferred.coreutils];
+        commands = [
+          {name = "bash";}
+          {
+            name = "sh";
+            module = "bash";
+            wasm = "bash.wasm";
+            output = "bash.wasm";
+          }
+        ];
+      };
+    };
     preConfigure = packages.sameProfile.lib.optionalString (!offProfile) ''
       echo 'bash must be built in the off-EH profile (wasmExceptions = "no")' >&2
       exit 1

@@ -9,7 +9,6 @@
   runners,
 }: let
   inherit (pkgs) lib;
-  inherit (import ../../lib/check-output.nix {inherit lib;}) usable;
 
   mkWasixPython = isCurrent: base: let
     pyVer = base.pythonVersion;
@@ -37,21 +36,38 @@
         bashNonInteractive = packages.sameProfile.buildPackages.bashNonInteractive;
         # python3.pkgs.<pkg> then builds against THIS python, not the unfixed python313.
         self = py;
-        # PYO3_CROSS_LIB_DIR is interpreter-specific, so its natural home is
-        # the Python constructor rather than an individual wheel override.
+        # Target-interpreter metadata belongs to the Python constructor rather
+        # than individual Rust and Meson wheel overrides.
         packageOverrides = _pyfinal: pyprev:
           lib.optionalAttrs (pyprev.python.stdenv.hostPlatform.isWasix or false) {
             buildPythonPackage = let
-              withPyo3 = buildPythonPackage:
+              rust = import ../../python/lib/rust.nix {final = packages.sameProfile;};
+              withWasixBuild = buildPythonPackage:
                 lib.extendMkDerivation {
                   constructDrv = buildPythonPackage;
-                  extendDrvArgs = _finalAttrs: previousArgs: {
-                    env = {PYO3_CROSS_LIB_DIR = "${py}/lib/${py.libPrefix}";} // (previousArgs.env or {});
+                  extendDrvArgs = finalAttrs: previousArgs: {
+                    env =
+                      {
+                        PYO3_CROSS_LIB_DIR = "${py}/lib/${py.libPrefix}";
+                      }
+                      // (previousArgs.env or {});
+                    nativeBuildInputs =
+                      (previousArgs.nativeBuildInputs or [])
+                      ++ lib.optionals (finalAttrs ? cargoDeps) [
+                        packages.sameProfile.rustPlatform.wasixDepCcHook
+                        packages.sameProfile.rustPlatform.wasixLockAmendHook
+                      ];
+                    postConfigure =
+                      (previousArgs.postConfigure or "")
+                      + lib.optionalString (finalAttrs ? cargoDeps) ''
+                        export CARGO_BUILD_TARGET=${rust.wasixRustDlTarget}
+                        export CARGO_TARGET_WASM32_WASMER_WASI_DL_LINKER=${rust.rustLld}
+                      '';
                   };
                 };
             in
-              withPyo3 pyprev.buildPythonPackage
-              // {override = args: withPyo3 (pyprev.buildPythonPackage.override args);};
+              withWasixBuild pyprev.buildPythonPackage
+              // {override = args: withWasixBuild (pyprev.buildPythonPackage.override args);};
           };
       }) {
         configureFlags = [
@@ -290,7 +306,7 @@
           done
 
           if [ -e "$out/lib/python${pyVer}/build-details.json" ]; then
-            ${packages.sameProfile.buildPackages.python3.interpreter} -c "import json,glob,sys; L=sys.argv[1]; g={}; exec(open(glob.glob(L+'/_sysconfigdata*.py')[0]).read(),g); e=g['build_time_vars']['EXT_SUFFIX']; p=L+'/build-details.json'; d=json.load(open(p)); d['abi']['extension_suffix']=e; d['abi'].setdefault('stable_abi_suffix','.abi3.so'); d['suffixes']['extensions']=[e,'.abi3.so','.so']; json.dump(d,open(p,'w'),indent=2)" "$out/lib/python${pyVer}"
+            ${packages.sameProfile.buildPackages.python3.interpreter} -c "import json,glob,sys; L=sys.argv[1]; g={}; exec(open(glob.glob(L+'/_sysconfigdata*.py')[0]).read(),g); e=g['build_time_vars']['EXT_SUFFIX']; p=L+'/build-details.json'; d=json.load(open(p)); d['abi']['extension_suffix']=e; d['abi'].setdefault('stable_abi_suffix','.abi3.so'); d['libpython']['link_extensions']=False; d['suffixes']['extensions']=[e,'.abi3.so','.so']; json.dump(d,open(p,'w'),indent=2)" "$out/lib/python${pyVer}"
           fi
 
         '';

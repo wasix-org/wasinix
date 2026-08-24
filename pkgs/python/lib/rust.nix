@@ -3,7 +3,7 @@
 # `import ./lib/rust.nix {inherit final;}`. The pyo3 cross sysconfig dir is NOT here: it's a
 # property of the python set building the wheel, derived from the `packages.sameProfile.python` callArg (see
 # packages/python3/package.nix).
-{final}: rec {
+{final}: {
   # Extensions are PIC (ehpic) → the dl std target + its rust-lld. The rustlib dir is named by
   # the toolchain's build-host rust triple; derive it so it can't drift.
   wasixRustDlTarget = "wasm32-wasmer-wasi-dl";

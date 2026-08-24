@@ -4,7 +4,6 @@
 # runtime platform switch needs a wasix branch, sys.platform being unknown to it.
 {
   exposeExtendedPackage,
-  packages,
   pkgs,
   lib,
 }:
@@ -27,14 +26,13 @@ exposeExtendedPackage {
     substituteInPlace setup.py \
       --replace-fail "oses = 'manylinux_2_28_{}'.format(pep600_architecture)" \
                      "oses = 'wasix_wasm32'"
+    substituteInPlace tests/test_soundfile.py \
+      --replace-fail \
+        $'        f.title = \'testing\'\n    with sf.SoundFile(filename_new) as f:' \
+        $'        f.title = \'testing\'\n    if sys.platform == "wasix" and hasattr(file_w, "close"):\n        file_w.close()\n    with sf.SoundFile(filename_new) as f:'
   '';
-  pytestFlags =
-    [
-      "--deselect=tests/test_soundfile.py::test_if_open_with_mode_w_truncates"
-      "--deselect=tests/test_soundfile.py::test_write_flush_should_write_to_disk[obj]"
-    ]
-    ++ lib.optionals (lib.versionOlder packages.sameProfile.python.version "3.14") [
-      # This file-object write is not visible when reopened by path on Python 3.13.
-      "--deselect=tests/test_soundfile.py::test_file_attributes_should_save_to_disk[obj]"
-    ];
+  pytestFlags = [
+    "--deselect=tests/test_soundfile.py::test_if_open_with_mode_w_truncates"
+    "--deselect=tests/test_soundfile.py::test_write_flush_should_write_to_disk[obj]"
+  ];
 }

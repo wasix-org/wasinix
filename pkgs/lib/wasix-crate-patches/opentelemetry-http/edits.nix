@@ -3,7 +3,7 @@
 # browserWasm narrows the gate to the browser target that actually lacks it.
 {rewriters, ...}: {
   edited = [">=0.27.0"];
-  forVersion = {...}: {
+  forVersion = _: {
     patchPhase = "${rewriters.browserWasm}";
   };
 }

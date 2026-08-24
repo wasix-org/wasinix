@@ -29,8 +29,8 @@ For example, `exnrefEh` uses exnref EH, `ehpic` uses legacy Wasm EH with PIC,
 and `off` has no Wasm EH. PIC is required for dynamic linking. `fork()` requires
 asyncify in every profile; `off` also uses it for `setjmp` and `longjmp`.
 
-`pkgs/profiles.nix` is the profile inventory and derives platform attributes,
-sysroot flags, directory names, and name lookup from it.
+`pkgs/project/profiles.nix` is the profile inventory and derives platform
+attributes, sysroot flags, directory names, and name lookup from it.
 
 ## Cross package sets
 

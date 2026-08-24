@@ -12,7 +12,7 @@
   # Wasmer runtime for the import checks (flake input; null -> pkgs.wasmer).
   wasmer ? null,
   mkTestGroup,
-  # the shared check machinery (pkgs/emulated-check.nix, pkgs/lib/check-output.nix)
+  # the shared check machinery (pkgs/checks/emulated.nix, pkgs/lib/check-output.nix)
   emulatedChecks,
   installCheckOutputArgsIf,
   # Which worklist entries this call builds. noarch wheels (python-version-independent: they ship
@@ -22,12 +22,12 @@
   # This call's wheel variant ("py313"/"py314"/"noarch"); history entries gate on it.
   pyKey,
 }: let
-  testLib = import ./python-test-lib.nix {inherit pkgs lib python3 pythonWebc wasmer;};
+  testLib = import ./test-lib.nix {inherit pkgs lib python3 pythonWebc wasmer;};
 
-  wheelList = import ./python/wheels/default.nix;
+  wheelList = import ./default.nix;
   # Older releases also served (registry history), keyed by worklist attr then version;
   # JSON so scripts/history.py and update.py can edit it (schema: see wheels.nix header).
-  historyTable = builtins.fromJSON (builtins.readFile ./python/history.json);
+  historyTable = builtins.fromJSON (builtins.readFile ../history.json);
   unknownHistory = lib.filter (n: !(lib.elem n (map (e: e.attr) wheelList))) (lib.attrNames historyTable);
   # A noarch entry builds once on the default python, so its history versions
   # would be gated out by every `variants` value and silently never ship.
@@ -95,7 +95,7 @@
     checker = pkgs.python3.withPackages (ps: [ps.packaging]);
   in
     pkgs.runCommand "wheel-deps-${name}" {} ''
-      ${checker.interpreter} ${./python-wheel-deps.py} \
+      ${checker.interpreter} ${./check-dependencies.py} \
         ${wheel.dist} ${python3.pythonVersion} \
         ${lib.escapeShellArgs servedNames} > "$out"
     '';
@@ -110,7 +110,7 @@
     sites = map (m: "${m}/${python3.sitePackages}") members;
   in
     pkgs.runCommand "wheel-dynamic-${name}" {} ''
-      ${pkgs.python3.interpreter} ${./python-wheel-dyn.py} \
+      ${pkgs.python3.interpreter} ${./check-dynamic-imports.py} \
         ${lib.getExe' python3 "python${python3.pythonVersion}.wasm"} \
         ${lib.escapeShellArgs sites} > "$out"
     '';
@@ -159,7 +159,7 @@
 
   # Package tests follow python/<attr>/tests/*.nix and return
   # named derivations from the supplied scope.
-  pkgTestsDir = attr: ./python + "/${attr}/tests";
+  pkgTestsDir = attr: ../. + "/${attr}/tests";
   pkgTests = e: let
     dir = pkgTestsDir e.attr;
     scope = {
@@ -183,7 +183,7 @@
   # unchanged). Inherited nixpkgs passthru.tests are dropped: they are x86 test
   # suites that would leak into `checks`. Per-package tests/ run only on the
   # primary (current) wheel (name == e.attr), not history versions.
-  inherit (import ./python-publish.nix {inherit pkgs lib;}) publishOf;
+  inherit (import ./publication.nix {inherit pkgs lib;}) publishOf;
   mkWheel = name: e: wheel: let
     historyVersion =
       if name == e.attr

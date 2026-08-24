@@ -34,7 +34,7 @@
   # Rust standard libraries use. The shared exnref hook translates linked .so
   # files afterwards, so the C objects match the Rust ones.
   env = import ../toolchain/env.nix {inherit lib;};
-  profiles = (import ../profiles.nix).profiles;
+  inherit ((import ../project/profiles.nix)) profiles;
   depBintools = pkgsCross.stdenv.cc.bintools.override {
     libc = null;
     noLibc = true;
@@ -78,9 +78,11 @@
         (mkBin "clang" "wasixcc")
         (mkBin "clang++" "wasix++")
       ];
-      passthru.hardeningUnsupportedFlags = ["zerocallusedregs" "stackclashprotection"];
-      passthru.isClang = true;
-      passthru.isROCm = true;
+      passthru = {
+        hardeningUnsupportedFlags = ["zerocallusedregs" "stackclashprotection"];
+        isClang = true;
+        isROCm = true;
+      };
     };
   in
     pkgsCross.stdenv.cc.override {
@@ -240,7 +242,7 @@
         rebuild = {cargoHash ? null, ...} @ overrides:
           lib.throwIf (cargoHash == null)
           "wasixRebuildVendor: a fetchCargoVendor package needs a cargoHash in its history entry (wasinix versions add <attr>@<version> derives it)"
-          (final.fetchCargoVendor (args // builtins.removeAttrs overrides ["cargoHash"] // {hash = cargoHash;}));
+          (final.fetchCargoVendor (args // removeAttrs overrides ["cargoHash"] // {hash = cargoHash;}));
       in
         attach (patchInPlace (vendorPlatform.fetchCargoVendor args)) rebuild
     );
@@ -284,10 +286,10 @@ in
     # found a function").
     buildRustPackage = lib.extendMkDerivation {
       constructDrv = patchedPlatform.buildRustPackage;
-      extendDrvArgs = finalAttrs: prevArgs: {
+      extendDrvArgs = _finalAttrs: prevArgs: {
         # wasm can't run tests on the build host. extendDrvArgs re-runs on
         # overrideAttrs, so read prevArgs rather than forcing false; that is
-        # how an emulated check (pkgs/emulated-check.nix) turns doCheck on.
+        # how an emulated check (pkgs/checks/emulated.nix) turns doCheck on.
         doCheck = prevArgs.doCheck or false;
         doInstallCheck = prevArgs.doInstallCheck or false;
         # cargo-auditable would re-link via the host rustc; unneeded for wasm.

@@ -13,7 +13,7 @@
   workProject = workFlake.legacyPackages.${system};
   baseProject = (flakeAt "?rev=${base}").legacyPackages.${system};
   inherit (workFlake.inputs.nixpkgs) lib;
-  profiles = import ./pkgs/profiles.nix;
+  profiles = import ./pkgs/project/profiles.nix;
   baseNative = baseProject.internals.packageSets.nativeRaw;
   baseByProfile = baseProject.internals.packageSets.wasixRaw;
   nativeNames = builtins.attrNames baseProject.packages.native;

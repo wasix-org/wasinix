@@ -3,7 +3,6 @@
 {
   exposeExtendedPackage,
   packages,
-  pkgs,
 }:
 exposeExtendedPackage {
   nativeBuildInputs = [packages.sameProfile.python.pythonOnBuildForHost.pkgs.cffi];

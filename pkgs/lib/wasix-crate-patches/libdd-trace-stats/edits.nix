@@ -4,7 +4,7 @@
 {rewriters, ...}: {
   edited = ["*"];
   notMinted = "git-sourced via ddtrace (DataDog/libdatadog), not crates.io";
-  forVersion = {...}: {
+  forVersion = _: {
     patchPhase = "${rewriters.wasmerAsNative}";
   };
 }

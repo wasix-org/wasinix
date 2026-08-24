@@ -14,14 +14,19 @@ exposePackage (
   } (
     extendPackage package {
       patches = [./patches/wasi-opendirat.patch];
-      # The autotest suite depends on POSIX permissions, sparse files, and symlinks.
-      doCheck = false;
-      passthru.wasinix.shipped = true;
-      # tar spawns its compression programs with fork, which the off profile
-      # asyncifies for; binaryen cannot asyncify the EH instructions the others
-      # emit.
-      passthru.wasix.supportedProfiles = ["off"];
-      passthru.wasmer.name = "tar";
+      # `make check TESTS=` still runs check-local and executes the Autotest
+      # suite, so build its helpers without running it during the snapshot.
+      wasixCheckPrebuild = ''
+        make -C tests -j"''${NIX_BUILD_CORES:-1}" genfile checkseekhole ckmtime
+      '';
+      passthru = {
+        wasinix.shipped = true;
+        # tar spawns its compression programs with fork, which the off profile
+        # asyncifies for; binaryen cannot asyncify the EH instructions the others
+        # emit.
+        wasix.supportedProfiles = ["off"];
+        wasmer.name = "tar";
+      };
       configureFlags = [
         # AC_TYPE_GETGROUPS is a run test, so a cross build takes its historic int
         # fallback, and gnulib's definition then disagrees with its own gid_t header.

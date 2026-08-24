@@ -2,10 +2,10 @@
 # gate, which wasi satisfies too. One line, one file, unchanged across the line,
 # so it is a substitution rather than eleven near-identical floors. 1.x builds
 # stock (verified on 1.6 and 1.9, which this tree builds against).
-{...}: {
+_: {
   edited = [">=0.14.18, <0.15.0"];
   stock = ["<0.14.18" ">=0.15.0"];
-  forVersion = {...}: {
+  forVersion = _: {
     patches = [];
     patchPhase = ''
       substituteInPlace src/client/connect/http.rs \

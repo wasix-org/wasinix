@@ -30,7 +30,7 @@ exposePackage (
   in
     extendPackage (package.override ({
         blas = lapack;
-        lapack = lapack;
+        inherit lapack;
         pythran = buildPythran;
         boost191 = buildBoost;
       }

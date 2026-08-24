@@ -1,4 +1,4 @@
-"""Check a wheel's published requirements are servable (python-wheels.nix `deps`).
+"""Check a wheel's published requirements are servable (project.nix `deps`).
 
 Every requirement the wheel's own METADATA states must name a distribution the
 registry serves. One that names something it cannot (a nixpkgs-internal module
@@ -6,7 +6,7 @@ name, a dependency dropped from the build but left in the metadata) makes `pip
 install` fail to resolve, even though the import smoke-test passes: that test
 runs off the installed closure rather than the published artifact.
 
-Usage: python-wheel-deps.py <dist dir> <python version> <served name>...
+Usage: check-dependencies.py <dist dir> <python version> <served name>...
 """
 
 import re

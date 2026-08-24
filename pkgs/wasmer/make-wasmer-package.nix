@@ -34,6 +34,7 @@
 }: let
   # the wasmer package and its webc point back at the package definition
   packagePos = posOf package;
+  packageBin = lib.getBin package;
   w = package.passthru.wasmer or {};
   ciTags = (package.passthru.wasinix or {}).ci.tags or [];
   ciWasinix = {inherit publication;} // lib.optionalAttrs (ciTags != []) {ci.tags = ciTags;};
@@ -149,7 +150,7 @@
 
   # Dependency webcs and their transitive closure, symlinkJoined (via each
   # .webc) into one --include-webc tree for the shim.
-  depWebcs = map (dep: self {package = dep.package;}) dependencySpecs;
+  depWebcs = map (dep: self {inherit (dep) package;}) dependencySpecs;
   closure = webcs: lib.unique (webcs ++ lib.concatMap (w: closure w.depWebcs) webcs);
   depTree =
     if depWebcs == []
@@ -382,7 +383,7 @@ in
         if commands == null
         then ''
           found_any=0
-          if [ -d "${package}/bin" ]; then
+          if [ -d "${packageBin}/bin" ]; then
             while IFS= read -r -d "" wasm_path; do
               found_any=1
               wasm_file="$(basename "$wasm_path")"
@@ -392,11 +393,11 @@ in
 
               cp -f "$wasm_path" "$bin_dir/$output_file"
               append_command "$command_name" "$module_name" "$output_file" "${defaultRunner}" "null" "\"$module_name\"" "''${command_env[$command_name]:-$package_env}"
-            done < <(${lib.getExe pkgs.findutils} "${package}/bin" -maxdepth 1 -type f -name '*.wasm' -print0)
+            done < <(${lib.getExe pkgs.findutils} "${packageBin}/bin" -maxdepth 1 -type f -name '*.wasm' -print0)
           fi
 
           if [ "$found_any" -eq 0 ]; then
-            echo "No .wasm binaries found in ${package}/bin for ${name}" >&2
+            echo "No .wasm binaries found in ${packageBin}/bin for ${name}" >&2
             exit 1
           fi
         ''
@@ -404,7 +405,7 @@ in
               while IFS='|' read -r command_name module_name wasm_file output_file runner main_args_json atom_json env_json; do
                 [ -n "$command_name" ] || continue
                 if [ -n "$wasm_file" ]; then
-                  source_path="${package}/bin/$wasm_file"
+                  source_path="${packageBin}/bin/$wasm_file"
                   if [ ! -f "$source_path" ]; then
                     echo "Missing declared wasm binary: $source_path" >&2
                     exit 1

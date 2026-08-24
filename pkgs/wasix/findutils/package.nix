@@ -82,6 +82,10 @@ exposePackage (
     passthru.wasmer = {
       name = "find";
       entrypoint = "find";
+      commands = map (name: {inherit name;}) [
+        "find"
+        "xargs"
+      ];
     };
     # Rename find/xargs to *.wasm (one webc command per bin/*.wasm).
     postInstall = ''

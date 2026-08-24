@@ -4,7 +4,7 @@
 # and 0.12 lines identically; ring/rustix in its cone build stock on wasix.
 {rewriters, ...}: {
   edited = [">=0.11.0"];
-  forVersion = {...}: {
+  forVersion = _: {
     patchPhase = "${rewriters.browserWasm}";
   };
 }

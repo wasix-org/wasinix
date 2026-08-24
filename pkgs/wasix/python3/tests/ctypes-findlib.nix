@@ -1,11 +1,9 @@
 {
-  pkgs,
   harnesses,
   helpers,
   packages,
 }:
 helpers.forEachPython packages.preferred ({
-  python,
   pythonCommands,
   pyVer,
   tag,

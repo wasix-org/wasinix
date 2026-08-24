@@ -5,7 +5,7 @@ publication release (PEP 440 local version `+wasix.<rel>`) and, where the entry
 is built for fewer interpreters than the index serves, the Requires-Python bound
 that says so. Filename, dist-info dir, METADATA and RECORD are kept consistent.
 
-Run per wheel by its own derivation (pkgs/python-wheels.nix), so a rel bump
+Run per wheel by its own derivation (pkgs/python/wheels/project.nix), so a rel bump
 rewrites this cheap output instead of rebuilding the wheel, and the published
 bytes have a store path of their own.
 

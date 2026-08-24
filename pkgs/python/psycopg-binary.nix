@@ -9,7 +9,7 @@
   packages,
 }:
 exposePackage (
-  packages.sameProfile.psycopg.passthru.c.overridePythonAttrs (o: {
+  packages.sameProfile.psycopg.passthru.c.overridePythonAttrs (_o: {
     pname = "psycopg-binary";
     # nix-level only (the wheel's METADATA stays dep-free like upstream's):
     # gives the import check psycopg, which the upstream guard requires

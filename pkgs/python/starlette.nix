@@ -18,10 +18,15 @@ exposeExtendedPackage {
     packages.sameProfile.python-multipart
     packages.sameProfile.pyyaml
     packages.sameProfile.sniffio
+    packages.sameProfile.pytest-timeout
   ];
   # Trio dispatches WASIX to its kqueue backend. Register the suite's strict
   # marker without loading pytest-trio, then exclude the Trio cases.
-  pytestFlags = ["--override-ini=markers=trio"];
+  pytestFlags = [
+    "--override-ini=markers=trio"
+    "--timeout=120"
+  ];
+  passthru.wasinix.checks.captured.shards = 4;
   disabledTests = [
     "trio"
     "test_cors_allow_all_except_credentials"

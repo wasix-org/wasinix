@@ -1,4 +1,4 @@
-"""Check a wheel's extensions import nothing that is never exported (python-wheels.nix `dynamic`).
+"""Check a wheel's extensions import nothing that is never exported (project.nix `dynamic`).
 
 A wasm PIC extension resolves data and function symbols it does not define
 through the `GOT.mem` and `GOT.func` import modules, and wasm-ld turns an
@@ -10,7 +10,7 @@ Walk every extension in the wheel, collect what it asks the loader for, and
 require some module the loader will have (the interpreter, or another extension
 in the closure) to export it.
 
-Usage: python-wheel-dyn.py <interpreter wasm> <site-packages dir>...
+Usage: check-dynamic-imports.py <interpreter wasm> <site-packages dir>...
 """
 
 import sys

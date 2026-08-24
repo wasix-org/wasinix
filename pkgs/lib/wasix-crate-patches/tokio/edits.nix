@@ -11,6 +11,6 @@
 # (src/process/wasi, src/signal/wasi) copied from a patchPhase as mio's backend
 # is, plus the tokio_wasi_classic/tokio_wasix cfg split -- but that payload
 # targets 1.20's io driver, which 1.24 replaced with crate::runtime::io.
-{...}: {
+_: {
   edited = ["=1.35.1" ">=1.47.0"];
 }

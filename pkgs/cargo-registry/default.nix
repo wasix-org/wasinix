@@ -56,7 +56,7 @@
 
       # The crate's patch stack (residuals + the floor patch), applied -p1 at the
       # crate root exactly as the vendor applies it.
-      patches = resolved.patches;
+      inherit (resolved) patches;
 
       nativeBuildInputs = [(pkgs.python3.withPackages (ps: [ps.tomlkit]))];
 

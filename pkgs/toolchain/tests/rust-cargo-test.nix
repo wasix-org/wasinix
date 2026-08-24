@@ -65,7 +65,7 @@
 
     # doCheck builds the test binary; the cross gate is force-zeroed by nixpkgs
     # (canExecuteHostOnBuild), so re-export it before the phase list, as
-    # emulated-check.nix does. --no-run compiles without executing (no wasmer).
+    # checks/emulated.nix does. --no-run compiles without executing (no wasmer).
     doCheck = true;
     prePhases = ["wasixEnableCheck"];
     wasixEnableCheck = "export doCheck=1";
