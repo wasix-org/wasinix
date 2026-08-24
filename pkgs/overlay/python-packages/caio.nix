@@ -4,20 +4,27 @@
 {
   pyprev,
   helpers,
+  lib,
   ...
-}:
-helpers.libTweaks {
-  postPatch = ''
+}: let
+  # nixpkgs rewrites a pyproject version literal only its current release carries,
+  # so --replace-fail misses on a rebased src. The rebase takes its version from
+  # the release it points at, so nothing needs rewriting.
+  isHistory = (pyprev.caio.passthru.wasix.historySpec or null) != null;
+  forceThreadAio = ''
     substituteInPlace setup.py \
       --replace-fail 'OS_NAME = platform.system().lower()' 'OS_NAME = "wasm"'
   '';
-  # the asyncio adapter tests import aiomisc at collection
-  disabledTestPaths = ["tests/test_asyncio_adapter.py"];
-  # Suite off: the first thread-aio test kills the guest outright; undiagnosed.
-  passthru = old:
-    old
-    // {
-      wasix = (old.wasix or {}) // {installCheck = false;};
-    };
-}
-pyprev.caio
+in
+  helpers.libTweaks {
+    postPatch = old: helpers.mergeScript (lib.optional (!isHistory) old ++ [forceThreadAio]);
+    # the asyncio adapter tests import aiomisc at collection
+    disabledTestPaths = ["tests/test_asyncio_adapter.py"];
+    # Suite off: the first thread-aio test kills the guest outright; undiagnosed.
+    passthru = old:
+      old
+      // {
+        wasix = (old.wasix or {}) // {installCheck = false;};
+      };
+  }
+  pyprev.caio
