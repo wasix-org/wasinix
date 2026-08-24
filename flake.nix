@@ -240,7 +240,7 @@
     wasinixCoreInputs = with wasix.pkgs; [
       bash
       coreutils
-      git
+      gitMinimal
       nix-eval-jobs
       wasinixNix
       openssh
@@ -292,7 +292,7 @@
     wasinixCoreClosure = wasix.pkgs.closureInfo {rootPaths = [wasinixCore];};
     wasinixCoreClosureCheck =
       wasix.pkgs.runCommand "wasinix-core-closure-check" {
-        optionalPaths = lib.concatStringsSep " " (map toString wasinixOptionalInputs);
+        optionalPaths = builtins.unsafeDiscardStringContext (lib.concatStringsSep " " (map toString wasinixOptionalInputs));
       } ''
         for path in $optionalPaths; do
           if grep -Fx "$path" ${wasinixCoreClosure}/store-paths; then
@@ -315,13 +315,13 @@
           wasix.pkgs.writeShellApplication {
             inherit name;
             inheritPath = false;
-            runtimeInputs = [wasinix];
+            runtimeInputs = [wasinixCore];
             text = "exec wasinix ${name} \"$@\"";
           }
       );
     wasinixInterfaceCheck =
       wasix.pkgs.runCommand "wasinix-interface-check" {
-        nativeBuildInputs = builtins.attrValues commands;
+        nativeBuildInputs = [wasinixCore] ++ builtins.attrValues (builtins.removeAttrs commands ["default" "wasinix"]);
       } ''
         wasinix --help >/dev/null
         for command in ${lib.escapeShellArgs commandAliases}; do
