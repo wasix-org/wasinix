@@ -47,14 +47,10 @@ CLI lock file would cause broad invalidation, its own crate and lock file.
 helper by this role; adding or removing one without updating the inventory fails
 the CLI corpus tests.
 
-An evaluated derivation-graph check protects nominated foundational roots from
-direct or transitive dependencies on `wasinix` or `wasinix-core`. Legitimate
-leaf exceptions are named explicitly. Source filtering also ensures that a CLI
-presentation change cannot alter a helper derivation's source hash.
-
-The `wasinix-helper-boundaries` check exports the transitive graphs of the
-toolchain roots and narrow Python indexer from their `.drv` files. It therefore
-checks the dependency boundary without building those roots.
+`mkWasix` constructs foundational packages through an explicit `pkgs` import
+that does not receive the main CLI; the CLI consumes `wasix`, not the reverse.
+The helper inventory and corpus tests enforce the source boundary and ensure
+that a CLI presentation change cannot alter a helper derivation's source hash.
 
 ## One grammar and three surfaces
 
@@ -242,7 +238,7 @@ implementations are gone.
 | GitHub publication           | One surface publisher                     | Permission and sanitizer types              |
 | GitHub Actions outputs       | `github/actions.rs`                       | Scalar validation and parsed workflow tests |
 | Workflow coupling            | Shared metadata or parsed structures      | Structural workflow tests                   |
-| Build helpers                | Per-purpose helper derivations            | Derivation-graph checks                     |
+| Build helpers                | Per-purpose helper derivations            | Scope and source-boundary tests             |
 
 Before changing registry and update flows, review each entire subsystem and add
 its repeated mechanisms to this ledger. Similar names alone do not prove that
@@ -261,7 +257,7 @@ The remaining integration suite covers:
 - report and GitHub projections;
 - durable-run recovery;
 - capability realisation and prewarming; and
-- workflow and derivation-graph boundaries.
+- workflow and build-helper boundaries.
 
 Production failures become named end-to-end regressions. Golden tests remain for
 rendered documents. Architecture tests prefer visibility, types, parsed

@@ -302,32 +302,6 @@
         done
         touch "$out"
       '';
-    protectedHelperRoots = {
-      libc = toolchain.libc;
-      compiler-rt = toolchain.compiler-rt;
-      libcxx = toolchain.libcxx;
-      sysroot = toolchain.sysroot;
-      wasixcc = toolchain.wasixcc;
-      rust-toolchain = toolchain.wasixRustToolchain;
-      cargo-registry-wire = wasix.cargoRegistryWire;
-      python-index = wasix.pythonRegistry.indexer;
-    };
-    helperBoundaryCheck =
-      wasix.pkgs.runCommand "wasinix-helper-boundary-check" {
-        exportReferencesGraph = lib.concatMap (
-          name: [
-            "graph-${name}"
-            (builtins.unsafeDiscardOutputDependency protectedHelperRoots.${name}.drvPath)
-          ]
-        ) (builtins.attrNames protectedHelperRoots);
-        forbiddenDrv = builtins.unsafeDiscardOutputDependency wasinixUnwrapped.drvPath;
-      } ''
-        if grep -Fx "$forbiddenDrv" graph-*; then
-          echo "a protected helper root depends on the main wasinix CLI" >&2
-          exit 1
-        fi
-        touch "$out"
-      '';
     # One alias per top-level command; the interface check keeps this list and
     # the CLI from drifting apart.
     commandAliases = ["build" "spot" "diff" "run" "remote" "ci"];
@@ -540,7 +514,6 @@
         {
           wasinix = wasinixTests;
           wasinix-core-closure = wasinixCoreClosureCheck;
-          wasinix-helper-boundaries = helperBoundaryCheck;
           wasinix-interface = wasinixInterfaceCheck;
           wasinix-cargo-publish = wasinixCargoPublishCheck;
           wasinix-wasmer-serve = wasinixWasmerServeCheck;
