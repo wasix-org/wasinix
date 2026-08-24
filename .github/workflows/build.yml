@@ -69,8 +69,8 @@ jobs:
         id: run
         shell: bash
         env:
-          WASINIX_EVAL_WORKERS: "4"
-          WASINIX_EVAL_MEMORY: "8192"
+          WASINIX_EVAL_WORKERS: "2"
+          WASINIX_EVAL_MEMORY: "16384"
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto

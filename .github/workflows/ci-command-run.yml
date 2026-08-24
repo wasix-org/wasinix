@@ -23,11 +23,11 @@ on:
       eval-workers:
         description: nix-eval-jobs workers for the build job
         type: string
-        default: "4"
+        default: "2"
       eval-memory:
         description: nix-eval-jobs memory cap (MB) for the build job
         type: string
-        default: "8192"
+        default: "16384"
 
 jobs:
   authorize:
