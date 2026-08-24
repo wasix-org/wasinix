@@ -75,7 +75,6 @@ pub struct RunRequest<'a> {
 pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
     let limits = request.route.limits()?;
     let timeout = limits.timeout;
-    let gc_roots = crate::support::fs::absolute(&request.jobs_path.with_extension("gc-roots"))?;
     // The workers race to fetch a workdir flake: the first records its final
     // narHash while another may still re-fetch the locked rev through the
     // archive path, and the two disagree on a tree carrying a submodule
@@ -94,8 +93,6 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
         .args(["--flake", request.flake, "--meta"])
         .args(["--workers", &limits.workers.to_string()])
         .args(["--max-memory-size", &limits.memory.to_string()])
-        .args(["--gc-roots-dir", &gc_roots.to_string_lossy()])
-        .option("min-free", "0")
         .workdir(request.workdir)
         .timeout(timeout)
         .route(request.route)?;

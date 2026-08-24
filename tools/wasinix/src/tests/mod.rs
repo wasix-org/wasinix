@@ -5232,34 +5232,25 @@ mod corpus {
     }
 
     #[test]
-    fn evaluations_are_protected_until_their_derivations_are_rooted() {
+    fn evaluations_do_not_override_store_gc_policy() {
         let source = sources(false)
             .into_iter()
             .find(|(path, _)| path == "nix/evaljobs.rs")
             .unwrap()
             .1;
-        assert_eq!(source.matches("\"--gc-roots-dir\"").count(), 1);
-        assert_eq!(source.matches(".option(\"min-free\", \"0\")").count(), 1);
+        assert!(!source.contains("--gc-roots-dir"));
+        assert!(!source.contains("min-free"));
     }
 
     #[test]
-    fn cached_build_inputs_are_rooted_before_build_attempts() {
+    fn cached_build_outputs_are_not_realised() {
         let source = sources(false)
             .into_iter()
             .find(|(path, _)| path == "nix/buildset.rs")
             .unwrap()
             .1;
-        let calls: Vec<usize> = source
-            .match_indices("root_cached_inputs(")
-            .map(|(index, _)| index)
-            .collect();
-        assert_eq!(calls.len(), 2, "one definition and one build-stage call");
-        let implementation = &source[calls[0]..calls[1]];
-        assert!(implementation.contains("rooted_realise_invocation("));
-        assert!(implementation.contains(".operands(inputs.iter().cloned())"));
-        let attempts = source.find("while attempt <= BUILD_ATTEMPTS").unwrap();
-        assert!(calls[1] < attempts, "cached inputs must be rooted first");
-        assert_eq!(source.matches("&plan.fetched").count(), 1);
+        assert!(!source.contains("root_cached_inputs"));
+        assert_eq!(source.matches("plan.fetched.contains").count(), 3);
     }
 
     /// git runs through support::git (repo named on every call, three-way
@@ -7719,8 +7710,7 @@ mod table {
 
 mod buildset {
     use crate::nix::buildset::{
-        MissingPathRepairs, RealiseFailure, dry_run_plan, failure_excerpt_from_log,
-        prebuilt_partition, realise_building_drv, realise_failure,
+        dry_run_plan, failure_excerpt_from_log, prebuilt_partition, realise_building_drv,
     };
 
     #[test]
@@ -7900,14 +7890,6 @@ mod buildset {
         assert!(bad["error"].as_str().unwrap().contains("doom"), "{bad}");
         let junit = std::fs::read_to_string(scratch.path().join("first/results.xml")).unwrap();
         assert!(junit.contains("case::ok"), "{junit}");
-        let roots: Vec<std::path::PathBuf> =
-            std::fs::read_dir(scratch.path().join("first/.store-roots"))
-                .unwrap()
-                .map(|entry| entry.unwrap().path())
-                .collect();
-        assert!(!roots.is_empty());
-        assert!(roots.iter().all(|root| root.is_symlink()));
-
         // The rerun finds the built output valid and reports it cached; the
         // failure builds again and fails again.
         let (status, results) = run("second");
@@ -7931,43 +7913,6 @@ mod buildset {
             Some("/nix/store/abc-zlib.drv")
         );
         assert_eq!(realise_failed_drv("error: dependency failed"), None);
-    }
-
-    #[test]
-    fn invalid_store_paths_are_typed_and_repaired_once() {
-        let path = "/nix/store/nyk0dzdf89jq4skvn3c6nc35x7kgv6rx-bzip2-static-1.0.8";
-        assert_eq!(
-            realise_failure(&format!("error: path '{path}' is not valid")),
-            Some(RealiseFailure::MissingStorePath(path.to_string()))
-        );
-        assert_eq!(
-            realise_failure("error: path '/tmp/input' is not valid"),
-            None
-        );
-        assert_eq!(
-            realise_failure("error: path '/nix/store/hash/name' is not valid"),
-            None
-        );
-
-        let mut repairs = MissingPathRepairs::new();
-        repairs.claim(path).unwrap();
-        assert!(
-            repairs
-                .claim(path)
-                .unwrap_err()
-                .to_string()
-                .contains("same invalid store path again")
-        );
-    }
-
-    #[test]
-    fn invalid_store_path_recovery_accepts_distinct_paths() {
-        let mut repairs = MissingPathRepairs::new();
-        for index in 0..9 {
-            repairs
-                .claim(&format!("/nix/store/{index:032}-input"))
-                .unwrap();
-        }
     }
 }
 

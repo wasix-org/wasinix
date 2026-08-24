@@ -1,8 +1,8 @@
 //! Build selected CI jobs from the derivations the evaluation already
 //! instantiated: no re-evaluation, ever. A dry-run partitions the jobs into
-//! cached and to-build, cached inputs are rooted before one realise per
-//! attempt builds the rest, and finished outputs stream to the cache as they
-//! complete, so a timeout or cancel never loses built work.
+//! cached and to-build, one realise per attempt builds the rest, and
+//! finished outputs stream to the cache as they complete, so a timeout or
+//! cancel never loses built work.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{BufRead, BufReader, Write};
@@ -57,15 +57,6 @@ pub enum StreamEvent {
     /// what the run is doing when no job derivation is in flight.
     Heartbeat {
         recent_deps: Vec<String>,
-    },
-    CachedInputsStarted {
-        paths: usize,
-    },
-    CachedInputsHeartbeat {
-        paths: usize,
-    },
-    Recovery {
-        path: String,
     },
     AutomaticGc {
         requested_bytes: u64,
@@ -550,224 +541,6 @@ pub fn push_prebuilt(
 }
 
 const BUILD_ATTEMPTS: usize = 3;
-const STORE_ROOTS_DIR: &str = ".store-roots";
-const CACHED_INPUTS_LOG: &str = "cached-inputs.log";
-
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) enum RealiseFailure {
-    MissingStorePath(String),
-}
-
-pub(crate) fn realise_failure(line: &str) -> Option<RealiseFailure> {
-    let path = line
-        .trim()
-        .strip_prefix("error: path '")?
-        .strip_suffix("' is not valid")?;
-    if !path.starts_with("/nix/store/") || path[11..].contains('/') {
-        return None;
-    }
-    Some(RealiseFailure::MissingStorePath(path.to_string()))
-}
-
-struct StoreRoots {
-    dir: PathBuf,
-    next: usize,
-}
-
-impl StoreRoots {
-    fn create(work_dir: &Path) -> Result<StoreRoots> {
-        let dir = work_dir.join(STORE_ROOTS_DIR);
-        crate::support::fs::create_dir_all(&dir)?;
-        Ok(StoreRoots { dir, next: 0 })
-    }
-
-    fn next(&mut self, kind: &str) -> Result<PathBuf> {
-        loop {
-            self.next += 1;
-            let path = self.dir.join(format!("{kind}-{}", self.next));
-            match std::fs::symlink_metadata(&path) {
-                Ok(_) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(path),
-                Err(error) => return Err(io(&path, error)),
-            }
-        }
-    }
-}
-
-fn realise_invocation(route: &crate::nix::route::Route) -> Result<crate::support::nix::Invocation> {
-    crate::support::nix::Invocation::tool("nix-store")
-        .arg("--realise")
-        .route(route)
-}
-
-fn rooted_realise_invocation(
-    route: &crate::nix::route::Route,
-    roots: &mut StoreRoots,
-    kind: &str,
-) -> Result<crate::support::nix::Invocation> {
-    let mut invocation = realise_invocation(route)?;
-    if route.store().is_none() {
-        invocation = invocation
-            .arg("--add-root")
-            .arg(roots.next(kind)?.to_string_lossy());
-    }
-    Ok(invocation)
-}
-
-fn root_finished_outputs(
-    finished: &[String],
-    jobs: &BTreeMap<String, JobSpec>,
-    route: &crate::nix::route::Route,
-    roots: &mut StoreRoots,
-) -> Result<()> {
-    let outputs: Vec<String> = finished
-        .iter()
-        .flat_map(|drv| jobs[drv].outputs.iter().cloned())
-        .collect();
-    if outputs.is_empty() || route.store().is_some() {
-        return Ok(());
-    }
-    for chunk in outputs.chunks(STORE_PATH_CHUNK) {
-        let result = rooted_realise_invocation(route, roots, "result")?
-            .operands(chunk.iter().cloned())
-            .probe("rooting completed build outputs")?;
-        if !result.status.is_success() {
-            return Err(crate::support::error::Error::Failure(format!(
-                "could not protect completed outputs from garbage collection: {}",
-                crate::support::error::tail(&result.stderr, 500)
-            )));
-        }
-    }
-    Ok(())
-}
-
-pub(crate) fn cached_inputs_log(work_dir: &Path) -> PathBuf {
-    work_dir.join(CACHED_INPUTS_LOG)
-}
-
-fn root_cached_inputs(
-    inputs: &BTreeSet<String>,
-    route: &crate::nix::route::Route,
-    roots: &mut StoreRoots,
-    work_dir: &Path,
-    on_event: &mut dyn FnMut(StreamEvent) -> Result<()>,
-) -> Result<()> {
-    let log_path = cached_inputs_log(work_dir);
-    let log = crate::support::log::SharedLog::create(&log_path)?;
-    if inputs.is_empty() {
-        log.finish()?;
-        return Ok(());
-    }
-
-    let mut cmd = rooted_realise_invocation(route, roots, "input")?
-        .operands(inputs.iter().cloned())
-        .command()?;
-    let automatic_gc = crate::support::nix::AutomaticGcObserver::default();
-    let mut stderr_log = log.clone();
-    let stderr_path = log_path.clone();
-    let stderr_automatic_gc = automatic_gc.clone();
-    let (mut child, readers) = crate::support::tools::spawn_piped(
-        &mut cmd,
-        |mut stdout| {
-            std::io::copy(&mut stdout, &mut std::io::sink())
-                .map_err(|error| crate::support::error::io("nix-store stdout", error))?;
-            Ok(())
-        },
-        move |stderr| {
-            let mut reader = BufReader::new(stderr);
-            let mut buffer = Vec::new();
-            while reader
-                .read_until(b'\n', &mut buffer)
-                .map_err(|error| io(&stderr_path, error))?
-                > 0
-            {
-                stderr_automatic_gc.observe(&buffer);
-                stderr_log
-                    .write_all(&buffer)
-                    .map_err(|error| io(&stderr_path, error))?;
-                buffer.clear();
-            }
-            Ok(())
-        },
-    )?;
-    on_event(StreamEvent::CachedInputsStarted {
-        paths: inputs.len(),
-    })?;
-    let mut last_heartbeat = std::time::Instant::now();
-    let status = loop {
-        if let Some(status) = child.try_wait().map_err(|error| io(&log_path, error))? {
-            break status;
-        }
-        std::thread::sleep(Duration::from_millis(250));
-        if last_heartbeat.elapsed() >= Duration::from_secs(5) {
-            on_event(StreamEvent::CachedInputsHeartbeat {
-                paths: inputs.len(),
-            })?;
-            last_heartbeat = std::time::Instant::now();
-        }
-    };
-    let reader_result = readers.join(&cmd);
-    let finish_result = log.finish();
-    reader_result?;
-    finish_result?;
-    for requested_bytes in automatic_gc.requested_bytes() {
-        on_event(StreamEvent::AutomaticGc { requested_bytes })?;
-    }
-    if !status.success() {
-        let output = crate::support::fs::read_to_string(&log_path)?;
-        return Err(crate::support::error::Error::Failure(format!(
-            "could not fetch and protect cached build inputs: {}",
-            crate::support::error::tail(&output, 500)
-        )));
-    }
-    Ok(())
-}
-
-pub(crate) struct MissingPathRepairs {
-    attempted: BTreeSet<String>,
-}
-
-impl MissingPathRepairs {
-    pub(crate) fn new() -> MissingPathRepairs {
-        MissingPathRepairs {
-            attempted: BTreeSet::new(),
-        }
-    }
-
-    pub(crate) fn claim(&mut self, path: &str) -> Result<()> {
-        if self.attempted.contains(path) {
-            return Err(crate::support::error::Error::Failure(format!(
-                "Nix reported the same invalid store path again after recovery: {path}"
-            )));
-        }
-        self.attempted.insert(path.to_string());
-        Ok(())
-    }
-}
-
-fn recover_store_path(
-    path: &str,
-    route: &crate::nix::route::Route,
-    roots: &mut StoreRoots,
-    log: &mut crate::support::log::BoundedLog,
-    log_path: &Path,
-) -> Result<()> {
-    writeln!(log, "wasinix: recovering invalid store path {path}")
-        .map_err(|error| io(log_path, error))?;
-    let result = rooted_realise_invocation(route, roots, "repair")?
-        .operand(path)
-        .probe("recovering an invalid store path")?;
-    for line in result.stderr.lines() {
-        writeln!(log, "{line}").map_err(|error| io(log_path, error))?;
-    }
-    if !result.status.is_success() {
-        return Err(crate::support::error::Error::Failure(format!(
-            "Nix reported an invalid store path ({path}), and direct realisation failed: {}",
-            crate::support::error::tail(&result.stderr, 500)
-        )));
-    }
-    Ok(())
-}
 
 /// Build every case's selected jobs from their evaluated derivations,
 /// streaming results to `on_event` as they arrive. Each realise child gets
@@ -782,7 +555,6 @@ pub fn build_union(
     }
     let work_dir =
         std::path::absolute(request.work_dir).map_err(|error| io(request.work_dir, error))?;
-    let mut store_roots = StoreRoots::create(&work_dir)?;
     let log_path = work_dir.join("build-union.log");
     let stream_path = work_dir.join("build-results.jsonl");
     let mut log = crate::support::log::BoundedLog::create(&log_path)?;
@@ -900,13 +672,6 @@ pub fn build_union(
         .route(request.route)?
         .probe("the dry-run plan partitions cached from to-build")?;
     let plan = dry_run_plan(&plan.stderr)?;
-    root_cached_inputs(
-        &plan.fetched,
-        request.route,
-        &mut store_roots,
-        &work_dir,
-        on_event,
-    )?;
     let to_build = plan.to_build;
 
     let mut pending: BTreeSet<String> = BTreeSet::new();
@@ -976,19 +741,16 @@ pub fn build_union(
     // Announced build-time dependencies, pushed as their outputs turn valid.
     let mut dep_pending: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut timed_out = false;
-    let mut missing_path_repairs = MissingPathRepairs::new();
-    let mut attempt = 1;
-
-    while attempt <= BUILD_ATTEMPTS {
+    for attempt in 1..=BUILD_ATTEMPTS {
         if pending.is_empty() || timed_out {
             break;
         }
         let mut attempt_started = BTreeSet::new();
-        let mut invalid_store_paths = BTreeSet::new();
-        let mut cmd = realise_invocation(request.route)?
-            .arg("--keep-going")
+        let mut cmd = crate::support::nix::Invocation::tool("nix-store")
+            .args(["--realise", "--keep-going"])
             .args(["--max-jobs", &request.max_jobs.to_string()])
             .operands(pending.iter().cloned())
+            .route(request.route)?
             .command()?;
         let mut child =
             crate::support::tools::spawn(cmd.stdout(Stdio::null()).stderr(Stdio::piped()))?;
@@ -1014,9 +776,6 @@ pub fn build_union(
                         crate::support::nix::auto_gc_requested_bytes(&line)
                     {
                         on_event(StreamEvent::AutomaticGc { requested_bytes })?;
-                    }
-                    if let Some(RealiseFailure::MissingStorePath(path)) = realise_failure(&line) {
-                        invalid_store_paths.insert(path);
                     }
                     if let Some(drv) = realise_failed_drv(&line) {
                         if pending.contains(drv) {
@@ -1104,7 +863,6 @@ pub fn build_union(
                 })
                 .cloned()
                 .collect();
-            root_finished_outputs(&finished, &jobs, request.route, &mut store_roots)?;
             for drv in finished {
                 pending.remove(&drv);
                 let duration = build_started.get(&drv).map(|at| at.elapsed().as_secs_f64());
@@ -1154,7 +912,6 @@ pub fn build_union(
             })
             .cloned()
             .collect();
-        root_finished_outputs(&finished, &jobs, request.route, &mut store_roots)?;
         for drv in finished {
             pending.remove(&drv);
             let duration = build_started.get(&drv).map(|at| at.elapsed().as_secs_f64());
@@ -1193,15 +950,6 @@ pub fn build_union(
                 )?;
             }
         }
-        if !timed_out && !pending.is_empty() && !invalid_store_paths.is_empty() {
-            for path in invalid_store_paths {
-                missing_path_repairs.claim(&path)?;
-                on_event(StreamEvent::Recovery { path: path.clone() })?;
-                recover_store_path(&path, request.route, &mut store_roots, &mut log, &log_path)?;
-                on_event(StreamEvent::Activity)?;
-            }
-            continue;
-        }
         if !pending.is_empty() && attempt < BUILD_ATTEMPTS && !timed_out {
             crate::support::ui::note(format!(
                 "retrying {} builds without logs (attempt {}/{BUILD_ATTEMPTS})",
@@ -1209,7 +957,6 @@ pub fn build_union(
                 attempt + 1
             ));
         }
-        attempt += 1;
     }
 
     // Whatever never became valid is a failure, with its log as the story.
