@@ -810,7 +810,6 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
     let repo = crate::support::git::repo_root()?;
     let (worktree, rev, tree) = crate::ci::workspace::working_worktree(&repo)?;
     let route = crate::nix::route::Route::from_on(&repo, Some("local"))?;
-    let mut evaluation_scratch = None;
     let map = match recorded_eval(&tree)? {
         Some((run_id, map)) => {
             ui::fact("evaluation", format!("recorded by run {run_id}"));
@@ -842,7 +841,6 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
             }
             let jobs =
                 crate::nix::evaljobs::parse_file(&crate::support::fs::read_to_string(&jobs_path)?)?;
-            evaluation_scratch = Some(scratch);
             crate::ci::evalmap::EvalMap::from_jobs(rev, &jobs)
         }
     };
@@ -870,7 +868,6 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
     }
 
     let report = crate::nix::buildset::push_prebuilt(&outputs_by_drv, &route)?;
-    drop(evaluation_scratch);
     ui::emit(
         &json,
         &CachePush {

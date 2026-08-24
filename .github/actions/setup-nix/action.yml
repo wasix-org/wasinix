@@ -13,9 +13,6 @@ runs:
           extra-substituters = https://nix-cache.wasix.org
           extra-trusted-public-keys = wasinix-1:jvsqbOJGsZxMvg97fuyNCWCc+t2nn6uHB47kQCGNmXI=
           trusted-users = root runner
-          min-free = 10737418240
-          max-free = 53687091200
-          keep-outputs = true
 
     - name: Cache flake inputs
       uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0

@@ -103,19 +103,23 @@ mod auto_gc_tests {
         observer.observe(b"running auto-GC to free 42 bytes\n");
         assert_eq!(observer.requested_bytes(), vec![42]);
     }
+
+    #[test]
+    fn ci_does_not_override_store_gc() {
+        let config = super::nix_config();
+        assert!(!config.contains("min-free"));
+        assert!(!config.contains("max-free"));
+        assert!(!config.contains("keep-outputs"));
+    }
 }
 
 /// The nix config block workflows install, from the same constants the
-/// binary trusts. Automatic GC preserves runner headroom; keep-outputs
-/// protects build-time dependencies while it runs.
+/// binary trusts.
 pub fn nix_config() -> String {
     format!(
         "extra-substituters = {CACHE_SUBSTITUTER}\n\
          extra-trusted-public-keys = {CACHE_PUBLIC_KEY}\n\
-         trusted-users = root runner\n\
-         min-free = 10737418240\n\
-         max-free = 53687091200\n\
-         keep-outputs = true\n"
+         trusted-users = root runner\n"
     )
 }
 
