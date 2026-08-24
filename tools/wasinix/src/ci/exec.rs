@@ -636,6 +636,22 @@ impl Liveness {
         self.warned = false;
     }
 
+    fn heartbeat_detail(
+        &mut self,
+        tracker: &mut Tracker,
+        detail: Option<String>,
+        immediate: bool,
+    ) -> Result<()> {
+        if immediate || self.last_heartbeat.elapsed() >= Duration::from_secs(60) {
+            tracker.record(Event::Heartbeat {
+                at: unix_secs(),
+                detail,
+            })?;
+            self.last_heartbeat = Instant::now();
+        }
+        Ok(())
+    }
+
     fn heartbeat(
         &mut self,
         tracker: &mut Tracker,
@@ -645,21 +661,15 @@ impl Liveness {
         // One heartbeat a minute: the renderer turns them into liveness
         // lines through quiet stretches, and the comment watcher keeps its
         // own, longer republish throttle.
-        if self.last_heartbeat.elapsed() >= Duration::from_secs(60) {
-            // Only when no job derivation is in flight: the job names carry
-            // the story otherwise, and dependencies are detail.
-            let detail = (building.is_empty() && !recent_deps.is_empty()).then(|| {
-                format!(
-                    "dependencies: {}",
-                    crate::support::format::some(recent_deps, 3)
-                )
-            });
-            tracker.record(Event::Heartbeat {
-                at: unix_secs(),
-                detail,
-            })?;
-            self.last_heartbeat = Instant::now();
-        }
+        // Only when no job derivation is in flight: the job names carry
+        // the story otherwise, and dependencies are detail.
+        let detail = (building.is_empty() && !recent_deps.is_empty()).then(|| {
+            format!(
+                "dependencies: {}",
+                crate::support::format::some(recent_deps, 3)
+            )
+        });
+        self.heartbeat_detail(tracker, detail, false)?;
         if !self.warned && self.last_activity.elapsed() >= self.stall_after {
             self.warned = true;
             let names: Vec<&str> = building.iter().map(String::as_str).collect();
@@ -945,6 +955,22 @@ fn run_build_tasks(
                 crate::nix::buildset::StreamEvent::Heartbeat { recent_deps } => {
                     liveness.heartbeat(tracker, &building, &recent_deps)
                 }
+                crate::nix::buildset::StreamEvent::CachedInputsStarted { paths } => {
+                    liveness.activity();
+                    liveness.heartbeat_detail(
+                        tracker,
+                        Some(format!("fetching {paths} cached build inputs")),
+                        true,
+                    )
+                }
+                crate::nix::buildset::StreamEvent::CachedInputsHeartbeat { paths } => {
+                    liveness.activity();
+                    liveness.heartbeat_detail(
+                        tracker,
+                        Some(format!("fetching {paths} cached build inputs")),
+                        false,
+                    )
+                }
                 crate::nix::buildset::StreamEvent::Recovery { path } => {
                     liveness.activity();
                     tracker.record(Event::Warning {
@@ -967,6 +993,8 @@ fn run_build_tasks(
         )?;
         union_artifacts.record(&result_file)?;
         union_artifacts.record(&build_dir.join("build-results.jsonl"))?;
+        let cached_inputs_log = crate::nix::buildset::cached_inputs_log(&build_dir);
+        union_artifacts.record_log(&cached_inputs_log)?;
         union_artifacts.record_log(&build_dir.join("build-union.log"))?;
         // The per-job facts are the verdict; a failing driver status with
         // every selected job reporting success is a teardown anomaly worth
