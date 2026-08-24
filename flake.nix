@@ -97,6 +97,17 @@
     wasix = mkWasix {};
     lib = wasix.pkgs.lib;
     wasixLib = import ./pkgs/lib {inherit lib;};
+    wasinixNixVersion = "2.35.2";
+    wasinixNixInstaller = "https://releases.nixos.org/nix/nix-${wasinixNixVersion}/install";
+    wasinixNix = let
+      package = wasix.pkgs.nixVersions.nix_2_35;
+      setupAction = builtins.readFile ./.github/actions/setup-nix/action.yml;
+    in
+      lib.throwIf (package.version != wasinixNixVersion)
+      "wasinix Nix is ${package.version}, expected ${wasinixNixVersion}"
+      (lib.throwIf (!lib.hasInfix "install_url: ${wasinixNixInstaller}" setupAction)
+        "setup-nix must install Nix ${wasinixNixVersion}"
+        package);
 
     # From-source toolchain (LLVM fork + libc + runtimes + sysroot), see pkgs/toolchain.
     toolchain = wasix.toolchain;
@@ -220,7 +231,7 @@
         src = wasinixTestSource;
         cargoToml = ./tools/wasinix/Cargo.toml;
         cargoArtifacts = wasinixCargoArtifacts;
-        nativeCheckInputs = with wasix.pkgs; [gitMinimal nixVersions.latest];
+        nativeCheckInputs = [wasix.pkgs.gitMinimal wasinixNix];
         postUnpack = ''
           cd $sourceRoot/tools/wasinix
           sourceRoot="."
@@ -231,7 +242,7 @@
       coreutils
       git
       nix-eval-jobs
-      nixVersions.latest
+      wasinixNix
       openssh
     ];
     wasinixOptionalInputs = with wasix.pkgs; [
