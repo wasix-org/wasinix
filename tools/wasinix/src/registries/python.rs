@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::support::capability::Capability;
-use crate::support::error::{io, request_error, Result};
-use crate::support::nix::{eval, project_installable, Flake};
+use crate::support::error::{Result, io, request_error};
+use crate::support::nix::{Flake, eval, project_installable};
 use crate::support::process::CommandStatus;
 use crate::support::ui;
 

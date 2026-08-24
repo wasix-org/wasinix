@@ -587,6 +587,7 @@ pub(crate) fn run_on_host(
     mut request: ResolvedRequest,
     run_dir: &Path,
     cache: CacheIntent,
+    inputs_only: bool,
 ) -> Result<CommandStatus> {
     // The host builds on itself; the placement axis was consumed by
     // choosing it.
@@ -598,27 +599,32 @@ pub(crate) fn run_on_host(
     if matches!(cache, CacheIntent::Push) {
         payload_tail.push("--push-cache".to_string());
     }
+    if inputs_only {
+        payload_tail.push("--inputs-only".to_string());
+    }
     let mut renderer = crate::cli::render::LineRenderer::for_build();
     let status = crate::runs::remote::run(crate::runs::remote::Request {
         repo,
         builder,
         inputs: vec![(shipped, "request.json".to_string())],
-        payload: &|state| {
-            let mut words = vec![
-                "ci".to_string(),
-                "run".to_string(),
-                "--request".to_string(),
-                format!("{state}/request.json"),
-            ];
-            words.extend(payload_tail.clone());
-            words
-        },
+        payload: &|state| host_payload(state, &payload_tail),
         fetch_to: run_dir,
         progress: &mut renderer,
         forward_push_credentials: matches!(cache, CacheIntent::Push),
     });
     renderer.finish();
     status
+}
+
+pub(crate) fn host_payload(state: &str, tail: &[String]) -> Vec<String> {
+    let mut words = vec![
+        "ci".to_string(),
+        "run".to_string(),
+        "--request".to_string(),
+        format!("{state}/request.json"),
+    ];
+    words.extend_from_slice(tail);
+    words
 }
 
 /// Whether this run intends to push to the shared cache.
@@ -822,7 +828,7 @@ fn drive_terminal(repo: &Path, request: ParsedRequest, mode: &ModeArgs) -> Resul
     if let Some(builder) = host_builder(repo, &resolved)? {
         case_facts(&resolved);
         let run_dir = run_directory(&mode.run_dir)?;
-        let status = run_on_host(repo, &builder, resolved, &run_dir, cache)?;
+        let status = run_on_host(repo, &builder, resolved, &run_dir, cache, mode.inputs_only)?;
         if let Some(out) = &mode.junit_out {
             export_junit(&run_dir, out)?;
         }

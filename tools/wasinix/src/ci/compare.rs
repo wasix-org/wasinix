@@ -101,32 +101,28 @@ pub fn junit_status(paths: &[std::path::PathBuf]) -> StatusMap {
         let mut current: Option<String> = None;
         while let Ok(event) = reader.read_event_into(&mut buffer) {
             match event {
-                Event::Start(element) | Event::Empty(element) => {
-                    match element.name().as_ref() {
-                        b"testcase" => {
-                            // nix-eval-jobs quotes the dotted attr name, and the
-                            // quotes arrive escaped.
-                            current = element
-                                .attributes()
-                                .flatten()
-                                .find(|attr| attr.key.as_ref() == b"name")
-                                .and_then(|attr| attr.unescape_value().ok())
-                                .map(|value| value.trim_matches('"').to_string())
-                                .filter(|value| !value.is_empty());
-                            if let Some(job) = &current {
-                                status
-                                    .entry(JobAddr(job.clone()))
-                                    .or_insert(JobStatus::Success);
-                            }
+                Event::Start(element) | Event::Empty(element) => match element.name().as_ref() {
+                    b"testcase" => {
+                        current = element
+                            .attributes()
+                            .flatten()
+                            .find(|attr| attr.key.as_ref() == b"name")
+                            .and_then(|attr| attr.unescape_value().ok())
+                            .map(|value| crate::nix::evaljobs::attr_name(&value))
+                            .filter(|value| !value.is_empty());
+                        if let Some(job) = &current {
+                            status
+                                .entry(JobAddr(job.clone()))
+                                .or_insert(JobStatus::Success);
                         }
-                        b"failure" => {
-                            if let Some(job) = &current {
-                                status.insert(JobAddr(job.clone()), JobStatus::Failure);
-                            }
-                        }
-                        _ => {}
                     }
-                }
+                    b"failure" => {
+                        if let Some(job) = &current {
+                            status.insert(JobAddr(job.clone()), JobStatus::Failure);
+                        }
+                    }
+                    _ => {}
+                },
                 Event::End(element) => {
                     if element.name().as_ref() == b"testcase" {
                         current = None;

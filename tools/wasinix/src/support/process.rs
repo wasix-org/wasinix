@@ -1,5 +1,8 @@
 use std::process::{ExitCode, ExitStatus};
 
+#[cfg(all(test, target_os = "linux"))]
+use std::process::Command;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CommandStatus(u8);
 
@@ -36,6 +39,11 @@ impl From<CommandStatus> for ExitCode {
     }
 }
 
+#[cfg(all(test, target_os = "linux"))]
+extern "C" {
+    fn getppid() -> i32;
+    fn prctl(option: i32, arg2: usize, arg3: usize, arg4: usize, arg5: usize) -> i32;
+}
 /// Signal a whole process group, so killing a runner takes its spawned tree
 /// (nix, ssh) down with it instead of orphaning it.
 #[cfg(unix)]
@@ -53,5 +61,25 @@ pub fn signal_group(pgid: u32, signal: libc::c_int) -> std::io::Result<()> {
         Ok(())
     } else {
         Err(error)
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+pub fn kill_with_parent(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+
+    unsafe {
+        let parent = std::process::id() as i32;
+        command.pre_exec(move || {
+            const PR_SET_PDEATHSIG: i32 = 1;
+            const SIGKILL: usize = 9;
+            if prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            if getppid() != parent {
+                return Err(std::io::Error::from_raw_os_error(10));
+            }
+            Ok(())
+        });
     }
 }

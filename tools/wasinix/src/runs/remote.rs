@@ -409,6 +409,7 @@ pub fn run(request: Request<'_>) -> Result<CommandStatus> {
     let limits = EvaluationLimits::configured(
         request.builder,
         default_eval_workers(builder::RouteKind::Host),
+        crate::nix::route::DEFAULT_REMOTE_EVAL_MEMORY,
     )?;
     let script = launch_script(
         request.builder,

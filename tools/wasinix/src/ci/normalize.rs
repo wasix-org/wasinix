@@ -14,7 +14,7 @@ use crate::ci::types::{
     Build, Case, Diff, Override, OverrideKind, ParsedRequest, RefSource, Request, RequestAction,
     ResolvedRequest, RevSource, Spot,
 };
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 use crate::support::git;
 
 static PR_SPEC: LazyLock<Regex> = LazyLock::new(|| {

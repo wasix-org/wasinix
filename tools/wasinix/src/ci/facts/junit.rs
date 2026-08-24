@@ -67,51 +67,48 @@ pub fn parse_junits(paths: &[PathBuf], warn_missing: bool) -> Option<Vec<Case>> 
         let mut in_failure = false;
         while let Ok(event) = reader.read_event_into(&mut buffer) {
             match event {
-                Event::Start(element) | Event::Empty(element) => {
-                    match element.name().as_ref() {
-                        b"testcase" => {
-                            if let Some(case) = current.take() {
-                                cases.push(case);
-                            }
-                            let attribute = |name: &[u8]| {
-                                element
-                                    .attributes()
-                                    .flatten()
-                                    .find(|attr| attr.key.as_ref() == name)
-                                    .and_then(|attr| attr.unescape_value().ok())
-                                    .map(|value| value.to_string())
-                                    .unwrap_or_default()
-                            };
-                            // nix-eval-jobs quotes the dotted attr name
-                            let mut case = Case::new(
-                                attribute(b"name").trim_matches('"').to_string(),
-                                attribute(b"classname"),
-                            );
-                            case.duration = attribute(b"time")
-                                .parse::<f64>()
-                                .ok()
-                                .filter(|seconds| seconds.is_finite() && *seconds >= 0.0)
-                                .unwrap_or(0.0);
-                            case.drv = Some(attribute(b"drv")).filter(|drv| !drv.is_empty());
-                            current = Some(case);
+                Event::Start(element) | Event::Empty(element) => match element.name().as_ref() {
+                    b"testcase" => {
+                        if let Some(case) = current.take() {
+                            cases.push(case);
                         }
-                        b"failure" => {
-                            if let Some(case) = current.as_mut() {
-                                let message = element
-                                    .attributes()
-                                    .flatten()
-                                    .find(|attr| attr.key.as_ref() == b"message")
-                                    .and_then(|attr| attr.unescape_value().ok())
-                                    .map(|value| value.to_string())
-                                    .unwrap_or_default();
-                                case.message = Some(message);
-                                case.log = Some(String::new());
-                                in_failure = true;
-                            }
-                        }
-                        _ => {}
+                        let attribute = |name: &[u8]| {
+                            element
+                                .attributes()
+                                .flatten()
+                                .find(|attr| attr.key.as_ref() == name)
+                                .and_then(|attr| attr.unescape_value().ok())
+                                .map(|value| value.to_string())
+                                .unwrap_or_default()
+                        };
+                        let mut case = Case::new(
+                            crate::nix::evaljobs::attr_name(&attribute(b"name")),
+                            attribute(b"classname"),
+                        );
+                        case.duration = attribute(b"time")
+                            .parse::<f64>()
+                            .ok()
+                            .filter(|seconds| seconds.is_finite() && *seconds >= 0.0)
+                            .unwrap_or(0.0);
+                        case.drv = Some(attribute(b"drv")).filter(|drv| !drv.is_empty());
+                        current = Some(case);
                     }
-                }
+                    b"failure" => {
+                        if let Some(case) = current.as_mut() {
+                            let message = element
+                                .attributes()
+                                .flatten()
+                                .find(|attr| attr.key.as_ref() == b"message")
+                                .and_then(|attr| attr.unescape_value().ok())
+                                .map(|value| value.to_string())
+                                .unwrap_or_default();
+                            case.message = Some(message);
+                            case.log = Some(String::new());
+                            in_failure = true;
+                        }
+                    }
+                    _ => {}
+                },
                 Event::Text(text) if in_failure => {
                     if let Some(case) = current.as_mut() {
                         if let Ok(value) = text.unescape() {

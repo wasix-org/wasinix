@@ -9,11 +9,11 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use regex::Regex;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use crate::support::error::{request_error, Result};
+use crate::support::error::{Result, request_error};
 use crate::support::naming::{self, Domain, Resolved};
-use crate::support::nix::{eval, Flake, SYSTEM};
+use crate::support::nix::{Flake, SYSTEM, eval};
 
 /// The interpreters the wheel set ships.
 const INTERPRETERS: [&str; 2] = ["py313", "py314"];
@@ -75,8 +75,7 @@ fn wheel_worklist(repo: &Path) -> Result<BTreeMap<String, String>> {
         "eval",
         format!(
             "import {}",
-            repo.join("pkgs/python/wheels/default.nix")
-                .display()
+            repo.join("pkgs/python/wheels/default.nix").display()
         ),
     )
     .json()
@@ -132,7 +131,9 @@ fn cli_map() -> Result<BTreeMap<String, String>> {
     let packages = eval(
         &Flake::default(),
         "packages.preferred",
-        Some("builtins.mapAttrs (_: p: { aliases = p.passthru.wasinix.aliases or []; shipped = p.passthru.wasinix.shipped or false; })"),
+        Some(
+            "builtins.mapAttrs (_: p: { aliases = p.passthru.wasinix.aliases or []; shipped = p.passthru.wasinix.shipped or false; })",
+        ),
     )?;
     let mut map = BTreeMap::new();
     for (name, info) in packages.as_object().into_iter().flatten() {
@@ -183,7 +184,12 @@ impl Sets {
         let mut domain = Domain::new("the shipped wheels and CLIs");
         for attr in self.wheels.values() {
             for interpreter in INTERPRETERS {
-                let path = vec!["packages".into(), "python".into(), interpreter.into(), attr.clone()];
+                let path = vec![
+                    "packages".into(),
+                    "python".into(),
+                    interpreter.into(),
+                    attr.clone(),
+                ];
                 let axis = naming::axis_of(&path);
                 domain.add_path(path, attr, axis, vec![normalize(attr)]);
             }
@@ -317,10 +323,8 @@ fn github_tags(owner: &str, repo: &str) -> Result<Vec<String>> {
     // 1000 tags is plenty to cover every major.
     for page in 1..=10 {
         let path = format!("repos/{owner}/{repo}/tags?per_page=100&page={page}");
-        let data = crate::github::client::Client::new(
-            crate::github::client::token().as_deref(),
-        )
-        .get(&path)?;
+        let data = crate::github::client::Client::new(crate::github::client::token().as_deref())
+            .get(&path)?;
         let Some(items) = data.as_array() else { break };
         tags.extend(
             items
@@ -482,7 +486,10 @@ pub fn substitute_version(
                     continue;
                 }
             }
-            let ch = haystack[index..].chars().next().expect("index is on a boundary");
+            let ch = haystack[index..]
+                .chars()
+                .next()
+                .expect("index is on a boundary");
             out.push(ch);
             index += ch.len_utf8();
         }
@@ -540,13 +547,11 @@ fn hash_field(repo: &Path, target: &Target) -> Result<&'static str> {
         .apply("d: d.outputHash")
         .workdir(repo)
         .probe("the field name is judged from the eval's own complaint")?;
-    Ok(
-        if output.stderr.contains("multiple hashes passed") {
-            "sha256"
-        } else {
-            "hash"
-        },
-    )
+    Ok(if output.stderr.contains("multiple hashes passed") {
+        "sha256"
+    } else {
+        "hash"
+    })
 }
 
 fn concrete_url(repo: &Path, url: &str) -> Result<String> {
@@ -568,10 +573,7 @@ fn concrete_url(repo: &Path, url: &str) -> Result<String> {
         .workdir(repo)
         .probe("a failed mirror resolve names the url")?;
     if !output.status.is_success() {
-        return request_error(format!(
-            "could not resolve {url}: {}",
-            output.stderr.trim()
-        ));
+        return request_error(format!("could not resolve {url}: {}", output.stderr.trim()));
     }
     let mirrors: Vec<String> = serde_json::from_slice(&output.stdout).map_err(|source| {
         crate::support::error::Error::Json {
@@ -794,8 +796,8 @@ pub fn verify_mint(repo: &Path, target: &Target, added: &[String], before: &Hist
         "eval",
         format!(".#legacyPackages.{SYSTEM}.schemaVersion"),
     )
-        .workdir(repo)
-        .probe("verify_mint reports the failing set's own stderr")?;
+    .workdir(repo)
+    .probe("verify_mint reports the failing set's own stderr")?;
     if !output.status.is_success() {
         write_history(repo, &target.history, before, false)?;
         let tail = crate::support::error::tail(&output.stderr, 600);
@@ -854,7 +856,7 @@ pub fn add_version(
         Err(error) if options.skip_unsupported => {
             return Ok(AddOutcome::Skipped {
                 reason: error.to_string(),
-            })
+            });
         }
         Err(error) => return Err(error),
     };
@@ -921,18 +923,13 @@ pub fn add_version(
     if let Some(note) = &options.note {
         entry.insert("note".into(), Value::String(note.clone()));
     }
-    history
-        .entry(target.attr.clone())
-        .or_default()
-        .insert(
-            version.to_string(),
-            serde_json::to_value(entry).map_err(|source| {
-                crate::support::error::Error::Json {
-                    path: "<history entry>".into(),
-                    source,
-                }
-            })?,
-        );
+    history.entry(target.attr.clone()).or_default().insert(
+        version.to_string(),
+        serde_json::to_value(entry).map_err(|source| crate::support::error::Error::Json {
+            path: "<history entry>".into(),
+            source,
+        })?,
+    );
 
     let tail = match &chosen {
         Some(picked) if !picked.is_empty() => {
@@ -1156,7 +1153,10 @@ pub fn from_lockfile(repo: &Path, path: &Path, dry_run: bool) -> Result<Backfill
     let mut files: Vec<PathBuf> = if dry_run {
         Vec::new()
     } else {
-        touched.iter().map(|(target, _)| target.history.clone()).collect()
+        touched
+            .iter()
+            .map(|(target, _)| target.history.clone())
+            .collect()
     };
     files.sort();
     files.dedup();

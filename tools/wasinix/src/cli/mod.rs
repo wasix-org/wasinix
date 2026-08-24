@@ -357,6 +357,9 @@ pub enum CiCommand {
         request: PathBuf,
         #[arg(long)]
         run_dir: PathBuf,
+        /// Stop after warming evaluation inputs
+        #[arg(long)]
+        inputs_only: bool,
         /// Push trusted results to the shared cache; requires NIX_SIGNING_KEY
         #[arg(long)]
         push_cache: bool,
@@ -825,10 +828,7 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
             );
             let scratch = crate::support::fs::Scratch::create("wasinix-cache-push")?;
             let jobs_path = scratch.path().join("jobs.jsonl");
-            let attr = format!(
-                ".#legacyPackages.{}.ci.jobs",
-                crate::support::nix::SYSTEM
-            );
+            let attr = format!(".#legacyPackages.{}.ci.jobs", crate::support::nix::SYSTEM);
             let catalog = crate::ci::exec::selector_catalog(worktree.path(), &route)?.into_map();
             let selected: Vec<String> = if selectors.is_empty() {
                 catalog.jobs.keys().map(|job| job.0.clone()).collect()
@@ -1509,6 +1509,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
         CiCommand::Run {
             request,
             run_dir,
+            inputs_only,
             push_cache,
         } => {
             let resolved: crate::ci::types::ResolvedRequest = schema::read(&request)?;
@@ -1517,7 +1518,11 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 source: request::Source::Resolved(resolved),
                 run_dir,
                 cache: cache_intent(push_cache),
-                only: request::TaskFilter::All,
+                only: if inputs_only {
+                    request::TaskFilter::InputsOnly
+                } else {
+                    request::TaskFilter::All
+                },
                 follow: false,
                 finish: request::Finish::Headline,
             })
@@ -1542,6 +1547,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 request,
                 &run_dir,
                 request::CacheIntent::Off,
+                false,
             )
         }
         CiCommand::Observe {
