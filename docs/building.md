@@ -86,7 +86,7 @@ never finishes. Size workers against free RAM, not core count, and set the
 budget through the environment the CLI reads:
 
 ```sh
-WASINIX_EVAL_WORKERS=4 WASINIX_EVAL_MEMORY=8192 wasinix build all --on local
+WASINIX_EVAL_WORKERS=2 WASINIX_EVAL_MEMORY=16384 wasinix build all --on local
 ```
 
 The build tail's parallelism is a separate knob: `WASINIX_MAX_JOBS` caps
