@@ -54,7 +54,11 @@ in {
       failures = []
 
       listed = set()
-      for entry in manifest["crates"]:
+      entries = manifest["crates"]
+      milestone = max(1, (len(entries) + 9) // 10)
+      for index, entry in enumerate(entries, 1):
+          if index == 1 or index % milestone == 0 or index == len(entries):
+              print(f"checking registry archives: {index}/{len(entries)}", file=sys.stderr, flush=True)
           root = f"{entry['crate']}-{entry['wasixVersion']}"
           path = reg / "crates" / entry["crateFile"]
           listed.add(entry["crateFile"])
@@ -134,7 +138,7 @@ in {
       EOF
       echo 'fn main() {}' > app/src/main.rs
 
-      cd app && cargo build --offline --quiet
+      cd app && cargo build --offline
 
       got=$(sed -n '/name = "${probe.crate}"/,/^$/p' Cargo.lock | sed -n 's/^version = "\(.*\)"/\1/p')
       [ "$got" = "${probeEntry.wasixVersion}" ] \
@@ -178,7 +182,7 @@ in {
       index = "sparse+$base/"
       EOF
       echo 'fn main() {}' > app/src/main.rs
-      ( cd app && CARGO_HOME="$PWD/../cargo-home" cargo build --quiet )
+      ( cd app && CARGO_HOME="$PWD/../cargo-home" cargo build )
 
       got=$(sed -n '/name = "${probe.crate}"/,/^$/p' app/Cargo.lock | sed -n 's/^version = "\(.*\)"/\1/p')
       [ "$got" = "${probeEntry.wasixVersion}" ] \
