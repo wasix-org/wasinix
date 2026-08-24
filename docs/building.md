@@ -121,6 +121,8 @@ one target.
   its contents.
 - `nix fmt`. CI rejects unformatted files, and prettier covers markdown as well
   as Nix.
+- `nix flake check`. This runs formatting, Nix linters, and project-API
+  evaluation tests; package and runtime builds belong to `wasinix build`.
 - For a behaviour-preserving refactor, diff the derivations. Semantic
   equivalence is the bar, not identical drv paths; meta or passthru changes do
   not move them at all.

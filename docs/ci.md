@@ -174,14 +174,14 @@ at most one open pull request, constrained by both the head repository and
 commit. `ci preview-context` applies the preview label, same-repository,
 live-head, and green-Build gates for both preview trigger shapes.
 
-`build.yml` runs one CI run per event and publishes through `ci publish`: the
-sticky "Wasinix CI" comment and check run on same-repo events, the step summary
-as the overflow home. While the run executes, `ci publish --watch` tails the
-same event stream and republishes the comment and check at most every five
-minutes; the finished surfaces still come only from the post-run publish.
-`test-report.yml` re-publishes fork PRs in base context (the PR's read-only
-token cannot post in-job); a fork's report is its own code's claim, so it
-publishes `--untrusted` and concludes neutral.
+`build.yml` first runs the source-only `nix flake check`, then one CI run per
+event and publishes through `ci publish`: the sticky "Wasinix CI" comment and
+check run on same-repo events, the step summary as the overflow home. While the
+run executes, `ci publish --watch` tails the same event stream and republishes
+the comment and check at most every five minutes; the finished surfaces still
+come only from the post-run publish. `test-report.yml` re-publishes fork PRs in
+base context (the PR's read-only token cannot post in-job); a fork's report is
+its own code's claim, so it publishes `--untrusted` and concludes neutral.
 
 `ci-command.yml` handles `/wasinix <command>` on a pull request: `ci origin`
 authorizes it (the shared grammar, a live write-permission check, PR state),
