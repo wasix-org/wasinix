@@ -1901,7 +1901,7 @@ mod exec {
     use crate::ci::events::{Event, Tracker, read_all};
     use crate::ci::exec::{
         JobState, blocked_by_case_failure, cached_jobs, classify_build_outcome, fatal,
-        fixed_output_derivations, project_junit, record_result,
+        project_junit, record_result,
     };
     use crate::ci::plan::{BuildTarget, Phase};
     use crate::support::atoms::{JobStatus, TaskStatus};
@@ -1914,31 +1914,6 @@ mod exec {
             duration: None,
             error: None,
         }
-    }
-
-    #[test]
-    fn evaluation_inputs_select_only_fixed_output_derivations() {
-        let graph = json!({
-            "/nix/store/source.drv": {
-                "outputs": {"out": {"hash": "sha256-example"}}
-            },
-            "/nix/store/package.drv": {
-                "outputs": {"out": {"path": "/nix/store/package"}}
-            },
-            "/nix/store/multi-source.drv": {
-                "outputs": {
-                    "out": {"path": "/nix/store/multi-source"},
-                    "download": {"hash": "sha256-other"}
-                }
-            }
-        });
-        assert_eq!(
-            fixed_output_derivations(&graph),
-            [
-                "/nix/store/multi-source.drv^download",
-                "/nix/store/source.drv^out"
-            ]
-        );
     }
 
     #[test]
@@ -5172,13 +5147,14 @@ mod corpus {
     }
 
     #[test]
-    fn evaluations_keep_their_derivations_rooted() {
+    fn evaluations_are_protected_until_their_derivations_are_rooted() {
         let source = sources(false)
             .into_iter()
             .find(|(path, _)| path == "nix/evaljobs.rs")
             .unwrap()
             .1;
         assert_eq!(source.matches("\"--gc-roots-dir\"").count(), 1);
+        assert_eq!(source.matches(".option(\"min-free\", \"0\")").count(), 1);
     }
 
     /// git runs through support::git (repo named on every call, three-way

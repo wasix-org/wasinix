@@ -177,61 +177,6 @@ fn run_logged(
     Ok(CommandStatus::from_exit(status))
 }
 
-struct LoggedOutput {
-    status: std::process::ExitStatus,
-    stdout: Vec<u8>,
-}
-
-fn output_logged(
-    cmd: &mut Command,
-    log_path: &Path,
-    artifacts: &mut Artifacts,
-) -> Result<LoggedOutput> {
-    use std::io::Read;
-    let log = crate::support::log::BoundedLog::create(log_path)?;
-    let output = crate::support::tools::piped(
-        cmd,
-        None,
-        |mut stream| {
-            let mut output = Vec::new();
-            stream
-                .read_to_end(&mut output)
-                .map_err(|error| io(log_path, error))?;
-            Ok(output)
-        },
-        |mut stream| {
-            let mut log = log;
-            std::io::copy(&mut stream, &mut log).map_err(|error| io(log_path, error))?;
-            log.finish()?;
-            Ok(())
-        },
-    )?
-    .value();
-    artifacts.record_log(log_path)?;
-    Ok(LoggedOutput {
-        status: output.status,
-        stdout: output.stdout,
-    })
-}
-
-pub(crate) fn fixed_output_derivations(graph: &Value) -> Vec<String> {
-    let mut paths: Vec<String> = graph
-        .as_object()
-        .into_iter()
-        .flat_map(|entries| entries.iter())
-        .flat_map(|(path, drv)| {
-            drv["outputs"]
-                .as_object()
-                .into_iter()
-                .flat_map(|outputs| outputs.iter())
-                .filter(|(_, output)| output["hash"].as_str().is_some())
-                .map(move |(output, _)| format!("{path}^{output}"))
-        })
-        .collect();
-    paths.sort();
-    paths
-}
-
 fn treefmt(
     worktree: &Path,
     case_id: &str,
@@ -271,8 +216,7 @@ fn treefmt(
     Ok(fragment)
 }
 
-/// Warm the evaluation's fixed-output inputs so the offline evaluation and
-/// the build behind it never fetch.
+/// Complete one online evaluation before the authoritative offline one.
 fn eval_inputs(
     ctx: &Context,
     worktree: &Path,
@@ -308,62 +252,7 @@ fn eval_inputs(
             failure = Some((error, evaluate_log.clone()));
             CommandStatus::FAILURE
         }
-        None => {
-            let jobs = evaljobs::parse_file(&crate::support::fs::read_to_string(&jobs_path)?)?;
-            let mut drvs: Vec<&str> = jobs
-                .iter()
-                .filter_map(|job| job.drv_path.as_deref())
-                .collect();
-            drvs.sort();
-            drvs.dedup();
-            let drv_file = logs.join("job-derivations.txt");
-            crate::support::fs::write(&drv_file, (drvs.join("\n") + "\n").as_bytes())?;
-            artifacts.record(&drv_file)?;
-
-            let mut show = crate::support::nix::Invocation::plain("derivation show")
-                .args(["--recursive", "--stdin"])
-                .stdin(&drv_file)
-                .workdir(worktree)
-                .route(route)?
-                .command()?;
-            let derivations_log = logs.join("derivations.log");
-            let shown = output_logged(&mut show, &derivations_log, artifacts)?;
-            if !shown.status.success() {
-                failure = Some((
-                    "could not inspect evaluation inputs".to_string(),
-                    derivations_log,
-                ));
-                CommandStatus::from_exit(shown.status)
-            } else {
-                let graph: Value =
-                    serde_json::from_slice(&shown.stdout).map_err(|source| Error::Json {
-                        path: derivations_log.clone(),
-                        source,
-                    })?;
-                let fetches = fixed_output_derivations(&graph);
-                let fetch_file = logs.join("fixed-output-derivations.txt");
-                crate::support::fs::write(&fetch_file, (fetches.join("\n") + "\n").as_bytes())?;
-                artifacts.record(&fetch_file)?;
-                if fetches.is_empty() {
-                    CommandStatus::SUCCESS
-                } else {
-                    let mut build = crate::support::nix::Invocation::plain("build")
-                        .args(["--no-link", "--stdin"])
-                        .accepts_flake_config()
-                        .stdin(&fetch_file)
-                        .workdir(worktree)
-                        .route(route)?
-                        .command()?;
-                    let fetch_log = logs.join("fetch.log");
-                    let status = run_logged(&mut build, &fetch_log, artifacts)?;
-                    if !status.is_success() {
-                        failure =
-                            Some(("could not fetch evaluation inputs".to_string(), fetch_log));
-                    }
-                    status
-                }
-            }
-        }
+        None => CommandStatus::SUCCESS,
     };
     let mut fragment = Fragment::new(
         format!("{case_id}.eval-inputs"),
