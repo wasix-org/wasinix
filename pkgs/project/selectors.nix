@@ -4,13 +4,13 @@
 }: let
   catalog = project.catalog.entries;
   jobsForSubjects = group: subjects: let
-    catalogSubjects = map (entry: entry.packageSubject or entry.address) (builtins.attrValues catalog);
+    catalogSubjects = lib.unique (lib.concatMap (entry: entry.packageSubjects or [entry.address]) (builtins.attrValues catalog));
     unknown = lib.subtractLists catalogSubjects subjects;
   in
     lib.throwIf (unknown != [])
     "CI selector group '${group}' names unknown package subject(s): ${lib.concatStringsSep ", " unknown}"
     (map (entry: entry.address) (lib.filter (entry:
-      builtins.elem (entry.packageSubject or entry.address) subjects)
+      lib.intersectLists (entry.packageSubjects or [entry.address]) subjects != [])
     (builtins.attrValues catalog)));
   nativeSubjects = names: map (name: "packages.native.${name}") names;
   pandocSubjects = map (profile: "packages.wasix.${profile}.pandoc") (builtins.attrNames project.packages.wasix);

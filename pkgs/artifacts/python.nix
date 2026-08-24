@@ -6,31 +6,23 @@
   wheelList = import ../python/wheels/default.nix;
   history = builtins.fromJSON (builtins.readFile ../python/history.json);
   wheelInventory = lib.listToAttrs (map (entry: lib.nameValuePair entry.attr entry) wheelList);
-  allVariants = ["py313" "py314" "noarch"];
-  interpreterPackages = {
-    py313 = "python313";
-    py314 = "python314";
-  };
   wheelArtifactKind = variant: "wheel-${variant}";
-  wheelArtifactKinds = map wheelArtifactKind allVariants;
   isNoarch = entry: entry.noarch or false;
-  pythonNameFor = interpreter:
-    interpreterPackages.${interpreter}
-    or (throw "unknown Python wheel interpreter '${interpreter}'");
-
   wheelSet = {
     interpreter,
     packages,
     packageSets,
+    pythonVariants,
     pyKey,
     select,
   }: let
-    pythonName = pythonNameFor interpreter;
+    pythonName = pythonVariants.specs.${interpreter}.interpreterPackage;
     python = packageSets.preferred.${pythonName};
     pythonArtifact = packages.preferred.${pythonName};
   in
     mkPythonWheels {
       inherit pyKey select;
+      interpreterVariants = pythonVariants.all;
       python3 = python;
       pythonPackages =
         packageSets.python.${interpreter}
@@ -67,6 +59,7 @@ in {
     entry,
     packages,
     packageSets,
+    pythonVariants,
     ...
   }: let
     declaration = wheelInventory.${entry.name} or null;
@@ -78,8 +71,8 @@ in {
       else interpreter;
     instanceVariants =
       if entry.instance.kind == "history"
-      then history.${entry.name}.${entry.instance.version}.variants or ["py313" "py314"]
-      else declaration.variants or allVariants;
+      then history.${entry.name}.${entry.instance.version}.variants or pythonVariants.all
+      else declaration.variants or pythonVariants.all;
     enabled =
       declaration
       != null
@@ -87,14 +80,14 @@ in {
       && entry.scope == "python"
       && (
         if noarch
-        then interpreter == "py314"
+        then interpreter == pythonVariants.preferred
         else builtins.elem interpreter instanceVariants
       );
     wheels = wheelSet {
-      inherit packages packageSets pyKey;
+      inherit packages packageSets pythonVariants pyKey;
       interpreter =
         if noarch
-        then "py314"
+        then pythonVariants.preferred
         else interpreter;
       select = candidate: candidate.attr == entry.name;
     };
@@ -108,50 +101,53 @@ in {
     };
 
   registryArtifact = {
-    entry,
+    catalog,
     packages,
     packageSets,
+    pythonVariants,
+    ...
+  }: let
+    inherit (pythonVariants) preferred;
+    preferredPython = pythonVariants.specs.${preferred}.interpreterPackage;
+    publishOnce = map (entry': entry'.attr) (lib.filter (entry': entry'.publishOnce or false) wheelList);
+    pythonSets =
+      lib.mapAttrs (interpreter: spec: {
+        python3 = packageSets.preferred.${spec.interpreterPackage};
+        pythonWheels =
+          wheelsFor packages interpreter (wheelArtifactKind interpreter)
+          // lib.optionalAttrs (interpreter == preferred) (wheelsFor packages interpreter "wheel-noarch");
+        omitFromRegistry = lib.optionals (interpreter != preferred) publishOnce;
+      })
+      pythonVariants.specs;
+    wheelArtifactKinds = map wheelArtifactKind (pythonVariants.all ++ ["noarch"]);
+    wheelSubjects = map (entry: entry.address) (lib.filter (entry:
+      entry.kind
+      == "artifact"
+      && builtins.elem entry.artifactKind wheelArtifactKinds)
+    (builtins.attrValues catalog.entries));
+    registry = mkPythonRegistry {
+      python3 = packageSets.preferred.${preferredPython};
+      pythonWebc = packages.preferred.${preferredPython}.artifacts.webc.shim;
+      inherit pythonSets;
+    };
+  in {
+    artifacts.registry.python = {
+      artifact = registry;
+      subjects = wheelSubjects;
+      scope = "python";
+      variant.interpreter = preferred;
+    };
+  };
+
+  artifactTests = {
+    entry,
+    pythonVariants,
     ...
   }:
     lib.optionalAttrs (
       entry.kind
       == "artifact"
-      && entry.artifactKind == "webc"
-      && entry.name == "python314"
-      && entry.instance.kind == "current"
-    ) (let
-      noarch = wheelsFor packages "py314" "wheel-noarch";
-      py313 = wheelsFor packages "py313" "wheel-py313";
-      py314 = wheelsFor packages "py314" "wheel-py314";
-      publishOnce = map (entry': entry'.attr) (lib.filter (entry': entry'.publishOnce or false) wheelList);
-      registry = mkPythonRegistry {
-        python3 = packageSets.preferred.python314;
-        pythonWebc = entry.artifact.shim;
-        pythonSets = {
-          py313 = {
-            python3 = packageSets.preferred.python313;
-            pythonWheels = py313;
-            omitFromRegistry = publishOnce;
-          };
-          py314 = {
-            python3 = packageSets.preferred.python314;
-            pythonWheels = noarch // py314;
-          };
-        };
-      };
-    in {
-      artifacts.registry = {
-        artifact = registry;
-        name = "python";
-        projectionPath = ["python"];
-      };
-    });
-
-  artifactTests = {entry, ...}:
-    lib.optionalAttrs (
-      entry.kind
-      == "artifact"
-      && builtins.elem entry.artifactKind (["registry"] ++ wheelArtifactKinds)
+      && builtins.elem entry.artifactKind (["registry"] ++ map wheelArtifactKind (pythonVariants.all ++ ["noarch"]))
       && (entry.artifact.passthru or {}) ? tests
     ) {
       tests = flattenTests "" entry.artifact.passthru.tests;

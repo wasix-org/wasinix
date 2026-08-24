@@ -76,6 +76,14 @@ global views are `artifacts.pkg.<name>`, `artifacts.webc.<name>`, and
 `commands.<name>`. Canonical entries alone drive publication and CI; aliases are
 alternate catalog addresses, not duplicate builds.
 
+Entry projections produce versions, artifacts, commands, and tests relative to
+one catalog entry. Project projections produce aggregate artifacts from the same
+lazy project context. Aggregate artifacts are catalog entries with explicit
+immediate subjects, so the ordinary projection machinery attaches their tests
+and derives their transitive package subjects for CI. The Python registry is one
+such aggregate over the cataloged wheel artifacts; it is not owned by a chosen
+interpreter package.
+
 ## Flake outputs
 
 - `packages.<system>`: convenient development outputs

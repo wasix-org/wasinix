@@ -226,6 +226,7 @@
     pythonSetsFor = {wasixRaw, ...}: {
       py = {
         pkgs = wasixRaw.default;
+        interpreterPackage = "core";
         packageSet = mkPythonSet [];
         preferred = true;
       };
@@ -276,7 +277,7 @@
   };
   historyProjectionRules.historyVersions = {
     namespaces = ["versions"];
-    project = {
+    entry = {
       entry,
       instantiateVersions,
       ...
@@ -499,7 +500,7 @@
     extensions = [emptyExtension];
     projectionRules.perProject = {
       namespaces = ["tests"];
-      project = {entry, ...}:
+      entry = {entry, ...}:
         lib.optionalAttrs (entry.address == "packages.wasix.default.core") {
           tests.per-project = mkPackage {name = "per-project";};
         };
@@ -746,6 +747,111 @@
       importNixpkgs = fakeImportNixpkgs;
       extensions = [consumerExtension];
     };
+  aggregateProjectionRules = {
+    bundle = {entry, ...}:
+      lib.optionalAttrs (entry.address == "packages.wasix.default.consumer") {
+        artifacts.bundle = mkPackage {name = "consumer-bundle";};
+      };
+    aggregate = {
+      source = "consumer";
+      namespaces = ["artifacts" "tests"];
+      project = {
+        packages,
+        pythonVariants,
+        ...
+      }: {
+        artifacts.aggregate.fixture = {
+          artifact = mkPackage {name = "aggregate-${packages.wasix.default.consumer.name}-${pythonVariants.preferred}";};
+          subjects = ["artifacts.bundle.consumer"];
+        };
+      };
+      entry = {entry, ...}:
+        lib.optionalAttrs (entry.kind == "artifact" && entry.artifactKind == "aggregate") {
+          tests.inspect = mkPackage {name = "inspect-${entry.artifact.name}";};
+        };
+    };
+  };
+  aggregateProjectionProject = projectWithProjectionRules aggregateProjectionRules;
+  duplicateAggregateProject = projectWithProjectionRules {
+    first = {
+      source = "consumer";
+      namespaces = ["artifacts"];
+      project = _context: {artifacts.aggregate.same = mkPackage {};};
+    };
+    second = {
+      source = "consumer";
+      namespaces = ["artifacts"];
+      project = _context: {artifacts.aggregate.same = mkPackage {};};
+    };
+  };
+  unknownAggregateSourceProject = projectWithProjectionRules {
+    aggregate = {
+      source = "missing";
+      namespaces = ["artifacts"];
+      project = _context: {artifacts.aggregate.fixture = mkPackage {};};
+    };
+  };
+  invalidAggregateSubjectsProject = projectWithProjectionRules {
+    aggregate = {
+      source = "consumer";
+      namespaces = ["artifacts"];
+      project = _context: {
+        artifacts.aggregate.fixture = {
+          artifact = mkPackage {};
+          subjects = ["artifacts.missing"];
+        };
+      };
+    };
+  };
+  malformedAggregateSubjectsProject = projectWithProjectionRules {
+    aggregate = {
+      source = "consumer";
+      namespaces = ["artifacts"];
+      project = _context: {
+        artifacts.aggregate.fixture = {
+          artifact = mkPackage {};
+          subjects = "artifacts.bundle.consumer";
+        };
+      };
+    };
+  };
+  pythonArtifactModule = import ../artifacts/python.nix {
+    inherit lib;
+    mkPythonRegistry = args:
+      mkPackage {
+        name = "python-registry";
+        passthru.registryArgs = args;
+      };
+    mkPythonWheels = _args: {};
+  };
+  pythonRegistryFor = preferred: let
+    interpreterPackages = {
+      old = "python-old";
+      new = "python-new";
+    };
+    runtimeFor = interpreter: mkPackage {name = "runtime-${interpreter}";};
+    webcFor = interpreter: {
+      artifacts.webc.shim = mkPackage {name = "webc-${interpreter}";};
+    };
+    result = pythonArtifactModule.registryArtifact {
+      catalog.entries = {};
+      packages = {
+        preferred = lib.mapAttrs' (_: interpreterPackage:
+          lib.nameValuePair interpreterPackage (webcFor interpreterPackage))
+        interpreterPackages;
+        python = lib.genAttrs (lib.attrNames interpreterPackages) (_: {});
+      };
+      packageSets.preferred = lib.mapAttrs' (_: interpreterPackage:
+        lib.nameValuePair interpreterPackage (runtimeFor interpreterPackage))
+      interpreterPackages;
+      pythonVariants = {
+        all = lib.attrNames interpreterPackages;
+        inherit preferred;
+        specs = lib.mapAttrs (_: interpreterPackage: {inherit interpreterPackage;}) interpreterPackages;
+      };
+    };
+  in
+    result.artifacts.registry.python.artifact.passthru.registryArgs;
   duplicateProjectionProject = projectWithProjectionRules {
     first = {entry, ...}: lib.optionalAttrs (entry.policy.checks.probe or false) {tests.same = mkPackage {};};
     second = {entry, ...}: lib.optionalAttrs (entry.policy.checks.probe or false) {tests.same = mkPackage {};};
@@ -823,6 +929,9 @@
   };
   invalidResultProject = projectWithProjectionRules {
     invalid = _args: "not an attribute set";
+  };
+  invalidRuleProject = projectWithProjectionRules {
+    invalid.namespaces = ["artifacts"];
   };
   extensionDeclaration = import ./extension.nix {inherit (projectLib) loadPackageOverlays;};
 in {
@@ -913,6 +1022,23 @@ in {
       orphanDeclarationFails = true;
       authoredDefinitionFails = true;
       changedDefinitionFails = true;
+    };
+  };
+
+  pythonAggregate = {
+    expr = {
+      oldRuntime = (pythonRegistryFor "old").python3.name;
+      oldWebc = (pythonRegistryFor "old").pythonWebc.name;
+      newRuntime = (pythonRegistryFor "new").python3.name;
+      newWebc = (pythonRegistryFor "new").pythonWebc.name;
+      variants = lib.attrNames (pythonRegistryFor "new").pythonSets;
+    };
+    expected = {
+      oldRuntime = "runtime-python-old";
+      oldWebc = "webc-python-old";
+      newRuntime = "runtime-python-new";
+      newWebc = "webc-python-new";
+      variants = ["new" "old"];
     };
   };
 
@@ -1130,12 +1256,26 @@ in {
         history = historyProjectionProject.artifacts.retained.core.versions."0.9".name;
         test = historyProjectionProject.tests.${''tests.artifacts.retained.core.versions."0.9".inspect''}.name;
       };
+      aggregateProjection = {
+        artifact = aggregateProjectionProject.artifacts.aggregate.fixture.name;
+        subjects = aggregateProjectionProject.catalog.entries."artifacts.aggregate.fixture".subjects;
+        packageSubjects = aggregateProjectionProject.catalog.entries."artifacts.aggregate.fixture".packageSubjects;
+        test = aggregateProjectionProject.tests."tests.artifacts.aggregate.fixture.inspect".name;
+        testPackageSubjects = aggregateProjectionProject.catalog.entries."tests.artifacts.aggregate.fixture.inspect".packageSubjects;
+        ciIncludesArtifact = aggregateProjectionProject.ci.jobs ? "artifacts.aggregate.fixture";
+        ciIncludesTest = aggregateProjectionProject.ci.jobs ? "tests.artifacts.aggregate.fixture.inspect";
+      };
+      duplicateAggregateFails = !(force duplicateAggregateProject.artifacts).success;
+      unknownAggregateSourceFails = !(force unknownAggregateSourceProject.artifacts).success;
+      invalidAggregateSubjectsFail = !(force invalidAggregateSubjectsProject.catalog).success;
+      malformedAggregateSubjectsFail = !(force malformedAggregateSubjectsProject.catalog).success;
       invalidProjectionFails = !(force invalidProjectionProject.tests).success;
       invalidArtifactFails = !(force invalidArtifactProject.artifacts).success;
       invalidCommandFails = !(force invalidCommandProject.commands).success;
       invalidNamespaceFails = !(force invalidNamespaceProject.catalog).success;
       invalidNamespaceShapeFails = !(force invalidNamespaceShapeProject.catalog).success;
       invalidResultFails = !(force invalidResultProject.catalog).success;
+      invalidRuleFails = !(force invalidRuleProject).success;
       variantShapeFails = !(force variantShapeProject).success;
       staleHistoryFails = !(force staleHistoryProject).success;
       invalidProfileFails = !(force invalidProfileProject).success;
@@ -1279,12 +1419,26 @@ in {
         history = "retained-0.9";
         test = "inspect-retained-0.9";
       };
+      aggregateProjection = {
+        artifact = "aggregate-consumer-default-py";
+        subjects = ["artifacts.bundle.consumer"];
+        packageSubjects = ["packages.wasix.default.consumer"];
+        test = "inspect-aggregate-consumer-default-py";
+        testPackageSubjects = ["packages.wasix.default.consumer"];
+        ciIncludesArtifact = true;
+        ciIncludesTest = true;
+      };
+      duplicateAggregateFails = true;
+      unknownAggregateSourceFails = true;
+      invalidAggregateSubjectsFail = true;
+      malformedAggregateSubjectsFail = true;
       invalidProjectionFails = true;
       invalidArtifactFails = true;
       invalidCommandFails = true;
       invalidNamespaceFails = true;
       invalidNamespaceShapeFails = true;
       invalidResultFails = true;
+      invalidRuleFails = true;
       variantShapeFails = true;
       staleHistoryFails = true;
       invalidProfileFails = true;

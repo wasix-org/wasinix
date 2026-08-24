@@ -16,11 +16,12 @@
   emulatedChecks,
   installCheckOutputArgsIf,
   # Which worklist entries this call builds. noarch wheels (python-version-independent: they ship
-  # no python code, e.g. a redistributed binary) build once on the default python; everything else
+  # no python code, e.g. a redistributed binary) build once on the preferred python; everything else
   # builds per interpreter.
   select ? (_: true),
   # This call's wheel variant ("py313"/"py314"/"noarch"); history entries gate on it.
   pyKey,
+  interpreterVariants,
 }: let
   testLib = import ./test-lib.nix {inherit pkgs lib python3 pythonWebc wasmer;};
 
@@ -29,7 +30,7 @@
   # JSON so scripts/history.py and update.py can edit it (schema: see wheels.nix header).
   historyTable = builtins.fromJSON (builtins.readFile ../history.json);
   unknownHistory = lib.filter (n: !(lib.elem n (map (e: e.attr) wheelList))) (lib.attrNames historyTable);
-  # A noarch entry builds once on the default python, so its history versions
+  # A noarch entry builds once on the preferred python, so its history versions
   # would be gated out by every `variants` value and silently never ship.
   noarchHistory =
     map (e: e.attr)
@@ -117,8 +118,8 @@
 
   # Guards a `noarch` mark (a python-version-independent package, e.g. a redistributed binary): the
   # wheel AND its whole python-dep closure must be py3-none-any. A version-specific (cp-tagged)
-  # member builds only on the default python, so the other interpreter can't resolve it from the
-  # merged registry. Runs on the default python.
+  # member builds only on the preferred python, so the other interpreter can't resolve it from the
+  # merged registry. Runs on the preferred python.
   noarchClosureTest = name: wheel: let
     members = lib.filter (m: m ? dist) ([wheel] ++ pythonPackages.requiredPythonModules [wheel]);
   in
@@ -192,7 +193,7 @@
     variants =
       if historyVersion == null
       then e.variants or allVariants
-      else historyTable.${e.attr}.${historyVersion}.variants or ["py313" "py314"];
+      else historyTable.${e.attr}.${historyVersion}.variants or interpreterVariants;
     # Read declarations from the native package because cross finalAttrs recurse.
     nativeWheel = pkgs.python3Packages.${e.attr} or null;
     # Map native Python check inputs back into this interpreter's cross package
@@ -366,10 +367,10 @@
   # History wheels (<attr>-<version>): the entry's older releases, rebased by
   # project history from python/history.json. Never noarch. `spec.variants` is
   # the generic history gate: the build variants an entry is limited to; for
-  # this set a variant IS an interpreter (pyKey), default both.
+  # this set a variant IS an interpreter (pyKey), default every configured interpreter.
   # A worklist entry reads the same `variants` gate as a history entry, for a
   # package one interpreter cannot run (cramjam's pyo3 predates 3.14).
-  allVariants = ["py313" "py314" "noarch"];
+  allVariants = interpreterVariants ++ ["noarch"];
 
   historyOf = e:
     lib.concatMap (
@@ -377,7 +378,7 @@
         spec = historyTable.${e.attr}.${v};
         name = "${e.attr}-${v}";
       in
-        lib.optionals (lib.elem pyKey (spec.variants or ["py313" "py314"])) [
+        lib.optionals (lib.elem pyKey (spec.variants or interpreterVariants)) [
           (lib.nameValuePair name (mkWheel name e packageVersions.${e.attr}.${v}))
         ]
     ) (lib.attrNames (historyTable.${e.attr} or {}));

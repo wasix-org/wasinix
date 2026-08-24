@@ -529,6 +529,47 @@ mod evalmap {
     }
 
     #[test]
+    fn aggregate_jobs_resolve_to_every_package_subject() {
+        let mut mapping = map();
+        mapping.packages.insert(
+            JobAddr("packages.wasix.eh.zlib".into()),
+            CatalogJob {
+                kind: "package".into(),
+                name: "zlib".into(),
+                ..CatalogJob::default()
+            },
+        );
+        mapping.packages.insert(
+            JobAddr("packages.wasix.exnrefEh.zlib".into()),
+            CatalogJob {
+                kind: "package".into(),
+                name: "zlib".into(),
+                ..CatalogJob::default()
+            },
+        );
+        mapping.info.insert(
+            JobAddr("artifacts.bundle.zlib".into()),
+            JobInfo {
+                package_subjects: vec![
+                    "packages.wasix.eh.zlib".into(),
+                    "packages.wasix.exnrefEh.zlib".into(),
+                ],
+                ..JobInfo::default()
+            },
+        );
+        mapping.groups.insert(
+            "aggregate".into(),
+            SelectorGroup {
+                jobs: vec!["artifacts.bundle.zlib".into()],
+            },
+        );
+        assert_eq!(
+            mapping.resolve_packages(&["aggregate".into()]).unwrap(),
+            ["packages.wasix.eh.zlib", "packages.wasix.exnrefEh.zlib"]
+        );
+    }
+
+    #[test]
     fn published_maps_carry_the_envelope() {
         use crate::support::schema::{self, Document};
         assert_eq!(EvalMap::SCHEMA, 1);

@@ -209,7 +209,7 @@
     wasinixProjectionRules = {
       historyVersions = {
         namespaces = ["versions"];
-        project = {
+        entry = {
           entry,
           instantiateVersions,
           ...
@@ -261,24 +261,30 @@
         entry,
         packages,
         packageSets,
+        pythonVariants,
         ...
       }: ((import ../artifacts/python.nix {
           inherit lib;
           inherit ((constructionFor packageSets.native)) mkPythonRegistry mkPythonWheels;
         })
           .wheelArtifacts
-        {inherit entry packages packageSets;});
+        {inherit entry packages packageSets pythonVariants;});
       pythonRegistryArtifact = {
-        entry,
-        packages,
-        packageSets,
-        ...
-      }: ((import ../artifacts/python.nix {
-          inherit lib;
-          inherit ((constructionFor packageSets.native)) mkPythonRegistry mkPythonWheels;
-        })
-          .registryArtifact
-        {inherit entry packages packageSets;});
+        source = "wasinix";
+        namespaces = ["artifacts"];
+        project = {
+          catalog,
+          packages,
+          packageSets,
+          pythonVariants,
+          ...
+        }: ((import ../artifacts/python.nix {
+            inherit lib;
+            inherit ((constructionFor packageSets.native)) mkPythonRegistry mkPythonWheels;
+          })
+            .registryArtifact
+          {inherit catalog packages packageSets pythonVariants;});
+      };
       inherit
         (import ../artifacts/python.nix {
           inherit lib;
@@ -416,10 +422,12 @@
       pythonSetsFor = {wasixRaw, ...}: {
         py313 = {
           pkgs = wasixRaw.exnrefEhpic;
+          interpreterPackage = "python313";
           packageSet = wasixRaw.exnrefEhpic.python313.pkgs;
         };
         py314 = {
           pkgs = wasixRaw.exnrefEhpic;
+          interpreterPackage = "python314";
           packageSet = wasixRaw.exnrefEhpic.python314.pkgs;
           preferred = true;
         };
