@@ -67,11 +67,12 @@ The main legacy trees are `toolchain`, `packagesByProfile`, `nativePackages`,
 `legacyPackages.<system>.ci` flattens the build trees to dotted job names.
 Unsupported and broken packages are filtered before becoming jobs.
 `wasinix build` records the selected derivations for its plan and report, then
-passes the exact attribute set to nix-fast-build for scheduling and retries. The
-second traversal uses Nix's evaluation cache. CI runs the same verb.
+realises those derivations directly. Nix owns the dependency graph and build
+schedule; the recorded evaluation remains the single source of job identity.
+CI runs the same verb.
 
 `packages.<system>.wasinix-core` carries the orchestrator and its Git, Nix,
-nix-eval-jobs, nix-fast-build, and OpenSSH system boundaries. `wasinix` is the
+nix-eval-jobs, and OpenSSH system boundaries. `wasinix` is the
 compatibility package that also carries optional registry and publication
 helpers. The `wasinix-capability-*` outputs expose each optional helper
 separately. A core launcher binds capability resolution to its own flake source

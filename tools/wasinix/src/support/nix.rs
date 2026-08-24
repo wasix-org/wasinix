@@ -161,7 +161,6 @@ pub struct Invocation {
 enum Interface {
     Nix,
     EvalJobs,
-    FastBuild,
 }
 
 impl Invocation {
@@ -215,12 +214,6 @@ impl Invocation {
     pub fn eval_jobs() -> Invocation {
         let mut invocation = Invocation::base("nix-eval-jobs", "", false);
         invocation.interface = Interface::EvalJobs;
-        invocation
-    }
-
-    pub fn fast_build() -> Invocation {
-        let mut invocation = Invocation::base("nix-fast-build", "", false);
-        invocation.interface = Interface::FastBuild;
         invocation
     }
 
@@ -292,7 +285,6 @@ impl Invocation {
         match self.interface {
             Interface::Nix => route.configure_nix(&mut carrier)?,
             Interface::EvalJobs => route.configure_eval_jobs(&mut carrier)?,
-            Interface::FastBuild => route.configure_fast_build(&mut carrier)?,
         }
         self.flags.extend(
             carrier

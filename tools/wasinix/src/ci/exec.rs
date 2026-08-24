@@ -614,8 +614,8 @@ pub(crate) fn record_result(
     Ok(())
 }
 
-/// A build stream line announcing that nix-fast-build scheduled a top-level
-/// job; the attr is the union key, quoted like the eval attrs.
+/// A build stream line announcing that Nix started a top-level job. The build
+/// observer translates derivation paths back to these union keys.
 pub(crate) fn scheduled_attr(line: &str) -> Option<&str> {
     line.strip_prefix("  building ")
         .map(|attr| attr.trim().trim_matches('"'))
@@ -899,20 +899,8 @@ fn run_build_tasks(
             .collect();
         let route = Route::from_on(ctx.runner_root, on.as_deref())?;
         let _lease = route.acquire()?;
-        let limits = route.limits()?;
-        let mut worktrees = Vec::new();
-        for case_id in &cases {
-            let case = find_build_case(request, case_id)?;
-            let patch = case_dir(ctx.run_dir, case_id)
-                .join("prepared")
-                .join(PATCH_FILE);
-            worktrees.push((
-                case_id.clone(),
-                reproduced_worktree(ctx.runner_root, &case.source, &patch)?,
-            ));
-        }
         let mut union_cases = Vec::new();
-        for (case_id, worktree) in &worktrees {
+        for case_id in &cases {
             let selected: BTreeSet<String> = specs
                 .iter()
                 .filter(|spec| &spec.case == case_id)
@@ -920,7 +908,6 @@ fn run_build_tasks(
                 .collect();
             union_cases.push(crate::nix::buildset::UnionCase {
                 id: case_id.clone(),
-                worktree: worktree.path().to_path_buf(),
                 jobs_file: case_dir(ctx.run_dir, case_id).join("maps/eval-jobs.jsonl"),
                 jobs: selected.into_iter().collect(),
             });
@@ -945,7 +932,7 @@ fn run_build_tasks(
                 max_jobs: crate::nix::route::max_jobs(
                     std::thread::available_parallelism()
                         .map(|jobs| jobs.get())
-                        .unwrap_or(limits.workers),
+                        .unwrap_or(1),
                 )?,
                 hard_timeout,
                 push: ctx.push_cache,
