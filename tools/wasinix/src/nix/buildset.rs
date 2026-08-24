@@ -683,7 +683,6 @@ pub fn build_union(
     let to_build = plan.to_build;
 
     let mut pending: BTreeSet<String> = BTreeSet::new();
-    let mut local_only: Vec<String> = Vec::new();
     let mut census = PlanCensus::new();
     for (drv, spec) in &jobs {
         let planned = if to_build.contains(drv) {
@@ -704,12 +703,6 @@ pub fn build_union(
             pending.insert(drv.clone());
             continue;
         }
-        local_only.extend(
-            spec.outputs
-                .iter()
-                .filter(|output| !plan.fetched.contains(*output))
-                .cloned(),
-        );
         for attr in &spec.attrs {
             writer.emit(serde_json::json!({
                 "type": "BUILD", "attr": attr, "drv": drv, "success": true,
@@ -730,10 +723,6 @@ pub fn build_union(
     writer.event(StreamEvent::Plan(census))?;
 
     let uploader = Uploader::start(key.as_ref().map(SigningKey::store), request.route.store());
-    if key.is_some() && !local_only.is_empty() {
-        crate::support::ui::fact("pushing locally built outputs", local_only.len());
-        uploader.push(local_only);
-    }
     let started = std::time::Instant::now();
     let mut timed_out = false;
     let mut driver_failed = false;
