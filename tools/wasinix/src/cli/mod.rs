@@ -2007,7 +2007,11 @@ pub fn main() -> std::process::ExitCode {
     // set and exits here; `completions <shell>` prints the registration.
     clap_complete::CompleteEnv::with_factory(surface::terminal_command).complete();
     let cli = match surface::parse_terminal() {
-        Ok(cli) => cli,
+        Ok(surface::TerminalInput::Command(cli)) => cli,
+        Ok(surface::TerminalInput::Display(text)) => {
+            ui::output(text);
+            return std::process::ExitCode::SUCCESS;
+        }
         Err(error) => {
             ui::report_error(&error);
             return error.status().into();

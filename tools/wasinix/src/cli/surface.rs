@@ -5,6 +5,11 @@ use crate::support::error::{Error, Result};
 
 use super::Cli;
 
+pub(crate) enum TerminalInput {
+    Command(Cli),
+    Display(String),
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Surface {
     Terminal,
@@ -402,13 +407,32 @@ fn validate_terminal(matches: &clap::ArgMatches) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn parse_terminal() -> Result<Cli> {
+fn parse_terminal_from<I, T>(args: I) -> Result<TerminalInput>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<std::ffi::OsString> + Clone,
+{
     let mut command = terminal_command();
-    let matches = command
-        .try_get_matches_from_mut(crate::support::env::args_os())
-        .map_err(clap_error)?;
+    let matches = match command.try_get_matches_from_mut(args) {
+        Ok(matches) => matches,
+        Err(error)
+            if matches!(
+                error.kind(),
+                clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion
+            ) =>
+        {
+            return Ok(TerminalInput::Display(error.to_string()));
+        }
+        Err(error) => return Err(clap_error(error)),
+    };
     validate_terminal(&matches)?;
-    Cli::from_arg_matches(&matches).map_err(clap_error)
+    Cli::from_arg_matches(&matches)
+        .map(TerminalInput::Command)
+        .map_err(clap_error)
+}
+
+pub(crate) fn parse_terminal() -> Result<TerminalInput> {
+    parse_terminal_from(crate::support::env::args_os())
 }
 
 fn command_at<'a>(mut command: &'a clap::Command, path: &[&str]) -> &'a clap::Command {
@@ -611,5 +635,20 @@ mod tests {
             .try_get_matches_from_mut(["wasinix", "build", "core", "--plan"])
             .unwrap();
         super::validate_terminal(&matches).unwrap();
+    }
+
+    #[test]
+    fn terminal_help_and_version_are_successful_displays() {
+        for words in [
+            ["wasinix", "--help"].as_slice(),
+            ["wasinix", "build", "--help"].as_slice(),
+            ["wasinix", "--version"].as_slice(),
+        ] {
+            let super::TerminalInput::Display(text) = super::parse_terminal_from(words).unwrap()
+            else {
+                panic!("{words:?} parsed as a command");
+            };
+            assert!(!text.starts_with("error:"), "{text}");
+        }
     }
 }
