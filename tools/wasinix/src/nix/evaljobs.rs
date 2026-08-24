@@ -88,7 +88,7 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
     // nix-eval-jobs comes from PATH so a run does not fetch the registry's
     // channel tarball. meta.position anchors failure annotations at the
     // package definition.
-    let mut invocation = crate::support::nix::Invocation::tool("nix-eval-jobs")
+    let mut invocation = crate::support::nix::Invocation::eval_jobs()
         .accepts_flake_config()
         .args(["--flake", request.flake, "--meta"])
         .args(["--workers", &limits.workers.to_string()])

@@ -1308,6 +1308,14 @@ mod route {
     }
 
     #[test]
+    fn fast_build_uses_its_supported_store_interface() {
+        let route = Route::Store(builder());
+        let mut command = Command::new("nix-fast-build");
+        route.configure_fast_build(&mut command).unwrap();
+        assert_eq!(args(&command), ["--store", "ssh-ng://builder@example"]);
+    }
+
+    #[test]
     fn builder_evaluation_disables_local_build_slots() {
         let route = Route::Builder(builder());
         let mut command = Command::new("nix-eval-jobs");
@@ -7709,22 +7717,14 @@ mod table {
 }
 
 mod buildset {
-    use crate::nix::buildset::{
-        claim_recovery, dry_run_plan, failure_excerpt_from_log, invalid_store_path,
-        prebuilt_partition, realise_building_drv,
-    };
+    use crate::nix::buildset::{dry_run_plan, prebuilt_partition, select_jobs};
 
     #[test]
-    fn only_a_nonempty_build_log_proves_a_derivation_ran() {
-        assert_eq!(failure_excerpt_from_log(b""), None);
-        assert_eq!(failure_excerpt_from_log(b"\n"), None);
-        let log = (1..=25)
-            .map(|n| format!("line {n}"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        let excerpt = failure_excerpt_from_log(log.as_bytes()).unwrap();
-        assert!(excerpt.starts_with("line 6\n"), "{excerpt}");
-        assert!(excerpt.ends_with("line 25"), "{excerpt}");
+    fn fast_build_selects_exact_job_names() {
+        assert_eq!(
+            select_jobs(&["plain".into(), "literal.dot".into(), "a\"b".into()]).unwrap(),
+            r#"jobs: builtins.listToAttrs (map (name: { inherit name; value = builtins.getAttr name jobs; }) [ "plain" "literal.dot" "a\"b" ])"#
+        );
     }
 
     #[test]
@@ -7805,142 +7805,87 @@ mod buildset {
         assert!(dry_run_plan("cannot price /nix/store/x.drv").is_err());
     }
 
-    /// Real-nix integration: run with `cargo test -- --ignored` on a
-    /// machine with a nix daemon; the crate's sandboxed check has none.
     #[test]
-    #[ignore = "needs a nix daemon"]
-    fn the_driver_builds_reports_and_marks_cached_on_rerun() {
+    #[ignore = "needs a nix daemon and nix-fast-build"]
+    fn fast_build_drives_selected_flake_jobs() {
         use crate::nix::buildset::{StreamEvent, UnionCase, UnionRequest, build_union};
         use crate::nix::route::{EvaluationLimits, Route};
-        let scratch = crate::support::fs::Scratch::create("wasinix-driver").unwrap();
-        let instantiate = |expr: &str| -> (String, String) {
-            let drv = crate::support::nix::Invocation::tool("nix-instantiate")
-                .args(["--expr", expr])
-                .checked_text("instantiate")
-                .unwrap();
-            let out = crate::support::nix::Invocation::tool("nix-store")
-                .args(["--query", "--outputs"])
-                .operand(drv.trim())
-                .checked_text("outputs")
-                .unwrap();
-            (drv.trim().to_string(), out.trim().to_string())
-        };
+        let scratch = crate::support::fs::Scratch::create("wasinix-fast-build").unwrap();
         let nonce = std::process::id();
-        let (ok_drv, ok_out) = instantiate(&format!(
-            r#"derivation {{ name = "wasinix-driver-ok-{nonce}"; system = builtins.currentSystem; builder = "/bin/sh"; args = ["-c" "echo ok > $out"]; }}"#
-        ));
-        let (bad_drv, bad_out) = instantiate(&format!(
-            r#"derivation {{ name = "wasinix-driver-bad-{nonce}"; system = builtins.currentSystem; builder = "/bin/sh"; args = ["-c" "echo doom >&2; exit 1"]; }}"#
-        ));
-        let jobs_file = scratch.path().join("jobs.jsonl");
         std::fs::write(
-            &jobs_file,
+            scratch.path().join("flake.nix"),
             format!(
-                "{}
-{}
-",
-                serde_json::json!({"attrPath": ["ok"], "drvPath": ok_drv, "outputs": {"out": ok_out}}),
-                serde_json::json!({"attrPath": ["bad"], "drvPath": bad_drv, "outputs": {"out": bad_out}}),
+                r#"{{
+  outputs = {{ self }}: {{
+    legacyPackages.{}.ciSets.all = {{
+      ok = derivation {{ name = "wasinix-fast-build-ok-{nonce}"; system = "{}"; builder = "/bin/sh"; args = ["-c" "echo ok > $out"]; }};
+      bad = derivation {{ name = "wasinix-fast-build-bad-{nonce}"; system = "{}"; builder = "/bin/sh"; args = ["-c" "exit 1"]; }};
+    }};
+  }};
+}}
+"#,
+                crate::support::nix::SYSTEM,
+                crate::support::nix::SYSTEM,
+                crate::support::nix::SYSTEM,
             ),
         )
         .unwrap();
+        let job = |name: &str| {
+            let attr = format!(
+                ".#legacyPackages.{}.ciSets.all.{name}",
+                crate::support::nix::SYSTEM
+            );
+            let field = |field: &str| {
+                crate::support::nix::Invocation::flake("eval", format!("{attr}.{field}"))
+                    .raw()
+                    .workdir(scratch.path())
+                    .checked_text(field)
+                    .unwrap()
+            };
+            serde_json::json!({
+                "attrPath": [name],
+                "drvPath": field("drvPath"),
+                "outputs": {"out": field("outPath")},
+            })
+        };
+        let jobs_path = scratch.path().join("jobs.jsonl");
+        std::fs::write(&jobs_path, format!("{}\n{}\n", job("ok"), job("bad"))).unwrap();
         let route = Route::Local(EvaluationLimits {
             workers: 1,
             memory: 2048,
             timeout: std::time::Duration::from_secs(600),
         });
-        let run = |dir: &str| {
-            let mut results = Vec::new();
-            let status = build_union(
-                UnionRequest {
-                    cases: vec![UnionCase {
-                        id: "case".into(),
-                        jobs_file: jobs_file.clone(),
-                        jobs: vec!["ok".into(), "bad".into()],
-                    }],
-                    work_dir: &scratch.path().join(dir),
-                    result_file: scratch.path().join(dir).join("results.xml"),
-                    route: &route,
-                    max_jobs: 2,
-                    hard_timeout: None,
-                    push: false,
-                },
-                &mut |event| {
-                    if let StreamEvent::Result(value) = event {
-                        results.push(value);
-                    }
-                    Ok(())
-                },
-            )
-            .unwrap();
-            (status, results)
-        };
-
-        let (status, results) = run("first");
+        let mut results = Vec::new();
+        let status = build_union(
+            UnionRequest {
+                cases: vec![UnionCase {
+                    id: "case".into(),
+                    worktree: scratch.path().to_path_buf(),
+                    jobs_file: jobs_path,
+                    jobs: vec!["ok".into(), "bad".into()],
+                }],
+                work_dir: &scratch.path().join("run"),
+                result_file: scratch.path().join("run/results.xml"),
+                route: &route,
+                max_jobs: 2,
+                hard_timeout: None,
+                push: false,
+            },
+            &mut |event| {
+                if let StreamEvent::Result(value) = event {
+                    results.push(value);
+                }
+                Ok(())
+            },
+        )
+        .unwrap();
         assert!(!status.is_success());
-        let find = |results: &[serde_json::Value], attr: &str| -> serde_json::Value {
-            results
-                .iter()
-                .find(|value| value["attr"] == format!("case::{attr}"))
-                .unwrap()
-                .clone()
-        };
-        assert_eq!(find(&results, "ok")["success"], true);
-        let bad = find(&results, "bad");
-        assert_eq!(bad["success"], false);
-        assert!(bad["error"].as_str().unwrap().contains("doom"), "{bad}");
-        let junit = std::fs::read_to_string(scratch.path().join("first/results.xml")).unwrap();
-        assert!(junit.contains("case::ok"), "{junit}");
-        // The rerun finds the built output valid and reports it cached; the
-        // failure builds again and fails again.
-        let (status, results) = run("second");
-        assert!(!status.is_success());
-        assert_eq!(find(&results, "ok")["cached"], true);
-        assert_eq!(find(&results, "bad")["success"], false);
-    }
-
-    #[test]
-    fn realise_progress_lines_name_their_derivation() {
-        use crate::nix::buildset::realise_failed_drv;
-
-        assert_eq!(
-            realise_building_drv("building '/nix/store/abc-zlib.drv'..."),
-            Some("/nix/store/abc-zlib.drv")
-        );
-        assert_eq!(realise_building_drv("copying path '/nix/store/x'"), None);
-        assert_eq!(realise_building_drv("building trees"), None);
-        assert_eq!(
-            realise_failed_drv("error: Cannot build '/nix/store/abc-zlib.drv'."),
-            Some("/nix/store/abc-zlib.drv")
-        );
-        assert_eq!(realise_failed_drv("error: dependency failed"), None);
-    }
-
-    #[test]
-    fn only_top_level_invalid_store_paths_are_recoverable() {
-        let path = "/nix/store/nyk0dzdf89jq4skvn3c6nc35x7kgv6rx-bzip2-static-1.0.8";
-        assert_eq!(
-            invalid_store_path(&format!("error: path '{path}' is not valid")),
-            Some(path)
-        );
-        assert_eq!(
-            invalid_store_path("error: path '/tmp/input' is not valid"),
-            None
-        );
-        assert_eq!(
-            invalid_store_path("error: path '/nix/store/hash/name' is not valid"),
-            None
-        );
-        assert_eq!(invalid_store_path("error: path is not valid"), None);
-
-        let mut recovered = std::collections::BTreeSet::new();
-        claim_recovery(&mut recovered, path).unwrap();
-        assert!(
-            claim_recovery(&mut recovered, path)
-                .unwrap_err()
-                .to_string()
-                .contains("same invalid store path")
-        );
+        assert!(results.iter().any(|value| {
+            value["attr"] == "case::ok" && value["success"].as_bool() == Some(true)
+        }));
+        assert!(results.iter().any(|value| {
+            value["attr"] == "case::bad" && value["success"].as_bool() == Some(false)
+        }));
     }
 }
 

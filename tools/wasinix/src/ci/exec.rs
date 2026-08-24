@@ -901,19 +901,28 @@ fn run_build_tasks(
         let route = Route::from_on(ctx.runner_root, on.as_deref())?;
         let _lease = route.acquire()?;
         let limits = route.limits()?;
-        // The build consumes the evaluation's derivations directly; no
-        // worktree and no re-evaluation happen here.
+        let mut worktrees = Vec::new();
+        for case_id in &cases {
+            let case = find_build_case(request, case_id)?;
+            let patch = case_dir(ctx.run_dir, case_id)
+                .join("prepared")
+                .join(PATCH_FILE);
+            worktrees.push((
+                case_id.clone(),
+                reproduced_worktree(ctx.runner_root, &case.source, &patch)?,
+            ));
+        }
         let mut union_cases = Vec::new();
-        for case_id in cases {
-            find_build_case(request, &case_id)?;
+        for (case_id, worktree) in &worktrees {
             let selected: BTreeSet<String> = specs
                 .iter()
-                .filter(|spec| spec.case == case_id)
+                .filter(|spec| &spec.case == case_id)
                 .flat_map(|spec| spec.jobs.iter().cloned())
                 .collect();
             union_cases.push(crate::nix::buildset::UnionCase {
                 id: case_id.clone(),
-                jobs_file: case_dir(ctx.run_dir, &case_id).join("maps/eval-jobs.jsonl"),
+                worktree: worktree.path().to_path_buf(),
+                jobs_file: case_dir(ctx.run_dir, case_id).join("maps/eval-jobs.jsonl"),
                 jobs: selected.into_iter().collect(),
             });
         }
@@ -966,15 +975,6 @@ fn run_build_tasks(
                         task_ids: group_task_ids.clone(),
                         requested_bytes: Bytes(requested_bytes),
                     }),
-                crate::nix::buildset::StreamEvent::Recovery { path } => {
-                    liveness.activity();
-                    tracker.record(Event::Warning {
-                        at: unix_secs(),
-                        message: format!(
-                            "Nix could not substitute {path} in the build batch; retrying it separately"
-                        ),
-                    })
-                }
                 crate::nix::buildset::StreamEvent::Output(line) => {
                     if let Some(attr) = building_attr(&line) {
                         if jobs.contains_key(attr) && building.insert(attr.to_string()) {

@@ -141,6 +141,7 @@ pub struct Probe {
 
 pub struct Invocation {
     program: String,
+    interface: Interface,
     subcommand: Vec<String>,
     flags: Vec<String>,
     operands: Vec<String>,
@@ -156,10 +157,18 @@ pub struct Invocation {
     offline: bool,
 }
 
+#[derive(Clone, Copy)]
+enum Interface {
+    Nix,
+    EvalJobs,
+    FastBuild,
+}
+
 impl Invocation {
     fn base(program: &str, subcommand: &str, accept_flake_config: bool) -> Invocation {
         Invocation {
             program: program.into(),
+            interface: Interface::Nix,
             subcommand: subcommand.split_whitespace().map(str::to_string).collect(),
             flags: Vec::new(),
             operands: Vec::new(),
@@ -198,9 +207,21 @@ impl Invocation {
     }
 
     /// A non-`nix` frontend sharing the flag conventions: nix-store,
-    /// nix-eval-jobs, nix-prefetch-url.
+    /// nix-prefetch-url, and similar tools.
     pub fn tool(program: &str) -> Invocation {
         Invocation::base(program, "", false)
+    }
+
+    pub fn eval_jobs() -> Invocation {
+        let mut invocation = Invocation::base("nix-eval-jobs", "", false);
+        invocation.interface = Interface::EvalJobs;
+        invocation
+    }
+
+    pub fn fast_build() -> Invocation {
+        let mut invocation = Invocation::base("nix-fast-build", "", false);
+        invocation.interface = Interface::FastBuild;
+        invocation
     }
 
     pub fn accepts_flake_config(mut self) -> Invocation {
@@ -265,13 +286,13 @@ impl Invocation {
     /// Fold the route's placement in: store and eval-store for a Store
     /// route, the builders guard for the rest. A host route is refused, so
     /// no nix command can silently run locally when the caller meant the
-    /// host. nix-eval-jobs takes its own store spelling.
+    /// host. Each frontend gets the store spelling its interface accepts.
     pub fn route(mut self, route: &Route) -> Result<Invocation> {
         let mut carrier = Command::new(&self.program);
-        if self.program == "nix-eval-jobs" {
-            route.configure_eval_jobs(&mut carrier)?;
-        } else {
-            route.configure_nix(&mut carrier)?;
+        match self.interface {
+            Interface::Nix => route.configure_nix(&mut carrier)?,
+            Interface::EvalJobs => route.configure_eval_jobs(&mut carrier)?,
+            Interface::FastBuild => route.configure_fast_build(&mut carrier)?,
         }
         self.flags.extend(
             carrier
