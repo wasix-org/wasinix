@@ -9,7 +9,7 @@ use serde_json::json;
 use crate::ci::events::Snapshot;
 use crate::ci::report::{Fragment, Report};
 use crate::github::client::Client;
-use crate::github::markdown::{self, Links};
+use crate::github::markdown::{self, FailureLogKey, Links};
 use crate::github::surfaces::{Registry, Surface};
 use crate::support::capability::Capability;
 use crate::support::error::Result;
@@ -24,8 +24,7 @@ pub struct Target {
     /// The report came from a fork PR's own code, so its verdict is a claim,
     /// not a result: the check concludes neutral and the surfaces say so.
     pub untrusted: bool,
-    /// Where publish_failure_logs put this run's logs, when it ran.
-    pub log_base: Option<String>,
+    pub failure_logs: BTreeMap<FailureLogKey, String>,
 }
 
 const UNTRUSTED_NOTICE: &str = "> [!NOTE]\n> This result was produced by this \
@@ -166,7 +165,7 @@ fn links(_rendered: &Rendered, target: &Target, reply_to: Option<u64>) -> Links 
             .head_sha
             .as_deref()
             .and_then(|sha| crate::support::atoms::Rev::parse(sha).ok()),
-        log_base: target.log_base.clone(),
+        failure_logs: target.failure_logs.clone(),
         origin: match (reply_to, target.pull_request) {
             (Some(comment_id), Some(pull_request)) => {
                 Some(crate::github::surfaces::origin_comment_url(
@@ -180,65 +179,60 @@ fn links(_rendered: &Rendered, target: &Target, reply_to: Option<u64>) -> Links 
     }
 }
 
-/// Upload each rendered failure's build log to the public cache bucket and
-/// return the base URL rows link under. The logs come from the local store,
-/// so this runs on the machine that built; a job whose log is gone is
-/// skipped rather than fatal.
+fn failure_log_name(key: &FailureLogKey) -> String {
+    use sha2::{Digest, Sha256};
+
+    let mut digest = Sha256::new();
+    digest.update(key.task.as_bytes());
+    digest.update([0]);
+    digest.update(key.archive.as_bytes());
+    let digest = format!("{:x}", digest.finalize());
+    format!("{}.txt", &digest[..24])
+}
+
+pub(crate) fn stage_failure_logs(
+    run_dir: &Path,
+    report: &Report,
+    sha: &str,
+    destination: &Path,
+) -> Result<BTreeMap<FailureLogKey, String>> {
+    let base = format!("{}/logs/{sha}", crate::support::nix::CACHE_SUBSTITUTER);
+    let mut published = BTreeMap::new();
+    for (task, failures) in &report.failures {
+        for failure in failures {
+            let Some(log) = &failure.log else {
+                continue;
+            };
+            let key = FailureLogKey::new(task, log.path.as_str());
+            if published.contains_key(&key) {
+                continue;
+            }
+            let logs_dir = crate::ci::prepare::build_logs_dir(run_dir, task)?;
+            let name = failure_log_name(&key);
+            let text = crate::ci::facts::logs::read_archived(&logs_dir, log, usize::MAX)?;
+            crate::support::fs::write(&destination.join(&name), text.as_bytes())?;
+            published.insert(key, format!("{base}/{name}"));
+        }
+    }
+    Ok(published)
+}
+
+/// Upload the archived log bound to each rendered failure and return its URL.
 pub fn publish_failure_logs(
     run_dir: &Path,
     rendered: &Rendered,
     sha: &str,
     effects: crate::support::effects::Effects,
-) -> Result<Option<String>> {
-    let mut drvs: BTreeMap<String, String> = BTreeMap::new();
-    if let Ok(cases) = std::fs::read_dir(crate::ci::prepare::cases_dir(run_dir)) {
-        for case in cases.flatten() {
-            let map_path = crate::ci::prepare::eval_map_path(&case.path());
-            if !map_path.exists() {
-                continue;
-            }
-            let map: crate::ci::evalmap::EvalMap = crate::support::schema::read(&map_path)?;
-            drvs.extend(
-                map.jobs
-                    .iter()
-                    .map(|(job, drv)| (job.as_str().to_string(), drv.clone())),
-            );
-        }
-    }
+) -> Result<BTreeMap<FailureLogKey, String>> {
     let scratch = crate::support::fs::Scratch::create("wasinix-failure-logs")?;
-    let mut published = 0usize;
-    for failures in rendered.report.failures.values() {
-        for failure in failures {
-            let Some(drv) = drvs.get(failure.job.as_str()) else {
-                continue;
-            };
-            let Ok(log) = crate::support::nix::Invocation::plain("log")
-                .local_only()
-                .operand(drv)
-                .probe("a job without a log has no page to publish")
-            else {
-                continue;
-            };
-            if !log.status.is_success() || log.stdout.is_empty() {
-                continue;
-            }
-            crate::support::fs::write(
-                &scratch.path().join(format!("{}.txt", failure.job.as_str())),
-                &log.stdout,
-            )?;
-            published += 1;
-        }
+    let published = stage_failure_logs(run_dir, &rendered.report, sha, scratch.path())?;
+    if published.is_empty() {
+        return Ok(published);
     }
-    if published == 0 {
-        return Ok(None);
-    }
-    let base = format!("{}/logs/{sha}", crate::support::nix::CACHE_SUBSTITUTER);
+    let count = published.len();
     if effects.is_dry_run() {
-        crate::support::ui::fact(
-            "failure logs",
-            format!("skipped (dry run), {published} logs"),
-        );
-        return Ok(Some(base));
+        crate::support::ui::fact("failure logs", format!("skipped (dry run), {count} logs"));
+        return Ok(published);
     }
     let mut cmd = Capability::Aws.command()?;
     cmd.args(["s3", "cp", "--no-progress", "--recursive"])
@@ -250,8 +244,14 @@ pub fn publish_failure_logs(
         .args(["--content-type", "text/plain; charset=utf-8"])
         .args(["--endpoint-url", crate::support::nix::CACHE_ENDPOINT]);
     crate::support::tools::checked_output(&mut cmd, "publishing failure logs")?;
-    crate::support::ui::fact("failure logs", format!("{published} at {base}"));
-    Ok(Some(base))
+    crate::support::ui::fact(
+        "failure logs",
+        format!(
+            "{count} at {}/logs/{sha}",
+            crate::support::nix::CACHE_SUBSTITUTER
+        ),
+    );
+    Ok(published)
 }
 
 /// Upsert the report comment through its states; the same surface carries

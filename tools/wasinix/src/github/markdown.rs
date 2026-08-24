@@ -24,12 +24,26 @@ const FAILURE_ROWS: usize = 20;
 const PREEXISTING_ROWS: usize = 20;
 const RECENT_FAILURES: usize = 5;
 
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct FailureLogKey {
+    pub task: String,
+    pub archive: String,
+}
+
+impl FailureLogKey {
+    pub fn new(task: impl Into<String>, archive: impl Into<String>) -> Self {
+        Self {
+            task: task.into(),
+            archive: archive.into(),
+        }
+    }
+}
+
 pub struct Links {
     /// The Actions run, which every report links.
     pub run_url: Option<String>,
     pub sha: Option<Rev>,
-    /// Where per-job failure logs were published; rows link into it.
-    pub log_base: Option<String>,
+    pub failure_logs: BTreeMap<FailureLogKey, String>,
     /// The command comment this report answers, so a reader can find what
     /// asked for it even after other commands queued behind it.
     pub origin: Option<String>,
@@ -63,7 +77,7 @@ pub fn plan_reply(
         origin_line(&Links {
             run_url: None,
             sha: None,
-            log_base: None,
+            failure_logs: BTreeMap::new(),
             origin: Some(origin.to_string()),
         }),
         Markdown::constant("### Planned `/wasinix` run\n\n"),
@@ -102,12 +116,17 @@ impl Links {
         }
     }
 
-    /// A link to the job's published log; nothing without one, since a link
+    /// A link to this task failure's published log; nothing without one, since a link
     /// to the whole pipeline would only pretend to be specific.
-    fn log_link(&self, job: &str) -> Markdown {
-        match &self.log_base {
-            Some(base) => Markdown::constant(" · ")
-                .push(Markdown::cell_link("logs", &format!("{base}/{job}.txt"))),
+    fn log_link(&self, task: &str, failure: &Failure) -> Markdown {
+        let Some(log) = &failure.log else {
+            return Markdown::new();
+        };
+        match self
+            .failure_logs
+            .get(&FailureLogKey::new(task, log.path.as_str()))
+        {
+            Some(url) => Markdown::constant(" · ").push(Markdown::cell_link("logs", url)),
             None => Markdown::new(),
         }
     }
@@ -279,7 +298,7 @@ fn failure_table(rows: &[(&str, &Failure)], links: &Links, cap: usize) -> Markdo
             Markdown::cell(task),
             Markdown::constant(" | "),
             failure_cause(failure),
-            links.log_link(failure.job.as_str()),
+            links.log_link(task, failure),
             Markdown::constant(" |\n"),
         ]);
     }

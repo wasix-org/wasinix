@@ -63,6 +63,22 @@ pub fn logs_dir(case: &Path) -> PathBuf {
     case.join("logs")
 }
 
+pub fn build_logs_dir(run_dir: &Path, task_id: &str) -> Result<PathBuf> {
+    let Some((case, target)) = task_id.split_once('.') else {
+        return request_error(format!("invalid build task id {task_id:?}"));
+    };
+    if !safe_path_component(case) || !safe_path_component(target) {
+        return request_error(format!("invalid build task id {task_id:?}"));
+    }
+    Ok(logs_dir(&case_dir(run_dir, case)).join(target))
+}
+
+fn safe_path_component(value: &str) -> bool {
+    let mut components = Path::new(value).components();
+    matches!(components.next(), Some(std::path::Component::Normal(_)))
+        && components.next().is_none()
+}
+
 pub fn preparation_path(run_dir: &Path) -> PathBuf {
     run_dir.join("preparation.json")
 }

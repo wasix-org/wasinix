@@ -4,7 +4,7 @@
 
 | job | task | failure |
 |:--|:--|:--|
-| `` checks.zlib`\|<img src=x onerror=alert(1)> `` | case.core | boom \`\`\` · logs `` https://ci.example/logs)\|base/checks.zlib`\|<img src=x onerror=alert(1)>.txt `` |
+| `` checks.zlib`\|<img src=x onerror=alert(1)> `` | case.core | boom \`\`\` · logs `https://ci.example/logs)\|base/log.txt` |
 
 <sub>case: Formatting ✅ · Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ❌<br>full pipeline `https://ci.example/runs/1)|end`</sub>
 

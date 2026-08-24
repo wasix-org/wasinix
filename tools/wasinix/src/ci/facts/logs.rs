@@ -358,6 +358,15 @@ pub fn archive(
 /// The gunzipped tail of an archived log, for display.
 pub fn read_archived(logs_dir: &Path, log: &LogRef, limit: usize) -> Result<String> {
     use std::io::Read;
+    let mut components = Path::new(&log.path).components();
+    if !matches!(components.next(), Some(std::path::Component::Normal(_)))
+        || components.next().is_some()
+    {
+        return crate::support::error::request_error(format!(
+            "invalid archived log path {:?}",
+            log.path
+        ));
+    }
     let path = logs_dir.join(&log.path);
     let file = std::fs::File::open(&path).map_err(|e| io(&path, e))?;
     let mut text = String::new();
