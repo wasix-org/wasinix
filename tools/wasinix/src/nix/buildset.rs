@@ -1,8 +1,8 @@
 //! Build selected CI jobs from the derivations the evaluation already
 //! instantiated: no re-evaluation, ever. A dry-run partitions the jobs into
-//! cached and to-build, one realise per attempt builds the rest, and
-//! finished outputs stream to the cache as they complete, so a timeout or
-//! cancel never loses built work.
+//! cached and to-build, cached inputs are rooted before one realise per
+//! attempt builds the rest, and finished outputs stream to the cache as they
+//! complete, so a timeout or cancel never loses built work.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{BufRead, BufReader, Write};
@@ -57,6 +57,12 @@ pub enum StreamEvent {
     /// what the run is doing when no job derivation is in flight.
     Heartbeat {
         recent_deps: Vec<String>,
+    },
+    CachedInputsStarted {
+        paths: usize,
+    },
+    CachedInputsHeartbeat {
+        paths: usize,
     },
     Recovery {
         path: String,
@@ -542,6 +548,7 @@ pub fn push_prebuilt(
 
 const BUILD_ATTEMPTS: usize = 3;
 const STORE_ROOTS_DIR: &str = ".store-roots";
+const CACHED_INPUTS_LOG: &str = "cached-inputs.log";
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum RealiseFailure {
@@ -627,6 +634,71 @@ fn root_finished_outputs(
                 crate::support::error::tail(&result.stderr, 500)
             )));
         }
+    }
+    Ok(())
+}
+
+pub(crate) fn cached_inputs_log(work_dir: &Path) -> PathBuf {
+    work_dir.join(CACHED_INPUTS_LOG)
+}
+
+fn root_cached_inputs(
+    inputs: &BTreeSet<String>,
+    route: &crate::nix::route::Route,
+    roots: &mut StoreRoots,
+    work_dir: &Path,
+    on_event: &mut dyn FnMut(StreamEvent) -> Result<()>,
+) -> Result<()> {
+    let log_path = cached_inputs_log(work_dir);
+    let log = crate::support::log::SharedLog::create(&log_path)?;
+    if inputs.is_empty() {
+        log.finish()?;
+        return Ok(());
+    }
+
+    let mut cmd = rooted_realise_invocation(route, roots, "input")?
+        .operands(inputs.iter().cloned())
+        .command()?;
+    let mut stderr_log = log.clone();
+    let stderr_path = log_path.clone();
+    let (mut child, readers) = crate::support::tools::spawn_piped(
+        &mut cmd,
+        |mut stdout| {
+            std::io::copy(&mut stdout, &mut std::io::sink())
+                .map_err(|error| crate::support::error::io("nix-store stdout", error))?;
+            Ok(())
+        },
+        move |mut stderr| {
+            std::io::copy(&mut stderr, &mut stderr_log).map_err(|error| io(&stderr_path, error))?;
+            Ok(())
+        },
+    )?;
+    on_event(StreamEvent::CachedInputsStarted {
+        paths: inputs.len(),
+    })?;
+    let mut last_heartbeat = std::time::Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().map_err(|error| io(&log_path, error))? {
+            break status;
+        }
+        std::thread::sleep(Duration::from_millis(250));
+        if last_heartbeat.elapsed() >= Duration::from_secs(5) {
+            on_event(StreamEvent::CachedInputsHeartbeat {
+                paths: inputs.len(),
+            })?;
+            last_heartbeat = std::time::Instant::now();
+        }
+    };
+    let reader_result = readers.join(&cmd);
+    let finish_result = log.finish();
+    reader_result?;
+    finish_result?;
+    if !status.success() {
+        let output = crate::support::fs::read_to_string(&log_path)?;
+        return Err(crate::support::error::Error::Failure(format!(
+            "could not fetch and protect cached build inputs: {}",
+            crate::support::error::tail(&output, 500)
+        )));
     }
     Ok(())
 }
@@ -808,6 +880,13 @@ pub fn build_union(
         .route(request.route)?
         .probe("the dry-run plan partitions cached from to-build")?;
     let plan = dry_run_plan(&plan.stderr)?;
+    root_cached_inputs(
+        &plan.fetched,
+        request.route,
+        &mut store_roots,
+        &work_dir,
+        on_event,
+    )?;
     let to_build = plan.to_build;
 
     let mut pending: BTreeSet<String> = BTreeSet::new();

@@ -5157,6 +5157,26 @@ mod corpus {
         assert_eq!(source.matches(".option(\"min-free\", \"0\")").count(), 1);
     }
 
+    #[test]
+    fn cached_build_inputs_are_rooted_before_build_attempts() {
+        let source = sources(false)
+            .into_iter()
+            .find(|(path, _)| path == "nix/buildset.rs")
+            .unwrap()
+            .1;
+        let calls: Vec<usize> = source
+            .match_indices("root_cached_inputs(")
+            .map(|(index, _)| index)
+            .collect();
+        assert_eq!(calls.len(), 2, "one definition and one build-stage call");
+        let implementation = &source[calls[0]..calls[1]];
+        assert!(implementation.contains("rooted_realise_invocation("));
+        assert!(implementation.contains(".operands(inputs.iter().cloned())"));
+        let attempts = source.find("while attempt <= BUILD_ATTEMPTS").unwrap();
+        assert!(calls[1] < attempts, "cached inputs must be rooted first");
+        assert_eq!(source.matches("&plan.fetched").count(), 1);
+    }
+
     /// git runs through support::git (repo named on every call, three-way
     /// exits preserved); ssh and scp through the builder (deadlines, logging).
     #[test]
