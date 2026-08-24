@@ -5176,6 +5176,40 @@ mod corpus {
         offenders
     }
 
+    #[test]
+    fn derivation_checks_do_not_silence_cargo() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let pkgs = root.join("pkgs");
+        if !pkgs.is_dir() {
+            return;
+        }
+        let quiet = regex::Regex::new(
+            r"\bcargo\s+(?:build|run|test)\b[^\n]*(?:--quiet(?:\s|$)|(?:^|\s)-q(?:\s|$))",
+        )
+        .unwrap();
+        let mut pending = vec![pkgs];
+        let mut paths = vec![root.join("flake.nix")];
+        while let Some(dir) = pending.pop() {
+            for entry in std::fs::read_dir(dir).unwrap().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    pending.push(path);
+                } else if path.extension().is_some_and(|extension| extension == "nix") {
+                    paths.push(path);
+                }
+            }
+        }
+        let mut found = Vec::new();
+        for path in paths {
+            let text = std::fs::read_to_string(&path).unwrap();
+            for hit in quiet.find_iter(&text) {
+                let line = text[..hit.start()].lines().count() + 1;
+                found.push(format!("{}:{line}: {}", path.display(), hit.as_str()));
+            }
+        }
+        assert!(found.is_empty(), "{}", found.join("\n"));
+    }
+
     #[derive(serde::Deserialize)]
     struct HelperBoundaries {
         host: Vec<String>,

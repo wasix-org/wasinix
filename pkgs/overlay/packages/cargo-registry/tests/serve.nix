@@ -90,7 +90,7 @@
       EOF
       echo 'fn main() { assert_eq!(probe::ok(), 42); }' > app/src/main.rs
 
-      ( cd app && CARGO_HOME="$WASIX_TEST_ROOT/cargo-home" cargo build --quiet )
+      ( cd app && CARGO_HOME="$WASIX_TEST_ROOT/cargo-home" cargo build )
 
       got=$(sed -n '/name = "probe"/,/^$/p' app/Cargo.lock | sed -n 's/^version = "\(.*\)"/\1/p')
       [ "$got" = "0.1.0+wasix.1" ] \

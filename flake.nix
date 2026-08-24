@@ -460,7 +460,7 @@
         registry = "sparse+$base/"
         EOF
         echo 'fn main() { assert_eq!(probe::ok(), 42); }' > app/src/main.rs
-        ( cd app && CARGO_HOME="$PWD/../cargo-home" cargo run --quiet )
+        ( cd app && CARGO_HOME="$PWD/../cargo-home" cargo run )
         touch "$out"
       '';
     # `wasinix wasmer serve` from prebuilt webcs (no nix in the sandbox):
