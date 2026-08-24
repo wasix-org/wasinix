@@ -190,6 +190,15 @@ impl Route {
         Ok(())
     }
 
+    pub fn configure_fast_build(&self, command: &mut Command) -> Result<()> {
+        self.no_host("nix-fast-build")?;
+        if let Route::Store(builder) = self {
+            command.args(["--store", &builder.store()]);
+        }
+        command.args(self.build_nix_options());
+        Ok(())
+    }
+
     pub fn build_nix_options(&self) -> Vec<String> {
         let mut options = Vec::new();
         match self {
