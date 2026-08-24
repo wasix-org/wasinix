@@ -32,6 +32,8 @@ pub struct JobInfo {
     pub subject: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub package_subject: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub package_subjects: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub test_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -121,6 +123,8 @@ pub struct CatalogJob {
     pub subject: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub package_subject: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub package_subjects: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub test_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -148,6 +152,7 @@ impl CatalogJob {
             display_name: Some(self.name.clone()),
             subject: self.subject.or(Some(self.name)),
             package_subject: self.package_subject,
+            package_subjects: self.package_subjects,
             test_name: self.test_name,
             variant,
             artifact_kind: self.artifact_kind,
@@ -509,14 +514,21 @@ impl EvalMap {
             let mut matched = false;
             for member in members {
                 let address = JobAddr(member.clone());
-                let package = if self.packages.contains_key(&address) {
-                    Some(member.as_str())
+                let packages = if self.packages.contains_key(&address) {
+                    vec![member.as_str()]
                 } else {
                     self.info
                         .get(&address)
-                        .and_then(|info| info.package_subject.as_deref())
+                        .map(|info| {
+                            if info.package_subjects.is_empty() {
+                                info.package_subject.iter().map(String::as_str).collect()
+                            } else {
+                                info.package_subjects.iter().map(String::as_str).collect()
+                            }
+                        })
+                        .unwrap_or_default()
                 };
-                if let Some(package) = package {
+                for package in packages {
                     matched = true;
                     push_unique(&mut sources, package);
                 }

@@ -23,6 +23,13 @@ the shared Rust wheel hooks described in [`rust.md`](rust.md).
 runs their import tests under Wasmer. The wheel index and publication flow are
 described in [`registry.md`](registry.md#the-python-wheel-index).
 
+Each Python variant declares the WASIX interpreter package it uses, and exactly
+one variant is preferred. Architecture-independent wheels are built once with
+that preferred variant. The combined registry is a project artifact derived from
+every cataloged wheel; changing the preferred variant changes its Python runtime
+and the owner of architecture-independent wheels without changing the aggregate
+mechanism.
+
 For package selection and coverage, see
 [`python-coverage.md`](python-coverage.md). The survey data behind that work is
 in [`../pypi-survey/`](../pypi-survey/). Refresh it with

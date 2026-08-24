@@ -597,7 +597,7 @@ The general construction operation maps a catalog entry to typed projections:
 ```nix
 projectionRules.wasmerArtifacts = {
   namespaces = ["artifacts"];
-  project = {
+  entry = {
     entry,
     artifacts,
     ...
@@ -612,7 +612,7 @@ projectionRules.wasmerArtifacts = {
 
 projectionRules.historyVersions = {
   namespaces = ["versions"];
-  project = {entry, instantiateVersions, ...}: {
+  entry = {entry, instantiateVersions, ...}: {
     versions = instantiateVersions entry;
   };
 };
@@ -629,15 +629,32 @@ projectionRules.wasmerCommands = {entry, ...}:
 projectionRules.packagedBehavior = {entry, harnesses, ...}:
   lib.optionalAttrs (entry.kind == "artifact" && entry.artifactKind == "webc") {
     tests.packaged = packagedBehaviorCheck;
+};
+
+projectionRules.pythonRegistry = {
+  source = "my-project";
+  namespaces = ["artifacts"];
+  project = {catalog, packages, ...}: {
+    artifacts.registry.python = {
+      artifact = registryDerivation;
+      subjects = wheelEntryAddresses;
+    };
   };
+};
 ```
 
 Every rule declares the typed namespaces it can produce and returns a possibly
-empty attrset containing those namespaces. `versions` contains package
-projections; `artifacts`, `commands`, and `tests` contain their corresponding
-entry kinds. Results merge disjointly within each namespace; collisions,
-undeclared outputs, and invalid payloads are errors. A bare function is
-shorthand for a rule declaring `artifacts`, `commands`, and `tests`.
+empty attrset containing those namespaces. `entry` runs once for every catalog
+entry and produces paths relative to that entry. A bare function is shorthand
+for this callback with the `artifacts`, `commands`, and `tests` namespaces.
+`project` runs once over the complete lazy project and produces absolute paths;
+v1 permits project-level `artifacts`. A structured rule may provide either or
+both callbacks.
+
+`versions` contains package projections; `artifacts`, `commands`, and `tests`
+contain their corresponding entry kinds. Results merge disjointly within each
+namespace; collisions, undeclared outputs, invalid payloads, and unregistered
+project-artifact sources are errors.
 
 Artifacts are distributable derivation projections. WebCs, wheels, registries,
 and similar outputs live under their subject entry and in a global view indexed
@@ -646,6 +663,14 @@ catalog entries inherit the subject's provenance and instance identity. Artifact
 entries may themselves pass through projection rules, allowing packaged behavior
 tests to belong to the WebC rather than its source package. Commands and tests
 are terminal entry kinds in v1.
+
+Project artifacts are ordinary catalog entries too. Their declaration names a
+registered `source` on the rule and may name immediate catalog dependencies in
+`subjects`. The constructor validates those addresses and derives the transitive
+package ownership as `packageSubjects`. Entry projections then run on the
+project artifact exactly as they do on package-produced artifacts. This is how
+an aggregate such as the Python registry receives its own behavior tests and is
+included in CI whenever any selected package contributes to it.
 
 Commands describe packaged commands as facts:
 
@@ -685,30 +710,43 @@ where they are consumed.
 
 ## Tests
 
-Every projection rule destructures the same lazy recursive context:
+Both projection callbacks destructure the same lazy recursive project context:
 
 ```nix
 {
-  entry,
   packages,
+  packageSets,
+  pythonVariants,
+  catalog,
   commands,
   artifacts,
+  tests,
   harnesses,
   pkgs,
 }
 ```
 
-`entry` is exactly the canonical internal catalog entry being projected. It is
-not a second context record with copied package fields. The fields below are
-common projection dependencies, not a test-owned API:
+An `entry` callback additionally receives `entry`, exactly the canonical
+internal catalog entry being projected, and entry-relative conveniences such as
+`packages.sameProfile`. It is not a second context record with copied package
+fields. The fields below are common projection dependencies, not a test-owned
+API:
 
-- `packages.sameProfile` and `packages.preferred`, with retained history under
-  each package's `versions`;
+- `packages.native`, `packages.wasix`, `packages.python`, and
+  `packages.preferred`, with retained history under each package's `versions`;
+- `packages.sameProfile` for entry callbacks, where the entry supplies a package
+  scope and variant;
+- `packageSets`, the undecorated native, WASIX, Python, and preferred package
+  sets;
+- `pythonVariants`, including the configured variants, their interpreter
+  packages, and the preferred variant;
+- `catalog` and `tests`;
 - `commands`;
 - entry-relative and global `artifacts` views;
 - `harnesses`;
 - `probes`;
-- `pkgs`, the native package set for host-side fixtures.
+- `pkgs`, the scope-appropriate construction set for entry callbacks and the
+  native package set for project callbacks.
 
 The package-unit argument `package` remains distinct: it is the preceding
 derivation being adapted. A projection rule's `entry` is the completed canonical

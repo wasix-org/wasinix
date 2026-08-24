@@ -146,12 +146,14 @@
     build = package;
     inherit address name package preferred projectionPath scope variant;
     inherit (metadata) definition source lineage instance;
+    subjects = [];
+    packageSubjects = [address];
     inherit policy;
   };
 
   serializableEntry = entry:
     {
-      inherit (entry) kind address name source lineage scope variant instance;
+      inherit (entry) kind address name source lineage scope variant instance subjects packageSubjects;
       policy = {
         aliases = aliasAddressesFor entry;
         shipped = entry.policy.shipped or false;
@@ -161,7 +163,9 @@
       };
     }
     // lib.optionalAttrs (entry ? artifactKind) {inherit (entry) artifactKind;}
-    // lib.optionalAttrs (entry ? packageSubject) {inherit (entry) packageSubject;}
+    // lib.optionalAttrs (lib.length (entry.packageSubjects or []) == 1) {
+      packageSubject = builtins.head entry.packageSubjects;
+    }
     // lib.optionalAttrs (entry ? subject) {inherit (entry) subject;}
     // lib.optionalAttrs (entry ? testName) {inherit (entry) testName;}
     // lib.optionalAttrs (entry.kind == "package" && entry.scope == "wasix") {
@@ -205,7 +209,7 @@
       function =
         if builtins.isFunction rule
         then rule
-        else rule.project or null;
+        else rule.entry or null;
       unknownDeclared = lib.subtractLists knownNamespaces declaredNamespaces;
       applies = lib.intersectLists namespaces declaredNamespaces != [];
       result =
@@ -214,17 +218,18 @@
         else {};
       unknown = lib.subtractLists declaredNamespaces (lib.attrNames result);
     in
-      lib.throwIf (declaredNamespaces == [])
-      "projection rule '${ruleName}' must declare at least one namespace"
-      (lib.throwIf (unknownDeclared != [])
-        "projection rule '${ruleName}' declares unknown namespace(s): ${lib.concatStringsSep ", " unknownDeclared}"
-        (lib.throwIf (!builtins.isFunction function)
-          "projection rule '${ruleName}' has no project function"
+      if !builtins.isFunction function
+      then {}
+      else
+        lib.throwIf (declaredNamespaces == [])
+        "projection rule '${ruleName}' must declare at least one namespace"
+        (lib.throwIf (unknownDeclared != [])
+          "projection rule '${ruleName}' declares unknown namespace(s): ${lib.concatStringsSep ", " unknownDeclared}"
           (lib.throwIf (!lib.isAttrs result)
             "projection rule '${ruleName}' must return an attribute set"
             (lib.throwIf (unknown != [])
               "projection rule '${ruleName}' returned undeclared namespace(s): ${lib.concatStringsSep ", " unknown}"
-              result))));
+              result)));
     results = lib.mapAttrs resultFor rules;
     validCommand = name: command:
       lib.isAttrs command
@@ -270,6 +275,43 @@
       lib.foldlAttrs (mergeNamespace namespace) {} results;
   in
     lib.genAttrs namespaces namespaceFor;
+
+  projectProjectionResults = {
+    context,
+    rules,
+  }: let
+    knownNamespaces = ["artifacts"];
+    resultFor = ruleName: rule: let
+      declaredNamespaces =
+        if builtins.isFunction rule
+        then []
+        else rule.namespaces or [];
+      function =
+        if builtins.isFunction rule
+        then null
+        else rule.project or null;
+      result =
+        if builtins.isFunction function
+        then projectLib.callWith context function
+        else {};
+      returnedNamespaces = lib.attrNames result;
+      unknown = lib.subtractLists declaredNamespaces returnedNamespaces;
+      unsupported = lib.subtractLists knownNamespaces returnedNamespaces;
+    in
+      if !builtins.isFunction function
+      then {}
+      else
+        lib.throwIf (declaredNamespaces == [])
+        "project projection rule '${ruleName}' must declare at least one namespace"
+        (lib.throwIf (!lib.isAttrs result)
+          "project projection rule '${ruleName}' must return an attribute set"
+          (lib.throwIf (unknown != [])
+            "project projection rule '${ruleName}' returned undeclared namespace(s): ${lib.concatStringsSep ", " unknown}"
+            (lib.throwIf (unsupported != [])
+              "project projection rule '${ruleName}' returned unsupported namespace(s): ${lib.concatStringsSep ", " unsupported}"
+              result)));
+  in
+    lib.mapAttrs resultFor rules;
 
   validateVariantShapes = label: extensionIds: packageSets: let
     variants = lib.attrNames packageSets;
@@ -324,6 +366,15 @@ in rec {
     extensionIds = map (extension: extension.id) allExtensions;
     requestedCiSources = ci.sources or (map (extension: extension.id) extensions);
     unknownCiSources = lib.subtractLists extensionIds requestedCiSources;
+    invalidProjectionRules = lib.attrNames (lib.filterAttrs (_: rule:
+      !builtins.isFunction rule
+      && (
+        !lib.isAttrs rule
+        || (!(builtins.isFunction (rule.entry or null)) && !(builtins.isFunction (rule.project or null)))
+        || (rule ? entry && !(builtins.isFunction rule.entry))
+        || (rule ? project && !(builtins.isFunction rule.project))
+      ))
+    projectionRules);
     invalidProjectTests = lib.attrNames (lib.filterAttrs (_: test:
       !lib.isAttrs test
       || !builtins.isString (test.source or null)
@@ -437,30 +488,38 @@ in rec {
           else package)
         finalSet;
 
-      contextFor = scope: variant: enclosingPkgs: {final, ...}: {
-        inherit lib;
-        packages = {
-          native = nativeForContext;
-          inherit wasix preferred;
-          python = python // lib.optionalAttrs (preferredPythonInterpreter != null) {preferred = python.${preferredPythonInterpreter};};
-          sameProfile = projectedPackageSet scope variant final;
-        };
+      sharedProjectionContext = {
+        inherit lib pythonVariants;
+        packageSets = packageSetsView;
         commands = commandsView;
         artifacts = artifactsView;
+        tests = lib.mapAttrs (_: entry: entry.check) testEntries;
+        catalog = {inherit entries;};
         harnesses = harnessesView;
         runners = runnersView;
         probes = probesView;
         inherit profileSets;
         inherit (profiles) profileOf;
         profileTraitsOf = platform: profiles.sysrootEncodings.${profiles.profileOf platform};
-        pkgs =
-          if enclosingPkgs != null
-          then enclosingPkgs
-          else if scope == "wasix"
-          then nativeRaw
-          else final;
         inherit (projectLib) buildHostPypaTools dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix dropSphinxDocs extendPackage linkInputs mergeScript packageForEntry replaceInputsByName wasmRename;
       };
+
+      contextFor = scope: variant: enclosingPkgs: {final, ...}:
+        sharedProjectionContext
+        // {
+          packages = {
+            native = nativeForContext;
+            inherit wasix preferred;
+            python = python // lib.optionalAttrs (preferredPythonInterpreter != null) {preferred = python.${preferredPythonInterpreter};};
+            sameProfile = projectedPackageSet scope variant final;
+          };
+          pkgs =
+            if enclosingPkgs != null
+            then enclosingPkgs
+            else if scope == "wasix"
+            then nativeRaw
+            else final;
+        };
 
       nativeRaw = importNixpkgs {
         localSystem = {inherit system;};
@@ -595,6 +654,24 @@ in rec {
       harnessesView = harnessesFor callbackArgs;
       runnersView = runnersFor callbackArgs;
       probesView.ifd = nativeRaw.writeText "wasinix-ifd-probe" "ok";
+      packageSetsView = {
+        native = nativeRaw;
+        wasix = wasixRaw;
+        python = pythonRaw;
+        preferred = lib.genAttrs allWasixNames (name: let
+          profile = preferredProfileNameFor name;
+        in
+          wasixRaw.${profile}.${name});
+      };
+      pythonVariants = {
+        all = lib.attrNames pythonSpecs;
+        preferred = preferredPythonInterpreter;
+        specs =
+          lib.mapAttrs (_: spec: {
+            inherit (spec) interpreterPackage;
+          })
+          pythonSpecs;
+      };
       contextForEntry = entry: let
         selected =
           if entry.scope == "native"
@@ -617,18 +694,7 @@ in rec {
           extensions = allExtensions;
           finalSet = selected.final;
           inherit entry packageTransformFor repairPythonPackage;
-        })
-        // {
-          packageSets = {
-            native = nativeRaw;
-            wasix = wasixRaw;
-            python = pythonRaw;
-            preferred = lib.genAttrs allWasixNames (name: let
-              profile = preferredProfileNameFor name;
-            in
-              wasixRaw.${profile}.${name});
-          };
-        };
+        });
 
       nativeEntries = lib.mapAttrs' (name: package: let
         address = projectLib.address "packages" ["native" name];
@@ -684,6 +750,8 @@ in rec {
             version = toString (test.version or "project");
           };
           subject = "project";
+          subjects = [];
+          packageSubjects = [];
           policy = {
             aliases = [];
             shipped = false;
@@ -770,7 +838,8 @@ in rec {
               inherit artifact projectionPath;
               inherit (baseEntry) name preferred definition source lineage scope variant instance;
               subject = baseEntry.address;
-              packageSubject = baseEntry.packageSubject or baseEntry.address;
+              subjects = [baseEntry.address];
+              inherit (baseEntry) packageSubjects;
               policy = inheritedPolicy baseEntry artifact;
             }
             // lib.optionalAttrs (!lib.isDerivation declared && declared ? name) {inherit (declared) name;}))
@@ -827,7 +896,8 @@ in rec {
             inherit address command projectionPath;
             inherit (baseEntry) definition source lineage scope variant instance;
             subject = baseEntry.address;
-            packageSubject = baseEntry.packageSubject or baseEntry.address;
+            subjects = [baseEntry.address];
+            inherit (baseEntry) packageSubjects;
             inherit (baseEntry) policy;
           })
         outputs.commands;
@@ -842,7 +912,8 @@ in rec {
             testName = name;
             inherit (baseEntry) definition source lineage scope variant instance;
             subject = baseEntry.address;
-            packageSubject = baseEntry.packageSubject or baseEntry.address;
+            subjects = [baseEntry.address];
+            inherit (baseEntry) packageSubjects;
             policy = inheritedPolicy baseEntry check;
           })
         outputs.tests;
@@ -859,15 +930,148 @@ in rec {
           }
         ];
       };
+      flattenProjectArtifacts = ruleName: source: path: value:
+        if lib.isDerivation value || (lib.isAttrs value && value ? artifact)
+        then [
+          {
+            inherit path ruleName source;
+            declared = value;
+          }
+        ]
+        else if lib.isAttrs value
+        then
+          lib.concatLists (lib.mapAttrsToList (
+              name: child:
+                flattenProjectArtifacts ruleName source (path ++ [name]) child
+            )
+            value)
+        else throw "project projection rule '${ruleName}' returned an invalid artifact at ${projectLib.address "artifacts" path}";
+      projectProjectionContext =
+        sharedProjectionContext
+        // {
+          packages = packageViews;
+          pkgs = nativeRaw;
+        };
+      projectProjectionOutputs = projectProjectionResults {
+        context = projectProjectionContext;
+        rules = projectionRules;
+      };
+      projectArtifactDeclarations = lib.concatLists (lib.mapAttrsToList (ruleName: result: let
+        rule = projectionRules.${ruleName};
+        source = rule.source or null;
+      in
+        flattenProjectArtifacts ruleName source [] (result.artifacts or {}))
+      projectProjectionOutputs);
+      projectArtifactGroups = lib.groupBy (declaration:
+        projectLib.address "artifacts" declaration.path)
+      projectArtifactDeclarations;
+      duplicateProjectArtifacts = lib.attrNames (lib.filterAttrs (_: declarations: lib.length declarations > 1) projectArtifactGroups);
+      aggregateArtifactBases = lib.mapAttrs (address: declarations: let
+        declaration = builtins.head declarations;
+        inherit (declaration) declared;
+        artifact =
+          if lib.isDerivation declared
+          then declared
+          else declared.artifact;
+        source =
+          if lib.isAttrs declared && declared ? source
+          then declared.source
+          else declaration.source;
+        subjects =
+          if lib.isAttrs declared
+          then declared.subjects or []
+          else [];
+        metadata = removeAttrs (projectLib.packageMetadata artifact) projectLib.machineMetadata;
+        policy =
+          {
+            aliases = [];
+            shipped = false;
+            ci = {};
+            publication = {};
+            retention = null;
+          }
+          // metadata
+          // (
+            if lib.isAttrs declared
+            then declared.policy or {}
+            else {}
+          );
+        inherit (declaration) path;
+        artifactKind = builtins.head path;
+        projectionPath = builtins.tail path;
+        name =
+          if lib.isAttrs declared && declared ? name
+          then declared.name
+          else lib.last path;
+        packageSubjects = lib.unique (lib.concatMap (subject:
+          (entries.${subject} or {packageSubjects = [];}).packageSubjects)
+        subjects);
+      in
+        lib.throwIf (path == [])
+        "project projection rule '${declaration.ruleName}' returned an artifact without a path"
+        (lib.throwIf (!builtins.isString source || !(builtins.elem source extensionIds))
+          "project projection rule '${declaration.ruleName}' must declare a registered source"
+          {
+            kind = "artifact";
+            inherit address artifact artifactKind name packageSubjects policy projectionPath source subjects;
+            build = artifact;
+            definition = null;
+            lineage = [source];
+            scope =
+              if lib.isAttrs declared
+              then declared.scope or "native"
+              else "native";
+            variant =
+              if lib.isAttrs declared
+              then declared.variant or {}
+              else {};
+            instance =
+              if lib.isAttrs declared
+              then
+                declared.instance or {
+                  kind = "current";
+                  version = "project";
+                }
+              else {
+                kind = "current";
+                version = "project";
+              };
+            subject =
+              if subjects == []
+              then "project"
+              else builtins.head subjects;
+          }))
+      projectArtifactGroups;
+      aggregateArtifactNodes =
+        lib.throwIf (duplicateProjectArtifacts != [])
+        "duplicate project artifact address(es): ${lib.concatStringsSep ", " duplicateProjectArtifacts}"
+        (lib.mapAttrs (_: projectEntry) aggregateArtifactBases);
       projectedPackageNodes = lib.mapAttrs (_: projectEntry) currentPackageEntries;
-      projected = mergeProjectionCollections (map (node: node.descendants) (lib.attrValues projectedPackageNodes));
+      packageProjected = mergeProjectionCollections (map (node: node.descendants) (lib.attrValues projectedPackageNodes));
+      aggregateProjected = mergeProjectionCollections (map (node: node.descendants) (lib.attrValues aggregateArtifactNodes));
       projectedPackageEntries =
         lib.mapAttrs (_: node: node.entry) projectedPackageNodes
-        // projected.packages;
-      artifactEntries = projected.artifacts;
-      commandEntries = projected.commands;
-      testEntries = mergeDisjoint "test" [projected.tests projectTestEntries];
+        // packageProjected.packages;
+      artifactEntries = mergeDisjoint "artifact" [
+        (lib.mapAttrs (_: node: node.entry) aggregateArtifactNodes)
+        packageProjected.artifacts
+        aggregateProjected.artifacts
+      ];
+      commandEntries = mergeDisjoint "command" [packageProjected.commands aggregateProjected.commands];
+      testEntries = mergeDisjoint "test" [packageProjected.tests aggregateProjected.tests projectTestEntries];
       entries = mergeDisjoint "catalog" [projectedPackageEntries artifactEntries commandEntries testEntries];
+      invalidSubjectEntries = lib.attrNames (lib.filterAttrs (_: entry:
+        !builtins.isList entry.subjects || !lib.all builtins.isString entry.subjects)
+      entries);
+      unknownSubjects = lib.unique (lib.concatMap (entry:
+        lib.subtractLists (lib.attrNames entries) entry.subjects)
+      (lib.attrValues entries));
+      subjectsValid =
+        lib.throwIf (invalidSubjectEntries != [])
+        "catalog entries have invalid subjects: ${lib.concatStringsSep ", " invalidSubjectEntries}"
+        (lib.throwIf (unknownSubjects != [])
+          "catalog entries name unknown subject(s): ${lib.concatStringsSep ", " unknownSubjects}"
+          true);
       aliasClaims = lib.concatMap (entry:
         map (alias: {
           inherit alias;
@@ -926,11 +1130,11 @@ in rec {
       projectedPackageEntries;
       ciPackageAddresses = lib.attrNames ciPackageEntries;
       ciArtifactEntries = lib.filterAttrs (_: entry:
-        builtins.elem entry.packageSubject ciPackageAddresses)
+        lib.intersectLists entry.packageSubjects ciPackageAddresses != [])
       artifactEntries;
       ciTestEntries = lib.filterAttrs (_: entry:
-        if entry ? packageSubject
-        then builtins.elem entry.packageSubject ciPackageAddresses
+        if entry.packageSubjects != []
+        then lib.intersectLists entry.packageSubjects ciPackageAddresses != []
         else builtins.elem entry.source requestedCiSources)
       testEntries;
       ciEntries = mergeDisjoint "CI job" [ciPackageEntries ciArtifactEntries ciTestEntries];
@@ -939,7 +1143,7 @@ in rec {
         if
           entry.scope
           == "python"
-          || (entry.kind == "artifact" && builtins.elem entry.artifactKind ["wheel-noarch" "wheel-py313" "wheel-py314"])
+          || (entry.kind == "artifact" && lib.hasPrefix "wheel-" entry.artifactKind)
           || (entry.kind == "test" && (lib.hasPrefix "artifacts.registry." entry.subject || lib.hasPrefix "artifacts.wheel-" entry.subject))
         then "python"
         else if entry.scope == "wasix"
@@ -955,6 +1159,7 @@ in rec {
       assert pythonPreferenceValid;
       assert projectValid;
       assert nativeInterfacesValid;
+      assert subjectsValid;
       assert aliasesValid; {
         schemaVersion = schema.version;
         packages = packageViews;
@@ -983,11 +1188,13 @@ in rec {
         };
       };
   in
-    lib.throwIf (unknownCiSources != [])
-    "CI selects unknown Wasinix source(s): ${lib.concatStringsSep ", " unknownCiSources}"
-    (lib.throwIf (invalidProjectTests != [])
-      "invalid project test declaration(s): ${lib.concatStringsSep ", " invalidProjectTests}"
-      (lib.throwIf (unknownProjectTestSources != [])
-        "project tests select unknown Wasinix source(s): ${lib.concatStringsSep ", " unknownProjectTestSources}"
-        project));
+    lib.throwIf (invalidProjectionRules != [])
+    "invalid projection rule(s): ${lib.concatStringsSep ", " invalidProjectionRules}"
+    (lib.throwIf (unknownCiSources != [])
+      "CI selects unknown Wasinix source(s): ${lib.concatStringsSep ", " unknownCiSources}"
+      (lib.throwIf (invalidProjectTests != [])
+        "invalid project test declaration(s): ${lib.concatStringsSep ", " invalidProjectTests}"
+        (lib.throwIf (unknownProjectTestSources != [])
+          "project tests select unknown Wasinix source(s): ${lib.concatStringsSep ", " unknownProjectTestSources}"
+          project)));
 }
