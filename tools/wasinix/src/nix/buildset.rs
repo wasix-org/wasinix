@@ -61,6 +61,9 @@ pub enum StreamEvent {
     AutomaticGc {
         requested_bytes: u64,
     },
+    Recovery {
+        path: String,
+    },
     Output(String),
 }
 
@@ -542,6 +545,51 @@ pub fn push_prebuilt(
 
 const BUILD_ATTEMPTS: usize = 3;
 
+pub(crate) fn invalid_store_path(line: &str) -> Option<&str> {
+    let path = line
+        .trim()
+        .strip_prefix("error: path '")?
+        .strip_suffix("' is not valid")?;
+    (path.starts_with("/nix/store/") && !path[11..].contains('/')).then_some(path)
+}
+
+pub(crate) fn claim_recovery(recovered: &mut BTreeSet<String>, path: &str) -> Result<()> {
+    if !recovered.insert(path.to_string()) {
+        return Err(crate::support::error::Error::Failure(format!(
+            "Nix reported the same invalid store path after retrying it separately: {path}"
+        )));
+    }
+    Ok(())
+}
+
+fn recover_store_path(
+    path: &str,
+    route: &crate::nix::route::Route,
+    log: &mut crate::support::log::BoundedLog,
+    log_path: &Path,
+) -> Result<()> {
+    writeln!(
+        log,
+        "wasinix: retrying invalid store path separately: {path}"
+    )
+    .map_err(|error| io(log_path, error))?;
+    let result = crate::support::nix::Invocation::tool("nix-store")
+        .arg("--realise")
+        .operand(path)
+        .route(route)?
+        .probe("retrying an invalid store path separately")?;
+    for line in result.stderr.lines() {
+        writeln!(log, "{line}").map_err(|error| io(log_path, error))?;
+    }
+    if !result.status.is_success() {
+        return Err(crate::support::error::Error::Failure(format!(
+            "Nix reported an invalid store path ({path}), and retrying it separately failed: {}",
+            crate::support::error::tail(&result.stderr, 500)
+        )));
+    }
+    Ok(())
+}
+
 /// Build every case's selected jobs from their evaluated derivations,
 /// streaming results to `on_event` as they arrive. Each realise child gets
 /// its own process group, so a timeout takes its whole nix tree down.
@@ -741,11 +789,14 @@ pub fn build_union(
     // Announced build-time dependencies, pushed as their outputs turn valid.
     let mut dep_pending: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut timed_out = false;
-    for attempt in 1..=BUILD_ATTEMPTS {
+    let mut recovered_paths = BTreeSet::new();
+    let mut attempt = 1;
+    while attempt <= BUILD_ATTEMPTS {
         if pending.is_empty() || timed_out {
             break;
         }
         let mut attempt_started = BTreeSet::new();
+        let mut invalid_store_paths = BTreeSet::new();
         let mut cmd = crate::support::nix::Invocation::tool("nix-store")
             .args(["--realise", "--keep-going"])
             .args(["--max-jobs", &request.max_jobs.to_string()])
@@ -776,6 +827,9 @@ pub fn build_union(
                         crate::support::nix::auto_gc_requested_bytes(&line)
                     {
                         on_event(StreamEvent::AutomaticGc { requested_bytes })?;
+                    }
+                    if let Some(path) = invalid_store_path(&line) {
+                        invalid_store_paths.insert(path.to_string());
                     }
                     if let Some(drv) = realise_failed_drv(&line) {
                         if pending.contains(drv) {
@@ -950,6 +1004,15 @@ pub fn build_union(
                 )?;
             }
         }
+        if !timed_out && !pending.is_empty() && !invalid_store_paths.is_empty() {
+            for path in invalid_store_paths {
+                claim_recovery(&mut recovered_paths, &path)?;
+                on_event(StreamEvent::Recovery { path: path.clone() })?;
+                recover_store_path(&path, request.route, &mut log, &log_path)?;
+                on_event(StreamEvent::Activity)?;
+            }
+            continue;
+        }
         if !pending.is_empty() && attempt < BUILD_ATTEMPTS && !timed_out {
             crate::support::ui::note(format!(
                 "retrying {} builds without logs (attempt {}/{BUILD_ATTEMPTS})",
@@ -957,6 +1020,7 @@ pub fn build_union(
                 attempt + 1
             ));
         }
+        attempt += 1;
     }
 
     // Whatever never became valid is a failure, with its log as the story.
