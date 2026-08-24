@@ -966,6 +966,15 @@ fn run_build_tasks(
                         task_ids: group_task_ids.clone(),
                         requested_bytes: Bytes(requested_bytes),
                     }),
+                crate::nix::buildset::StreamEvent::Recovery { path } => {
+                    liveness.activity();
+                    tracker.record(Event::Warning {
+                        at: unix_secs(),
+                        message: format!(
+                            "Nix could not substitute {path} in the build batch; retrying it separately"
+                        ),
+                    })
+                }
                 crate::nix::buildset::StreamEvent::Output(line) => {
                     if let Some(attr) = building_attr(&line) {
                         if jobs.contains_key(attr) && building.insert(attr.to_string()) {

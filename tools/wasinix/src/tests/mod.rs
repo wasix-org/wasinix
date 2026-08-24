@@ -7710,7 +7710,8 @@ mod table {
 
 mod buildset {
     use crate::nix::buildset::{
-        dry_run_plan, failure_excerpt_from_log, prebuilt_partition, realise_building_drv,
+        claim_recovery, dry_run_plan, failure_excerpt_from_log, invalid_store_path,
+        prebuilt_partition, realise_building_drv,
     };
 
     #[test]
@@ -7913,6 +7914,33 @@ mod buildset {
             Some("/nix/store/abc-zlib.drv")
         );
         assert_eq!(realise_failed_drv("error: dependency failed"), None);
+    }
+
+    #[test]
+    fn only_top_level_invalid_store_paths_are_recoverable() {
+        let path = "/nix/store/nyk0dzdf89jq4skvn3c6nc35x7kgv6rx-bzip2-static-1.0.8";
+        assert_eq!(
+            invalid_store_path(&format!("error: path '{path}' is not valid")),
+            Some(path)
+        );
+        assert_eq!(
+            invalid_store_path("error: path '/tmp/input' is not valid"),
+            None
+        );
+        assert_eq!(
+            invalid_store_path("error: path '/nix/store/hash/name' is not valid"),
+            None
+        );
+        assert_eq!(invalid_store_path("error: path is not valid"), None);
+
+        let mut recovered = std::collections::BTreeSet::new();
+        claim_recovery(&mut recovered, path).unwrap();
+        assert!(
+            claim_recovery(&mut recovered, path)
+                .unwrap_err()
+                .to_string()
+                .contains("same invalid store path")
+        );
     }
 }
 
