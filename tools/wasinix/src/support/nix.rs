@@ -301,14 +301,11 @@ impl Invocation {
         self.configured_command()
     }
 
-    pub fn run_piped<T>(
+    pub fn run_piped(
         &self,
-        stdout: impl FnOnce(Box<dyn std::io::Read + Send>) -> Result<T> + Send,
+        stdout: impl FnOnce(Box<dyn std::io::Read + Send>) -> Result<()> + Send,
         stderr: impl FnOnce(Box<dyn std::io::Read + Send>) -> Result<()> + Send,
-    ) -> Result<crate::support::tools::Completion<crate::support::tools::Piped<T>>>
-    where
-        T: Send,
-    {
+    ) -> Result<crate::support::tools::Completion<std::process::ExitStatus>> {
         let mut command = self.configured_command()?;
         crate::support::tools::piped(
             &mut command,

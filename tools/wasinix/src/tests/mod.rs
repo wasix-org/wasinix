@@ -7336,17 +7336,27 @@ mod tools {
     fn piped_commands_drain_both_streams_and_keep_the_status() {
         let mut command = Command::new("sh");
         command.args(["-c", "printf stdout; printf stderr >&2; exit 17"]);
+        let stdout = Arc::new(Mutex::new(Vec::new()));
+        let stdout_writer = Arc::clone(&stdout);
         let stderr = Arc::new(Mutex::new(Vec::new()));
         let stderr_writer = Arc::clone(&stderr);
-        let completion = piped(&mut command, None, read_stream, move |stream| {
-            *stderr_writer.lock().unwrap() = read_stream(stream)?;
-            Ok(())
-        })
+        let status = piped(
+            &mut command,
+            None,
+            move |stream| {
+                *stdout_writer.lock().unwrap() = read_stream(stream)?;
+                Ok(())
+            },
+            move |stream| {
+                *stderr_writer.lock().unwrap() = read_stream(stream)?;
+                Ok(())
+            },
+        )
         .unwrap()
         .value();
 
-        assert_eq!(completion.status.code(), Some(17));
-        assert_eq!(completion.stdout, b"stdout");
+        assert_eq!(status.code(), Some(17));
+        assert_eq!(*stdout.lock().unwrap(), b"stdout");
         assert_eq!(*stderr.lock().unwrap(), b"stderr");
     }
 

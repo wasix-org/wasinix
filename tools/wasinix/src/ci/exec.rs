@@ -171,7 +171,7 @@ fn run_logged(
         |stream| copy(Box::new(stream), log.clone()),
         |stream| copy(Box::new(stream), log.clone()),
     )?;
-    let status = completion.value().status;
+    let status = completion.value();
     log.finish()?;
     artifacts.record_log(log_path)?;
     Ok(CommandStatus::from_exit(status))
