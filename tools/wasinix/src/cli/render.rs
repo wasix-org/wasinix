@@ -41,10 +41,11 @@ pub struct LineRenderer {
     total_jobs: usize,
     completed: usize,
     incomplete: usize,
-    /// Start order, so the named few are the longest-running builds.
-    building: Vec<String>,
+    /// Start order, so the named few are the longest-running realisations.
+    realising: Vec<String>,
     phases: std::collections::BTreeMap<String, ActivePhase>,
     last_liveness_at: Option<u64>,
+    heartbeat_detail: Option<String>,
     unexplained_failures: usize,
 }
 
@@ -132,9 +133,10 @@ impl LineRenderer {
             total_jobs: 0,
             completed: 0,
             incomplete: 0,
-            building: Vec::new(),
+            realising: Vec::new(),
             phases: std::collections::BTreeMap::new(),
             last_liveness_at: None,
+            heartbeat_detail: None,
             unexplained_failures: 0,
         }
     }
@@ -164,13 +166,15 @@ impl LineRenderer {
         crate::support::ui::counts(&parts)
     }
 
-    /// [`counts`](Self::counts) plus the builds in flight, for the lines
+    /// [`counts`](Self::counts) plus the work in flight, for the lines
     /// describing a run still going.
     fn progress(&self, at: u64) -> String {
         let counts = self.counts();
-        let work = if !self.building.is_empty() {
-            let names: Vec<&str> = self.building.iter().map(String::as_str).collect();
-            format!("building {}", format::some(&names, 3))
+        let work = if !self.realising.is_empty() {
+            let names: Vec<&str> = self.realising.iter().map(String::as_str).collect();
+            format!("realising {}", format::some(&names, 3))
+        } else if let Some(detail) = &self.heartbeat_detail {
+            detail.clone()
         } else if let Some(phase) = self.phases.values().min_by_key(|phase| phase.started_at) {
             let label = if self.phases.len() == 1 {
                 display_label(&phase.label)
@@ -209,29 +213,15 @@ impl LineRenderer {
         }
         match event {
             Event::RunStarted { .. } => Vec::new(),
-            // Once-a-minute liveness with fresh counts, in quiet stretches
-            // and through chatty compiles alike.
-            Event::Heartbeat { at, detail } => {
-                self.last_liveness_at = Some(*at);
-                let mut progress = self.progress(*at);
-                if let Some(detail) = detail {
-                    if progress.is_empty() {
-                        progress = detail.clone();
-                    } else {
-                        progress = format!("{progress} · {detail}");
-                    }
-                }
-                if self.bar.is_none() && !progress.is_empty() {
-                    vec![format!("{} {}", self.stamp(*at), progress)]
-                } else {
-                    Vec::new()
-                }
+            Event::Heartbeat { detail, .. } => {
+                self.heartbeat_detail.clone_from(detail);
+                Vec::new()
             }
             // Starts feed the in-flight set the milestone lines and the bar
             // show; a line per start would drown the narration.
             Event::JobStarted { job, .. } => {
-                if !self.building.iter().any(|started| started == job.as_str()) {
-                    self.building.push(job.to_string());
+                if !self.realising.iter().any(|started| started == job.as_str()) {
+                    self.realising.push(job.to_string());
                 }
                 Vec::new()
             }
@@ -292,7 +282,7 @@ impl LineRenderer {
                 ..
             } => {
                 self.completed += 1;
-                self.building.retain(|started| started != job.as_str());
+                self.realising.retain(|started| started != job.as_str());
                 if *status == JobStatus::Failure {
                     self.incomplete += 1;
                     if error.as_deref() == Some(crate::ci::facts::NO_BUILD_LOG) {
@@ -309,8 +299,6 @@ impl LineRenderer {
                         );
                     }
                     lines
-                } else if self.completed.is_multiple_of(MILESTONE_EVERY) && self.bar.is_none() {
-                    vec![format!("{} {}", self.stamp(*at), self.progress(*at))]
                 } else {
                     Vec::new()
                 }
@@ -352,18 +340,48 @@ impl LineRenderer {
         }
     }
 
-    pub fn event(&mut self, event: &Event) {
-        for line in self.lines_for(event) {
+    pub(crate) fn lines_for_events(&mut self, events: &[Event]) -> Vec<String> {
+        let mut lines = Vec::new();
+        let mut milestone_at = None;
+        for event in events {
+            if matches!(event, Event::RunFinished { .. }) {
+                if let Some(at) = milestone_at.take() {
+                    lines.push(format!("{} {}", self.stamp(at), self.progress(at)));
+                }
+            }
+            let success = matches!(
+                event,
+                Event::JobFinished {
+                    status: JobStatus::Success,
+                    ..
+                }
+            );
+            lines.extend(self.lines_for(event));
+            if success && self.completed.is_multiple_of(MILESTONE_EVERY) && self.bar.is_none() {
+                milestone_at = Some(event.at());
+            }
+        }
+        if let Some(at) = milestone_at {
+            lines.push(format!("{} {}", self.stamp(at), self.progress(at)));
+        }
+        lines
+    }
+
+    pub fn events(&mut self, events: &[Event]) {
+        for line in self.lines_for_events(events) {
             self.line(line);
         }
-        if matches!(event, Event::RunFinished { .. }) {
+        if events
+            .iter()
+            .any(|event| matches!(event, Event::RunFinished { .. }))
+        {
             if let Some(bar) = self.bar.take() {
                 bar.finish_and_clear();
             }
             return;
         }
-        if let Some(bar) = &self.bar {
-            let progress = self.progress(event.at());
+        if let (Some(bar), Some(last)) = (&self.bar, events.last()) {
+            let progress = self.progress(last.at());
             let start = !progress.is_empty() && !self.bar_started;
             bar.set_message(progress);
             if start {
@@ -371,6 +389,10 @@ impl LineRenderer {
                 self.bar_started = true;
             }
         }
+    }
+
+    pub fn event(&mut self, event: &Event) {
+        self.events(std::slice::from_ref(event));
     }
 
     pub(crate) fn lines_for_tick(&mut self, at: u64) -> Vec<String> {
@@ -425,6 +447,11 @@ impl ProgressSink for LineRenderer {
 
     fn tick(&mut self, at: u64) {
         LineRenderer::tick(self, at);
+    }
+
+    fn observe(&mut self, events: &[Event]) {
+        LineRenderer::events(self, events);
+        LineRenderer::tick(self, crate::support::time::unix_secs());
     }
 }
 

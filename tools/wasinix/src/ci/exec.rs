@@ -614,9 +614,9 @@ pub(crate) fn record_result(
     Ok(())
 }
 
-/// A build stream line announcing a build start; the attr is the
-/// union key, quoted like the eval attrs.
-pub(crate) fn building_attr(line: &str) -> Option<&str> {
+/// A build stream line announcing that nix-fast-build scheduled a top-level
+/// job; the attr is the union key, quoted like the eval attrs.
+pub(crate) fn scheduled_attr(line: &str) -> Option<&str> {
     line.strip_prefix("  building ")
         .map(|attr| attr.trim().trim_matches('"'))
         .filter(|attr| !attr.is_empty())
@@ -649,15 +649,14 @@ impl Liveness {
     fn heartbeat(
         &mut self,
         tracker: &mut Tracker,
-        building: &std::collections::BTreeSet<String>,
+        realising: &std::collections::BTreeSet<String>,
         recent_deps: &[String],
     ) -> Result<()> {
-        // One heartbeat a minute: the renderer turns them into liveness
-        // lines through quiet stretches, and the comment watcher keeps its
-        // own, longer republish throttle.
+        // One heartbeat a minute carries current detail to every observer;
+        // each observer's renderer owns its liveness clock.
         // Only when no job derivation is in flight: the job names carry
         // the story otherwise, and dependencies are detail.
-        let detail = (building.is_empty() && !recent_deps.is_empty()).then(|| {
+        let detail = (realising.is_empty() && !recent_deps.is_empty()).then(|| {
             format!(
                 "dependencies: {}",
                 crate::support::format::some(recent_deps, 3)
@@ -672,11 +671,11 @@ impl Liveness {
         }
         if !self.warned && self.last_activity.elapsed() >= self.stall_after {
             self.warned = true;
-            let names: Vec<&str> = building.iter().map(String::as_str).collect();
+            let names: Vec<&str> = realising.iter().map(String::as_str).collect();
             let waiting = if names.is_empty() {
                 String::new()
             } else {
-                format!("; building: {}", crate::support::format::some(&names, 5))
+                format!("; realising: {}", crate::support::format::some(&names, 5))
             };
             tracker.record(Event::Warning {
                 at: unix_secs(),
@@ -932,7 +931,7 @@ fn run_build_tasks(
             results.insert(case.id.clone(), build_dir.join("results.xml"));
         }
         let mut liveness = Liveness::new(stall_after);
-        let mut building: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        let mut realising: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
         let result_file = build_dir.join("results.xml");
         let status = crate::nix::buildset::build_union(
             crate::nix::buildset::UnionRequest {
@@ -955,7 +954,7 @@ fn run_build_tasks(
                 crate::nix::buildset::StreamEvent::Result(value) => {
                     liveness.activity();
                     record_result(&value, &mut jobs, tracker)?;
-                    building.retain(|attr| jobs.get(attr).is_none_or(|job| job.status.is_none()));
+                    realising.retain(|attr| jobs.get(attr).is_none_or(|job| job.status.is_none()));
                     Ok(())
                 }
                 crate::nix::buildset::StreamEvent::Plan(census) => {
@@ -967,7 +966,7 @@ fn run_build_tasks(
                     Ok(())
                 }
                 crate::nix::buildset::StreamEvent::Heartbeat { recent_deps } => {
-                    liveness.heartbeat(tracker, &building, &recent_deps)
+                    liveness.heartbeat(tracker, &realising, &recent_deps)
                 }
                 crate::nix::buildset::StreamEvent::AutomaticGc { requested_bytes } => tracker
                     .record(Event::AutomaticGc {
@@ -976,8 +975,8 @@ fn run_build_tasks(
                         requested_bytes: Bytes(requested_bytes),
                     }),
                 crate::nix::buildset::StreamEvent::Output(line) => {
-                    if let Some(attr) = building_attr(&line) {
-                        if jobs.contains_key(attr) && building.insert(attr.to_string()) {
+                    if let Some(attr) = scheduled_attr(&line) {
+                        if jobs.contains_key(attr) && realising.insert(attr.to_string()) {
                             tracker.record(Event::JobStarted {
                                 at: unix_secs(),
                                 job: JobAddr(attr.to_string()),

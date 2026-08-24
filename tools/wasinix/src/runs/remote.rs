@@ -299,9 +299,7 @@ pub fn observe(
             &offset_path,
             (remote_offset - carry.len() as u64).to_string().as_bytes(),
         )?;
-        for event in &fresh {
-            progress.event(event);
-        }
+        progress.observe(&fresh);
         let Some(run) = poll.run else {
             continue;
         };
