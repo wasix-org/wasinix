@@ -1308,14 +1308,6 @@ mod route {
     }
 
     #[test]
-    fn fast_build_uses_its_supported_store_interface() {
-        let route = Route::Store(builder());
-        let mut command = Command::new("nix-fast-build");
-        route.configure_fast_build(&mut command).unwrap();
-        assert_eq!(args(&command), ["--store", "ssh-ng://builder@example"]);
-    }
-
-    #[test]
     fn builder_evaluation_disables_local_build_slots() {
         let route = Route::Builder(builder());
         let mut command = Command::new("nix-eval-jobs");
@@ -5351,7 +5343,6 @@ mod corpus {
             "nix\"",
             "nix-store\"",
             "nix-eval-jobs\"",
-            "nix-fast-build\"",
             "nix-prefetch-url\"",
         ]
         .iter()
@@ -5360,6 +5351,18 @@ mod corpus {
         let banned: Vec<&str> = banned.iter().map(String::as_str).collect();
         let found = offenders(false, &["support/nix.rs"], &banned);
         assert!(found.is_empty(), "{}", found.join("\n"));
+    }
+
+    /// The evaluated job map is the build plan. A second build frontend would
+    /// evaluate the flake again and can silently schedule a different set.
+    #[test]
+    fn the_build_driver_has_no_second_evaluator() {
+        let removed_driver = ["nix", "-fast-build"].concat();
+        let found = offenders(false, &[], &[&removed_driver]);
+        assert!(found.is_empty(), "{}", found.join("\n"));
+        let flake = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../flake.nix");
+        let flake = std::fs::read_to_string(flake).unwrap();
+        assert!(!flake.contains(&removed_driver));
     }
 
     #[test]
@@ -7847,14 +7850,51 @@ mod table {
 }
 
 mod buildset {
-    use crate::nix::buildset::{dry_run_plan, prebuilt_partition, select_jobs};
+    use crate::nix::buildset::{building_drv, dry_run_plan, prebuilt_partition, realise_command};
 
     #[test]
-    fn fast_build_selects_exact_job_names() {
+    fn evaluated_derivations_are_realised_without_an_evaluator() {
+        use crate::nix::route::{EvaluationLimits, Route};
+        let route = Route::Local(EvaluationLimits {
+            workers: 1,
+            memory: 2048,
+            timeout: std::time::Duration::from_secs(600),
+        });
+        let command = realise_command(
+            ["/nix/store/a.drv".into(), "/nix/store/b.drv".into()],
+            7,
+            &route,
+        )
+        .unwrap();
+        let args: Vec<String> = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(command.get_program(), "nix-store");
         assert_eq!(
-            select_jobs(&["plain".into(), "literal.dot".into(), "a\"b".into()]).unwrap(),
-            r#"jobs: builtins.listToAttrs (map (name: { inherit name; value = builtins.getAttr name jobs; }) [ "plain" "literal.dot" "a\"b" ])"#
+            args,
+            [
+                "--realise",
+                "--keep-going",
+                "--max-jobs",
+                "7",
+                "--option",
+                "builders",
+                "",
+                "/nix/store/a.drv",
+                "/nix/store/b.drv",
+            ]
         );
+    }
+
+    #[test]
+    fn nix_build_lines_identify_only_derivations() {
+        assert_eq!(
+            building_drv("building '/nix/store/abc-selected.drv'..."),
+            Some("/nix/store/abc-selected.drv")
+        );
+        assert_eq!(building_drv("copying path '/nix/store/abc'"), None);
+        assert_eq!(building_drv("building '/nix/store/abc'..."), None);
     }
 
     #[test]
@@ -7936,11 +7976,11 @@ mod buildset {
     }
 
     #[test]
-    #[ignore = "needs a nix daemon and nix-fast-build"]
-    fn fast_build_drives_selected_flake_jobs() {
+    #[ignore = "needs a nix daemon"]
+    fn evaluated_derivations_drive_the_build_union() {
         use crate::nix::buildset::{StreamEvent, UnionCase, UnionRequest, build_union};
         use crate::nix::route::{EvaluationLimits, Route};
-        let scratch = crate::support::fs::Scratch::create("wasinix-fast-build").unwrap();
+        let scratch = crate::support::fs::Scratch::create("wasinix-build-union").unwrap();
         let nonce = std::process::id();
         std::fs::write(
             scratch.path().join("flake.nix"),
@@ -7948,8 +7988,8 @@ mod buildset {
                 r#"{{
   outputs = {{ self }}: {{
     legacyPackages.{}.ciSets.all = {{
-      ok = derivation {{ name = "wasinix-fast-build-ok-{nonce}"; system = "{}"; builder = "/bin/sh"; args = ["-c" "echo ok > $out"]; }};
-      bad = derivation {{ name = "wasinix-fast-build-bad-{nonce}"; system = "{}"; builder = "/bin/sh"; args = ["-c" "exit 1"]; }};
+      ok = derivation {{ name = "wasinix-build-union-ok-{nonce}"; system = "{}"; builder = "/bin/sh"; args = ["-c" "echo ok > $out"]; }};
+      bad = derivation {{ name = "wasinix-build-union-bad-{nonce}"; system = "{}"; builder = "/bin/sh"; args = ["-c" "exit 1"]; }};
     }};
   }};
 }}
@@ -7990,7 +8030,6 @@ mod buildset {
             UnionRequest {
                 cases: vec![UnionCase {
                     id: "case".into(),
-                    worktree: scratch.path().to_path_buf(),
                     jobs_file: jobs_path,
                     jobs: vec!["ok".into(), "bad".into()],
                 }],

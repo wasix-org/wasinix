@@ -242,7 +242,6 @@
       coreutils
       git
       nix-eval-jobs
-      nix-fast-build
       wasinixNix
       openssh
     ];
@@ -1028,7 +1027,6 @@
         wasmerRuntime
 
         nixpkgs.legacyPackages.${system}.nix-eval-jobs
-        nixpkgs.legacyPackages.${system}.nix-fast-build
         nixpkgs.legacyPackages.${system}.nixVersions.latest
       ];
       shellHook = ''

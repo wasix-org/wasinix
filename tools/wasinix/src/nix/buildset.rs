@@ -1,21 +1,20 @@
-//! Build selected CI jobs. Wasinix records the plan and reports outcomes;
-//! nix-fast-build evaluates the selected attributes and schedules builds.
+//! Build the derivations selected by CI evaluation. Nix owns the dependency
+//! graph and schedule; Wasinix observes the known outputs and reports outcomes.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-use crate::support::error::{Error, Result, io, request_error};
+use crate::support::error::{Result, io, request_error};
 use crate::support::process::CommandStatus;
 
 pub struct UnionCase {
     pub id: String,
-    pub worktree: PathBuf,
     pub jobs_file: PathBuf,
     pub jobs: Vec<String>,
 }
@@ -448,47 +447,165 @@ pub fn push_prebuilt(
     Ok(report)
 }
 
-pub(crate) fn select_jobs(jobs: &[String]) -> Result<String> {
-    let names = jobs
-        .iter()
-        .map(serde_json::to_string)
-        .collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(|source| Error::Failure(format!("encoding build selectors: {source}")))?
-        .join(" ");
-    Ok(format!(
-        "jobs: builtins.listToAttrs (map (name: {{ inherit name; value = builtins.getAttr name jobs; }}) [ {names} ])"
-    ))
+struct ResultWriter<'a> {
+    stream: &'a mut std::fs::File,
+    stream_path: &'a Path,
+    cases: &'a mut Vec<crate::ci::facts::junit::Case>,
+    on_event: &'a mut dyn FnMut(StreamEvent) -> Result<()>,
 }
 
-fn emit(
-    value: Value,
-    stream: &mut std::fs::File,
-    stream_path: &Path,
-    cases: &mut Vec<crate::ci::facts::junit::Case>,
-    on_event: &mut dyn FnMut(StreamEvent) -> Result<()>,
-) -> Result<()> {
-    writeln!(stream, "{value}").map_err(|error| io(stream_path, error))?;
-    let mut case = crate::ci::facts::junit::Case::new(
-        value["attr"].as_str().unwrap_or_default().to_string(),
-        "Build".to_string(),
-    );
-    case.duration = value["duration"].as_f64().unwrap_or_default();
-    case.drv = value["drv"].as_str().map(str::to_string);
-    if !value["success"].as_bool().unwrap_or(false) {
-        case.message = Some(
-            value["error"]
-                .as_str()
-                .unwrap_or("build failed")
-                .to_string(),
+impl ResultWriter<'_> {
+    fn emit(&mut self, value: Value) -> Result<()> {
+        writeln!(self.stream, "{value}").map_err(|error| io(self.stream_path, error))?;
+        let mut case = crate::ci::facts::junit::Case::new(
+            value["attr"].as_str().unwrap_or_default().to_string(),
+            "Build".to_string(),
+        );
+        case.duration = value["duration"].as_f64().unwrap_or_default();
+        case.drv = value["drv"].as_str().map(str::to_string);
+        if !value["success"].as_bool().unwrap_or(false) {
+            case.message = Some(
+                value["error"]
+                    .as_str()
+                    .unwrap_or("build failed")
+                    .to_string(),
+            );
+        }
+        self.cases.push(case);
+        (self.on_event)(StreamEvent::Result(value))
+    }
+
+    fn event(&mut self, event: StreamEvent) -> Result<()> {
+        (self.on_event)(event)
+    }
+}
+
+pub(crate) fn building_drv(line: &str) -> Option<&str> {
+    line.strip_prefix("building '")
+        .and_then(|rest| rest.split_once("'...").map(|(drv, _)| drv))
+        .filter(|drv| drv.ends_with(".drv"))
+}
+
+fn invalid_outputs(
+    outputs: &[String],
+    route: &crate::nix::route::Route,
+) -> Result<BTreeSet<String>> {
+    let mut invalid = BTreeSet::new();
+    for chunk in outputs.chunks(500) {
+        let result = crate::support::nix::Invocation::tool("nix-store")
+            .args(["--check-validity", "--print-invalid"])
+            .operands(chunk.iter().cloned())
+            .route(route)?
+            .probe("observe which selected outputs have finished")?;
+        if !result.status.is_success() {
+            return Err(crate::support::error::Error::Failure(format!(
+                "checking completed build outputs failed: {}",
+                crate::support::error::tail(&result.stderr, 300)
+            )));
+        }
+        invalid.extend(
+            String::from_utf8_lossy(&result.stdout)
+                .split_whitespace()
+                .map(str::to_string),
         );
     }
-    cases.push(case);
-    on_event(StreamEvent::Result(value))
+    Ok(invalid)
 }
 
-/// Build each selected case with nix-fast-build. Wasinix owns selection,
-/// routing, reporting, and cache credentials; nix-fast-build owns evaluation,
-/// retries, and the per-derivation build schedule.
+fn settle_finished(
+    pending: &mut BTreeSet<String>,
+    jobs: &BTreeMap<String, JobSpec>,
+    build_started: &BTreeMap<String, Instant>,
+    started: Instant,
+    route: &crate::nix::route::Route,
+    uploader: &Uploader,
+    writer: &mut ResultWriter<'_>,
+) -> Result<()> {
+    if pending.is_empty() {
+        return Ok(());
+    }
+    let outputs: Vec<String> = pending
+        .iter()
+        .flat_map(|drv| jobs[drv].outputs.iter().cloned())
+        .collect();
+    let invalid = invalid_outputs(&outputs, route)?;
+    let finished: Vec<String> = pending
+        .iter()
+        .filter(|drv| {
+            !jobs[*drv].outputs.is_empty()
+                && jobs[*drv]
+                    .outputs
+                    .iter()
+                    .all(|path| !invalid.contains(path))
+        })
+        .cloned()
+        .collect();
+    for drv in finished {
+        pending.remove(&drv);
+        let spec = &jobs[&drv];
+        uploader.push(spec.outputs.clone());
+        let duration = build_started
+            .get(&drv)
+            .copied()
+            .unwrap_or(started)
+            .elapsed()
+            .as_secs_f64();
+        for attr in &spec.attrs {
+            writer.emit(serde_json::json!({
+                "type": "BUILD", "attr": attr, "drv": drv,
+                "success": true, "duration": duration,
+            }))?;
+        }
+    }
+    Ok(())
+}
+
+fn failure_log(drv: &str, route: &crate::nix::route::Route) -> Result<Option<String>> {
+    let result = crate::support::nix::Invocation::plain("log")
+        .operand(drv)
+        .route(route)?
+        .probe("retrieve the failed derivation's build log")?;
+    if !result.status.is_success() {
+        return Ok(None);
+    }
+    let output = if result.stdout.is_empty() {
+        result.stderr
+    } else {
+        String::from_utf8_lossy(&result.stdout).into_owned()
+    };
+    Ok((!output.trim().is_empty()).then(|| crate::support::error::tail(&output, 500)))
+}
+
+fn emit_failure(
+    drv: &str,
+    error: &str,
+    jobs: &BTreeMap<String, JobSpec>,
+    writer: &mut ResultWriter<'_>,
+) -> Result<usize> {
+    for attr in &jobs[drv].attrs {
+        writer.emit(serde_json::json!({
+            "type": "BUILD", "attr": attr, "drv": drv,
+            "success": false, "error": error,
+        }))?;
+    }
+    Ok(jobs[drv].attrs.len())
+}
+
+pub(crate) fn realise_command(
+    drvs: impl IntoIterator<Item = String>,
+    max_jobs: usize,
+    route: &crate::nix::route::Route,
+) -> Result<std::process::Command> {
+    crate::support::nix::Invocation::tool("nix-store")
+        .args(["--realise", "--keep-going"])
+        .args(["--max-jobs", &max_jobs.to_string()])
+        .operands(drvs)
+        .route(route)?
+        .command()
+}
+
+/// Realise the derivations produced by the authoritative evaluation. Nix owns
+/// scheduling; the output observer only reports completion and liveness.
 pub fn build_union(
     request: UnionRequest<'_>,
     on_event: &mut dyn FnMut(StreamEvent) -> Result<()>,
@@ -505,7 +622,6 @@ pub fn build_union(
     let mut stream = std::fs::File::create(&stream_path).map_err(|e| io(&stream_path, e))?;
 
     let mut jobs: BTreeMap<String, JobSpec> = BTreeMap::new();
-    let mut attrs: BTreeMap<String, String> = BTreeMap::new();
     let mut missing: Vec<String> = Vec::new();
     for case in &request.cases {
         let text = crate::support::fs::read_to_string(&case.jobs_file)?;
@@ -518,7 +634,6 @@ pub fn build_union(
             let attr = format!("{}::{name}", case.id);
             match job.drv_path.clone().filter(|drv| !drv.is_empty()) {
                 Some(drv) => {
-                    attrs.insert(attr.clone(), drv.clone());
                     let spec = jobs.entry(drv).or_insert_with(|| JobSpec {
                         attrs: Vec::new(),
                         outputs: job.outputs.values().cloned().collect(),
@@ -531,19 +646,19 @@ pub fn build_union(
     }
 
     let mut cases: Vec<crate::ci::facts::junit::Case> = Vec::new();
+    let mut writer = ResultWriter {
+        stream: &mut stream,
+        stream_path: &stream_path,
+        cases: &mut cases,
+        on_event,
+    };
     let mut failures = 0usize;
     for attr in &missing {
         failures += 1;
-        emit(
-            serde_json::json!({
-                "type": "BUILD", "attr": attr, "success": false,
-                "error": "the evaluation produced no derivation for this job",
-            }),
-            &mut stream,
-            &stream_path,
-            &mut cases,
-            on_event,
-        )?;
+        writer.emit(serde_json::json!({
+            "type": "BUILD", "attr": attr, "success": false,
+            "error": "the evaluation produced no derivation for this job",
+        }))?;
     }
 
     let key = if request.push {
@@ -586,7 +701,7 @@ pub fn build_union(
             census.insert(attr.clone(), planned);
         }
         if planned == Planned::Build {
-            pending.extend(spec.attrs.iter().cloned());
+            pending.insert(drv.clone());
             continue;
         }
         local_only.extend(
@@ -596,16 +711,10 @@ pub fn build_union(
                 .cloned(),
         );
         for attr in &spec.attrs {
-            emit(
-                serde_json::json!({
-                    "type": "BUILD", "attr": attr, "drv": drv, "success": true,
-                    "cached": true, "duration": 0.0,
-                }),
-                &mut stream,
-                &stream_path,
-                &mut cases,
-                on_event,
-            )?;
+            writer.emit(serde_json::json!({
+                "type": "BUILD", "attr": attr, "drv": drv, "success": true,
+                "cached": true, "duration": 0.0,
+            }))?;
         }
     }
     let count = |want: Planned| census.values().filter(|planned| **planned == want).count();
@@ -618,7 +727,7 @@ pub fn build_union(
             count(Planned::Present)
         ),
     );
-    on_event(StreamEvent::Plan(census))?;
+    writer.event(StreamEvent::Plan(census))?;
 
     let uploader = Uploader::start(key.as_ref().map(SigningKey::store), request.route.store());
     if key.is_some() && !local_only.is_empty() {
@@ -628,137 +737,74 @@ pub fn build_union(
     let started = std::time::Instant::now();
     let mut timed_out = false;
     let mut driver_failed = false;
-    for case in &request.cases {
-        if timed_out {
-            break;
-        }
-        let selected: Vec<String> = case
-            .jobs
-            .iter()
-            .filter(|name| pending.contains(&format!("{}::{name}", case.id)))
-            .cloned()
-            .collect();
-        if selected.is_empty() {
-            continue;
-        }
-        let limits = request.route.limits()?;
-        let flake = format!(
-            ".#legacyPackages.{}.ciSets.all",
-            crate::support::nix::SYSTEM
-        );
-        let invocation = crate::support::nix::Invocation::fast_build()
-            .args(["--flake", &flake])
-            .args(["--select", &select_jobs(&selected)?])
-            .args(["--max-jobs", &request.max_jobs.to_string()])
-            .args(["--eval-workers", &limits.workers.to_string()])
-            .args(["--eval-max-memory-size", &limits.memory.to_string()])
-            .args(["--retries", "3", "--no-nom", "--no-link", "--skip-cached"])
-            .arg("--stream-json-lines")
-            .accepts_flake_config()
-            .workdir(&case.worktree)
-            .route(request.route)?;
-        let mut cmd = invocation.command()?;
+    let mut build_started = BTreeMap::new();
+    if !pending.is_empty() {
+        let mut cmd = realise_command(pending.iter().cloned(), request.max_jobs, request.route)?;
         let mut child =
-            crate::support::tools::spawn(cmd.stdout(Stdio::piped()).stderr(Stdio::piped()))?;
-        let stdout = child.take_stdout().expect("stdout was piped");
+            crate::support::tools::spawn(cmd.stdout(Stdio::null()).stderr(Stdio::piped()))?;
         let stderr = child.take_stderr().expect("stderr was piped");
         let (sender, receiver) = mpsc::channel();
-        let stdout_sender = sender.clone();
-        let stdout_thread = std::thread::spawn(move || {
-            let mut reader = BufReader::new(stdout);
-            let mut buffer = Vec::new();
-            while matches!(reader.read_until(b'\n', &mut buffer), Ok(n) if n > 0) {
-                let line = String::from_utf8_lossy(&buffer).trim_end().to_string();
-                let _ = stdout_sender.send((true, line));
-                buffer.clear();
-            }
-        });
         let stderr_thread = std::thread::spawn(move || {
             let mut reader = BufReader::new(stderr);
             let mut buffer = Vec::new();
             while matches!(reader.read_until(b'\n', &mut buffer), Ok(n) if n > 0) {
                 let line = String::from_utf8_lossy(&buffer).trim_end().to_string();
-                let _ = sender.send((false, line));
+                let _ = sender.send(line);
                 buffer.clear();
             }
         });
-        let mut status = None;
+        let mut recent_deps = VecDeque::new();
+        let mut last_poll = Instant::now();
         loop {
             match receiver.recv_timeout(Duration::from_secs(5)) {
-                Ok((is_stdout, line)) => {
+                Ok(line) => {
                     writeln!(log, "{line}").map_err(|e| io(&log_path, e))?;
-                    if !is_stdout {
-                        if let Some(requested_bytes) =
-                            crate::support::nix::auto_gc_requested_bytes(&line)
-                        {
-                            on_event(StreamEvent::AutomaticGc { requested_bytes })?;
-                        }
+                    if let Some(requested_bytes) =
+                        crate::support::nix::auto_gc_requested_bytes(&line)
+                    {
+                        writer.event(StreamEvent::AutomaticGc { requested_bytes })?;
                     }
-                    if is_stdout {
-                        let value: Value =
-                            serde_json::from_str(&line).map_err(|source| Error::Json {
-                                path: "<nix-fast-build stdout>".into(),
-                                source,
-                            })?;
-                        if let Some(name) = value["attr"].as_str() {
-                            let attr = format!("{}::{name}", case.id);
-                            if value["type"] == "BUILD" {
-                                if let Some(drv) = attrs.get(&attr) {
-                                    if value["success"].as_bool().unwrap_or(false) {
-                                        let outputs = value["outputs"]
-                                            .as_object()
-                                            .into_iter()
-                                            .flat_map(|outputs| outputs.values())
-                                            .filter_map(Value::as_str)
-                                            .map(str::to_string)
-                                            .collect();
-                                        uploader.push(outputs);
-                                    }
-                                    for alias in &jobs[drv].attrs {
-                                        if !pending.remove(alias) {
-                                            continue;
-                                        }
-                                        let mut normalized = value.clone();
-                                        normalized["attr"] = Value::String(alias.clone());
-                                        normalized["drv"] = Value::String(drv.clone());
-                                        if !normalized["success"].as_bool().unwrap_or(false) {
-                                            failures += 1;
-                                        }
-                                        emit(
-                                            normalized,
-                                            &mut stream,
-                                            &stream_path,
-                                            &mut cases,
-                                            on_event,
-                                        )?;
-                                    }
-                                }
-                            } else if value["type"] == "EVAL"
-                                && !value["success"].as_bool().unwrap_or(false)
-                                && pending.remove(&attr)
-                            {
-                                failures += 1;
-                                let mut normalized = value;
-                                normalized["attr"] = Value::String(attr);
-                                emit(normalized, &mut stream, &stream_path, &mut cases, on_event)?;
+                    if let Some(drv) = building_drv(&line) {
+                        if let Some(spec) = jobs.get(drv) {
+                            build_started
+                                .entry(drv.to_string())
+                                .or_insert_with(Instant::now);
+                            for attr in &spec.attrs {
+                                writer
+                                    .event(StreamEvent::Output(format!("  building \"{attr}\"")))?;
                             }
+                        } else {
+                            let name = Path::new(drv)
+                                .file_name()
+                                .and_then(|name| name.to_str())
+                                .unwrap_or(drv)
+                                .trim_end_matches(".drv")
+                                .to_string();
+                            recent_deps.retain(|seen| seen != &name);
+                            recent_deps.push_front(name);
+                            recent_deps.truncate(4);
                         }
-                    } else if let Some(name) = line.strip_prefix("  building ") {
-                        let attr = format!("{}::{}", case.id, name.trim_matches('"'));
-                        if attrs.contains_key(&attr) {
-                            on_event(StreamEvent::Output(format!("  building \"{attr}\"")))?;
-                        }
-                    } else {
-                        on_event(StreamEvent::Output(line))?;
                     }
-                    on_event(StreamEvent::Activity)?;
+                    writer.event(StreamEvent::Activity)?;
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
                 Err(mpsc::RecvTimeoutError::Disconnected) => break,
             }
-            on_event(StreamEvent::Heartbeat {
-                recent_deps: Vec::new(),
-            })?;
+            if last_poll.elapsed() >= Duration::from_secs(5) {
+                last_poll = Instant::now();
+                writer.event(StreamEvent::Heartbeat {
+                    recent_deps: recent_deps.iter().cloned().collect(),
+                })?;
+                settle_finished(
+                    &mut pending,
+                    &jobs,
+                    &build_started,
+                    started,
+                    request.route,
+                    &uploader,
+                    &mut writer,
+                )?;
+            }
             if request
                 .hard_timeout
                 .is_some_and(|timeout| started.elapsed() >= timeout)
@@ -767,43 +813,36 @@ pub fn build_union(
                 child.kill().map_err(|error| io(&log_path, error))?;
                 break;
             }
-            if status.is_none() {
-                status = child.try_wait().map_err(|error| io(&log_path, error))?;
-            }
         }
-        let _ = stdout_thread.join();
         let _ = stderr_thread.join();
-        let status = match status {
-            Some(status) => status,
-            None => child.wait().map_err(|error| io(&log_path, error))?,
-        };
+        let status = child.wait().map_err(|error| io(&log_path, error))?;
         driver_failed |= !status.success();
     }
 
-    for attr in std::mem::take(&mut pending) {
+    settle_finished(
+        &mut pending,
+        &jobs,
+        &build_started,
+        started,
+        request.route,
+        &uploader,
+        &mut writer,
+    )?;
+    for drv in std::mem::take(&mut pending) {
         let error = if timed_out {
             "the build timed out before this job finished".to_string()
         } else {
-            crate::ci::facts::NO_BUILD_LOG.to_string()
+            failure_log(&drv, request.route)?
+                .unwrap_or_else(|| crate::ci::facts::NO_BUILD_LOG.to_string())
         };
-        failures += 1;
-        emit(
-            serde_json::json!({
-                "type": "BUILD", "attr": attr, "drv": attrs.get(&attr),
-                "success": false, "error": error,
-            }),
-            &mut stream,
-            &stream_path,
-            &mut cases,
-            on_event,
-        )?;
+        failures += emit_failure(&drv, &error, &jobs, &mut writer)?;
     }
 
     uploader.finish();
-    cases.sort_by(|a, b| a.attr.cmp(&b.attr));
+    writer.cases.sort_by(|a, b| a.attr.cmp(&b.attr));
     crate::support::fs::write(
         &request.result_file,
-        crate::ci::facts::junit::write_junit(&cases).as_bytes(),
+        crate::ci::facts::junit::write_junit(writer.cases).as_bytes(),
     )?;
     if let Some(key) = &key {
         push_build_deps(key, &needed, request.route)?;
