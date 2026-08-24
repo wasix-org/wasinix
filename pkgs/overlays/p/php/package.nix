@@ -158,6 +158,10 @@ in {
           'opcache.enable_cli = 1' \
           >> "$out"
       '';
+      phpPatches = import ./patches {
+        inherit lib int64 serverSnapshot;
+        version = spec.version;
+      };
     in
       helpers.wasmRename {wasmName = "php";} (final.stdenv.mkDerivation {
         pname = "php";
@@ -165,75 +169,7 @@ in {
 
         inherit src;
 
-        patches =
-          [
-            ./patches/php-optional-getgroups.patch
-            ./patches/php-readline-static-cli.patch
-            ./patches/php-network-blocking-connect.patch
-            ./patches/php-sockets-wasix-features.patch
-            (
-              if lib.versionOlder spec.version "8.2"
-              then ./patches/php-sockets-optional-so-debug-pre82.patch
-              else ./patches/php-sockets-optional-so-debug.patch
-            )
-          ]
-          ++ lib.optional int64 ./patches/php-wasix-int64.patch
-          ++ lib.optional (serverSnapshot && lib.versionOlder spec.version "8.5") ./patches/php81-84-cli-server-snapshot.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.5") ./patches/php85-cli-server-snapshot.patch
-          ++ lib.optional serverSnapshot (
-            if lib.versionOlder spec.version "8.2"
-            then ./patches/php81-server-snapshot.patch
-            else if lib.versionOlder spec.version "8.3"
-            then ./patches/php82-server-snapshot.patch
-            else if lib.versionOlder spec.version "8.4"
-            then ./patches/php83-server-snapshot.patch
-            else ./patches/php84-server-snapshot.patch
-          )
-          ++ lib.optional (lib.versionAtLeast spec.version "8.1") ./patches/php-zend-extensions-wasi.patch
-          ++ lib.optional (lib.versionOlder spec.version "8.0") ./patches/php74-zend-extensions-wasi.patch
-          ++ lib.optional (lib.versionOlder spec.version "8.5") ./patches/php-opcache-optional-sys-ipc.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.4") ./patches/php-fd-table-size.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.2" && lib.versionOlder spec.version "8.4") ./patches/php-fd-table-size-pre84.patch
-          ++ lib.optional (lib.versionOlder spec.version "8.2") ./patches/php-fd-table-size-pre82.patch
-          ++ lib.optional (lib.versionOlder spec.version "8.2") ./patches/php-fopencookie-seeker-pre82.patch
-          ++ [
-            ./patches/php-fileinfo-disable-fifo.patch
-            ./patches/php-mysqlnd-localhost-tcp.patch
-          ]
-          ++ lib.optional (lib.versionAtLeast spec.version "8.2") ./patches/php-zend-allocator-madvise.patch
-          ++ lib.optional (lib.versionOlder spec.version "8.2") ./patches/php-zend-allocator-madvise-pre82.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.4") ./patches/php-posix-spawn-proc-open.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.3" && lib.versionOlder spec.version "8.4") ./patches/php83-posix-spawn-proc-open.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.1" && lib.versionOlder spec.version "8.3") ./patches/php-posix-spawn-81-82.patch
-          ++ lib.optional (lib.versionOlder spec.version "8.0") ./patches/php-posix-spawn-pre83.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.4") ./patches/php-random-getrandom.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.3" && lib.versionOlder spec.version "8.4") ./patches/php-random-getrandom-pre84.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.2" && lib.versionOlder spec.version "8.3") ./patches/php82-random-getrandom.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.1" && lib.versionOlder spec.version "8.2") ./patches/php81-random-getrandom.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.2" && lib.versionOlder spec.version "8.4") ./patches/php-gd-cross-format-cache-pre84.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.1" && lib.versionOlder spec.version "8.4") ./patches/php-fibers-wasix-pre84.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.4") ./patches/php-fibers-wasix.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.2") ./patches/php-opcache-wasix.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.1" && lib.versionOlder spec.version "8.2") ./patches/php-opcache-wasix-81.patch
-          ++ lib.optional (lib.versionOlder spec.version "8.0") ./patches/php-opcache-wasix-74.patch
-          ++ lib.optional (lib.versionOlder spec.version "8.0") ./patches/php74-opcache-static.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.1" && lib.versionOlder spec.version "8.2") ./patches/php81-opcache-static.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.2" && lib.versionOlder spec.version "8.3") ./patches/php82-opcache-static.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.3" && lib.versionOlder spec.version "8.4") ./patches/php83-opcache-static.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.4" && lib.versionOlder spec.version "8.5") ./patches/php84-opcache-static.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.1" && lib.versionOlder spec.version "8.4") ./patches/php-opcache-mmap-cross.patch
-          ++ lib.optional (lib.versionOlder spec.version "8.0") ./patches/php74-opcache-mmap-cross.patch
-          ++ lib.optional (lib.versionAtLeast spec.version "8.3") ./patches/php-opcache-preload-wasix.patch
-          ++ lib.optional (lib.versionOlder spec.version "8.3") ./patches/php-opcache-preload-wasix-pre83.patch
-          ++ lib.optionals (lib.versionOlder spec.version "8.0") [
-            ./patches/php74-cross-phar.patch
-            ./patches/php74-libxml-2.15.patch
-            ./patches/php74-openssl-3.6.patch
-            ./patches/php74-pdo-odbc-size-t.patch
-            ./patches/php74-random-getrandom.patch
-            ./patches/php74-setjmp-off.patch
-            ./patches/php74-sockets-optional-sock-rdm.patch
-          ];
+        patches = phpPatches.source;
 
         nativeBuildInputs =
           (with final.buildPackages; [
@@ -341,11 +277,7 @@ in {
               postRestore = ''
                 export NO_INTERACTION=1
                 export WASIX_RUN_FLAGS="$WASIX_RUN_FLAGS --volume ${preferredProfilePackages.icu-data}/share/icu/${final.icu.version}:/share/icu/${final.icu.version}"
-                patch -p1 < ${
-                  if lib.versionOlder spec.version "8.0"
-                  then ./patches/php-run-tests-sharding-pre80.patch
-                  else ./patches/php-run-tests-sharding.patch
-                }
+                patch -p1 < ${phpPatches.testRunner}
                 substituteInPlace Makefile \
                   --replace-fail 'TEST_PHP_EXECUTABLE=$(PHP_EXECUTABLE)' \
                   'TEST_PHP_EXECUTABLE=$(PHP_EXECUTABLE).wasm'
