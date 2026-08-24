@@ -68,19 +68,18 @@ The main legacy trees are `toolchain`, `packagesByProfile`, `nativePackages`,
 Unsupported and broken packages are filtered before becoming jobs.
 `wasinix build` records the selected derivations for its plan and report, then
 realises those derivations directly. Nix owns the dependency graph and build
-schedule; the recorded evaluation remains the single source of job identity.
-CI runs the same verb.
+schedule; the recorded evaluation remains the single source of job identity. CI
+runs the same verb.
 
 `packages.<system>.wasinix-core` carries the orchestrator and its Git, Nix,
-nix-eval-jobs, and OpenSSH system boundaries. `wasinix` is the
-compatibility package that also carries optional registry and publication
-helpers. The `wasinix-capability-*` outputs expose each optional helper
-separately. A core launcher binds capability resolution to its own flake source
-and lock; a bare development binary may use its PATH and otherwise uses its
-checkout. Only the full compatibility launcher marks its optional PATH entries
-as coming from the same locked package set; core never prefers ambient helpers.
-Resolution permits substitution or a remote builder but sets Nix's local build
-capacity to zero.
+nix-eval-jobs, and OpenSSH system boundaries. `wasinix` is the compatibility
+package that also carries optional registry and publication helpers. The
+`wasinix-capability-*` outputs expose each optional helper separately. A core
+launcher binds capability resolution to its own flake source and lock; a bare
+development binary may use its PATH and otherwise uses its checkout. Only the
+full compatibility launcher marks its optional PATH entries as coming from the
+same locked package set; core never prefers ambient helpers. Resolution permits
+substitution or a remote builder but sets Nix's local build capacity to zero.
 
 After parsing, commands conservatively declare the optional helpers they may
 need. One owned background worker realises that set as a batch while command
