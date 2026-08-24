@@ -69,6 +69,12 @@ When a run finishes, its completed transcripts are compacted fairly to 256 MiB
 in total. Small transcripts remain whole before larger ones share the remaining
 space. `WASINIX_RUN_LOG_BYTES` sets another positive byte limit for the run.
 
+Each task boundary also records the total and available space on the filesystem
+backing `/nix/store`. Nix automatic-GC announcements record how many times it
+ran and how many bytes it requested; that request is not reported as bytes
+reclaimed. `run report --json` carries the per-task samples and aggregate store
+low-water mark, while `run report -v` renders the same measurements.
+
 The verdict has four values. A green run passes; a red run has a failed required
 gate or a comparison with regressions. Removed jobs stay in the comparison for
 reviewer information but do not fail it. A diff whose baseline could not

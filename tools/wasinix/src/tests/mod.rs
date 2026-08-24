@@ -1649,8 +1649,10 @@ mod runs {
 }
 
 mod events {
-    use crate::ci::events::{Event, FILE, Tracker, append, fold_snapshot, read_all, read_from};
-    use crate::support::atoms::{JobAddr, JobStatus, RunState, TaskStatus};
+    use crate::ci::events::{
+        Event, FILE, ResourceBoundary, Tracker, append, fold_snapshot, read_all, read_from,
+    };
+    use crate::support::atoms::{Bytes, JobAddr, JobStatus, RunState, TaskStatus};
     use crate::support::fs::Scratch;
 
     fn job(at: u64, name: &str, status: JobStatus, cached: bool) -> Event {
@@ -1697,6 +1699,65 @@ mod events {
             read_all(scratch.path()).unwrap().as_slice(),
             [Event::LegacyOutput { at: 2, line }] if line == "warning: noisy"
         ));
+    }
+
+    #[test]
+    fn run_data_folds_task_space_and_automatic_gc() {
+        let scratch = Scratch::create("wasinix-test").unwrap();
+        let mut report = crate::ci::report::starting(None);
+        report.tasks.push(crate::ci::report::TaskView {
+            task_id: "head.eval".into(),
+            label: "head: Evaluation".into(),
+            kind: crate::ci::plan::TaskKind::Eval,
+            case: "head".into(),
+            status: TaskStatus::Success,
+            gate: true,
+            enabled: true,
+            headline: "evaluated".into(),
+            elapsed_seconds: None,
+            artifact_bytes: None,
+            store_available_start_bytes: None,
+            store_available_finish_bytes: None,
+        });
+        for (at, boundary, available) in [
+            (1, ResourceBoundary::Start, 80),
+            (2, ResourceBoundary::Finish, 30),
+        ] {
+            append(
+                scratch.path(),
+                &Event::ResourceSample {
+                    at,
+                    task_id: "head.eval".into(),
+                    boundary,
+                    available_bytes: Bytes(available),
+                    total_bytes: Bytes(100),
+                },
+            )
+            .unwrap();
+        }
+        append(
+            scratch.path(),
+            &Event::AutomaticGc {
+                at: 2,
+                task_ids: vec!["head.eval".into()],
+                requested_bytes: Bytes(50),
+            },
+        )
+        .unwrap();
+
+        report.attach_run_data(scratch.path()).unwrap();
+        assert_eq!(report.tasks[0].store_available_start_bytes, Some(Bytes(80)));
+        assert_eq!(
+            report.tasks[0].store_available_finish_bytes,
+            Some(Bytes(30))
+        );
+        assert_eq!(
+            report.resources.minimum_store_available_bytes,
+            Some(Bytes(30))
+        );
+        assert_eq!(report.resources.store_total_bytes, Some(Bytes(100)));
+        assert_eq!(report.resources.automatic_gc_runs, 1);
+        assert_eq!(report.resources.automatic_gc_requested_bytes, Bytes(50));
     }
 
     #[test]
@@ -2475,6 +2536,8 @@ mod markdown {
                 headline: "1529 selected · 1 blocked".into(),
                 elapsed_seconds: None,
                 artifact_bytes: None,
+                store_available_start_bytes: None,
+                store_available_finish_bytes: None,
             }],
             failures: std::collections::BTreeMap::from([(
                 "head.packages".to_string(),
@@ -2495,6 +2558,7 @@ mod markdown {
             request: None,
             command: None,
             log_retention: Default::default(),
+            resources: Default::default(),
         };
         let body = comment(&report, &Default::default(), None, &links()).into_string();
         assert!(body.contains("checks.cli-behavior-find"), "{body}");
@@ -3515,7 +3579,7 @@ mod render {
     use crate::cli::render::{
         LineRenderer, ReportView, failure_summary, report_lines, report_title, test_summary,
     };
-    use crate::support::atoms::{DurationSecs, JobAddr, JobStatus, RunState, TaskStatus};
+    use crate::support::atoms::{Bytes, DurationSecs, JobAddr, JobStatus, RunState, TaskStatus};
 
     #[test]
     fn test_summaries_keep_expected_and_broken_outcomes_visible() {
@@ -3562,6 +3626,27 @@ mod render {
                 "Inspect failures: wasinix run failures /tmp/run",
                 "Inspect logs: wasinix run logs /tmp/run",
             ]
+        );
+    }
+
+    #[test]
+    fn a_verbose_report_distinguishes_gc_requests_from_store_space() {
+        let mut report = scenarios::green().0;
+        report.resources.automatic_gc_runs = 2;
+        report.resources.automatic_gc_requested_bytes = Bytes(20 * 1024 * 1024 * 1024);
+        report.resources.minimum_store_available_bytes = Some(Bytes(3 * 1024 * 1024 * 1024));
+        report.resources.store_total_bytes = Some(Bytes(100 * 1024 * 1024 * 1024));
+        report.tasks[0].store_available_start_bytes = Some(Bytes(90 * 1024 * 1024 * 1024));
+        report.tasks[0].store_available_finish_bytes = Some(Bytes(80 * 1024 * 1024 * 1024));
+
+        let lines = report_lines(&report, ReportView::Stored, true);
+        assert!(lines.iter().any(|line| {
+            line == "store: 3.0 GiB available at low point · 100.0 GiB total · automatic GC ran 2 times · 20.0 GiB requested"
+        }));
+        assert!(
+            lines
+                .iter()
+                .any(|line| { line.contains("store 90.0 GiB → 80.0 GiB available") })
         );
     }
 
@@ -5282,6 +5367,8 @@ mod corpus {
             "Event::RunStarted",
             "Event::PhaseStarted",
             "Event::PhaseFinished",
+            "Event::ResourceSample",
+            "Event::AutomaticGc",
             "Event::JobStarted",
             "Event::JobFinished",
             "Event::Warning",
@@ -5296,6 +5383,7 @@ mod corpus {
                 "ci/events.rs",
                 "cli/render.rs",
                 "ci/exec.rs",
+                "ci/report.rs",
                 "runs/mod.rs",
                 "github/publish.rs",
                 "nix/buildset.rs",
@@ -7591,6 +7679,14 @@ mod fs {
         let path = scratch.path().join("log");
         fs::write(&path, "front middle end".as_bytes()).unwrap();
         assert_eq!(fs::tail(&path, 3).unwrap(), "end");
+    }
+
+    #[test]
+    fn space_measures_the_filesystem_containing_the_path() {
+        let scratch = fs::Scratch::create("wasinix-test").unwrap();
+        let space = fs::space(scratch.path()).unwrap();
+        assert!(space.total > 0);
+        assert!(space.available <= space.total);
     }
 }
 

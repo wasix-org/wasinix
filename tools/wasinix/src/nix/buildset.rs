@@ -67,6 +67,9 @@ pub enum StreamEvent {
     Recovery {
         path: String,
     },
+    AutomaticGc {
+        requested_bytes: u64,
+    },
     Output(String),
 }
 
@@ -659,8 +662,10 @@ fn root_cached_inputs(
     let mut cmd = rooted_realise_invocation(route, roots, "input")?
         .operands(inputs.iter().cloned())
         .command()?;
+    let automatic_gc = crate::support::nix::AutomaticGcObserver::default();
     let mut stderr_log = log.clone();
     let stderr_path = log_path.clone();
+    let stderr_automatic_gc = automatic_gc.clone();
     let (mut child, readers) = crate::support::tools::spawn_piped(
         &mut cmd,
         |mut stdout| {
@@ -668,8 +673,20 @@ fn root_cached_inputs(
                 .map_err(|error| crate::support::error::io("nix-store stdout", error))?;
             Ok(())
         },
-        move |mut stderr| {
-            std::io::copy(&mut stderr, &mut stderr_log).map_err(|error| io(&stderr_path, error))?;
+        move |stderr| {
+            let mut reader = BufReader::new(stderr);
+            let mut buffer = Vec::new();
+            while reader
+                .read_until(b'\n', &mut buffer)
+                .map_err(|error| io(&stderr_path, error))?
+                > 0
+            {
+                stderr_automatic_gc.observe(&buffer);
+                stderr_log
+                    .write_all(&buffer)
+                    .map_err(|error| io(&stderr_path, error))?;
+                buffer.clear();
+            }
             Ok(())
         },
     )?;
@@ -693,6 +710,9 @@ fn root_cached_inputs(
     let finish_result = log.finish();
     reader_result?;
     finish_result?;
+    for requested_bytes in automatic_gc.requested_bytes() {
+        on_event(StreamEvent::AutomaticGc { requested_bytes })?;
+    }
     if !status.success() {
         let output = crate::support::fs::read_to_string(&log_path)?;
         return Err(crate::support::error::Error::Failure(format!(
@@ -990,6 +1010,11 @@ pub fn build_union(
             match receiver.recv_timeout(Duration::from_secs(5)) {
                 Ok(line) => {
                     writeln!(log, "{line}").map_err(|e| io(&log_path, e))?;
+                    if let Some(requested_bytes) =
+                        crate::support::nix::auto_gc_requested_bytes(&line)
+                    {
+                        on_event(StreamEvent::AutomaticGc { requested_bytes })?;
+                    }
                     if let Some(RealiseFailure::MissingStorePath(path)) = realise_failure(&line) {
                         invalid_store_paths.insert(path);
                     }
