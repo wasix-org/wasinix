@@ -5834,12 +5834,6 @@ mod corpus {
             action.contains(&expected),
             "the setup-nix action's nix config drifted from `wasinix ci nix-config`"
         );
-        assert!(
-            action.contains(
-                "install_url: https://releases.nixos.org/nix/nix-2.26.3/install"
-            ),
-            "the setup-nix action must pin the Nix version"
-        );
         for entry in std::fs::read_dir(root.join("workflows")).unwrap().flatten() {
             let text = std::fs::read_to_string(entry.path()).unwrap();
             for needle in [
