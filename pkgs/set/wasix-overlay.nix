@@ -7,7 +7,7 @@
   # emulator path is baked into a build.
   wasixRunStub,
 }: final: prev: let
-  lib = prev.lib;
+  inherit (prev) lib;
   helpers = import ../lib {inherit lib;};
 
   # The per-profile toolchain members picked once, so no package file repeats it.
@@ -77,8 +77,8 @@
       # so eval fails. Gated on isWasixTarget: these run on the build platform
       # and live in pkgsBuildHost. `rustPlatform.buildRustPackage` users
       # (sd/ripgrep) don't read these.
-      cargo = wasixRustPlatform.cargo;
-      rustc = wasixRustPlatform.rustc;
+      inherit (wasixRustPlatform) cargo;
+      inherit (wasixRustPlatform) rustc;
 
       # A Fortran recipe names its compiler `gfortran` and gcc has no wasm
       # backend, so the set's gfortran is wasixflang wrapped like any other
@@ -116,7 +116,7 @@
 
   goSupport = lib.optionalAttrs isWasixHost {
     buildGoModule = final.callPackage ./tinygo-platform.nix {
-      buildGoModule = prev.buildGoModule;
+      inherit (prev) buildGoModule;
       tinygo = toolchain.wasixTinyGo;
     };
   };

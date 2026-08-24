@@ -3,8 +3,8 @@
   rustPlatform,
   buildPackages,
   fetchFromGitHub,
-  nix-update-script,
 }: let
+  inherit (buildPackages) nix-update-script;
   # Upstream dogfoods the overlay registry. Use its exact resolution with the
   # +wasix suffixes stripped, then let the WASIX rustPlatform reapply the fork
   # sources when this recipe is instantiated in a WASIX package set.

@@ -5,7 +5,7 @@
 {rewriters, ...}: {
   edited = ["=0.17.0"];
   stock = ["<0.17.0" ">0.17.0"];
-  forVersion = {...}: {
+  forVersion = _: {
     patchPhase = "${rewriters.browserWasm}";
   };
 }

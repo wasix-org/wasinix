@@ -20,11 +20,45 @@
   };
   pythonBuildEdit = projectLib.extendPythonPackage (package: package) previous {patches = ["fix.patch"];};
   pythonTestEdit = projectLib.extendPythonPackage (package: package) previous {doCheck = false;};
+  repairPythonPackage = import ../python/lib/repair.nix {
+    inherit lib;
+    inherit (projectLib) mergeScript;
+  };
+  buildBackendPackages = {
+    pdm-backend = mkPackage {name = "pdm-backend";};
+    hatchling = mkPackage {name = "hatchling";};
+    flit-core = mkPackage {name = "flit-core";};
+    poetry-core = mkPackage {name = "poetry-core";};
+    cython = mkPackage {name = "cython";};
+    setuptools = mkPackage {name = "setuptools";};
+    wheel = mkPackage {name = "wheel";};
+  };
+  repairPython = {
+    pkgs.requiredPythonModules = inputs: map (input: input.name) inputs;
+    pythonOnBuildForHost = {
+      pkgs = buildBackendPackages;
+      sitePackages = "lib/python/site-packages";
+      withPackages = select: builtins.deepSeq (select buildBackendPackages) "/build-backends";
+    };
+    sitePackages = "lib/python/site-packages";
+  };
+  historyRepairOnce = repairPythonPackage (mkPackage {
+    name = "history-repair";
+    nativeBuildInputs = [
+      (mkPackage {name = "pyproject-version-patch-hook.sh";})
+    ];
+    passthru.wasix.historySpec = {};
+    propagatedBuildInputs = [dependency];
+    pythonModule = repairPython;
+  });
+  historyRepairTwice = repairPythonPackage historyRepairOnce;
   newRecipe = mkPackage {name = "new";};
   familyA = mkPackage {name = "family-a";};
   familyB = mkPackage {name = "family-b";};
   final = {
     inherit dependency newRecipe familyA familyB;
+    callPackage = file: overrides:
+      projectLib.callWithLabel "test-recipe" (final // overrides) (import file);
   };
   prev = {
     inherit dependency;
@@ -44,8 +78,10 @@
     }
     final
     prev;
-  loaded = builtins.removeAttrs loadedRaw [projectLib.unitOverlaysAttr];
+  loaded = removeAttrs loadedRaw [projectLib.unitOverlaysAttr];
   discoveredUnits = projectLib.discoverUnits ./tests/units;
+  conflictingUnits = projectLib.discoverUnits ./tests/conflicting-units;
+  topLevelPackageFiles = lib.attrNames (lib.filterAttrs (name: type: type == "regular" && lib.hasSuffix ".nix" name) (builtins.readDir ../.));
   bareUnit =
     projectLib.loadPackageOverlay {
       inherit contextFor;
@@ -92,7 +128,7 @@
   extension = extensionOverlay {} core;
   missingDeclaration = projectLib.registerOverlay {
     source = "my-project";
-    overlay = _final: previous: {owned = previous.owned;};
+    overlay = _final: previous: {inherit (previous) owned;};
   };
   orphanDeclaration = projectLib.registerOverlay {
     source = "my-project";
@@ -227,10 +263,13 @@
       inherit webc;
       passthru = {inherit servedVersions;};
     };
-  wasmerProjectionRules = import ../artifacts/wasmer.nix {
+  wasmerProjectionModule = import ../artifacts/wasmer.nix {
     inherit lib;
     makeWasmerPackage = fakeMakeWasmerPackage;
     webcIdent = fakeWebcIdent;
+  };
+  wasmerProjectionRules = {
+    inherit (wasmerProjectionModule) wasmerArtifacts wasmerCommands;
   };
   behaviorProjectionRules = import ../checks/behavior.nix {
     inherit lib projectLib;
@@ -261,15 +300,28 @@
         passthru.harnessArgs = args;
       };
   };
-  fakeHarnesses = import ../harnesses {
-    inherit lib;
-    pkgs.runCommand = name: attrs: script:
-      mkPackage {
-        inherit name script;
-        passthru.runCommandAttrs = attrs;
+  fakeHarnesses =
+    import ../harnesses {
+      inherit lib;
+      pkgs.runCommand = name: attrs: script:
+        mkPackage {
+          inherit name script;
+          passthru.runCommandAttrs = attrs;
+        };
+      testLib = fakeTestLib;
+    }
+    // {
+      packageCommands = package: {
+        ${package.pname or package.name} = {
+          artifact = mkPackage {
+            name = "webc-${package.name}";
+            shim = mkPackage {name = "shim-${package.name}";};
+          };
+          entrypoint = package.pname or package.name;
+          name = package.pname or package.name;
+        };
       };
-    testLib = fakeTestLib;
-  };
+    };
   duplicateHarnessCommand = {
     name = "duplicate";
     entrypoint = "duplicate";
@@ -326,6 +378,10 @@
       };
       existing = previous;
       inherited = mkPackage {name = "inherited";};
+      unpackaged = mkPackage {
+        name = "unpackaged";
+        version = "1.0";
+      };
       profile = args.crossSystem.wasinixProfile or "native";
       replacement = mkPackage {
         name = "base-replacement";
@@ -339,7 +395,14 @@
       stdenv.hostPlatform.isWasix = args ? crossSystem;
     };
   in
-    lib.fix (final: builtins.foldl' (previous: overlay: previous // overlay final previous) base args.overlays);
+    lib.fix (final:
+      builtins.foldl' (previous: overlay: previous // overlay final previous)
+      (base
+        // {
+          callPackage = file: overrides:
+            projectLib.callWithLabel "test-recipe" (final // overrides) (import file);
+        })
+      args.overlays);
   consumerExtension = {
     id = "consumer";
     history = {
@@ -349,9 +412,11 @@
     overlays = {
       wasix = final: previous: {
         core = projectLib.extendPackage previous.core {
-          passthru.wasinix.overrides = "wasinix";
-          passthru.wasinix.checks.probe = true;
-          passthru.wasinix.ci.profiles = ["default" "alternate"];
+          passthru.wasinix = {
+            overrides = "wasinix";
+            checks.probe = true;
+            ci.profiles = ["default" "alternate"];
+          };
         };
         consumer = mkPackage {
           name = "consumer-${final.profile}";
@@ -376,10 +441,12 @@
           passthru.wasinix.catalog = false;
         };
       };
-      python =
-        (projectApi.loadPackageOverlays {
+      inherit
+        ((projectApi.loadPackageOverlays {
           python = ./tests/python-units;
-        }).python;
+        }))
+        python
+        ;
     };
   };
   unitExtension = {
@@ -430,6 +497,13 @@
     system = "test-system";
     importNixpkgs = fakeImportNixpkgs;
     extensions = [emptyExtension];
+    projectionRules.perProject = {
+      namespaces = ["tests"];
+      project = {entry, ...}:
+        lib.optionalAttrs (entry.address == "packages.wasix.default.core") {
+          tests.per-project = mkPackage {name = "per-project";};
+        };
+    };
   };
   project = projectApi.mkProject {
     system = "test-system";
@@ -498,6 +572,10 @@
           wasmer.commands = [
             {name = "first";}
             {name = "second";}
+            {
+              name = "local";
+              global = false;
+            }
             {
               name = "dependency";
               dependency.package = dependency;
@@ -746,8 +824,23 @@
   invalidResultProject = projectWithProjectionRules {
     invalid = _args: "not an attribute set";
   };
-  extensionDeclaration = import ../extension.nix {inherit (projectLib) loadPackageOverlays;};
+  extensionDeclaration = import ./extension.nix {inherit (projectLib) loadPackageOverlays;};
 in {
+  pythonRepair = {
+    expr = {
+      idempotentPreBuild = historyRepairTwice.preBuild == historyRepairOnce.preBuild;
+      idempotentPostPatch = historyRepairTwice.postPatch == historyRepairOnce.postPatch;
+      inputs = map (input: input.name) historyRepairTwice.nativeBuildInputs;
+      modules = historyRepairTwice.passthru.requiredPythonModules;
+    };
+    expected = {
+      idempotentPreBuild = true;
+      idempotentPostPatch = true;
+      inputs = ["setuptools" "wheel"];
+      modules = ["dependency"];
+    };
+  };
+
   builtInExtension = {
     expr = {
       inherit (extensionDeclaration) id;
@@ -771,21 +864,27 @@ in {
       replayNames = lib.attrNames loadedRaw.${projectLib.unitOverlaysAttr};
       fileUnitDirectory = (lib.findFirst (unit: unit.name == "existing") null discoveredUnits).directory;
       directoryUnitDirectory = toString (lib.findFirst (unit: unit.name == "family") null discoveredUnits).directory;
+      recipeUnitDirectory = toString (lib.findFirst (unit: unit.name == "recipe") null discoveredUnits).directory;
       bareUnitFails = !(force bareUnit).success;
+      conflictingUnitsFail = !(force conflictingUnits).success;
+      inherit topLevelPackageFiles;
       exposed = exposedUnits.dependency.name;
       missingExposureFails = !(force missingExposure).success;
-      wasmRename = lib.hasInfix "tool.wasm" ((projectLib.wasmRename {wasmName = "tool";} (mkPackage {name = "tool";})).postInstall);
+      wasmRename = lib.hasInfix "tool.wasm" (projectLib.wasmRename {wasmName = "tool";} (mkPackage {name = "tool";})).postInstall;
       buildEditSupersedesPyPI = pythonBuildEdit.passthru.wasinix.publication.supersedesPyPI;
       testEditSupersedesPyPI = pythonTestEdit.passthru.wasinix.publication.supersedesPyPI or false;
     };
     expected = {
-      names = ["existing" "family-a" "family-b" "new"];
+      names = ["existing" "family-a" "family-b" "new" "recipe"];
       existingInputs = ["dependency"];
       existingPolicy = true;
-      replayNames = ["existing" "family-a" "family-b" "new"];
+      replayNames = ["existing" "family-a" "family-b" "new" "recipe"];
       fileUnitDirectory = null;
       directoryUnitDirectory = toString ./tests/units/family;
+      recipeUnitDirectory = toString ./tests/units/recipe;
       bareUnitFails = true;
+      conflictingUnitsFail = true;
+      topLevelPackageFiles = [];
       exposed = "dependency";
       missingExposureFails = true;
       wasmRename = true;
@@ -873,6 +972,9 @@ in {
       script = behaviorProject.artifacts.webc.behavior.tests.packaged.passthru.harnessArgs.script;
       historyTags = behaviorProject.ci.catalog.jobs.${''tests.artifacts.webc.behavior.versions."0.9".packaged''}.policy.ci.tags;
       definition = toString behaviorProject.catalog.entries."artifacts.webc.behavior".definition.directory;
+      unpackaged = behaviorProject.tests."tests.packages.wasix.default.unpackaged.direct".name;
+      unpackagedSubject = behaviorProject.ci.catalog.jobs."tests.packages.wasix.default.unpackaged.direct".subject;
+      unpackagedArtifacts = behaviorProject.packages.wasix.default.unpackaged.artifacts;
       nonDerivationFails =
         !(force (projectLib.loadTestDirectory {
           context = {};
@@ -897,6 +999,9 @@ in {
       script = "behavior --version # native";
       historyTags = ["history-tests"];
       definition = toString ./tests/behavior-units/behavior;
+      unpackaged = "host-shell-unpackaged-1.0";
+      unpackagedSubject = "packages.wasix.default.unpackaged";
+      unpackagedArtifacts = {};
       nonDerivationFails = true;
       duplicateTestFails = true;
       duplicateCommandFails = true;
@@ -910,11 +1015,12 @@ in {
       historyArtifact = wasmerProject.artifacts.webc.core.versions."0.9".name;
       servedVersions = wasmerProject.artifacts.pkg.core.passthru.servedVersions;
       commands = lib.attrNames wasmerProject.commands;
+      packageCommands = lib.attrNames wasmerProject.packages.wasix.default.explicit.commands;
       autoCommand = wasmerProject.packages.wasix.default.auto.artifacts.webc.commands.auto.entrypoint;
       explicitCommand = wasmerProject.commands.second.entrypoint;
       historyCommands = lib.attrNames wasmerProject.artifacts.webc.core.versions."0.9".commands;
       relativeDependencyCommand = wasmerProject.packages.wasix.default.explicit.artifacts.webc.commands.dependency.name;
-      dependencyIsNotGlobal = !(wasmerProject.commands ? dependency);
+      localCommandsAreNotGlobal = !(wasmerProject.commands ? dependency) && !(wasmerProject.commands ? local);
       commandAddresses = builtins.filter (name: lib.hasPrefix "commands." name) (lib.attrNames wasmerProject.catalog.entries);
       dataCommands = wasmerProject.packages.wasix.default.data.artifacts.webc.commands;
       unshippedArtifacts = wasmerProject.packages.wasix.default.unshipped.artifacts;
@@ -931,17 +1037,19 @@ in {
       historyArtifact = "webc-core-0.9";
       servedVersions = ["core" "0.9"];
       commands = ["auto" "core" "first" "second"];
+      packageCommands = ["dependency" "first" "local" "second"];
       autoCommand = "launch";
       explicitCommand = "second";
       historyCommands = ["core"];
       relativeDependencyCommand = "dependency";
-      dependencyIsNotGlobal = true;
+      localCommandsAreNotGlobal = true;
       commandAddresses = [
         "commands.auto"
         "commands.core"
         ''commands.core.versions."0.9"''
         "commands.dependency.from.explicit"
         "commands.first"
+        "commands.local.from.explicit"
         "commands.second"
       ];
       dataCommands = {};
@@ -957,7 +1065,7 @@ in {
 
   structuredProject = {
     expr = {
-      schemaVersion = project.schemaVersion;
+      inherit (project) schemaVersion;
       nativeNames = lib.attrNames project.packages.native;
       nativeInterfaceName = project.packages.native.core.profiles.default.package.name;
       defaultNames = lib.attrNames project.packages.wasix.default;
@@ -1000,6 +1108,8 @@ in {
       selectorsCoverJobs =
         lib.sort builtins.lessThan (lib.unique (lib.concatLists (lib.attrValues project.ci.catalog.selectors.sets)))
         == lib.sort builtins.lessThan (lib.attrNames project.ci.jobs);
+      ciPackageIsRaw = !(project.ci.jobs."packages.wasix.default.consumer" ? artifacts);
+      ciArtifactIsRaw = !(project.ci.jobs."artifacts.bundle.consumer" ? tests);
       brokenCiAbsent = !(builtins.hasAttr "packages.wasix.default.broken" project.ci.jobs);
       testNames = lib.attrNames project.tests;
       testSubject = project.ci.catalog.jobs."tests.packages.wasix.default.consumer.probe".subject;
@@ -1032,6 +1142,7 @@ in {
       invalidCiProfileFails = !(force invalidCiProfileProject.ci).success;
       invalidNativeInterfaceFails = !(force invalidNativeInterfaceProject).success;
       emptyProjectSource = emptyProject.packages.native.core.passthru.wasinix.source;
+      perProjectRule = emptyProject.tests."tests.packages.wasix.default.core.per-project".name;
       projectTestName = projectTestProject.tests."tests.project.format".name;
       projectTestSerializable = !(projectTestProject.ci.catalog.jobs."tests.project.format" ? check);
     };
@@ -1070,6 +1181,8 @@ in {
       artifactTestSubject = "artifacts.bundle.consumer";
       historyTags = ["history-tests"];
       historyTestTags = ["history-tests"];
+      ciPackageIsRaw = true;
+      ciArtifactIsRaw = true;
       ciSources = ["consumer"];
       ciJobNames = [
         "artifacts.bundle.consumer"
@@ -1178,6 +1291,7 @@ in {
       invalidCiProfileFails = true;
       invalidNativeInterfaceFails = true;
       emptyProjectSource = "empty";
+      perProjectRule = "per-project";
       projectTestName = "format";
       projectTestSerializable = true;
     };

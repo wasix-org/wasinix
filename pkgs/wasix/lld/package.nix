@@ -10,9 +10,9 @@ exposePackage (
     wasixLlvm = packages.sameProfile.wasix-llvm.passthru;
     libllvm = packages.sameProfile.llvm.passthru.wasix.libllvm;
     base = packages.sameProfile.llvmPackages.lld.override {
-      version = wasixLlvm.version;
+      inherit (wasixLlvm) version;
       release_version = wasixLlvm.llvmVersion;
-      monorepoSrc = wasixLlvm.monorepoSrc;
+      inherit (wasixLlvm) monorepoSrc;
       inherit libllvm;
     };
   in

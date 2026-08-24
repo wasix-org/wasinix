@@ -10,7 +10,7 @@
   pkgs,
 }: let
   names = ["opencv-python" "opencv-python-headless"];
-in let
+
   module = packages.sameProfile.opencv4;
   inherit (module) version;
   py = packages.sameProfile.python;

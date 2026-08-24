@@ -2,6 +2,6 @@
 # the floor opens the unix backend to the wasm family. That backend uses cfg-if,
 # which upstream declares only for unix and windows, so the manifest edit rides
 # along; without it the extern crate resolves to the sysroot's private copy.
-{...}: {
+_: {
   edited = [">=0.8.9"];
 }

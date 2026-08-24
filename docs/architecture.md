@@ -6,10 +6,10 @@ consumers and extensions; this page explains how Wasinix itself uses it.
 
 ## Toolchains and package sets
 
-`pkgs/profiles.nix` is the ABI profile inventory. `mkProject` imports one native
-nixpkgs set and one cross set per profile, applying registered overlays in the
-same order to every applicable set. `pkgs/toolchain/` constructs the
-profile-specific interfaces used by those sets.
+`pkgs/project/profiles.nix` is the ABI profile inventory. `mkProject` imports
+one native nixpkgs set and one cross set per profile, applying registered
+overlays in the same order to every applicable set. `pkgs/toolchain/` constructs
+the profile-specific interfaces used by those sets.
 
 Each profile is a complete nixpkgs package set. Overriding a dependency there
 therefore affects everything in that profile that consumes it. The language
@@ -22,8 +22,8 @@ details live in:
 
 ## Package lanes
 
-The built-in `wasinix` extension is defined in `pkgs/extension.nix`. Its overlay
-lanes are discovered by `loadPackageOverlays`:
+The built-in `wasinix` extension is defined in `pkgs/project/extension.nix`. Its
+overlay lanes are discovered by `loadPackageOverlays`:
 
 - `shared` applies to native and WASIX sets;
 - `native` applies only to the native set;
@@ -31,13 +31,13 @@ lanes are discovered by `loadPackageOverlays`:
 - `python` applies to each supported Python package fixpoint.
 
 `pkgs/shared/<name>/recipe.nix` is the shared recipe for a package built both
-natively and with a WASIX host; its sibling `package.nix` exposes it as a
-cataloged package. The same recipe receives the appropriate `stdenv`,
-`rustPlatform`, and dependency splice from its scope.
+natively and with a WASIX host. Recipe units are cataloged automatically and
+receive the appropriate `stdenv`, `rustPlatform`, and dependency splice from its
+scope.
 
-Buildable compiler and sysroot recipes use the same pair under `pkgs/native/`.
-Their recipe overlay remains available to cross-set build stages, while only the
-native instance is a package-unit catalog entry.
+Buildable compiler and sysroot recipes use the same form under `pkgs/native/`.
+Their generated overlay remains available to cross-set build stages, while only
+the native application is registered in the catalog.
 
 WASIX-specific policy lives in `pkgs/wasix/`: patches, flags, runtime
 dependencies, Wasm command names, WebC configuration, and tests. A unit normally
@@ -79,7 +79,7 @@ alternate catalog addresses, not duplicate builds.
 ## Flake outputs
 
 - `packages.<system>`: convenient development outputs
-- `checks.<system>`: the structured project's tests plus repository checks
+- `checks.<system>`: formatting, Nix linters, and project-API evaluation tests
 - `legacyPackages.<system>`: the complete structured project
 
 The project exposes `schemaVersion`, `packages`, `artifacts`, `commands`,
@@ -110,6 +110,10 @@ need. One owned background worker realises that set as a batch while command
 setup continues. First use waits for the same result; command exit cancels and
 reaps unfinished speculation, and an unused prewarm failure does not change the
 command result.
+
+Package, artifact, and runtime tests live in the structured project's `tests`
+and `ci` views, not in the flake `checks` output. This keeps `nix flake check` a
+source-only preflight while `wasinix build` remains the one build orchestrator.
 
 CA derivations are not used because caches cannot reliably distribute or
 authenticate realisations

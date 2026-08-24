@@ -4,10 +4,9 @@
   helpers,
   packages,
 }: let
-  lib = pkgs.lib;
+  inherit (pkgs) lib;
 in
   helpers.forEachPython packages.preferred ({
-    python,
     pythonCommands,
     pyVer,
     tag,

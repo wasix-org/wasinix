@@ -66,11 +66,13 @@
       (mkShimBin "clang" "wasixcc")
       (mkShimBin "clang++" "wasix++")
     ];
-    passthru.hardeningUnsupportedFlags = ["zerocallusedregs" "stackclashprotection"];
-    passthru.isClang = true;
-    # cc-wrapper injects -nostdlibinc for a clang cc, hiding the sysroot includes;
-    # its isROCm branch is the one that suppresses that.
-    passthru.isROCm = true;
+    passthru = {
+      hardeningUnsupportedFlags = ["zerocallusedregs" "stackclashprotection"];
+      isClang = true;
+      # cc-wrapper injects -nostdlibinc for a clang cc, hiding the sysroot
+      # includes; its isROCm branch is the one that suppresses that.
+      isROCm = true;
+    };
   };
 
   wasixBintools = baseStdenv.cc.bintools.override {
@@ -110,7 +112,7 @@
     '');
 in
   # Every declared suite gets a check output holding its test tree, allowing
-  # emulated-check.nix to run it without putting wasmer in the build closure.
+  # checks/emulated.nix to run it without putting wasmer in the build closure.
   buildPackages.stdenvAdapters.overrideMkDerivationArgs checkOutputArgs
   (baseStdenv.override (_old: {
     cc = wasixCC;

@@ -9,9 +9,7 @@
 #
 # PIC profiles only: a shared library needs -fPIC.
 {
-  lib,
   stdenvNoCC,
-  wasmer,
   toolchain,
 }:
 stdenvNoCC.mkDerivation {

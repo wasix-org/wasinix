@@ -12,7 +12,7 @@
   inherit (packages.sameProfile) lib;
   patchedSrc = packages.sameProfile.buildPackages.applyPatches {
     name = "duckdb-source-wasi-${package.version}";
-    src = package.src;
+    inherit (package) src;
     patches =
       [
         ./patches/duckdb-wasi-no-file-lock.patch

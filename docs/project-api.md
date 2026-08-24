@@ -196,7 +196,8 @@ The Wasinix extension uses the same helper. Its package area follows this shape:
 
 ```text
 pkgs/
-├── extension.nix
+├── project/
+│   └── extension.nix
 ├── shared/
 ├── native/
 ├── wasix/
@@ -214,10 +215,12 @@ toolchain or shipped do not determine file placement. Toolchain profile
 integration remains under `toolchain/`; buildable compiler and sysroot packages
 live in the package lane matching where they are instantiated.
 
-Discovery is shallow. A lane contains either `<name>.nix` or
-`<name>/package.nix`. Other files and directories are ignored. A directory form
-co-locates patches, package-specific checks, and other inputs with the unit that
-uses them.
+Discovery is shallow. A lane contains `<name>.nix`, `<name>/package.nix`, or a
+normal nixpkgs-style `<name>/recipe.nix`. A directory cannot contain both unit
+files. Other files and directories are ignored. The directory co-locates
+patches, package-specific checks, and other inputs with the package that uses
+them. Top-level `pkgs/` contains directories only; infrastructure files live in
+the directory owning their concern.
 
 The loader performs only these jobs:
 
@@ -230,11 +233,31 @@ The loader performs only these jobs:
 It does not construct history, attach tests, derive support policy, discover
 extensions, or maintain a parallel package-name list.
 
-### Package units
+### Recipes and package units
 
-Every package unit returns an attrset of derivations. For the common
-single-package case, `exposePackage` and `exposeExtendedPackage` use the file or
-directory name as that attribute without repeating it in the recipe:
+A `recipe.nix` is called through the package set's `callPackage` and cataloged
+under its directory name. It returns the derivation directly and may carry all
+Wasinix policy in `passthru.wasinix`. Applying the generated recipe overlay as
+unregistered package-set plumbing does not catalog it; catalog membership
+belongs to overlay registration rather than the derivation.
+
+```nix
+# shared/my-tool/recipe.nix
+{
+  lib,
+  rustPlatform,
+  fetchFromGitHub,
+}:
+rustPlatform.buildRustPackage {
+  pname = "my-tool";
+  # ...
+}
+```
+
+`package.nix` and flat package units adapt an existing package or define a
+multi-package result. Every package unit returns an attrset of derivations. For
+the common single-package adaptation, `exposePackage` and
+`exposeExtendedPackage` use the file or directory name as that attribute:
 
 ```nix
 # wasix/zlib.nix
@@ -301,17 +324,6 @@ directly, `buildHostPypaTools` and `dropSphinxDocs` cover common Python build
 adaptations, and `wasmRename` normalizes command filenames before WebC
 projection.
 
-A new package can retain a normal nixpkgs recipe:
-
-```nix
-# shared/my-tool/package.nix
-{
-  exposePackage,
-  packages,
-}:
-exposePackage (packages.sameProfile.callPackage ./recipe.nix {})
-```
-
 A unit that genuinely owns several attributes returns an attrset of derivations:
 
 ```nix
@@ -358,10 +370,10 @@ from filename ordering.
 
 ## Profiles, packages, and toolchains
 
-`pkgs/profiles.nix` remains the canonical WASIX profile inventory. `mkProject`
-constructs every profile. Packages declare their supported profiles and an
-optional preferred profile; the project constructor does not carry a second
-profile selection mechanism.
+`pkgs/project/profiles.nix` remains the canonical WASIX profile inventory.
+`mkProject` constructs every profile. Packages declare their supported profiles
+and an optional preferred profile; the project constructor does not carry a
+second profile selection mechanism.
 
 LLVM, Rust, wasixcc, sysroots, cargo-registry, anybuild, and similar buildable
 values are packages and may be used directly in development shells. Their
@@ -860,8 +872,8 @@ introduces them:
 - `ci.jobs` and `ci.catalog.jobs` have identical keys;
 - every serialized catalog carries the project schema version.
 
-The directory loader derives names and values from the unit's returned attrset.
-Its eval-only tests must cover a singleton package depending on the immediate
-recursive set, a multi-package unit, and rejection of a bare derivation. This
-pins the lazy result shape that prevents package-name discovery from collapsing
-the Nix fixpoint.
+The directory loader derives package-unit names and values from their returned
+attrsets and recipe names from their directories. Its eval-only tests must cover
+a normal recipe, a singleton package unit depending on the immediate recursive
+set, a multi-package unit, rejection of a bare package-unit derivation, and the
+absence of loose files at the top of `pkgs/`.

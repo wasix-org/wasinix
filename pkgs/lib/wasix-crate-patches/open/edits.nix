@@ -2,6 +2,6 @@
 # platform it has no launcher for. The floor adds a wasi arm shaped like the
 # redox one: there is no desktop under wasmer, so the spawn fails at runtime
 # with the launcher missing rather than failing the build.
-{...}: {
+_: {
   edited = [">=5.4.0"];
 }

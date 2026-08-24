@@ -1,10 +1,8 @@
 # The wasix-org LLVM fork (clang/lld/llvm), built via nixpkgs' llvmPackages with
 # the fork source swapped in. Built once on the host x86_64; it is both the
 # shipped toolchain and the compiler that builds the sysroot runtimes.
-{
-  pkgs,
-  nix-update-script,
-}: let
+{pkgs}: let
+  inherit (pkgs.buildPackages) nix-update-script;
   version = "21.1.206"; # fork release: base 21.1.2 plus a 2-digit counter
   # The base is the release minus the counter. Lenient (echoes strings it
   # cannot parse) so the update-note predicate below never throws on old

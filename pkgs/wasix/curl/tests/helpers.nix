@@ -1,4 +1,4 @@
-{pkgs}: rec {
+{pkgs}: {
   # Plain HTTP server on port 8765.
   # Serves docroot/hello.txt, docroot/echo.cgi (echoes body), docroot/redirect.cgi (301→/hello.txt).
   startHttpServer = ''

@@ -240,7 +240,7 @@
             passthru =
               (old.passthru or {})
               // {
-                wasinix = builtins.removeAttrs ((old.passthru or {}).wasinix or {}) machineMetadata;
+                wasinix = removeAttrs ((old.passthru or {}).wasinix or {}) machineMetadata;
               };
           });
     };
@@ -291,20 +291,37 @@
         inherit name;
         directory = null;
         file = dir + "/${name}.nix";
+        kind = "package";
       })
       (lib.filter (name: name != "default" && name != "history")
         (map (lib.removeSuffix ".nix")
           (lib.attrNames (lib.filterAttrs (name: type: type == "regular" && lib.hasSuffix ".nix" name) entries))));
-    directories =
-      map (name: {
+    directoryNames = lib.attrNames (lib.filterAttrs (_: type: type == "directory") entries);
+    conflicts = lib.filter (name:
+      builtins.pathExists (dir + "/${name}/package.nix")
+      && builtins.pathExists (dir + "/${name}/recipe.nix"))
+    directoryNames;
+    directories = lib.concatMap (name: let
+      packageFile = dir + "/${name}/package.nix";
+      recipeFile = dir + "/${name}/recipe.nix";
+    in
+      lib.optional (builtins.pathExists packageFile || builtins.pathExists recipeFile) {
         inherit name;
         directory = dir + "/${name}";
-        file = dir + "/${name}/package.nix";
+        file =
+          if builtins.pathExists packageFile
+          then packageFile
+          else recipeFile;
+        kind =
+          if builtins.pathExists packageFile
+          then "package"
+          else "recipe";
       })
-      (lib.filter (name: builtins.pathExists (dir + "/${name}/package.nix"))
-        (lib.attrNames (lib.filterAttrs (_: type: type == "directory") entries)));
+    directoryNames;
   in
-    files ++ directories;
+    lib.throwIf (conflicts != [])
+    "package directory ${toString dir} contains both package.nix and recipe.nix for: ${lib.concatStringsSep ", " conflicts}"
+    (files ++ directories);
 
   mergeDisjoint = state: unit: let
     duplicate = lib.intersectLists (lib.attrNames state) (lib.attrNames unit);
@@ -417,7 +434,7 @@
             (old.passthru or {})
             // {
               wasinix =
-                builtins.removeAttrs metadata machineMetadata
+                removeAttrs metadata machineMetadata
                 // {
                   inherit source lineage instance;
                   inherit definition;
@@ -437,8 +454,9 @@ in rec {
     dir,
     extendPackageFor ? extendPackage,
     expose ? [],
+    recipesOnly ? false,
   }: final: prev: let
-    instantiate = unit: final': prev': let
+    instantiatePackage = unit: final': prev': let
       formals = builtins.functionArgs (import unit.file);
       requestsPrevious = formals ? package || formals ? exposeExtendedPackage;
       previousAvailable = builtins.hasAttr unit.name prev';
@@ -458,9 +476,17 @@ in rec {
         previousRegistered = builtins.hasAttr unit.name (prev'.${registryAttr} or {});
         previousSet = prev';
       };
-    units = discoverUnits dir;
+    instantiateRecipe = unit: final': _prev': {
+      ${unit.name} = final'.callPackage unit.file {};
+    };
+    instantiate = unit:
+      if unit.kind == "recipe"
+      then instantiateRecipe unit
+      else instantiatePackage unit;
+    units = lib.filter (unit: !recipesOnly || unit.kind == "recipe") (discoverUnits dir);
     results =
       map (unit: {
+        inherit (unit) kind;
         definition = {
           inherit (unit) directory file;
         };
@@ -469,7 +495,8 @@ in rec {
       })
       units;
     packages = builtins.foldl' mergeDisjoint {} (map (item: item.result) results);
-    inheritedNames = lib.subtractLists (lib.attrNames packages) expose;
+    recipeNames = lib.concatMap (item: lib.optionals (item.kind == "recipe") (lib.attrNames item.result)) results;
+    inheritedNames = lib.subtractLists (lib.attrNames packages) (expose ++ recipeNames);
     missingInherited = lib.filter (name: !(builtins.hasAttr name prev)) inheritedNames;
     inherited = lib.genAttrs inheritedNames (name: prev.${name});
     unitOverlays = builtins.foldl' (state: item:
@@ -483,6 +510,11 @@ in rec {
     lib.throwIf (missingInherited != [])
     "package directory ${toString dir} exposes missing preceding package(s): ${lib.concatStringsSep ", " missingInherited}"
     (inherited // packages // {${unitOverlaysAttr} = unitOverlays;});
+
+  loadRecipeOverlay = args: final: prev:
+    removeAttrs
+    (loadPackageOverlay (args // {recipesOnly = true;}) final prev)
+    [unitOverlaysAttr];
 
   registerOverlay = {
     definition ? null,
@@ -498,9 +530,9 @@ in rec {
     (final: prev: let
       result = overlay final prev;
       unitOverlays = result.${unitOverlaysAttr} or {};
-      visibleResult = builtins.removeAttrs result [unitOverlaysAttr];
+      visibleResult = removeAttrs result [unitOverlaysAttr];
       reserved = lib.intersectLists (lib.attrNames result) [registryAttr extensionContextsAttr];
-      names = builtins.removeAttrs (lib.genAttrs (lib.attrNames visibleResult) (_: source)) [registryAttr extensionContextsAttr];
+      names = removeAttrs (lib.genAttrs (lib.attrNames visibleResult) (_: source)) [registryAttr extensionContextsAttr];
       stamped =
         lib.mapAttrs (
           name: value:

@@ -11,7 +11,7 @@
   flang = wasix-flang;
   inherit (pkgs) lib;
   # One sysroot variant per profile, encoded {eh, pic, exnref}; PIC needs EH.
-  profilesCfg = import ../../profiles.nix;
+  profilesCfg = import ../../project/profiles.nix;
 
   # The pin lives in libc.nix next to the witx pins; the per-variant libc drvs
   # share it as their src.

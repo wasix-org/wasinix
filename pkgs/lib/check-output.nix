@@ -1,6 +1,6 @@
 # The `check` output: the package's own build captures its test tree where
 # checkPhase would have run, so the suite compiles once and wasmer stays out
-# of the build closure. pkgs/emulated-check.nix restores and runs it; see
+# of the build closure. pkgs/checks/emulated.nix restores and runs it; see
 # docs/architecture.md.
 {
   lib,
@@ -104,9 +104,6 @@
       "check-output requires a native reference scanner and zstd"; ''
         if [ -z "''${check:-}" ]; then
           echo "no check output on this derivation; skipping the test snapshot"
-        elif [ -n "''${wasixCheckIsCSuite:-}" ] && [ -z "''${doCheck:-}" ]; then
-          echo "checks are disabled on this derivation; skipping the test snapshot"
-          mkdir -p "$check"
         else
           mkdir -p "$check"
           if (

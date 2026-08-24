@@ -6,7 +6,7 @@
 {rewriters, ...}: {
   edited = ["*"];
   notMinted = "git-sourced via ddtrace (DataDog/libdatadog), not crates.io";
-  forVersion = {...}: {
+  forVersion = _: {
     patchPhase = ''
       if [ -f src/threading.rs ]; then
         patch -p1 < ${./thread-id.patch}

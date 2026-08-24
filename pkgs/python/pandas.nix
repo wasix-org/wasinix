@@ -5,7 +5,6 @@
   exposeExtendedPackage,
   packages,
   package,
-  pkgs,
   lib,
 }: let
   crossNumpyInc = "${packages.sameProfile.numpy}/lib/${packages.sameProfile.python.libPrefix}/site-packages/numpy/_core/include";

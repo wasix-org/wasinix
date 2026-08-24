@@ -10,9 +10,11 @@
   crossNumpyInc = packages.sameProfile.numpy.crossInclude;
 in
   exposeExtendedPackage {
-    env.HDF5_VERSION = pkgs.hdf5.version;
-    env.H5PY_ROS3 = "0";
-    env.H5PY_DIRECT_VFD = "0";
+    env = {
+      HDF5_VERSION = pkgs.hdf5.version;
+      H5PY_ROS3 = "0";
+      H5PY_DIRECT_VFD = "0";
+    };
     buildInputs = [pkgs.zlib pkgs.libaec];
     passthru.wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook];
     # nixpkgs' `cd $out` targets the installed tree. The run-only check has a

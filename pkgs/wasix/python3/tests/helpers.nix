@@ -1,5 +1,5 @@
 {pkgs}: let
-  lib = pkgs.lib;
+  inherit (pkgs) lib;
 in {
   # Instantiate a test set once per shipped interpreter: the default WebC
   # (unsuffixed attrs) and Python 3.13 ("-313").
@@ -12,12 +12,12 @@ in {
       tag,
     }:
       lib.mapAttrs' (n: lib.nameValuePair (n + lib.optionalString (tag != "") "-${tag}"))
-      (f {
+      (f (builtins.intersectAttrs (builtins.functionArgs f) {
         inherit tag;
         pyVer = lib.versions.majorMinor package.version;
         python = package.artifacts.webc.shim;
         pythonCommands = builtins.attrValues package.artifacts.webc.commands;
-      });
+      }));
   in
     instantiate {
       package = preferredPackages.python314;

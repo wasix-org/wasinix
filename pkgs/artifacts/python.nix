@@ -126,7 +126,7 @@ in {
       publishOnce = map (entry': entry'.attr) (lib.filter (entry': entry'.publishOnce or false) wheelList);
       registry = mkPythonRegistry {
         python3 = packageSets.preferred.python314;
-        pythonWebc = entry.artifact;
+        pythonWebc = entry.artifact.shim;
         pythonSets = {
           py313 = {
             python3 = packageSets.preferred.python313;

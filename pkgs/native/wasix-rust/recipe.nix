@@ -18,7 +18,6 @@
   fetchurl,
   runCommand,
   rustPlatform,
-  nix-update-script,
   autoPatchelfHook,
   # x.py/cargo need a writable HOME.
   writableTmpDirAsHomeHook,
@@ -46,6 +45,7 @@
   # the resulting stage-2 compiler and its LLVM backend are WASIX modules.
   hostedOnWasix ? false,
 }: let
+  inherit (buildPackages) nix-update-script;
   inherit (lib) optionals optionalString;
   wasixLlvm = wasix-llvm;
   updateWrapper = buildPackages.writeShellApplication {

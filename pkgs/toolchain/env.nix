@@ -1,6 +1,6 @@
 # The WASIXCC_* environment as data, shared by every consumer that drives wasixcc.
 # Render with `exportsOf` (shell exports) or `makeWrapperFlagsOf` (--set flags).
-{lib}: rec {
+{lib}: {
   # Install dirs, NOT bin/: wasixcc appends bin/<tool> itself (src/args.rs).
   locationEnv = {
     wasixLlvm,

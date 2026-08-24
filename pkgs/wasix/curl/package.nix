@@ -5,7 +5,6 @@
 {
   exposePackage,
   extendPackage,
-  package,
   packages,
   wasmRename,
 }:

@@ -11,8 +11,8 @@
 
   firstChangelog = derivations:
     lib.findFirst (value: value != null) null
-    (map (derivation: let
-      attempted = builtins.tryEval (derivation.meta.changelog or null);
+    (map (drv: let
+      attempted = builtins.tryEval (drv.meta.changelog or null);
     in
       if attempted.success
       then attempted.value
@@ -21,7 +21,7 @@
   informationFor = {
     kind,
     versionOf,
-    changelogOf ? (derivation: derivation),
+    changelogOf ? (drv: drv),
     derivations,
   }: {
     versions = lib.unique (map versionOf derivations);
@@ -30,7 +30,7 @@
       lib.mapAttrs (_: values: firstChangelog (map changelogOf values))
       (lib.groupBy versionOf derivations);
     derivations = lib.mapAttrs (_: values:
-      map (derivation: builtins.unsafeDiscardStringContext derivation.drvPath) values)
+      map (drv: builtins.unsafeDiscardStringContext drv.drvPath) values)
     (lib.groupBy versionOf derivations);
   };
   wheelDerivations = name:
@@ -39,21 +39,21 @@
   wheelInfo = lib.mapAttrs' (name: _:
     lib.nameValuePair "artifacts.registry.python.wheels.${name}" (informationFor {
       kind = "wheel";
-      versionOf = derivation: derivation.version;
+      versionOf = drv: drv.version;
       derivations = wheelDerivations name;
     }))
   registry.wheelVersions;
   webcInfo = lib.mapAttrs' (name: package:
     lib.nameValuePair "artifacts.webc.${name}" (informationFor {
       kind = "webc";
-      versionOf = derivation: derivation.id.baseVersion;
+      versionOf = drv: drv.id.baseVersion;
       derivations = [package] ++ builtins.attrValues (package.versions or {});
     }))
   project.artifacts.pkg;
   cargoInfo = lib.mapAttrs' (name: _:
     lib.nameValuePair "artifacts.registry.cargo-registry.crates.${name}" (informationFor {
       kind = "crate";
-      versionOf = derivation: derivation.passthru.version;
+      versionOf = drv: drv.passthru.version;
       derivations = builtins.attrValues (cargoRegistryArtifact.crates.${name} or {});
     }))
   cargoRegistryArtifact.crateVersions;

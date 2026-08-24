@@ -8,7 +8,7 @@
   helpers,
   wasixRun,
 }: let
-  xverdict = import ./lib/xverdict.nix;
+  xverdict = import ../lib/xverdict.nix;
 
   runVerdict = name: spec: cmd: let
     timeout = spec.timeout or 1800;
@@ -83,9 +83,7 @@
             MAIN
 
             archives=$(${
-              if spec ? archives
-              then spec.archives
-              else ''find -L ${lib.getLib drv} ${lib.getDev drv} -name '*.a' 2>/dev/null | xargs -r -n1 realpath | sort -u''
+              spec.archives or ''find -L ${lib.getLib drv} ${lib.getDev drv} -name '*.a' 2>/dev/null | xargs -r -n1 realpath | sort -u''
             })
             [ -n "$archives" ] || { echo "no static archives found for ${name}"; exit 1; }
 

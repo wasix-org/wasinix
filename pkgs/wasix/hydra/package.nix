@@ -140,26 +140,31 @@ exposePackage (
       nativeBuildInputs = with packages.sameProfile.buildPackages; [cmake unzip];
       # The perl modules are XS, so they load through dlopen like perl itself, and
       # apr's DSO check wants the same dlfcn.h.
-      passthru.wasix.supportedProfiles = profileSets.pic;
-      passthru.wasinix.shipped = true;
-      passthru.wasmer.selfMounts = runtimeTools;
-      passthru.wasmer.version = v: let
-        d = builtins.match ".*-unstable-([0-9]{4})-([0-9]{2})-([0-9]{2})" v;
-      in
-        assert packages.sameProfile.lib.assertMsg (d != null) "hydra: version ${v} is not <ver>-unstable-YYYY-MM-DD"; "0.0.${packages.sameProfile.lib.concatStrings d}";
-      # The compiled daemons keep their plain names (the perl scripts exec them),
-      # so name them rather than leaving the bin/*.wasm glob to find nothing.
-      passthru.wasmer.commands = [
-        {
-          name = "hydra-evaluator";
-          wasm = "hydra-evaluator";
-          output = "hydra-evaluator.wasm";
-        }
-        {
-          name = "hydra-queue-runner";
-          wasm = "hydra-queue-runner";
-          output = "hydra-queue-runner.wasm";
-        }
-      ];
+      passthru = {
+        wasix.supportedProfiles = profileSets.pic;
+        wasinix.shipped = true;
+        wasmer = {
+          selfMounts = runtimeTools;
+          version = v: let
+            d = builtins.match ".*-unstable-([0-9]{4})-([0-9]{2})-([0-9]{2})" v;
+          in
+            assert packages.sameProfile.lib.assertMsg (d != null) "hydra: version ${v} is not <ver>-unstable-YYYY-MM-DD"; "0.0.${packages.sameProfile.lib.concatStrings d}";
+          # The compiled daemons keep their plain names (the perl scripts exec
+          # them), so name them rather than leaving the bin/*.wasm glob to find
+          # nothing.
+          commands = [
+            {
+              name = "hydra-evaluator";
+              wasm = "hydra-evaluator";
+              output = "hydra-evaluator.wasm";
+            }
+            {
+              name = "hydra-queue-runner";
+              wasm = "hydra-queue-runner";
+              output = "hydra-queue-runner.wasm";
+            }
+          ];
+        };
+      };
     }
 )

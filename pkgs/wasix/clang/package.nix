@@ -11,9 +11,9 @@ exposePackage (
   let
     wasixLlvm = packages.sameProfile.wasix-llvm.passthru;
     major = packages.sameProfile.lib.versions.major wasixLlvm.llvmVersion;
-    monorepoSrc = wasixLlvm.monorepoSrc;
+    inherit (wasixLlvm) monorepoSrc;
     base = packages.sameProfile.llvmPackages.clang-unwrapped.override {
-      version = wasixLlvm.version;
+      inherit (wasixLlvm) version;
       release_version = wasixLlvm.llvmVersion;
       inherit monorepoSrc;
       libllvm = packages.sameProfile.llvm.passthru.wasix.libllvm;

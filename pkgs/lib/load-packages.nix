@@ -31,7 +31,6 @@
   historyFrom ? "prev",
 }: let
   historyLib = import ../project/history.nix {inherit lib;};
-  inherit (historyLib) historyMeta;
   entries = builtins.readDir dir;
   historyUnder = v: lib.replaceStrings ["."] ["_"] v;
   historyNames = lib.concatLists (lib.mapAttrsToList
@@ -120,7 +119,7 @@ in {
       if u != null && !(isMulti u.entry)
       then {
         fn = u.entry;
-        file = u.file;
+        inherit (u) file;
       }
       else if u != null
       then throw "load-packages: history for '${name}' is a version family, which nixpkgs already carries at several versions; ship those attrs instead"
@@ -142,7 +141,7 @@ in {
         definition =
           if s.file == null
           then null
-          else {file = s.file;};
+          else {inherit (s) file;};
         label = "load-packages: '${name}' ${version}";
         spec = spec0;
       };

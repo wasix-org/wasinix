@@ -12,9 +12,8 @@
   exposeExtendedPackage,
   package,
   pkgs,
-  lib,
 }: let
-  lib = pkgs.lib;
+  inherit (pkgs) lib;
   # nixpkgs' patches target the release nixpkgs packages (right now the argon2
   # and scrypt test files); on a rebased history version they mis-apply, and
   # tests don't run cross anyway. Keyed on the history spec rather than a

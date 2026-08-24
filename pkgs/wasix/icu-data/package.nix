@@ -22,16 +22,20 @@
         license = lib.licenses.icu;
         platforms = lib.platforms.all;
       };
-      passthru.wasinix.shipped = true;
-      # No auto-retention: each icu major is already a first-class attr
-      # (icu-data${v}), so a pinned major stays served without minting a
-      # history entry when the default alias crosses a major.
-      passthru.wasinix.retention = "none";
-      passthru.wasmer = {
-        commands = [];
-        # This data-only WebC has no command; its behavior test mounts the
-        # archive into a generated ICU consumer.
-        fs."/share/icu/${icu.version}" = "${data}/share/icu/${icu.version}";
+      passthru = {
+        wasinix = {
+          shipped = true;
+          # No auto-retention: each icu major is already a first-class attr
+          # (icu-data${v}), so a pinned major stays served without minting a
+          # history entry when the default alias crosses a major.
+          retention = "none";
+        };
+        wasmer = {
+          commands = [];
+          # This data-only WebC has no command; its behavior test mounts the
+          # archive into a generated ICU consumer.
+          fs."/share/icu/${icu.version}" = "${data}/share/icu/${icu.version}";
+        };
       };
     };
   in

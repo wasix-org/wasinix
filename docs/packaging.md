@@ -5,12 +5,11 @@ keeping older versions rebuildable, is `docs/registry.md`.
 
 ## A package provided natively and for WASIX
 
-Put its standard nixpkgs-style recipe in `pkgs/shared/<name>/recipe.nix` and its
-package-unit wrapper in the sibling `package.nix`. The directory is enumerated
-automatically and the recipe is called in both the native package set and every
-WASIX profile set. Use ordinary function arguments such as `stdenv`,
-`rustPlatform`, and named dependencies; do not take a native build from a cross
-set's `buildPackages`.
+Put its standard nixpkgs-style recipe in `pkgs/shared/<name>/recipe.nix`. The
+directory is enumerated automatically and the recipe is called in both the
+native package set and every WASIX profile set. Use ordinary function arguments
+such as `stdenv`, `rustPlatform`, and named dependencies; do not take a native
+build from a cross set's `buildPackages`.
 
 Put only WASIX-specific adaptation in `pkgs/wasix/<name>/package.nix`, deriving
 from the preceding shared recipe:
@@ -195,12 +194,12 @@ server setup belong in the harness's explicit host setup. For a generated
 consumer, build against `packages.sameProfile` and use
 `harnesses.packageCommand` to package the result.
 
-Every wheel also gets the guards in `pkgs/python-wheels.nix`: `import` runs the
-module on the shipped python, `self-contained` rejects a baked `/nix/store`
-path, and `deps` checks the published METADATA names only distributions the
-registry serves. The first two read the installed closure, so `deps` is what
-covers the artifact pip actually resolves; `skipTest` gates only the guards that
-import.
+Every wheel also gets the guards in `pkgs/python/wheels/project.nix`: `import`
+runs the module on the shipped python, `self-contained` rejects a baked
+`/nix/store` path, and `deps` checks the published METADATA names only
+distributions the registry serves. The first two read the installed closure, so
+`deps` is what covers the artifact pip actually resolves; `skipTest` gates only
+the guards that import.
 
 To run tests against a locally built runtime instead of the pinned one:
 `WASMER_BIN=/path/to/wasmer nix build --impure .#checks.x86_64-linux.<name>`.
@@ -208,7 +207,7 @@ To run tests against a locally built runtime instead of the pinned one:
 ### Emulated build-system checks
 
 Packages with `doCheck` capture their configured test tree and build environment
-in a compressed `check` output. `pkgs/emulated-check.nix` restores that output
+in a compressed `check` output. `pkgs/checks/emulated.nix` restores that output
 and runs the declared check phase under Wasmer, without adding the runtime to
 the package build closure. Executable wasm test programs are exposed through
 host-side wrappers so build systems can invoke them by filename.

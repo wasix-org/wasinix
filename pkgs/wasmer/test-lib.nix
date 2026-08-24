@@ -2,7 +2,7 @@
   pkgs,
   wasmer ? null,
 }: let
-  lib = pkgs.lib;
+  inherit (pkgs) lib;
   # Set WASMER_BIN=/path/to/wasmer and build with --impure to test against a local binary.
   localWasmerBin = builtins.getEnv "WASMER_BIN";
   # Set WASMER_RUST_BACKTRACE=full (with --impure) to capture a wasmer panic
@@ -73,7 +73,7 @@
     else null;
 
   # expectFail/broken markers -> onCheckPass/onCheckFail shell. Shared with the
-  # emulated build-system checks (pkgs/emulated-check.nix).
+  # emulated build-system checks (pkgs/checks/emulated.nix).
   xverdict = import ../lib/xverdict.nix;
 in rec {
   inherit defaultForwardEnv defaultTimeout defaultWasixTimeout;

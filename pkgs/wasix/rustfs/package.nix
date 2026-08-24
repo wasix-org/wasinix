@@ -35,7 +35,7 @@ exposePackage (
     # RustFS's release profile uses thin LTO and one codegen unit. On its roughly
     # 100 MB wasm this whole-program link takes hours and risks OOM.
     env = old:
-      (builtins.removeAttrs old ["SSL_CERT_FILE"])
+      (removeAttrs old ["SSL_CERT_FILE"])
       // {
         # Preserve nixpkgs' tokio_unstable setting and opt into the WASIX mio Waker.
         RUSTFLAGS = "--cfg tokio_unstable --cfg tokio_wasix_waker";

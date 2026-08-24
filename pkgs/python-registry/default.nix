@@ -1,4 +1,4 @@
-# Static PEP 503 "simple" index over the shipped wheels (pkgs/python-wheels.nix), MERGED across
+# Static PEP 503 "simple" index over the shipped wheels (pkgs/python/wheels/project.nix), MERGED across
 # python versions: each wheel carries its cp313/cp314 tag in the filename, so one index serves both
 # and a resolver picks the file matching the running interpreter.
 #
@@ -18,11 +18,11 @@
   pythonWebc,
   mkTestGroup,
 }: let
-  # The wheels carry their own release (pkgs/python-publish.nix). Revision
+  # The wheels carry their own release (pkgs/python/wheels/publication.nix). Revision
   # state is read only to report keys no served version claims.
   rels = builtins.fromJSON (builtins.readFile ../../release-revisions.json);
   relPrefix = "artifacts.registry.python.wheels.";
-  inherit (import ../python-publish.nix {inherit pkgs lib;}) publishOf interpreters;
+  inherit (import ../python/wheels/publication.nix {inherit pkgs lib;}) publishOf interpreters;
 
   # Repo-relative "path:line" of the package definition, for the index's
   # publish-time source link. Only for positions in this repo: closure wheels
@@ -46,7 +46,7 @@
   in
     map (drv: rec {
       name = drv.pname or drv.name;
-      version = drv.version;
+      inherit (drv) version;
       relKey = "${relPrefix}${name}";
       # the publishable form, produced by the wheel's own derivation. A package
       # whose build follows the interpreter is published per set instead, under
@@ -88,6 +88,11 @@
       perVersion.${pv}
   ) {} (lib.attrNames perVersion);
   wheelDists = lib.concatLists (lib.attrValues perVersion);
+  indexDists =
+    map (dist: {
+      inherit (dist) name version relKey published attr drvPath source supersedes;
+    })
+    wheelDists;
 
   # The published artifacts, addressable so the reproduce command on an index
   # page names the bytes it describes (published.py314.numpy."2.5.0").
@@ -136,7 +141,7 @@
   registry =
     pkgs.runCommand "wasix-python-registry" {
       nativeBuildInputs = [indexer];
-      distsJson = builtins.toJSON wheelDists;
+      distsJson = builtins.toJSON indexDists;
       passAsFile = ["distsJson"];
     } ''
       wasinix-python-index "$distsJsonPath" "$out"

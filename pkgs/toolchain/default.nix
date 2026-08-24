@@ -2,7 +2,7 @@
 # wrappers driving them. `haskell` is a separate wasi toolchain; see haskell/.
 {pkgs}: let
   haskell = import ./haskell {inherit pkgs;};
-  inherit (pkgs.wasix-llvm.passthru) llvm llvmVersion monorepoSrc version;
+  inherit (pkgs.wasix-llvm.passthru) llvm llvmVersion monorepoSrc;
   llvmTree = pkgs.wasix-llvm;
   llvmMonorepoSrc = monorepoSrc;
   flang = pkgs.wasix-flang;
@@ -32,20 +32,8 @@
           pic = prof.wasmPic or false;
         }
     )
-    (import ../profiles.nix).profiles;
+    (import ../project/profiles.nix).profiles;
   openmpByProfile = pkgs.lib.mapAttrs (_: v: v.openmp) variants;
-
-  crateEdits =
-    import ../lib/crate-edits.nix {
-      inherit pkgs;
-      pins = builtins.fromJSON (builtins.readFile ../cargo-registry/crates.json);
-    }
-    ../lib/wasix-crate-patches;
-  vendorPatches = import ../lib/patch-rust-vendor.nix {
-    inherit (pkgs) lib;
-    hostPkgs = pkgs;
-    inherit crateEdits;
-  };
 
   wasixLlvm = llvmTree;
   wasixSysroot = sysroot;
@@ -55,8 +43,8 @@
   wasixHostedRustToolchain = wasixRustToolchain.override {
     hostedOnWasix = true;
   };
-  binaryen = pkgs.binaryen;
-  wasixcc = pkgs.wasixcc;
+  inherit (pkgs) binaryen;
+  inherit (pkgs) wasixcc;
   cargoWasix = pkgs.cargo-wasix;
 in {
   # The WASIX Rust platform is assembled by the project factory, where its

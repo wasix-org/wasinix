@@ -22,9 +22,9 @@ exposePackage (
     });
     mlir =
       extendPackage (packages.sameProfile.llvmPackages.mlir.override {
-        version = wasixLlvm.version;
+        inherit (wasixLlvm) version;
         release_version = wasixLlvm.llvmVersion;
-        monorepoSrc = wasixLlvm.monorepoSrc;
+        inherit (wasixLlvm) monorepoSrc;
         inherit libllvm;
         devExtraCmakeFlags = ["-DUNIX=ON"];
       }) {
@@ -40,13 +40,13 @@ exposePackage (
         ];
       };
     base = packages.sameProfile.llvmPackages.flang-unwrapped.override {
-      version = wasixLlvm.version;
+      inherit (wasixLlvm) version;
       release_version = wasixLlvm.llvmVersion;
-      monorepoSrc = wasixLlvm.monorepoSrc;
+      inherit (wasixLlvm) monorepoSrc;
       # nativeBuildInputs wants a build-host compiler, but this set's buildPackages
       # still resolves clang to the cross wrapper, so cmake probes with a driver
       # whose resource root holds no builtins archive for this target.
-      clang = pkgs.clang;
+      inherit (pkgs) clang;
       inherit libllvm libclang mlir;
     };
   in
@@ -57,38 +57,42 @@ exposePackage (
         ./wasm32-pointer-width.patch
         ./wasm32-fenv.patch
       ];
-      passthru.wasix = {
-        # The driver hands codegen to a clang -cc1 command and the spawn fails with
-        # ENOEXEC under wasmer, so the frontend builds but compiles nothing. Not
-        # shipped while that holds: the webc would carry a compiler that cannot
-        # compile. Its declared clang dependency does not resolve it.
-        broken = "flang cannot spawn the clang -cc1 job its driver schedules (WASIX-TODO.md)";
-      };
-      passthru.wasinix.update.notes = [
-        {message = "drop wasm32-target.patch once upstream Flang has a WebAssembly target ABI";}
-        {message = "drop wasm32-main.patch once upstream Flang emits WASI's two-argument main entry";}
-        {message = "drop external-mlir-tblgen.patch once standalone MLIR preserves a supplied native tablegen when cross compiling";}
-        {message = "recheck standalone WASIX Flang linking when the profile-specific runtime can be selected inside a webc";}
-      ];
-      passthru.wasmer = {
-        name = "flang";
-        entrypoint = "flang";
-        commands = [
-          {
-            name = "flang";
-            module = "flang";
-            wasm = "flang.wasm";
-            output = "flang.wasm";
-            mainArgs = [
-              "--target=wasm32-wasix"
-              "--sysroot=/sysroot"
-            ];
-          }
+      passthru = {
+        wasix = {
+          # The driver hands codegen to a clang -cc1 command and the spawn fails
+          # with ENOEXEC under wasmer, so the frontend builds but compiles
+          # nothing. Not shipped while that holds: the webc would carry a
+          # compiler that cannot compile. Its declared clang dependency does not
+          # resolve it.
+          broken = "flang cannot spawn the clang -cc1 job its driver schedules (WASIX-TODO.md)";
+        };
+        wasinix.update.notes = [
+          {message = "drop wasm32-target.patch once upstream Flang has a WebAssembly target ABI";}
+          {message = "drop wasm32-main.patch once upstream Flang emits WASI's two-argument main entry";}
+          {message = "drop external-mlir-tblgen.patch once standalone MLIR preserves a supplied native tablegen when cross compiling";}
+          {message = "recheck standalone WASIX Flang linking when the profile-specific runtime can be selected inside a webc";}
         ];
-        fs."/sysroot" = packages.native."wasix-sysroot".profiles.exnrefEh.sysroot;
-        # The Fortran job is flang's own, but the driver hands codegen to a clang
-        # -cc1 command, so this needs a clang to spawn as clang needs an lld.
-        dependencies = [packages.preferred.clang];
+        wasmer = {
+          name = "flang";
+          entrypoint = "flang";
+          commands = [
+            {
+              name = "flang";
+              module = "flang";
+              wasm = "flang.wasm";
+              output = "flang.wasm";
+              mainArgs = [
+                "--target=wasm32-wasix"
+                "--sysroot=/sysroot"
+              ];
+            }
+          ];
+          fs."/sysroot" = packages.native."wasix-sysroot".profiles.exnrefEh.sysroot;
+          # The Fortran job is flang's own, but the driver hands codegen to a
+          # clang -cc1 command, so this needs a clang to spawn as clang needs an
+          # lld.
+          dependencies = [packages.preferred.clang];
+        };
       };
 
       cmakeFlags = ["-DUNIX=ON"];

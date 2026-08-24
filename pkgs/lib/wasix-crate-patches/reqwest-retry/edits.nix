@@ -3,7 +3,7 @@
 # browserWasm narrows it, as for reqwest-middleware.
 {rewriters, ...}: {
   edited = [">=0.7.0"];
-  forVersion = {...}: {
+  forVersion = _: {
     patchPhase = "${rewriters.browserWasm}";
   };
 }

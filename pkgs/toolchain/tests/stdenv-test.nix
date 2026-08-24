@@ -12,7 +12,7 @@
   wasmer,
   toolchain,
 }: let
-  stdenv = toolchain.stdenv;
+  inherit (toolchain) stdenv;
   eh = (toolchain.wasmExceptions or "no") != "no";
   expect =
     if eh

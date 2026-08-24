@@ -13,8 +13,22 @@ exposePackage (
     posixAlias = true;
   } (
     extendPackage package {
-      passthru.wasinix.shipped = true;
-      passthru.wasix.supportedProfiles = ["off"];
+      passthru = {
+        wasinix.shipped = true;
+        wasix.supportedProfiles = ["off"];
+        wasmer = {
+          entrypoint = "gawk";
+          commands = [
+            {name = "gawk";}
+            {
+              name = "awk";
+              module = "gawk";
+              wasm = "gawk.wasm";
+              output = "gawk.wasm";
+            }
+          ];
+        };
+      };
       # The bundled extensions are dlopen'd, which a static wasm build cannot do,
       # and filefuncs wants major()/minor() from a header WASIX lacks.
       configureFlags = ["--disable-extensions"];
@@ -24,16 +38,6 @@ exposePackage (
       env.NIX_LDFLAGS = "--allow-multiple-definition";
       # Git's shell subcommands run awk by its store path, so that name has to survive
       # the *.wasm rename; the versioned copy is dead weight.
-      passthru.wasmer.entrypoint = "gawk";
-      passthru.wasmer.commands = [
-        {name = "gawk";}
-        {
-          name = "awk";
-          module = "gawk";
-          wasm = "gawk.wasm";
-          output = "gawk.wasm";
-        }
-      ];
       postInstall = ''
         rm -f "$out/bin/gawk-"*
         ln -sf gawk.wasm "$out/bin/awk"

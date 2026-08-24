@@ -7,20 +7,19 @@
   exposeExtendedPackage,
   packages,
   dropSphinxDocs,
-}: let
-in
-  exposeExtendedPackage (dropSphinxDocs []
-    // {
-      # Replaces the stashed check inputs: the inherited hypothesis is the
-      # build-platform one, whose Rust _native the guest cannot import.
-      passthru = old:
-        old
-        // {
-          wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook packages.sameProfile.hypothesis];
-        };
-      # -ra: pynacl's own quiet flags hide which tests fail
-      pytestFlags = ["-ra"];
-      # libsodium's argon2/scrypt hashes come out wrong on wasm32
-      # (WASIX-TODO.md); deselected so the rest of the suite reports
-      disabledTestPaths = ["tests/test_pwhash.py"];
-    })
+}:
+exposeExtendedPackage (dropSphinxDocs []
+  // {
+    # Replaces the stashed check inputs: the inherited hypothesis is the
+    # build-platform one, whose Rust _native the guest cannot import.
+    passthru = old:
+      old
+      // {
+        wasixDeclaredCheckInputs = [packages.sameProfile.pytestCheckHook packages.sameProfile.hypothesis];
+      };
+    # -ra: pynacl's own quiet flags hide which tests fail
+    pytestFlags = ["-ra"];
+    # libsodium's argon2/scrypt hashes come out wrong on wasm32
+    # (WASIX-TODO.md); deselected so the rest of the suite reports
+    disabledTestPaths = ["tests/test_pwhash.py"];
+  })

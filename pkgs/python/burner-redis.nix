@@ -1,10 +1,7 @@
 # burner-redis builds tokio's multi-thread runtime, which tokio does not offer
 # on wasm; the current-thread scheduler is what wasix has, and the client drives
 # one runtime from python either way.
-{
-  exposeExtendedPackage,
-  lib,
-}:
+{exposeExtendedPackage}:
 exposeExtendedPackage {
   postPatch = ''
     substituteInPlace src/lib.rs \

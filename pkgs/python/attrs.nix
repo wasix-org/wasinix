@@ -5,7 +5,6 @@
   exposeExtendedPackage,
   packages,
   package,
-  pkgs,
   lib,
 }: let
   buildPy = packages.sameProfile.python.pythonOnBuildForHost;

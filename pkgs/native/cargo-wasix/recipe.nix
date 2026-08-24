@@ -5,8 +5,8 @@
 {
   lib,
   stdenvNoCC,
+  buildPackages,
   makeWrapper,
-  nix-update-script,
   rustup,
   cargo-wasix-unwrapped,
   wasix-rust,
@@ -16,6 +16,7 @@
   wasix-sysroot,
   ...
 }: let
+  inherit (buildPackages) nix-update-script;
   env = import ../../toolchain/env.nix {inherit lib;};
   cargoWasixUnwrapped = cargo-wasix-unwrapped;
   wasixRustToolchain = wasix-rust;

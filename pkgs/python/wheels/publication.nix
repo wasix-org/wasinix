@@ -10,7 +10,7 @@
   pkgs,
   lib,
 }: let
-  rels = builtins.fromJSON (builtins.readFile ../release-revisions.json);
+  rels = builtins.fromJSON (builtins.readFile ../../../release-revisions.json);
 
   interpreters = {
     py313 = "3.13";
@@ -71,7 +71,7 @@ in {
     pkgs.runCommand "${name}-${drv.version}+wasix.${toString rel}-published" {
       nativeBuildInputs = [pkgs.python3];
     } ''
-      python3 ${./python-registry/publish-wheel.py} ${drv.dist} "$out" \
+      python3 ${../../python-registry/publish-wheel.py} ${drv.dist} "$out" \
         --rel ${toString rel} \
         ${lib.optionalString (requiresPython != null) "--requires-python '${requiresPython}'"} \
         ${lib.optionalString (pythonTag != null) "--python-tag ${pythonTag}"} \

@@ -19,7 +19,7 @@
 
   # The wasm build config applied to every package, via the set's mkDerivation.
   # Per-package fixes are the consumer's job, not the toolchain's.
-  packages = (cross.haskell.packages.ghc9123.override {ghc = wrappedGhc;}).extend (final: prev: {
+  packages = (cross.haskell.packages.ghc9123.override {ghc = wrappedGhc;}).extend (_final: prev: {
     mkDerivation = args:
       prev.mkDerivation (args
         // {

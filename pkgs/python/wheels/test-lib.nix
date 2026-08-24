@@ -1,6 +1,5 @@
 # Shared helpers for running python code on the wasix interpreter under wasmer.
-# Used by the wheel suites (python-wheels.nix) and the dependency-closure import
-# tests (python-closure-tests.nix).
+# Used by the wheel suites in project.nix.
 {
   pkgs,
   lib,

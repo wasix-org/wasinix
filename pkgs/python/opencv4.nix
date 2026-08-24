@@ -4,7 +4,6 @@
 {
   exposeExtendedPackage,
   packages,
-  pkgs,
   buildHostPypaTools,
 }: let
   py = packages.sameProfile.python;

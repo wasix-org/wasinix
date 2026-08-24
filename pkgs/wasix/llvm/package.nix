@@ -11,9 +11,9 @@ exposePackage (
   let
     wasixLlvm = packages.sameProfile.wasix-llvm.passthru;
     base = package.override {
-      version = wasixLlvm.version;
+      inherit (wasixLlvm) version;
       release_version = wasixLlvm.llvmVersion;
-      monorepoSrc = wasixLlvm.monorepoSrc;
+      inherit (wasixLlvm) monorepoSrc;
       enablePFM = false;
       enablePolly = false;
       enableTerminfo = false;
@@ -89,25 +89,31 @@ exposePackage (
     shippedTools = buildTools ++ builtins.attrNames toolAliases;
   in
     extendPackage common {
-      passthru.wasix = {
-        # Frontends link this complete, consistently patched LLVM build. The llvm
-        # webc itself installs only command-line utilities from the same base.
-        inherit libllvm;
+      passthru = {
+        wasix = {
+          # Frontends link this complete, consistently patched LLVM build. The
+          # llvm webc itself installs only command-line utilities from the same
+          # base.
+          inherit libllvm;
+        };
+        wasinix = {
+          shipped = true;
+          update.notes = [
+            {
+              message = "recheck the WASIX LLVM tool selection and cross-build flags when the toolchain fork base version moves";
+            }
+            {
+              message = "drop support-wasix.patch once upstream LLVM supports WASIX in its Unix support layer";
+            }
+            {message = "drop unix-optional-dlfcn.patch once upstream LLVM guards dlfcn.h with HAVE_DLOPEN";}
+            {message = "drop wasi-endian.patch once upstream LLVM recognizes WASI's endian.h";}
+          ];
+        };
+        wasmer = {
+          name = "llvm";
+          commands = map (name: {inherit name;}) shippedTools;
+        };
       };
-      passthru.wasinix = {
-        shipped = true;
-        update.notes = [
-          {
-            message = "recheck the WASIX LLVM tool selection and cross-build flags when the toolchain fork base version moves";
-          }
-          {
-            message = "drop support-wasix.patch once upstream LLVM supports WASIX in its Unix support layer";
-          }
-          {message = "drop unix-optional-dlfcn.patch once upstream LLVM guards dlfcn.h with HAVE_DLOPEN";}
-          {message = "drop wasi-endian.patch once upstream LLVM recognizes WASI's endian.h";}
-        ];
-      };
-      passthru.wasmer.name = "llvm";
 
       ninjaFlags = shippedTools;
       installTargets = map (tool: "install-${tool}") shippedTools;

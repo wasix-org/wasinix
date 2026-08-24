@@ -35,19 +35,25 @@
   }: let
     system = "x86_64-linux";
     projectApi = import ./pkgs/project/wasinix.nix {
-      lib = nixpkgs.lib;
+      inherit (nixpkgs) lib;
       ghcWasm = ghc-wasm-meta.packages.${system};
+      wasinixFlake = self;
       wasmerPackage = wasmer.packages.${system}.wasmer;
       wasmerRevision = wasmer.shortRev or "dirty";
     };
+    repositoryCheckNames = ["deadnix" "nil" "nixf" "project-api" "statix" "treefmt"];
     project = projectApi.mkProject {
       inherit system;
       importNixpkgs = args: import nixpkgs args;
       ci.sources = ["wasinix"];
-      projectTests.treefmt = {
-        source = "wasinix";
-        check = _project: treefmtCheck;
-      };
+      projectTests = builtins.listToAttrs (map (name: {
+          inherit name;
+          value = {
+            source = "wasinix";
+            check = _project: repositoryChecks.${name};
+          };
+        })
+        repositoryCheckNames);
       repository = {
         source = "wasinix";
         root = self;
@@ -57,10 +63,14 @@
     pkgs = project.internals.packageSets.nativeRaw;
     inherit (pkgs) lib;
 
-    treefmtEval = treefmt-nix.lib.evalModule pkgs {
-      projectRootFile = "flake.nix";
-      # Captured tool output, compared byte for byte by the tests.
-      settings.global.excludes = ["tools/wasinix/fixtures/golden/*"];
+    treefmtFor = module:
+      treefmt-nix.lib.evalModule pkgs (lib.recursiveUpdate {
+          projectRootFile = "flake.nix";
+          # Captured tool output, compared byte for byte by the tests.
+          settings.global.excludes = ["tools/wasinix/fixtures/golden/*"];
+        }
+        module);
+    treefmtEval = treefmtFor {
       programs = {
         alejandra.enable = true; # nix
         ruff-format.enable = true; # python
@@ -80,9 +90,77 @@
       };
     };
     treefmtCheck = treefmtEval.config.build.check self;
+    nixLintChecks = lib.mapAttrs (_name: module: (treefmtFor module).config.build.check self) {
+      deadnix.programs.deadnix = {
+        enable = true;
+        no-lambda-pattern-names = true;
+      };
+      nil.settings.formatter.nil = {
+        command = lib.getExe pkgs.nil;
+        options = ["diagnostics" "--deny-warnings"];
+        includes = ["*.nix"];
+      };
+      nixf = {
+        programs.nixf-diagnose = {
+          enable = true;
+          autoFix = false;
+        };
+        settings.formatter.nixf-diagnose.excludes = ["spot.nix"];
+      };
+      statix = {
+        programs.statix.enable = true;
+        settings.formatter.statix = {
+          command = lib.mkForce (pkgs.writeShellApplication {
+            name = "statix-check";
+            runtimeInputs = [pkgs.statix];
+            text = ''
+              status=0
+              diagnostics="$(statix check --format errfmt . 2>&1)" || status=$?
+              if [[ -n "$diagnostics" ]]; then
+                printf '%s\n' "$diagnostics" >&2
+              fi
+              if (( status != 0 )) || [[ -n "$diagnostics" ]]; then
+                exit 1
+              fi
+            '';
+          });
+          includes = lib.mkForce ["flake.nix"];
+        };
+      };
+    };
+    projectApiTests = import ./pkgs/project/tests.nix {inherit lib;};
+    failedProjectApiTests = lib.attrNames (lib.filterAttrs (_: test: test.expr != test.expected) projectApiTests);
+    requiredProjectApi = ["extendPackage" "loadPackageOverlays" "mkEmptyProject" "mkProject"];
+    missingProjectApi = lib.subtractLists (builtins.attrNames projectApi) requiredProjectApi;
+    projectApiCheck =
+      lib.throwIf (missingProjectApi != [])
+      "project API is missing: ${lib.concatStringsSep ", " missingProjectApi}"
+      (lib.throwIf (failedProjectApiTests != [])
+        "project API tests failed: ${lib.concatStringsSep ", " failedProjectApiTests}"
+        (pkgs.runCommand "wasinix-project-api-tests" {} ''
+          touch "$out"
+        ''));
+    repositoryChecks =
+      nixLintChecks
+      // {
+        treefmt = treefmtCheck;
+        project-api = projectApiCheck;
+      };
+    checkedRepositoryChecks =
+      lib.throwIf (builtins.attrNames repositoryChecks != repositoryCheckNames)
+      "repository checks do not match repositoryCheckNames"
+      repositoryChecks;
 
-    wasinix = project.packages.native.wasinix;
-    commandAliases = wasinix.commandAliases;
+    wasinixCore = project.packages.native.wasinix;
+    wasinixCapabilities = {
+      aws = pkgs.awscli2;
+      python = pkgs.python3;
+      python-index = project.artifacts.registry.python.indexer;
+      inherit (pkgs) rclone;
+      wasmer = project.packages.native.wasmer;
+    };
+    wasinix = wasinixCore.withCapabilities wasinixCapabilities;
+    inherit (wasinixCore) commandAliases;
     commands =
       {
         default = wasinix;
@@ -93,7 +171,7 @@
           pkgs.writeShellApplication {
             inherit name;
             inheritPath = false;
-            runtimeInputs = [wasinix];
+            runtimeInputs = [wasinixCore];
             text = "exec wasinix ${name} \"$@\"";
           }
       );
@@ -101,16 +179,23 @@
     lib = projectApi;
     formatter.${system} = treefmtEval.config.build.wrapper;
     apps.${system} =
-      lib.mapAttrs (_: command: {
+      lib.mapAttrs (name: command: {
         type = "app";
         program = lib.getExe command;
+        meta = (command.meta or {}) // {description = command.meta.description or "Run the Wasinix ${name} command";};
       })
       commands;
     legacyPackages.${system} = project;
-    checks.${system} = project.tests // {treefmt = treefmtCheck;};
+    checks.${system} = checkedRepositoryChecks;
     packages.${system} = {
       default = wasinix;
       inherit wasinix;
+      wasinix-core = wasinixCore;
+      wasinix-capability-aws = wasinixCapabilities.aws;
+      wasinix-capability-python = wasinixCapabilities.python;
+      wasinix-capability-python-index = wasinixCapabilities.python-index;
+      wasinix-capability-rclone = wasinixCapabilities.rclone;
+      wasinix-capability-wasmer = wasinixCapabilities.wasmer;
     };
     devShells.${system}.default = pkgs.mkShell {
       packages = [
