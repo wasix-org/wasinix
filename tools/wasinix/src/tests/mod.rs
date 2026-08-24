@@ -1847,15 +1847,15 @@ mod events {
     }
 
     #[test]
-    fn build_start_lines_parse_to_their_union_attr() {
-        use crate::ci::exec::building_attr;
+    fn scheduled_lines_parse_to_their_union_attr() {
+        use crate::ci::exec::scheduled_attr;
         assert_eq!(
-            building_attr("  building \"head::checks.zlib\""),
+            scheduled_attr("  building \"head::checks.zlib\""),
             Some("head::checks.zlib")
         );
-        assert_eq!(building_attr("  building x"), Some("x"));
-        assert_eq!(building_attr("building x"), None);
-        assert_eq!(building_attr("  evaluating y"), None);
+        assert_eq!(scheduled_attr("  building x"), Some("x"));
+        assert_eq!(scheduled_attr("building x"), None);
+        assert_eq!(scheduled_attr("  evaluating y"), None);
     }
 
     #[test]
@@ -3739,7 +3739,7 @@ mod render {
     }
 
     #[test]
-    fn the_milestone_line_names_the_builds_in_flight() {
+    fn milestone_batches_name_the_realisations_in_flight_once() {
         let mut renderer = LineRenderer::with_spinner(false);
         renderer.lines_for(&Event::PhaseStarted {
             at: 100,
@@ -3753,39 +3753,44 @@ mod render {
                 job: JobAddr(job.into()),
             });
         }
-        let mut milestone = Vec::new();
-        for index in 0..50 {
-            milestone = renderer.lines_for(&Event::JobFinished {
+        let finished: Vec<Event> = (0..100)
+            .map(|index| Event::JobFinished {
                 at: 160,
                 job: JobAddr(format!("checks.job{index}")),
                 status: JobStatus::Success,
                 cached: false,
                 duration_seconds: None,
                 error: None,
-            });
-        }
+            })
+            .collect();
         assert_eq!(
-            milestone,
-            ["[+1m 0s] 50/100 jobs · building checks.curl, checks.zlib"]
+            renderer.lines_for_events(&finished),
+            ["[+1m 0s] 100/100 jobs · realising checks.curl, checks.zlib"]
         );
-        // A heartbeat in a quiet stretch repeats the progress line.
+    }
+
+    #[test]
+    fn ticks_own_liveness_lines() {
+        let mut renderer = LineRenderer::with_spinner(false);
+        renderer.lines_for(&Event::PhaseStarted {
+            at: 100,
+            task_id: "build".into(),
+            label: "build".into(),
+            jobs: Some(100),
+        });
+        assert!(
+            renderer
+                .lines_for(&Event::Heartbeat {
+                    at: 160,
+                    detail: Some("dependencies: llvm, wasix-libc +2".into()),
+                })
+                .is_empty()
+        );
         assert_eq!(
-            renderer.lines_for(&Event::Heartbeat {
-                at: 460,
-                detail: None
-            }),
-            ["[+6m 0s] 50/100 jobs · building checks.curl, checks.zlib"]
+            renderer.lines_for_tick(160),
+            ["[+1m 0s] 0/100 jobs · dependencies: llvm, wasix-libc +2"]
         );
-        // With no job in flight the heartbeat says what the run is doing.
-        assert_eq!(
-            renderer.lines_for(&Event::Heartbeat {
-                at: 520,
-                detail: Some("dependencies: llvm, wasix-libc +2".into()),
-            }),
-            [
-                "[+7m 0s] 50/100 jobs · building checks.curl, checks.zlib · dependencies: llvm, wasix-libc +2"
-            ]
-        );
+        assert!(renderer.lines_for_tick(219).is_empty());
     }
 
     #[test]
