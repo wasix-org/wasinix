@@ -5377,14 +5377,17 @@ mod corpus {
     }
 
     #[test]
-    fn cached_build_outputs_are_not_realised() {
+    fn cached_build_outputs_are_neither_realised_nor_republished() {
         let source = sources(false)
             .into_iter()
             .find(|(path, _)| path == "nix/buildset.rs")
             .unwrap()
             .1;
         assert!(!source.contains("root_cached_inputs"));
-        assert_eq!(source.matches("plan.fetched.contains").count(), 3);
+        assert_eq!(source.matches("plan.fetched.contains").count(), 2);
+        assert_eq!(source.matches("uploader.push(").count(), 2);
+        assert!(source.contains("uploader.push(report.push.clone())"));
+        assert!(source.contains("uploader.push(spec.outputs.clone())"));
     }
 
     /// git runs through support::git (repo named on every call, three-way
