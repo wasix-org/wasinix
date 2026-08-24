@@ -95,6 +95,7 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
         .args(["--workers", &limits.workers.to_string()])
         .args(["--max-memory-size", &limits.memory.to_string()])
         .args(["--gc-roots-dir", &gc_roots.to_string_lossy()])
+        .option("min-free", "0")
         .workdir(request.workdir)
         .timeout(timeout)
         .route(request.route)?;
