@@ -69,6 +69,36 @@
       # The inherited artifact contains unpatched workspace crates and can
       # retain their rlibs and vtables after source patches are applied.
       cargoArtifacts = null;
+      # tokio::fs::File stays Busy when a blocking op is cancelled, so the next op
+      # re-polls a finished JoinHandle and panics ("JoinHandle polled after
+      # completion") onto guest stderr, failing checks that diff guest output.
+      cargoVendorDir = old.cargoVendorDir.overrideAttrs (o: {
+        nativeBuildInputs = (o.nativeBuildInputs or []) ++ [nixpkgs.legacyPackages.${system}.jq];
+        buildCommand =
+          o.buildCommand
+          + ''
+            registry=$(echo "$out"/*/)
+            registry=''${registry%/}
+            crates=$(readlink -f "$registry")
+            rm "$registry"
+            mkdir "$registry"
+            for crate in "$crates"/*; do
+              ln -s "$(readlink -f "$crate")" "$registry/$(basename "$crate")"
+            done
+
+            tokio="$registry/tokio-1.53.1"
+            if [ ! -L "$tokio" ]; then
+              echo "wasmer no longer vendors tokio 1.53.1; recheck patches/tokio-fs-file-no-poison-on-cancel.patch" >&2
+              exit 1
+            fi
+            rm "$tokio"
+            cp -rL "$crates/tokio-1.53.1" "$tokio"
+            chmod -R u+w "$tokio"
+            patch -p2 -d "$tokio" -i ${./patches/tokio-fs-file-no-poison-on-cancel.patch}
+            jq '.files = {}' "$tokio/.cargo-checksum.json" > "$tokio/.cargo-checksum.json.new"
+            mv "$tokio/.cargo-checksum.json.new" "$tokio/.cargo-checksum.json"
+          '';
+      });
       passthru =
         (old.passthru or {})
         // {
@@ -77,6 +107,7 @@
             noteVersion = "${old.version}-${wasmer.shortRev or "dirty"}";
             updateNotes = [
               {message = "recheck and drop any Wasmer patches that landed upstream; see WASIX-TODO.md";}
+              {message = "check whether tokio PR 8291 landed in the vendored tokio; if so drop patches/tokio-fs-file-no-poison-on-cancel.patch and the patched cargoVendorDir (WASIX-TODO.md)";}
             ];
           };
         };

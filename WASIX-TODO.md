@@ -104,6 +104,20 @@ current toolchain before relying on it.
 - Fix: once mio's upstream wasi backend ships a real `Waker` on every version in
   play, tokio can relax the blanket `not(wasi)` gate and the opt-in can go.
 
+### host tokio panics on a cancelled `fs::File` op 🟡
+
+- Symptom: `tokio::fs::File` stays in `Busy` when a blocking op is cancelled, so
+  the next op re-polls a finished `JoinHandle` and panics ("JoinHandle polled
+  after completion", `runtime/task/core.rs`). This is wasmer's own host runtime;
+  the panic reaches guest stderr and fails any check comparing guest output.
+- Workaround (`patches/tokio-fs-file-no-poison-on-cancel.patch`): restore
+  `State::Idle` before returning the error. This is the host build's own tokio,
+  not a crate compiled for the wasix target, so it is applied through a patched
+  `cargoVendorDir` in `flake.nix` rather than through
+  `pkgs/lib/wasix-crate-patches`.
+- Fix: upstream tokio PR 8291. Drop the patch once a wasmer bump picks up a
+  tokio release carrying it.
+
 ### `fd_datasync`/`fd_sync` deny with EACCES under mapped host dirs 🟢
 
 - wasmer's `fd_datasync`/`fd_sync` return `Errno::Access` unless the fd holds
