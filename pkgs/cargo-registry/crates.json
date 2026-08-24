@@ -109,7 +109,8 @@
     "0.51.0": "sha256-i1BdJSZ6P+oElEHNsHUDce84lx6tGhMc4yAdi+Jm/dI=",
     "0.52.0": "sha256-WNEzpHs4TN0ydZciUuuZDKcuVVt3y7mhp11ZJ71N3rs=",
     "0.53.0": "sha256-RISBHLpCI80Bmx8f5XrngvvRH+hndFW/YZ+nGGXUzDc=",
-    "0.54.0": "sha256-4E+JX/X8710Dhq8Gj/pnY+M9ugc0K9ShBh770v2NvKA="
+    "0.54.0": "sha256-4E+JX/X8710Dhq8Gj/pnY+M9ugc0K9ShBh770v2NvKA=",
+    "0.55.0": "sha256-oua92I8vHttxIrsPqR3GO0YzutyIDHLqSGdRar/JLgM="
   },
   "gix-pack": {
     "0.68.0": "sha256-I8Ap6cfxN3AhUnOFjL+GzJp+6hBptn6oSgO3h/PFZBk=",
@@ -117,7 +118,9 @@
     "0.70.0": "sha256-bBbPHkAzr38+DLrYgJ8APaHOB19Julhib5yNce+glCo=",
     "0.71.0": "sha256-T7vjNhAx8g2RcC4BJFBvd96P0YB+ASG0sUecIevRQh8=",
     "0.72.0": "sha256-DPMfcn3EhVDpy/qETEvuK7s6Zw6tcg2p1Qb5yPzyVMw=",
-    "0.73.0": "sha256-7qvJSaVZ0QR9qQLCrMrzSqF1SMZWGVJW1bgZJrz9AoU="
+    "0.73.0": "sha256-7qvJSaVZ0QR9qQLCrMrzSqF1SMZWGVJW1bgZJrz9AoU=",
+    "0.74.0": "sha256-FP5uVNQGlE6pZNwysuedAnRBlndCGH3R8lFbjW1BhXQ=",
+    "0.74.1": "sha256-1JLsXjKRAhWWzDrTyAGzJfEPf11h+0ck4d72T2DfO2A="
   },
   "google-cloud-auth": {
     "1.14.0": "sha256-mqIFP9ACvWjfjwv6RtROgPIPjnNqMOM1+eY6qRkGTmk=",
@@ -183,7 +186,8 @@
     "0.18.4+1.9.3": "sha256-T6MJ5FOtve9CQ08oUSmbB6fItM/7WVFfmlAknh4QBWs=",
     "0.18.5+1.9.4": "sha256-BVWhd6W4uB5hwwadtw/iVg8DMF9SCsPoYwcyLBezKho=",
     "0.18.6+1.9.5": "sha256-xXr0X7MjSnN0jbhVr2JSzvPDwv2R8hu1vsXkTPfZB5c=",
-    "0.18.7+1.9.6": "sha256-tY5Eb2AEnN7YdKpsvClTqmL/73upDpiKB4DaRomCNhs="
+    "0.18.7+1.9.6": "sha256-tY5Eb2AEnN7YdKpsvClTqmL/73upDpiKB4DaRomCNhs=",
+    "0.18.8+1.9.7": "sha256-pSyOaBK+jmmqP/FE1MObso5Poi+7bL2+/cFt0O5Yo6E="
   },
   "libloading": {
     "0.8.9": "sha256-k+IeADkesVCp5QghPoi+LxYVhfJF95DKrrz1PVGXqCc=",
