@@ -1103,15 +1103,10 @@ fn run_command(command: RunCommand) -> Result<CommandStatus> {
                         // at; a listing without it sends the reader to gunzip
                         // by hand.
                         if let Some(log) = &failure.log {
-                            // Build task ids are <case>.<target>, and the
-                            // archive lives under the target's log dir.
-                            let (case, target) =
-                                task.split_once('.').unwrap_or((task.as_str(), ""));
-                            let logs = crate::ci::prepare::logs_dir(&crate::ci::prepare::case_dir(
-                                &run_dir, case,
-                            ))
-                            .join(target);
-                            match crate::ci::facts::logs::read_archived(&logs, log, 4_000) {
+                            let tail = crate::ci::prepare::build_logs_dir(&run_dir, task).and_then(
+                                |logs| crate::ci::facts::logs::read_archived(&logs, log, 4_000),
+                            );
+                            match tail {
                                 Ok(tail) => {
                                     for line in tail.lines() {
                                         ui::raw(format!("    {line}\n"));
@@ -1613,7 +1608,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 run_url: surface.run_url,
                 author: surface.author,
                 untrusted,
-                log_base: None,
+                failure_logs: std::collections::BTreeMap::new(),
             };
             let client =
                 crate::github::client::Client::new(crate::github::client::token().as_deref());
@@ -1659,7 +1654,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                         "--failure-logs needs --sha to name the log prefix".into(),
                     )
                 })?;
-                target.log_base = crate::github::publish::publish_failure_logs(
+                target.failure_logs = crate::github::publish::publish_failure_logs(
                     &run_dir, &rendered, &sha, effects,
                 )?;
             }

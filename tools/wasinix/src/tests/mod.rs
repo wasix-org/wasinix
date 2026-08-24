@@ -2391,7 +2391,9 @@ mod cli {
 
 mod markdown {
     use super::{golden::check_text, scenarios};
-    use crate::github::markdown::{Links, check, comment, step_summary, truncate_sections};
+    use crate::github::markdown::{
+        FailureLogKey, Links, check, comment, step_summary, truncate_sections,
+    };
     use crate::github::sanitize::{code_span, escape_html, fence, table_cell};
     use crate::support::atoms::Rev;
 
@@ -2399,7 +2401,7 @@ mod markdown {
         Links {
             run_url: Some("https://github.com/wasix-org/wasinix/actions/runs/1".into()),
             sha: Some(Rev::parse(&"a".repeat(40)).unwrap()),
-            log_base: None,
+            failure_logs: Default::default(),
             origin: None,
         }
     }
@@ -2410,7 +2412,10 @@ mod markdown {
         Links {
             run_url: Some("https://ci.example/runs/1)|end".into()),
             sha: Some(Rev::parse(&"a".repeat(40)).unwrap()),
-            log_base: Some("https://ci.example/logs)|base".into()),
+            failure_logs: std::collections::BTreeMap::from([(
+                FailureLogKey::new("case.core", "00112233445566778899.log.gz"),
+                "https://ci.example/logs)|base/log.txt".into(),
+            )]),
             origin: Some("https://github.com/wasix-org/wasinix/pull/7#issuecomment-9".into()),
         }
     }
@@ -2482,6 +2487,85 @@ mod markdown {
             )
             .into_string(),
         );
+    }
+
+    #[test]
+    fn failure_logs_keep_the_case_that_produced_them() {
+        use std::io::Write;
+
+        use crate::ci::facts::{Failure, FailureCause, LogRef};
+        use crate::ci::report::Conclusion;
+        use crate::support::atoms::{Bytes, JobAddr};
+
+        let scratch = crate::support::fs::Scratch::create("wasinix-test").unwrap();
+        let run_dir = scratch.path().join("run");
+        let staged = scratch.path().join("staged");
+        std::fs::create_dir_all(&staged).unwrap();
+        let archive = "00112233445566778899.log.gz";
+        let failure = || Failure {
+            job: JobAddr("checks.yq".into()),
+            cause: FailureCause::Direct,
+            class: Some("Build".into()),
+            message: None,
+            jobs: Vec::new(),
+            position: None,
+            log: Some(LogRef {
+                path: archive.into(),
+                bytes: Bytes(4),
+                archived_bytes: Bytes(4),
+                truncated: false,
+            }),
+        };
+        let mut report = crate::ci::report::starting(None);
+        report.title = "CI failed".into();
+        report.complete = true;
+        report.conclusion = Some(Conclusion::Failure);
+        report.failures = std::collections::BTreeMap::from([
+            ("base.packages".into(), vec![failure()]),
+            ("head.packages".into(), vec![failure()]),
+        ]);
+        for (task, text) in [("base.packages", "base"), ("head.packages", "head")] {
+            let logs = crate::ci::prepare::build_logs_dir(&run_dir, task).unwrap();
+            std::fs::create_dir_all(&logs).unwrap();
+            let file = std::fs::File::create(logs.join(archive)).unwrap();
+            let mut gzip = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+            gzip.write_all(text.as_bytes()).unwrap();
+            gzip.finish().unwrap();
+        }
+
+        let published =
+            crate::github::publish::stage_failure_logs(&run_dir, &report, "deadbeef", &staged)
+                .unwrap();
+        let base = published
+            .get(&FailureLogKey::new("base.packages", archive))
+            .unwrap()
+            .clone();
+        let head = published
+            .get(&FailureLogKey::new("head.packages", archive))
+            .unwrap()
+            .clone();
+        assert_ne!(base, head);
+        for (url, expected) in [(&base, "base"), (&head, "head")] {
+            let name = url.rsplit('/').next().unwrap();
+            assert_eq!(
+                std::fs::read_to_string(staged.join(name)).unwrap(),
+                expected
+            );
+        }
+        let body = step_summary(
+            &report,
+            &Default::default(),
+            &Links {
+                run_url: None,
+                sha: None,
+                failure_logs: published,
+                origin: None,
+            },
+        )
+        .into_string();
+        assert!(body.contains(&base), "{body}");
+        assert!(body.contains(&head), "{body}");
+        assert!(crate::ci::prepare::build_logs_dir(&run_dir, "../base.packages").is_err());
     }
 
     #[test]
@@ -2916,7 +3000,7 @@ mod markdown {
                 run_url: hostile_links().run_url,
                 author: "github-actions[bot]".into(),
                 untrusted: true,
-                log_base: None,
+                failure_logs: Default::default(),
             },
             &path,
             crate::support::effects::Effects::Apply,
@@ -7435,6 +7519,13 @@ mod facts {
         let read: logs::LogManifest =
             crate::support::schema::read(&logs_dir.join("manifest.json")).unwrap();
         assert_eq!(read, manifest);
+        let escaped = crate::ci::facts::LogRef {
+            path: "../outside.log.gz".into(),
+            bytes: Default::default(),
+            archived_bytes: Default::default(),
+            truncated: false,
+        };
+        assert!(logs::read_archived(&logs_dir, &escaped, 4096).is_err());
     }
 }
 
