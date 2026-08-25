@@ -32,6 +32,7 @@ pub struct RevSource {
 pub enum SelectorKind {
     Set,
     Job,
+    Filter,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -225,12 +226,12 @@ pub type ResolvedRequest = Request<RevSource>;
 
 impl Document for ParsedRequest {
     const KIND: &'static str = "request";
-    const SCHEMA: u32 = 2;
+    const SCHEMA: u32 = 3;
 }
 
 impl Document for ResolvedRequest {
     const KIND: &'static str = "request";
-    const SCHEMA: u32 = 2;
+    const SCHEMA: u32 = 3;
 }
 
 impl<S> Request<S> {
@@ -400,7 +401,11 @@ impl<S> Build<S> {
                 names.push(set);
             }
         }
-        if all {
+        let has_positive_selector = self
+            .selectors
+            .iter()
+            .any(|selector| selector.kind != SelectorKind::Filter);
+        if all || !has_positive_selector {
             return SetName::ORDER.to_vec();
         }
         if names
@@ -421,6 +426,14 @@ impl<S> Build<S> {
             .iter()
             .filter(|selector| selector.kind == SelectorKind::Job)
             .map(|selector| selector.name.clone())
+            .collect()
+    }
+
+    pub fn source_filters(&self) -> Vec<String> {
+        self.selectors
+            .iter()
+            .filter(|selector| selector.kind == SelectorKind::Filter)
+            .map(|selector| selector.name.trim_start_matches("source=").to_string())
             .collect()
     }
 }

@@ -46,6 +46,18 @@ gates, then requests the exact resulting job addresses from Nix in one batch.
 Historical jobs remain cataloged and are tagged `history-tests`; selecting one
 without enabling that tag is an error rather than a silent omission.
 
+`source=<extension-id>` filters any selection to jobs owned by that source's
+package closure. A source filter by itself implies `all`, so these are
+equivalent:
+
+```sh
+wasinix build source=my-project
+wasinix build all source=my-project
+```
+
+Artifacts and tests attached to the source's packages remain selected even when
+their projection rule comes from another extension.
+
 This division lets extension flakes contribute ordinary catalog entries and CI
 facts without reimplementing selector behavior in Nix. It also keeps the
 orchestrator's errors and selection rules identical for this repository and for

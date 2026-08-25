@@ -574,16 +574,20 @@ fn target_jobs(
     mapping: &EvalMap,
 ) -> Result<Vec<String>> {
     if target == BuildTarget::Jobs {
-        return mapping.resolve_enabled_jobs(&case.requested_jobs(), &case.enabled_tags);
+        let mut jobs = mapping.resolve_enabled_jobs(&case.requested_jobs(), &case.enabled_tags)?;
+        mapping.filter_jobs(&mut jobs, &case.source_filters())?;
+        return Ok(jobs);
     }
-    Ok(mapping
+    let mut jobs: Vec<String> = mapping
         .sets
         .get(target.as_str())
         .into_iter()
         .flatten()
         .filter(|job| mapping.tag_enabled(job, &case.enabled_tags))
         .cloned()
-        .collect())
+        .collect();
+    mapping.filter_jobs(&mut jobs, &case.source_filters())?;
+    Ok(jobs)
 }
 
 pub(crate) fn cached_jobs(path: &Path) -> Result<BTreeSet<String>> {

@@ -41,18 +41,18 @@ pub struct VersionUpdate {
 
 /// Which jobs a case covers: its named jobs plus every job in its sets.
 pub fn selected(case: &Build<RevSource>, map: &EvalMap) -> Result<BTreeSet<String>> {
-    let mut jobs: BTreeSet<String> = map
-        .resolve_enabled_jobs(&case.requested_jobs(), &case.enabled_tags)?
-        .into_iter()
-        .collect();
+    let mut explicit = map.resolve_enabled_jobs(&case.requested_jobs(), &case.enabled_tags)?;
+    map.filter_jobs(&mut explicit, &case.source_filters())?;
+    let mut jobs: BTreeSet<String> = explicit.into_iter().collect();
     for set in case.requested_sets() {
         if let Some(members) = map.sets.get(set.as_str()) {
-            jobs.extend(
-                members
-                    .iter()
-                    .filter(|job| map.tag_enabled(job, &case.enabled_tags))
-                    .cloned(),
-            );
+            let mut selected: Vec<String> = members
+                .iter()
+                .filter(|job| map.tag_enabled(job, &case.enabled_tags))
+                .cloned()
+                .collect();
+            map.filter_jobs(&mut selected, &case.source_filters())?;
+            jobs.extend(selected);
         }
     }
     Ok(jobs)

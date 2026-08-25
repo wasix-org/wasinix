@@ -458,6 +458,13 @@ mod evalmap {
         }
         map.sets
             .insert("packages".into(), vec!["packages.wasix.eh.zlib".into()]);
+        map.sources.insert(
+            "consumer".into(),
+            vec![
+                "packages.wasix.exnrefEh.zlib".into(),
+                "checks.bench-heavy".into(),
+            ],
+        );
         map
     }
 
@@ -467,6 +474,27 @@ mod evalmap {
         assert_eq!(
             jobs,
             ["packages.wasix.eh.zlib", "packages.wasix.exnrefEh.zlib"]
+        );
+    }
+
+    #[test]
+    fn source_selectors_filter_positive_selectors_and_imply_all() {
+        assert_eq!(
+            map()
+                .resolve_jobs(&["packages.wasix.zlib".into(), "source=consumer".into()])
+                .unwrap(),
+            ["packages.wasix.exnrefEh.zlib"]
+        );
+        assert_eq!(
+            map().resolve_jobs(&["source=consumer".into()]).unwrap(),
+            ["checks.bench-heavy", "packages.wasix.exnrefEh.zlib"]
+        );
+        assert!(
+            map()
+                .resolve_jobs(&["source=missing".into()])
+                .unwrap_err()
+                .to_string()
+                .contains("unknown CI source")
         );
     }
 
@@ -603,7 +631,8 @@ mod evalmap {
             },
             "selectors": {
                 "sets": {"packages": ["tests.packages.wasix.eh.zlib.abi"]},
-                "groups": {}
+                "groups": {},
+                "sources": {"consumer": ["tests.packages.wasix.eh.zlib.abi"]}
             }
         }))
         .unwrap();
@@ -611,6 +640,7 @@ mod evalmap {
         let address = JobAddr("tests.packages.wasix.eh.zlib.abi".into());
         assert!(map.jobs.contains_key(&address));
         assert_eq!(map.sets["packages"], [address.as_str()]);
+        assert_eq!(map.sources["consumer"], [address.as_str()]);
         assert_eq!(map.info[&address].test_name.as_deref(), Some("abi"));
         assert_eq!(map.info[&address].variant.as_deref(), Some("eh"));
         assert_eq!(map.info[&address].tags, ["slow"]);
@@ -2496,6 +2526,7 @@ mod cli {
             "build",
             "core",
             "checks.bash-sh",
+            "source=consumer",
             "--at",
             "main",
             "--with",
@@ -2516,6 +2547,8 @@ mod cli {
                 .unwrap();
         assert_eq!(request.selectors[0].kind, SelectorKind::Set);
         assert_eq!(request.selectors[1].kind, SelectorKind::Job);
+        assert_eq!(request.selectors[2].kind, SelectorKind::Filter);
+        assert_eq!(request.source_filters(), ["consumer"]);
         assert_eq!(request.enabled_tags, ["slow-tests", "expensive-build"]);
         assert_eq!(request.overrides[0].kind, OverrideKind::Release);
         assert_eq!(request.overrides[0].value, "7.1.0");
