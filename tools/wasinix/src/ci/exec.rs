@@ -300,10 +300,7 @@ fn evaluate(
 
     let jobs = evaljobs::parse_file(&crate::support::fs::read_to_string(&jobs_path)?)?;
     let mut mapping = EvalMap::from_jobs(case.source.rev.clone(), &jobs);
-    mapping.info = catalog.info;
-    mapping.packages = catalog.packages;
-    mapping.sets = catalog.sets;
-    mapping.groups = catalog.groups;
+    mapping.attach_catalog(catalog);
     let map_path = crate::ci::prepare::eval_map_path(&case_dir(ctx.run_dir, case_id));
     schema::write(&map_path, &mapping)?;
     artifacts.record(&map_path)?;

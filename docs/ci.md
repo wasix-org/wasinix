@@ -74,9 +74,12 @@ markdown comment, and the check summary describe the same facts.
 Tasks do work and emit facts; anything computable from persisted facts is a
 projection the fold derives. The diff comparison is the example: no task
 computes it, `ci/compare.rs` projects it from the case directories each time the
-fold runs, so its eval half (added, removed, version moves, rebuilds) reaches
-the comment as soon as both evaluations exist and its build half (regressions,
-fixes) joins when results land.
+fold runs. Added, removed, and version changes compare the complete catalogs;
+rebuilds, regressions, and fixes compare the jobs selected on both sides. The
+report states selected, tag-omitted, and outside-selector coverage separately,
+so disabling a tag cannot look like removing a job. The catalog half reaches the
+comment as soon as both evaluations exist, and build outcomes join when results
+land.
 
 Progress is an append-only `events.jsonl`; the snapshot is derived from it, not
 maintained beside it. Every progress view (the terminal ladder, `run watch`,

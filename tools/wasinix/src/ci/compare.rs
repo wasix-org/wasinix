@@ -39,23 +39,101 @@ pub struct VersionUpdate {
     pub jobs: Vec<JobAddr>,
 }
 
-/// Which jobs a case covers: its named jobs plus every job in its sets.
-pub fn selected(case: &Build<RevSource>, map: &EvalMap) -> Result<BTreeSet<String>> {
-    let mut explicit = map.resolve_enabled_jobs(&case.requested_jobs(), &case.enabled_tags)?;
-    map.filter_jobs(&mut explicit, &case.source_filters())?;
-    let mut jobs: BTreeSet<String> = explicit.into_iter().collect();
-    for set in case.requested_sets() {
-        if let Some(members) = map.sets.get(set.as_str()) {
-            let mut selected: Vec<String> = members
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CaseCoverage {
+    pub catalog: usize,
+    pub selected: usize,
+    pub tag_omitted: usize,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub omitted_by_tags: BTreeMap<String, usize>,
+    pub outside_selection: usize,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ComparisonCoverage {
+    pub base: CaseCoverage,
+    pub head: CaseCoverage,
+}
+
+#[derive(Default)]
+struct Selection {
+    jobs: BTreeSet<String>,
+    tag_omitted: BTreeSet<String>,
+    omitted_by_tags: BTreeMap<String, BTreeSet<String>>,
+}
+
+impl Selection {
+    fn coverage(&self, catalog: &BTreeSet<String>) -> CaseCoverage {
+        let accounted: BTreeSet<&String> = self.jobs.union(&self.tag_omitted).collect();
+        CaseCoverage {
+            catalog: catalog.len(),
+            selected: self.jobs.len(),
+            tag_omitted: self.tag_omitted.len(),
+            omitted_by_tags: self
+                .omitted_by_tags
                 .iter()
-                .filter(|job| map.tag_enabled(job, &case.enabled_tags))
-                .cloned()
-                .collect();
-            map.filter_jobs(&mut selected, &case.source_filters())?;
-            jobs.extend(selected);
+                .map(|(tag, jobs)| (tag.clone(), jobs.len()))
+                .collect(),
+            outside_selection: catalog
+                .iter()
+                .filter(|job| !accounted.contains(job))
+                .count(),
         }
     }
-    Ok(jobs)
+
+    fn job_coverage(&self, job: &str) -> String {
+        if self.jobs.contains(job) {
+            return "selected".into();
+        }
+        let tags: Vec<&str> = self
+            .omitted_by_tags
+            .iter()
+            .filter_map(|(tag, jobs)| jobs.contains(job).then_some(tag.as_str()))
+            .collect();
+        if tags.is_empty() {
+            "not selected: outside selector/source".into()
+        } else {
+            format!("not selected: requires tag {}", tags.join(", "))
+        }
+    }
+}
+
+fn build_selection(case: &Build<RevSource>, map: &EvalMap) -> Result<Selection> {
+    let mut explicit = map.resolve_enabled_jobs(&case.requested_jobs(), &case.enabled_tags)?;
+    map.filter_jobs(&mut explicit, &case.source_filters())?;
+    let mut selection = Selection {
+        jobs: explicit.into_iter().collect(),
+        ..Selection::default()
+    };
+    for set in case.requested_sets() {
+        let Some(members) = map.sets.get(set.as_str()) else {
+            continue;
+        };
+        let mut candidates = members.clone();
+        map.filter_jobs(&mut candidates, &case.source_filters())?;
+        for job in candidates {
+            let missing = map.missing_tags(&job, &case.enabled_tags);
+            if missing.is_empty() {
+                selection.jobs.insert(job);
+                continue;
+            }
+            selection.tag_omitted.insert(job.clone());
+            for tag in missing {
+                selection
+                    .omitted_by_tags
+                    .entry(tag)
+                    .or_default()
+                    .insert(job.clone());
+            }
+        }
+    }
+    Ok(selection)
+}
+
+/// Which jobs a case covers: its named jobs plus every job in its sets.
+pub fn selected(case: &Build<RevSource>, map: &EvalMap) -> Result<BTreeSet<String>> {
+    Ok(build_selection(case, map)?.jobs)
 }
 
 pub fn selected_case(case: CaseRef<'_, RevSource>, map: &EvalMap) -> Result<BTreeSet<String>> {
@@ -159,6 +237,10 @@ pub struct EvalDiff {
     /// jobs; a reader wants to know which version each one is.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub identities: BTreeMap<JobAddr, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub catalog_job_coverage: BTreeMap<JobAddr, String>,
+    #[serde(default)]
+    pub coverage: ComparisonCoverage,
     pub selected_count: usize,
 }
 
@@ -225,9 +307,12 @@ impl Comparison {
 
 /// What the two cases cover, shared by both halves.
 struct Coverage {
-    base: BTreeSet<String>,
-    head: BTreeSet<String>,
+    base_selection: Selection,
+    head_selection: Selection,
+    base_catalog: BTreeSet<String>,
+    head_catalog: BTreeSet<String>,
     both: Vec<String>,
+    catalog_both: Vec<String>,
     /// A spot case covers only its own targets, so added/removed carry no
     /// signal and the diff is judged on the shared jobs alone.
     common_only: bool,
@@ -239,18 +324,43 @@ fn coverage(
     head_case: CaseRef<'_, RevSource>,
     head_map: &EvalMap,
 ) -> Result<Coverage> {
-    let base = selected_case(base_case, base_map)?;
-    let head = selected_case(head_case, head_map)?;
-    let both: Vec<String> = base.intersection(&head).cloned().collect();
+    let base_selection = match base_case {
+        CaseRef::Build(case) => build_selection(case, base_map)?,
+        CaseRef::Spot(case) => Selection {
+            jobs: base_map.resolve_jobs(&case.targets)?.into_iter().collect(),
+            ..Selection::default()
+        },
+    };
+    let head_selection = match head_case {
+        CaseRef::Build(case) => build_selection(case, head_map)?,
+        CaseRef::Spot(case) => Selection {
+            jobs: head_map.resolve_jobs(&case.targets)?.into_iter().collect(),
+            ..Selection::default()
+        },
+    };
+    let both: Vec<String> = base_selection
+        .jobs
+        .intersection(&head_selection.jobs)
+        .cloned()
+        .collect();
     let common_only =
         matches!(base_case, CaseRef::Spot(_)) || matches!(head_case, CaseRef::Spot(_));
     if common_only && both.is_empty() {
         return request_error("diff cases have no shared target coverage");
     }
+    let (base_catalog, head_catalog) = if common_only {
+        (base_selection.jobs.clone(), head_selection.jobs.clone())
+    } else {
+        (base_map.catalog_job_names(), head_map.catalog_job_names())
+    };
+    let catalog_both = base_catalog.intersection(&head_catalog).cloned().collect();
     Ok(Coverage {
-        base,
-        head,
+        base_selection,
+        head_selection,
+        base_catalog,
+        head_catalog,
         both,
+        catalog_both,
         common_only,
     })
 }
@@ -260,8 +370,8 @@ fn eval_diff(coverage: &Coverage, base_map: &EvalMap, head_map: &EvalMap) -> Eva
         Vec::new()
     } else {
         coverage
-            .head
-            .difference(&coverage.base)
+            .head_catalog
+            .difference(&coverage.base_catalog)
             .cloned()
             .map(JobAddr)
             .collect()
@@ -270,14 +380,14 @@ fn eval_diff(coverage: &Coverage, base_map: &EvalMap, head_map: &EvalMap) -> Eva
         Vec::new()
     } else {
         coverage
-            .base
-            .difference(&coverage.head)
+            .base_catalog
+            .difference(&coverage.head_catalog)
             .cloned()
             .map(JobAddr)
             .collect()
     };
     let identity_changed: Vec<&String> = coverage
-        .both
+        .catalog_both
         .iter()
         .filter(|job| base_map.identity(job) != head_map.identity(job))
         .collect();
@@ -286,7 +396,7 @@ fn eval_diff(coverage: &Coverage, base_map: &EvalMap, head_map: &EvalMap) -> Eva
     // must not merge into one row pointing at whichever changelog won.
     type UpdateKey = (String, String, String, Option<String>);
     let mut version_updates: BTreeMap<UpdateKey, VersionUpdate> = BTreeMap::new();
-    for job in &coverage.both {
+    for job in &coverage.catalog_both {
         let (Some(before), Some(after)) = (base_map.version(job), head_map.version(job)) else {
             continue;
         };
@@ -347,14 +457,22 @@ fn eval_diff(coverage: &Coverage, base_map: &EvalMap, head_map: &EvalMap) -> Eva
         selected_count: if coverage.common_only {
             coverage.both.len()
         } else {
-            coverage.base.union(&coverage.head).count()
+            coverage
+                .base_selection
+                .jobs
+                .union(&coverage.head_selection.jobs)
+                .count()
         },
         // A removed job has no head identity, so the base is the only side
         // that can say which version went away.
         identities: if coverage.common_only {
             coverage.both.iter().cloned().collect::<BTreeSet<_>>()
         } else {
-            coverage.base.union(&coverage.head).cloned().collect()
+            coverage
+                .base_catalog
+                .union(&coverage.head_catalog)
+                .cloned()
+                .collect()
         }
         .iter()
         .filter_map(|job| {
@@ -364,6 +482,25 @@ fn eval_diff(coverage: &Coverage, base_map: &EvalMap, head_map: &EvalMap) -> Eva
                 .map(|identity| (JobAddr(job.clone()), identity))
         })
         .collect(),
+        catalog_job_coverage: added
+            .iter()
+            .map(|job| {
+                (
+                    job.clone(),
+                    coverage.head_selection.job_coverage(job.as_str()),
+                )
+            })
+            .chain(removed.iter().map(|job| {
+                (
+                    job.clone(),
+                    coverage.base_selection.job_coverage(job.as_str()),
+                )
+            }))
+            .collect(),
+        coverage: ComparisonCoverage {
+            base: coverage.base_selection.coverage(&coverage.base_catalog),
+            head: coverage.head_selection.coverage(&coverage.head_catalog),
+        },
         added,
         removed,
     }
@@ -371,13 +508,13 @@ fn eval_diff(coverage: &Coverage, base_map: &EvalMap, head_map: &EvalMap) -> Eva
 
 fn build_diff(
     coverage: &Coverage,
-    eval: &EvalDiff,
     head_map: &EvalMap,
     base_status: &StatusMap,
     head_status: &StatusMap,
 ) -> BuildDiff {
     let head_aliases: BTreeSet<&str> = coverage
-        .head
+        .head_selection
+        .jobs
         .iter()
         .filter_map(|job| head_map.info.get(job.as_str()))
         .flat_map(|info| info.aliases.iter().map(String::as_str))
@@ -395,20 +532,22 @@ fn build_diff(
     };
     BuildDiff {
         regressions: transitioned(JobStatus::Success, JobStatus::Failure),
-        new_failures: eval
-            .added
-            .iter()
+        new_failures: coverage
+            .head_selection
+            .jobs
+            .difference(&coverage.base_selection.jobs)
             .filter(|job| head_status.get(job.as_str()) == Some(&JobStatus::Failure))
-            .cloned()
+            .map(|job| JobAddr(job.to_string()))
             .collect(),
-        dropped_successes: eval
-            .removed
-            .iter()
+        dropped_successes: coverage
+            .base_selection
+            .jobs
+            .difference(&coverage.head_selection.jobs)
             .filter(|job| {
                 !head_aliases.contains(job.as_str())
                     && base_status.get(job.as_str()) == Some(&JobStatus::Success)
             })
-            .cloned()
+            .map(|job| JobAddr(job.to_string()))
             .collect(),
         fixes: transitioned(JobStatus::Failure, JobStatus::Success),
         existing_failures: transitioned(JobStatus::Failure, JobStatus::Failure),
@@ -454,7 +593,7 @@ pub fn compare_loaded(
     let coverage = coverage(base_case, base_map, head_case, head_map)?;
     let eval = eval_diff(&coverage, base_map, head_map);
     let builds = statuses.map(|(base_status, head_status)| {
-        build_diff(&coverage, &eval, head_map, base_status, head_status)
+        build_diff(&coverage, head_map, base_status, head_status)
     });
     Ok((eval, builds))
 }

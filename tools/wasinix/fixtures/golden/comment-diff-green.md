@@ -1,6 +1,7 @@
 ### ✅ Wasinix diff · green · [run](https://github.com/wasix-org/wasinix/actions/runs/1) · `aaaaaaaaaaaa`
 
 **Comparison** · 1 fixed · 2 rebuilt · 1 version/rel changes · 1 added · 1 removed
+**Coverage** · baseline 40/42 selected · 2 omitted by tags (history-tests: 2) · head 40/42 selected · 2 omitted by tags (history-tests: 2)
 
 <details><summary>Fixed (1)</summary>
 
@@ -23,13 +24,13 @@
 
 <details><summary>Added (1)</summary>
 
-- `checks.brotli` at 1.1.0
+- `checks.brotli` at 1.1.0 · selected
 
 </details>
 
 <details><summary>Removed (1)</summary>
 
-- `checks.legacy-tool` at 0.9.1
+- `checks.legacy-tool` at 0.9.1 · selected
 
 </details>
 

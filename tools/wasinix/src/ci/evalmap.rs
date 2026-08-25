@@ -1,7 +1,7 @@
 //! The evaluation of one case: which jobs exist, what they build to, and the
 //! policy each job declares.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -284,12 +284,26 @@ impl Document for EvalMap {
 }
 
 impl EvalMap {
+    pub(crate) fn attach_catalog(&mut self, catalog: EvalMap) {
+        self.info = catalog.info;
+        self.packages = catalog.packages;
+        self.sets = catalog.sets;
+        self.groups = catalog.groups;
+        self.sources = catalog.sources;
+    }
+
     fn catalog_jobs(&self) -> Box<dyn Iterator<Item = &JobAddr> + '_> {
         if self.info.is_empty() {
             Box::new(self.jobs.keys().chain(self.errors.keys()))
         } else {
             Box::new(self.info.keys())
         }
+    }
+
+    pub(crate) fn catalog_job_names(&self) -> BTreeSet<String> {
+        self.catalog_jobs()
+            .map(|job| job.as_str().to_string())
+            .collect()
     }
 
     /// Every name a selector completer should offer, or None for a map too
