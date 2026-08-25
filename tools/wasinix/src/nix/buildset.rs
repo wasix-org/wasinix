@@ -680,7 +680,17 @@ pub fn build_union(
         .route(request.route)?
         .probe("the dry-run plan partitions cached from to-build")?;
     let plan = dry_run_plan(&plan.stderr)?;
-    let to_build = plan.to_build;
+    let to_build = &plan.to_build;
+
+    let prebuilt = if key.is_some() {
+        let outputs_by_drv = jobs
+            .iter()
+            .map(|(drv, spec)| (drv.clone(), spec.outputs.clone()))
+            .collect();
+        prebuilt_partition(&outputs_by_drv, &plan).push
+    } else {
+        Vec::new()
+    };
 
     let mut pending: BTreeSet<String> = BTreeSet::new();
     let mut census = PlanCensus::new();
@@ -723,6 +733,7 @@ pub fn build_union(
     writer.event(StreamEvent::Plan(census))?;
 
     let uploader = Uploader::start(key.as_ref().map(SigningKey::store), request.route.store());
+    uploader.push(prebuilt);
     let started = std::time::Instant::now();
     let mut timed_out = false;
     let mut driver_failed = false;
