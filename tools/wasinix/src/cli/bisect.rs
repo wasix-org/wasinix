@@ -83,6 +83,8 @@ pub struct Bisect<'a> {
     pub predicate: ParsedRequest,
     pub run_dir: PathBuf,
     pub budget: Option<bisect::Budget>,
+    /// Parent stream that should narrate each nested candidate run.
+    pub event_parent: Option<PathBuf>,
     /// Called with the candidate count before each build, for a caller whose
     /// answer is hours away and who has somewhere to say so.
     pub progress: Option<&'a mut dyn FnMut(usize) -> Result<()>>,
@@ -132,23 +134,84 @@ pub fn drive(repo: &Path, request: Bisect) -> Result<bisect::Report> {
             let mut predicate = request.predicate.clone();
             super::request::with_override(&mut predicate, &target, rev);
             crate::support::fs::create_dir_all(candidate_dir)?;
-            super::request::drive(super::request::Drive {
-                repo,
-                source: super::request::Source::Parse {
-                    request: predicate,
-                    origin: None,
-                },
-                run_dir: candidate_dir.to_path_buf(),
-                cache: super::request::CacheIntent::Off,
-                only: super::request::TaskFilter::All,
-                follow: false,
-                finish: super::request::Finish::Silent,
-            })?;
-            let report: crate::ci::report::Report =
-                crate::support::schema::read(&crate::ci::prepare::report_path(candidate_dir))?;
-            candidate_outcome(&report)
+            let run = || {
+                super::request::drive(super::request::Drive {
+                    repo,
+                    source: super::request::Source::Parse {
+                        request: predicate,
+                        origin: None,
+                    },
+                    run_dir: candidate_dir.to_path_buf(),
+                    cache: super::request::CacheIntent::Off,
+                    only: super::request::TaskFilter::All,
+                    follow: false,
+                    finish: super::request::Finish::Silent,
+                })?;
+                let report: crate::ci::report::Report =
+                    crate::support::schema::read(&crate::ci::prepare::report_path(candidate_dir))?;
+                candidate_outcome(&report)
+            };
+            match &request.event_parent {
+                Some(parent) => mirrored_candidate(candidate_dir, parent, &target, rev, run),
+                None => run(),
+            }
         },
     )
+}
+
+fn mirrored_candidate(
+    candidate_dir: &Path,
+    parent: &Path,
+    target: &str,
+    rev: &str,
+    run: impl FnOnce() -> Result<Outcome>,
+) -> Result<Outcome> {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let short = crate::support::format::short_rev(rev);
+    let scope = crate::ci::events::Scope {
+        id: format!("bisect-{short}"),
+        label: format!("{target} candidate {short}"),
+    };
+    scope.start(parent)?;
+    let stop = Arc::new(AtomicBool::new(false));
+    let mirror = {
+        let source = candidate_dir.to_path_buf();
+        let target = parent.to_path_buf();
+        let stop = Arc::clone(&stop);
+        std::thread::spawn(move || crate::ci::events::mirror(&source, &target, &stop))
+    };
+    let outcome = run();
+    stop.store(true, Ordering::Relaxed);
+    let mirrored = match mirror.join() {
+        Ok(mirrored) => mirrored,
+        Err(_) => Err(crate::support::error::Error::Failure(
+            "candidate event mirror panicked".into(),
+        )),
+    };
+    let outcome =
+        crate::support::error::finalize(outcome, mirrored, "could not mirror candidate progress");
+    let (status, headline) = match &outcome {
+        Ok(Outcome::Good) => (
+            crate::support::atoms::TaskStatus::Success,
+            "predicate passed",
+        ),
+        Ok(Outcome::Bad) => (
+            crate::support::atoms::TaskStatus::Success,
+            "predicate failed",
+        ),
+        Ok(Outcome::Skip) => (
+            crate::support::atoms::TaskStatus::Skipped,
+            "predicate skipped",
+        ),
+        Err(_) => (
+            crate::support::atoms::TaskStatus::Failure,
+            "candidate errored",
+        ),
+    };
+    let finished = scope.finish(parent, status, headline);
+    crate::support::error::finalize(outcome, finished, "could not finish candidate progress")
 }
 
 pub fn run_bisect(repo: &Path, args: BisectArgs) -> Result<CommandStatus> {
@@ -193,6 +256,7 @@ pub fn run_bisect(repo: &Path, args: BisectArgs) -> Result<CommandStatus> {
             predicate,
             run_dir: run_dir.clone(),
             budget: None,
+            event_parent: None,
             progress: None,
         },
     )?;

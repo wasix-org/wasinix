@@ -1659,7 +1659,8 @@ mod runs {
 
 mod events {
     use crate::ci::events::{
-        Event, FILE, ResourceBoundary, Tracker, append, fold_snapshot, read_all, read_from,
+        Event, FILE, ResourceBoundary, Scope, Tracker, append, fold_snapshot, mirror, read_all,
+        read_from,
     };
     use crate::support::atoms::{Bytes, JobAddr, JobStatus, RunState, TaskStatus};
     use crate::support::fs::Scratch;
@@ -1694,6 +1695,68 @@ mod events {
         let (tail, _) = read_from(&scratch.path().join(FILE), offset).unwrap();
         assert_eq!(tail.len(), 1);
         assert!(matches!(&tail[0], Event::JobFinished { job, .. } if job.as_str() == "checks.git"));
+    }
+
+    #[test]
+    fn a_nested_run_mirrors_scoped_progress_without_its_lifecycle() {
+        let scratch = Scratch::create("wasinix-test").unwrap();
+        let source = scratch.path().join("candidate");
+        let target = scratch.path().join("parent");
+        crate::support::fs::create_dir_all(&source).unwrap();
+        crate::support::fs::create_dir_all(&target).unwrap();
+        let scope = Scope {
+            id: "bisect-abcdef".into(),
+            label: "wasixcc candidate abcdef".into(),
+        };
+        scope.start(&target).unwrap();
+        append(&source, &Event::RunStarted { at: 1, pid: 42 }).unwrap();
+        append(
+            &source,
+            &Event::PhaseStarted {
+                at: 2,
+                task_id: "head.core".into(),
+                label: "head: Core".into(),
+                jobs: Some(1),
+            },
+        )
+        .unwrap();
+        append(
+            &source,
+            &job(3, "head::checks.zlib", JobStatus::Success, false),
+        )
+        .unwrap();
+        append(
+            &source,
+            &Event::RunFinished {
+                at: 4,
+                state: RunState::Complete,
+                exit_code: Some(0),
+            },
+        )
+        .unwrap();
+        mirror(&source, &target, &std::sync::atomic::AtomicBool::new(false)).unwrap();
+        scope
+            .finish(&target, TaskStatus::Success, "predicate passed")
+            .unwrap();
+
+        let events = read_all(&target).unwrap();
+        assert!(matches!(events[0], Event::ScopeStarted { .. }));
+        assert!(matches!(
+            &events[1],
+            Event::PhaseStarted { task_id, label, .. }
+                if task_id == "head.core" && label == "head: Core"
+        ));
+        assert!(matches!(
+            &events[2],
+            Event::JobFinished { job, .. }
+                if job.as_str() == "head::checks.zlib"
+        ));
+        assert!(matches!(events[3], Event::ScopeFinished { .. }));
+        assert_eq!(events.len(), 4, "nested lifecycle leaked into the parent");
+        assert_eq!(
+            fold_snapshot(&events).phases[0].label,
+            "wasixcc candidate abcdef: head: Core"
+        );
     }
 
     #[test]
@@ -3898,6 +3961,48 @@ mod render {
     }
 
     #[test]
+    fn a_scoped_run_names_itself_and_keeps_ticking() {
+        let mut renderer = LineRenderer::with_spinner(false);
+        renderer.lines_for(&Event::RunStarted { at: 100, pid: 1 });
+        assert_eq!(
+            renderer.lines_for(&Event::ScopeStarted {
+                at: 101,
+                scope_id: "bisect-abcdef".into(),
+                label: "wasixcc candidate abcdef".into(),
+            }),
+            ["[+1s] wasixcc candidate abcdef"]
+        );
+        assert_eq!(
+            renderer.lines_for(&Event::PhaseStarted {
+                at: 102,
+                task_id: "head.treefmt".into(),
+                label: "head: Formatting".into(),
+                jobs: None,
+            }),
+            ["[+2s] wasixcc candidate abcdef: head: Formatting"]
+        );
+        assert_eq!(
+            renderer.lines_for_tick(162),
+            ["[+1m 2s] wasixcc candidate abcdef: head: Formatting · running for 1m 0s"]
+        );
+        renderer.lines_for(&Event::PhaseFinished {
+            at: 163,
+            task_id: "head.treefmt".into(),
+            status: TaskStatus::Success,
+            headline: "formatting is clean".into(),
+        });
+        assert_eq!(
+            renderer.lines_for(&Event::ScopeFinished {
+                at: 164,
+                scope_id: "bisect-abcdef".into(),
+                status: TaskStatus::Success,
+                headline: "predicate passed".into(),
+            }),
+            ["[+1m 4s] ✓ wasixcc candidate abcdef · predicate passed · took 1m 3s"]
+        );
+    }
+
+    #[test]
     fn milestone_batches_name_the_realisations_in_flight_once() {
         let mut renderer = LineRenderer::with_spinner(false);
         renderer.lines_for(&Event::PhaseStarted {
@@ -5631,6 +5736,8 @@ mod corpus {
     fn run_events_have_one_narrator() {
         let banned = [
             "Event::RunStarted",
+            "Event::ScopeStarted",
+            "Event::ScopeFinished",
             "Event::PhaseStarted",
             "Event::PhaseFinished",
             "Event::ResourceSample",

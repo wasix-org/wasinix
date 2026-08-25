@@ -1318,6 +1318,7 @@ fn ci_bisect(
             predicate: request.predicate,
             run_dir: bisect_dir.clone(),
             budget: Some(COMMENT_BISECT_BUDGET),
+            event_parent: Some(run_dir),
             progress: Some(&mut progress),
         },
     ) {

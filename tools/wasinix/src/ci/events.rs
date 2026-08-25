@@ -15,7 +15,7 @@ use crate::support::atoms::{Bytes, DurationSecs, JobAddr, JobStatus, RunState, T
 use crate::support::error::{Error, Result, io};
 use crate::support::schema::Document;
 
-pub const SCHEMA: u32 = 2;
+pub const SCHEMA: u32 = 3;
 pub const FILE: &str = "events.jsonl";
 pub const SNAPSHOT: &str = "snapshot.json";
 
@@ -33,6 +33,21 @@ pub enum ResourceBoundary {
 pub enum Event {
     #[serde(rename_all = "camelCase")]
     RunStarted { at: u64, pid: u32 },
+    /// A nested run projected into this stream. Renderers reset their live
+    /// counters at this boundary while the nested run keeps its own record.
+    #[serde(rename_all = "camelCase")]
+    ScopeStarted {
+        at: u64,
+        scope_id: String,
+        label: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    ScopeFinished {
+        at: u64,
+        scope_id: String,
+        status: TaskStatus,
+        headline: String,
+    },
     #[serde(rename_all = "camelCase")]
     PhaseStarted {
         at: u64,
@@ -103,6 +118,8 @@ impl Event {
     pub fn at(&self) -> u64 {
         match self {
             Event::RunStarted { at, .. }
+            | Event::ScopeStarted { at, .. }
+            | Event::ScopeFinished { at, .. }
             | Event::PhaseStarted { at, .. }
             | Event::PhaseFinished { at, .. }
             | Event::ResourceSample { at, .. }
@@ -115,6 +132,54 @@ impl Event {
             | Event::Heartbeat { at, .. }
             | Event::RunFinished { at, .. } => *at,
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct Scope {
+    pub id: String,
+    pub label: String,
+}
+
+/// Mirror a nested run until it finishes or the caller stops after its work.
+pub fn mirror(source: &Path, target: &Path, stop: &std::sync::atomic::AtomicBool) -> Result<()> {
+    tail(
+        source,
+        std::time::Duration::from_millis(300),
+        |fresh| {
+            for event in fresh {
+                if !matches!(event, Event::RunStarted { .. } | Event::RunFinished { .. }) {
+                    append(target, &event)?;
+                }
+            }
+            Ok(())
+        },
+        || Ok(stop.load(std::sync::atomic::Ordering::Relaxed)),
+    )
+}
+
+impl Scope {
+    pub fn start(&self, target: &Path) -> Result<()> {
+        append(
+            target,
+            &Event::ScopeStarted {
+                at: crate::support::time::unix_secs(),
+                scope_id: self.id.clone(),
+                label: self.label.clone(),
+            },
+        )
+    }
+
+    pub fn finish(&self, target: &Path, status: TaskStatus, headline: &str) -> Result<()> {
+        append(
+            target,
+            &Event::ScopeFinished {
+                at: crate::support::time::unix_secs(),
+                scope_id: self.id.clone(),
+                status,
+                headline: headline.to_string(),
+            },
+        )
     }
 }
 
@@ -320,6 +385,7 @@ impl Document for Snapshot {
 struct SnapshotReducer {
     snapshot: Snapshot,
     phases: BTreeMap<String, usize>,
+    scope: Option<String>,
 }
 
 impl SnapshotReducer {
@@ -330,6 +396,17 @@ impl SnapshotReducer {
                 self.snapshot.state = RunState::Running;
                 self.snapshot.started_at = Some(*at);
             }
+            Event::ScopeStarted { label, .. } => {
+                self.snapshot.completed_jobs = 0;
+                self.snapshot.cached_jobs = 0;
+                self.snapshot.failed_jobs = 0;
+                self.snapshot.phases.clear();
+                self.snapshot.recent_failures.clear();
+                self.snapshot.building.clear();
+                self.phases.clear();
+                self.scope = Some(label.clone());
+            }
+            Event::ScopeFinished { .. } => self.scope = None,
             Event::PhaseStarted {
                 at,
                 task_id,
@@ -341,7 +418,11 @@ impl SnapshotReducer {
                 self.phases.insert(task_id.clone(), index);
                 self.snapshot.phases.push(PhaseSnapshot {
                     task_id: task_id.clone(),
-                    label: label.clone(),
+                    label: self
+                        .scope
+                        .as_ref()
+                        .map(|scope| format!("{scope}: {label}"))
+                        .unwrap_or_else(|| label.clone()),
                     status: TaskStatus::Pending,
                     started_at: Some(*at),
                     headline: None,

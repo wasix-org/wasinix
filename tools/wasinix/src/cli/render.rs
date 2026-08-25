@@ -33,6 +33,11 @@ struct ActivePhase {
     started_at: u64,
 }
 
+struct ActiveScope {
+    id: String,
+    phase: ActivePhase,
+}
+
 pub struct LineRenderer {
     started_at: Option<u64>,
     bar: Option<ProgressBar>,
@@ -44,6 +49,7 @@ pub struct LineRenderer {
     /// Start order, so the named few are the longest-running realisations.
     realising: Vec<String>,
     phases: std::collections::BTreeMap<String, ActivePhase>,
+    scope: Option<ActiveScope>,
     last_liveness_at: Option<u64>,
     heartbeat_detail: Option<String>,
     unexplained_failures: usize,
@@ -135,6 +141,7 @@ impl LineRenderer {
             incomplete: 0,
             realising: Vec::new(),
             phases: std::collections::BTreeMap::new(),
+            scope: None,
             last_liveness_at: None,
             heartbeat_detail: None,
             unexplained_failures: 0,
@@ -166,15 +173,26 @@ impl LineRenderer {
         crate::support::ui::counts(&parts)
     }
 
+    fn current_scope(&self) -> Option<&ActivePhase> {
+        self.scope.as_ref().map(|scope| &scope.phase)
+    }
+
+    fn scoped(&self, detail: &str) -> String {
+        match self.current_scope() {
+            Some(scope) => format!("{}: {detail}", scope.label),
+            None => detail.to_string(),
+        }
+    }
+
     /// [`counts`](Self::counts) plus the work in flight, for the lines
     /// describing a run still going.
     fn progress(&self, at: u64) -> String {
         let counts = self.counts();
         let work = if !self.realising.is_empty() {
             let names: Vec<&str> = self.realising.iter().map(String::as_str).collect();
-            format!("realising {}", format::some(&names, 3))
+            self.scoped(&format!("realising {}", format::some(&names, 3)))
         } else if let Some(detail) = &self.heartbeat_detail {
-            detail.clone()
+            self.scoped(detail)
         } else if let Some(phase) = self.phases.values().min_by_key(|phase| phase.started_at) {
             let label = if self.phases.len() == 1 {
                 display_label(&phase.label)
@@ -186,7 +204,15 @@ impl LineRenderer {
                 format::duration(at.saturating_sub(phase.started_at) as f64)
             )
         } else {
-            String::new()
+            self.current_scope()
+                .map(|scope| {
+                    format!(
+                        "{} · running for {}",
+                        scope.label,
+                        format::duration(at.saturating_sub(scope.started_at) as f64)
+                    )
+                })
+                .unwrap_or_default()
         };
         if counts.is_empty() {
             work
@@ -213,6 +239,53 @@ impl LineRenderer {
         }
         match event {
             Event::RunStarted { .. } => Vec::new(),
+            Event::ScopeStarted {
+                at,
+                scope_id,
+                label,
+            } => {
+                self.total_jobs = 0;
+                self.completed = 0;
+                self.incomplete = 0;
+                self.realising.clear();
+                self.phases.clear();
+                self.heartbeat_detail = None;
+                self.unexplained_failures = 0;
+                self.last_liveness_at = None;
+                self.scope = Some(ActiveScope {
+                    id: scope_id.clone(),
+                    phase: ActivePhase {
+                        label: label.clone(),
+                        started_at: *at,
+                    },
+                });
+                vec![format!("{} {label}", self.stamp(*at))]
+            }
+            Event::ScopeFinished {
+                at,
+                scope_id,
+                status,
+                headline,
+            } => {
+                self.realising.clear();
+                self.phases.clear();
+                self.heartbeat_detail = None;
+                let (label, took) = match self.scope.take() {
+                    Some(scope) if scope.id == *scope_id => (
+                        scope.phase.label,
+                        format!(
+                            " · took {}",
+                            format::duration(at.saturating_sub(scope.phase.started_at) as f64)
+                        ),
+                    ),
+                    _ => (scope_id.clone(), String::new()),
+                };
+                vec![format!(
+                    "{} {} {label} · {headline}{took}",
+                    self.stamp(*at),
+                    glyph(*status)
+                )]
+            }
             Event::Heartbeat { detail, .. } => {
                 self.heartbeat_detail.clone_from(detail);
                 Vec::new()
@@ -231,6 +304,7 @@ impl LineRenderer {
                 jobs,
                 task_id,
             } => {
+                let label = self.scoped(&display_label(label));
                 self.total_jobs += jobs.unwrap_or(0);
                 self.phases.insert(
                     task_id.clone(),
@@ -242,11 +316,7 @@ impl LineRenderer {
                 let size = jobs
                     .map(|jobs| format!(" · {jobs} jobs"))
                     .unwrap_or_default();
-                vec![format!(
-                    "{} {}{size}",
-                    self.stamp(*at),
-                    display_label(label)
-                )]
+                vec![format!("{} {}{size}", self.stamp(*at), label)]
             }
             Event::PhaseFinished {
                 at,
@@ -289,7 +359,11 @@ impl LineRenderer {
                         self.unexplained_failures += 1;
                         return Vec::new();
                     }
-                    let mut lines = vec![format!("{} ✗ {job}", self.stamp(*at))];
+                    let mut lines = vec![format!(
+                        "{} ✗ {}",
+                        self.stamp(*at),
+                        self.scoped(job.as_str())
+                    )];
                     if let Some(error) = error {
                         lines.extend(
                             error
@@ -304,7 +378,11 @@ impl LineRenderer {
                 }
             }
             Event::Warning { at, message } => {
-                vec![format!("{} warning: {message}", self.stamp(*at))]
+                vec![format!(
+                    "{} warning: {}",
+                    self.stamp(*at),
+                    self.scoped(message)
+                )]
             }
             Event::ResourceSample { .. } | Event::AutomaticGc { .. } => Vec::new(),
             Event::LegacyOutput { .. } => Vec::new(),
@@ -403,7 +481,7 @@ impl LineRenderer {
             }
             return Vec::new();
         }
-        if self.phases.is_empty()
+        if (self.phases.is_empty() && self.scope.is_none())
             || self
                 .last_liveness_at
                 .is_some_and(|last| at.saturating_sub(last) < LIVENESS_SECONDS)
