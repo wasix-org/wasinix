@@ -4,8 +4,8 @@
 {
   exposeExtendedPackage,
   package,
-  helpers,
   lib,
+  mergeScript,
   ...
 }: let
   # nixpkgs rewrites a pyproject version literal only its current release carries,
@@ -18,7 +18,7 @@
   '';
 in
   exposeExtendedPackage {
-    postPatch = old: helpers.mergeScript (lib.optional (!isHistory) old ++ [forceThreadAio]);
+    postPatch = old: mergeScript (lib.optional (!isHistory) old ++ [forceThreadAio]);
     # the asyncio adapter tests import aiomisc at collection
     disabledTestPaths = ["tests/test_asyncio_adapter.py"];
     # Suite off: the first thread-aio test kills the guest outright; undiagnosed.
