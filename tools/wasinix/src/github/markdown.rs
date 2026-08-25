@@ -835,6 +835,7 @@ fn job_list(
     title: &'static str,
     jobs: &[crate::support::atoms::JobAddr],
     identities: &BTreeMap<crate::support::atoms::JobAddr, String>,
+    coverage: Option<&BTreeMap<crate::support::atoms::JobAddr, String>>,
     open: bool,
 ) -> Markdown {
     if jobs.is_empty() {
@@ -860,6 +861,10 @@ fn job_list(
                 }
                 None => Markdown::constant(""),
             },
+            match coverage.and_then(|coverage| coverage.get(job)) {
+                Some(note) => Markdown::concat([Markdown::constant(" · "), Markdown::text(note)]),
+                None => Markdown::constant(""),
+            },
             Markdown::constant("\n"),
         ]);
     }
@@ -872,6 +877,29 @@ fn job_list(
         ]);
     }
     body.push(Markdown::constant("\n</details>\n"))
+}
+
+fn coverage_text(label: &str, coverage: &crate::ci::compare::CaseCoverage) -> String {
+    let mut parts = vec![format!(
+        "{label} {}/{} selected",
+        coverage.selected, coverage.catalog
+    )];
+    if coverage.tag_omitted > 0 {
+        let tags = coverage
+            .omitted_by_tags
+            .iter()
+            .map(|(tag, count)| format!("{tag}: {count}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        parts.push(format!("{} omitted by tags ({tags})", coverage.tag_omitted));
+    }
+    if coverage.outside_selection > 0 {
+        parts.push(format!(
+            "{} outside selector/source",
+            coverage.outside_selection
+        ));
+    }
+    parts.join(" · ")
 }
 
 /// The comparison's non-failure stories: what got fixed, rebuilt,
@@ -906,10 +934,21 @@ fn comparison_lists(comparison: &Comparison) -> Markdown {
             "\n"
         }),
     ]);
+    if eval.coverage.base.catalog > 0 || eval.coverage.head.catalog > 0 {
+        body = Markdown::concat([
+            body,
+            Markdown::constant("**Coverage** · "),
+            Markdown::text(&coverage_text("baseline", &eval.coverage.base)),
+            Markdown::constant(" · "),
+            Markdown::text(&coverage_text("head", &eval.coverage.head)),
+            Markdown::constant("\n"),
+        ]);
+    }
     body = body.push(job_list(
         "New evaluation failures",
         &eval.new_eval_errors,
         &eval.identities,
+        None,
         true,
     ));
     if let Some(builds) = &comparison.builds {
@@ -917,9 +956,16 @@ fn comparison_lists(comparison: &Comparison) -> Markdown {
             "Removed jobs that passed",
             &builds.dropped_successes,
             &eval.identities,
+            None,
             true,
         ));
-        body = body.push(job_list("Fixed", &builds.fixes, &eval.identities, false));
+        body = body.push(job_list(
+            "Fixed",
+            &builds.fixes,
+            &eval.identities,
+            None,
+            false,
+        ));
     }
     if !eval.identity_transitions.is_empty() {
         let mut section = Markdown::concat([
@@ -949,10 +995,28 @@ fn comparison_lists(comparison: &Comparison) -> Markdown {
             Markdown::constant(" jobs (toolchain-wide).\n"),
         ]);
     } else {
-        body = body.push(job_list("Rebuilt", &eval.rebuilt, &eval.identities, false));
+        body = body.push(job_list(
+            "Rebuilt",
+            &eval.rebuilt,
+            &eval.identities,
+            None,
+            false,
+        ));
     }
-    body = body.push(job_list("Added", &eval.added, &eval.identities, false));
-    body = body.push(job_list("Removed", &eval.removed, &eval.identities, false));
+    body = body.push(job_list(
+        "Added",
+        &eval.added,
+        &eval.identities,
+        Some(&eval.catalog_job_coverage),
+        false,
+    ));
+    body = body.push(job_list(
+        "Removed",
+        &eval.removed,
+        &eval.identities,
+        Some(&eval.catalog_job_coverage),
+        false,
+    ));
     body
 }
 

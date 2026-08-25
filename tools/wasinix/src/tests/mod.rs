@@ -629,10 +629,13 @@ mod evalmap {
         }))
         .unwrap();
         let map = catalog.into_map();
+        let mut evaluated = EvalMap::default();
+        evaluated.attach_catalog(map.clone());
         let address = JobAddr("tests.packages.wasix.eh.zlib.abi".into());
         assert!(map.jobs.contains_key(&address));
         assert_eq!(map.sets["packages"], [address.as_str()]);
         assert_eq!(map.sources["consumer"], [address.as_str()]);
+        assert_eq!(evaluated.sources["consumer"], [address.as_str()]);
         assert_eq!(map.info[&address].test_name.as_deref(), Some("abi"));
         assert_eq!(map.info[&address].variant.as_deref(), Some("eh"));
         assert_eq!(map.info[&address].tags, ["slow"]);
@@ -951,6 +954,121 @@ mod compare {
 
     fn addrs(names: &[&str]) -> Vec<JobAddr> {
         names.iter().map(|name| JobAddr(name.to_string())).collect()
+    }
+
+    fn catalog_map(evaluated: &[(&str, &str)], catalog: &[(&str, &[&str])]) -> EvalMap {
+        let mut mapping = map(evaluated);
+        mapping.info = catalog
+            .iter()
+            .map(|(name, tags)| {
+                (
+                    JobAddr((*name).to_string()),
+                    JobInfo {
+                        tags: tags.iter().map(|tag| (*tag).to_string()).collect(),
+                        ..JobInfo::default()
+                    },
+                )
+            })
+            .collect();
+        mapping.sets.insert(
+            "core".into(),
+            catalog
+                .iter()
+                .map(|(name, _)| (*name).to_string())
+                .collect(),
+        );
+        mapping
+    }
+
+    fn all_case() -> Build<RevSource> {
+        Build {
+            selectors: vec![Selector {
+                kind: SelectorKind::Set,
+                name: "all".into(),
+            }],
+            ..case(&[])
+        }
+    }
+
+    #[test]
+    fn tag_omission_changes_coverage_not_the_catalog() {
+        let base = catalog_map(
+            &[
+                ("regular", "/nix/store/regular.drv"),
+                ("history", "/nix/store/history.drv"),
+            ],
+            &[("regular", &[]), ("history", &[])],
+        );
+        let head = catalog_map(
+            &[("regular", "/nix/store/regular.drv")],
+            &[("regular", &[]), ("history", &["history-tests"])],
+        );
+        let (eval, _) = compare_loaded(
+            CaseRef::Build(&all_case()),
+            &base,
+            CaseRef::Build(&all_case()),
+            &head,
+            None,
+        )
+        .unwrap();
+        assert!(eval.added.is_empty());
+        assert!(eval.removed.is_empty());
+        assert_eq!(eval.coverage.base.selected, 2);
+        assert_eq!(eval.coverage.head.catalog, 2);
+        assert_eq!(eval.coverage.head.selected, 1);
+        assert_eq!(eval.coverage.head.tag_omitted, 1);
+        assert_eq!(eval.coverage.head.omitted_by_tags["history-tests"], 1);
+    }
+
+    #[test]
+    fn an_unselected_catalog_addition_stays_visible() {
+        let base = catalog_map(
+            &[("regular", "/nix/store/regular.drv")],
+            &[("regular", &[])],
+        );
+        let head = catalog_map(
+            &[("regular", "/nix/store/regular.drv")],
+            &[("regular", &[]), ("history", &["history-tests"])],
+        );
+        let (eval, _) = compare_loaded(
+            CaseRef::Build(&all_case()),
+            &base,
+            CaseRef::Build(&all_case()),
+            &head,
+            None,
+        )
+        .unwrap();
+        assert_eq!(eval.added, addrs(&["history"]));
+        assert_eq!(
+            eval.catalog_job_coverage["history"],
+            "not selected: requires tag history-tests"
+        );
+    }
+
+    #[test]
+    fn selection_changes_do_not_hide_new_failures_or_edit_the_catalog() {
+        let mut base = catalog_map(
+            &[("old", "/nix/store/old.drv")],
+            &[("old", &[]), ("new", &[])],
+        );
+        let mut head = catalog_map(
+            &[("new", "/nix/store/new.drv")],
+            &[("old", &[]), ("new", &[])],
+        );
+        base.sets.clear();
+        head.sets.clear();
+        let (eval, builds) = compare_cases(
+            &case(&["old"]),
+            &base,
+            &status(&[("old", JobStatus::Success)]),
+            &case(&["new"]),
+            &head,
+            &status(&[("new", JobStatus::Failure)]),
+        )
+        .unwrap();
+        assert!(eval.added.is_empty());
+        assert!(eval.removed.is_empty());
+        assert_eq!(builds.new_failures, addrs(&["new"]));
     }
 
     #[test]
@@ -7847,7 +7965,9 @@ mod scenarios {
     /// A green diff whose comparison carries every non-failure story: fixes,
     /// rebuilds, version moves, added and removed jobs.
     pub fn diff_green() -> (Report, Fragments) {
-        use crate::ci::compare::{BuildDiff, Comparison, EvalDiff, VersionUpdate};
+        use crate::ci::compare::{
+            BuildDiff, CaseCoverage, Comparison, ComparisonCoverage, EvalDiff, VersionUpdate,
+        };
         let request = Request::diff(
             Diff {
                 baseline: "baseline".into(),
@@ -7885,6 +8005,26 @@ mod scenarios {
                     (JobAddr("checks.legacy-tool".into()), "0.9.1".to_string()),
                     (JobAddr("checks.zlib".into()), "1.3.2".to_string()),
                 ]),
+                catalog_job_coverage: BTreeMap::from([
+                    (JobAddr("checks.brotli".into()), "selected".into()),
+                    (JobAddr("checks.legacy-tool".into()), "selected".into()),
+                ]),
+                coverage: ComparisonCoverage {
+                    base: CaseCoverage {
+                        catalog: 42,
+                        selected: 40,
+                        tag_omitted: 2,
+                        omitted_by_tags: BTreeMap::from([("history-tests".into(), 2)]),
+                        outside_selection: 0,
+                    },
+                    head: CaseCoverage {
+                        catalog: 42,
+                        selected: 40,
+                        tag_omitted: 2,
+                        omitted_by_tags: BTreeMap::from([("history-tests".into(), 2)]),
+                        outside_selection: 0,
+                    },
+                },
                 selected_count: 40,
                 ..EvalDiff::default()
             }),
@@ -7912,7 +8052,7 @@ mod scenarios {
     /// eval half of the comparison exists. The comment must already tell the
     /// added/removed/version story.
     pub fn diff_in_progress() -> (Report, Fragments) {
-        use crate::ci::compare::{Comparison, EvalDiff};
+        use crate::ci::compare::{CaseCoverage, Comparison, ComparisonCoverage, EvalDiff};
         let request = Request::diff(
             Diff {
                 baseline: "baseline".into(),
@@ -7951,6 +8091,26 @@ mod scenarios {
                     (JobAddr("checks.brotli".into()), "1.1.0".to_string()),
                     (JobAddr("checks.zlib".into()), "1.3.2".to_string()),
                 ]),
+                catalog_job_coverage: BTreeMap::from([(
+                    JobAddr("checks.brotli".into()),
+                    "not selected: requires tag history-tests".into(),
+                )]),
+                coverage: ComparisonCoverage {
+                    base: CaseCoverage {
+                        catalog: 42,
+                        selected: 40,
+                        tag_omitted: 2,
+                        omitted_by_tags: BTreeMap::from([("history-tests".into(), 2)]),
+                        outside_selection: 0,
+                    },
+                    head: CaseCoverage {
+                        catalog: 43,
+                        selected: 40,
+                        tag_omitted: 3,
+                        omitted_by_tags: BTreeMap::from([("history-tests".into(), 3)]),
+                        outside_selection: 0,
+                    },
+                },
                 selected_count: 40,
                 ..EvalDiff::default()
             }),
