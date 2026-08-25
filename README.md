@@ -33,9 +33,9 @@ CI builds cataloged packages, artifacts, and tests as separate jobs from
 
 `pkgs/project/` constructs the schema-versioned package catalog;
 `pkgs/project/profiles.nix` and `pkgs/set/` produce five ABI-profile package
-sets; `pkgs/shared/`, `pkgs/native/`, `pkgs/wasix/`, and `pkgs/python/` are the
-registered overlay lanes; projection rules produce artifacts, commands, and
-tests. Details: [`docs/architecture.md`](docs/architecture.md).
+sets; `pkgs/overlays/` and `pkgs/python-overlays/` are the sharded registered
+package inventories; projection rules produce artifacts, commands, and tests.
+Details: [`docs/architecture.md`](docs/architecture.md).
 
 ## Documentation
 

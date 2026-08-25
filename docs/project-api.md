@@ -132,28 +132,20 @@ An extension is an ownership and provenance boundary:
   id = "my-project";
 
   overlays = {
-    shared = final: prev: {};
-    native = final: prev: {};
-    wasix = final: prev: {};
+    packages = final: prev: {};
     python = final: prev: pyfinal: pyprev: {};
   };
 
   history = {
-    wasix = ./wasix/history.json;
-    python = ./python/history.json;
+    wasix = ./pkgs/overlays/history.json;
+    python = ./pkgs/python-overlays/history.json;
   };
 }
 ```
 
-Overlay lanes have application semantics rather than package roles:
-
-- `shared` applies to the native set and every WASIX profile set.
-- `native` applies only to the native set.
-- `wasix` applies to every WASIX profile set.
-- `python` applies to each supported Python package fixpoint.
-
-Absent lanes are empty. Extension list order is overlay order. Within an
-extension, `shared` precedes the set-specific lane.
+`packages` is an ordinary nixpkgs overlay applied to the native set and every
+WASIX profile set. `python` applies to each supported Python package fixpoint.
+Absent lanes are empty, and extension list order is overlay order.
 
 Ordinary overlays supplied by `importNixpkgs` are not registered. Their packages
 may be used as dependencies, but they do not acquire Wasinix provenance or enter
@@ -202,15 +194,19 @@ loader for repositories that keep one package unit per file:
   id = "my-project";
 
   overlays = wasinix.lib.loadPackageOverlays {
-    shared = ./shared;
-    native = ./native;
-    wasix = ./wasix;
-    python = ./python;
+    packages = {
+      directory = ./pkgs/overlays;
+      lane = "packages";
+    };
+    python = {
+      directory = ./pkgs/python-overlays;
+      lane = "python";
+    };
   };
 
   history = {
-    wasix = ./wasix/history.json;
-    python = ./python/history.json;
+    wasix = ./pkgs/overlays/history.json;
+    python = ./pkgs/python-overlays/history.json;
   };
 }
 ```
@@ -221,12 +217,14 @@ The Wasinix extension uses the same helper. Its package area follows this shape:
 pkgs/
 ├── project/
 │   └── extension.nix
-├── shared/
-├── native/
-├── wasix/
+├── overlays/
+│   └── history.json
+├── python-overlays/
 │   └── history.json
 ├── python/
-│   └── history.json
+│   ├── lib/
+│   └── wheels/
+├── set/
 ├── checks/
 ├── artifacts/
 ├── harnesses/
@@ -234,17 +232,27 @@ pkgs/
 └── toolchain/
 ```
 
-The package lanes describe where an overlay applies. Catalog roles such as
-toolchain or shipped do not determine file placement. Toolchain profile
-integration remains under `toolchain/`; buildable compiler and sysroot packages
-live in the package lane matching where they are instantiated.
+Both inventories use one-character buckets derived from the first character of
+the package attribute, for example `overlays/z/zlib.nix` and
+`python-overlays/s/scipy/package.nix`. A wrong bucket, loose support file, or
+duplicate flat and directory entry is an error.
 
-Discovery is shallow. A lane contains `<name>.nix`, `<name>/package.nix`, or a
-normal nixpkgs-style `<name>/recipe.nix`. A directory cannot contain both unit
-files. Other files and directories are ignored. The directory co-locates
-patches, package-specific checks, and other inputs with the package that uses
-them. Top-level `pkgs/` contains directories only; infrastructure files live in
-the directory owning their concern.
+The regular package inventory accepts three forms:
+
+- `<bucket>/<name>.nix`: a WASIX-only adaptation with no support files;
+- `<bucket>/<name>/wasix.nix`: the same, with colocated patches or tests;
+- `<bucket>/<name>/package.nix`: a complete package definition, with native and
+  WASIX behavior in one file.
+
+`wasix.nix` is instantiated only when the actual package-set host platform is
+WASIX, including across nixpkgs' build-package splices. `package.nix` is
+instantiated in native and WASIX sets and may branch on its `scope` argument. An
+entry cannot contain both files. `recipe.nix` is obsolete and rejected.
+
+The Python inventory accepts `<bucket>/<name>.nix` or
+`<bucket>/<name>/package.nix`. Package-specific patches and tests belong inside
+the directory entry that owns them. Shared Python construction helpers and the
+wheel declarations remain under `pkgs/python/lib/` and `pkgs/python/wheels/`.
 
 The loader performs only these jobs:
 
@@ -257,41 +265,18 @@ The loader performs only these jobs:
 It does not construct history, attach tests, derive support policy, discover
 extensions, or maintain a parallel package-name list.
 
-### Recipes and package units
+### Package units
 
-A `recipe.nix` is called through the package set's `callPackage` and cataloged
-under its directory name. It returns the derivation directly and may carry all
-Wasinix policy in `passthru.wasinix`. Applying the generated recipe overlay as
-unregistered package-set plumbing does not catalog it; catalog membership
-belongs to overlay registration rather than the derivation.
+Every package unit returns an attrset of derivations. A complete package uses
+`exposePackage` to bind one derivation to the discovered name:
 
 ```nix
-# shared/my-tool/recipe.nix
+# overlays/m/my-tool/package.nix
 {
-  lib,
-  rustPlatform,
-  fetchFromGitHub,
+  exposePackage,
+  packageSet,
 }:
-rustPlatform.buildRustPackage {
-  pname = "my-tool";
-  # ...
-}
-```
-
-`package.nix` and flat package units adapt an existing package or define a
-multi-package result. Every package unit returns an attrset of derivations. For
-the common single-package adaptation, `exposePackage` and
-`exposeExtendedPackage` use the file or directory name as that attribute:
-
-```nix
-# wasix/zlib.nix
-{
-  exposeExtendedPackage,
-  packages,
-}:
-exposeExtendedPackage {
-  buildInputs = [packages.sameProfile.someDependency];
-}
+exposePackage (packageSet.callPackage ./build.nix {})
 ```
 
 Wasinix ties one lazy recursive context containing the final project projections
@@ -302,17 +287,36 @@ uses. The context includes:
 - `packages.sameProfile`: the immediate recursive package set.
 - `packages.preferred`: the attribute-wise projection of each package's
   preferred WASIX profile.
+- `packageSet`: the immediate undecorated nixpkgs or Python fixpoint.
+- `scope` and `variant`: the actual package-set scope and its profile or
+  interpreter key.
 - `commands`, `artifacts`, `harnesses`, `runners`, and `probes`.
 - `extendPackage` and the other focused package helpers.
 
 A package-unit invocation additionally supplies `package`, the preceding value
-of the attribute being defined, when one exists. It also supplies two helpers
-closed over the discovered name: `exposePackage derivation` returns the lazy
-singleton result, while `exposeExtendedPackage attrs` combines that operation
-with `extendPackage package attrs`. A unit that defines a new attribute does not
-request `package` or `exposeExtendedPackage`; doing so is an error. Raw
-extension overlays retain the standard `final: prev:` interface; the discovered
-unit API does not duplicate those names.
+of the attribute being defined, when one exists. `exposePackage derivation`
+returns the lazy singleton result, while `exposeExtendedPackage attrs` combines
+that operation with `extendPackage package attrs`. A unit that defines a new
+attribute does not request `package` or `exposeExtendedPackage`; doing so is an
+error. Raw extension overlays retain the standard `final: prev:` interface; the
+discovered unit API does not duplicate those names.
+
+A WASIX adaptation uses the corresponding cross-only helper:
+
+```nix
+# overlays/z/zlib.nix
+{
+  exposeWasixExtendedPackage,
+  packages,
+}:
+exposeWasixExtendedPackage {
+  buildInputs = [packages.sameProfile.someDependency];
+}
+```
+
+`exposeWasixPackage`, `exposeWasixExtendedPackage`, and
+`exposeWasixExtendedPackages` require preceding nixpkgs attributes. They are
+never invoked in native package sets because `wasix.nix` units are absent there.
 
 The singleton helpers preserve the overlay fixpoint: the loader can discover the
 result attribute without forcing the derivation, so that derivation may depend
@@ -348,24 +352,22 @@ directly, `buildHostPypaTools` and `dropSphinxDocs` cover common Python build
 adaptations, and `wasmRename` normalizes command filenames before WebC
 projection.
 
-A unit that genuinely owns several attributes returns an attrset of derivations:
+A unit that genuinely owns several preceding WASIX attributes uses:
 
 ```nix
-{exposeExtendedPackages}:
-exposeExtendedPackages {
+{exposeWasixExtendedPackages}:
+exposeWasixExtendedPackages {
   llvm = {};
   clang = previous: previous.overrideAttrs (_: {doCheck = true;});
 }
 ```
 
-`exposeExtendedPackages` extends each named preceding package. An attrset value
-uses `extendPackage`; a function receives the corresponding preceding package
-and returns its replacement. A unit constructing several new packages returns
-the attrset directly. This replaces a separate `{names, packages}` declaration.
-All returned values must be derivations, and the returned attribute shape must
-be the same in every variant where the unit is instantiated. Unrelated packages
-use separate units; a multi-package unit is for construction that is actually
-shared.
+An attrset value uses `extendPackage`; a function receives the corresponding
+preceding package and returns its replacement. A complete unit constructing
+several new packages returns the attrset directly. All returned values must be
+derivations, and the returned attribute shape must be the same in every variant
+where the unit is instantiated. Unrelated packages use separate units; a
+multi-package unit is for construction that is actually shared.
 
 Python units use the same `packages.sameProfile` name for their immediate Python
 fixpoint:
@@ -385,8 +387,8 @@ extendPackage package {
 }
 ```
 
-For Python, `pkgs` is the enclosing WASIX package set. This is the only
-additional scope Python needs.
+For Python, `pkgs` is the enclosing WASIX package set and `packageSet` is the
+immediate Python fixpoint.
 
 Auto-discovered units must return disjoint attributes. Same-extension layering
 uses explicitly composed overlays so its order is visible rather than derived
@@ -424,8 +426,8 @@ The structured views are:
 There is no `packages.toolchain` or top-level `toolchain` namespace. Buildable
 toolchain artifacts are ordinary native packages. Profile-specific construction
 interfaces are lazy package projections, like retained versions. There is also
-no architectural product category: a shared recipe is a package supplied through
-the `shared` overlay lane, and shipping is an independent package policy.
+no architectural product category: a complete package is supplied through the
+regular package overlay, and shipping is an independent package policy.
 
 The standard `packages.<system>` flake output remains small, normally exposing
 only `wasinix` and a default. The complete structured project belongs under
@@ -546,9 +548,9 @@ Terminology is fixed as follows:
 
 Revision state lives in `release-revisions.json`.
 
-History initially supports packages adapted from `prev` and Python packages
-adapted from their immediate `prev`. Shared-recipe history is useful but is not
-required for v1.
+History supports WASIX and Python packages adapted from their immediate
+preceding package. History for complete package definitions is not required for
+v1.
 
 The built-in history projection applies to current package entries and returns
 retained derivations in its `versions` namespace. To instantiate one, the rule:
@@ -574,7 +576,7 @@ passthru.wasinix.instance = {
 ```
 
 Current instances use `kind = "current"`. Historical packages use current
-dependencies by default. A recipe that requires an older dependency addresses
+dependencies by default. A package that requires an older dependency addresses
 that dependency explicitly through the structured history views.
 
 History is the `versions` projection of a package view, not a separate package
@@ -957,8 +959,8 @@ introduces them:
 - `ci.jobs` and `ci.catalog.jobs` have identical keys;
 - every serialized catalog carries the project schema version.
 
-The directory loader derives package-unit names and values from their returned
-attrsets and recipe names from their directories. Its eval-only tests must cover
-a normal recipe, a singleton package unit depending on the immediate recursive
-set, a multi-package unit, rejection of a bare package-unit derivation, and the
-absence of loose files at the top of `pkgs/`.
+The directory loader derives package-unit names from their sharded paths and
+values from their returned attrsets. Its eval-only tests must cover complete and
+WASIX-only units, a singleton adaptation depending on the immediate recursive
+set, a multi-package unit, rejection of a bare derivation, wrong buckets,
+conflicting entry forms, obsolete `recipe.nix`, and loose support files.
