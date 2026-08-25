@@ -1,4 +1,4 @@
-### ✅ Wasinix CI · green · [run](https://github.com/wasix-org/wasinix/actions/runs/1) · `aaaaaaaaaaaa`
+### ✅ Wasinix diff · green · [run](https://github.com/wasix-org/wasinix/actions/runs/1) · `aaaaaaaaaaaa`
 
 **Comparison** · 1 fixed · 2 rebuilt · 1 version/rel changes · 1 added · 1 removed
 

@@ -184,6 +184,13 @@ comment (the PR's required check stays build.yml's). Mutations rewrite shared
 branch state, so they serialize per PR: of a mutation burst the first and the
 latest run, and one replaced while queued gets a superseded reply.
 
+A command reply keeps its parsed command identity and canonical `/wasinix`
+command from its first live update through its final result. A red result means
+the command completed and found failing checks; an internal execution failure is
+labeled `internal error` instead. Finding the first bad commit is therefore a
+successful bisect result, while ENOSPC or a crashed process is an execution
+error.
+
 Untrusted text (build logs, junit messages, PR comment bodies) passes exactly
 one sanitizer at the render edge: fences sized past the payload, HTML and cell
 escaping that neutralizes line breaks and backslashes. A managed surface is one

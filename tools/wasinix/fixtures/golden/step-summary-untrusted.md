@@ -1,7 +1,7 @@
 > [!NOTE]
 > This result was produced by this pull request's own code and is advisory; it is not an authoritative CI verdict.
 
-### ❌ Wasinix CI · 1 failure · run `https://ci.example/runs/1)|end` · `aaaaaaaaaaaa`
+### ❌ Wasinix build · `core` · 1 failure · run `https://ci.example/runs/1)|end` · `aaaaaaaaaaaa`
 
 | job | task | failure |
 |:--|:--|:--|

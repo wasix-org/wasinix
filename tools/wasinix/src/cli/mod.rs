@@ -519,6 +519,9 @@ pub enum CiCommand {
         /// The command comment the reply is keyed to
         #[arg(long)]
         comment_id: u64,
+        /// Authorized command document, when authorization completed
+        #[arg(long)]
+        origin: Option<PathBuf>,
         /// Files whose tail describes the failure; missing ones are skipped
         #[arg(long = "failure")]
         failures: Vec<PathBuf>,
@@ -1263,6 +1266,7 @@ fn command_reply(command: &crate::ci::origin::Command, reply: ReplyFreshness) ->
     let sha = crate::support::atoms::Rev::parse(&command.origin.head_sha)?;
     let body = crate::github::markdown::command_reply(
         reply,
+        Some(&command.command),
         &origin,
         updated_at,
         run_url.as_deref(),
@@ -1294,14 +1298,13 @@ fn ci_bisect(
     request: untrusted::BisectCommand,
     run_dir: PathBuf,
 ) -> Result<CommandStatus> {
-    let target = request.target.clone();
     // A candidate is a whole build, so the first answer is hours away. The
     // reply exists before the first one and is rewritten after each, which
     // is also what a budget-stopped run leaves behind.
     let mut progress = |tested: usize| {
         command_reply(
             command,
-            ReplyFreshness::Live(crate::github::markdown::bisect_progress(&target, tested)),
+            ReplyFreshness::Live(crate::github::markdown::bisect_progress(tested)),
         )
     };
     progress(0)?;
@@ -1767,9 +1770,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                     command_reply(
                         &command,
                         ReplyFreshness::Final(crate::github::markdown::plan_reply(
-                            &command.command,
-                            &resolved,
-                            &plan,
+                            &resolved, &plan,
                         )?),
                     )?;
                     return Ok(CommandStatus::SUCCESS);
@@ -1866,20 +1867,34 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
         CiCommand::Reply {
             surface,
             comment_id,
+            origin: command_origin,
             failures,
         } => {
             let pull_request = surface.pull_request.ok_or_else(|| {
                 crate::support::error::Error::Request("a reply needs --pull-request".into())
             })?;
             let repository = surface.repository(&repo)?;
-            let origin =
+            let origin_url =
                 crate::github::surfaces::origin_comment_url(&repository, pull_request, comment_id);
+            let command = command_origin
+                .as_ref()
+                .map(|path| schema::read::<crate::ci::origin::Command>(path))
+                .transpose()?;
+            if let Some(command) = &command {
+                crate::support::error::require(
+                    command.origin.repository == repository
+                        && command.origin.pull_request == pull_request
+                        && command.origin.comment_id == comment_id,
+                    "authorized command does not match the failure reply",
+                )?;
+            }
             let sha = crate::support::env::github_sha()?
                 .map(|sha| crate::support::atoms::Rev::parse(&sha))
                 .transpose()?;
             let body = crate::github::markdown::command_reply(
                 crate::github::markdown::failure_reply(&failure_tail(&failures)),
-                &origin,
+                command.as_ref().map(|command| command.command.as_str()),
+                &origin_url,
                 None,
                 surface.run_url.as_deref(),
                 sha.as_ref(),

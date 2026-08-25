@@ -1,4 +1,4 @@
-### ✅ Wasinix CI · green · [run](https://github.com/wasix-org/wasinix/actions/runs/1) · `aaaaaaaaaaaa`
+### ✅ Wasinix build · `core` · green · [run](https://github.com/wasix-org/wasinix/actions/runs/1) · `aaaaaaaaaaaa`
 
 <sub>case: Formatting ✅ · Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ✅<br><a href="https://github.com/wasix-org/wasinix/actions/runs/1">full pipeline</a></sub>
 

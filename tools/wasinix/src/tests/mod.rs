@@ -331,10 +331,10 @@ mod plan {
     fn a_comment_plan_reply_names_the_resolved_request_and_tasks() {
         let request = Request::build(build("case", &["core"]), Default::default());
         let plan = plan_of(&request, None, &[]);
-        let reply =
-            crate::github::markdown::plan_reply("build core --plan", &request, &plan).unwrap();
+        let reply = crate::github::markdown::plan_reply(&request, &plan).unwrap();
         let body = crate::github::markdown::command_reply(
             reply,
+            Some("build core --plan"),
             "https://github.com/wasix-org/wasinix/pull/1#issuecomment-2",
             None,
             Some("https://github.com/wasix-org/wasinix/actions/runs/3"),
@@ -343,7 +343,7 @@ mod plan {
         .into_string();
         assert!(
             body.contains(&format!(
-                "### ℹ️ Wasinix plan · {} tasks · [run]",
+                "### ℹ️ Wasinix plan · `build core` · {} tasks · [run]",
                 plan.tasks.len()
             )),
             "{body}"
@@ -3034,16 +3034,21 @@ mod markdown {
         let origin = "https://github.com/wasix-org/wasinix/pull/7#issuecomment-9";
         let body = crate::github::markdown::command_reply(
             crate::github::markdown::failure_reply("log line\n```\n### forged"),
+            Some("build all"),
             origin,
             None,
             Some("https://ci.example/run"),
             None,
         )
         .into_string();
-        assert!(body.contains("### ❌ Wasinix command · failed · [run](https://ci.example/run)"));
+        assert!(body.contains(
+            "### 💥 Wasinix build · `all` · internal error · [run](https://ci.example/run)"
+        ));
+        assert!(body.contains("**Command:** `/wasinix build all`"), "{body}");
         assert!(body.contains("````text\nlog line\n```\n### forged\n````"));
         let empty = crate::github::markdown::command_reply(
             crate::github::markdown::failure_reply("  "),
+            None,
             origin,
             None,
             None,
@@ -3200,13 +3205,18 @@ mod markdown {
                 &report,
                 Some("update wasixcc: no such revision"),
             ),
+            Some("bisect wasixcc --good pinned --bad main -- build core"),
             "https://github.com/wasix-org/wasinix/pull/7#issuecomment-9",
             None,
             Some("https://github.com/wasix-org/wasinix/actions/runs/3"),
             None,
         )
         .into_string();
-        assert!(body.contains("stopped on an error"), "{body}");
+        assert!(body.contains("internal error"), "{body}");
+        assert!(
+            body.contains("**Command:** `/wasinix bisect wasixcc"),
+            "{body}"
+        );
         assert!(body.contains("update wasixcc: no such revision"), "{body}");
         // The candidates it did test survive the error.
         assert!(body.contains("`de6585f76fa0`"), "{body}");
@@ -3222,7 +3232,8 @@ mod markdown {
         let sha = Rev::parse(&"e".repeat(40)).unwrap();
         let render = |tested| {
             command_reply(
-                bisect_progress("wasixcc", tested),
+                bisect_progress(tested),
+                Some("bisect wasixcc --good pinned --bad main -- build core"),
                 origin,
                 Some(1_756_144_000),
                 Some(run),
@@ -3286,6 +3297,24 @@ mod markdown {
             assert!(body[metadata_end..heading_end].contains("[run]"), "{body}");
             assert!(
                 body[metadata_end..heading_end].contains("`aaaaaaaaaaaa`"),
+                "{body}"
+            );
+        }
+    }
+
+    #[test]
+    fn command_identity_survives_from_live_to_final_report() {
+        let (mut report, fragments) = scenarios::green();
+        report.command = Some("build core --blocked=skip".into());
+        let final_body = comment(&report, &fragments, None, &links()).into_string();
+        report.conclusion = None;
+        report.complete = false;
+        let live_body = comment(&report, &fragments, None, &links()).into_string();
+
+        for body in [live_body, final_body] {
+            assert!(body.contains("Wasinix build · `core`"), "{body}");
+            assert!(
+                body.contains("**Command:** `/wasinix build core --blocked=skip`"),
                 "{body}"
             );
         }
@@ -3366,7 +3395,11 @@ mod markdown {
             Some("/wasinix build checks.gzip-roundtrip --with s3-server@0.1.10")
         );
         let body = comment(&rendered.report, &rendered.fragments, None, &links()).into_string();
-        assert!(body.contains("**Command**"), "{body}");
+        assert!(
+            body.contains("### 💥 Wasinix build · `checks.gzip-roundtrip` · internal error"),
+            "{body}"
+        );
+        assert!(body.contains("**Command:**"), "{body}");
         assert!(body.contains("--with s3-server@0.1.10"), "{body}");
         // And the error still leads, rather than the narration below it.
         assert!(
@@ -6286,7 +6319,32 @@ mod corpus {
 
 mod untrusted {
     use crate::ci::origin::{Classifier, CommandKind};
-    use crate::cli::untrusted::{ClapClassifier, UntrustedCommand, parse, split_words};
+    use crate::cli::untrusted::{
+        ClapClassifier, UntrustedCommand, parse, presentation, split_words,
+    };
+
+    #[test]
+    fn comment_presentations_come_from_the_shared_grammar() {
+        for (command, heading, target) in [
+            ("build all", "Wasinix build", Some("all")),
+            (
+                "/wasinix spot packagesByProfile.zlib",
+                "Wasinix spot",
+                Some("packagesByProfile.zlib"),
+            ),
+            ("diff build all --vs build core", "Wasinix diff", None),
+            (
+                "bisect wasixcc --good pinned --bad main -- build core",
+                "Wasinix bisect",
+                Some("wasixcc"),
+            ),
+            ("build core --plan", "Wasinix plan", Some("build core")),
+        ] {
+            let presentation = presentation(command).unwrap();
+            assert_eq!(presentation.heading, heading, "{command}");
+            assert_eq!(presentation.target.as_deref(), target, "{command}");
+        }
+    }
 
     #[test]
     fn words_split_shell_style_and_unbalanced_quotes_fail() {

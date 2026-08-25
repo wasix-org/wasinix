@@ -1,6 +1,6 @@
 <sub>updated 12:50 UTC</sub>
 
-### ⏳ Wasinix CI · building · [run](https://github.com/wasix-org/wasinix/actions/runs/1) · `aaaaaaaaaaaa`
+### ⏳ Wasinix diff · building · [run](https://github.com/wasix-org/wasinix/actions/runs/1) · `aaaaaaaaaaaa`
 
 **Comparison** · 1 rebuilt · 0 version/rel changes · 1 added · 0 removed · builds pending
 

@@ -1,4 +1,4 @@
-### ❌ Wasinix CI · 1 failure · [run](https://github.com/wasix-org/wasinix/actions/runs/1) · `aaaaaaaaaaaa`
+### ❌ Wasinix build · `core` · 1 failure · [run](https://github.com/wasix-org/wasinix/actions/runs/1) · `aaaaaaaaaaaa`
 
 | job | task | failure |
 |:--|:--|:--|

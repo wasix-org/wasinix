@@ -2,7 +2,7 @@
 //! rejects effects the workflow adapter owns before typed conversion.
 
 use crate::ci::origin::{Classifier, CommandKind};
-use crate::ci::types::{ParsedRequest, Request};
+use crate::ci::types::{ParsedRequest, Request, RequestAction};
 use crate::support::error::{Result, request_error};
 
 const MAX_WORDS: usize = 64;
@@ -134,6 +134,97 @@ pub enum UntrustedCommand {
     Bisect(BisectCommand),
     Mutation(MutationCommand),
     Help,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Presentation {
+    pub heading: &'static str,
+    pub target: Option<String>,
+}
+
+fn selection<'a>(values: impl Iterator<Item = &'a str>) -> Option<String> {
+    let values: Vec<&str> = values.collect();
+    match values.as_slice() {
+        [] => None,
+        [one] => Some((*one).to_string()),
+        [one, two] => Some(format!("{one}, {two}")),
+        [one, rest @ ..] => Some(format!("{one} +{}", rest.len())),
+    }
+}
+
+impl Presentation {
+    pub fn request<S>(request: &Request<S>, plan: bool) -> Presentation {
+        let (heading, action, target) = match &request.action {
+            RequestAction::Build(build) => (
+                "Wasinix build",
+                "build",
+                selection(
+                    build
+                        .selectors
+                        .iter()
+                        .map(|selector| selector.name.as_str()),
+                ),
+            ),
+            RequestAction::Spot(spot) => (
+                "Wasinix spot",
+                "spot",
+                selection(spot.targets.iter().map(String::as_str)),
+            ),
+            RequestAction::Diff(_) => ("Wasinix diff", "diff", None),
+        };
+        if plan {
+            Presentation {
+                heading: "Wasinix plan",
+                target: Some(match target {
+                    Some(target) => format!("{action} {target}"),
+                    None => action.to_string(),
+                }),
+            }
+        } else {
+            Presentation { heading, target }
+        }
+    }
+}
+
+impl UntrustedCommand {
+    pub fn presentation(&self) -> Presentation {
+        match self {
+            UntrustedCommand::Request(request) => Presentation::request(request, false),
+            UntrustedCommand::Plan(request) => Presentation::request(request, true),
+            UntrustedCommand::Bisect(bisect) => Presentation {
+                heading: "Wasinix bisect",
+                target: Some(bisect.target.clone()),
+            },
+            UntrustedCommand::Mutation(MutationCommand::Update { .. }) => Presentation {
+                heading: "Wasinix update",
+                target: None,
+            },
+            UntrustedCommand::Mutation(MutationCommand::Bump { .. }) => Presentation {
+                heading: "Wasinix versions",
+                target: None,
+            },
+            UntrustedCommand::Mutation(MutationCommand::Regenerate) => Presentation {
+                heading: "Wasinix regenerate",
+                target: None,
+            },
+            UntrustedCommand::Mutation(MutationCommand::Format) => Presentation {
+                heading: "Wasinix fmt",
+                target: None,
+            },
+            UntrustedCommand::Help => Presentation {
+                heading: "Wasinix commands",
+                target: None,
+            },
+        }
+    }
+}
+
+pub fn presentation(command: &str) -> Result<Presentation> {
+    let command = command
+        .strip_prefix(crate::ci::origin::PREFIX)
+        .map(str::trim_start)
+        .unwrap_or(command);
+    Ok(parse(command)?.presentation())
 }
 
 fn request_command(request: ParsedRequest, plan: bool) -> UntrustedCommand {

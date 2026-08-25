@@ -403,14 +403,25 @@ jobs:
           pattern: errors-*
           merge-multiple: true
 
+      - name: Fetch the authorized command
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: origin-command
+
       - name: Reply on error
         id: reply
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          origin=()
+          if [ -f origin-command.json ]; then
+            origin=(--origin origin-command.json)
+          fi
           nix run .#wasinix -- ci reply \
             --pull-request '${{ github.event.issue.number }}' \
             --comment-id '${{ github.event.comment.id }}' \
+            "${origin[@]}" \
             --failure auth-error.txt --failure run-error.txt \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 

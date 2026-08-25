@@ -1,6 +1,6 @@
 <sub><a href="https://github.com/wasix-org/wasinix/pull/7#issuecomment-9">↳ in reply to this command</a></sub>
 
-### ❌ Wasinix CI · 1 failure · run `https://ci.example/runs/1)|end` · `aaaaaaaaaaaa`
+### ❌ Wasinix build · `core` · 1 failure · run `https://ci.example/runs/1)|end` · `aaaaaaaaaaaa`
 
 | job | task | failure |
 |:--|:--|:--|

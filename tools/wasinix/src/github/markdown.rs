@@ -52,12 +52,71 @@ pub struct Links {
     pub rendered_at: u64,
 }
 
+fn report_presentation(report: &Report) -> crate::cli::untrusted::Presentation {
+    report
+        .command
+        .as_deref()
+        .and_then(|command| crate::cli::untrusted::presentation(command).ok())
+        .or_else(|| {
+            report
+                .request
+                .as_ref()
+                .map(|request| crate::cli::untrusted::Presentation::request(request, false))
+        })
+        .unwrap_or(crate::cli::untrusted::Presentation {
+            heading: "Wasinix CI",
+            target: None,
+        })
+}
+
+fn report_header(
+    status: HeadingStatus,
+    report: &Report,
+    mut details: Vec<Markdown>,
+    links: &Links,
+    updated_at: Option<u64>,
+) -> Markdown {
+    let presentation = report_presentation(report);
+    if let Some(target) = presentation.target {
+        details.insert(0, Markdown::code(&target));
+    }
+    header(
+        status,
+        Markdown::constant(presentation.heading),
+        details,
+        links.origin.as_deref(),
+        updated_at,
+        links.run_url.as_deref(),
+        links.sha.as_ref(),
+    )
+}
+
+fn command_block(command: Option<&str>) -> Markdown {
+    match command {
+        Some(command) => Markdown::concat([
+            Markdown::constant("**Command:** "),
+            Markdown::code(&format!(
+                "{}{}",
+                if command.starts_with("/wasinix") {
+                    ""
+                } else {
+                    "/wasinix "
+                },
+                command
+            )),
+            Markdown::constant("\n\n"),
+        ]),
+        None => Markdown::new(),
+    }
+}
+
 #[derive(Clone, Copy)]
 enum HeadingStatus {
     Running,
     Success,
     Warning,
-    Failure,
+    Negative,
+    Error,
     Info,
 }
 
@@ -67,7 +126,8 @@ impl HeadingStatus {
             HeadingStatus::Running => "⏳",
             HeadingStatus::Success => "✅",
             HeadingStatus::Warning => "⚠️",
-            HeadingStatus::Failure => "❌",
+            HeadingStatus::Negative => "❌",
+            HeadingStatus::Error => "💥",
             HeadingStatus::Info => "ℹ️",
         }
     }
@@ -141,12 +201,21 @@ fn reply(
 
 /// Add the metadata shared by replies keyed to a command comment.
 pub fn command_reply(
-    reply: CommandReply,
+    mut reply: CommandReply,
+    command: Option<&str>,
     origin: &str,
     updated_at: Option<u64>,
     run_url: Option<&str>,
     sha: Option<&Rev>,
 ) -> Markdown {
+    if let Some(presentation) =
+        command.and_then(|command| crate::cli::untrusted::presentation(command).ok())
+    {
+        reply.subject = Markdown::constant(presentation.heading);
+        if let Some(target) = presentation.target {
+            reply.details.insert(0, Markdown::code(&target));
+        }
+    }
     header(
         reply.status,
         reply.subject,
@@ -156,11 +225,11 @@ pub fn command_reply(
         run_url,
         sha,
     )
+    .push(command_block(command))
     .push(reply.body)
 }
 
 pub fn plan_reply(
-    command: &str,
     request: &ResolvedRequest,
     plan: &crate::ci::plan::Plan,
 ) -> crate::support::error::Result<CommandReply> {
@@ -171,9 +240,9 @@ pub fn plan_reply(
         }
     })?;
     let mut body = Markdown::concat([
-        Markdown::constant("No tasks were run.\n\n**Command**\n\n"),
-        Markdown::fenced(command, "text"),
-        Markdown::constant("\n<details><summary>Resolved request</summary>\n\n"),
+        Markdown::constant(
+            "No tasks were run.\n\n<details><summary>Resolved request</summary>\n\n",
+        ),
         Markdown::fenced(&request, "json"),
         Markdown::constant("\n</details>\n\n**Pipeline**\n\n| task | role |\n|:--|:--|\n"),
     ]);
@@ -498,16 +567,6 @@ fn footer(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Links
 
 fn details(report: &Report, fragments: &BTreeMap<String, Fragment>) -> Markdown {
     let mut body = Markdown::new();
-    // What was asked for, in the words it was asked in. A run that died
-    // before resolving a request has only this.
-    if let Some(command) = &report.command {
-        body = Markdown::concat([
-            body,
-            Markdown::constant("**Command**\n\n"),
-            Markdown::fenced(command, "text"),
-            Markdown::constant("\n"),
-        ]);
-    }
     if let Some(request) = &report.request {
         if let Ok(echo) = serde_json::to_string_pretty(request) {
             body = Markdown::concat([
@@ -787,15 +846,8 @@ fn green(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Links)
         None => Markdown::constant("green"),
     };
     Markdown::concat([
-        header(
-            HeadingStatus::Success,
-            Markdown::constant("Wasinix CI"),
-            vec![jobs],
-            links.origin.as_deref(),
-            None,
-            links.run_url.as_deref(),
-            links.sha.as_ref(),
-        ),
+        report_header(HeadingStatus::Success, report, vec![jobs], links, None),
+        command_block(report.command.as_deref()),
         diagnostics(report),
         comparison_block(report),
         footer(report, fragments, links),
@@ -805,6 +857,7 @@ fn green(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Links)
 }
 
 fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Links) -> Markdown {
+    let execution_error = report.complete && report.request.is_none() && report.command.is_some();
     let all = failures(report);
     // In a diff, regressions are the story and shared failures are the
     // baseline's condition; in a build, every failure is new.
@@ -848,7 +901,9 @@ fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
     // deserve an honest count; a report with no failed tasks at all (a
     // synthesized terminal report for a lost or cancelled run) carries its
     // whole story in the title.
-    let what = if primary.is_empty() {
+    let what = if execution_error {
+        Markdown::constant("internal error")
+    } else if primary.is_empty() {
         let failed_tasks = report
             .tasks
             .iter()
@@ -862,16 +917,14 @@ fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
     } else {
         what
     };
-    let mut text = header(
-        HeadingStatus::Failure,
-        Markdown::constant("Wasinix CI"),
-        vec![what],
-        links.origin.as_deref(),
-        None,
-        links.run_url.as_deref(),
-        links.sha.as_ref(),
-    )
-    .push(diagnostics(report));
+    let status = if execution_error {
+        HeadingStatus::Error
+    } else {
+        HeadingStatus::Negative
+    };
+    let mut text = report_header(status, report, vec![what], links, None)
+        .push(command_block(report.command.as_deref()))
+        .push(diagnostics(report));
     if primary.is_empty() {
         // A regression can be a job that never ran, whose failure atom is
         // transitive and so appears in no failure table. Naming it is the
@@ -947,15 +1000,14 @@ fn inconclusive(
         };
         ("blocked", lead)
     };
-    let mut text = header(
+    let mut text = report_header(
         HeadingStatus::Warning,
-        Markdown::constant("Wasinix CI"),
+        report,
         vec![Markdown::constant(state), Markdown::text(&report.title)],
-        links.origin.as_deref(),
+        links,
         None,
-        links.run_url.as_deref(),
-        links.sha.as_ref(),
     )
+    .push(command_block(report.command.as_deref()))
     .push(Markdown::constant(lead))
     .push(diagnostics(report));
     let all = failures(report);
@@ -1026,15 +1078,14 @@ fn in_progress(
     };
     let mut heading_details = vec![what];
     heading_details.extend(counts);
-    let mut text = header(
+    let mut text = report_header(
         HeadingStatus::Running,
-        Markdown::constant("Wasinix CI"),
+        report,
         heading_details,
-        links.origin.as_deref(),
+        links,
         Some(updated_at),
-        links.run_url.as_deref(),
-        links.sha.as_ref(),
-    );
+    )
+    .push(command_block(report.command.as_deref()));
     if let Some(snapshot) = snapshot {
         if !snapshot.recent_failures.is_empty() {
             let shown: Vec<Markdown> = snapshot
@@ -1164,9 +1215,9 @@ pub fn failure_reply(detail: &str) -> CommandReply {
         detail
     };
     reply(
-        HeadingStatus::Failure,
+        HeadingStatus::Error,
         "Wasinix command",
-        vec![Markdown::constant("failed")],
+        vec![Markdown::constant("internal error")],
         Markdown::fenced(detail, "text"),
     )
 }
@@ -1195,7 +1246,7 @@ fn candidates(report: &crate::nix::bisect::Report) -> Markdown {
 
 /// The bisect's reply while it runs. A candidate is a whole build, so the
 /// tick is the only sign the command was picked up at all.
-pub fn bisect_progress(target: &str, tested: usize) -> CommandReply {
+pub fn bisect_progress(tested: usize) -> CommandReply {
     let what = if tested == 0 {
         Markdown::constant("resolving the range")
     } else {
@@ -1204,7 +1255,7 @@ pub fn bisect_progress(target: &str, tested: usize) -> CommandReply {
     reply(
         HeadingStatus::Running,
         "Wasinix bisect",
-        vec![Markdown::code(target), what],
+        vec![what],
         Markdown::new(),
     )
 }
@@ -1221,12 +1272,9 @@ pub fn bisect_reply(report: &crate::nix::bisect::Report, failure: Option<&str>) 
             candidates(report),
         ]);
         return reply(
-            HeadingStatus::Failure,
+            HeadingStatus::Error,
             "Wasinix bisect",
-            vec![
-                Markdown::code(&report.target),
-                Markdown::constant("stopped on an error"),
-            ],
+            vec![Markdown::constant("internal error")],
             body,
         );
     }
@@ -1235,7 +1283,6 @@ pub fn bisect_reply(report: &crate::nix::bisect::Report, failure: Option<&str>) 
             HeadingStatus::Success,
             "Wasinix bisect",
             vec![
-                Markdown::code(&report.target),
                 Markdown::constant(if report.reverse {
                     "first passing commit"
                 } else {
@@ -1248,10 +1295,7 @@ pub fn bisect_reply(report: &crate::nix::bisect::Report, failure: Option<&str>) 
         None => reply(
             HeadingStatus::Warning,
             "Wasinix bisect",
-            vec![
-                Markdown::code(&report.target),
-                Markdown::constant("budget spent"),
-            ],
+            vec![Markdown::constant("budget spent")],
             Markdown::concat([
                 match report.revisions_left {
                     Some(left) => Markdown::concat([
