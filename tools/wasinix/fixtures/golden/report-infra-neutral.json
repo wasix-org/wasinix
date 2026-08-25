@@ -48,16 +48,6 @@
   "schema": 4,
   "tasks": [
     {
-      "case": "candidate-1",
-      "enabled": true,
-      "gate": true,
-      "headline": "x",
-      "kind": "validation",
-      "label": "candidate-1: Formatting",
-      "status": "success",
-      "taskId": "candidate-1.treefmt"
-    },
-    {
       "case": "baseline",
       "enabled": true,
       "gate": false,

@@ -269,14 +269,6 @@ mod plan {
         // broken baseline concludes neutral instead, so it never gates.
         assert!(gate("candidate-1.eval"));
         assert!(!gate("baseline.eval"));
-        assert!(gate("candidate-1.treefmt"));
-        // The baseline is not the submitted tree, so it is never format-checked.
-        assert!(
-            !plan
-                .tasks
-                .iter()
-                .any(|task| task.task_id == "baseline.treefmt")
-        );
         // The comparison is a fold-time projection, never a task.
         assert!(
             !plan
@@ -2209,8 +2201,7 @@ mod exec {
 
     use crate::ci::events::{Event, Tracker, read_all};
     use crate::ci::exec::{
-        JobState, blocked_by_case_failure, cached_jobs, classify_build_outcome, fatal,
-        project_junit, record_result,
+        JobState, cached_jobs, classify_build_outcome, fatal, project_junit, record_result,
     };
     use crate::ci::plan::{BuildTarget, Phase};
     use crate::support::atoms::{JobStatus, TaskStatus};
@@ -2227,29 +2218,10 @@ mod exec {
 
     #[test]
     fn only_fatal_failures_hide_analysis_results() {
-        assert!(blocked_by_case_failure(Phase::Eval));
-        assert!(blocked_by_case_failure(Phase::Build {
-            set: BuildTarget::Packages,
-        }));
-        // A content diff without its case's eval map can only error; a
-        // failed build is not fatal, so analysis still runs after one.
-        assert!(blocked_by_case_failure(Phase::Content));
-        assert!(!blocked_by_case_failure(Phase::Treefmt));
         assert!(fatal(Phase::Eval));
         assert!(!fatal(Phase::Build {
             set: BuildTarget::Packages,
         }));
-    }
-
-    #[test]
-    fn formatting_ignores_remote_placement() {
-        let route = crate::ci::exec::task_route(
-            std::path::Path::new("/repo-with-no-builder-config"),
-            Phase::Treefmt,
-            Some("missing-remote"),
-        )
-        .unwrap();
-        assert!(matches!(route, crate::nix::route::Route::Local(_)));
     }
 
     #[test]
@@ -6598,11 +6570,7 @@ mod corpus {
         let publish_index = read("publish-index.yml");
         let publish_job = job(&publish_index, "publish");
         assert_eq!(
-            field(
-                field(step(publish_job, "download"), "with"),
-                "name"
-            )
-            .as_str(),
+            field(field(step(publish_job, "download"), "with"), "name").as_str(),
             Some(crate::github::actions::ARTIFACT_CI_RUN)
         );
         assert_eq!(
@@ -6613,10 +6581,7 @@ mod corpus {
             .as_str()
             .unwrap();
         assert!(identity.contains(".outputs[$job].out // empty"));
-        let restore_key = field(
-            field(step(publish_job, "published"), "with"),
-            "key",
-        );
+        let restore_key = field(field(step(publish_job, "published"), "with"), "key");
         let save_key = field(
             field(step(publish_job, "save_publication_state"), "with"),
             "key",
@@ -6857,7 +6822,6 @@ mod untrusted {
     use crate::cli::untrusted::{
         ClapClassifier, UntrustedCommand, parse, presentation, split_words,
     };
-    use crate::ci::types::Request;
 
     #[test]
     fn comment_presentations_come_from_the_shared_grammar() {
@@ -7311,15 +7275,6 @@ mod fold {
             &[],
         );
         let mut fragments = BTreeMap::new();
-        fragments.insert(
-            "case.treefmt".to_string(),
-            fragment(
-                "case.treefmt",
-                TaskKind::Validation,
-                TaskStatus::Success,
-                "ok",
-            ),
-        );
         fragments.insert(
             "case.eval-inputs".to_string(),
             fragment(

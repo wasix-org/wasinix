@@ -414,10 +414,6 @@ impl BoundedLog {
 pub struct SharedLog(Arc<Mutex<BoundedLog>>);
 
 impl SharedLog {
-    pub fn create(path: &Path) -> Result<Self> {
-        Ok(Self(Arc::new(Mutex::new(BoundedLog::create(path)?))))
-    }
-
     pub fn create_followed(path: &Path) -> Result<Self> {
         Ok(Self(Arc::new(Mutex::new(BoundedLog::create_followed(
             path,

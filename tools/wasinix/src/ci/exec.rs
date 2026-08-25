@@ -5,7 +5,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
@@ -53,7 +52,6 @@ const EXCERPT_LINES: usize = 120;
 struct Artifacts {
     files: BTreeMap<PathBuf, u64>,
     total_bytes: u64,
-    automatic_gc_requested: Vec<u64>,
 }
 
 impl Artifacts {
@@ -84,10 +82,6 @@ impl Artifacts {
 
     fn bytes(&self) -> u64 {
         self.total_bytes
-    }
-
-    fn record_automatic_gc(&mut self, requested: impl IntoIterator<Item = u64>) {
-        self.automatic_gc_requested.extend(requested);
     }
 }
 
@@ -138,92 +132,6 @@ fn excerpt_of(text: &str) -> LogExcerpt {
         lines: lines[start..].iter().map(|line| line.to_string()).collect(),
         truncated: start > 0,
     }
-}
-
-/// Run a command, teeing its output to a log file. Build logs are the
-/// evidence a failure report is made of, so they are kept even when the
-/// console is not.
-fn run_logged(
-    cmd: &mut Command,
-    log_path: &Path,
-    artifacts: &mut Artifacts,
-) -> Result<CommandStatus> {
-    use std::io::{BufRead, BufReader, Write};
-    let log = crate::support::log::SharedLog::create(log_path)?;
-    let automatic_gc = crate::support::nix::AutomaticGcObserver::default();
-    let echo = crate::support::ui::verbosity() == crate::support::ui::Verbosity::Verbose;
-    let copy = |stream: Box<dyn std::io::Read + Send>,
-                mut log: crate::support::log::SharedLog,
-                automatic_gc: crate::support::nix::AutomaticGcObserver| {
-        let mut reader = BufReader::new(stream);
-        let mut buffer = Vec::new();
-        loop {
-            let read = reader
-                .read_until(b'\n', &mut buffer)
-                .map_err(|error| io(log_path, error))?;
-            if read == 0 {
-                break;
-            }
-            if echo {
-                crate::support::ui::raw(String::from_utf8_lossy(&buffer));
-            }
-            automatic_gc.observe(&buffer);
-            log.write_all(&buffer)
-                .map_err(|error| io(log_path, error))?;
-            buffer.clear();
-        }
-        Ok(())
-    };
-    let completion = crate::support::tools::piped(
-        cmd,
-        None,
-        |stream| copy(Box::new(stream), log.clone(), automatic_gc.clone()),
-        |stream| copy(Box::new(stream), log.clone(), automatic_gc.clone()),
-    )?;
-    let status = completion.value();
-    log.finish()?;
-    artifacts.record_log(log_path)?;
-    artifacts.record_automatic_gc(automatic_gc.requested_bytes());
-    Ok(CommandStatus::from_exit(status))
-}
-
-fn treefmt(
-    worktree: &Path,
-    case_id: &str,
-    route: &Route,
-    log: &Path,
-    artifacts: &mut Artifacts,
-) -> Result<Fragment> {
-    let _lease = route.acquire()?;
-    let mut cmd = crate::support::nix::Invocation::flake(
-        "build",
-        format!(".#checks.{}.treefmt", crate::support::nix::SYSTEM),
-    )
-    .args(["--no-link", "--print-build-logs"])
-    .workdir(worktree)
-    .route(route)?
-    .command()?;
-    let status = run_logged(&mut cmd, log, artifacts)?;
-
-    let mut fragment = Fragment::new(
-        format!("{case_id}.treefmt"),
-        format!("{case_id}: Formatting"),
-        TaskKind::Validation,
-        if status.is_success() {
-            TaskStatus::Success
-        } else {
-            TaskStatus::Failure
-        },
-        if status.is_success() {
-            "formatting is clean"
-        } else {
-            "formatting changes required"
-        },
-    );
-    if !status.is_success() {
-        fragment = fragment.with_data(FragmentData::Log(excerpt(log)));
-    }
-    Ok(fragment)
 }
 
 /// Complete one online evaluation before the authoritative offline one.
@@ -1265,12 +1173,6 @@ fn run_phase(
         .join(PATCH_FILE);
     let worktree = reproduced_worktree(ctx.runner_root, case.source(), &patch)?;
     match (phase, case) {
-        (Phase::Treefmt, _) => {
-            let log = crate::ci::prepare::logs_dir(&case_dir(ctx.run_dir, case_id))
-                .join("treefmt")
-                .join("treefmt.log");
-            treefmt(worktree.path(), case_id, &route, &log, artifacts)
-        }
         (Phase::EvalInputs, CaseRef::Build(build)) => {
             eval_inputs(ctx, worktree.path(), build, &route, artifacts)
         }
@@ -1292,15 +1194,8 @@ fn run_phase(
     }
 }
 
-pub(crate) fn task_route(repo: &Path, phase: Phase, placement: Option<&str>) -> Result<Route> {
-    match phase {
-        Phase::Treefmt => Route::local(),
-        _ => Route::from_on(repo, placement),
-    }
-}
-
-pub(crate) fn blocked_by_case_failure(phase: Phase) -> bool {
-    !matches!(phase, Phase::Treefmt)
+pub(crate) fn task_route(repo: &Path, _phase: Phase, placement: Option<&str>) -> Result<Route> {
+    Route::from_on(repo, placement)
 }
 
 /// A phase whose failure blocks the rest of its case. Builds run as one
@@ -1338,13 +1233,6 @@ fn finish_task(
     if let Some(telemetry) = telemetry {
         fragment.elapsed_seconds = Some(DurationSecs(telemetry.elapsed.as_secs_f64()));
         fragment.artifact_bytes = Some(Bytes(telemetry.artifact_bytes));
-        for requested_bytes in telemetry.automatic_gc_requested {
-            tracker.record(Event::AutomaticGc {
-                at: unix_secs(),
-                task_ids: vec![fragment.task_id.clone()],
-                requested_bytes: Bytes(requested_bytes),
-            })?;
-        }
     }
     record_resource_sample(
         tracker,
@@ -1379,7 +1267,6 @@ fn start_task(
 struct TaskTelemetry {
     elapsed: Duration,
     artifact_bytes: u64,
-    automatic_gc_requested: Vec<u64>,
 }
 
 impl TaskTelemetry {
@@ -1387,7 +1274,6 @@ impl TaskTelemetry {
         TaskTelemetry {
             elapsed: started.elapsed(),
             artifact_bytes: artifacts.bytes(),
-            automatic_gc_requested: artifacts.automatic_gc_requested.clone(),
         }
     }
 }
@@ -1481,7 +1367,7 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
             worst = worst.max(status);
             continue;
         }
-        if broken.contains(&task.case) && blocked_by_case_failure(task.phase) {
+        if broken.contains(&task.case) {
             start_task(&mut tracker, &task.task_id, &task.label, None)?;
             finish_task(
                 ctx,
