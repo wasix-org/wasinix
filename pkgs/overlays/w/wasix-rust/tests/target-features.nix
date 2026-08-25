@@ -7,7 +7,7 @@
   ...
 }: let
   inherit (pkgs) lib;
-  features = [
+  enabled = [
     "atomics"
     "bulk-memory"
     "mutable-globals"
@@ -16,8 +16,8 @@
     "simd128"
     "relaxed-simd"
     "extended-const"
-    "wide-arithmetic"
   ];
+  disabled = ["wide-arithmetic"];
   targets = [
     "wasm32-wasmer-wasi"
     "wasm32-wasmer-wasi-dl"
@@ -27,16 +27,22 @@ in {
     fail=0
     for target in ${lib.escapeShellArgs targets}; do
       cfg=$(${lib.getExe' entry.package "rustc"} --print cfg --target "$target")
-      for feature in ${lib.escapeShellArgs features}; do
+      for feature in ${lib.escapeShellArgs enabled}; do
         grep -qxF "target_feature=\"$feature\"" <<<"$cfg" || {
           echo "FAIL: $target does not enable $feature" >&2
           fail=1
         }
       done
+      for feature in ${lib.escapeShellArgs disabled}; do
+        if grep -qxF "target_feature=\"$feature\"" <<<"$cfg"; then
+          echo "FAIL: $target enables $feature" >&2
+          fail=1
+        fi
+      done
     done
 
     [ "$fail" -eq 0 ] || exit 1
     mkdir -p "$out"
-    echo "wasm feature baseline present on the wasix rust targets" > "$out/result"
+    echo "wasm feature baseline checked on the wasix rust targets" > "$out/result"
   '';
 }

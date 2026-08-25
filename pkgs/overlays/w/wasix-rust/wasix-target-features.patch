@@ -8,7 +8,7 @@ diff --git a/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs b/comp
 -    options.features =
 -        "+bulk-memory,+atomics,+mutable-globals,+sign-ext,+nontrapping-fptoint".into();
 +    options.features = "+bulk-memory,+atomics,+mutable-globals,+sign-ext,+nontrapping-fptoint,\
-+                        +simd128,+relaxed-simd,+extended-const,+wide-arithmetic"
++                        +simd128,+relaxed-simd,+extended-const,-wide-arithmetic"
 +        .into();
  
      Target {
