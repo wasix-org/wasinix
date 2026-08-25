@@ -130,7 +130,7 @@
     };
     projectApiTests = import ./pkgs/project/tests.nix {inherit lib;};
     failedProjectApiTests = lib.attrNames (lib.filterAttrs (_: test: test.expr != test.expected) projectApiTests);
-    requiredProjectApi = ["extendPackage" "loadPackageOverlays" "mkEmptyProject" "mkProject"];
+    requiredProjectApi = ["appsForProject" "cliForProject" "extendPackage" "loadPackageOverlays" "mkEmptyProject" "mkProject"];
     missingProjectApi = lib.subtractLists (builtins.attrNames projectApi) requiredProjectApi;
     projectApiCheck =
       lib.throwIf (missingProjectApi != [])
@@ -151,40 +151,15 @@
       "repository checks do not match repositoryCheckNames"
       repositoryChecks;
 
+    projectAttr = "legacyPackages.${system}";
     wasinixCore = project.packages.native.wasinix;
-    wasinixCapabilities = {
-      aws = pkgs.awscli2;
-      python = pkgs.python3;
-      python-index = project.artifacts.registry.python.indexer;
-      inherit (pkgs) rclone;
-      wasmer = project.packages.native.wasmer;
-    };
-    wasinix = wasinixCore.withCapabilities wasinixCapabilities;
-    inherit (wasinixCore) commandAliases;
-    commands =
-      {
-        default = wasinix;
-        inherit wasinix;
-      }
-      // lib.genAttrs commandAliases (
-        name:
-          pkgs.writeShellApplication {
-            inherit name;
-            inheritPath = false;
-            runtimeInputs = [wasinixCore];
-            text = "exec wasinix ${name} \"$@\"";
-          }
-      );
+    wasinix = projectApi.cliForProject {inherit project projectAttr;};
+    wasinixApps = projectApi.appsForProject {inherit project projectAttr;};
+    wasinixCapabilities = (import ./pkgs/project/apps.nix {inherit lib project projectAttr;}).capabilities;
   in {
     lib = projectApi;
     formatter.${system} = treefmtEval.config.build.wrapper;
-    apps.${system} =
-      lib.mapAttrs (name: command: {
-        type = "app";
-        program = lib.getExe command;
-        meta = (command.meta or {}) // {description = command.meta.description or "Run the Wasinix ${name} command";};
-      })
-      commands;
+    apps.${system} = wasinixApps;
     legacyPackages.${system} = project;
     checks.${system} = checkedRepositoryChecks;
     packages.${system} = {

@@ -48,6 +48,7 @@
       inherit runtimeInputs;
       text = ''
         ${lib.optionalString (wasinixCapabilityFlake != null) "export WASINIX_CAPABILITY_FLAKE=${wasinixCapabilityFlake}"}
+        export WASINIX_LAUNCHER="''${0%/bin/wasinix}"
         ${lib.optionalString capabilitiesOnPath "export WASINIX_CAPABILITIES_ON_PATH=1"}
         PATH="''${0%/*}:$PATH" exec ${lib.getExe unwrapped} "$@"
       '';

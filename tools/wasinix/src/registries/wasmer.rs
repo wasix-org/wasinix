@@ -20,7 +20,7 @@ use sha2::{Digest, Sha256};
 use crate::support::capability::Capability;
 use crate::support::error::{Error, Result, request_error};
 use crate::support::naming::{self, Domain};
-use crate::support::nix::{Flake, project_attr};
+use crate::support::nix::{Flake, active_project_installable};
 
 /// The rebuild command doubles as the machine-readable rev record: the
 /// appended block is a pure function of (package dir, rev), so a later run
@@ -119,7 +119,7 @@ fn selected_packages(specs: &[String]) -> Result<Vec<String>> {
 }
 
 fn build_pkg_roots(selected: &[String]) -> Result<Vec<PathBuf>> {
-    let prefix = format!(".#{}", project_attr(""));
+    let prefix = active_project_installable("");
     let mut installables: Vec<String> = Vec::new();
     let names = if selected.is_empty() {
         crate::support::nix::eval(
@@ -1216,12 +1216,14 @@ pub fn materialize(options: ServeOptions) -> Result<PathBuf> {
         let mut installables: Vec<String> = Vec::new();
         for name in &names {
             let quoted = naming::quoted_attr(name)?;
-            installables.push(format!(".#{}.artifacts.webc.{quoted}", project_attr("")));
+            installables.push(
+                crate::support::nix::project().installable(&format!("artifacts.webc.{quoted}")),
+            );
             if deps[name].as_bool() == Some(true) {
-                installables.push(format!(
-                    ".#{}.artifacts.pkg.{quoted}.depTree",
-                    project_attr("")
-                ));
+                installables.push(
+                    crate::support::nix::project()
+                        .installable(&format!("artifacts.pkg.{quoted}.depTree")),
+                );
             }
         }
         crate::support::ui::fact("building", format!("{} webc closures", names.len()));

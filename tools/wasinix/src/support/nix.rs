@@ -6,26 +6,86 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use serde_json::Value;
 
 use crate::nix::route::Route;
-use crate::support::error::{Error, Result};
+use crate::support::error::{Error, Result, request_error};
 use crate::support::process::CommandStatus;
 
 pub const SYSTEM: &str = "x86_64-linux";
+pub const DEFAULT_PROJECT: &str = ".#legacyPackages.x86_64-linux";
 
-pub fn project_attr(path: &str) -> String {
-    if path.is_empty() {
-        format!("legacyPackages.{SYSTEM}")
-    } else {
-        format!("legacyPackages.{SYSTEM}.{path}")
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProjectRef {
+    pub flake: String,
+    pub attr: String,
+}
+
+impl ProjectRef {
+    pub fn parse(value: &str) -> Result<ProjectRef> {
+        let Some((flake, attr)) = value.rsplit_once('#') else {
+            return request_error(format!("--project {value:?}: expected FLAKE#PROJECT-ATTR"));
+        };
+        if flake.is_empty() || attr.is_empty() {
+            return request_error(format!(
+                "--project {value:?}: flake and project attr must be non-empty"
+            ));
+        }
+        Ok(ProjectRef {
+            flake: flake.to_string(),
+            attr: attr.to_string(),
+        })
+    }
+
+    pub fn attr(&self, path: &str) -> String {
+        if path.is_empty() {
+            self.attr.clone()
+        } else {
+            format!("{}.{path}", self.attr)
+        }
+    }
+
+    pub fn installable(&self, path: &str) -> String {
+        format!("{}#{}", self.flake, self.attr(path))
+    }
+
+    pub fn installable_at(&self, flake: &str, path: &str) -> String {
+        format!("{flake}#{}", self.attr(path))
     }
 }
 
+impl Default for ProjectRef {
+    fn default() -> Self {
+        ProjectRef::parse(DEFAULT_PROJECT).expect("the default project ref is valid")
+    }
+}
+
+static PROJECT: OnceLock<ProjectRef> = OnceLock::new();
+
+pub fn configure_project(value: &str) -> Result<()> {
+    let project = ProjectRef::parse(value)?;
+    PROJECT
+        .set(project)
+        .map_err(|_| Error::Failure("Wasinix project was configured twice".into()))
+}
+
+pub fn project() -> &'static ProjectRef {
+    PROJECT.get_or_init(ProjectRef::default)
+}
+
+pub fn project_attr(path: &str) -> String {
+    project().attr(path)
+}
+
 pub fn project_installable(flake: &str, path: &str) -> String {
-    format!("{flake}#{}", project_attr(path))
+    project().installable_at(flake, path)
+}
+
+pub fn active_project_installable(path: &str) -> String {
+    project().installable(path)
 }
 
 pub(crate) fn copy_paths_invocation(route: &Route, paths: &std::path::Path) -> Option<Invocation> {
@@ -152,7 +212,7 @@ pub struct Flake<'a>(pub &'a str);
 
 impl Default for Flake<'_> {
     fn default() -> Self {
-        Flake(".")
+        Flake("")
     }
 }
 
@@ -563,7 +623,12 @@ pub fn eval_installable(installable: &str, apply: Option<&str>) -> Result<Value>
 
 /// Evaluate `legacyPackages.<system>.<attr>`, optionally through `--apply`.
 pub fn eval(flake: &Flake<'_>, attr: &str, apply: Option<&str>) -> Result<Value> {
-    eval_installable(&project_installable(flake.0, attr), apply)
+    let installable = if flake.0.is_empty() {
+        active_project_installable(attr)
+    } else {
+        project_installable(flake.0, attr)
+    };
+    eval_installable(&installable, apply)
 }
 
 #[cfg(test)]
@@ -580,5 +645,17 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("cannot export"), "{error}");
+    }
+
+    #[test]
+    fn project_refs_keep_the_flake_and_attr_independent() {
+        let project = super::ProjectRef::parse("github:owner/repo#projects.release").unwrap();
+        assert_eq!(project.flake, "github:owner/repo");
+        assert_eq!(project.attr("ci.jobs"), "projects.release.ci.jobs");
+        assert_eq!(
+            project.installable_at("path:/worktree", "schemaVersion"),
+            "path:/worktree#projects.release.schemaVersion"
+        );
+        assert!(super::ProjectRef::parse("projects.release").is_err());
     }
 }

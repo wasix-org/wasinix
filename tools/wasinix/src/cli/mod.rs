@@ -42,6 +42,9 @@ pub struct Cli {
     pub quiet: bool,
     #[arg(long, global = true, value_enum, default_value_t = ColorMode::Auto)]
     pub color: ColorMode,
+    /// Structured project to operate on
+    #[arg(long, global = true, value_name = "FLAKE#PROJECT-ATTR")]
+    pub project: Option<String>,
     #[command(subcommand)]
     pub command: CommandTree,
 }
@@ -828,7 +831,7 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
             );
             let scratch = crate::support::fs::Scratch::create("wasinix-cache-push")?;
             let jobs_path = scratch.path().join("jobs.jsonl");
-            let attr = format!(".#legacyPackages.{}.ci.jobs", crate::support::nix::SYSTEM);
+            let attr = format!(".#{}", crate::support::nix::project_attr("ci.jobs"));
             let catalog = crate::ci::exec::selector_catalog(worktree.path(), &route)?.into_map();
             let selected: Vec<String> = if selectors.is_empty() {
                 catalog.jobs.keys().map(|job| job.0.clone()).collect()
@@ -2066,6 +2069,16 @@ pub fn main() -> std::process::ExitCode {
         ColorMode::Always => crate::support::terminal::ColorChoice::Always,
         ColorMode::Never => crate::support::terminal::ColorChoice::Never,
     });
+    let project = match cli.project.as_deref() {
+        Some(project) => Ok(project.to_string()),
+        None => crate::support::env::project()
+            .map(|project| project.unwrap_or_else(|| crate::support::nix::DEFAULT_PROJECT.into())),
+    };
+    let configured = project.and_then(|project| crate::support::nix::configure_project(&project));
+    if let Err(error) = configured {
+        ui::report_error(&error);
+        return error.status().into();
+    }
     let prewarm = match crate::support::capability::prewarm(cli.command.anticipated_capabilities())
     {
         Ok(prewarm) => prewarm,

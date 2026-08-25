@@ -6,6 +6,10 @@ goes to CI.
 Every command here is the `wasinix` CLI: on PATH in a dev shell, and
 `nix run .#wasinix -- <args>` without one.
 
+In a consuming flake, expose `wasinix.lib.appsForProject` and use the same
+commands. `--project FLAKE#PROJECT-ATTR` selects a project explicitly; generated
+apps bind it automatically.
+
 ## Where builds run
 
 The toolchain and the full CI sweep are expensive: local builds at that scale

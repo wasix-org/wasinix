@@ -145,7 +145,7 @@ pub fn changelogs(targets: &[&Target]) -> BTreeMap<String, String> {
     }
     selected += "}";
     let value = match eval_installable(
-        &format!(".#legacyPackages.{}", crate::support::nix::SYSTEM),
+        &crate::support::nix::active_project_installable(""),
         Some(&selected),
     ) {
         Ok(value) => value,

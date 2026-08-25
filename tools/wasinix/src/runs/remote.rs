@@ -95,6 +95,7 @@ pub(crate) fn launch_script(
     state: &str,
     head: &str,
     source: &str,
+    launcher: Option<&Path>,
     limits: EvaluationLimits,
     payload: &[String],
 ) -> String {
@@ -107,6 +108,14 @@ pub(crate) fn launch_script(
     // The payload names the launcher binary explicitly: the supervisor runs
     // an ordinary program, and the launcher carries the tools the payload
     // needs on PATH.
+    let binary = launcher
+        .map(|path| quote(&format!("{}/bin/wasinix", path.display())))
+        .unwrap_or_else(|| {
+            let installable = quote(&format!("path:{source}#wasinix"));
+            format!(
+                "\"$(nix build --print-out-paths --no-link --accept-flake-config {installable})/bin/wasinix\""
+            )
+        });
     format!(
         "set -eu\n\
          {load_check}\
@@ -119,7 +128,7 @@ pub(crate) fn launch_script(
          export WASINIX_EVAL_TIMEOUT_SECONDS={timeout}\n\
          export WASINIX_HOST_LEASE_ROOT=\"${{XDG_RUNTIME_DIR:-/tmp}}/wasinix/leases/{name}\"\n\
          export WASINIX_HOST_LEASE_CAPACITY={capacity}\n\
-         bin=\"$(nix build --print-out-paths --no-link --accept-flake-config {flake}#wasinix)/bin/wasinix\"\n\
+         bin={binary}\n\
          id=$(\"$bin\" run start -- \"$bin\" {payload})\n\
          printf 'WASINIX_RUN_DIR %s/wasinix/runs/%s\\n' \"${{XDG_STATE_HOME:-$HOME/.local/state}}\" \"$id\"\n",
         load_check = crate::nix::builder::load_check_script(builder),
@@ -129,7 +138,6 @@ pub(crate) fn launch_script(
         timeout = limits.timeout.as_secs(),
         name = quote(&builder.name),
         capacity = builder.capacity,
-        flake = quote(&format!("path:{source}")),
     )
 }
 
@@ -352,9 +360,14 @@ pub fn run(request: Request<'_>) -> Result<CommandStatus> {
     // The builder's own store URL: a configured store_url override applies
     // here too, not only to the store route.
     let host_store = request.builder.store();
+    let launcher = crate::support::env::launcher();
+    let mut paths = vec![source.clone()];
+    if let Some(path) = &launcher {
+        paths.push(path.display().to_string());
+    }
     let (copied, detail) = crate::support::nix::Invocation::plain("copy")
         .args(["--to", &host_store])
-        .operand(&source)
+        .operands(&paths)
         .captured_status()?;
     if !copied.is_success() {
         return request_error(format!(
@@ -416,6 +429,7 @@ pub fn run(request: Request<'_>) -> Result<CommandStatus> {
         &state,
         head.full(),
         &source,
+        launcher.as_deref(),
         limits,
         &(request.payload)(&state),
     );
