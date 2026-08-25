@@ -310,6 +310,7 @@
           passthru.runCommandAttrs = attrs;
         };
       testLib = fakeTestLib;
+      wasmer = mkPackage {name = "wasmer";};
     }
     // {
       packageCommands = package: {
@@ -333,6 +334,7 @@
   };
   projectApi = import ./default.nix (projectApiArgs
     // {
+      harnessesFor = _args: fakeHarnesses;
       projectionRules = {
         inherit (historyProjectionRules) historyVersions;
         probe = {
@@ -956,12 +958,18 @@ in {
       lanes = lib.attrNames extensionDeclaration.overlays;
       history = lib.attrNames extensionDeclaration.history;
       sharedDirectory = toString extensionDeclaration.overlays.shared.directory;
+      legacyOverlayAbsent = !builtins.pathExists ../overlay;
+      pythonHarnessPresent = builtins.pathExists ../harnesses/python.nix;
+      legacyPythonHarnessAbsent = !builtins.pathExists ../python/wheels/test-lib.nix;
     };
     expected = {
       id = "wasinix";
       lanes = ["native" "python" "shared" "wasix"];
       history = ["python" "wasix"];
       sharedDirectory = toString ../shared;
+      legacyOverlayAbsent = true;
+      pythonHarnessPresent = true;
+      legacyPythonHarnessAbsent = true;
     };
   };
 
@@ -1205,6 +1213,7 @@ in {
       focusedHelper = project.packages.wasix.default.uses-inherited.passthru.usedFocusedHelper;
       runnerContextName = project.packages.wasix.default.uses-inherited.passthru.runnerContextName;
       runnerName = project.runners.rawWasm.unbound.name;
+      pythonHarnessAvailable = project.harnesses ? python;
       ifdProbe = project.probes.ifd.passthru.text;
       profileNames = project.packages.wasix.default.uses-inherited.passthru.profileNames;
       pythonNames = lib.attrNames project.packages.python.py;
@@ -1303,6 +1312,7 @@ in {
       focusedHelper = true;
       runnerContextName = "raw-wasm-unbound";
       runnerName = "raw-wasm-unbound";
+      pythonHarnessAvailable = true;
       ifdProbe = "ok";
       profileNames = ["alternate" "default"];
       pythonNames = ["contextProof" "corePython" "inheritedPython" "uses-python"];

@@ -8,10 +8,10 @@
 # single-threaded defensively so no parallel_for path is taken under wasmer.
 {
   wheel,
-  runPython,
+  harnesses,
   ...
 }: {
-  ops = runPython {
+  ops = harnesses.python {
     name = "opencv-ops";
     inherit wheel;
     script = ''

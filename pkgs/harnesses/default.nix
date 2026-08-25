@@ -2,6 +2,7 @@
   lib,
   pkgs,
   testLib,
+  wasmer,
 }: let
   validExecutableName = name:
     builtins.isString name
@@ -19,6 +20,9 @@
       ''));
 in {
   inherit (testLib) defaultForwardEnv normalizers;
+
+  python = args:
+    import ./python.nix ({inherit lib pkgs wasmer;} // args);
 
   hostShell = {
     name ? "wasinix-host-shell",

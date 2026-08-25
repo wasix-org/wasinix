@@ -152,9 +152,8 @@
       };
       mkPythonWheels = args:
         import ../python/wheels/project.nix ({
-            inherit lib emulatedChecks mkTestGroup;
+            inherit lib emulatedChecks harnesses mkTestGroup;
             pkgs = nativePkgs;
-            wasmer = runtime;
             inherit (helpers.checkOutput) installCheckOutputArgsIf;
           }
           // args);
@@ -173,6 +172,7 @@
         import ../harnesses {
           inherit lib testLib;
           pkgs = nativePkgs;
+          wasmer = runtime;
         }
         // {
           packageCommand = {

@@ -2,12 +2,12 @@
 # the wasix port) runs in-process, offline.
 {
   wheel,
-  runPython,
+  harnesses,
   ...
 }: {
   # DDSketch computes + serializes and the trace exporter builder constructs, all
   # without an agent or the network (the sandbox has neither).
-  native = runPython {
+  native = harnesses.python {
     name = "ddtrace-native";
     inherit wheel;
     script = ''

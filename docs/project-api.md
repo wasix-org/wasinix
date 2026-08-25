@@ -230,6 +230,7 @@ pkgs/
 ├── checks/
 ├── artifacts/
 ├── harnesses/
+├── runners/
 └── toolchain/
 ```
 
@@ -876,6 +877,21 @@ Only named environment variables, capabilities, and mounts cross into the guest.
 Host shell remains appropriate for native fixtures, host comparisons, and
 runtime coordination. WASIX shell is preferred when the behavior under test is a
 workflow intended to run entirely inside WASIX.
+
+The Python harness runs a wheel through the packaged Python WebC in a clean
+pip-like target without mounting the Nix store:
+
+```nix
+harnesses.python {
+  name = "wheel-pytest-foo";
+  inherit wheel;
+  deps = [pythonPkgs.pytest];
+  script = ''
+    import pytest
+    raise SystemExit(pytest.main(["-q"]))
+  '';
+}
+```
 
 ## CI
 

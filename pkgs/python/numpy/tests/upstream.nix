@@ -2,10 +2,10 @@
 # source tree (whose numpy/ package would shadow the compiled modules).
 {
   wheel,
-  runPython,
+  harnesses,
   pythonPkgs,
 }: {
-  upstream = runPython {
+  upstream = harnesses.python {
     name = "wheel-pytest-numpy";
     inherit wheel;
     deps = [pythonPkgs.pytest pythonPkgs.hypothesis];

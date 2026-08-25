@@ -23,6 +23,11 @@ the shared Rust wheel hooks described in [`rust.md`](rust.md).
 runs their import tests under Wasmer. The wheel index and publication flow are
 described in [`registry.md`](registry.md#the-python-wheel-index).
 
+Focused wheel behavior tests live in `pkgs/python/<attr>/tests/*.nix` and use
+`harnesses.python`. The harness installs the wheel and explicit test
+dependencies into a clean target, then runs it through the packaged Python WebC
+without a Nix store mount.
+
 Each Python variant declares the WASIX interpreter package it uses, and exactly
 one variant is preferred. Architecture-independent wheels are built once with
 that preferred variant. The combined registry is a project artifact derived from

@@ -16,10 +16,10 @@
 # is the tightest regression check on that patch.
 {
   wheel,
-  runPython,
+  harnesses,
   ...
 }: {
-  fit = runPython {
+  fit = harnesses.python {
     name = "scikit-learn-fit";
     inherit wheel;
     script = ''
@@ -72,7 +72,7 @@
   };
 
   # Pin both sides of the OMP_NUM_THREADS behavior described above.
-  openmp-threads = runPython {
+  openmp-threads = harnesses.python {
     name = "scikit-learn-openmp-threads";
     inherit wheel;
     script = ''

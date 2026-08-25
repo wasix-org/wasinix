@@ -194,6 +194,12 @@ server setup belong in the harness's explicit host setup. For a generated
 consumer, build against `packages.sameProfile` and use
 `harnesses.packageCommand` to package the result.
 
+Python wheel tests use `harnesses.python`. It copies the wheel and explicit test
+dependencies into a clean target, runs the packaged Python WebC under Wasmer,
+and does not mount the Nix store. Python tests live at
+`pkgs/python/<attr>/tests/*.nix`, including when the package adaptation itself
+is the flat `pkgs/python/<attr>.nix` form.
+
 Every wheel also gets the guards in `pkgs/python/wheels/project.nix`: `import`
 runs the module on the shipped python, `self-contained` rejects a baked
 `/nix/store` path, and `deps` checks the published METADATA names only
