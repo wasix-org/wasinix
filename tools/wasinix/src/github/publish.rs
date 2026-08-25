@@ -203,6 +203,7 @@ fn failure_log_name(key: &FailureLogKey) -> String {
     format!("{}.txt", &digest[..24])
 }
 
+#[cfg(test)]
 pub(crate) fn stage_failure_logs(
     run_dir: &Path,
     report: &Report,
@@ -330,6 +331,7 @@ fn bisect_failure_source<'a>(
     ))
 }
 
+#[cfg(test)]
 pub(crate) fn stage_bisect_failure_logs(
     report: &crate::nix::bisect::Report,
     sha: &str,
