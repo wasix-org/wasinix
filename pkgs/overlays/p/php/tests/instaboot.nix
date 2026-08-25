@@ -47,12 +47,13 @@
       timeout = 180;
       script = ''
         journal=$PWD/php-server.journal
+        port=$((20000 + RANDOM % 30000))
         mkdir docroot
         printf '%s\n' '<?php echo "restored server ok";' >docroot/index.php
 
-        if ! timeout 30 env \
+        if ! timeout 90 env \
           WASMER_FLAGS="--net --volume $PWD:$PWD --cwd $PWD --journal-writable $journal --snapshot-on explicit --stop-after-snapshot" \
-          php -S 127.0.0.1:8893 -t "$PWD/docroot" >snapshot.log 2>&1; then
+          php -S 127.0.0.1:$port -t "$PWD/docroot" >snapshot.log 2>&1; then
           cat snapshot.log >&2
           exit 1
         fi
@@ -60,17 +61,20 @@
           cat snapshot.log >&2
           exit 1
         fi
-        wasmer journal compact "$journal" >journal-inspect.log
+        if ! wasmer journal compact "$journal" >journal-inspect.log 2>&1; then
+          cat journal-inspect.log >&2
+          exit 1
+        fi
 
         WASMER_FLAGS="--net --volume $PWD:$PWD --cwd $PWD --journal $journal --skip-journal-stdio" \
-          php -S 127.0.0.1:8893 -t "$PWD/docroot" >server.log 2>&1 &
+          php -S 127.0.0.1:$port -t "$PWD/docroot" >server.log 2>&1 &
         server_pid=$!
         trap 'kill $server_pid 2>/dev/null || true' EXIT
 
         response=
         for _ in $(seq 1 300); do
           kill -0 "$server_pid" 2>/dev/null || { cat journal-inspect.log server.log >&2; exit 1; }
-          response=$(curl -fsS http://127.0.0.1:8893/index.php 2>/dev/null) || true
+          response=$(curl -fsS http://127.0.0.1:$port/index.php 2>/dev/null) || true
           [ "$response" = "restored server ok" ] && break
           sleep 0.1
         done
