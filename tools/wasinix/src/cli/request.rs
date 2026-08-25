@@ -620,6 +620,8 @@ pub(crate) fn run_on_host(
 
 pub(crate) fn host_payload(state: &str, tail: &[String]) -> Vec<String> {
     let mut words = vec![
+        "--project".to_string(),
+        format!(".#{}", crate::support::nix::project_attr("")),
         "ci".to_string(),
         "run".to_string(),
         "--request".to_string(),

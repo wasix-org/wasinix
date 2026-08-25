@@ -438,6 +438,8 @@
     project;
 in {
   inherit (projectLib) extendPackage loadPackageOverlays;
+  appsForProject = args: (import ./apps.nix ({inherit lib;} // args)).apps;
+  cliForProject = args: (import ./apps.nix ({inherit lib;} // args)).cli;
   mkEmptyProject = constructProject false;
   mkProject = constructProject true;
 }

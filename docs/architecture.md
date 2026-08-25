@@ -113,6 +113,11 @@ full compatibility launcher marks its optional PATH entries as coming from the
 same locked package set; core never prefers ambient helpers. Resolution permits
 substitution or a remote builder but sets Nix's local build capacity to zero.
 
+`appsForProject` binds that tool source to a structured project attr. Remote
+host runs copy the packaged launcher separately from the project checkout, so an
+external project does not need to build or expose its own CLI package to run its
+catalog.
+
 After parsing, commands conservatively declare the optional helpers they may
 need. One owned background worker realises that set as a batch while command
 setup continues. First use waits for the same result; command exit cancels and

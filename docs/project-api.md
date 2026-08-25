@@ -33,6 +33,21 @@ wasinix.lib.mkProject {
 `mkProject` returns the structured project, not complete flake outputs. A flake
 may construct several projects and expose them under different attributes.
 
+Bind the CLI and its command aliases to an exposed project with:
+
+```nix
+apps.${system} = wasinix.lib.appsForProject {
+  inherit project;
+  projectAttr = "legacyPackages.${system}";
+};
+```
+
+The generated apps run the CLI from the pinned Wasinix input, derive optional
+capabilities from `project`, and pass the exact project attr to every command. A
+flake with several projects calls the helper once per project and chooses how to
+name the resulting apps. `cliForProject` returns the corresponding full CLI
+package when the flake also wants to expose it from `packages`.
+
 `mkProject` is `mkEmptyProject` with the Wasinix extension and projection rules
 prepended. Wasinix itself uses this composed constructor. `mkEmptyProject` is
 the lower-level mechanism for projects that need the structured catalog without
@@ -408,6 +423,10 @@ only `wasinix` and a default. The complete structured project belongs under
 `legacyPackages.<system>` or another flake-specific output chosen by the
 consumer. Toolchain and catalog packages do not need duplicate top-level flake
 attributes.
+
+The CLI accepts `--project FLAKE#PROJECT-ATTR`; it defaults to
+`.#legacyPackages.x86_64-linux`. This reference selects the structured project,
+independently of the pinned Wasinix flake supplying the CLI and optional tools.
 
 `packages.preferred` is generally available but is not a coherent nixpkgs
 package set: two attributes may select different profiles. Linked dependencies

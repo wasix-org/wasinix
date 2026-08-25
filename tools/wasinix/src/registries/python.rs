@@ -11,7 +11,7 @@ use serde_json::Value;
 
 use crate::support::capability::Capability;
 use crate::support::error::{Result, io, request_error};
-use crate::support::nix::{Flake, eval, project_installable};
+use crate::support::nix::{Flake, active_project_installable, eval};
 use crate::support::process::CommandStatus;
 use crate::support::ui;
 
@@ -32,7 +32,7 @@ fn registry_path(given: Option<PathBuf>) -> Result<PathBuf> {
     }
     let paths = crate::support::nix::Invocation::flake(
         "build",
-        project_installable(".", "artifacts.registry.python"),
+        active_project_installable("artifacts.registry.python"),
     )
     .arg("--no-link")
     .out_paths("building the index")?;
@@ -550,9 +550,9 @@ pub fn preview_index(
         })?;
         let base = attr.strip_suffix("^dist").unwrap_or(attr);
         let expr = format!(
-            r#"(builtins.getFlake "path:{repo}").legacyPackages.{system}.{base}.publishedWith "{suffix}""#,
+            r#"(builtins.getFlake "path:{repo}").{project}.{base}.publishedWith "{suffix}""#,
             repo = repo.display(),
-            system = crate::support::nix::SYSTEM,
+            project = crate::support::nix::project_attr(""),
         );
         let built = crate::support::nix::Invocation::expr("build", expr)
             .impure()

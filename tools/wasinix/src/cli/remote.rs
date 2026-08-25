@@ -163,11 +163,7 @@ fn doctor(repo: &Path, remote: Option<&str>, ifd: bool) -> Result<CommandStatus>
         ui::result("store: ok");
         if ifd {
             let route = Route::Store(builder.clone());
-            let probe = format!(
-                ".#legacyPackages.{}.{}",
-                crate::support::nix::SYSTEM,
-                IFD_PROBE_ATTR
-            );
+            let probe = format!(".#{}", crate::support::nix::project_attr(IFD_PROBE_ATTR));
             let built = crate::support::nix::Invocation::flake("build", &probe)
                 .arg("--no-link")
                 .workdir(repo)

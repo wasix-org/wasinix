@@ -147,7 +147,7 @@ const VERSION_COMMANDS: &[CommandPolicy] = &[
     },
 ];
 
-const ROOT_TERMINAL_ARGS: &[&str] = &["verbose", "quiet", "color"];
+const ROOT_TERMINAL_ARGS: &[&str] = &["verbose", "quiet", "color", "project"];
 
 #[cfg(test)]
 const MUTATION_EFFECTS: &[&str] = &[
@@ -556,7 +556,7 @@ mod tests {
             }
             let actual = names(node.get_arguments().filter_map(|arg| {
                 let id = arg.get_id().as_str();
-                (!matches!(id, "help" | "verbose" | "quiet" | "color")).then_some(id)
+                (!matches!(id, "help" | "verbose" | "quiet" | "color" | "project")).then_some(id)
             }));
             let classified = names(
                 leaf.shared_args

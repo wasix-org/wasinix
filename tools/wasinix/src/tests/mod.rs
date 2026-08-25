@@ -2559,6 +2559,24 @@ mod cli {
     }
 
     #[test]
+    fn a_project_ref_is_global_and_explicit() {
+        let cli = Cli::try_parse_from([
+            "wasinix",
+            "build",
+            "all",
+            "--project",
+            "github:owner/repo#projects.release",
+        ])
+        .unwrap();
+        assert_eq!(
+            cli.project.as_deref(),
+            Some("github:owner/repo#projects.release")
+        );
+        let defaulted = Cli::try_parse_from(["wasinix", "build", "all"]).unwrap();
+        assert!(defaulted.project.is_none());
+    }
+
+    #[test]
     fn blocked_policy_is_explicit_and_defaults_to_failure() {
         use crate::support::atoms::BlockedPolicy;
 
@@ -6991,6 +7009,8 @@ mod remote_runs {
                 &["--inputs-only".to_string(), "--push-cache".to_string()],
             ),
             [
+                "--project",
+                ".#legacyPackages.x86_64-linux",
                 "ci",
                 "run",
                 "--request",
@@ -7010,6 +7030,7 @@ mod remote_runs {
             "/state/dir with space",
             "a".repeat(40).as_str(),
             "/nix/store/src",
+            Some(std::path::Path::new("/nix/store/launcher")),
             EvaluationLimits {
                 workers: 4,
                 memory: 8192,
@@ -7019,6 +7040,7 @@ mod remote_runs {
         );
         assert!(script.contains("'/state/dir with space'/repo.bundle"));
         assert!(script.contains("run start -- \"$bin\" ci run --request 'a b'"));
+        assert!(script.contains("bin=/nix/store/launcher/bin/wasinix"));
         assert!(script.contains("WASINIX_EVAL_WORKERS=4"));
         assert!(script.contains("WASINIX_HOST_LEASE_ROOT"));
         assert!(script.contains("WASINIX_HOST_LEASE_CAPACITY=2"));

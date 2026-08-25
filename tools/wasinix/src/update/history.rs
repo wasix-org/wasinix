@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 
 use crate::support::error::{Result, request_error};
 use crate::support::naming::{self, Domain, Resolved};
-use crate::support::nix::{Flake, SYSTEM, eval};
+use crate::support::nix::{Flake, eval};
 
 /// The interpreters the wheel set ships.
 const INTERPRETERS: [&str; 2] = ["py313", "py314"];
@@ -408,8 +408,9 @@ fn tofu_hash(repo: &Path, target: &Target, mut args: BTreeMap<String, String>) -
     args.insert("hash".into(), FAKE_HASH.into());
     let expression = |args: &BTreeMap<String, String>| {
         format!(
-            "(builtins.getFlake \"{}\").legacyPackages.{SYSTEM}.{}.src.override ({})",
+            "(builtins.getFlake \"{}\").{}.{}.src.override ({})",
             repo.display(),
+            crate::support::nix::project_attr(""),
             target.path,
             nix_attrs(args)
         )
@@ -431,13 +432,14 @@ fn tofu_cargo_hash(
     src_args: &BTreeMap<String, String>,
 ) -> Result<Option<String>> {
     let expr = format!(
-        "let p = (builtins.getFlake \"{}\").legacyPackages.{SYSTEM}.{}; \
+        "let p = (builtins.getFlake \"{}\").{}.{}; \
          newSrc = p.src.override ({}); in \
          if p.cargoDeps ? wasixRebuildVendor \
          then p.cargoDeps.wasixRebuildVendor {{ src = newSrc; cargoHash = \"{FAKE_HASH}\"; }} \
          else p.cargoDeps.overrideAttrs (o: {{ vendorStaging = o.vendorStaging.overrideAttrs \
          (_: {{ src = newSrc; outputHash = \"{FAKE_HASH}\"; }}); }})",
         repo.display(),
+        crate::support::nix::project_attr(""),
         target.path,
         nix_attrs(src_args)
     );
@@ -537,9 +539,10 @@ fn hex_to_bytes(hex: &str) -> Option<Vec<u8>> {
 
 fn hash_field(repo: &Path, target: &Target) -> Result<&'static str> {
     let expr = format!(
-        "(builtins.getFlake \"{}\").legacyPackages.{SYSTEM}.{}.src.override \
+        "(builtins.getFlake \"{}\").{}.{}.src.override \
          {{ hash = \"{FAKE_HASH}\"; }}",
         repo.display(),
+        crate::support::nix::project_attr(""),
         target.path
     );
     let output = crate::support::nix::Invocation::expr("eval", &expr)
@@ -794,7 +797,7 @@ pub fn verify_mint(repo: &Path, target: &Target, added: &[String], before: &Hist
     }
     let output = crate::support::nix::Invocation::flake(
         "eval",
-        format!(".#legacyPackages.{SYSTEM}.schemaVersion"),
+        format!(".#{}", crate::support::nix::project_attr("schemaVersion")),
     )
     .workdir(repo)
     .probe("verify_mint reports the failing set's own stderr")?;

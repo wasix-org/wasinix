@@ -9,7 +9,7 @@ use serde_json::Value;
 
 use crate::support::error::{Result, request_error};
 use crate::support::naming::{self, Domain};
-use crate::support::nix::{Flake, SYSTEM, eval};
+use crate::support::nix::{Flake, eval, project_attr};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Backend {
@@ -67,7 +67,7 @@ impl Target {
             Backend::CratePins => "artifacts.registry.cargo-registry.crates".to_string(),
             Backend::UpdateScript => self
                 .attr
-                .strip_prefix(&format!("legacyPackages.{SYSTEM}."))
+                .strip_prefix(&format!("{}.", project_attr("")))
                 .unwrap_or(&self.attr)
                 .to_string(),
         }
@@ -184,7 +184,7 @@ pub(crate) fn declared_target(repo: &Path, attr: &str, value: &Value) -> Result<
         name,
         backend: Backend::UpdateScript,
         input: String::new(),
-        attr: format!("legacyPackages.{SYSTEM}.{attr_path}"),
+        attr: project_attr(&attr_path),
         version: declaration.version.unwrap_or_default(),
         command: declaration.command,
         command_drv_paths: declaration.command_drv_paths,

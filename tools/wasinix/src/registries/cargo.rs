@@ -36,8 +36,7 @@ fn nix_build(installable: &str) -> Result<PathBuf> {
 pub fn mint_path(given: Option<PathBuf>) -> Result<PathBuf> {
     match given {
         Some(path) => Ok(path),
-        None => nix_build(&crate::support::nix::project_installable(
-            ".",
+        None => nix_build(&crate::support::nix::active_project_installable(
             "artifacts.registry.cargo-registry",
         )),
     }
@@ -369,8 +368,7 @@ pub fn start(options: ServeOptions) -> Result<Running> {
         Some(path) => path,
         None => {
             ui::fact("building", "the wasix server");
-            nix_build(&crate::support::nix::project_installable(
-                ".",
+            nix_build(&crate::support::nix::active_project_installable(
                 "artifacts.webc.cargo-registry",
             ))?
         }
