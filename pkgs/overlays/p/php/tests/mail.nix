@@ -1,33 +1,27 @@
 {
-  crossPkgs,
-  helpers,
-  makeWasmerPackage,
+  entry,
+  harnesses,
+  packageForEntry,
+  packages,
   pkgs,
-  testLib,
   ...
-}: let
-  versions = import ../versions.nix;
-  wasmerPkgs = helpers.mkPhpShims "" {inherit crossPkgs makeWasmerPackage;};
-in
-  pkgs.lib.mapAttrs' (attr: _: {
-    name = "${attr}-mail";
-    value = testLib.mkWasixRun {
-      name = "${attr}-mail";
-      nativePkgs = [pkgs.gnugrep];
-      wasixPkgs = [wasmerPkgs.${attr}];
-      forwardEnv = testLib.defaultForwardEnv ++ ["SENDMAIL_FILE_PATH"];
-      broken =
-        if attr == "php74"
-        then "the off-profile runtime surfaces the spawned sendmail guest's exit as an unhandled exception"
-        else null;
-      script = ''
-        export SENDMAIL_FILE_PATH="$WASIX_TEST_ROOT/mail.txt"
-        php -r 'exit(mail("recipient@example.com", "PHP subject", "PHP body") ? 0 : 1);'
+}: {
+  mail = harnesses.hostShell {
+    name = "${entry.name}-mail";
+    hostPackages = [pkgs.gnugrep];
+    wasixCommands = builtins.attrValues entry.commands;
+    forwardEnv = harnesses.defaultForwardEnv ++ ["SENDMAIL_FILE_PATH"];
+    broken =
+      if pkgs.lib.versionOlder (packageForEntry packages entry).version "8.0"
+      then "the off-profile runtime surfaces the spawned sendmail guest's exit as an unhandled exception"
+      else null;
+    script = ''
+      export SENDMAIL_FILE_PATH="$WASIX_TEST_ROOT/mail.txt"
+      php -r 'exit(mail("recipient@example.com", "PHP subject", "PHP body") ? 0 : 1);'
 
-        grep -F 'Envelope-To: recipient@example.com' "$SENDMAIL_FILE_PATH"
-        grep -F 'Subject: PHP subject' "$SENDMAIL_FILE_PATH"
-        grep -F 'PHP body' "$SENDMAIL_FILE_PATH"
-      '';
-    };
-  })
-  versions
+      grep -F 'Envelope-To: recipient@example.com' "$SENDMAIL_FILE_PATH"
+      grep -F 'Subject: PHP subject' "$SENDMAIL_FILE_PATH"
+      grep -F 'PHP body' "$SENDMAIL_FILE_PATH"
+    '';
+  };
+}

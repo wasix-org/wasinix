@@ -1,9 +1,5 @@
-{
-  prev,
-  helpers,
-  ...
-}:
-helpers.libTweaks {
+{exposeExtendedPackage}:
+exposeExtendedPackage {
   cmakeFlags = old: old ++ ["-DBUILD_SHARED_LIB=OFF"];
   postPatch = ''
     substituteInPlace include/tidyplatform.h \
@@ -11,4 +7,3 @@ helpers.libTweaks {
       --replace-fail '#    if defined(SOLARIS_OS)' '#    if defined(__wasi__) || defined(SOLARIS_OS)'
   '';
 }
-prev.html-tidy

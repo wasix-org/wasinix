@@ -227,8 +227,7 @@ php.withExtensions ({enabled, all}: enabled ++ [all.igbinary])
 `phpVersion`, so an extension can select a compatible source or patch for that
 interpreter. Dependencies declared by an extension must come from the
 same-profile `final` package set. Keep the source, configure flag, build inputs,
-and cross-build environment together in
-`pkgs/overlays/p/php/extensions.nix`.
+and cross-build environment together in `pkgs/overlays/p/php/extensions.nix`.
 
 The `php-int64` and versioned `php*-int64` attributes keep the wasm32 pointer
 ABI while using a 64-bit `zend_long` and timelib integer. Their `withExtensions`
@@ -281,11 +280,10 @@ C and C++ packages use their nixpkgs `checkPhase`. Python wheels use the native
 nixpkgs custom `installCheckPhase` or check hook. Override that choice with
 `passthru.wasinix.checks.captured.install`; configure the run with
 `passthru.wasinix.checks.captured` (`timeout`, `expectFail`, `broken`, or
-`tags`).
-`guestInputs` adds WASIX packages to the guest PATH and exposes their commands
-under `/bin`; `postRestore` adjusts a captured tree before its phase runs. Large
-suites can set `shards = N`; pytest checks partition collected node IDs
-deterministically, while custom phases consume `WASIX_CHECK_SHARD_COUNT` and
+`tags`). `guestInputs` adds WASIX packages to the guest PATH and exposes their
+commands under `/bin`; `postRestore` adjusts a captured tree before its phase
+runs. Large suites can set `shards = N`; pytest checks partition collected node
+IDs deterministically, while custom phases consume `WASIX_CHECK_SHARD_COUNT` and
 `WASIX_CHECK_SHARD_NUM` themselves.
 
 `resultCheck` can replace the phase's exit status with a stricter verdict after

@@ -4,7 +4,7 @@
   nixpkgsExtensions,
   phpVersion,
 }: let
-  getDev = lib.getDev;
+  inherit (lib) getDev;
   extensionPassthru = attrs: attrs // {inherit phpVersion;};
 in {
   imagick = let
