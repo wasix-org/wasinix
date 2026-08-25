@@ -8527,7 +8527,7 @@ mod tools {
             .unwrap();
         assert_eq!(
             rendered(&command),
-            "nix flake archive --option accept-flake-config true ."
+            "nix flake archive --option accept-flake-config true path:."
         );
     }
 
