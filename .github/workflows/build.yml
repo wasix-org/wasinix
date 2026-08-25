@@ -105,7 +105,7 @@ jobs:
           if [ -n "$NIX_SIGNING_KEY" ]; then push_cache=(--push-cache); fi
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             echo "runDir=run-dir" >> "$GITHUB_OUTPUT"
-            nix run .#wasinix -- build all --on local --run-dir run-dir \
+            nix run .#build -- all --on local --run-dir run-dir \
               "${push_cache[@]}"
           else
             # The run is durable so ci publish --watch can keep the check run
@@ -113,7 +113,7 @@ jobs:
             # report is still Post report below. run start executes its
             # payload verbatim, so the payload names the binary itself.
             # Only the baseline (main's commit) is trusted; the candidate is not.
-            bin="$(nix build .#wasinix --no-link --print-out-paths)/bin/wasinix"
+            bin="$(nix build .#wasinix-core --no-link --print-out-paths)/bin/wasinix"
             IFS=$'\t' read -r id dir < <("$bin" ci start \
               --github-output "$GITHUB_OUTPUT" -- \
               "$bin" -v diff --content-diff \
@@ -176,7 +176,7 @@ jobs:
           # failure logs need S3 credentials, which fork PRs do not get
           logs=()
           if [ -n "$AWS_ACCESS_KEY_ID" ]; then logs=(--failure-logs); fi
-          nix run .#wasinix -- ci publish --run-dir "$RUN_DIR" \
+          nix run .#ci -- publish --run-dir "$RUN_DIR" \
             --sha "$HEAD_SHA" \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --check "${comment[@]}" "${logs[@]}" \
@@ -200,7 +200,7 @@ jobs:
             echo "no credentials; skipping"
             exit 0
           fi
-          nix run .#wasinix -- ci publish --run-dir "$RUN_DIR" --baseline
+          nix run .#ci -- publish --run-dir "$RUN_DIR" --baseline
 
       - name: Collect durable runs
         id: collect
@@ -208,7 +208,7 @@ jobs:
           ${{ always() && steps.run_artifact.outcome == 'success' &&
           (steps.baseline.outcome == 'success' || steps.baseline.outcome ==
           'skipped') }}
-        run: nix run .#wasinix -- run gc --max-age-days 0
+        run: nix run .#run -- gc --max-age-days 0
 
   # Which step was slow, per job, without opening any log. Every run
   # publishes its record, the way the baseline does: the builds that cost

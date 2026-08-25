@@ -63,9 +63,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: >-
-          nix run .#wasinix -- ci preview-context --repository
-          "$GITHUB_REPOSITORY" --event "$GITHUB_EVENT_PATH" --github-output
-          "$GITHUB_OUTPUT"
+          nix run .#ci -- preview-context --repository "$GITHUB_REPOSITORY"
+          --event "$GITHUB_EVENT_PATH" --github-output "$GITHUB_OUTPUT"
 
       - name: Checkout
         id: head_checkout

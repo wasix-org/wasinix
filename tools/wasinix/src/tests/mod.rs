@@ -6492,7 +6492,7 @@ mod corpus {
         assert_eq!(
             field(step(job(&report, "report"), "context"), "run").as_str(),
             Some(
-                "nix run .#wasinix -- ci pull-request --repository \"$GITHUB_REPOSITORY\" --head-sha \"$HEAD_SHA\" --head-repository \"$HEAD_REPOSITORY\" --github-output \"$GITHUB_OUTPUT\""
+                "nix run .#ci -- pull-request --repository \"$GITHUB_REPOSITORY\" --head-sha \"$HEAD_SHA\" --head-repository \"$HEAD_REPOSITORY\" --github-output \"$GITHUB_OUTPUT\""
             )
         );
 
@@ -6573,7 +6573,7 @@ mod corpus {
         assert_eq!(
             field(step(targets, "list"), "run").as_str(),
             Some(
-                "nix run .#wasinix -- ci update-matrix --targets \"$TARGETS\" --github-output \"$GITHUB_OUTPUT\""
+                "nix run .#ci -- update-matrix --targets \"$TARGETS\" --github-output \"$GITHUB_OUTPUT\""
             )
         );
 
@@ -6582,7 +6582,7 @@ mod corpus {
         assert_eq!(
             field(delete, "run").as_str(),
             Some(
-                "nix run .#wasinix -- ci preview-cleanup \\\n  --namespace \"$NAMESPACE\" --pull-request \"$PR\" --registry \"$WASMER_REGISTRY\"\n"
+                "nix run .#ci -- preview-cleanup \\\n  --namespace \"$NAMESPACE\" --pull-request \"$PR\" --registry \"$WASMER_REGISTRY\"\n"
             )
         );
 
@@ -6597,7 +6597,7 @@ mod corpus {
         assert_eq!(
             field(step(preview_job, "ctx"), "run").as_str(),
             Some(
-                "nix run .#wasinix -- ci preview-context --repository \"$GITHUB_REPOSITORY\" --event \"$GITHUB_EVENT_PATH\" --github-output \"$GITHUB_OUTPUT\""
+                "nix run .#ci -- preview-context --repository \"$GITHUB_REPOSITORY\" --event \"$GITHUB_EVENT_PATH\" --github-output \"$GITHUB_OUTPUT\""
             )
         );
         assert_eq!(
@@ -6619,6 +6619,49 @@ mod corpus {
                 Some(format!("${{{{ steps.ctx.outputs.{output} }}}}").as_str())
             );
         }
+    }
+
+    /// Command apps carry wasinix-core alone. Running their subcommands
+    /// through the compatibility package realizes every optional capability.
+    #[test]
+    fn workflow_orchestration_uses_core_apps() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.github");
+        if !root.is_dir() {
+            return;
+        }
+        let banned = [
+            "nix build .#wasinix ",
+            "nix run .#wasinix -- build ",
+            "nix run .#wasinix -- ci ",
+            "nix run .#wasinix -- diff ",
+            "nix run .#wasinix -- remote ",
+            "nix run .#wasinix -- run ",
+            "nix run .#wasinix -- spot ",
+        ];
+        let mut pending = vec![root];
+        let mut found = Vec::new();
+        while let Some(dir) = pending.pop() {
+            for entry in std::fs::read_dir(dir).unwrap().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    pending.push(path);
+                    continue;
+                }
+                if path
+                    .extension()
+                    .is_none_or(|extension| extension != "yml" && extension != "yaml")
+                {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).unwrap();
+                for (index, line) in text.lines().enumerate() {
+                    if banned.iter().any(|needle| line.contains(needle)) {
+                        found.push(format!("{}:{}: {}", path.display(), index + 1, line.trim()));
+                    }
+                }
+            }
+        }
+        assert!(found.is_empty(), "{}", found.join("\n"));
     }
 
     /// The cache identity (key, substituter, bucket) lives in support/nix.rs
