@@ -52,7 +52,6 @@ impl From<SetName> for BuildTarget {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "phase", rename_all = "camelCase")]
 pub enum Phase {
-    Treefmt,
     EvalInputs,
     Eval,
     Build { set: BuildTarget },
@@ -195,20 +194,6 @@ pub fn plan_of<S>(request: &Request<S>, request_id: Option<&str>, reused: &[Stri
     };
 
     let cases = request.cases();
-    for case in &cases {
-        let id = case.case_id().to_string();
-        if baseline != Some(id.as_str()) {
-            builder.push(
-                format!("{id}.treefmt"),
-                format!("{id}: Formatting"),
-                TaskKind::Validation,
-                &id,
-                Phase::Treefmt,
-                true,
-            );
-        }
-    }
-
     for case in &cases {
         let id = case.case_id();
         if reused.iter().any(|reused_id| reused_id == id) {

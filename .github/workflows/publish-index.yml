@@ -99,7 +99,8 @@ jobs:
 
       - name: Publish wheels to the index volume
         id: publish-volume
-        if: steps.published.outputs.cache-hit != 'true' && env.WASMER_TOKEN != ''
+        if:
+          steps.published.outputs.cache-hit != 'true' && env.WASMER_TOKEN != ''
         run: |
           nix run .#wasinix -- python publish \
             "$(readlink -f registry-result)" \
@@ -111,32 +112,42 @@ jobs:
       - name: Prepare Pages snapshot
         # Pages intentionally tracks the fresh build, independently of the
         # append-only volume publication above.
-        if: always() && steps.published.outputs.cache-hit != 'true' && steps.build-index.outcome == 'success'
+        if:
+          always() && steps.published.outputs.cache-hit != 'true' &&
+          steps.build-index.outcome == 'success'
         run: |
           # materialize the result symlink with writable modes for the tarring action
           mkdir site
           cp -r --no-preserve=mode,ownership --dereference registry-result/. site/
 
       - name: Upload Pages artifact
-        if: always() && steps.published.outputs.cache-hit != 'true' && steps.build-index.outcome == 'success'
+        if:
+          always() && steps.published.outputs.cache-hit != 'true' &&
+          steps.build-index.outcome == 'success'
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:
           path: site
 
       - name: Deploy to GitHub Pages
         id: deploy
-        if: always() && steps.published.outputs.cache-hit != 'true' && steps.build-index.outcome == 'success'
+        if:
+          always() && steps.published.outputs.cache-hit != 'true' &&
+          steps.build-index.outcome == 'success'
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
 
       - name: Record publication
-        if: always() && steps.publish-volume.outcome == 'success' && steps.deploy.outcome == 'success'
+        if:
+          always() && steps.publish-volume.outcome == 'success' &&
+          steps.deploy.outcome == 'success'
         env:
           INDEX_PATH: ${{ steps.identity.outputs.path }}
         run: echo "$INDEX_PATH" > .wasinix-published-index
 
       - name: Save publication state
         id: save_publication_state
-        if: always() && steps.publish-volume.outcome == 'success' && steps.deploy.outcome == 'success'
+        if:
+          always() && steps.publish-volume.outcome == 'success' &&
+          steps.deploy.outcome == 'success'
         uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: .wasinix-published-index

@@ -148,9 +148,11 @@ pub fn auto_gc_requested_bytes(line: &str) -> Option<u64> {
     rest.strip_suffix(" bytes")?.parse().ok()
 }
 
+#[cfg(test)]
 #[derive(Clone, Default)]
 pub struct AutomaticGcObserver(std::sync::Arc<std::sync::Mutex<Vec<u64>>>);
 
+#[cfg(test)]
 impl AutomaticGcObserver {
     pub fn observe(&self, line: &[u8]) {
         if let Some(requested) = auto_gc_requested_bytes(String::from_utf8_lossy(line).trim_end()) {

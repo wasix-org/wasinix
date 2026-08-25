@@ -24,16 +24,6 @@
       "enabled": true,
       "gate": true,
       "headline": "ok",
-      "kind": "validation",
-      "label": "case: Formatting",
-      "status": "success",
-      "taskId": "case.treefmt"
-    },
-    {
-      "case": "case",
-      "enabled": true,
-      "gate": true,
-      "headline": "ok",
       "kind": "eval",
       "label": "case: Preparing evaluation inputs",
       "status": "success",
@@ -43,10 +33,10 @@
       "case": "case",
       "enabled": true,
       "gate": true,
-      "headline": "",
+      "headline": "ok",
       "kind": "eval",
       "label": "case: Evaluating jobs",
-      "status": "pending",
+      "status": "success",
       "taskId": "case.eval"
     },
     {
