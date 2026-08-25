@@ -68,7 +68,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          bin="$(nix build .#wasinix --no-link --print-out-paths)/bin/wasinix"
+          bin="$(nix build .#wasinix-core --no-link --print-out-paths)/bin/wasinix"
           set +e
           "$bin" ci origin \
             --event "$GITHUB_EVENT_PATH" \
@@ -168,7 +168,7 @@ jobs:
           # names the binary itself. The binary builds before stderr capture
           # starts: run-error.txt is what a failure reply quotes, and it must
           # hold the run's own words, not substitution noise.
-          bin="$(nix build .#wasinix --no-link --print-out-paths)/bin/wasinix"
+          bin="$(nix build .#wasinix-core --no-link --print-out-paths)/bin/wasinix"
           exec 2> >(tee run-error.txt >&2)
           IFS=$'\t' read -r id dir < <("$bin" ci start \
             --github-output "$GITHUB_OUTPUT" -- \
@@ -202,7 +202,7 @@ jobs:
         run: |
           logs=()
           if [ -n "$AWS_ACCESS_KEY_ID" ]; then logs=(--failure-logs); fi
-          nix run .#wasinix -- ci publish --run-dir "$RUN_DIR" \
+          nix run .#ci -- publish --run-dir "$RUN_DIR" \
             --sha "$HEAD_SHA" \
             --pull-request "$PULL_REQUEST" \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
@@ -237,7 +237,7 @@ jobs:
           == 'success' && steps.report.outcome == 'success') ||
           (steps.run.outcome != 'success' && steps.run_artifact.outcome ==
           'success')) }}
-        run: nix run .#wasinix -- run gc --max-age-days 0
+        run: nix run .#run -- gc --max-age-days 0
 
   # No push credential here: the PR tree's own update scripts execute in
   # this job, and all they can reach is the bundle it leaves behind.
@@ -285,7 +285,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          bin="$(nix build .#wasinix --no-link --print-out-paths)/bin/wasinix"
+          bin="$(nix build .#wasinix-core --no-link --print-out-paths)/bin/wasinix"
           exec 2> >(tee run-error.txt >&2)
           "$bin" ci mutate \
             --origin origin-command.json \
@@ -333,7 +333,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
           WASINIX_UPDATE_PR_TOKEN_PRESENT: ${{ secrets.UPDATE_PR_TOKEN != '' }}
         run: |
-          bin="$(nix build .#wasinix --no-link --print-out-paths)/bin/wasinix"
+          bin="$(nix build .#wasinix-core --no-link --print-out-paths)/bin/wasinix"
           exec 2> >(tee run-error.txt >&2)
           "$bin" ci mutate-publish --out-dir mutation
 
@@ -424,7 +424,7 @@ jobs:
           if [ -f origin-command.json ]; then
             origin=(--origin origin-command.json)
           fi
-          nix run .#wasinix -- ci reply \
+          nix run .#ci -- reply \
             --pull-request '${{ github.event.issue.number }}' \
             --comment-id '${{ github.event.comment.id }}' \
             "${origin[@]}" \

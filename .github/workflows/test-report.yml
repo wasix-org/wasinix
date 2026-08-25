@@ -39,7 +39,7 @@ jobs:
           HEAD_REPOSITORY:
             ${{ github.event.workflow_run.head_repository.full_name }}
         run: >-
-          nix run .#wasinix -- ci pull-request --repository "$GITHUB_REPOSITORY"
+          nix run .#ci -- pull-request --repository "$GITHUB_REPOSITORY"
           --head-sha "$HEAD_SHA" --head-repository "$HEAD_REPOSITORY"
           --github-output "$GITHUB_OUTPUT"
 
@@ -72,7 +72,7 @@ jobs:
         run: |
           comment=()
           if [ -n "$PULL_REQUEST" ]; then comment=(--comment --pull-request "$PULL_REQUEST"); fi
-          nix run .#wasinix -- ci publish --run-dir run-dir \
+          nix run .#ci -- publish --run-dir run-dir \
             --sha "$HEAD_SHA" \
             --run-url "$RUN_URL" \
             --untrusted \

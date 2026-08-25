@@ -41,5 +41,5 @@ jobs:
       - name: Delete apps
         id: delete_apps
         run: |
-          nix run .#wasinix -- ci preview-cleanup \
+          nix run .#ci -- preview-cleanup \
             --namespace "$NAMESPACE" --pull-request "$PR" --registry "$WASMER_REGISTRY"

@@ -28,5 +28,5 @@ runs:
         if [ "$PUBLISH" = "true" ] && [ -n "$AWS_ACCESS_KEY_ID" ]; then
           args+=(--publish)
         fi
-        nix run .#wasinix -- ci step-timings \
+        nix run .#ci -- step-timings \
           --step-summary "$GITHUB_STEP_SUMMARY" "${args[@]}"

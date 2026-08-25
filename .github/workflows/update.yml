@@ -44,8 +44,8 @@ jobs:
         env:
           TARGETS: ${{ github.event.inputs.targets }}
         run:
-          nix run .#wasinix -- ci update-matrix --targets "$TARGETS"
-          --github-output "$GITHUB_OUTPUT"
+          nix run .#ci -- update-matrix --targets "$TARGETS" --github-output
+          "$GITHUB_OUTPUT"
 
   update:
     name: bump ${{ matrix.job.name }}
