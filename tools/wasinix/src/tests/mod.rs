@@ -4266,6 +4266,37 @@ mod update {
     }
 
     #[test]
+    fn command_hooks_parse_the_flakes_camel_case_fields() {
+        let value = serde_json::json!({
+            "action": {
+                "kind": "command",
+                "command": ["/nix/store/aaa-anybuild-update/bin/anybuild-update"],
+                "commandDrvPaths": ["/nix/store/bbb-anybuild-update.drv"]
+            },
+            "version": "0.4.0"
+        });
+        let hook =
+            crate::update::targets::declared_post_update_hook("nativePackages.anybuild", &value)
+                .unwrap();
+        let PostUpdateAction::Command {
+            command,
+            command_drv_paths,
+        } = hook.action
+        else {
+            panic!("expected command")
+        };
+        assert_eq!(
+            command,
+            ["/nix/store/aaa-anybuild-update/bin/anybuild-update"]
+        );
+        assert_eq!(command_drv_paths, ["/nix/store/bbb-anybuild-update.drv"]);
+        assert!(
+            include_str!("../../../../flake.nix")
+                .contains("commandDrvPaths = commandDrvsOf (lib.toList h);")
+        );
+    }
+
+    #[test]
     fn the_completion_cache_round_trips_and_narrow_maps_do_not_shrink_it() {
         let scratch = crate::support::fs::Scratch::create("wasinix-test").unwrap();
         let names = crate::support::completions::round_trip_for_tests(
