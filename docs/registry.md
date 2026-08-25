@@ -12,6 +12,15 @@ the next Python coverage additions. `wasinix serve` stands all three up at once
 and tears them down together; `--mint`, `--index`, `--server`, and `--webc`
 reuse prebuilt artifacts instead of building fresh.
 
+`wasinix publish [selectors...]` is the repository-level publisher. It uses the
+same package, group, set, and `source=<id>` selectors as `wasinix build`, then
+runs only the registry legs represented by the selected artifacts. With no
+selector it publishes the complete inventory owned by `repository.source`.
+`--with-dependencies` adds WebC dependencies that the target registry does not
+yet carry. Registry URLs, the Python app directory, and WebC provenance come
+from `repository.publication`, so a consuming flake publishes its own source
+without inheriting Wasinix repository identity.
+
 `wasinix wasmer serve` yields a directory, not a URL: the wasmer CLI has no
 local-HTTP registry mode (`--registry` always resolves a remote GraphQL
 endpoint), so the cell materializes the selected packages and their dependency

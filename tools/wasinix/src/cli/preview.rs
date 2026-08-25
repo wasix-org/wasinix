@@ -293,6 +293,7 @@ fn publish(args: &PreviewArgs, repo: &Path) -> Result<()> {
             with_dependencies: false,
             publish_as: None,
             namespace: Some(namespace.clone()),
+            provenance: None,
         })?;
     }
 

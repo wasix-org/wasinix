@@ -101,6 +101,12 @@ pub enum CommandTree {
     Python(registries::PythonCommand),
     /// Publish to every registry
     Publish {
+        /// Package selectors, as in `build`; none means this repository's inventory
+        #[arg(add = clap_complete::ArgValueCandidates::new(request::selector_candidates))]
+        selectors: Vec<String>,
+        /// Add unpublished WebC dependencies to the selected batch
+        #[arg(long)]
+        with_dependencies: bool,
         #[arg(long)]
         dry_run: bool,
     },
@@ -2017,9 +2023,15 @@ fn run(command: CommandTree) -> Result<CommandStatus> {
         CommandTree::Cargo(command) => registries::run_cargo(command),
         CommandTree::Wasmer(command) => registries::run_wasmer(command),
         CommandTree::Python(command) => registries::run_python(command),
-        CommandTree::Publish { dry_run } => {
-            registries::run_meta_publish(crate::support::effects::Effects::from_dry_run(dry_run))
-        }
+        CommandTree::Publish {
+            selectors,
+            with_dependencies,
+            dry_run,
+        } => registries::run_meta_publish(
+            &selectors,
+            with_dependencies,
+            crate::support::effects::Effects::from_dry_run(dry_run),
+        ),
         CommandTree::Preview(args) => preview::run(args),
         CommandTree::Serve {
             mint,
