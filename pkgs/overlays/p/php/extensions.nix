@@ -1,15 +1,18 @@
 {
   final,
   lib,
+  nixpkgsExtensions,
   phpVersion,
 }: let
   getDev = lib.getDev;
   extensionPassthru = attrs: attrs // {inherit phpVersion;};
 in {
-  imagick =
-    final.buildPackages.runCommand "php-extension-imagick-3.8.1" {
+  imagick = let
+    upstream = nixpkgsExtensions.imagick;
+  in
+    final.buildPackages.runCommand "php-extension-${upstream.extensionName}-${upstream.version}" {
       passthru = extensionPassthru {
-        extensionName = "imagick";
+        inherit (upstream) extensionName version;
         configureFlag = "--with-imagick";
         buildInputs = [final.imagemagick];
         # PECL ships these headers; cross install must not regenerate them with target PHP.
@@ -23,10 +26,7 @@ in {
       };
     } ''
       mkdir -p "$out"
-      tar --strip-components=1 -xf ${final.fetchurl {
-        url = "https://pecl.php.net/get/imagick-3.8.1.tgz";
-        hash = "sha256-OjWHwKUkwX0NrZZzoWC5DNd26DaDhHThc7VJ7YZDUu4=";
-      }} -C "$out"
+      tar --strip-components=1 -xf ${upstream.src} -C "$out"
       substituteInPlace "$out/config.m4" \
         --replace-fail \
           '# This line checks that ImageMagick is available, and
@@ -35,18 +35,36 @@ in {
           ""
     '';
 
-  igbinary =
-    final.buildPackages.runCommand "php-extension-igbinary-edda7101" {
+  igbinary = let
+    upstream = nixpkgsExtensions.igbinary;
+    useUpstreamSource = lib.versionOlder phpVersion "8.5";
+    version =
+      if useUpstreamSource
+      then upstream.version
+      else "edda7101";
+    source =
+      if useUpstreamSource
+      then upstream.src
+      else
+        final.fetchFromGitHub {
+          owner = "igbinary";
+          repo = "igbinary";
+          rev = "edda7101adf583df047d028a154abf3bf04ced61";
+          hash = "sha256-EY3fSQjR0/tuEyNvY7ZYpArtmQNebbMyoa2OhGVkWvE=";
+        };
+  in
+    final.buildPackages.runCommand "php-extension-${upstream.extensionName}-${version}" {
       passthru = extensionPassthru {
-        extensionName = "igbinary";
-        configureFlag = "--enable-igbinary";
+        inherit (upstream) extensionName;
+        inherit version;
+        configureFlag = builtins.head upstream.configureFlags;
       };
     } ''
-      cp -R --no-preserve=mode,ownership ${final.fetchFromGitHub {
-        owner = "igbinary";
-        repo = "igbinary";
-        rev = "edda7101adf583df047d028a154abf3bf04ced61";
-        hash = "sha256-EY3fSQjR0/tuEyNvY7ZYpArtmQNebbMyoa2OhGVkWvE=";
-      }} "$out"
+      mkdir -p "$out"
+      ${
+        if useUpstreamSource
+        then ''tar --strip-components=1 -xf ${source} -C "$out"''
+        else ''cp -R --no-preserve=mode,ownership ${source}/. "$out"''
+      }
     '';
 }
