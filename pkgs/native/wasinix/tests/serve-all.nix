@@ -16,7 +16,6 @@
         pkgs.gzip
         pkgs.writableTmpDirAsHomeHook
       ];
-      publisher = ../../../cargo-registry/publish-crate.py;
       server = packages.preferred.cargo-registry;
       bashWebc = artifacts.webc.bash;
     } ''
@@ -31,7 +30,6 @@
       echo 'pub fn ok() {}' > mint/work/probe-0.1.0+wasix.1/src/lib.rs
       tar czf mint/crates/probe-0.1.0+wasix.1.crate -C mint/work probe-0.1.0+wasix.1
       rm -r mint/work
-      cp "$publisher" mint/publish-crate.py
       cat > mint/manifest.json <<'EOF'
       {"crates":[{"crate":"probe","wasixVersion":"0.1.0+wasix.1","crateFile":"probe-0.1.0+wasix.1.crate","upstream":"0.1.0","rel":1}],"shadowLimits":[],"excluded":[],"unpinned":[],"stray":[]}
       EOF
