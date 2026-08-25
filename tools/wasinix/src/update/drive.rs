@@ -119,6 +119,10 @@ fn changed_hooks(
         .collect()
 }
 
+fn release_followups(changes: &ChangeSet, release_work: bool) -> bool {
+    release_work && changes.changed()
+}
+
 fn hook_stage(
     repo: &Path,
     changes: &mut ChangeSet,
@@ -217,18 +221,13 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
             .get(&target.name)
             .is_none_or(|request| request.mode == Mode::Release)
     });
-    let priors = if !release_work {
-        Value::Null
-    } else {
-        retention::note_versions()
-    };
     // A transient eval failure here must abort: retention diffs against these
     // versions, and starting from an empty map means retaining nothing while
-    // the prune still runs.
-    let history_priors: Versions = if !release_work {
-        Versions::new()
+    // the prune still runs. Both views come from one package-set evaluation.
+    let (priors, history_priors): (Value, Versions) = if release_work {
+        retention::prior_state(repo)?
     } else {
-        retention::current_versions(repo)?
+        (Value::Null, Versions::new())
     };
 
     // One flaky upstream must not abort the rest: isolate each target,
@@ -286,9 +285,11 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
         }
     }
 
+    let release_changed = release_followups(&changes, release_work);
+
     // Retain before pruning: the prune drops the rel key of any version no
     // longer served, which is exactly what retention just brought back.
-    if changes.changed() && release_work {
+    if release_changed {
         match retention::regen_history(repo, &history_priors) {
             Ok(Some(retained)) => {
                 let entry = Entry {
@@ -312,7 +313,7 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
             }),
         }
     }
-    if release_work {
+    if release_changed {
         match retention::prune_rels(repo) {
             Ok(Some(pruned)) => {
                 let entry = Entry {
@@ -346,7 +347,7 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
         hook_stage(repo, &mut changes, options.commit, committer, hooks)?;
     }
 
-    if release_work {
+    if release_changed {
         for note in retention::fired_notes(repo, &priors) {
             changes.entries.push(Entry {
                 kind: EntryKind::Notable,
@@ -410,5 +411,22 @@ mod tests {
             ),
             ["hook", "--flag", "1", "2"]
         );
+    }
+
+    #[test]
+    fn release_followups_require_a_changed_release_target() {
+        let mut changes = ChangeSet::default();
+        assert!(!release_followups(&changes, true));
+        changes.entries.push(Entry {
+            kind: EntryKind::Bump,
+            subject: "pkg".into(),
+            from: Some("1".into()),
+            to: Some("2".into()),
+            detail: None,
+            changelog: None,
+            files: Vec::new(),
+        });
+        assert!(release_followups(&changes, true));
+        assert!(!release_followups(&changes, false));
     }
 }

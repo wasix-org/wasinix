@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::support::error::{Result, request_error};
-use crate::support::nix::{Flake, SYSTEM, eval};
+use crate::support::nix::{Invocation, SYSTEM};
 use crate::support::ui;
 use crate::update::history::AddOutcome;
 
@@ -85,12 +85,51 @@ fn cli_apply() -> String {
     )
 }
 
+#[derive(Deserialize)]
+struct EvaluatedNotes {
+    ok: bool,
+    value: Value,
+}
+
+#[derive(Deserialize)]
+struct VersionState {
+    wheels: Value,
+    clis: Value,
+    notes: EvaluatedNotes,
+}
+
+fn version_apply(include_notes: bool) -> String {
+    let notes = if include_notes {
+        "let n = builtins.tryEval p.updateNotes.versions; in { ok = n.success; value = if n.success then n.value else {}; }"
+    } else {
+        "{ ok = true; value = {}; }"
+    };
+    format!(
+        "p: {{ wheels = ({WHEEL_APPLY}) p.pythonWheels; clis = ({}) p.wasmerPackages; notes = {notes}; }}",
+        cli_apply()
+    )
+}
+
+fn evaluate_versions(repo: &Path, include_notes: bool) -> Result<VersionState> {
+    let apply = version_apply(include_notes);
+    let value = Invocation::flake("eval", format!(".#legacyPackages.{SYSTEM}"))
+        .json()
+        .apply(&apply)
+        .workdir(repo)
+        .run_json("served versions")?;
+    crate::support::json::from_value(value, "served versions")
+}
+
 /// Current served versions, excluding the history entries themselves.
 pub fn current_versions(repo: &Path) -> Result<Versions> {
+    let state = evaluate_versions(repo, false)?;
+    versions_from_state(repo, &state)
+}
+
+fn versions_from_state(repo: &Path, state: &VersionState) -> Result<Versions> {
     let mut result: Versions = BTreeMap::new();
     result.insert("wheel".into(), BTreeMap::new());
     result.insert("cli".into(), BTreeMap::new());
-
     let history: Value = crate::support::json::read(&crate::update::history::wheel_history(repo))?;
     let history_keys: std::collections::BTreeSet<String> = history
         .as_object()
@@ -105,8 +144,7 @@ pub fn current_versions(repo: &Path) -> Result<Versions> {
         })
         .collect();
 
-    let wheels = eval(&Flake::default(), "pythonWheels", Some(WHEEL_APPLY))?;
-    for (_, by_attr) in wheels.as_object().into_iter().flatten() {
+    for (_, by_attr) in state.wheels.as_object().into_iter().flatten() {
         for (attr, info) in by_attr.as_object().into_iter().flatten() {
             if history_keys.contains(attr) {
                 continue;
@@ -122,9 +160,7 @@ pub fn current_versions(repo: &Path) -> Result<Versions> {
         }
     }
 
-    let cli_apply = cli_apply();
-    let clis = eval(&Flake::default(), "wasmerPackages", Some(&cli_apply))?;
-    for (_, info) in clis.as_object().into_iter().flatten() {
+    for (_, info) in state.clis.as_object().into_iter().flatten() {
         if info["history"].as_bool().unwrap_or(false) {
             continue;
         }
@@ -139,6 +175,15 @@ pub fn current_versions(repo: &Path) -> Result<Versions> {
             )?);
     }
     Ok(result)
+}
+
+pub fn prior_state(repo: &Path) -> Result<(Value, Versions)> {
+    let state = evaluate_versions(repo, true)?;
+    if !state.notes.ok {
+        ui::warning("note version eval failed");
+    }
+    let versions = versions_from_state(repo, &state)?;
+    Ok((state.notes.value, versions))
 }
 
 /// Retention keeps the outgoing version behind in the registry-history table
@@ -263,15 +308,6 @@ pub struct Note {
 
 impl Note {}
 
-/// Versions of the packages carrying update notes, from before the run: the
-/// `prior` side of each note's predicate.
-pub fn note_versions() -> Value {
-    eval(&Flake::default(), "updateNotes.versions", None).unwrap_or_else(|error| {
-        ui::warning(format!("note version eval failed: {error}"));
-        Value::Object(Default::default())
-    })
-}
-
 fn fired_notes_once(repo: &Path, priors: &Value) -> Result<Value> {
     let output = crate::support::nix::Invocation::flake(
         "eval",
@@ -322,4 +358,32 @@ pub fn fired_notes(repo: &Path, priors: &Value) -> Vec<Note> {
         }
     }
     seen.into_values().collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{VersionState, version_apply};
+    use crate::support::nix::Invocation;
+
+    #[test]
+    fn one_package_set_evaluation_returns_every_prior_view() {
+        let expression = format!(
+            "let p = {{ \
+             pythonWheels.py313.demo = {{ version = \"1\"; passthru.wasix.retention = \"minor\"; }}; \
+             wasmerPackages.cli = {{ overlayName = \"cli\"; version = \"2\"; passthru.wasmer = {{}}; passthru.wasix.retention = \"major\"; }}; \
+             updateNotes.versions.cli = \"2\"; \
+             }}; in ({}) p",
+            version_apply(true)
+        );
+        let value = Invocation::expr("eval", expression)
+            .option("experimental-features", "nix-command")
+            .args(["--store", "dummy://"])
+            .json()
+            .run_json("combined update state")
+            .unwrap();
+        let state: VersionState = crate::support::json::from_value(value, "update state").unwrap();
+        assert_eq!(state.wheels["py313"]["demo"]["version"], "1");
+        assert_eq!(state.clis["cli"]["version"], "2");
+        assert_eq!(state.notes.value["cli"], "2");
+    }
 }
