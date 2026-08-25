@@ -9,8 +9,7 @@
   # the self-contained python webc; the interpreter it bundles runs the import
   # test with no host /nix/store.
   pythonWebc,
-  # Wasmer runtime for the import checks (flake input; null -> pkgs.wasmer).
-  wasmer ? null,
+  harnesses,
   mkTestGroup,
   # the shared check machinery (pkgs/checks/emulated.nix, pkgs/lib/check-output.nix)
   emulatedChecks,
@@ -23,7 +22,12 @@
   pyKey,
   interpreterVariants,
 }: let
-  testLib = import ./test-lib.nix {inherit pkgs lib python3 pythonWebc wasmer;};
+  pythonHarnesses =
+    harnesses
+    // {
+      python = args:
+        harnesses.python ({inherit python3 pythonWebc;} // args);
+    };
 
   wheelList = import ./default.nix;
   # Older releases also served (registry history), keyed by worklist attr then version;
@@ -48,12 +52,10 @@
         else lib.replaceStrings ["-"] ["_"] e.attr
     );
 
-  inherit (testLib) runPython;
-
   # `import <mod>` check: the runtime counterpart to the static
   # `self-contained` guard below.
   importTest = name: e: wheel:
-    runPython {
+    pythonHarnesses.python {
       name = "wheel-import-${name}";
       inherit wheel;
       script = "import ${pyImportOf e wheel}";
@@ -167,7 +169,8 @@
       wheel = pythonPackages.${e.attr};
       # for `deps` (test-only wheels: pytest plugins, fixture libs)
       pythonPkgs = pythonPackages;
-      inherit runPython pkgs lib;
+      inherit pkgs lib;
+      harnesses = pythonHarnesses;
     };
   in
     builtins.foldl' (

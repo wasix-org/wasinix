@@ -2,10 +2,10 @@
 # not only the base/parquet imports.
 {
   wheel,
-  runPython,
+  harnesses,
   ...
 }: {
-  dataset = runPython {
+  dataset = harnesses.python {
     name = "pyarrow-dataset";
     inherit wheel;
     script = ''

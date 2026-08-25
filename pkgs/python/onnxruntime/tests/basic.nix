@@ -5,7 +5,7 @@
 # that the cross-numpy-header cmake fix makes correct.
 #
 # The model is an embedded serialized ONNX protobuf (base64), not built via the
-# `onnx` python package: runPython gives the wheel only its own dependency
+# `onnx` python package: harnesses.python gives the wheel only its own dependency
 # closure, and onnxruntime does not depend on onnx, so `import onnx` is
 # unavailable in the sandbox. The bytes were produced once with onnx.helper
 # (MatMul, opset 17, ir_version 9).
@@ -14,10 +14,10 @@
 # pinned single-threaded so no worker-thread path is taken under wasmer.
 {
   wheel,
-  runPython,
+  harnesses,
   ...
 }: {
-  inference = runPython {
+  inference = harnesses.python {
     name = "onnxruntime-inference";
     inherit wheel;
     script = ''

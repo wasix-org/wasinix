@@ -11,10 +11,10 @@
 #  - sparse svds(solver=propack) -> _propack               (blaslapack_declarations.h)
 {
   wheel,
-  runPython,
+  harnesses,
   ...
 }: {
-  blas-lapack = runPython {
+  blas-lapack = harnesses.python {
     name = "scipy-blas-lapack";
     inherit wheel;
     script = ''
@@ -84,7 +84,7 @@
   # which declares them as returning a C99 complex: the clang caller and the
   # flang callee then have to agree on the wasm32 complex return lowering
   # (flang-wasm32-target.patch). Nothing at link time checks that they do.
-  complex-blas = runPython {
+  complex-blas = harnesses.python {
     name = "scipy-complex-blas";
     inherit wheel;
     script = ''
@@ -107,7 +107,7 @@
   # -D_without-fortran=true is meant to cost scipy.odr and nothing else. Pin both
   # halves so a bump that moves Fortran into another subpackage, or that adds a
   # subpackage, fails here instead of silently shipping a hole.
-  submodules = runPython {
+  submodules = harnesses.python {
     name = "scipy-submodules";
     inherit wheel;
     script = ''

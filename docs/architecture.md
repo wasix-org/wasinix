@@ -128,6 +128,11 @@ Package, artifact, and runtime tests live in the structured project's `tests`
 and `ci` views, not in the flake `checks` output. This keeps `nix flake check` a
 source-only preflight while `wasinix build` remains the one build orchestrator.
 
+Test constructors live under `pkgs/harnesses/`; package tests receive them
+through the project `harnesses` view. Reusable executable adapters that do not
+construct a test live under `pkgs/runners/`. Package-specific test declarations
+remain beside their package unit.
+
 CA derivations are not used because caches cannot reliably distribute or
 authenticate realisations
 ([nix#11748](https://github.com/NixOS/nix/issues/11748),

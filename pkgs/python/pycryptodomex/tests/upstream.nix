@@ -5,9 +5,9 @@
 # (pythonImportsCheck only), so this covers strictly more than upstream.
 {
   wheel,
-  runPython,
+  harnesses,
 }: {
-  upstream = runPython {
+  upstream = harnesses.python {
     name = "wheel-pytest-pycryptodomex";
     inherit wheel;
     timeout = 1800;

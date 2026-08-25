@@ -10,10 +10,10 @@
 # this isolated test instead of claiming synchronization it does not have.
 {
   wheel,
-  runPython,
+  harnesses,
   ...
 }: {
-  read-write = runPython {
+  read-write = harnesses.python {
     name = "h5py-read-write";
     inherit wheel;
     script = ''

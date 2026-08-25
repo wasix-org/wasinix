@@ -2,13 +2,13 @@
 # port) initializes, offline.
 {
   wheel,
-  runPython,
+  harnesses,
   ...
 }: {
   # Client construction builds the rustls ClientConfig on the aws-lc-rs crypto
   # provider plus the browser TLS fingerprint; then a header roundtrip through
   # the rust request builder. No network (the sandbox has none).
-  client = runPython {
+  client = harnesses.python {
     name = "primp-client";
     inherit wheel;
     script = ''

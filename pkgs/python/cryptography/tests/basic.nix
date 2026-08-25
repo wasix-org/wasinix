@@ -1,9 +1,9 @@
 {
   wheel,
-  runPython,
+  harnesses,
   ...
 }: {
-  openssl-provider = runPython {
+  openssl-provider = harnesses.python {
     name = "cryptography-openssl-provider";
     inherit wheel;
     script = ''

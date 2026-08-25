@@ -2,10 +2,10 @@
 # (an import that breaks, or a /proc that appears) shows up here.
 {
   wheel,
-  runPython,
+  harnesses,
   ...
 }: {
-  works = runPython {
+  works = harnesses.python {
     name = "psutil-works";
     inherit wheel;
     script = ''

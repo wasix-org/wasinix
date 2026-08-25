@@ -1,9 +1,9 @@
 {
   wheel,
-  runPython,
+  harnesses,
   ...
 }: {
-  api-health = runPython {
+  api-health = harnesses.python {
     name = "langflow-api-health";
     inherit wheel;
     script = ''
@@ -22,7 +22,7 @@
     '';
   };
 
-  cli = runPython {
+  cli = harnesses.python {
     name = "langflow-cli";
     inherit wheel;
     script = ''
@@ -38,7 +38,7 @@
     '';
   };
 
-  launcher-and-frontend = runPython {
+  launcher-and-frontend = harnesses.python {
     name = "langflow-launcher-and-frontend";
     inherit wheel;
     script = ''
@@ -54,7 +54,7 @@
     '';
   };
 
-  schemas = runPython {
+  schemas = harnesses.python {
     name = "langflow-schemas";
     inherit wheel;
     script = ''
