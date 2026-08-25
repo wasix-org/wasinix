@@ -50,6 +50,7 @@
           inherit contextFor;
           dir = declared.directory;
           expose = declared.expose or [];
+          lane = declared.lane or "packages";
         }
         // lib.optionalAttrs (extendPackageFor != null) {inherit extendPackageFor;})
     else extensionError extension "${label} is not an overlay";
@@ -70,7 +71,7 @@
 
   validateExtension = extension: let
     id = extension.id or null;
-    invalidLanes = lib.subtractLists ["shared" "native" "wasix" "python"] (lib.attrNames (extension.overlays or {}));
+    invalidLanes = lib.subtractLists ["packages" "python"] (lib.attrNames (extension.overlays or {}));
     invalidHistory = lib.subtractLists ["wasix" "python"] (lib.attrNames (extension.history or {}));
   in
     lib.throwIf (
@@ -382,21 +383,17 @@ in rec {
     projectTests);
     unknownProjectTestSources = lib.subtractLists extensionIds (lib.unique (map (test: test.source) (lib.attrValues projectTests)));
 
-    overlaysFor = contextFor: scope: variant: lanes:
+    overlaysFor = contextFor: scope: variant:
       lib.concatMap (
-        extension:
-          [
-            (captureExtensionContext extension)
-          ]
-          ++ map (lane: let
-            declared = (extension.overlays or {}).${lane} or (_final: _prev: {});
-          in
-            laneOverlay {
-              inherit contextFor declared extension scope variant;
-              enabled = previous: lane != "wasix" || (previous.stdenv.hostPlatform.isWasix or false);
-              label = "overlay lane '${lane}'";
-            })
-          lanes
+        extension: let
+          declared = (extension.overlays or {}).packages or (_final: _prev: {});
+        in [
+          (captureExtensionContext extension)
+          (laneOverlay {
+            inherit contextFor declared extension scope variant;
+            label = "package overlay";
+          })
+        ]
       )
       allExtensions;
 
@@ -414,11 +411,9 @@ in rec {
         declared = ((package.passthru or {}).wasix or {}).supportedProfiles or profileNames;
         unknown = lib.subtractLists profileNames declared;
       in
-        lib.throwIf (declared == [])
-        "${package.pname or package.name}: supportedProfiles must not be empty"
-        (lib.throwIf (unknown != [])
-          "${package.pname or package.name}: supportedProfiles contains unknown profile(s): ${lib.concatStringsSep ", " unknown}"
-          declared);
+        lib.throwIf (unknown != [])
+        "${package.pname or package.name}: supportedProfiles contains unknown profile(s): ${lib.concatStringsSep ", " unknown}"
+        declared;
 
       preferredProfileFor = package: let
         metadata = (package.passthru or {}).wasix or {};
@@ -504,9 +499,23 @@ in rec {
         inherit (projectLib) buildHostPypaTools dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix dropSphinxDocs extendPackage linkInputs mergeScript packageForEntry replaceInputsByName wasmRename;
       };
 
-      contextFor = scope: variant: enclosingPkgs: {final, ...}:
+      contextFor = declaredScope: declaredVariant: enclosingPkgs: {
+        final,
+        prev ? final,
+      }: let
+        scope =
+          if declaredScope == "wasix" && !(prev.stdenv.hostPlatform.isWasix or false)
+          then "native"
+          else declaredScope;
+        variant =
+          if scope == declaredScope
+          then declaredVariant
+          else {};
+      in
         sharedProjectionContext
         // {
+          inherit scope variant;
+          packageSet = final;
           packages = {
             native = nativeForContext;
             inherit wasix preferred;
@@ -535,13 +544,8 @@ in rec {
             nativeRaw = null;
             scope = "native";
             variant = {};
-            packageRecipesOverlay = args:
-              projectLib.loadRecipeOverlay ({
-                  contextFor = contextFor "native" {} null;
-                }
-                // args);
           }
-          ++ overlaysFor (contextFor "native" {} null) "native" {} ["shared" "native"];
+          ++ overlaysFor (contextFor "native" {} null) "native" {};
       };
 
       wasixRaw =
@@ -560,13 +564,8 @@ in rec {
                   inherit project nativeRaw;
                   scope = "wasix";
                   variant = {inherit profile;};
-                  packageRecipesOverlay = args:
-                    projectLib.loadRecipeOverlay ({
-                        contextFor = contextFor "wasix" {inherit profile;} null;
-                      }
-                      // args);
                 }
-                ++ overlaysFor (contextFor "wasix" {inherit profile;} null) "wasix" {inherit profile;} ["shared" "wasix"];
+                ++ overlaysFor (contextFor "wasix" {inherit profile;} null) "wasix" {inherit profile;};
             }
         )
         profiles.profiles;
@@ -638,6 +637,7 @@ in rec {
         };
       };
       allWasixNames = lib.unique (lib.concatMap projectLib.registeredNames (lib.attrValues wasixRaw));
+      availableWasixNames = lib.unique (lib.concatMap lib.attrNames (lib.attrValues baseWasix));
       preferredProfileNameFor = name: let
         defaultProfile = profiles.defaultProfileName or null;
         packageAtDefault = wasixRaw.${defaultProfile}.${name};
@@ -1105,7 +1105,7 @@ in rec {
           projectedPackageNodes.${projectLib.address "packages" ["python" interpreter name]}.value)
         packages)
       basePython;
-      preferred = lib.genAttrs allWasixNames (name: let
+      preferred = lib.genAttrs availableWasixNames (name: let
         profile = preferredProfileNameFor name;
       in
         projectedPackageFor "wasix" {inherit profile;} wasixRaw.${profile} name wasixRaw.${profile}.${name});

@@ -4,7 +4,7 @@
   mkPythonWheels,
 }: let
   wheelList = import ../python/wheels/default.nix;
-  history = builtins.fromJSON (builtins.readFile ../python/history.json);
+  history = builtins.fromJSON (builtins.readFile ../python-overlays/history.json);
   wheelInventory = lib.listToAttrs (map (entry: lib.nameValuePair entry.attr entry) wheelList);
   wheelArtifactKind = variant: "wheel-${variant}";
   isNoarch = entry: entry.noarch or false;

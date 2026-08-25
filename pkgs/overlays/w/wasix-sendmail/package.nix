@@ -1,0 +1,51 @@
+{
+  exposePackage,
+  packageSet,
+  scope,
+}:
+exposePackage (
+  packageSet.rustPlatform.buildRustPackage (finalAttrs: {
+    pname = "wasix-sendmail";
+    version = "0.1.10";
+
+    src = packageSet.fetchFromGitHub {
+      owner = "wasix-org";
+      repo = "wasix-sendmail";
+      tag = "v${finalAttrs.version}";
+      hash = "sha256-2gdbeJgJ+CertmJp0r0K8InU7A8mEUmLm1IejMuUWps=";
+    };
+
+    cargoPatches = [./dependencies.patch];
+    cargoHash = "sha256-bLGQmYdPMMaVPzpvotqiCxr4QTZ/U7cX9kmm2b6ncwQ=";
+
+    passthru =
+      {
+        wasix.supportedProfiles = ["eh" "ehpic"];
+        updateScript = {
+          command = packageSet.nix-update-script {extraArgs = ["--flake"];};
+          accepts = ["release" "revision"];
+          source = {
+            kind = "github";
+            owner = "wasix-org";
+            repo = "wasix-sendmail";
+          };
+        };
+      }
+      // packageSet.lib.optionalAttrs (scope == "wasix") {
+        wasinix.shipped = true;
+        wasmer = {
+          owner = "sendmail";
+          name = "sendmail";
+        };
+      };
+
+    meta = {
+      description = "Sendmail-compatible email sender with multiple backends";
+      longDescription = "A sendmail-compatible command-line email sender with configurable delivery backends.";
+      homepage = "https://github.com/wasix-org/wasix-sendmail";
+      changelog = "https://github.com/wasix-org/wasix-sendmail/releases/tag/v${finalAttrs.version}";
+      license = packageSet.lib.licenses.agpl3Only;
+      mainProgram = "sendmail";
+    };
+  })
+)

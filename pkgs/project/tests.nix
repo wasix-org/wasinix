@@ -66,8 +66,15 @@
     family-a = familyA;
     family-b = familyB;
     new = throw "an exposePackage unit must not force its preceding value";
+    zlib = previous;
   };
+  wasixPrev =
+    prev
+    // {
+      stdenv.hostPlatform.isWasix = true;
+    };
   contextFor = {final, ...}: {
+    packageSet = final;
     packages.sameProfile = final;
     inherit (projectLib) extendPackage;
   };
@@ -75,36 +82,72 @@
     projectLib.loadPackageOverlay {
       inherit contextFor;
       dir = ./tests/units;
+      lane = "packages";
     }
     final
-    prev;
+    wasixPrev;
   loaded = removeAttrs loadedRaw [projectLib.unitOverlaysAttr];
-  discoveredUnits = projectLib.discoverUnits ./tests/units;
-  conflictingUnits = projectLib.discoverUnits ./tests/conflicting-units;
+  discoveredUnits = projectLib.discoverShardedUnits {
+    dir = ./tests/units;
+    lane = "packages";
+  };
   topLevelPackageFiles = lib.attrNames (lib.filterAttrs (name: type: type == "regular" && lib.hasSuffix ".nix" name) (builtins.readDir ../.));
   bareUnit =
     projectLib.loadPackageOverlay {
       inherit contextFor;
       dir = ./tests/invalid-units;
+      lane = "packages";
     }
     final
-    prev;
+    wasixPrev;
   exposedUnits =
     projectLib.loadPackageOverlay {
       inherit contextFor;
       dir = ./tests/units;
       expose = ["dependency"];
+      lane = "packages";
     }
     final
-    prev;
+    wasixPrev;
   missingExposure =
     projectLib.loadPackageOverlay {
       inherit contextFor;
       dir = ./tests/units;
       expose = ["missing"];
+      lane = "packages";
     }
     final
-    prev;
+    wasixPrev;
+  shardedPackagesFor = scope: let
+    previousSet =
+      prev
+      // {
+        stdenv.hostPlatform.isWasix = scope == "wasix";
+      };
+  in
+    projectLib.loadPackageOverlay {
+      contextFor = args: contextFor args // {inherit scope;};
+      dir = ./tests/sharded-packages;
+      lane = "packages";
+    }
+    final
+    previousSet;
+  shardedNative = shardedPackagesFor "native";
+  shardedWasix = shardedPackagesFor "wasix";
+  shardedPythonUnits = projectLib.discoverShardedUnits {
+    dir = ./tests/sharded-python;
+    lane = "python";
+  };
+  invalidSharded = map (dir:
+    force (projectLib.discoverShardedUnits {
+      inherit dir;
+      lane = "packages";
+    })) [
+    ./tests/sharded-conflict
+    ./tests/sharded-loose
+    ./tests/sharded-recipe
+    ./tests/sharded-wrong
+  ];
 
   coreOverlay = projectLib.registerOverlay {
     source = "wasinix";
@@ -209,7 +252,7 @@
     };
     builtInExtension = {
       id = "wasinix";
-      overlays.shared = _final: _previous: {
+      overlays.packages = _final: _previous: {
         core = mkPackage {
           name = "core";
           passthru = {
@@ -413,7 +456,7 @@
       python = ./tests/python-history.json;
     };
     overlays = {
-      wasix = final: previous: {
+      packages = final: previous: {
         core = projectLib.extendPackage previous.core {
           passthru.wasinix = {
             overrides = "wasinix";
@@ -446,7 +489,10 @@
       };
       inherit
         ((projectApi.loadPackageOverlays {
-          python = ./tests/python-units;
+          python = {
+            directory = ./tests/python-units;
+            lane = "python";
+          };
         }))
         python
         ;
@@ -455,20 +501,26 @@
   unitExtension = {
     id = "unit-consumer";
     overlays = projectApi.loadPackageOverlays {
-      wasix = ./tests/project-units;
+      packages = {
+        directory = ./tests/project-units;
+        lane = "packages";
+      };
     };
   };
   definitionExtension = {
     id = "definition-consumer";
     history.wasix = ./tests/unit-history.json;
     overlays = projectApi.loadPackageOverlays {
-      wasix = ./tests/units;
+      packages = {
+        directory = ./tests/units;
+        lane = "packages";
+      };
     };
   };
   pythonContextExtension = {
     id = "python-context";
     overlays = {
-      wasix = _final: _previous: {
+      packages = _final: _previous: {
         topOwned = mkPackage {name = "top-owned";};
       };
       python = final: previous: _pyfinal: _pyprevious: {
@@ -491,7 +543,7 @@
   };
   emptyExtension = {
     id = "empty";
-    overlays.shared = _final: _previous: {
+    overlays.packages = _final: _previous: {
       core = mkPackage {name = "empty-core";};
       only = mkPackage {name = "only";};
     };
@@ -547,7 +599,7 @@
   wasmerExtension = {
     id = "wasmer-fixture";
     history.wasix = ./tests/wasix-history.json;
-    overlays.wasix = final: previous: {
+    overlays.packages = final: previous: {
       core = projectLib.extendPackage previous.core {
         passthru.wasinix = {
           overrides = "wasinix";
@@ -602,7 +654,10 @@
     id = "behavior-fixture";
     history.wasix = ./tests/behavior-history.json;
     overlays = projectApi.loadPackageOverlays {
-      wasix = ./tests/behavior-units;
+      packages = {
+        directory = ./tests/behavior-units;
+        lane = "packages";
+      };
     };
   };
   wasmerProject = wasmerProjectApi.mkProject {
@@ -623,7 +678,7 @@
       extensions = [
         {
           inherit id;
-          overlays.wasix = _final: _previous: {
+          overlays.packages = _final: _previous: {
             probe = mkPackage {
               name = "probe";
               version = "1.0";
@@ -659,7 +714,7 @@
     extensions = [
       {
         id = "alias-collision";
-        overlays.wasix = _final: _previous: {
+        overlays.packages = _final: _previous: {
           first = mkPackage {passthru.wasinix.aliases = ["shared"];};
           second = mkPackage {passthru.wasinix.aliases = ["shared"];};
         };
@@ -672,7 +727,7 @@
     extensions = [
       {
         id = "variant-shape";
-        overlays.wasix = _final: previous:
+        overlays.packages = _final: previous:
           lib.optionalAttrs (previous.profile == "default") {
             conditional = mkPackage {name = "conditional";};
           };
@@ -696,7 +751,7 @@
       {
         id = "replacement-history";
         history.wasix = ./tests/replacement-history.json;
-        overlays.wasix = _final: _previous: {
+        overlays.packages = _final: _previous: {
           replacement = mkPackage {
             name = "standalone-replacement";
             version = "1.0";
@@ -711,7 +766,7 @@
     extensions = [
       {
         id = "invalid-profile";
-        overlays.wasix = _final: _previous: {
+        overlays.packages = _final: _previous: {
           invalidProfile = mkPackage {
             passthru.wasix.supportedProfiles = ["missing"];
           };
@@ -725,7 +780,7 @@
     extensions = [
       {
         id = "invalid-ci-profile";
-        overlays.wasix = _final: _previous: {
+        overlays.packages = _final: _previous: {
           invalidCiProfile = mkPackage {
             passthru.wasix.supportedProfiles = ["alternate"];
             passthru.wasinix.ci.profiles = ["default"];
@@ -957,16 +1012,16 @@ in {
       inherit (extensionDeclaration) id;
       lanes = lib.attrNames extensionDeclaration.overlays;
       history = lib.attrNames extensionDeclaration.history;
-      sharedDirectory = toString extensionDeclaration.overlays.shared.directory;
+      packagesDirectory = toString extensionDeclaration.overlays.packages.directory;
       legacyOverlayAbsent = !builtins.pathExists ../overlay;
       pythonHarnessPresent = builtins.pathExists ../harnesses/python.nix;
       legacyPythonHarnessAbsent = !builtins.pathExists ../python/wheels/test-lib.nix;
     };
     expected = {
       id = "wasinix";
-      lanes = ["native" "python" "shared" "wasix"];
+      lanes = ["packages" "python"];
       history = ["python" "wasix"];
-      sharedDirectory = toString ../shared;
+      packagesDirectory = toString ../overlays;
       legacyOverlayAbsent = true;
       pythonHarnessPresent = true;
       legacyPythonHarnessAbsent = true;
@@ -979,11 +1034,10 @@ in {
       existingInputs = map (package: package.name) loaded.existing.buildInputs;
       existingPolicy = loaded.existing.passthru.wasinix.test;
       replayNames = lib.attrNames loadedRaw.${projectLib.unitOverlaysAttr};
-      fileUnitDirectory = (lib.findFirst (unit: unit.name == "existing") null discoveredUnits).directory;
+      fileUnitDirectory = toString (lib.findFirst (unit: unit.name == "existing") null discoveredUnits).directory;
       directoryUnitDirectory = toString (lib.findFirst (unit: unit.name == "family") null discoveredUnits).directory;
-      recipeUnitDirectory = toString (lib.findFirst (unit: unit.name == "recipe") null discoveredUnits).directory;
+      completeUnitDirectory = toString (lib.findFirst (unit: unit.name == "complete") null discoveredUnits).directory;
       bareUnitFails = !(force bareUnit).success;
-      conflictingUnitsFail = !(force conflictingUnits).success;
       inherit topLevelPackageFiles;
       exposed = exposedUnits.dependency.name;
       missingExposureFails = !(force missingExposure).success;
@@ -992,21 +1046,41 @@ in {
       testEditSupersedesPyPI = pythonTestEdit.passthru.wasinix.publication.supersedesPyPI or false;
     };
     expected = {
-      names = ["existing" "family-a" "family-b" "new" "recipe"];
+      names = ["complete" "existing" "family-a" "family-b" "new"];
       existingInputs = ["dependency"];
       existingPolicy = true;
-      replayNames = ["existing" "family-a" "family-b" "new" "recipe"];
-      fileUnitDirectory = null;
-      directoryUnitDirectory = toString ./tests/units/family;
-      recipeUnitDirectory = toString ./tests/units/recipe;
+      replayNames = ["complete" "existing" "family-a" "family-b" "new"];
+      fileUnitDirectory = toString ./tests/units/e/existing;
+      directoryUnitDirectory = toString ./tests/units/f/family;
+      completeUnitDirectory = toString ./tests/units/c/complete;
       bareUnitFails = true;
-      conflictingUnitsFail = true;
       topLevelPackageFiles = [];
       exposed = "dependency";
       missingExposureFails = true;
       wasmRename = true;
       buildEditSupersedesPyPI = true;
       testEditSupersedesPyPI = false;
+    };
+  };
+
+  shardedInventory = {
+    expr = {
+      nativeNames = lib.attrNames (removeAttrs shardedNative [projectLib.unitOverlaysAttr]);
+      wasixNames = lib.attrNames (removeAttrs shardedWasix [projectLib.unitOverlaysAttr]);
+      wasixAbsentFromNative = !(shardedNative ? zlib);
+      wasixInputs = shardedWasix.zlib.buildInputs;
+      supportedProfiles = shardedWasix.zlib.passthru.wasix.supportedProfiles;
+      pythonNames = map (unit: unit.name) shardedPythonUnits;
+      invalidLayoutsFail = lib.all (result: !result.success) invalidSharded;
+    };
+    expected = {
+      nativeNames = ["custom"];
+      wasixNames = ["custom" "zlib"];
+      wasixAbsentFromNative = true;
+      wasixInputs = ["wasix-input"];
+      supportedProfiles = ["default"];
+      pythonNames = ["requests"];
+      invalidLayoutsFail = true;
     };
   };
 
@@ -1065,7 +1139,7 @@ in {
         })).success;
       historyVendorConflictFails =
         !(force (testHistoryLib.resolveHistoryLockFile {
-          definition.file = ./tests/units/existing.nix;
+          definition.file = ./tests/units/e/existing/wasix.nix;
           label = "fixture.package 0.1";
           spec.vendorLayout = {
             lockFile = "locks/0.1.lock";
@@ -1075,10 +1149,10 @@ in {
       rawOverlay = project.catalog.entries."packages.wasix.default.core".definition;
     };
     expected = {
-      file = toString ./tests/units/existing.nix;
-      directory = toString ./tests/units/family;
-      historyFile = toString ./tests/units/existing.nix;
-      historyVendorPostPatch = "cp ${./tests/units/locks/0.1.lock} Cargo.lock";
+      file = toString ./tests/units/e/existing/wasix.nix;
+      directory = toString ./tests/units/f/family;
+      historyFile = toString ./tests/units/e/existing/wasix.nix;
+      historyVendorPostPatch = "cp ${./tests/units/e/existing/locks/0.1.lock} Cargo.lock";
       historyVendorLockFileRemoved = true;
       historyVendorMissingDefinitionFails = true;
       historyVendorConflictFails = true;
@@ -1132,7 +1206,7 @@ in {
       historyCommand = ["wasinix-command-behavior"];
       script = "behavior --version # native";
       historyTags = ["history-tests"];
-      definition = toString ./tests/behavior-units/behavior;
+      definition = toString ./tests/behavior-units/b/behavior;
       unpackaged = "host-shell-unpackaged-1.0";
       unpackagedSubject = "packages.wasix.default.unpackaged";
       unpackagedArtifacts = {};
@@ -1299,7 +1373,7 @@ in {
     };
     expected = {
       schemaVersion = 1;
-      nativeNames = ["core"];
+      nativeNames = ["broken" "ciNarrow" "consumer" "core" "dot.name" "limited" "topOwned" "uses-inherited"];
       nativeInterfaceName = "core";
       defaultNames = ["broken" "ciNarrow" "consumer" "core" "dot.name" "topOwned" "uses-inherited"];
       alternateNames = ["broken" "ciNarrow" "consumer" "core" "dot.name" "limited" "topOwned" "uses-inherited"];
@@ -1338,6 +1412,11 @@ in {
       ciSources = ["consumer"];
       ciJobNames = [
         "artifacts.bundle.consumer"
+        ''packages.native."dot.name"''
+        "packages.native.ciNarrow"
+        "packages.native.consumer"
+        "packages.native.core"
+        "packages.native.limited"
         "packages.python.py.inheritedPython"
         ''packages.python.py.inheritedPython.versions."0.8"''
         "packages.python.py.uses-python"
@@ -1352,6 +1431,8 @@ in {
         "packages.wasix.default.core"
         ''packages.wasix.default.core.versions."0.9"''
         "tests.artifacts.bundle.consumer.packaged"
+        "tests.packages.native.consumer.probe"
+        "tests.packages.native.core.probe"
         "tests.packages.wasix.alternate.consumer.probe"
         "tests.packages.wasix.alternate.core.probe"
         ''tests.packages.wasix.alternate.core.versions."0.9".probe''
@@ -1361,6 +1442,11 @@ in {
       ];
       catalogJobNames = [
         "artifacts.bundle.consumer"
+        ''packages.native."dot.name"''
+        "packages.native.ciNarrow"
+        "packages.native.consumer"
+        "packages.native.core"
+        "packages.native.limited"
         "packages.python.py.inheritedPython"
         ''packages.python.py.inheritedPython.versions."0.8"''
         "packages.python.py.uses-python"
@@ -1375,6 +1461,8 @@ in {
         "packages.wasix.default.core"
         ''packages.wasix.default.core.versions."0.9"''
         "tests.artifacts.bundle.consumer.packaged"
+        "tests.packages.native.consumer.probe"
+        "tests.packages.native.core.probe"
         "tests.packages.wasix.alternate.consumer.probe"
         "tests.packages.wasix.alternate.core.probe"
         ''tests.packages.wasix.alternate.core.versions."0.9".probe''
@@ -1382,12 +1470,19 @@ in {
         "tests.packages.wasix.default.core.probe"
         ''tests.packages.wasix.default.core.versions."0.9".probe''
       ];
-      selectorNames = ["packages" "python"];
+      selectorNames = ["core" "packages" "python"];
       selectorGroupNames = ["fixture"];
       selectorSourceNames = ["consumer"];
       sourceSelectorCoversJobs = true;
       selectablePackageNames = [
+        ''packages.native."dot.name"''
+        "packages.native.broken"
+        "packages.native.ciNarrow"
+        "packages.native.consumer"
         "packages.native.core"
+        "packages.native.limited"
+        "packages.native.topOwned"
+        "packages.native.uses-inherited"
         "packages.python.py.contextProof"
         "packages.python.py.corePython"
         "packages.python.py.inheritedPython"
@@ -1412,6 +1507,8 @@ in {
       brokenCiAbsent = true;
       testNames = [
         "tests.artifacts.bundle.consumer.packaged"
+        "tests.packages.native.consumer.probe"
+        "tests.packages.native.core.probe"
         "tests.packages.wasix.alternate.consumer.probe"
         "tests.packages.wasix.alternate.core.probe"
         ''tests.packages.wasix.alternate.core.versions."0.9".probe''

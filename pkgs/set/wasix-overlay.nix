@@ -122,16 +122,16 @@
   };
 
   # `final.haskellPackages`, like nixpkgs' top-level attr: the toolchain's base
-  # wasi set plus the per-package overrides in ../wasix/haskell-packages (loaded like
+  # wasi set plus the per-package overrides in ./haskell-packages (loaded like
   # this directory, the way python3.pkgs takes packageOverrides from ../python).
-  haskellPackages = toolchain.haskell.packages.extend (import ../wasix/haskell-packages {
+  haskellPackages = toolchain.haskell.packages.extend (import ./haskell-packages {
     callArgs = {
       inherit final prev helpers lib;
       toolchain = profileToolchain;
     };
   });
 
-  perlPackages = final.perl.pkgs.overrideScope (import ../wasix/perl-packages {
+  perlPackages = final.perl.pkgs.overrideScope (import ./perl-packages {
     inherit final helpers wasixRunStub;
   });
 in

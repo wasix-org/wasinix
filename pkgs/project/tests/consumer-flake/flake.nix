@@ -29,17 +29,18 @@
       extensions = [
         {
           id = "consumer";
-          overlays.native = final: _previous: {
-            consumer-tool = final.runCommand "consumer-tool" {} ''
-              mkdir -p "$out/bin"
-              printf '#!/bin/sh\nprintf consumer\\n' > "$out/bin/consumer-tool"
-              chmod +x "$out/bin/consumer-tool"
-            '';
-          };
-          overlays.wasix = final: _previous: {
+          overlays.packages = final: _previous: {
+            consumer-tool =
+              final.runCommand "consumer-tool" {
+                passthru.wasix.supportedProfiles = [];
+              } ''
+                mkdir -p "$out/bin"
+                printf '#!/bin/sh\nprintf consumer\\n' > "$out/bin/consumer-tool"
+                chmod +x "$out/bin/consumer-tool"
+              '';
             consumer-wasm =
               final.runCommand "consumer-wasm-1.0.0" {
-                passthru.wasinix.shipped = true;
+                passthru.wasinix.shipped = final.stdenv.hostPlatform.isWasix or false;
                 meta.mainProgram = "consumer-wasm";
               } ''
                 mkdir -p "$out/bin"
