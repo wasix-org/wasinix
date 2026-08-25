@@ -301,15 +301,20 @@ fn glyph(status: TaskStatus) -> Markdown {
 /// stay out: their root (a direct failure or a dependency root cause)
 /// carries the story, and [`blocked_count`] carries their number.
 fn failures(report: &Report) -> Vec<(&str, &Failure)> {
-    report
-        .failures
+    failures_for(&report.diagnostics, &report.failures)
+}
+
+fn failures_for<'a>(
+    diagnostics: &[crate::ci::facts::Diagnostic],
+    failures: &'a BTreeMap<String, Vec<Failure>>,
+) -> Vec<(&'a str, &'a Failure)> {
+    failures
         .iter()
         .flat_map(|(task, failures)| failures.iter().map(move |failure| (task.as_str(), failure)))
         .filter(|(_, failure)| failure.cause != FailureCause::Transitive)
         .filter(|(_, failure)| {
             failure.message.as_deref() != Some(crate::ci::facts::NO_BUILD_LOG)
-                || !report
-                    .diagnostics
+                || !diagnostics
                     .iter()
                     .any(|diagnostic| diagnostic.affected_jobs.contains(&failure.job))
         })
@@ -502,6 +507,52 @@ fn diagnostics(report: &Report) -> Markdown {
     diagnostics_for(&report.diagnostics, &report.failures)
 }
 
+#[derive(Default)]
+struct DependencyTraces<'a> {
+    paths: Vec<(&'a str, &'a DependencyPath)>,
+    untraced: Vec<(&'a str, &'a crate::support::atoms::JobAddr, Option<&'a str>)>,
+}
+
+fn fragment_dependency_traces(fragments: &BTreeMap<String, Fragment>) -> DependencyTraces<'_> {
+    let mut traces = DependencyTraces::default();
+    for (task, fragment) in fragments {
+        let Some(FragmentData::Build(facts)) = &fragment.data else {
+            continue;
+        };
+        traces.paths.extend(
+            facts
+                .dependency_paths
+                .iter()
+                .map(|path| (task.as_str(), path)),
+        );
+        traces.untraced.extend(
+            facts
+                .untraced_jobs
+                .iter()
+                .map(|job| (task.as_str(), job, facts.dependency_trace_error.as_deref())),
+        );
+    }
+    traces
+}
+
+fn candidate_dependency_traces(
+    evidence: &crate::nix::bisect::CandidateEvidence,
+) -> DependencyTraces<'_> {
+    let mut traces = DependencyTraces::default();
+    for (task, trace) in &evidence.dependency_traces {
+        traces
+            .paths
+            .extend(trace.paths.iter().map(|path| (task.as_str(), path)));
+        traces.untraced.extend(
+            trace
+                .untraced_jobs
+                .iter()
+                .map(|job| (task.as_str(), job, trace.error.as_deref())),
+        );
+    }
+    traces
+}
+
 fn dependency_path_count(fragments: &BTreeMap<String, Fragment>) -> usize {
     fragments
         .values()
@@ -554,32 +605,13 @@ fn dependency_path_table(paths: &[(&str, &DependencyPath)], cap: usize) -> Markd
     text.push(Markdown::constant("\n"))
 }
 
-fn dependency_paths(fragments: &BTreeMap<String, Fragment>, cap: usize) -> Markdown {
-    let mut paths: Vec<(&str, &DependencyPath)> = Vec::new();
-    let mut untraced = Vec::new();
-    for (task, fragment) in fragments {
-        let Some(FragmentData::Build(facts)) = &fragment.data else {
-            continue;
-        };
-        paths.extend(
-            facts
-                .dependency_paths
-                .iter()
-                .map(|path| (task.as_str(), path)),
-        );
-        untraced.extend(
-            facts
-                .untraced_jobs
-                .iter()
-                .map(|job| (task.as_str(), job, facts.dependency_trace_error.as_deref())),
-        );
-    }
-    if paths.is_empty() && untraced.is_empty() {
+fn dependency_traces(traces: &DependencyTraces<'_>, cap: usize) -> Markdown {
+    if traces.paths.is_empty() && traces.untraced.is_empty() {
         return Markdown::new();
     }
     let mut text = Markdown::constant("**Why selected jobs did not run**\n\n");
-    text = text.push(dependency_path_table(&paths, cap));
-    for (task, job, error) in untraced.into_iter().take(cap) {
+    text = text.push(dependency_path_table(&traces.paths, cap));
+    for (task, job, error) in traces.untraced.iter().take(cap) {
         text = Markdown::concat([
             text,
             Markdown::constant("- Could not trace "),
@@ -593,6 +625,25 @@ fn dependency_paths(fragments: &BTreeMap<String, Fragment>, cap: usize) -> Markd
         ]);
     }
     text.push(Markdown::constant("\n"))
+}
+
+fn dependency_paths(fragments: &BTreeMap<String, Fragment>, cap: usize) -> Markdown {
+    dependency_traces(&fragment_dependency_traces(fragments), cap)
+}
+
+fn failure_details(
+    diagnostics: &[crate::ci::facts::Diagnostic],
+    failures: &BTreeMap<String, Vec<Failure>>,
+    traces: &DependencyTraces<'_>,
+    rows: &[(&str, &Failure)],
+    links: &Links,
+    cap: usize,
+) -> Markdown {
+    let mut text = diagnostics_for(diagnostics, failures).push(dependency_traces(traces, cap));
+    if !rows.is_empty() {
+        text = text.push(failure_table(rows, links, cap));
+    }
+    text
 }
 
 /// The phase ladder: one line per case with the case named once, and the
@@ -1028,11 +1079,18 @@ fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
     } else {
         HeadingStatus::Negative
     };
+    let traces = fragment_dependency_traces(fragments);
     let mut text = report_header(status, report, vec![what], links, None)
-        .push(command_block(report.command.as_deref()))
-        .push(diagnostics(report))
-        .push(dependency_paths(fragments, FAILURE_ROWS));
+        .push(command_block(report.command.as_deref()));
     if primary.is_empty() {
+        text = text.push(failure_details(
+            &report.diagnostics,
+            &report.failures,
+            &traces,
+            &[],
+            links,
+            FAILURE_ROWS,
+        ));
         // A regression can be a job that never ran, whose failure atom is
         // transitive and so appears in no failure table. Naming it is the
         // whole answer; without this the comment counted a regression and
@@ -1055,7 +1113,14 @@ fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
         }
         text = text.push(Markdown::constant("\n"));
     } else {
-        text = text.push(failure_table(&primary, links, FAILURE_ROWS));
+        text = text.push(failure_details(
+            &report.diagnostics,
+            &report.failures,
+            &traces,
+            &primary,
+            links,
+            FAILURE_ROWS,
+        ));
         text = text.push(blocked_line(report));
         text = text.push(Markdown::constant("\n"));
     }
@@ -1274,12 +1339,15 @@ pub fn check(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Li
             title
         }
     };
-    let mut summary = diagnostics(report).push(dependency_paths(fragments, FAILURE_ROWS));
-    if !all.is_empty() {
-        summary = summary
-            .push(failure_table(&all, links, FAILURE_ROWS))
-            .push(Markdown::constant("\n"));
-    }
+    let mut summary = failure_details(
+        &report.diagnostics,
+        &report.failures,
+        &fragment_dependency_traces(fragments),
+        &all,
+        links,
+        FAILURE_ROWS,
+    )
+    .push(Markdown::constant("\n"));
     summary = summary.push(footer(report, fragments, links));
     Check {
         title: title.chars().take(CHECK_TITLE_BUDGET).collect(),
@@ -1371,76 +1439,27 @@ fn candidates(report: &crate::nix::bisect::Report) -> Markdown {
     table
 }
 
-fn bisect_evidence(report: &crate::nix::bisect::Report) -> Markdown {
+fn bisect_evidence(report: &crate::nix::bisect::Report, links: &Links) -> Markdown {
     let Some(evidence) = report.boundary().and_then(|test| test.evidence.as_ref()) else {
         return Markdown::new();
     };
-    let mut failures: Vec<(&str, &Failure)> = evidence
-        .failures
-        .iter()
-        .flat_map(|(task, failures)| {
-            failures
-                .iter()
-                .filter(|failure| failure.cause != FailureCause::Transitive)
-                .map(|failure| (task.as_str(), failure))
-        })
-        .collect();
-    failures.sort_by(|a, b| a.1.job.cmp(&b.1.job));
-    let paths: Vec<(&str, &DependencyPath)> = evidence
-        .dependency_traces
-        .iter()
-        .flat_map(|(task, trace)| trace.paths.iter().map(|path| (task.as_str(), path)))
-        .collect();
-    let untraced: Vec<_> = evidence
-        .dependency_traces
-        .iter()
-        .flat_map(|(task, trace)| {
-            trace
-                .untraced_jobs
-                .iter()
-                .map(|job| (task.as_str(), job, trace.error.as_deref()))
-        })
-        .collect();
-    let mut body = Markdown::concat([
+    let failures = failures_for(&evidence.diagnostics, &evidence.failures);
+    Markdown::concat([
         Markdown::constant("**Predicate:** "),
         Markdown::code(&report.predicate_command()),
         Markdown::constant("\n\n**Boundary candidate:** "),
         Markdown::text(&evidence.headline),
         Markdown::constant("\n\n"),
-        diagnostics_for(&evidence.diagnostics, &evidence.failures),
-    ]);
-    if !paths.is_empty() {
-        body = Markdown::concat([
-            body,
-            Markdown::constant("**Why selected jobs did not run**\n\n"),
-            dependency_path_table(&paths, FAILURE_ROWS),
-        ]);
-    }
-    if !untraced.is_empty() {
-        for (task, job, error) in untraced.into_iter().take(FAILURE_ROWS) {
-            body = Markdown::concat([
-                body,
-                Markdown::constant("- Could not trace "),
-                Markdown::code(job.as_str()),
-                Markdown::constant(" in "),
-                Markdown::code(task),
-                error.map_or_else(Markdown::new, |error| {
-                    Markdown::concat([Markdown::constant(": "), headline_cell(error)])
-                }),
-                Markdown::constant("\n"),
-            ]);
-        }
-        body = Markdown::concat([body, Markdown::constant("\n")]);
-    }
-    if !failures.is_empty() {
-        body = Markdown::concat([
-            body,
-            Markdown::constant("**What failed**\n\n"),
-            failure_table(&failures, &Links::default(), FAILURE_ROWS),
-            Markdown::constant("\n"),
-        ]);
-    }
-    body
+        failure_details(
+            &evidence.diagnostics,
+            &evidence.failures,
+            &candidate_dependency_traces(evidence),
+            &failures,
+            links,
+            FAILURE_ROWS,
+        ),
+        Markdown::constant("\n"),
+    ])
 }
 
 /// The bisect's reply while it runs. A candidate is a whole build, so the
@@ -1461,7 +1480,11 @@ pub fn bisect_progress(tested: usize) -> CommandReply {
 
 /// The reply a `/wasinix bisect` posts. A run stopped by its budget still
 /// answers: the range it narrowed to is the useful half of the result.
-pub fn bisect_reply(report: &crate::nix::bisect::Report, failure: Option<&str>) -> CommandReply {
+pub fn bisect_reply(
+    report: &crate::nix::bisect::Report,
+    failure: Option<&str>,
+    links: &Links,
+) -> CommandReply {
     // A bisect that died still narrowed the range; the candidates it did
     // test are the useful half and they are already on disk.
     if let Some(failure) = failure {
@@ -1489,7 +1512,7 @@ pub fn bisect_reply(report: &crate::nix::bisect::Report, failure: Option<&str>) 
                 }),
                 Markdown::code(rev),
             ],
-            Markdown::concat([bisect_evidence(report), candidates(report)]),
+            Markdown::concat([bisect_evidence(report, links), candidates(report)]),
         ),
         None => reply(
             HeadingStatus::Warning,

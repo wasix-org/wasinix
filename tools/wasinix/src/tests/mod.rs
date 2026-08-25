@@ -3087,6 +3087,7 @@ mod markdown {
                 report: report.clone(),
                 fragments: fragments.clone(),
                 snapshot: None,
+                bisect: None,
             },
             &crate::github::publish::Target {
                 repository: "wasix-org/wasinix".into(),
@@ -3097,6 +3098,7 @@ mod markdown {
                 untrusted: true,
                 failure_logs: Default::default(),
             },
+            None,
             &path,
             crate::support::effects::Effects::Apply,
         )
@@ -3222,6 +3224,7 @@ mod markdown {
             crate::github::markdown::bisect_reply(
                 &report,
                 Some("update wasixcc: no such revision"),
+                &crate::github::markdown::Links::default(),
             ),
             Some("bisect wasixcc --good pinned --bad main -- build core"),
             "https://github.com/wasix-org/wasinix/pull/7#issuecomment-9",
@@ -3244,14 +3247,26 @@ mod markdown {
 
     #[test]
     fn a_completed_bisect_explains_the_boundary_candidate() {
-        use crate::ci::facts::{DependencyPath, Failure, FailureCause};
+        use std::io::Write;
+
+        use crate::ci::facts::{DependencyPath, Failure, FailureCause, LogRef};
         use crate::nix::bisect::{
             CandidateDependencyTrace, CandidateEvidence, Outcome, Report, TestResult,
         };
-        use crate::support::atoms::JobAddr;
+        use crate::support::atoms::{Bytes, JobAddr};
 
         let rev = "44de7eb12de3e82375cab47ee8208d7473b30d7c";
         let task = "case.jobs".to_string();
+        let scratch = crate::support::fs::Scratch::create("wasinix-test").unwrap();
+        let candidate_dir = scratch.path().join("candidate");
+        let archive = "00112233445566778899.log.gz";
+        let logs_dir = crate::ci::prepare::build_logs_dir(&candidate_dir, &task).unwrap();
+        std::fs::create_dir_all(&logs_dir).unwrap();
+        let file = std::fs::File::create(logs_dir.join(archive)).unwrap();
+        let mut gzip = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+        gzip.write_all(b"builder failed with exit code 1: undefined symbol")
+            .unwrap();
+        gzip.finish().unwrap();
         let report = Report {
             schema: 2,
             target: "wasixcc".into(),
@@ -3267,7 +3282,7 @@ mod markdown {
                 rev: rev.into(),
                 outcome: Outcome::Bad,
                 seconds: 129.0,
-                run_dir: "/x".into(),
+                run_dir: candidate_dir,
                 evidence: Some(CandidateEvidence {
                     headline: "Build blocked after 2m 9s".into(),
                     failures: std::collections::BTreeMap::from([(
@@ -3281,7 +3296,12 @@ mod markdown {
                             ),
                             jobs: vec![JobAddr("checks.gzip-roundtrip".into())],
                             position: None,
-                            log: None,
+                            log: Some(LogRef {
+                                path: archive.into(),
+                                bytes: Bytes(49),
+                                archived_bytes: Bytes(49),
+                                truncated: false,
+                            }),
                         }],
                     )]),
                     diagnostics: Vec::new(),
@@ -3299,8 +3319,26 @@ mod markdown {
                 }),
             }],
         };
+        let staged = scratch.path().join("staged");
+        std::fs::create_dir_all(&staged).unwrap();
+        let failure_logs =
+            crate::github::publish::stage_bisect_failure_logs(&report, &"a".repeat(40), &staged)
+                .unwrap();
+        let log_url = failure_logs.values().next().unwrap().clone();
+        assert!(log_url.contains("/bisect-"), "{log_url}");
+        assert_eq!(
+            std::fs::read_to_string(staged.join(log_url.rsplit('/').next().unwrap())).unwrap(),
+            "builder failed with exit code 1: undefined symbol"
+        );
         let body = crate::github::markdown::command_reply(
-            crate::github::markdown::bisect_reply(&report, None),
+            crate::github::markdown::bisect_reply(
+                &report,
+                None,
+                &crate::github::markdown::Links {
+                    failure_logs: failure_logs.clone(),
+                    ..crate::github::markdown::Links::default()
+                },
+            ),
             Some("bisect wasixcc --good old --bad new -- build checks.gzip-roundtrip"),
             "https://github.com/wasix-org/wasinix/pull/7#issuecomment-9",
             None,
@@ -3315,6 +3353,60 @@ mod markdown {
         assert!(body.contains("wasix-compare-gzip-roundtrip"), "{body}");
         assert!(body.contains("wasixcc-unwrapped-0.4.0"), "{body}");
         assert!(body.contains("undefined symbol"), "{body}");
+        assert!(body.contains(&log_url), "{body}");
+        let mut outer = crate::ci::report::starting(None);
+        outer.complete = true;
+        outer.command =
+            Some("bisect wasixcc --good old --bad new -- build checks.gzip-roundtrip".into());
+        let mut rendered = crate::github::publish::Rendered {
+            report: outer,
+            fragments: std::collections::BTreeMap::new(),
+            snapshot: None,
+            bisect: Some(report.clone()),
+        };
+        let target = crate::github::publish::Target {
+            repository: "wasix-org/wasinix".into(),
+            pull_request: Some(7),
+            head_sha: Some("a".repeat(40)),
+            run_url: Some("https://github.com/wasix-org/wasinix/actions/runs/3".into()),
+            author: "github-actions[bot]".into(),
+            untrusted: false,
+            failure_logs,
+        };
+        let final_while_outer_run_finishes =
+            crate::github::publish::comment_markdown(&rendered, &target, Some(9))
+                .unwrap()
+                .into_string();
+        assert!(
+            final_while_outer_run_finishes.contains("first bad commit"),
+            "{final_while_outer_run_finishes}"
+        );
+        rendered.report.conclusion = Some(crate::ci::report::Conclusion::Success);
+        let published = crate::github::publish::comment_markdown(&rendered, &target, Some(9))
+            .unwrap()
+            .into_string();
+        assert!(published.contains("first bad commit"), "{published}");
+        assert!(published.contains(&log_url), "{published}");
+        assert!(!published.contains("green"), "{published}");
+        let summary_path = scratch.path().join("summary.md");
+        crate::github::publish::step_summary(
+            &rendered,
+            &target,
+            Some(9),
+            &summary_path,
+            crate::support::effects::Effects::Apply,
+        )
+        .unwrap();
+        let summary = std::fs::read_to_string(summary_path).unwrap();
+        assert!(summary.contains("first bad commit"), "{summary}");
+        assert!(summary.contains(&log_url), "{summary}");
+        assert!(
+            crate::github::publish::comment_markdown(&rendered, &target, None)
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("--reply-to")
+        );
         let terminal = crate::cli::render::bisect_boundary_result(&report).unwrap();
         assert!(terminal.contains("first bad wasixcc commit"), "{terminal}");
         assert!(terminal.contains("wasixcc-unwrapped-0.4.0"), "{terminal}");

@@ -7,7 +7,7 @@ use std::path::Path;
 use serde_json::json;
 
 use crate::ci::events::Snapshot;
-use crate::ci::report::{Fragment, Report};
+use crate::ci::report::{Conclusion, Fragment, Report};
 use crate::github::client::Client;
 use crate::github::markdown::{self, FailureLogKey, Links};
 use crate::github::surfaces::{Registry, Surface};
@@ -48,6 +48,15 @@ pub struct Rendered {
     pub report: Report,
     pub fragments: BTreeMap<String, Fragment>,
     pub snapshot: Option<Snapshot>,
+    pub bisect: Option<crate::nix::bisect::Report>,
+}
+
+fn load_bisect(run_dir: &Path) -> Result<Option<crate::nix::bisect::Report>> {
+    let path = run_dir.join("bisect").join(crate::nix::bisect::REPORT_FILE);
+    if !path.exists() {
+        return Ok(None);
+    }
+    crate::support::json::read(&path).map(Some)
 }
 
 pub fn load(run_dir: &Path) -> Result<Rendered> {
@@ -86,6 +95,7 @@ pub fn load(run_dir: &Path) -> Result<Rendered> {
         report,
         fragments,
         snapshot,
+        bisect: load_bisect(run_dir)?,
     })
 }
 
@@ -129,6 +139,7 @@ pub(crate) fn load_running(
             report,
             fragments: BTreeMap::new(),
             snapshot,
+            bisect: load_bisect(run_dir)?,
         }));
     }
     let loaded = crate::ci::prepare::load(run_dir)?;
@@ -155,6 +166,7 @@ pub(crate) fn load_running(
         },
         fragments,
         snapshot: Some(snapshot),
+        bisect: load_bisect(run_dir)?,
     }))
 }
 
@@ -197,9 +209,21 @@ pub(crate) fn stage_failure_logs(
     sha: &str,
     destination: &Path,
 ) -> Result<BTreeMap<FailureLogKey, String>> {
-    let base = format!("{}/logs/{sha}", crate::support::nix::CACHE_SUBSTITUTER);
+    stage_failure_map(run_dir, &report.failures, sha, destination)
+}
+
+fn stage_failure_map(
+    run_dir: &Path,
+    failures: &BTreeMap<String, Vec<crate::ci::facts::Failure>>,
+    namespace: &str,
+    destination: &Path,
+) -> Result<BTreeMap<FailureLogKey, String>> {
+    let base = format!(
+        "{}/logs/{namespace}",
+        crate::support::nix::CACHE_SUBSTITUTER
+    );
     let mut published = BTreeMap::new();
-    for (task, failures) in &report.failures {
+    for (task, failures) in failures {
         for failure in failures {
             let Some(log) = &failure.log else {
                 continue;
@@ -225,8 +249,23 @@ pub fn publish_failure_logs(
     sha: &str,
     effects: crate::support::effects::Effects,
 ) -> Result<BTreeMap<FailureLogKey, String>> {
+    if let Some(report) = &rendered.bisect {
+        let Some((run_dir, failures, namespace)) = bisect_failure_source(report, sha) else {
+            return Ok(BTreeMap::new());
+        };
+        return publish_failure_map(run_dir, failures, &namespace, effects);
+    }
+    publish_failure_map(run_dir, &rendered.report.failures, sha, effects)
+}
+
+fn publish_failure_map(
+    run_dir: &Path,
+    failures: &BTreeMap<String, Vec<crate::ci::facts::Failure>>,
+    namespace: &str,
+    effects: crate::support::effects::Effects,
+) -> Result<BTreeMap<FailureLogKey, String>> {
     let scratch = crate::support::fs::Scratch::create("wasinix-failure-logs")?;
-    let published = stage_failure_logs(run_dir, &rendered.report, sha, scratch.path())?;
+    let published = stage_failure_map(run_dir, failures, namespace, scratch.path())?;
     if published.is_empty() {
         return Ok(published);
     }
@@ -239,7 +278,7 @@ pub fn publish_failure_logs(
     cmd.args(["s3", "cp", "--no-progress", "--recursive"])
         .arg(scratch.path())
         .arg(format!(
-            "s3://{}/logs/{sha}",
+            "s3://{}/logs/{namespace}",
             crate::support::nix::CACHE_BUCKET
         ))
         .args(["--content-type", "text/plain; charset=utf-8"])
@@ -248,11 +287,119 @@ pub fn publish_failure_logs(
     crate::support::ui::fact(
         "failure logs",
         format!(
-            "{count} at {}/logs/{sha}",
+            "{count} at {}/logs/{namespace}",
             crate::support::nix::CACHE_SUBSTITUTER
         ),
     );
     Ok(published)
+}
+
+fn bisect_log_namespace(
+    report: &crate::nix::bisect::Report,
+    boundary: &crate::nix::bisect::TestResult,
+    sha: &str,
+) -> String {
+    use sha2::{Digest, Sha256};
+
+    let mut digest = Sha256::new();
+    for part in std::iter::once(report.target.as_str())
+        .chain(std::iter::once(boundary.rev.as_str()))
+        .chain(report.command.iter().map(String::as_str))
+    {
+        digest.update(part.as_bytes());
+        digest.update([0]);
+    }
+    let digest = format!("{:x}", digest.finalize());
+    format!("{sha}/bisect-{}", &digest[..24])
+}
+
+fn bisect_failure_source<'a>(
+    report: &'a crate::nix::bisect::Report,
+    sha: &str,
+) -> Option<(
+    &'a Path,
+    &'a BTreeMap<String, Vec<crate::ci::facts::Failure>>,
+    String,
+)> {
+    let boundary = report.boundary()?;
+    let evidence = boundary.evidence.as_ref()?;
+    Some((
+        &boundary.run_dir,
+        &evidence.failures,
+        bisect_log_namespace(report, boundary, sha),
+    ))
+}
+
+pub(crate) fn stage_bisect_failure_logs(
+    report: &crate::nix::bisect::Report,
+    sha: &str,
+    destination: &Path,
+) -> Result<BTreeMap<FailureLogKey, String>> {
+    let Some((run_dir, failures, namespace)) = bisect_failure_source(report, sha) else {
+        return Ok(BTreeMap::new());
+    };
+    stage_failure_map(run_dir, failures, &namespace, destination)
+}
+
+pub(crate) fn comment_markdown(
+    rendered: &Rendered,
+    target: &Target,
+    reply_to: Option<u64>,
+) -> Result<crate::github::sanitize::Markdown> {
+    let links = links(rendered, target, reply_to);
+    let bisect = if let Some(bisect) = &rendered.bisect {
+        let origin = links.origin.as_deref().ok_or_else(|| {
+            crate::support::error::Error::Request(
+                "publishing a bisect report needs --reply-to".into(),
+            )
+        })?;
+        let bisect_finished = bisect.first_bad.is_some() || bisect.revisions_left.is_some();
+        let (reply, updated_at) = match rendered.report.conclusion {
+            None if !bisect_finished => (
+                markdown::bisect_progress(bisect.tests.len()),
+                Some(
+                    rendered
+                        .snapshot
+                        .as_ref()
+                        .and_then(|snapshot| snapshot.last_event_at)
+                        .unwrap_or(links.rendered_at),
+                ),
+            ),
+            None | Some(Conclusion::Success) => {
+                (markdown::bisect_reply(bisect, None, &links), None)
+            }
+            Some(_) => {
+                let failure = rendered
+                    .report
+                    .diagnostics
+                    .first()
+                    .map(|diagnostic| diagnostic.message.as_str())
+                    .unwrap_or(&rendered.report.title);
+                (markdown::bisect_reply(bisect, Some(failure), &links), None)
+            }
+        };
+        Some(markdown::command_reply(
+            reply,
+            rendered.report.command.as_deref(),
+            origin,
+            updated_at,
+            links.run_url.as_deref(),
+            links.sha.as_ref(),
+        ))
+    } else {
+        None
+    };
+    Ok(with_notice(
+        bisect.unwrap_or_else(|| {
+            markdown::comment(
+                &rendered.report,
+                &rendered.fragments,
+                rendered.snapshot.as_ref(),
+                &links,
+            )
+        }),
+        target,
+    ))
 }
 
 /// Upsert the report comment through its states; the same surface carries
@@ -267,16 +414,7 @@ pub fn comment(
     let pull_request = target.pull_request.ok_or_else(|| {
         crate::support::error::Error::Request("publishing a comment needs a pull request".into())
     })?;
-    let links = links(rendered, target, reply_to);
-    let body = with_notice(
-        markdown::comment(
-            &rendered.report,
-            &rendered.fragments,
-            rendered.snapshot.as_ref(),
-            &links,
-        ),
-        target,
-    );
+    let body = comment_markdown(rendered, target, reply_to)?;
     let mut registry = Registry::new(
         client,
         target.repository.clone(),
@@ -477,18 +615,20 @@ impl<'a> Watcher<'a> {
 pub fn step_summary(
     rendered: &Rendered,
     target: &Target,
+    reply_to: Option<u64>,
     path: &Path,
     effects: crate::support::effects::Effects,
 ) -> Result<()> {
     let links = links(rendered, target, None);
-    let text = markdown::truncate_sections(
+    let body = if rendered.bisect.is_some() {
+        comment_markdown(rendered, target, reply_to)?
+    } else {
         with_notice(
             markdown::step_summary(&rendered.report, &rendered.fragments, &links),
             target,
         )
-        .into_string(),
-        markdown::STEP_SUMMARY_BUDGET,
-    );
+    };
+    let text = markdown::truncate_sections(body.into_string(), markdown::STEP_SUMMARY_BUDGET);
     if effects.is_dry_run() {
         crate::support::ui::fact(
             "step summary",

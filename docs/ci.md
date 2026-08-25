@@ -182,8 +182,10 @@ bisect, so a comment bisect carries a budget: it stops with the range narrowed,
 replies with what it tested, and the same command again resumes from the
 recorded outcomes. Each candidate also records the predicate's typed failures,
 diagnostics, and dependency paths, so the final boundary commit says what made
-the predicate change. `/wasinix fmt` formats the branch and commits the result,
-serialized per PR with the other mutations.
+the predicate change. Its final report uses the ordinary CI failure projection
+and publishes the boundary candidate's archived failure logs. `/wasinix fmt`
+formats the branch and commits the result, serialized per PR with the other
+mutations.
 
 Every command comment runs its own workflow: acknowledged, authorized, and
 answered even in a burst, and builds run in parallel, each replying to its own

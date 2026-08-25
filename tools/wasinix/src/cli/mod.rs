@@ -1335,6 +1335,7 @@ fn ci_bisect(
                     ReplyFreshness::Final(crate::github::markdown::bisect_reply(
                         &partial,
                         Some(&crate::support::error::brief(&error, 1500)),
+                        &crate::github::markdown::Links::default(),
                     )),
                 );
             }
@@ -1343,7 +1344,11 @@ fn ci_bisect(
     };
     command_reply(
         command,
-        ReplyFreshness::Final(crate::github::markdown::bisect_reply(&report, None)),
+        ReplyFreshness::Final(crate::github::markdown::bisect_reply(
+            &report,
+            None,
+            &crate::github::markdown::Links::default(),
+        )),
     )?;
     for line in render::bisect_evidence_lines(&report) {
         ui::note(line);
@@ -1680,7 +1685,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 crate::github::publish::check(&client, &rendered, &target, effects)?;
             }
             if let Some(path) = step_summary {
-                crate::github::publish::step_summary(&rendered, &target, &path, effects)?;
+                crate::github::publish::step_summary(&rendered, &target, reply_to, &path, effects)?;
             }
             if let Some(path) = github_output {
                 crate::github::actions::append(
