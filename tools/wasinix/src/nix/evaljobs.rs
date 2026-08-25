@@ -140,7 +140,7 @@ pub(crate) fn stream_jobs(
 pub(crate) fn archive_inputs_invocation(workdir: &Path) -> crate::support::nix::Invocation {
     crate::support::nix::Invocation::plain("flake archive")
         .accepts_flake_config()
-        .operand(".")
+        .operand("path:.")
         .workdir(workdir)
 }
 
@@ -168,7 +168,7 @@ pub fn run(request: &RunRequest<'_>) -> Result<Option<String>> {
     // Fetch the complete locked input graph before workers fan out. Fetching
     // only the root leaves inputs such as Wasmer's submodule checkout racing
     // behind one shared fetch lock across every worker.
-    if request.flake.starts_with('.') {
+    if request.flake.starts_with('.') || request.flake.starts_with("path:.") {
         archive_inputs_invocation(request.workdir)
             .route(request.route)?
             .checked_output("archiving the case inputs")?;
