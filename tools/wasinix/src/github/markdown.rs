@@ -50,22 +50,33 @@ pub struct Links {
 }
 
 /// The answering line above a reply's heading.
-fn origin_line(links: &Links) -> Markdown {
-    match &links.origin {
+fn reply_line(origin: Option<&str>, updated_at: Option<u64>) -> Markdown {
+    match origin {
         Some(url) => Markdown::concat([
             Markdown::constant("<sub>"),
             Markdown::html_link("↳ in reply to this command", url),
+            match updated_at {
+                Some(at) => Markdown::text(&format!(
+                    " · updated {}",
+                    crate::support::time::wall_clock_utc(at)
+                )),
+                None => Markdown::new(),
+            },
             Markdown::constant("</sub>\n\n"),
         ]),
         None => Markdown::new(),
     }
 }
 
+/// Add the metadata shared by replies keyed to a command comment.
+pub fn command_reply(body: Markdown, origin: &str, updated_at: Option<u64>) -> Markdown {
+    reply_line(Some(origin), updated_at).push(body)
+}
+
 pub fn plan_reply(
     command: &str,
     request: &ResolvedRequest,
     plan: &crate::ci::plan::Plan,
-    origin: &str,
 ) -> crate::support::error::Result<Markdown> {
     let request = serde_json::to_string_pretty(request).map_err(|source| {
         crate::support::error::Error::Json {
@@ -74,12 +85,6 @@ pub fn plan_reply(
         }
     })?;
     let mut body = Markdown::concat([
-        origin_line(&Links {
-            run_url: None,
-            sha: None,
-            failure_logs: BTreeMap::new(),
-            origin: Some(origin.to_string()),
-        }),
         Markdown::constant("### Planned `/wasinix` run\n\n"),
         Markdown::constant("No tasks were run.\n\n**Command**\n\n"),
         Markdown::fenced(command, "text"),
@@ -671,7 +676,7 @@ pub fn comment(
         Some(Conclusion::Neutral) => inconclusive(report, fragments, links, true),
         Some(Conclusion::Blocked) => inconclusive(report, fragments, links, false),
     };
-    origin_line(links).push(body)
+    reply_line(links.origin.as_deref(), None).push(body)
 }
 
 /// Jobs the request selected, which for a selector build is a handful of the
@@ -1061,22 +1066,13 @@ pub fn step_summary(
 /// The reply when a `/wasinix` command dies before it can publish a report:
 /// the failure tail fenced so a PR-controlled log line cannot render as
 /// markup, and the run link for the rest.
-pub fn failure_reply(detail: &str, run_url: Option<&str>, origin: Option<&str>) -> Markdown {
+pub fn failure_reply(detail: &str, run_url: Option<&str>) -> Markdown {
     let detail = if detail.trim().is_empty() {
         "see the Actions run"
     } else {
         detail
     };
-    let answering = match origin {
-        Some(url) => Markdown::concat([
-            Markdown::constant("<sub>"),
-            Markdown::html_link("↳ in reply to this command", url),
-            Markdown::constant("</sub>\n\n"),
-        ]),
-        None => Markdown::new(),
-    };
     let mut body = Markdown::concat([
-        answering,
         Markdown::constant("❌ `/wasinix` command failed:\n\n"),
         Markdown::fenced(detail, "text"),
     ]);
@@ -1136,22 +1132,12 @@ pub fn bisect_reply(
     report: &crate::nix::bisect::Report,
     failure: Option<&str>,
     run_url: Option<&str>,
-    origin: Option<&str>,
 ) -> Markdown {
-    let answering = match origin {
-        Some(url) => Markdown::concat([
-            Markdown::constant("<sub>"),
-            Markdown::html_link("↳ in reply to this command", url),
-            Markdown::constant("</sub>\n\n"),
-        ]),
-        None => Markdown::new(),
-    };
     let what = if report.reverse { "passing" } else { "bad" };
     // A bisect that died still narrowed the range; the candidates it did
     // test are the useful half and they are already on disk.
     if let Some(failure) = failure {
         let mut body = Markdown::concat([
-            answering,
             Markdown::constant("### ❌ Bisect stopped on an error\n\n"),
             Markdown::fenced(failure, "text"),
             Markdown::constant("\n"),
@@ -1189,7 +1175,7 @@ pub fn bisect_reply(
             },
         ]),
     };
-    let mut body = Markdown::concat([answering, headline, candidates(report)]);
+    let mut body = Markdown::concat([headline, candidates(report)]);
     if let Some(url) = run_url {
         body = Markdown::concat([
             body,

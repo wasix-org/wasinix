@@ -331,14 +331,9 @@ mod plan {
     fn a_comment_plan_reply_names_the_resolved_request_and_tasks() {
         let request = Request::build(build("case", &["core"]), Default::default());
         let plan = plan_of(&request, None, &[]);
-        let body = crate::github::markdown::plan_reply(
-            "build core --plan",
-            &request,
-            &plan,
-            "https://github.com/wasix-org/wasinix/pull/1#issuecomment-2",
-        )
-        .unwrap()
-        .into_string();
+        let body = crate::github::markdown::plan_reply("build core --plan", &request, &plan)
+            .unwrap()
+            .into_string();
         assert!(body.contains("No tasks were run"), "{body}");
         assert!(body.contains("case: Core"), "{body}");
         assert!(body.contains("build core --plan"), "{body}");
@@ -2959,15 +2954,12 @@ mod markdown {
         let body = crate::github::markdown::failure_reply(
             "log line\n```\n### forged",
             Some("https://ci.example/run"),
-            Some("https://github.com/wasix-org/wasinix/pull/7#issuecomment-9"),
         )
         .into_string();
-        assert!(body.starts_with(
-            "<sub><a href=\"https://github.com/wasix-org/wasinix/pull/7#issuecomment-9\">\u{21b3} in reply to this command</a></sub>\n\n❌ `/wasinix` command failed:"
-        ));
+        assert!(body.starts_with("❌ `/wasinix` command failed:"));
         assert!(body.contains("````text\nlog line\n```\n### forged\n````"));
         assert!(body.contains("[Actions run](https://ci.example/run)"));
-        let empty = crate::github::markdown::failure_reply("  ", None, None).into_string();
+        let empty = crate::github::markdown::failure_reply("  ", None).into_string();
         assert!(empty.contains("see the Actions run"));
     }
 
@@ -3117,7 +3109,6 @@ mod markdown {
             &report,
             Some("update wasixcc: no such revision"),
             None,
-            None,
         )
         .into_string();
         assert!(body.contains("stopped on an error"), "{body}");
@@ -3130,8 +3121,13 @@ mod markdown {
 
     #[test]
     fn a_bisect_reply_exists_before_its_first_answer() {
-        use crate::github::markdown::bisect_progress;
-        let opening = bisect_progress("wasixcc", 0).into_string();
+        use crate::github::markdown::{bisect_progress, command_reply};
+        let origin = "https://github.com/wasix-org/wasinix/pull/7#issuecomment-9";
+        let opening =
+            command_reply(bisect_progress("wasixcc", 0), origin, Some(1_756_144_000)).into_string();
+        assert!(opening.contains("↳ in reply to this command"), "{opening}");
+        assert!(opening.contains(origin), "{opening}");
+        assert!(opening.contains("updated 17:46 UTC"), "{opening}");
         assert!(opening.contains("resolving the range"), "{opening}");
         assert!(
             bisect_progress("wasixcc", 1)

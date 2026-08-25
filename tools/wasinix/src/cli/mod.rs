@@ -1243,11 +1243,23 @@ const COMMENT_BISECT_BUDGET: crate::nix::bisect::Budget = crate::nix::bisect::Bu
     wall: std::time::Duration::from_secs(4 * 60 * 60),
 };
 
+enum CommandReply {
+    Final(crate::github::sanitize::Markdown),
+    Live(crate::github::sanitize::Markdown),
+}
+
 /// Upsert the reply keyed to the command comment.
-fn command_reply(
-    command: &crate::ci::origin::Command,
-    body: crate::github::sanitize::Markdown,
-) -> Result<()> {
+fn command_reply(command: &crate::ci::origin::Command, reply: CommandReply) -> Result<()> {
+    let (body, updated_at) = match reply {
+        CommandReply::Final(body) => (body, None),
+        CommandReply::Live(body) => (body, Some(crate::support::time::unix_secs())),
+    };
+    let origin = crate::github::surfaces::origin_comment_url(
+        &command.origin.repository,
+        command.origin.pull_request,
+        command.origin.comment_id,
+    );
+    let body = crate::github::markdown::command_reply(body, &origin, updated_at);
     let client = crate::github::client::Client::new(crate::github::client::token().as_deref());
     let mut registry = crate::github::surfaces::Registry::new(
         &client,
@@ -1281,7 +1293,7 @@ fn ci_bisect(
     let mut progress = |tested: usize| {
         command_reply(
             command,
-            crate::github::markdown::bisect_progress(&target, tested),
+            CommandReply::Live(crate::github::markdown::bisect_progress(&target, tested)),
         )
     };
     progress(0)?;
@@ -1308,34 +1320,23 @@ fn ci_bisect(
             if let Some(partial) = crate::nix::bisect::read_report(&bisect_dir) {
                 let _ = command_reply(
                     command,
-                    crate::github::markdown::bisect_reply(
+                    CommandReply::Final(crate::github::markdown::bisect_reply(
                         &partial,
                         Some(&crate::support::error::brief(&error, 1500)),
                         crate::support::env::github_run_url()?.as_deref(),
-                        Some(&crate::github::surfaces::origin_comment_url(
-                            &command.origin.repository,
-                            command.origin.pull_request,
-                            command.origin.comment_id,
-                        )),
-                    ),
+                    )),
                 );
             }
             return Err(error);
         }
     };
-    let origin = crate::github::surfaces::origin_comment_url(
-        &command.origin.repository,
-        command.origin.pull_request,
-        command.origin.comment_id,
-    );
     command_reply(
         command,
-        crate::github::markdown::bisect_reply(
+        CommandReply::Final(crate::github::markdown::bisect_reply(
             &report,
             None,
             crate::support::env::github_run_url()?.as_deref(),
-            Some(&origin),
-        ),
+        )),
     )?;
     match &report.first_bad {
         Some(rev) => ui::result(format!("first bad {} commit: {rev}", report.target)),
@@ -1759,19 +1760,13 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                         },
                     )?;
                     let plan = crate::ci::plan::plan_of(&resolved, None, &[]);
-                    let origin = crate::github::surfaces::origin_comment_url(
-                        &command.origin.repository,
-                        command.origin.pull_request,
-                        command.origin.comment_id,
-                    );
                     command_reply(
                         &command,
-                        crate::github::markdown::plan_reply(
+                        CommandReply::Final(crate::github::markdown::plan_reply(
                             &command.command,
                             &resolved,
                             &plan,
-                            &origin,
-                        )?,
+                        )?),
                     )?;
                     return Ok(CommandStatus::SUCCESS);
                 }
@@ -1790,21 +1785,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 // Help is a command like any other: it replies to the comment
                 // that asked, rather than erroring into the failure path.
                 untrusted::UntrustedCommand::Help => {
-                    let origin = crate::github::surfaces::origin_comment_url(
-                        &command.origin.repository,
-                        command.origin.pull_request,
-                        command.origin.comment_id,
-                    );
-                    let body = crate::github::sanitize::Markdown::concat([
-                        crate::github::sanitize::Markdown::constant("<sub>"),
-                        crate::github::sanitize::Markdown::html_link(
-                            "\u{21b3} in reply to this command",
-                            &origin,
-                        ),
-                        crate::github::sanitize::Markdown::constant("</sub>\n\n"),
-                        surface::comment_help(),
-                    ]);
-                    command_reply(&command, body)?;
+                    command_reply(&command, CommandReply::Final(surface::comment_help()))?;
                     return Ok(CommandStatus::SUCCESS);
                 }
             };
@@ -1884,10 +1865,13 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             let repository = surface.repository(&repo)?;
             let origin =
                 crate::github::surfaces::origin_comment_url(&repository, pull_request, comment_id);
-            let body = crate::github::markdown::failure_reply(
-                &failure_tail(&failures),
-                surface.run_url.as_deref(),
-                Some(&origin),
+            let body = crate::github::markdown::command_reply(
+                crate::github::markdown::failure_reply(
+                    &failure_tail(&failures),
+                    surface.run_url.as_deref(),
+                ),
+                &origin,
+                None,
             );
             let client =
                 crate::github::client::Client::new(crate::github::client::token().as_deref());
