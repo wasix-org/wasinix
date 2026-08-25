@@ -13,12 +13,14 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
 
 env:
   REGISTRY: wasmer.io
+  INDEX_JOB: pythonRegistry
 
 jobs:
   publish:
@@ -33,7 +35,39 @@ jobs:
       # the app itself is resolved from pkgs/python-registry/app.yaml (app_id)
       INDEX_VOLUME: index
     steps:
+      - name: Download build result
+        id: download
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ci-run
+          path: run-dir
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Read index identity
+        id: identity
+        shell: bash
+        run: |
+          mapfile -t paths < <(jq -r --arg job "$INDEX_JOB" \
+            '.outputs[$job].out // empty' run-dir/cases/*/maps/eval-map.json | sort -u)
+          if [ "${#paths[@]}" -ne 1 ]; then
+            echo "expected one $INDEX_JOB output in the Build result, found ${#paths[@]}" >&2
+            exit 1
+          fi
+          echo "path=${paths[0]}" >> "$GITHUB_OUTPUT"
+          echo "key=python-index-${paths[0]##*/}" >> "$GITHUB_OUTPUT"
+
+      - name: Check publication state
+        id: published
+        uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        with:
+          path: .wasinix-published-index
+          key: ${{ steps.identity.outputs.key }}
+          lookup-only: true
+
       - name: Checkout
+        id: checkout
+        if: steps.published.outputs.cache-hit != 'true'
         uses: actions/checkout@v4
         with:
           # workflow_run does not check out the triggering commit by default
@@ -42,6 +76,7 @@ jobs:
       # A single wasmer namespace token; the job fetches the volume's S3
       # credentials at runtime (provisioning them on the first run).
       - name: Select wasmer registry
+        if: steps.published.outputs.cache-hit != 'true'
         uses: ./.github/actions/wasmer-registry
         with:
           registry: ${{ env.REGISTRY }}
@@ -50,16 +85,21 @@ jobs:
           token-dev: ${{ secrets.WASMER_TOKEN_DEV }}
 
       - name: Set up Nix
+        if: steps.published.outputs.cache-hit != 'true'
         uses: ./.github/actions/setup-nix
 
-      - name: Build index
+      - name: Realise index
         id: build-index
-        run:
-          nix build .#pythonRegistry -o registry-result --option
-          accept-flake-config true
+        if: steps.published.outputs.cache-hit != 'true'
+        env:
+          INDEX_PATH: ${{ steps.identity.outputs.path }}
+        run: |
+          nix-store --realise "$INDEX_PATH"
+          ln -s "$INDEX_PATH" registry-result
 
       - name: Publish wheels to the index volume
-        if: env.WASMER_TOKEN != ''
+        id: publish-volume
+        if: steps.published.outputs.cache-hit != 'true' && env.WASMER_TOKEN != ''
         run: |
           nix run .#wasinix -- python publish \
             "$(readlink -f registry-result)" \
@@ -71,19 +111,33 @@ jobs:
       - name: Prepare Pages snapshot
         # Pages intentionally tracks the fresh build, independently of the
         # append-only volume publication above.
-        if: always() && steps.build-index.outcome == 'success'
+        if: always() && steps.published.outputs.cache-hit != 'true' && steps.build-index.outcome == 'success'
         run: |
           # materialize the result symlink with writable modes for the tarring action
           mkdir site
           cp -r --no-preserve=mode,ownership --dereference registry-result/. site/
 
       - name: Upload Pages artifact
-        if: always() && steps.build-index.outcome == 'success'
+        if: always() && steps.published.outputs.cache-hit != 'true' && steps.build-index.outcome == 'success'
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:
           path: site
 
       - name: Deploy to GitHub Pages
         id: deploy
-        if: always() && steps.build-index.outcome == 'success'
+        if: always() && steps.published.outputs.cache-hit != 'true' && steps.build-index.outcome == 'success'
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+
+      - name: Record publication
+        if: always() && steps.publish-volume.outcome == 'success' && steps.deploy.outcome == 'success'
+        env:
+          INDEX_PATH: ${{ steps.identity.outputs.path }}
+        run: echo "$INDEX_PATH" > .wasinix-published-index
+
+      - name: Save publication state
+        id: save_publication_state
+        if: always() && steps.publish-volume.outcome == 'success' && steps.deploy.outcome == 'success'
+        uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        with:
+          path: .wasinix-published-index
+          key: ${{ steps.identity.outputs.key }}

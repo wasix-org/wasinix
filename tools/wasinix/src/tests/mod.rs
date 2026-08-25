@@ -6333,6 +6333,45 @@ mod corpus {
             )
         );
 
+        let publish_index = read("publish-index.yml");
+        let publish_job = job(&publish_index, "publish");
+        assert_eq!(
+            field(
+                field(step(publish_job, "download"), "with"),
+                "name"
+            )
+            .as_str(),
+            Some(crate::github::actions::ARTIFACT_CI_RUN)
+        );
+        assert_eq!(
+            field(field(&publish_index, "env"), "INDEX_JOB").as_str(),
+            Some("pythonRegistry")
+        );
+        let identity = field(step(publish_job, "identity"), "run")
+            .as_str()
+            .unwrap();
+        assert!(identity.contains(".outputs[$job].out // empty"));
+        let restore_key = field(
+            field(step(publish_job, "published"), "with"),
+            "key",
+        );
+        let save_key = field(
+            field(step(publish_job, "save_publication_state"), "with"),
+            "key",
+        );
+        assert_eq!(restore_key, save_key);
+        assert!(
+            step_index(publish_job, "published") < step_index(publish_job, "checkout"),
+            "an already published index should skip checkout and tool setup"
+        );
+        assert!(
+            !field(step(publish_job, "build-index"), "run")
+                .as_str()
+                .unwrap()
+                .contains("nix build"),
+            "publishing must reuse the output the Build workflow evaluated"
+        );
+
         let build_job = job(&build, "build");
         assert!(
             step_index(build_job, "collect") > step_index(build_job, "run_artifact")
