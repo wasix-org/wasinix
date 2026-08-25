@@ -338,6 +338,7 @@ mod plan {
             "https://github.com/wasix-org/wasinix/pull/1#issuecomment-2",
             None,
             Some("https://github.com/wasix-org/wasinix/actions/runs/3"),
+            None,
         )
         .into_string();
         assert!(
@@ -2403,6 +2404,7 @@ mod markdown {
             sha: Some(Rev::parse(&"a".repeat(40)).unwrap()),
             failure_logs: Default::default(),
             origin: None,
+            rendered_at: 1_755_003_000,
         }
     }
 
@@ -2417,6 +2419,7 @@ mod markdown {
                 "https://ci.example/logs)|base/log.txt".into(),
             )]),
             origin: Some("https://github.com/wasix-org/wasinix/pull/7#issuecomment-9".into()),
+            rendered_at: 1_755_003_000,
         }
     }
 
@@ -2560,6 +2563,7 @@ mod markdown {
                 sha: None,
                 failure_logs: published,
                 origin: None,
+                rendered_at: 1_755_003_000,
             },
         )
         .into_string();
@@ -2970,6 +2974,7 @@ mod markdown {
             origin,
             None,
             Some("https://ci.example/run"),
+            None,
         )
         .into_string();
         assert!(body.contains("### ❌ Wasinix command · failed · [run](https://ci.example/run)"));
@@ -2977,6 +2982,7 @@ mod markdown {
         let empty = crate::github::markdown::command_reply(
             crate::github::markdown::failure_reply("  "),
             origin,
+            None,
             None,
             None,
         )
@@ -3134,6 +3140,7 @@ mod markdown {
             "https://github.com/wasix-org/wasinix/pull/7#issuecomment-9",
             None,
             Some("https://github.com/wasix-org/wasinix/actions/runs/3"),
+            None,
         )
         .into_string();
         assert!(body.contains("stopped on an error"), "{body}");
@@ -3149,12 +3156,14 @@ mod markdown {
         use crate::github::markdown::{bisect_progress, command_reply};
         let origin = "https://github.com/wasix-org/wasinix/pull/7#issuecomment-9";
         let run = "https://github.com/wasix-org/wasinix/actions/runs/3";
+        let sha = Rev::parse(&"e".repeat(40)).unwrap();
         let render = |tested| {
             command_reply(
                 bisect_progress("wasixcc", tested),
                 origin,
                 Some(1_756_144_000),
                 Some(run),
+                Some(&sha),
             )
             .into_string()
         };
@@ -3162,14 +3171,61 @@ mod markdown {
         assert!(opening.contains("↳ in reply to this command"), "{opening}");
         assert_eq!(opening.matches(origin).count(), 1, "{opening}");
         assert_eq!(opening.matches(run).count(), 1, "{opening}");
+        assert_eq!(opening.matches("updated ").count(), 1, "{opening}");
         assert!(opening.contains("updated 17:46 UTC"), "{opening}");
         assert!(
-            opening.contains("### ⏳ Wasinix bisect · `wasixcc` · resolving the range · [run]"),
+            opening.contains(&format!(
+                "### ⏳ Wasinix bisect · `wasixcc` · resolving the range · [run]({run}) · `eeeeeeeeeeee`"
+            )),
             "{opening}"
         );
         assert!(opening.contains("resolving the range"), "{opening}");
         assert!(render(1).contains("1 candidate tested"));
         assert!(render(3).contains("3 candidates tested"));
+    }
+
+    #[test]
+    fn live_ci_headers_keep_metadata_and_identity_in_one_place() {
+        let origin = "https://github.com/wasix-org/wasinix/pull/7#issuecomment-9";
+        let (report, fragments) = scenarios::diff_in_progress();
+        let mut links = links();
+        links.origin = Some(origin.into());
+        let snapshot = crate::ci::events::Snapshot {
+            state: crate::support::atoms::RunState::Running,
+            exit_code: None,
+            started_at: Some(1_755_000_000),
+            last_event_at: Some(1_755_003_060),
+            completed_jobs: 0,
+            cached_jobs: 0,
+            failed_jobs: 0,
+            phases: Vec::new(),
+            recent_failures: Vec::new(),
+            building: Vec::new(),
+        };
+        for (body, updated) in [
+            (
+                comment(&report, &fragments, None, &links).into_string(),
+                "updated 12:50 UTC",
+            ),
+            (
+                comment(&report, &fragments, Some(&snapshot), &links).into_string(),
+                "updated 12:51 UTC",
+            ),
+        ] {
+            let metadata_end = body.find("</sub>\n\n").expect("reply metadata");
+            let heading_end = body[metadata_end + 8..]
+                .find("\n\n")
+                .map(|offset| metadata_end + 8 + offset)
+                .expect("reply heading");
+            assert_eq!(body.matches(origin).count(), 1, "{body}");
+            assert_eq!(body.matches("updated ").count(), 1, "{body}");
+            assert!(body[..metadata_end].contains(updated), "{body}");
+            assert!(body[metadata_end..heading_end].contains("[run]"), "{body}");
+            assert!(
+                body[metadata_end..heading_end].contains("`aaaaaaaaaaaa`"),
+                "{body}"
+            );
+        }
     }
 
     /// The synthesized task and the log fragment made the same choice in two
@@ -5326,6 +5382,8 @@ mod corpus {
             .as_str();
         assert_eq!(markdown.matches("Markdown::constant(\"### \")").count(), 1);
         assert_eq!(markdown.matches("Markdown::link(\"run\", url)").count(), 1);
+        assert_eq!(markdown.matches("↳ in reply to this command").count(), 1);
+        assert_eq!(markdown.matches("updated {}").count(), 1);
         for path in ["cli/mod.rs", "cli/surface.rs"] {
             let body = source
                 .iter()

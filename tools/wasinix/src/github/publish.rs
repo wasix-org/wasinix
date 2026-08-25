@@ -176,6 +176,7 @@ fn links(_rendered: &Rendered, target: &Target, reply_to: Option<u64>) -> Links 
             }
             _ => None,
         },
+        rendered_at: crate::support::time::unix_secs(),
     }
 }
 

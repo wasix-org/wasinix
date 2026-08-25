@@ -47,25 +47,9 @@ pub struct Links {
     /// The command comment this report answers, so a reader can find what
     /// asked for it even after other commands queued behind it.
     pub origin: Option<String>,
-}
-
-/// The answering line above a reply's heading.
-fn reply_line(origin: Option<&str>, updated_at: Option<u64>) -> Markdown {
-    match origin {
-        Some(url) => Markdown::concat([
-            Markdown::constant("<sub>"),
-            Markdown::html_link("↳ in reply to this command", url),
-            match updated_at {
-                Some(at) => Markdown::text(&format!(
-                    " · updated {}",
-                    crate::support::time::wall_clock_utc(at)
-                )),
-                None => Markdown::new(),
-            },
-            Markdown::constant("</sub>\n\n"),
-        ]),
-        None => Markdown::new(),
-    }
+    /// When this projection was rendered, used as live-comment freshness
+    /// before the run has emitted its first event.
+    pub rendered_at: u64,
 }
 
 #[derive(Clone, Copy)]
@@ -89,13 +73,34 @@ impl HeadingStatus {
     }
 }
 
-fn heading(
+fn header(
     status: HeadingStatus,
     subject: Markdown,
     mut details: Vec<Markdown>,
+    origin: Option<&str>,
+    updated_at: Option<u64>,
     run_url: Option<&str>,
     sha: Option<&Rev>,
 ) -> Markdown {
+    let mut metadata = Vec::new();
+    if let Some(url) = origin {
+        metadata.push(Markdown::html_link("↳ in reply to this command", url));
+    }
+    if let Some(at) = updated_at {
+        metadata.push(Markdown::text(&format!(
+            "updated {}",
+            crate::support::time::wall_clock_utc(at)
+        )));
+    }
+    let metadata = if metadata.is_empty() {
+        Markdown::new()
+    } else {
+        Markdown::concat([
+            Markdown::constant("<sub>"),
+            Markdown::join(metadata, " · "),
+            Markdown::constant("</sub>\n\n"),
+        ])
+    };
     let mut parts = vec![subject];
     parts.append(&mut details);
     if let Some(url) = run_url {
@@ -104,13 +109,13 @@ fn heading(
     if let Some(sha) = sha {
         parts.push(Markdown::code(sha.short()));
     }
-    Markdown::concat([
+    metadata.push(Markdown::concat([
         Markdown::constant("### "),
         Markdown::constant(status.glyph()),
         Markdown::constant(" "),
         Markdown::join(parts, " · "),
         Markdown::constant("\n\n"),
-    ])
+    ]))
 }
 
 pub struct CommandReply {
@@ -140,16 +145,18 @@ pub fn command_reply(
     origin: &str,
     updated_at: Option<u64>,
     run_url: Option<&str>,
+    sha: Option<&Rev>,
 ) -> Markdown {
-    reply_line(Some(origin), updated_at)
-        .push(heading(
-            reply.status,
-            reply.subject,
-            reply.details,
-            run_url,
-            None,
-        ))
-        .push(reply.body)
+    header(
+        reply.status,
+        reply.subject,
+        reply.details,
+        Some(origin),
+        updated_at,
+        run_url,
+        sha,
+    )
+    .push(reply.body)
 }
 
 pub fn plan_reply(
@@ -741,14 +748,20 @@ pub fn comment(
     snapshot: Option<&Snapshot>,
     links: &Links,
 ) -> Markdown {
-    let body = match report.conclusion {
-        None => in_progress(report, snapshot, links),
+    match report.conclusion {
+        None => in_progress(
+            report,
+            snapshot,
+            links,
+            snapshot
+                .and_then(|snapshot| snapshot.last_event_at)
+                .unwrap_or(links.rendered_at),
+        ),
         Some(Conclusion::Success) => green(report, fragments, links),
         Some(Conclusion::Failure) => failing(report, fragments, links),
         Some(Conclusion::Neutral) => inconclusive(report, fragments, links, true),
         Some(Conclusion::Blocked) => inconclusive(report, fragments, links, false),
-    };
-    reply_line(links.origin.as_deref(), None).push(body)
+    }
 }
 
 /// Jobs the request selected, which for a selector build is a handful of the
@@ -774,10 +787,12 @@ fn green(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Links)
         None => Markdown::constant("green"),
     };
     Markdown::concat([
-        heading(
+        header(
             HeadingStatus::Success,
             Markdown::constant("Wasinix CI"),
             vec![jobs],
+            links.origin.as_deref(),
+            None,
             links.run_url.as_deref(),
             links.sha.as_ref(),
         ),
@@ -847,10 +862,12 @@ fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
     } else {
         what
     };
-    let mut text = heading(
+    let mut text = header(
         HeadingStatus::Failure,
         Markdown::constant("Wasinix CI"),
         vec![what],
+        links.origin.as_deref(),
+        None,
         links.run_url.as_deref(),
         links.sha.as_ref(),
     )
@@ -930,10 +947,12 @@ fn inconclusive(
         };
         ("blocked", lead)
     };
-    let mut text = heading(
+    let mut text = header(
         HeadingStatus::Warning,
         Markdown::constant("Wasinix CI"),
         vec![Markdown::constant(state), Markdown::text(&report.title)],
+        links.origin.as_deref(),
+        None,
         links.run_url.as_deref(),
         links.sha.as_ref(),
     )
@@ -967,7 +986,12 @@ fn inconclusive(
     text
 }
 
-fn in_progress(report: &Report, snapshot: Option<&Snapshot>, links: &Links) -> Markdown {
+fn in_progress(
+    report: &Report,
+    snapshot: Option<&Snapshot>,
+    links: &Links,
+    updated_at: u64,
+) -> Markdown {
     // Preparation phases carry no job count, and the title names their
     // current operation. Without it the heading says only "building" for
     // the minutes a worktree and its overrides take.
@@ -1002,10 +1026,12 @@ fn in_progress(report: &Report, snapshot: Option<&Snapshot>, links: &Links) -> M
     };
     let mut heading_details = vec![what];
     heading_details.extend(counts);
-    let mut text = heading(
+    let mut text = header(
         HeadingStatus::Running,
         Markdown::constant("Wasinix CI"),
         heading_details,
+        links.origin.as_deref(),
+        Some(updated_at),
         links.run_url.as_deref(),
         links.sha.as_ref(),
     );
@@ -1026,8 +1052,6 @@ fn in_progress(report: &Report, snapshot: Option<&Snapshot>, links: &Links) -> M
             ]);
         }
     }
-    // The comment is edited in place, so absolute wall-clock tells a reader
-    // whether the run is live in a way "building" alone cannot.
     let mut trailing = Vec::new();
     if let Some(phase) = snapshot.and_then(|snapshot| {
         snapshot
@@ -1045,12 +1069,6 @@ fn in_progress(report: &Report, snapshot: Option<&Snapshot>, links: &Links) -> M
             None => phase.label.clone(),
         };
         trailing.push(Markdown::text(&label));
-    }
-    if let Some(at) = snapshot.and_then(|snapshot| snapshot.last_event_at) {
-        trailing.push(Markdown::text(&format!(
-            "updated {}",
-            crate::support::time::wall_clock_utc(at)
-        )));
     }
     Markdown::concat([
         text,

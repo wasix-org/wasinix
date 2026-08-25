@@ -1260,8 +1260,14 @@ fn command_reply(command: &crate::ci::origin::Command, reply: ReplyFreshness) ->
         command.origin.comment_id,
     );
     let run_url = crate::support::env::github_run_url()?;
-    let body =
-        crate::github::markdown::command_reply(reply, &origin, updated_at, run_url.as_deref());
+    let sha = crate::support::atoms::Rev::parse(&command.origin.head_sha)?;
+    let body = crate::github::markdown::command_reply(
+        reply,
+        &origin,
+        updated_at,
+        run_url.as_deref(),
+        Some(&sha),
+    );
     let client = crate::github::client::Client::new(crate::github::client::token().as_deref());
     let mut registry = crate::github::surfaces::Registry::new(
         &client,
@@ -1867,11 +1873,15 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             let repository = surface.repository(&repo)?;
             let origin =
                 crate::github::surfaces::origin_comment_url(&repository, pull_request, comment_id);
+            let sha = crate::support::env::github_sha()?
+                .map(|sha| crate::support::atoms::Rev::parse(&sha))
+                .transpose()?;
             let body = crate::github::markdown::command_reply(
                 crate::github::markdown::failure_reply(&failure_tail(&failures)),
                 &origin,
                 None,
                 surface.run_url.as_deref(),
+                sha.as_ref(),
             );
             let client =
                 crate::github::client::Client::new(crate::github::client::token().as_deref());
