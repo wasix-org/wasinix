@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 
 use crate::ci::compare::Comparison;
 use crate::ci::events::Snapshot;
-use crate::ci::facts::{Failure, FailureCause};
+use crate::ci::facts::{BUILD_PROCESS_ERROR_TITLE, DependencyPath, Failure, FailureCause};
 use crate::ci::report::{Conclusion, Fragment, FragmentData, Report};
 use crate::ci::types::ResolvedRequest;
 use crate::github::sanitize::Markdown;
@@ -467,8 +467,24 @@ fn failure_table(rows: &[(&str, &Failure)], links: &Links, cap: usize) -> Markdo
 }
 
 fn diagnostics(report: &Report) -> Markdown {
+    let dependency_victims: std::collections::BTreeSet<_> = report
+        .failures
+        .values()
+        .flatten()
+        .filter(|failure| failure.cause == FailureCause::Dependency)
+        .flat_map(|failure| failure.jobs.iter())
+        .collect();
     let mut body = Markdown::new();
     for diagnostic in &report.diagnostics {
+        if diagnostic.title == BUILD_PROCESS_ERROR_TITLE
+            && !diagnostic.affected_jobs.is_empty()
+            && diagnostic
+                .affected_jobs
+                .iter()
+                .all(|job| dependency_victims.contains(job))
+        {
+            continue;
+        }
         body = Markdown::concat([
             body,
             Markdown::constant("**"),
@@ -487,6 +503,95 @@ fn diagnostics(report: &Report) -> Markdown {
         body = body.push(Markdown::constant("\n"));
     }
     body
+}
+
+fn dependency_path_count(fragments: &BTreeMap<String, Fragment>) -> usize {
+    fragments
+        .values()
+        .filter_map(|fragment| match &fragment.data {
+            Some(FragmentData::Build(facts)) => Some(facts.dependency_paths.len()),
+            _ => None,
+        })
+        .sum()
+}
+
+fn dependency_paths(fragments: &BTreeMap<String, Fragment>, cap: usize) -> Markdown {
+    let mut paths: Vec<(&str, &DependencyPath)> = Vec::new();
+    let mut untraced = Vec::new();
+    for (task, fragment) in fragments {
+        let Some(FragmentData::Build(facts)) = &fragment.data else {
+            continue;
+        };
+        paths.extend(
+            facts
+                .dependency_paths
+                .iter()
+                .map(|path| (task.as_str(), path)),
+        );
+        untraced.extend(
+            facts
+                .untraced_jobs
+                .iter()
+                .map(|job| (task.as_str(), job, facts.dependency_trace_error.as_deref())),
+        );
+    }
+    if paths.is_empty() && untraced.is_empty() {
+        return Markdown::new();
+    }
+    let mut text = Markdown::constant("**Why selected jobs did not run**\n\n");
+    if !paths.is_empty() {
+        text = text.push(Markdown::constant(
+            "| selected job | task | dependency path to failure |\n|:--|:--|:--|\n",
+        ));
+        for (task, path) in paths.iter().take(cap) {
+            let mut chain = Markdown::new();
+            for dependency in &path.via {
+                chain = Markdown::concat([
+                    chain,
+                    Markdown::cell_code(dependency),
+                    Markdown::constant(" → "),
+                ]);
+            }
+            chain = Markdown::concat([
+                chain,
+                Markdown::cell_code(path.root.as_str()),
+                Markdown::constant(" (failed)"),
+            ]);
+            text = Markdown::concat([
+                text,
+                Markdown::constant("| "),
+                Markdown::cell_code(path.job.as_str()),
+                Markdown::constant(" | "),
+                Markdown::cell(task),
+                Markdown::constant(" | "),
+                chain,
+                Markdown::constant(" |\n"),
+            ]);
+        }
+        if paths.len() > cap {
+            text = Markdown::concat([
+                text,
+                Markdown::constant("\nand "),
+                Markdown::text(&(paths.len() - cap).to_string()),
+                Markdown::constant(" more paths in the step summary\n"),
+            ]);
+        }
+        text = text.push(Markdown::constant("\n"));
+    }
+    for (task, job, error) in untraced.into_iter().take(cap) {
+        text = Markdown::concat([
+            text,
+            Markdown::constant("- Could not trace "),
+            Markdown::code(job.as_str()),
+            Markdown::constant(" in "),
+            Markdown::code(task),
+            error.map_or_else(Markdown::new, |error| {
+                Markdown::concat([Markdown::constant(": "), headline_cell(error)])
+            }),
+            Markdown::constant("\n"),
+        ]);
+    }
+    text.push(Markdown::constant("\n"))
 }
 
 /// The phase ladder: one line per case with the case named once, and the
@@ -924,7 +1029,8 @@ fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
     };
     let mut text = report_header(status, report, vec![what], links, None)
         .push(command_block(report.command.as_deref()))
-        .push(diagnostics(report));
+        .push(diagnostics(report))
+        .push(dependency_paths(fragments, FAILURE_ROWS));
     if primary.is_empty() {
         // A regression can be a job that never ran, whose failure atom is
         // transitive and so appears in no failure table. Naming it is the
@@ -1000,8 +1106,14 @@ fn inconclusive(
         };
         ("blocked", lead)
     };
+    let heading_status =
+        if !comparison && report.blocked_policy() == crate::support::atoms::BlockedPolicy::Fail {
+            HeadingStatus::Negative
+        } else {
+            HeadingStatus::Warning
+        };
     let mut text = report_header(
-        HeadingStatus::Warning,
+        heading_status,
         report,
         vec![Markdown::constant(state), Markdown::text(&report.title)],
         links,
@@ -1010,6 +1122,9 @@ fn inconclusive(
     .push(command_block(report.command.as_deref()))
     .push(Markdown::constant(lead))
     .push(diagnostics(report));
+    if !comparison {
+        text = text.push(dependency_paths(fragments, FAILURE_ROWS));
+    }
     let all = failures(report);
     if !all.is_empty() {
         let summary = if comparison {
@@ -1158,7 +1273,7 @@ pub fn check(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Li
             title
         }
     };
-    let mut summary = diagnostics(report);
+    let mut summary = diagnostics(report).push(dependency_paths(fragments, FAILURE_ROWS));
     if !all.is_empty() {
         summary = summary
             .push(failure_table(&all, links, FAILURE_ROWS))
@@ -1188,6 +1303,17 @@ pub fn step_summary(
             Markdown::text(&all.len().to_string()),
             Markdown::constant(")**\n\n"),
             failure_table(&all, links, usize::MAX),
+        ]);
+    }
+    let path_count = dependency_path_count(fragments);
+    if path_count > FAILURE_ROWS {
+        text = Markdown::concat([
+            text,
+            Markdown::constant("\n<details><summary>All dependency paths ("),
+            Markdown::text(&path_count.to_string()),
+            Markdown::constant(")</summary>\n\n"),
+            dependency_paths(fragments, usize::MAX),
+            Markdown::constant("</details>\n"),
         ]);
     }
     for fragment in fragments.values() {

@@ -2727,7 +2727,10 @@ mod markdown {
 
     #[test]
     fn a_blocked_gate_is_never_green() {
-        use crate::ci::facts::{BuildFacts, Failure, FailureCause};
+        use crate::ci::facts::{
+            BUILD_PROCESS_ERROR_TITLE, BuildFacts, DependencyPath, Diagnostic, DiagnosticSeverity,
+            Failure, FailureCause,
+        };
         use crate::ci::plan::{TaskKind, plan_of};
         use crate::ci::report::{FoldContext, Fragment, FragmentData, fold};
         use crate::cli::untrusted::{UntrustedCommand, parse};
@@ -2779,6 +2782,11 @@ mod markdown {
                     log: None,
                 },
             ],
+            dependency_paths: vec![DependencyPath {
+                job: JobAddr("checks.gzip-roundtrip".into()),
+                root: JobAddr("wasix-cc-legacy".into()),
+                via: vec!["wasix-compare-gzip-roundtrip".into()],
+            }],
             counts: std::collections::BTreeMap::from([("Build".to_string(), (1usize, 0usize))]),
             census: Some(crate::ci::facts::JobCensus {
                 selected: 1,
@@ -2797,7 +2805,13 @@ mod markdown {
                 TaskStatus::Blocked,
                 "1 of 1 jobs blocked",
             )
-            .with_data(FragmentData::Build(facts)),
+            .with_data(FragmentData::Build(facts))
+            .with_diagnostic(Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                title: BUILD_PROCESS_ERROR_TITLE.into(),
+                message: "error: Cannot build the selected derivation".into(),
+                affected_jobs: vec![JobAddr("checks.gzip-roundtrip".into())],
+            }),
         );
         let report = fold(
             &plan,
@@ -2815,8 +2829,10 @@ mod markdown {
         );
         let body = comment(&report, &fragments, None, &links()).into_string();
         assert!(!body.contains("jobs green"), "{body}");
-        // The dependency that blocked it is the whole answer.
         assert!(body.contains("wasix-cc-legacy"), "{body}");
+        assert!(body.contains("Why selected jobs did not run"), "{body}");
+        assert!(body.contains("wasix-compare-gzip-roundtrip"), "{body}");
+        assert!(!body.contains(BUILD_PROCESS_ERROR_TITLE), "{body}");
     }
 
     #[test]
@@ -7807,6 +7823,7 @@ mod facts {
             drv: "/nix/store/abc-openssl-3.0.drv".into(),
             name: "openssl-3.0".into(),
             log: "configure: error: no".into(),
+            message: None,
             jobs: vec!["checks.zlib".into()],
         };
         let mut failures = vec![Failure {

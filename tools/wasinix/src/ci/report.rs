@@ -85,7 +85,7 @@ pub struct Fragment {
 
 impl Document for Fragment {
     const KIND: &'static str = "fragment";
-    const SCHEMA: u32 = 2;
+    const SCHEMA: u32 = 3;
 }
 
 impl Fragment {

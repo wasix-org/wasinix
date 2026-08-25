@@ -59,6 +59,11 @@ deduplicates shared diagnostics and their affected jobs into the report; final
 terminal and GitHub surfaces render that report instead of re-reading task
 facts.
 
+A blocked build task records the shortest derivation path from each selected job
+to every failed dependency root. It reads the direct-input graph once, so the
+comment can distinguish the selected job, intermediate dependencies, and the
+failure whose log and reason explain the result.
+
 Task and durable-run transcripts retain at most 64 MiB each by default: their
 opening context and newest output, with the omitted byte count between them. A
 neighboring `*.retention.json` records original and retained bytes. Set

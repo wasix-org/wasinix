@@ -16,7 +16,7 @@ use crate::support::error::{Result, io};
 use crate::support::schema::Document;
 
 use super::junit::Case;
-use super::{Failure, FailureCause, LogRef};
+use super::{DependencyPath, Failure, FailureCause, LogRef, drv_name};
 
 const MAX_ARCHIVED_LOG_BYTES: usize = 20 * 1024 * 1024;
 const MAX_ARCHIVED_TASK_BYTES: usize = 100 * 1024 * 1024;
@@ -127,10 +127,9 @@ fn outputs_valid(drv: &str) -> bool {
     else {
         return false;
     };
-    output.status.is_success()
-        && String::from_utf8_lossy(&output.stdout)
-            .split_whitespace()
-            .any(|path| Path::new(path).exists())
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let outputs: Vec<_> = stdout.split_whitespace().map(Path::new).collect();
+    output.status.is_success() && !outputs.is_empty() && outputs.iter().all(|path| path.exists())
 }
 
 /// Attach expectations and positions, fetch direct failures' logs, and mark
@@ -177,77 +176,208 @@ pub struct RootCause {
     pub drv: String,
     pub name: String,
     pub log: String,
+    pub message: Option<String>,
     pub jobs: Vec<String>,
 }
 
-/// Walk the failed jobs' closures for a derivation that ran, failed, and is
-/// not itself a job: its log is the one explanation none of the victims carry.
-pub fn dependency_root_causes(
+#[derive(Debug, Default)]
+pub struct DependencyCauses {
+    pub roots: Vec<RootCause>,
+    pub paths: Vec<DependencyPath>,
+    pub untraced_jobs: Vec<crate::support::atoms::JobAddr>,
+    pub error: Option<String>,
+}
+
+fn derivation_graph(value: &serde_json::Value) -> Result<BTreeMap<String, Vec<String>>> {
+    if value.get("version").and_then(serde_json::Value::as_u64) != Some(4) {
+        return Err(crate::support::error::Error::Failure(
+            "derivation graph is not Nix JSON version 4".into(),
+        ));
+    }
+    let entries = value
+        .get("derivations")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| {
+            crate::support::error::Error::Failure(
+                "derivation graph has no derivations object".into(),
+            )
+        })?;
+    let mut graph = BTreeMap::new();
+    for (drv, value) in entries {
+        let inputs = value
+            .get("inputs")
+            .and_then(|inputs| inputs.get("drvs"))
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| {
+                crate::support::error::Error::Failure(format!(
+                    "derivation graph entry {drv} has no inputs.drvs object"
+                ))
+            })?;
+        let path = format!("/nix/store/{drv}");
+        graph.insert(
+            path,
+            inputs
+                .keys()
+                .map(|dependency| format!("/nix/store/{dependency}"))
+                .collect(),
+        );
+    }
+    Ok(graph)
+}
+
+fn shortest_paths(
+    graph: &BTreeMap<String, Vec<String>>,
+    start: &str,
+) -> BTreeMap<String, Option<String>> {
+    let mut queue = std::collections::VecDeque::from([start.to_string()]);
+    let mut previous: BTreeMap<String, Option<String>> =
+        BTreeMap::from([(start.to_string(), None)]);
+    while let Some(current) = queue.pop_front() {
+        for dependency in graph.get(&current).into_iter().flatten() {
+            if !previous.contains_key(dependency) {
+                previous.insert(dependency.clone(), Some(current.clone()));
+                queue.push_back(dependency.clone());
+            }
+        }
+    }
+    previous
+}
+
+fn path_to(previous: &BTreeMap<String, Option<String>>, target: &str) -> Option<Vec<String>> {
+    let mut path = Vec::new();
+    let mut at = Some(target.to_string());
+    while let Some(node) = at {
+        at = previous.get(&node)?.clone();
+        path.push(node);
+    }
+    path.reverse();
+    Some(path)
+}
+
+fn reported_root(reported: &crate::nix::buildset::BuilderFailure) -> RootCause {
+    let mut message = reported.reason.clone();
+    if let Some(last) = reported.log.last() {
+        message.push_str(&format!(": {last}"));
+    }
+    RootCause {
+        drv: reported.drv.clone(),
+        name: drv_name(&reported.drv),
+        log: reported.log.join("\n"),
+        message: Some(message),
+        jobs: Vec::new(),
+    }
+}
+
+fn sorted_roots(roots: BTreeMap<String, RootCause>) -> Vec<RootCause> {
+    let mut roots: Vec<_> = roots.into_values().collect();
+    roots.sort_by(|a, b| a.name.cmp(&b.name));
+    roots
+}
+
+pub fn dependency_causes(
     failed: &[Case],
     index: &BTreeMap<String, Job>,
     cutoff: std::time::SystemTime,
-) -> Vec<RootCause> {
+    builder_failures: &[crate::nix::buildset::BuilderFailure],
+) -> DependencyCauses {
     let job_drvs: BTreeSet<&str> = failed
         .iter()
         .filter_map(|case| index.get(&case.attr).map(|job| job.drv.as_str()))
         .collect();
-    let mut checked: BTreeMap<String, Option<String>> = BTreeMap::new();
-    let mut roots: BTreeMap<String, RootCause> = BTreeMap::new();
-
-    for case in failed.iter().filter(|case| case.transitive) {
-        let Some(job) = index.get(&case.attr) else {
-            continue;
+    let mut roots: BTreeMap<String, RootCause> = builder_failures
+        .iter()
+        .filter(|reported| !job_drvs.contains(reported.drv.as_str()))
+        .map(|reported| (reported.drv.clone(), reported_root(reported)))
+        .collect();
+    let transitive: Vec<(&Case, &Job)> = failed
+        .iter()
+        .filter(|case| case.transitive)
+        .filter_map(|case| index.get(&case.attr).map(|job| (case, job)))
+        .collect();
+    if transitive.is_empty() {
+        return DependencyCauses {
+            roots: sorted_roots(roots),
+            ..DependencyCauses::default()
         };
-        let Ok(output) = crate::support::nix::Invocation::tool("nix-store")
-            .args(["--query", "--requisites"])
-            .operand(&job.drv)
-            .probe("one unqueryable derivation must not lose the report")
-        else {
-            continue;
-        };
-        if !output.status.is_success() {
-            crate::support::ui::warning(format!(
-                "requisites of {}: {}",
-                case.attr,
-                output.stderr.trim()
-            ));
+    }
+    let starts: Vec<String> = transitive.iter().map(|(_, job)| job.drv.clone()).collect();
+    let graph = crate::support::nix::Invocation::plain("derivation show")
+        .arg("--recursive")
+        .local_only()
+        .operands(starts)
+        .run_json("reading failed derivation graph")
+        .and_then(|value| derivation_graph(&value));
+    let graph = match graph {
+        Ok(graph) => graph,
+        Err(error) => {
+            let message = crate::support::error::brief(&error, 240);
+            crate::support::ui::warning(format!("dependency paths unavailable: {message}"));
+            return DependencyCauses {
+                roots: sorted_roots(roots),
+                untraced_jobs: transitive
+                    .into_iter()
+                    .map(|(case, _)| crate::support::atoms::JobAddr(case.attr.clone()))
+                    .collect(),
+                error: Some(message),
+                ..DependencyCauses::default()
+            };
+        }
+    };
+    for drv in graph.keys() {
+        if job_drvs.contains(drv.as_str()) {
             continue;
         }
-        for drv in String::from_utf8_lossy(&output.stdout).split_whitespace() {
-            if !drv.ends_with(".drv") || job_drvs.contains(drv) {
-                continue;
-            }
-            if !checked.contains_key(drv) {
-                let mut root = None;
-                if let Some(log) = local_log(drv, cutoff) {
-                    if !outputs_valid(drv) {
-                        let name = drv
-                            .rsplit('/')
-                            .next()
-                            .and_then(|base| base.split_once('-'))
-                            .map(|(_, rest)| rest.trim_end_matches(".drv").to_string())
-                            .unwrap_or_else(|| drv.to_string());
-                        roots.entry(drv.to_string()).or_insert(RootCause {
-                            drv: drv.to_string(),
-                            name,
-                            log,
-                            jobs: Vec::new(),
-                        });
-                        root = Some(drv.to_string());
-                    }
-                }
-                checked.insert(drv.to_string(), root);
-            }
-            if let Some(Some(key)) = checked.get(drv) {
-                if let Some(root) = roots.get_mut(key) {
-                    root.jobs.push(case.attr.clone());
-                }
+        if let Some(log) = local_log(drv, cutoff) {
+            if !outputs_valid(drv) {
+                roots
+                    .entry(drv.clone())
+                    .and_modify(|root| {
+                        if !log.is_empty() {
+                            root.log.clone_from(&log);
+                        }
+                    })
+                    .or_insert_with(|| RootCause {
+                        drv: drv.clone(),
+                        name: drv_name(drv),
+                        log,
+                        message: None,
+                        jobs: Vec::new(),
+                    });
             }
         }
     }
-    let mut found: Vec<RootCause> = roots.into_values().collect();
-    found.sort_by(|a, b| a.name.cmp(&b.name));
-    found
+    let mut paths = Vec::new();
+    let mut untraced_jobs = Vec::new();
+    for (case, job) in transitive {
+        let mut traced = false;
+        let previous = shortest_paths(&graph, &job.drv);
+        for root in roots.values_mut() {
+            let Some(path) = path_to(&previous, &root.drv) else {
+                continue;
+            };
+            traced = true;
+            root.jobs.push(case.attr.clone());
+            paths.push(DependencyPath {
+                job: crate::support::atoms::JobAddr(case.attr.clone()),
+                root: crate::support::atoms::JobAddr(root.name.clone()),
+                via: path[1..path.len() - 1]
+                    .iter()
+                    .map(|drv| drv_name(drv))
+                    .collect(),
+            });
+        }
+        if !traced {
+            untraced_jobs.push(crate::support::atoms::JobAddr(case.attr.clone()));
+        }
+    }
+    let roots = sorted_roots(roots);
+    paths.sort_by(|a, b| (&a.job, &a.root).cmp(&(&b.job, &b.root)));
+    DependencyCauses {
+        roots,
+        paths,
+        untraced_jobs,
+        error: None,
+    }
 }
 
 /// One archived log in the manifest. The same struct writes and reads the
@@ -300,6 +430,9 @@ pub fn archive(
         ));
     }
     for cause in roots {
+        if cause.log.is_empty() {
+            continue;
+        }
         candidates.push((
             cause.name.clone(),
             cause.drv.clone(),
@@ -374,4 +507,80 @@ pub fn read_archived(logs_dir: &Path, log: &LogRef, limit: usize) -> Result<Stri
         .read_to_string(&mut text)
         .map_err(|e| io(&path, e))?;
     Ok(crate::support::tools::utf8_suffix(&text, limit).to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::{dependency_causes, derivation_graph, path_to, shortest_paths};
+
+    #[test]
+    fn derivation_graph_preserves_branches_and_shortest_paths() {
+        let graph = derivation_graph(&json!({
+            "version": 4,
+            "derivations": {
+                "00-selected.drv": {
+                    "inputs": { "drvs": {
+                        "01-left.drv": {},
+                        "02-right.drv": {}
+                    }}
+                },
+                "01-left.drv": {
+                    "inputs": { "drvs": { "03-middle.drv": {} }}
+                },
+                "02-right.drv": {
+                    "inputs": { "drvs": { "04-root.drv": {} }}
+                },
+                "03-middle.drv": {
+                    "inputs": { "drvs": { "04-root.drv": {} }}
+                },
+                "04-root.drv": {
+                    "inputs": { "drvs": {} }
+                }
+            }
+        }))
+        .unwrap();
+        assert_eq!(
+            path_to(
+                &shortest_paths(&graph, "/nix/store/00-selected.drv"),
+                "/nix/store/04-root.drv",
+            )
+            .unwrap(),
+            vec![
+                "/nix/store/00-selected.drv",
+                "/nix/store/02-right.drv",
+                "/nix/store/04-root.drv"
+            ]
+        );
+    }
+
+    #[test]
+    fn derivation_graph_rejects_schema_drift() {
+        let error = derivation_graph(&json!({
+            "version": 4,
+            "derivations": {
+                "00-selected.drv": { "inputs": {} }
+            }
+        }))
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("inputs.drvs"), "{error}");
+    }
+
+    #[test]
+    fn builder_roots_survive_without_a_traceable_selected_job() {
+        let causes = dependency_causes(
+            &[],
+            &Default::default(),
+            std::time::SystemTime::now(),
+            &[crate::nix::buildset::BuilderFailure {
+                drv: "/nix/store/00-openssl.drv".into(),
+                reason: "builder failed with exit code 1".into(),
+                log: vec!["configure failed".into()],
+            }],
+        );
+        assert_eq!(causes.roots.len(), 1);
+        assert_eq!(causes.roots[0].name, "openssl");
+    }
 }

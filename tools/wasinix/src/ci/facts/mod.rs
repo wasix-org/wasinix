@@ -87,6 +87,15 @@ pub struct Failure {
     pub log: Option<LogRef>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DependencyPath {
+    pub job: JobAddr,
+    pub root: JobAddr,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub via: Vec<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TestOutcome {
@@ -177,6 +186,12 @@ pub struct BuildFacts {
     pub complete: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub failures: Vec<Failure>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dependency_paths: Vec<DependencyPath>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub untraced_jobs: Vec<JobAddr>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dependency_trace_error: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tests: Vec<TestResult>,
     /// Per class (Build, Eval, ...): (total, failed).
@@ -280,7 +295,7 @@ fn failures_of(failed: &[junit::Case], roots: &[logs::RootCause]) -> Vec<Failure
             job: JobAddr(root.name.clone()),
             cause: FailureCause::Dependency,
             class: None,
-            message: None,
+            message: root.message.clone(),
             jobs: jobs.into_iter().map(JobAddr).collect(),
             position: None,
             log: None,
@@ -311,40 +326,16 @@ pub fn ingest(
         .filter(|case| case.message.is_some())
         .cloned()
         .collect();
-    let roots = logs::dependency_root_causes(&failed, &index, cutoff);
-    let mut failures = failures_of(&failed, &roots);
-    // The realise output already named what failed and why. The walk above
-    // finds the same thing by querying the store and probing the log
-    // directory, which answers nothing when either is unreadable, and then
-    // a blocked job's report says only "build failed before producing a
-    // log".
-    let claimed: std::collections::BTreeSet<&str> =
-        roots.iter().map(|root| root.drv.as_str()).collect();
-    let job_drvs: std::collections::BTreeSet<&str> =
-        index.values().map(|job| job.drv.as_str()).collect();
-    for reported in builder_failures {
-        if claimed.contains(reported.drv.as_str()) || job_drvs.contains(reported.drv.as_str()) {
-            continue;
-        }
-        let mut message = reported.reason.clone();
-        if let Some(last) = reported.log.last() {
-            message.push_str(&format!(": {last}"));
-        }
-        failures.push(Failure {
-            job: JobAddr(drv_name(&reported.drv)),
-            cause: FailureCause::Dependency,
-            class: None,
-            message: Some(message),
-            jobs: Vec::new(),
-            position: None,
-            log: None,
-        });
-    }
-    logs::archive(logs_dir, &failed, &roots, &index, &mut failures)?;
+    let causes = logs::dependency_causes(&failed, &index, cutoff, builder_failures);
+    let mut failures = failures_of(&failed, &causes.roots);
+    logs::archive(logs_dir, &failed, &causes.roots, &index, &mut failures)?;
     let metrics = BuildMetrics::from_cases(&cases);
     Ok(BuildFacts {
         complete: true,
         failures,
+        dependency_paths: causes.paths,
+        untraced_jobs: causes.untraced_jobs,
+        dependency_trace_error: causes.error,
         tests: test_results(&cases),
         counts,
         build_seconds: metrics.build_seconds,
