@@ -17,7 +17,6 @@
         pkgs.gzip
         pkgs.writableTmpDirAsHomeHook
       ];
-      publisher = ../../../cargo-registry/publish-crate.py;
       server = packages.preferred.cargo-registry;
     } ''
       set -u
@@ -37,7 +36,6 @@
         printf 'pub fn ok() -> u32 { %s }\n' "$2" > "$1/work/probe-0.1.0+wasix.1/src/lib.rs"
         tar czf "$1/crates/probe-0.1.0+wasix.1.crate" -C "$1/work" "probe-0.1.0+wasix.1"
         rm -r "$1/work"
-        cp "$publisher" "$1/publish-crate.py"
         cat > "$1/manifest.json" <<'EOF'
       {"crates":[{"crate":"probe","wasixVersion":"0.1.0+wasix.1","crateFile":"probe-0.1.0+wasix.1.crate","upstream":"0.1.0","rel":1}],"shadowLimits":[],"excluded":[],"unpinned":[],"stray":[]}
       EOF
