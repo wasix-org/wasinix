@@ -14,6 +14,18 @@
     project = wasinix.lib.mkProject {
       inherit system;
       importNixpkgs = args: import nixpkgs args;
+      repository = {
+        source = "consumer";
+        root = self;
+        revisionsFile = ./release-revisions.json;
+        publication = {
+          wasmer.registry = "wasmer.io";
+          provenance = {
+            flake = "github:example/consumer";
+            repository = "example/consumer";
+          };
+        };
+      };
       extensions = [
         {
           id = "consumer";
@@ -23,6 +35,16 @@
               printf '#!/bin/sh\nprintf consumer\\n' > "$out/bin/consumer-tool"
               chmod +x "$out/bin/consumer-tool"
             '';
+          };
+          overlays.wasix = final: _previous: {
+            consumer-wasm =
+              final.runCommand "consumer-wasm-1.0.0" {
+                passthru.wasinix.shipped = true;
+                meta.mainProgram = "consumer-wasm";
+              } ''
+                mkdir -p "$out/bin"
+                touch "$out/bin/consumer-wasm.wasm"
+              '';
           };
         }
       ];

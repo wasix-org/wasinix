@@ -4,10 +4,18 @@
   revisionsFile,
   root,
   source,
+  publication ? {},
 }: let
   wasinixLib = import ../lib {inherit lib;};
-  registry = project.artifacts.registry.python;
-  cargoRegistryArtifact = project.artifacts.registry.cargo-registry;
+  projectLib = import ./lib.nix {inherit lib;};
+  registry = project.artifacts.registry.python or null;
+  cargoRegistryArtifact = project.artifacts.registry.cargo-registry or null;
+  ownedEntries = projectLib.entriesForSource project.catalog.entries source;
+
+  subjectsOf = entries:
+    lib.unique (lib.concatMap (entry: entry.packageSubjects or []) entries);
+  entriesMatching = predicate:
+    lib.filter predicate (lib.attrValues ownedEntries);
 
   firstChangelog = derivations:
     lib.findFirst (value: value != null) null
@@ -23,9 +31,11 @@
     versionOf,
     changelogOf ? (drv: drv),
     derivations,
+    identity,
+    packageSubjects,
   }: {
     versions = lib.unique (map versionOf derivations);
-    inherit kind;
+    inherit identity kind packageSubjects;
     changelogs =
       lib.mapAttrs (_: values: firstChangelog (map changelogOf values))
       (lib.groupBy versionOf derivations);
@@ -36,27 +46,55 @@
   wheelDerivations = name:
     lib.concatMap (perInterpreter: lib.attrValues (perInterpreter.${name} or {}))
     (lib.attrValues registry.wheels);
-  wheelInfo = lib.mapAttrs' (name: _:
-    lib.nameValuePair "artifacts.registry.python.wheels.${name}" (informationFor {
-      kind = "wheel";
-      versionOf = drv: drv.version;
-      derivations = wheelDerivations name;
-    }))
-  registry.wheelVersions;
+  wheelInfo =
+    if registry == null
+    then {}
+    else
+      lib.mapAttrs' (name: _:
+        lib.nameValuePair "artifacts.registry.python.wheels.${name}" (informationFor {
+          kind = "wheel";
+          identity = {inherit name;};
+          versionOf = drv: drv.version;
+          derivations = wheelDerivations name;
+          packageSubjects = subjectsOf (entriesMatching (entry:
+            entry.kind
+            == "artifact"
+            && lib.hasPrefix "wheel-" entry.artifactKind
+            && entry.name == name));
+        }))
+      (lib.filterAttrs (name: _:
+        entriesMatching (entry:
+          entry.kind
+          == "artifact"
+          && lib.hasPrefix "wheel-" entry.artifactKind
+          && entry.name == name)
+        != [])
+      registry.wheelVersions);
   webcInfo = lib.mapAttrs' (name: package:
     lib.nameValuePair "artifacts.webc.${name}" (informationFor {
       kind = "webc";
+      identity = {
+        inherit name;
+        inherit (package.id) owner;
+      };
       versionOf = drv: drv.id.baseVersion;
       derivations = [package] ++ builtins.attrValues (package.versions or {});
+      packageSubjects = ownedEntries.${"artifacts.webc.${name}"}.packageSubjects;
     }))
-  project.artifacts.pkg;
+  (lib.filterAttrs (name: _: builtins.hasAttr "artifacts.webc.${name}" ownedEntries) (project.artifacts.pkg or {}));
+  cargoSubjects =
+    if ownedEntries ? "artifacts.registry.cargo-registry"
+    then ownedEntries."artifacts.registry.cargo-registry".packageSubjects
+    else [];
   cargoInfo = lib.mapAttrs' (name: _:
     lib.nameValuePair "artifacts.registry.cargo-registry.crates.${name}" (informationFor {
       kind = "crate";
+      identity = {inherit name;};
       versionOf = drv: drv.passthru.version;
       derivations = builtins.attrValues (cargoRegistryArtifact.crates.${name} or {});
+      packageSubjects = cargoSubjects;
     }))
-  cargoRegistryArtifact.crateVersions;
+  (lib.optionalAttrs (cargoSubjects != [] && cargoRegistryArtifact != null) cargoRegistryArtifact.crateVersions);
   publicationInfo = wheelInfo // webcInfo // cargoInfo;
 
   packagesFrom = prefix: packages:
@@ -159,6 +197,12 @@ in {
   inherit root source;
   revisions = builtins.fromJSON (builtins.readFile revisionsFile);
   publication = {
+    catalog =
+      lib.mapAttrs (_: info: {
+        inherit (info) identity kind packageSubjects;
+      })
+      publicationInfo;
+    destinations = publication;
     info = publicationInfo;
     versions = lib.mapAttrs (_: info: info.versions) publicationInfo;
   };

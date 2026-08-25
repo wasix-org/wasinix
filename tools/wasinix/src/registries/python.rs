@@ -70,6 +70,8 @@ pub struct Index {
     pub effects: crate::support::effects::Effects,
     /// The checkout, which holds the app config and the publisher.
     pub repo: PathBuf,
+    /// Repository-relative directory holding app.yaml and publish.py.
+    pub app_directory: PathBuf,
     /// Upload the pages even when no wheel is new: they answer to the index
     /// generator rather than to the wheel set.
     pub refresh_listings: bool,
@@ -129,7 +131,7 @@ fn volume_config(app_dir: &Path, registry: &str) -> Result<String> {
 /// rclone.conf, which would leave a working key in a home directory.
 pub fn publish_index(request: Index) -> Result<CommandStatus> {
     let registry_path = registry_path(request.registry_path)?;
-    let app_dir = request.repo.join("pkgs/python-registry");
+    let app_dir = request.repo.join(request.app_directory);
     let registry = request.registry;
     let scratch = crate::support::fs::Scratch::create("wasinix-rclone")?;
     let config = scratch.path().join("rclone.conf");

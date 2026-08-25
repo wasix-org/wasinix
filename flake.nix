@@ -58,6 +58,18 @@
         source = "wasinix";
         root = self;
         revisionsFile = ./release-revisions.json;
+        publication = {
+          cargo.registry = "https://cargo-registry.wasix.org";
+          python = {
+            registry = "wasmer.io";
+            appDirectory = "pkgs/python-registry";
+          };
+          wasmer.registry = "wasmer.io";
+          provenance = {
+            flake = "github:wasix-org/wasinix";
+            repository = "wasix-org/wasinix";
+          };
+        };
       };
     };
     pkgs = project.internals.packageSets.nativeRaw;

@@ -583,4 +583,18 @@ in rec {
         && (packageMetadata package).catalog or true
     )
     registered;
+
+  packageAddressesForSource = entries: source:
+    lib.attrNames (lib.filterAttrs (_: entry:
+      entry.kind == "package" && entry.source == source)
+    entries);
+
+  entriesForSource = entries: source: let
+    packageAddresses = packageAddressesForSource entries source;
+  in
+    lib.filterAttrs (_: entry:
+      entry.source
+      == source
+      || lib.intersectLists (entry.packageSubjects or []) packageAddresses != [])
+    entries;
 }

@@ -2,11 +2,14 @@
 //! every column: serve is local and ephemeral, publish pushes what is
 //! missing, preview is an ephemeral deploy; an empty cell says so honestly.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
+
+use serde::Deserialize;
 
 use crate::registries::{cargo, python, wasmer};
 use crate::support::effects::Effects;
-use crate::support::error::Result;
+use crate::support::error::{Error, Result, request_error};
 use crate::support::process::CommandStatus;
 use crate::support::ui;
 
@@ -307,6 +310,7 @@ pub fn run_wasmer(command: WasmerCommand) -> Result<CommandStatus> {
             with_dependencies: false,
             publish_as,
             namespace: None,
+            provenance: None,
         }),
         WasmerCommand::Preview {
             tag,
@@ -326,6 +330,7 @@ pub fn run_wasmer(command: WasmerCommand) -> Result<CommandStatus> {
             with_dependencies,
             publish_as: None,
             namespace: Some(namespace),
+            provenance: None,
         }),
     }
 }
@@ -346,6 +351,7 @@ pub fn run_python(command: PythonCommand) -> Result<CommandStatus> {
             rev,
             effects: Effects::from_dry_run(dry_run),
             repo: crate::support::git::repo_root()?,
+            app_directory: "pkgs/python-registry".into(),
             refresh_listings,
             withdraw_stale,
         }),
@@ -467,52 +473,254 @@ fn fan_out(legs: Vec<(&str, Leg<'_>)>) -> Result<CommandStatus> {
     Ok(worst)
 }
 
-pub fn run_meta_publish(effects: Effects) -> Result<CommandStatus> {
+#[derive(Deserialize)]
+struct Publication {
+    catalog: BTreeMap<String, PublicationInfo>,
+    destinations: Destinations,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PublishProject {
+    publication: Publication,
+    selector_catalog: crate::ci::evalmap::SelectorCatalog,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PublicationInfo {
+    kind: PublicationKind,
+    identity: PublicationIdentity,
+    package_subjects: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum PublicationKind {
+    Crate,
+    Webc,
+    Wheel,
+}
+
+#[derive(Deserialize)]
+struct PublicationIdentity {
+    name: String,
+}
+
+#[derive(Default, Deserialize)]
+struct Destinations {
+    cargo: Option<RegistryDestination>,
+    python: Option<PythonDestination>,
+    wasmer: Option<RegistryDestination>,
+    provenance: Option<wasmer::Provenance>,
+}
+
+#[derive(Deserialize)]
+struct RegistryDestination {
+    registry: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PythonDestination {
+    registry: String,
+    app_directory: PathBuf,
+}
+
+fn project_value<T: for<'de> Deserialize<'de>>(path: &str, apply: Option<&str>) -> Result<T> {
+    let value = crate::support::nix::eval(&crate::support::nix::Flake::default(), path, apply)?;
+    serde_json::from_value(value).map_err(|source| Error::Json {
+        path: format!("<{}>", crate::support::nix::project_attr(path)).into(),
+        source,
+    })
+}
+
+fn selected_publications<'a>(
+    publication: &'a Publication,
+    selectors: &[String],
+    selector_catalog: crate::ci::evalmap::SelectorCatalog,
+) -> Result<Vec<&'a PublicationInfo>> {
+    if selectors.is_empty() {
+        return Ok(publication.catalog.values().collect());
+    }
+    let selected: BTreeSet<String> = selector_catalog
+        .into_map()
+        .resolve_jobs(selectors)?
+        .into_iter()
+        .collect();
+    Ok(publication
+        .catalog
+        .iter()
+        .filter(|(address, info)| {
+            selected.contains(*address)
+                || info
+                    .package_subjects
+                    .iter()
+                    .any(|subject| selected.contains(subject))
+        })
+        .map(|(_, info)| info)
+        .collect())
+}
+
+pub fn run_meta_publish(
+    selectors: &[String],
+    with_dependencies: bool,
+    effects: Effects,
+) -> Result<CommandStatus> {
     let repo = crate::support::git::repo_root()?;
-    fan_out(vec![
-        (
+    let project: PublishProject = project_value(
+        "",
+        Some(
+            "p: { publication = { inherit (p.internals.repository.publication) catalog destinations; }; selectorCatalog = p.ci.catalog; }",
+        ),
+    )?;
+    let expected_schema = crate::support::schema::project_version();
+    if project.selector_catalog.schema_version != expected_schema {
+        return request_error(format!(
+            "publication catalog uses Wasinix project schema {}; this wasinix supports schema {expected_schema}",
+            project.selector_catalog.schema_version
+        ));
+    }
+    let selected =
+        selected_publications(&project.publication, selectors, project.selector_catalog)?;
+    if selected.is_empty() {
+        return request_error("the publication selectors matched no publishable artifacts");
+    }
+    let mut webcs = BTreeSet::new();
+    let mut crates = BTreeSet::new();
+    let mut wheels = false;
+    for info in selected {
+        match info.kind {
+            PublicationKind::Webc => {
+                webcs.insert(info.identity.name.clone());
+            }
+            PublicationKind::Crate => {
+                crates.insert(info.identity.name.clone());
+            }
+            PublicationKind::Wheel => wheels = true,
+        }
+    }
+    let destinations = project.publication.destinations;
+    let mut legs: Vec<(&str, Leg<'_>)> = Vec::new();
+    if !webcs.is_empty() {
+        let Some(destination) = destinations.wasmer else {
+            return request_error(
+                "selected WebC artifacts have no repository.publication.wasmer destination",
+            );
+        };
+        let Some(provenance) = destinations.provenance.clone() else {
+            return request_error(
+                "selected WebC artifacts have no repository.publication.provenance",
+            );
+        };
+        legs.push((
             "wasmer",
             Box::new(move || {
                 wasmer::publish(wasmer::Options {
-                    registry: "wasmer.io".into(),
-                    packages: Vec::new(),
+                    registry: destination.registry,
+                    packages: webcs.into_iter().collect(),
                     effects,
                     skip_sha_validation: false,
                     rev: None,
                     preview: None,
-                    with_dependencies: false,
+                    with_dependencies,
                     publish_as: None,
                     namespace: None,
+                    provenance: Some(provenance),
                 })
             }),
-        ),
-        (
+        ));
+    }
+    if wheels {
+        let Some(destination) = destinations.python else {
+            return request_error(
+                "selected wheels have no repository.publication.python destination",
+            );
+        };
+        legs.push((
             "python",
             Box::new(move || {
                 python::publish_index(python::Index {
                     registry_path: None,
-                    registry: python::registry(None),
+                    registry: destination.registry,
                     rev: String::new(),
                     effects,
                     repo,
+                    app_directory: destination.app_directory,
                     refresh_listings: false,
                     withdraw_stale: false,
                 })
             }),
-        ),
-        (
+        ));
+    }
+    if !crates.is_empty() {
+        let Some(destination) = destinations.cargo else {
+            return request_error(
+                "selected crates have no repository.publication.cargo destination",
+            );
+        };
+        legs.push((
             "cargo",
             Box::new(move || {
                 run_cargo(CargoCommand::Publish {
-                    crates: Vec::new(),
-                    registry: cargo::DEPLOYED_REGISTRY.into(),
+                    crates: crates.into_iter().collect(),
+                    registry: destination.registry,
                     mint: None,
                     dry_run: effects.is_dry_run(),
                     json: Default::default(),
                 })
             }),
-        ),
-    ])
+        ));
+    }
+    fan_out(legs)
+}
+
+#[cfg(test)]
+mod publication_tests {
+    use super::{Publication, selected_publications};
+
+    #[test]
+    fn source_selection_reaches_publications_through_package_subjects() {
+        let publication: Publication = serde_json::from_value(serde_json::json!({
+            "catalog": {
+                "artifacts.webc.consumer": {
+                    "kind": "webc",
+                    "identity": { "name": "consumer" },
+                    "packageSubjects": ["packages.wasix.default.consumer"]
+                }
+            },
+            "destinations": {}
+        }))
+        .unwrap();
+        let selector_catalog = serde_json::from_value(serde_json::json!({
+            "schemaVersion": crate::support::schema::project_version(),
+            "jobs": {
+                "packages.native.tool": {
+                    "kind": "package",
+                    "name": "tool",
+                    "packageSubjects": ["packages.native.tool"]
+                },
+                "packages.wasix.default.consumer": {
+                    "kind": "package",
+                    "name": "consumer",
+                    "packageSubjects": ["packages.wasix.default.consumer"]
+                }
+            },
+            "selectors": {
+                "sets": { "all": ["packages.native.tool", "packages.wasix.default.consumer"] },
+                "sources": {
+                    "consumer": ["packages.native.tool", "packages.wasix.default.consumer"]
+                }
+            }
+        }))
+        .unwrap();
+        let selected =
+            selected_publications(&publication, &["source=consumer".into()], selector_catalog)
+                .unwrap();
+
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].identity.name, "consumer");
+    }
 }
 
 /// All three registries at once: the cargo server (slowest up, fails

@@ -4920,8 +4920,8 @@ mod update {
         );
         assert_eq!(command_drv_paths, ["/nix/store/bbb-anybuild-update.drv"]);
         assert!(
-            include_str!("../../../../flake.nix")
-                .contains("commandDrvPaths = commandDrvsOf (lib.toList h);")
+            include_str!("../../../../pkgs/project/repository.nix")
+                .contains("commandDrvPaths = commandDrvsOf (lib.toList declaration);")
         );
     }
 
@@ -5295,8 +5295,8 @@ mod webc_identity {
     use std::collections::{BTreeMap, BTreeSet};
 
     use crate::registries::wasmer::{
-        Package, ResolvedGraph, Staged, include_unpublished_dependencies, order_packages,
-        parse_publish_as, stage,
+        Package, Provenance, ResolvedGraph, Staged, include_unpublished_dependencies,
+        order_packages, parse_publish_as, resolved_graph_from_value, stage,
     };
     use crate::support::fs::Scratch;
 
@@ -5309,6 +5309,45 @@ mod webc_identity {
             resolved_dependencies: BTreeMap::new(),
             source: None,
         }
+    }
+
+    fn provenance() -> Provenance {
+        Provenance {
+            flake: "github:example/project".into(),
+            repository: "example/project".into(),
+        }
+    }
+
+    #[test]
+    fn webc_graph_aliases_must_name_the_same_derivation() {
+        let package = serde_json::json!({
+            "name": "wasmer/icu-data78",
+            "version": "78.3.0",
+            "drvPath": "/nix/store/icu-data",
+            "dependencies": [],
+        });
+        let graph = resolved_graph_from_value(&serde_json::json!({
+            "icu-data": package,
+            "icu-data78": package,
+        }))
+        .unwrap();
+        assert_eq!(
+            graph.keys_by_attr["icu-data"],
+            graph.keys_by_attr["icu-data78"]
+        );
+
+        let error = resolved_graph_from_value(&serde_json::json!({
+            "one": package,
+            "two": {
+                "name": "wasmer/icu-data78",
+                "version": "78.3.0",
+                "drvPath": "/nix/store/different",
+                "dependencies": [],
+            },
+        }))
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("distinct packages with identity"), "{error}");
     }
 
     #[test]
@@ -5367,7 +5406,14 @@ mod webc_identity {
             batch: &empty,
         };
         let into = scratch.path().join("staged");
-        let staged = stage(&pkg, "abc", &into, &as_("kilyanni/python", "3.13.99")).unwrap();
+        let staged = stage(
+            &pkg,
+            "abc",
+            &into,
+            &as_("kilyanni/python", "3.13.99"),
+            &provenance(),
+        )
+        .unwrap();
         let text = crate::support::fs::read_to_string(&staged.join("wasmer.toml")).unwrap();
         assert!(text.contains("name = \"kilyanni/python\""), "{text}");
         assert!(text.contains("version = \"3.13.99\""), "{text}");
@@ -5379,6 +5425,7 @@ mod webc_identity {
             "abc",
             &scratch.path().join("unspaced"),
             &as_("kilyanni/python", "3.13.99"),
+            &provenance(),
         )
         .unwrap_err()
         .to_string();
@@ -5435,6 +5482,7 @@ mod webc_identity {
                 preview_tag: Some("pr1.gabc"),
                 batch: &batch,
             },
+            &provenance(),
         )
         .unwrap();
         let text = crate::support::fs::read_to_string(&staged.join("wasmer.toml")).unwrap();

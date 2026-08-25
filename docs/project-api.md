@@ -26,6 +26,13 @@ wasinix.lib.mkProject {
     source = "my-project";
     root = self;
     revisionsFile = ./release-revisions.json;
+    publication = {
+      wasmer.registry = "wasmer.io";
+      provenance = {
+        flake = "github:owner/my-project";
+        repository = "owner/my-project";
+      };
+    };
   };
 }
 ```
@@ -72,8 +79,9 @@ The constructor takes:
 - `repository`: optional ownership information for update and publication
   collection. Its `source` selects catalogued packages, `root` bounds update
   declarations to the repository, and `revisionsFile` supplies release state.
-  The resulting revisions, publication inventory, update scripts, notes, and
-  hooks live under `internals.repository`.
+  `publication` declares registry destinations and provenance owned by that
+  repository. The resulting revisions, source-filtered publication inventory,
+  update scripts, notes, and hooks live under `internals.repository`.
 - `ci.sources`: registered sources whose packages, artifacts, and tests become
   CI jobs. It defaults to the caller-supplied extension IDs, excluding the
   implicit core extension.

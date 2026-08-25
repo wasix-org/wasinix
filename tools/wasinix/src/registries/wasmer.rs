@@ -25,9 +25,14 @@ use crate::support::nix::{Flake, active_project_installable};
 /// The rebuild command doubles as the machine-readable rev record: the
 /// appended block is a pure function of (package dir, rev), so a later run
 /// reproduces the published bytes by restaging with the recorded rev.
-static REV: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?m)^    nix build 'github:wasix-org/wasinix/([^#']+)#").unwrap()
-});
+static REV: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?m)^    nix build '[^']+/([^/#']+)#").unwrap());
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct Provenance {
+    pub flake: String,
+    pub repository: String,
+}
 
 #[derive(Debug, Clone)]
 pub struct Package {
@@ -155,6 +160,7 @@ fn build_pkg_roots(selected: &[String]) -> Result<Vec<PathBuf>> {
 
 type PackageKey = (String, String);
 
+#[derive(Debug)]
 pub(crate) struct ResolvedGraph {
     pub(crate) dependencies: BTreeMap<PackageKey, BTreeMap<String, String>>,
     pub(crate) keys_by_attr: BTreeMap<String, PackageKey>,
@@ -165,12 +171,17 @@ fn resolved_graph() -> Result<ResolvedGraph> {
     let apply = r#"ps: builtins.mapAttrs (_: p: {
           name = "${p.id.owner}/${p.id.name}";
           version = p.id.version;
+          drvPath = p.drvPath;
           dependencies = map (d: {
             name = "${d.id.owner}/${d.id.name}";
             version = d.id.version;
           }) p.depWebcs;
         }) ps"#;
     let values = crate::support::nix::eval(&Flake::default(), "artifacts.pkg", Some(apply))?;
+    resolved_graph_from_value(&values)
+}
+
+pub(crate) fn resolved_graph_from_value(values: &Value) -> Result<ResolvedGraph> {
     let Some(values) = values.as_object() else {
         return request_error("WebC package dependency map is not an object");
     };
@@ -179,6 +190,7 @@ fn resolved_graph() -> Result<ResolvedGraph> {
         keys_by_attr: BTreeMap::new(),
         attrs_by_key: BTreeMap::new(),
     };
+    let mut derivations = BTreeMap::new();
     for (attr, value) in values {
         let identity = |value: &Value| -> Result<PackageKey> {
             let Some(name) = value["name"].as_str() else {
@@ -192,6 +204,9 @@ fn resolved_graph() -> Result<ResolvedGraph> {
             Ok((name.to_string(), version.to_string()))
         };
         let key = identity(value)?;
+        let Some(drv_path) = value["drvPath"].as_str() else {
+            return request_error(format!("artifacts.pkg.{attr}: derivation path is missing"));
+        };
         let Some(dependencies) = value["dependencies"].as_array() else {
             return request_error(format!(
                 "artifacts.pkg.{attr}: dependencies is not an array"
@@ -209,19 +224,17 @@ fn resolved_graph() -> Result<ResolvedGraph> {
             }
         }
         graph.keys_by_attr.insert(attr.clone(), key.clone());
-        if graph
-            .attrs_by_key
-            .insert(key.clone(), attr.clone())
-            .is_some()
-            || graph
-                .dependencies
-                .insert(key.clone(), package_dependencies)
-                .is_some()
-        {
-            return request_error(format!(
-                "WebC package catalog has duplicate identity {}@{}",
-                key.0, key.1
-            ));
+        if let Some(existing) = graph.dependencies.get(&key) {
+            if existing != &package_dependencies || derivations[&key] != drv_path {
+                return request_error(format!(
+                    "WebC package catalog has distinct packages with identity {}@{}",
+                    key.0, key.1
+                ));
+            }
+        } else {
+            graph.attrs_by_key.insert(key.clone(), attr.clone());
+            graph.dependencies.insert(key.clone(), package_dependencies);
+            derivations.insert(key, drv_path.to_string());
         }
     }
     Ok(graph)
@@ -611,7 +624,7 @@ fn copy_tree(from: &Path, to: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn provenance(pkg: &Package, rev: &str) -> String {
+pub fn provenance(pkg: &Package, rev: &str, config: &Provenance) -> String {
     let name = pkg
         .full_name
         .split_once('/')
@@ -621,14 +634,20 @@ pub fn provenance(pkg: &Package, rev: &str) -> String {
         Some(source) => {
             let (file, line) = source.rsplit_once(':').unwrap_or((source.as_str(), "1"));
             format!(
-                "Built from [{file}](https://github.com/wasix-org/wasinix/blob/{rev}/{file}#L{line})"
+                "Built from [{file}](https://github.com/{}/blob/{rev}/{file}#L{line})",
+                config.repository
             )
         }
-        None => "Built by [wasinix](https://github.com/wasix-org/wasinix)".to_string(),
+        None => format!(
+            "Built by [wasinix](https://github.com/{})",
+            config.repository
+        ),
     };
     let short: String = rev.chars().take(12).collect();
     format!(
-        "\n{origin}\nat `{short}`; rebuild with\n\n    nix build 'github:wasix-org/wasinix/{rev}#legacyPackages.x86_64-linux.artifacts.webc.\"{name}\"'\n"
+        "\n{origin}\nat `{short}`; rebuild with\n\n    nix build '{}/{rev}#{}.artifacts.webc.\"{name}\"'\n",
+        config.flake,
+        crate::support::nix::project().attr
     )
 }
 
@@ -651,7 +670,13 @@ pub fn renamespace(full_name: &str, namespace: &str) -> String {
     format!("{namespace}/{name}")
 }
 
-pub fn stage(pkg: &Package, rev: &str, into: &Path, as_: &Staged) -> Result<PathBuf> {
+pub fn stage(
+    pkg: &Package,
+    rev: &str,
+    into: &Path,
+    as_: &Staged,
+    provenance_config: &Provenance,
+) -> Result<PathBuf> {
     let dst = into.join("pkg");
     copy_tree(&pkg.path, &dst)?;
     let renamed = as_.name != pkg.full_name || as_.version != pkg.version;
@@ -709,12 +734,18 @@ pub fn stage(pkg: &Package, rev: &str, into: &Path, as_: &Staged) -> Result<Path
     }
     let readme = dst.join("README.md");
     let mut text = std::fs::read_to_string(&readme).unwrap_or_default();
-    text.push_str(&provenance(pkg, rev));
+    text.push_str(&provenance(pkg, rev, provenance_config));
     crate::support::fs::write(&readme, text.as_bytes())?;
     Ok(dst)
 }
 
-fn staged_sha256(pkg: &Package, rev: &str, pub_name: &str, pub_version: &str) -> Result<String> {
+fn staged_sha256(
+    pkg: &Package,
+    rev: &str,
+    pub_name: &str,
+    pub_version: &str,
+    provenance: &Provenance,
+) -> Result<String> {
     let scratch = Scratch::new("restage")?;
     let batch = BTreeSet::new();
     let staged = stage(
@@ -728,6 +759,7 @@ fn staged_sha256(pkg: &Package, rev: &str, pub_name: &str, pub_version: &str) ->
             preview_tag: None,
             batch: &batch,
         },
+        provenance,
     )?;
     build_webc_sha256(&staged, pkg)
 }
@@ -834,13 +866,25 @@ pub struct Options {
     /// Publish the whole batch under this namespace instead of the one the
     /// manifests carry.
     pub namespace: Option<String>,
+    pub provenance: Option<Provenance>,
 }
 
 /// Namespaces a preview may not publish into: a `-pr123.gabc` prerelease on a
 /// released package is permanent, since registry versions are immutable.
 const RELEASED_NAMESPACES: [&str; 1] = ["wasmer"];
 
-pub fn publish(options: Options) -> Result<crate::support::process::CommandStatus> {
+pub fn publish(mut options: Options) -> Result<crate::support::process::CommandStatus> {
+    if options.provenance.is_none() {
+        let value = crate::support::nix::eval(
+            &Flake::default(),
+            "internals.repository.publication.destinations.provenance",
+            None,
+        )?;
+        options.provenance = Some(serde_json::from_value(value).map_err(|source| Error::Json {
+            path: "<repository publication provenance>".into(),
+            source,
+        })?);
+    }
     let rev = match &options.rev {
         Some(rev) if !rev.is_empty() => rev.clone(),
         _ => {
@@ -879,7 +923,7 @@ pub fn publish(options: Options) -> Result<crate::support::process::CommandStatu
     let graphql_url = graphql_endpoint(&options.registry)?;
     let graph = resolved_graph()?;
     let mut selected = selected_packages(&options.packages)?;
-    if options.preview.is_some() && options.with_dependencies && !selected.is_empty() {
+    if options.with_dependencies && !selected.is_empty() {
         selected = include_unpublished_dependencies(&selected, &graph, |name, version| {
             Ok(get_published(&graphql_url, name, version)?.exists)
         })?;
@@ -999,7 +1043,13 @@ fn publish_one(
         // local build is restaged with the recorded rev to reproduce it.
         // Artifacts published without provenance compare bare.
         let local = match recorded_rev(existing.readme.as_deref()) {
-            Some(published_rev) => staged_sha256(pkg, &published_rev, pub_name, pub_version)?,
+            Some(published_rev) => staged_sha256(
+                pkg,
+                &published_rev,
+                pub_name,
+                pub_version,
+                options.provenance.as_ref().unwrap(),
+            )?,
             None => build_webc_sha256(&pkg.path, pkg)?,
         };
         if &local != registry_sha {
@@ -1056,6 +1106,7 @@ fn publish_one(
             preview_tag: options.preview.as_deref(),
             batch,
         },
+        options.provenance.as_ref().unwrap(),
     )?;
     let staged_sha = build_webc_sha256(&staged, pkg)?;
     run(Capability::Wasmer
