@@ -7,6 +7,8 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::ci::facts::{DependencyPath, Diagnostic, Failure};
+use crate::support::atoms::JobAddr;
 use crate::support::error::{Result, request_error, require};
 use crate::update::select as updateselect;
 use crate::update::targets::{self as updatetargets, Backend, Target};
@@ -29,6 +31,44 @@ pub enum Outcome {
     Skip,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CandidateEvidence {
+    pub headline: String,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub failures: BTreeMap<String, Vec<Failure>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<Diagnostic>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub dependency_traces: BTreeMap<String, CandidateDependencyTrace>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CandidateDependencyTrace {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paths: Vec<DependencyPath>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub untraced_jobs: Vec<JobAddr>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CandidateResult {
+    pub outcome: Outcome,
+    pub evidence: Option<CandidateEvidence>,
+}
+
+impl From<Outcome> for CandidateResult {
+    fn from(outcome: Outcome) -> Self {
+        CandidateResult {
+            outcome,
+            evidence: None,
+        }
+    }
+}
+
 impl Outcome {
     fn git_word(self) -> &'static str {
         match self {
@@ -46,6 +86,8 @@ pub struct TestResult {
     pub outcome: Outcome,
     pub seconds: f64,
     pub run_dir: PathBuf,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<CandidateEvidence>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +110,21 @@ pub struct Report {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revisions_left: Option<u64>,
     pub tests: Vec<TestResult>,
+}
+
+impl Report {
+    pub fn boundary(&self) -> Option<&TestResult> {
+        let rev = self.first_bad.as_deref()?;
+        self.tests.iter().find(|test| test.rev == rev)
+    }
+
+    pub fn predicate_command(&self) -> String {
+        self.command
+            .iter()
+            .map(|word| crate::support::shell::quote(word))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
 }
 
 /// What one invocation may spend on candidates. A bisect is resumable, so
@@ -241,7 +298,7 @@ pub struct Options {
 /// materialization and execution, which keeps this module usable in tests.
 pub fn run<F>(options: Options, mut test: F) -> Result<Report>
 where
-    F: FnMut(&str, &Path) -> Result<Outcome>,
+    F: FnMut(&str, &Path) -> Result<CandidateResult>,
 {
     crate::support::fs::create_dir_all(&options.run_dir)?;
     let source_dir = options.run_dir.join("source.git");
@@ -285,7 +342,7 @@ where
 
     let report_path = options.run_dir.join(REPORT_FILE);
     let fresh = Report {
-        schema: 1,
+        schema: 2,
         target: options.dependency.target.clone(),
         repository: options.dependency.repository.clone(),
         good: good.clone(),
@@ -333,17 +390,18 @@ where
             crate::support::format::short_rev(rev),
         );
         let started = Instant::now();
-        let outcome = test(rev, &candidate_dir)?;
+        let tested = test(rev, &candidate_dir)?;
         let result = TestResult {
             rev: rev.to_string(),
-            outcome,
+            outcome: tested.outcome,
             seconds: duration_seconds(started.elapsed()),
             run_dir: candidate_dir,
+            evidence: tested.evidence,
         };
         report.tests.push(result);
-        cached.insert(rev.to_string(), outcome);
+        cached.insert(rev.to_string(), tested.outcome);
         write_report(&report_path, report)?;
-        Ok(outcome)
+        Ok(tested.outcome)
     };
 
     require(
@@ -431,7 +489,10 @@ fn duration_seconds(duration: Duration) -> f64 {
 #[cfg(test)]
 mod tests {
 
-    use super::{Budget, Dependency, Duration, Options, Outcome, completed};
+    use super::{
+        Budget, CandidateEvidence, CandidateResult, Dependency, Duration, Options, Outcome,
+        completed,
+    };
 
     #[test]
     fn reads_first_bad_commit() {
@@ -496,15 +557,30 @@ mod tests {
                 budget: None,
             },
             |rev, _| {
-                Ok(if revisions[..3].iter().any(|candidate| candidate == rev) {
+                let outcome = if revisions[..3].iter().any(|candidate| candidate == rev) {
                     Outcome::Good
                 } else {
                     Outcome::Bad
+                };
+                Ok(CandidateResult {
+                    outcome,
+                    evidence: Some(CandidateEvidence {
+                        headline: format!("predicate at {rev}"),
+                        ..CandidateEvidence::default()
+                    }),
                 })
             },
         )
         .unwrap();
         assert_eq!(report.first_bad.as_deref(), Some(revisions[3].as_str()));
+        let expected = format!("predicate at {}", revisions[3]);
+        assert_eq!(
+            report
+                .boundary()
+                .and_then(|test| test.evidence.as_ref())
+                .map(|evidence| evidence.headline.as_str()),
+            Some(expected.as_str())
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -610,7 +686,8 @@ mod tests {
                     Outcome::Bad
                 } else {
                     Outcome::Good
-                })
+                }
+                .into())
             },
         )
         .unwrap();
@@ -674,7 +751,7 @@ mod tests {
             })),
             |rev, _| {
                 tested += 1;
-                Ok(verdict(rev))
+                Ok(verdict(rev).into())
             },
         )
         .unwrap();
@@ -692,7 +769,7 @@ mod tests {
         let before = tested;
         let finished = super::run(options(None), |rev, _| {
             tested += 1;
-            Ok(verdict(rev))
+            Ok(verdict(rev).into())
         })
         .unwrap();
         assert_eq!(finished.first_bad.as_deref(), Some(revisions[9].as_str()));

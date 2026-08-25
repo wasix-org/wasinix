@@ -639,6 +639,88 @@ pub(crate) fn failure_summary(report: &Report) -> Option<String> {
     (!parts.is_empty()).then(|| format!("Jobs: {}", crate::support::ui::counts(&parts)))
 }
 
+pub(crate) fn bisect_evidence_lines(report: &crate::nix::bisect::Report) -> Vec<String> {
+    let Some(evidence) = report.boundary().and_then(|test| test.evidence.as_ref()) else {
+        return Vec::new();
+    };
+    let mut lines = vec![
+        format!("predicate: {}", report.predicate_command()),
+        format!("boundary candidate: {}", evidence.headline),
+    ];
+    for path in evidence
+        .dependency_traces
+        .values()
+        .flat_map(|trace| &trace.paths)
+        .take(FAILURE_DETAIL_LINES)
+    {
+        let mut chain = vec![path.job.to_string()];
+        chain.extend(path.via.iter().cloned());
+        chain.push(format!("{} failed", path.root));
+        lines.push(format!("  {}", chain.join(" → ")));
+    }
+    for (task, trace) in &evidence.dependency_traces {
+        for job in &trace.untraced_jobs {
+            let error = trace
+                .error
+                .as_deref()
+                .map(|error| format!(": {error}"))
+                .unwrap_or_default();
+            lines.push(format!("  could not trace {job} in {task}{error}"));
+        }
+    }
+    let failures: Vec<_> = evidence
+        .failures
+        .values()
+        .flatten()
+        .filter(|failure| failure.cause != FailureCause::Transitive)
+        .take(FAILURE_DETAIL_LINES)
+        .collect();
+    for failure in &failures {
+        lines.push(format!(
+            "  failure: {} · {}",
+            failure.job,
+            failure.summary()
+        ));
+    }
+    if failures.is_empty() {
+        for diagnostic in evidence.diagnostics.iter().take(1) {
+            lines.extend(diagnostic_lines(diagnostic));
+        }
+    }
+    lines
+}
+
+pub(crate) fn bisect_boundary_result(report: &crate::nix::bisect::Report) -> Option<String> {
+    let rev = report.first_bad.as_deref()?;
+    let what = if report.reverse { "passing" } else { "bad" };
+    let evidence = report.boundary().and_then(|test| test.evidence.as_ref());
+    let detail = evidence
+        .and_then(|evidence| {
+            evidence
+                .failures
+                .values()
+                .flatten()
+                .find(|failure| failure.cause != FailureCause::Transitive)
+                .map(|failure| format!("{}: {}", failure.job, failure.summary()))
+                .or_else(|| {
+                    evidence.diagnostics.first().map(|diagnostic| {
+                        format!(
+                            "{}: {}",
+                            diagnostic.title,
+                            diagnostic.message.lines().next().unwrap_or_default()
+                        )
+                    })
+                })
+                .or_else(|| (!evidence.headline.is_empty()).then(|| evidence.headline.clone()))
+        })
+        .map(|detail| format!(" · {}", detail.chars().take(180).collect::<String>()))
+        .unwrap_or_default();
+    Some(format!(
+        "first {what} {} commit: {rev}{detail}",
+        report.target
+    ))
+}
+
 fn failed_test_summary(tests: &[&TestResult]) -> Option<String> {
     let failed = tests
         .iter()

@@ -87,6 +87,20 @@ pub struct Failure {
     pub log: Option<LogRef>,
 }
 
+impl Failure {
+    pub fn summary(&self) -> String {
+        match &self.message {
+            Some(message) => message.lines().next().unwrap_or_default().to_string(),
+            None if !self.jobs.is_empty() => format!(
+                "dependency failure taking down {} {}",
+                self.jobs.len(),
+                if self.jobs.len() == 1 { "job" } else { "jobs" }
+            ),
+            None => "no build log was captured".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DependencyPath {

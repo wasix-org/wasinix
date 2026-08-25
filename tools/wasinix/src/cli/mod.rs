@@ -1345,8 +1345,11 @@ fn ci_bisect(
         command,
         ReplyFreshness::Final(crate::github::markdown::bisect_reply(&report, None)),
     )?;
+    for line in render::bisect_evidence_lines(&report) {
+        ui::note(line);
+    }
     match &report.first_bad {
-        Some(rev) => ui::result(format!("first bad {} commit: {rev}", report.target)),
+        Some(_) => ui::result(render::bisect_boundary_result(&report).unwrap()),
         None => ui::result(format!(
             "{}: budget spent, {} candidates tested",
             report.target,

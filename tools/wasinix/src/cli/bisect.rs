@@ -4,8 +4,11 @@
 use std::path::{Path, PathBuf};
 
 use crate::ci::report::Conclusion;
+use crate::ci::report::{Fragment, FragmentData};
 use crate::ci::types::{Case, ParsedRequest, Request};
-use crate::nix::bisect::{self, Outcome};
+use crate::nix::bisect::{
+    self, CandidateDependencyTrace, CandidateEvidence, CandidateResult, Outcome,
+};
 use crate::support::atoms::BlockedPolicy;
 use crate::support::error::{Result, request_error};
 use crate::support::process::CommandStatus;
@@ -106,6 +109,39 @@ pub(crate) fn candidate_outcome(report: &crate::ci::report::Report) -> Result<Ou
     })
 }
 
+fn candidate_result(
+    report: &crate::ci::report::Report,
+    fragments: &std::collections::BTreeMap<String, Fragment>,
+) -> Result<CandidateResult> {
+    let dependency_traces = fragments
+        .iter()
+        .filter_map(|(task, fragment)| match &fragment.data {
+            Some(FragmentData::Build(facts))
+                if !facts.dependency_paths.is_empty() || !facts.untraced_jobs.is_empty() =>
+            {
+                Some((
+                    task.clone(),
+                    CandidateDependencyTrace {
+                        paths: facts.dependency_paths.clone(),
+                        untraced_jobs: facts.untraced_jobs.clone(),
+                        error: facts.dependency_trace_error.clone(),
+                    },
+                ))
+            }
+            _ => None,
+        })
+        .collect();
+    Ok(CandidateResult {
+        outcome: candidate_outcome(report)?,
+        evidence: Some(CandidateEvidence {
+            headline: super::render::report_title(report),
+            failures: report.failures.clone(),
+            diagnostics: report.diagnostics.clone(),
+            dependency_traces,
+        }),
+    })
+}
+
 /// Walk the candidates, building the predicate against each. The report is
 /// written after every candidate, so an interrupted or budgeted run resumes
 /// from what it already knows.
@@ -149,7 +185,10 @@ pub fn drive(repo: &Path, request: Bisect) -> Result<bisect::Report> {
                 })?;
                 let report: crate::ci::report::Report =
                     crate::support::schema::read(&crate::ci::prepare::report_path(candidate_dir))?;
-                candidate_outcome(&report)
+                let fragments = crate::ci::report::fragments_under(
+                    &crate::ci::prepare::fragments_dir(candidate_dir),
+                )?;
+                candidate_result(&report, &fragments)
             };
             match &request.event_parent {
                 Some(parent) => mirrored_candidate(candidate_dir, parent, &target, rev, run),
@@ -164,8 +203,8 @@ fn mirrored_candidate(
     parent: &Path,
     target: &str,
     rev: &str,
-    run: impl FnOnce() -> Result<Outcome>,
-) -> Result<Outcome> {
+    run: impl FnOnce() -> Result<CandidateResult>,
+) -> Result<CandidateResult> {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -193,15 +232,24 @@ fn mirrored_candidate(
     let outcome =
         crate::support::error::finalize(outcome, mirrored, "could not mirror candidate progress");
     let (status, headline) = match &outcome {
-        Ok(Outcome::Good) => (
+        Ok(CandidateResult {
+            outcome: Outcome::Good,
+            ..
+        }) => (
             crate::support::atoms::TaskStatus::Success,
             "predicate passed",
         ),
-        Ok(Outcome::Bad) => (
+        Ok(CandidateResult {
+            outcome: Outcome::Bad,
+            ..
+        }) => (
             crate::support::atoms::TaskStatus::Success,
             "predicate failed",
         ),
-        Ok(Outcome::Skip) => (
+        Ok(CandidateResult {
+            outcome: Outcome::Skip,
+            ..
+        }) => (
             crate::support::atoms::TaskStatus::Skipped,
             "predicate skipped",
         ),
@@ -261,12 +309,17 @@ pub fn run_bisect(repo: &Path, args: BisectArgs) -> Result<CommandStatus> {
         },
     )?;
 
-    let what = if report.reverse { "passing" } else { "bad" };
+    for line in super::render::bisect_evidence_lines(&report) {
+        ui::note(line);
+    }
     match &report.first_bad {
-        Some(rev) => {
-            ui::result(format!("first {what} {} commit: {rev}", report.target));
+        Some(_) => {
+            ui::result(super::render::bisect_boundary_result(&report).unwrap());
         }
-        None => ui::result(format!("{}: no first-{what} commit found", report.target)),
+        None => {
+            let what = if report.reverse { "passing" } else { "bad" };
+            ui::result(format!("{}: no first-{what} commit found", report.target));
+        }
     }
     ui::fact("report", run_dir.join(bisect::REPORT_FILE).display());
     Ok(CommandStatus::SUCCESS)

@@ -3207,12 +3207,14 @@ mod markdown {
                     outcome: Outcome::Good,
                     seconds: 163.0,
                     run_dir: "/x".into(),
+                    evidence: None,
                 },
                 TestResult {
                     rev: "8a505d4605b1".repeat(3) + "abcd",
                     outcome: Outcome::Bad,
                     seconds: 129.0,
                     run_dir: "/x".into(),
+                    evidence: None,
                 },
             ],
         };
@@ -3238,6 +3240,85 @@ mod markdown {
         assert!(body.contains("`de6585f76fa0`"), "{body}");
         assert!(body.contains("| good | 2m 43s |"), "{body}");
         assert!(body.contains("`8a505d4605b1`"), "{body}");
+    }
+
+    #[test]
+    fn a_completed_bisect_explains_the_boundary_candidate() {
+        use crate::ci::facts::{DependencyPath, Failure, FailureCause};
+        use crate::nix::bisect::{
+            CandidateDependencyTrace, CandidateEvidence, Outcome, Report, TestResult,
+        };
+        use crate::support::atoms::JobAddr;
+
+        let rev = "44de7eb12de3e82375cab47ee8208d7473b30d7c";
+        let task = "case.jobs".to_string();
+        let report = Report {
+            schema: 2,
+            target: "wasixcc".into(),
+            repository: "https://github.com/wasix-org/wasixcc".into(),
+            good: "d".repeat(40),
+            bad: "8".repeat(40),
+            first_parent: false,
+            reverse: false,
+            command: vec!["build".into(), "checks.gzip-roundtrip".into()],
+            first_bad: Some(rev.into()),
+            revisions_left: Some(0),
+            tests: vec![TestResult {
+                rev: rev.into(),
+                outcome: Outcome::Bad,
+                seconds: 129.0,
+                run_dir: "/x".into(),
+                evidence: Some(CandidateEvidence {
+                    headline: "Build blocked after 2m 9s".into(),
+                    failures: std::collections::BTreeMap::from([(
+                        task.clone(),
+                        vec![Failure {
+                            job: JobAddr("wasixcc-unwrapped-0.4.0".into()),
+                            cause: FailureCause::Dependency,
+                            class: None,
+                            message: Some(
+                                "builder failed with exit code 1: undefined symbol".into(),
+                            ),
+                            jobs: vec![JobAddr("checks.gzip-roundtrip".into())],
+                            position: None,
+                            log: None,
+                        }],
+                    )]),
+                    diagnostics: Vec::new(),
+                    dependency_traces: std::collections::BTreeMap::from([(
+                        task,
+                        CandidateDependencyTrace {
+                            paths: vec![DependencyPath {
+                                job: JobAddr("checks.gzip-roundtrip".into()),
+                                root: JobAddr("wasixcc-unwrapped-0.4.0".into()),
+                                via: vec!["wasix-compare-gzip-roundtrip".into()],
+                            }],
+                            ..CandidateDependencyTrace::default()
+                        },
+                    )]),
+                }),
+            }],
+        };
+        let body = crate::github::markdown::command_reply(
+            crate::github::markdown::bisect_reply(&report, None),
+            Some("bisect wasixcc --good old --bad new -- build checks.gzip-roundtrip"),
+            "https://github.com/wasix-org/wasinix/pull/7#issuecomment-9",
+            None,
+            None,
+            None,
+        )
+        .into_string();
+        assert!(
+            body.contains("**Predicate:** `build checks.gzip-roundtrip`"),
+            "{body}"
+        );
+        assert!(body.contains("wasix-compare-gzip-roundtrip"), "{body}");
+        assert!(body.contains("wasixcc-unwrapped-0.4.0"), "{body}");
+        assert!(body.contains("undefined symbol"), "{body}");
+        let terminal = crate::cli::render::bisect_boundary_result(&report).unwrap();
+        assert!(terminal.contains("first bad wasixcc commit"), "{terminal}");
+        assert!(terminal.contains("wasixcc-unwrapped-0.4.0"), "{terminal}");
+        assert!(terminal.contains("undefined symbol"), "{terminal}");
     }
 
     #[test]
@@ -4264,7 +4345,8 @@ mod bisect {
                     Outcome::Good
                 } else {
                     Outcome::Bad
-                })
+                }
+                .into())
             },
         )
         .unwrap();
