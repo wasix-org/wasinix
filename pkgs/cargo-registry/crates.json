@@ -120,7 +120,8 @@
     "0.72.0": "sha256-DPMfcn3EhVDpy/qETEvuK7s6Zw6tcg2p1Qb5yPzyVMw=",
     "0.73.0": "sha256-7qvJSaVZ0QR9qQLCrMrzSqF1SMZWGVJW1bgZJrz9AoU=",
     "0.74.0": "sha256-FP5uVNQGlE6pZNwysuedAnRBlndCGH3R8lFbjW1BhXQ=",
-    "0.74.1": "sha256-1JLsXjKRAhWWzDrTyAGzJfEPf11h+0ck4d72T2DfO2A="
+    "0.74.1": "sha256-1JLsXjKRAhWWzDrTyAGzJfEPf11h+0ck4d72T2DfO2A=",
+    "0.74.2": "sha256-nMz9368tiUZbWtUxd401gl7ABoplM78bb1DTFqdhP+I="
   },
   "google-cloud-auth": {
     "1.14.0": "sha256-mqIFP9ACvWjfjwv6RtROgPIPjnNqMOM1+eY6qRkGTmk=",
@@ -233,7 +234,8 @@
   },
   "open": {
     "5.4.0": "sha256-qQYTdiMvkVgJTKPXddjOkEcod0Woy36qfXY5bXTivsg=",
-    "5.4.1": "sha256-y4CpzMzJm9LaSkKn7AWMGBJSKFNS3r4hqZFWqTnRhvI="
+    "5.4.1": "sha256-y4CpzMzJm9LaSkKn7AWMGBJSKFNS3r4hqZFWqTnRhvI=",
+    "5.4.2": "sha256-pnpTYWinlNNU42WgdCelAnZy9Q6hjVFv0vQkbsEn4+A="
   },
   "openssl-src": {
     "300.4.1+3.4.0": "sha256-ny/TzdrVBlBEQFhSxE0KBHWhBldYcUYuKXdh8g1P13c=",
