@@ -475,11 +475,9 @@ pub(crate) fn comment_help() -> Markdown {
             Markdown::constant("</details>\n"),
         ])
     });
-    Markdown::constant("### `/wasinix` commands\n\n")
-        .push(Markdown::join(entries, "\n"))
-        .push(Markdown::constant(
-            "\n\nAny line of a comment works; the command runs against this pull request.\n",
-        ))
+    Markdown::join(entries, "\n").push(Markdown::constant(
+        "\n\nAny line of a comment works; the command runs against this pull request.\n",
+    ))
 }
 
 pub(crate) fn parse_comment(words: &[String]) -> Result<Cli> {

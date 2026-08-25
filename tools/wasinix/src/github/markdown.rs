@@ -68,16 +68,95 @@ fn reply_line(origin: Option<&str>, updated_at: Option<u64>) -> Markdown {
     }
 }
 
+#[derive(Clone, Copy)]
+enum HeadingStatus {
+    Running,
+    Success,
+    Warning,
+    Failure,
+    Info,
+}
+
+impl HeadingStatus {
+    fn glyph(self) -> &'static str {
+        match self {
+            HeadingStatus::Running => "⏳",
+            HeadingStatus::Success => "✅",
+            HeadingStatus::Warning => "⚠️",
+            HeadingStatus::Failure => "❌",
+            HeadingStatus::Info => "ℹ️",
+        }
+    }
+}
+
+fn heading(
+    status: HeadingStatus,
+    subject: Markdown,
+    mut details: Vec<Markdown>,
+    run_url: Option<&str>,
+    sha: Option<&Rev>,
+) -> Markdown {
+    let mut parts = vec![subject];
+    parts.append(&mut details);
+    if let Some(url) = run_url {
+        parts.push(Markdown::link("run", url));
+    }
+    if let Some(sha) = sha {
+        parts.push(Markdown::code(sha.short()));
+    }
+    Markdown::concat([
+        Markdown::constant("### "),
+        Markdown::constant(status.glyph()),
+        Markdown::constant(" "),
+        Markdown::join(parts, " · "),
+        Markdown::constant("\n\n"),
+    ])
+}
+
+pub struct CommandReply {
+    status: HeadingStatus,
+    subject: Markdown,
+    details: Vec<Markdown>,
+    body: Markdown,
+}
+
+fn reply(
+    status: HeadingStatus,
+    subject: &'static str,
+    details: Vec<Markdown>,
+    body: Markdown,
+) -> CommandReply {
+    CommandReply {
+        status,
+        subject: Markdown::constant(subject),
+        details,
+        body,
+    }
+}
+
 /// Add the metadata shared by replies keyed to a command comment.
-pub fn command_reply(body: Markdown, origin: &str, updated_at: Option<u64>) -> Markdown {
-    reply_line(Some(origin), updated_at).push(body)
+pub fn command_reply(
+    reply: CommandReply,
+    origin: &str,
+    updated_at: Option<u64>,
+    run_url: Option<&str>,
+) -> Markdown {
+    reply_line(Some(origin), updated_at)
+        .push(heading(
+            reply.status,
+            reply.subject,
+            reply.details,
+            run_url,
+            None,
+        ))
+        .push(reply.body)
 }
 
 pub fn plan_reply(
     command: &str,
     request: &ResolvedRequest,
     plan: &crate::ci::plan::Plan,
-) -> crate::support::error::Result<Markdown> {
+) -> crate::support::error::Result<CommandReply> {
     let request = serde_json::to_string_pretty(request).map_err(|source| {
         crate::support::error::Error::Json {
             path: "<resolved request>".into(),
@@ -85,7 +164,6 @@ pub fn plan_reply(
         }
     })?;
     let mut body = Markdown::concat([
-        Markdown::constant("### Planned `/wasinix` run\n\n"),
         Markdown::constant("No tasks were run.\n\n**Command**\n\n"),
         Markdown::fenced(command, "text"),
         Markdown::constant("\n<details><summary>Resolved request</summary>\n\n"),
@@ -102,25 +180,19 @@ pub fn plan_reply(
             Markdown::constant(" |\n"),
         ]);
     }
-    Ok(body)
+    Ok(reply(
+        HeadingStatus::Info,
+        "Wasinix plan",
+        vec![plural(plan.tasks.len(), "task")],
+        body,
+    ))
+}
+
+pub fn help_reply(body: Markdown) -> CommandReply {
+    reply(HeadingStatus::Info, "Wasinix commands", Vec::new(), body)
 }
 
 impl Links {
-    fn heading_suffix(&self) -> Markdown {
-        let mut parts = Vec::new();
-        if let Some(url) = &self.run_url {
-            parts.push(Markdown::link("run", url));
-        }
-        if let Some(sha) = &self.sha {
-            parts.push(Markdown::code(sha.short()));
-        }
-        if parts.is_empty() {
-            Markdown::new()
-        } else {
-            Markdown::constant(" · ").push(Markdown::join(parts, " · "))
-        }
-    }
-
     /// A link to this task failure's published log; nothing without one, since a link
     /// to the whole pipeline would only pretend to be specific.
     fn log_link(&self, task: &str, failure: &Failure) -> Markdown {
@@ -702,10 +774,13 @@ fn green(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Links)
         None => Markdown::constant("green"),
     };
     Markdown::concat([
-        Markdown::constant("### ✅ Wasinix CI · "),
-        jobs,
-        links.heading_suffix(),
-        Markdown::constant("\n\n"),
+        heading(
+            HeadingStatus::Success,
+            Markdown::constant("Wasinix CI"),
+            vec![jobs],
+            links.run_url.as_deref(),
+            links.sha.as_ref(),
+        ),
         diagnostics(report),
         comparison_block(report),
         footer(report, fragments, links),
@@ -772,13 +847,14 @@ fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
     } else {
         what
     };
-    let mut text = Markdown::concat([
-        Markdown::constant("### ❌ Wasinix CI · "),
-        what,
-        links.heading_suffix(),
-        Markdown::constant("\n\n"),
-        diagnostics(report),
-    ]);
+    let mut text = heading(
+        HeadingStatus::Failure,
+        Markdown::constant("Wasinix CI"),
+        vec![what],
+        links.run_url.as_deref(),
+        links.sha.as_ref(),
+    )
+    .push(diagnostics(report));
     if primary.is_empty() {
         // A regression can be a job that never ran, whose failure atom is
         // transitive and so appears in no failure table. Naming it is the
@@ -835,9 +911,9 @@ fn inconclusive(
     links: &Links,
     comparison: bool,
 ) -> Markdown {
-    let (heading, lead) = if comparison {
+    let (state, lead) = if comparison {
         (
-            "### ⚠️ Wasinix CI could not compare · ",
+            "could not compare",
             "> The base did not produce results to compare against. This is not caused by your change.\n\n",
         )
     } else {
@@ -852,16 +928,17 @@ fn inconclusive(
                 "> Nothing selected finished; this result was accepted as good under --blocked=good.\n\n"
             }
         };
-        ("### ⚠️ Wasinix CI blocked · ", lead)
+        ("blocked", lead)
     };
-    let mut text = Markdown::concat([
-        Markdown::constant(heading),
-        Markdown::text(&report.title),
-        links.heading_suffix(),
-        Markdown::constant("\n\n"),
-        Markdown::constant(lead),
-        diagnostics(report),
-    ]);
+    let mut text = heading(
+        HeadingStatus::Warning,
+        Markdown::constant("Wasinix CI"),
+        vec![Markdown::constant(state), Markdown::text(&report.title)],
+        links.run_url.as_deref(),
+        links.sha.as_ref(),
+    )
+    .push(Markdown::constant(lead))
+    .push(diagnostics(report));
     let all = failures(report);
     if !all.is_empty() {
         let summary = if comparison {
@@ -912,13 +989,9 @@ fn in_progress(report: &Report, snapshot: Option<&Snapshot>, links: &Links) -> M
             if snapshot.failed_jobs > 0 {
                 parts.push(Markdown::text(&format!("{} failed", snapshot.failed_jobs)));
             }
-            if parts.is_empty() {
-                Markdown::new()
-            } else {
-                Markdown::constant(" · ").push(Markdown::join(parts, " · "))
-            }
+            parts
         }
-        None => Markdown::new(),
+        None => Vec::new(),
     };
     // Before task phases, the title is the run's current preparation work;
     // once tasks exist, "building" plus the counts says more.
@@ -927,13 +1000,15 @@ fn in_progress(report: &Report, snapshot: Option<&Snapshot>, links: &Links) -> M
     } else {
         Markdown::constant("building")
     };
-    let mut text = Markdown::concat([
-        Markdown::constant("### ⏳ Wasinix CI · "),
-        what,
-        counts,
-        links.heading_suffix(),
-        Markdown::constant("\n\n"),
-    ]);
+    let mut heading_details = vec![what];
+    heading_details.extend(counts);
+    let mut text = heading(
+        HeadingStatus::Running,
+        Markdown::constant("Wasinix CI"),
+        heading_details,
+        links.run_url.as_deref(),
+        links.sha.as_ref(),
+    );
     if let Some(snapshot) = snapshot {
         if !snapshot.recent_failures.is_empty() {
             let shown: Vec<Markdown> = snapshot
@@ -1063,28 +1138,19 @@ pub fn step_summary(
     text
 }
 
-/// The reply when a `/wasinix` command dies before it can publish a report:
-/// the failure tail fenced so a PR-controlled log line cannot render as
-/// markup, and the run link for the rest.
-pub fn failure_reply(detail: &str, run_url: Option<&str>) -> Markdown {
+/// The reply when a `/wasinix` command dies before it can publish a report.
+pub fn failure_reply(detail: &str) -> CommandReply {
     let detail = if detail.trim().is_empty() {
         "see the Actions run"
     } else {
         detail
     };
-    let mut body = Markdown::concat([
-        Markdown::constant("❌ `/wasinix` command failed:\n\n"),
+    reply(
+        HeadingStatus::Failure,
+        "Wasinix command",
+        vec![Markdown::constant("failed")],
         Markdown::fenced(detail, "text"),
-    ]);
-    if let Some(url) = run_url {
-        body = Markdown::concat([
-            body,
-            Markdown::constant("\n"),
-            Markdown::link("Actions run", url),
-            Markdown::constant("\n"),
-        ]);
-    }
-    body
+    )
 }
 
 /// Every candidate a bisect tested, in the order it tested them.
@@ -1111,80 +1177,76 @@ fn candidates(report: &crate::nix::bisect::Report) -> Markdown {
 
 /// The bisect's reply while it runs. A candidate is a whole build, so the
 /// tick is the only sign the command was picked up at all.
-pub fn bisect_progress(target: &str, tested: usize) -> Markdown {
+pub fn bisect_progress(target: &str, tested: usize) -> CommandReply {
     let what = if tested == 0 {
         Markdown::constant("resolving the range")
     } else {
         plural(tested, "candidate").push(Markdown::constant(" tested"))
     };
-    Markdown::concat([
-        Markdown::constant("### ⏳ Bisecting "),
-        Markdown::code(target),
-        Markdown::constant(" · "),
-        what,
-        Markdown::constant("\n"),
-    ])
+    reply(
+        HeadingStatus::Running,
+        "Wasinix bisect",
+        vec![Markdown::code(target), what],
+        Markdown::new(),
+    )
 }
 
 /// The reply a `/wasinix bisect` posts. A run stopped by its budget still
 /// answers: the range it narrowed to is the useful half of the result.
-pub fn bisect_reply(
-    report: &crate::nix::bisect::Report,
-    failure: Option<&str>,
-    run_url: Option<&str>,
-) -> Markdown {
-    let what = if report.reverse { "passing" } else { "bad" };
+pub fn bisect_reply(report: &crate::nix::bisect::Report, failure: Option<&str>) -> CommandReply {
     // A bisect that died still narrowed the range; the candidates it did
     // test are the useful half and they are already on disk.
     if let Some(failure) = failure {
-        let mut body = Markdown::concat([
-            Markdown::constant("### ❌ Bisect stopped on an error\n\n"),
+        let body = Markdown::concat([
             Markdown::fenced(failure, "text"),
             Markdown::constant("\n"),
+            candidates(report),
         ]);
-        body = body.push(candidates(report));
-        if let Some(url) = run_url {
-            body = Markdown::concat([
-                body,
-                Markdown::constant("\n"),
-                Markdown::link("Actions run", url),
-                Markdown::constant("\n"),
-            ]);
-        }
-        return body;
-    }
-    let headline = match &report.first_bad {
-        Some(rev) => Markdown::concat([
-            Markdown::constant("### ✅ First "),
-            Markdown::text(what),
-            Markdown::constant(" "),
-            Markdown::text(&report.target),
-            Markdown::constant(" commit: "),
-            Markdown::code(rev),
-            Markdown::constant("\n\n"),
-        ]),
-        None => Markdown::concat([
-            Markdown::constant("### ⚠ Bisect stopped on its budget\n\n"),
-            match report.revisions_left {
-                Some(left) => Markdown::concat([
-                    Markdown::constant("Narrowed to "),
-                    plural(left as usize, "revision"),
-                    Markdown::constant("; re-run the command to continue.\n\n"),
-                ]),
-                None => Markdown::constant("Re-run the command to continue.\n\n"),
-            },
-        ]),
-    };
-    let mut body = Markdown::concat([headline, candidates(report)]);
-    if let Some(url) = run_url {
-        body = Markdown::concat([
+        return reply(
+            HeadingStatus::Failure,
+            "Wasinix bisect",
+            vec![
+                Markdown::code(&report.target),
+                Markdown::constant("stopped on an error"),
+            ],
             body,
-            Markdown::constant("\n"),
-            Markdown::link("Actions run", url),
-            Markdown::constant("\n"),
-        ]);
+        );
     }
-    body
+    match &report.first_bad {
+        Some(rev) => reply(
+            HeadingStatus::Success,
+            "Wasinix bisect",
+            vec![
+                Markdown::code(&report.target),
+                Markdown::constant(if report.reverse {
+                    "first passing commit"
+                } else {
+                    "first bad commit"
+                }),
+                Markdown::code(rev),
+            ],
+            candidates(report),
+        ),
+        None => reply(
+            HeadingStatus::Warning,
+            "Wasinix bisect",
+            vec![
+                Markdown::code(&report.target),
+                Markdown::constant("budget spent"),
+            ],
+            Markdown::concat([
+                match report.revisions_left {
+                    Some(left) => Markdown::concat([
+                        Markdown::constant("Narrowed to "),
+                        plural(left as usize, "revision"),
+                        Markdown::constant("; re-run the command to continue.\n\n"),
+                    ]),
+                    None => Markdown::constant("Re-run the command to continue.\n\n"),
+                },
+                candidates(report),
+            ]),
+        ),
+    }
 }
 
 /// Drop trailing `<details>` blocks whole until the text fits, and say what
