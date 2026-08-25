@@ -349,13 +349,12 @@
       setOverlaysFor = {
         scope,
         nativeRaw,
-        packageRecipesOverlay,
         ...
       }:
-        lib.optionals (includeWasinix && scope == "native") [
+        lib.optionals includeWasinix [
           (final: _previous:
             {
-              wasi-ghc = import ../native/wasi-ghc/input.nix {
+              wasi-ghc = import ../overlays/w/wasi-ghc/input.nix {
                 inherit ghcWasm;
                 pkgs = final;
               };
@@ -364,16 +363,13 @@
               wasinixCapabilityFlake = wasinixFlake;
             }
             // lib.optionalAttrs (wasmerPackage != null) {
-              wasmer = import ../native/wasmer/input.nix {
+              wasmer = import ../overlays/w/wasmer/input.nix {
                 wasmer = wasmerPackage;
                 revision = wasmerRevision;
               };
             })
         ]
         ++ lib.optionals (scope == "wasix") [
-          (packageRecipesOverlay {
-            dir = ../native;
-          })
           (constructionFor nativeRaw).wasixInfrastructureOverlay
         ];
       nativePackageInterfacesFor = {

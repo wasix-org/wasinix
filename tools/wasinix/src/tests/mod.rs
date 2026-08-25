@@ -3820,7 +3820,7 @@ mod markdown {
     fn a_report_less_run_names_its_error_in_the_task_too() {
         let tail = concat!(
             "materializing: head at 06b43c168c5c\n",
-            "error: update s3-server: Update 0.1.22 -> 0.1.10 in pkgs/shared/s3-server\n",
+            "error: update s3-server: Update 0.1.22 -> 0.1.10 in pkgs/overlays/s/s3-server\n",
             "  $ nix-build --expr 'let src = ...'\n",
             "  took 11s\n",
         );
@@ -3836,7 +3836,7 @@ mod markdown {
         let report = crate::ci::report::from_run_state(&run, Some(tail));
         assert_eq!(
             report.tasks[0].headline,
-            "error: update s3-server: Update 0.1.22 -> 0.1.10 in pkgs/shared/s3-server"
+            "error: update s3-server: Update 0.1.22 -> 0.1.10 in pkgs/overlays/s/s3-server"
         );
     }
 
@@ -4933,7 +4933,7 @@ mod update {
             "name": "wasix-libc",
             "version": "2026-07-30.1",
             "attrPath": "toolchain.libc-unwrapped",
-            "position": "/nix/store/aaa-source/pkgs/native/wasix-sysroot/libc.nix:22",
+            "position": "/nix/store/aaa-source/pkgs/overlays/w/wasix-sysroot/libc.nix:22",
             "command": ["/nix/store/bbb-wasix-libc-update/bin/wasix-libc-update"],
             "commandDrvPaths": ["/nix/store/ccc-wasix-libc-update.drv"],
             "accepts": ["release"],
@@ -4955,7 +4955,7 @@ mod update {
             "{}",
             target.attr
         );
-        assert_eq!(target.file, "pkgs/native/wasix-sysroot/libc.nix");
+        assert_eq!(target.file, "pkgs/overlays/w/wasix-sysroot/libc.nix");
     }
 
     #[test]
@@ -7869,7 +7869,7 @@ mod scenarios {
                     class: Some("Build".into()),
                     message: Some("builder failed with exit code 1".into()),
                     jobs: Vec::new(),
-                    position: Some("pkgs/wasix/zlib.nix:12".into()),
+                    position: Some("pkgs/overlays/z/zlib.nix:12".into()),
                     log: Some(LogRef {
                         path: "00112233445566778899.log.gz".into(),
                         bytes: Bytes(20_000),

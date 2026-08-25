@@ -1,0 +1,5 @@
+{
+  exposeWasixPackage,
+  package,
+}:
+exposeWasixPackage package

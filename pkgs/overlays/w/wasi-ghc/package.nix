@@ -1,0 +1,5 @@
+{
+  exposeNativePackage,
+  package,
+}:
+exposeNativePackage package

@@ -32,7 +32,7 @@
   wheelList = import ./default.nix;
   # Older releases also served (registry history), keyed by worklist attr then version;
   # JSON so scripts/history.py and update.py can edit it (schema: see wheels.nix header).
-  historyTable = builtins.fromJSON (builtins.readFile ../history.json);
+  historyTable = builtins.fromJSON (builtins.readFile ../../python-overlays/history.json);
   unknownHistory = lib.filter (n: !(lib.elem n (map (e: e.attr) wheelList))) (lib.attrNames historyTable);
   # A noarch entry builds once on the preferred python, so its history versions
   # would be gated out by every `variants` value and silently never ship.
@@ -162,7 +162,7 @@
 
   # Package tests follow python/<attr>/tests/*.nix and return
   # named derivations from the supplied scope.
-  pkgTestsDir = attr: ../. + "/${attr}/tests";
+  pkgTestsDir = attr: ../../python-overlays + "/${lib.substring 0 1 attr}/${attr}/tests";
   pkgTests = e: let
     dir = pkgTestsDir e.attr;
     scope = {
@@ -368,7 +368,7 @@
     });
 
   # History wheels (<attr>-<version>): the entry's older releases, rebased by
-  # project history from python/history.json. Never noarch. `spec.variants` is
+  # project history from python-overlays/history.json. Never noarch. `spec.variants` is
   # the generic history gate: the build variants an entry is limited to; for
   # this set a variant IS an interpreter (pyKey), default every configured interpreter.
   # A worklist entry reads the same `variants` gate as a history entry, for a

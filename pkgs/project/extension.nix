@@ -1,10 +1,12 @@
 {loadPackageOverlays}: let
   overlays = loadPackageOverlays {
-    shared = ../shared;
-    native = ../native;
-    wasix = ../wasix;
+    packages = {
+      directory = ../overlays;
+      lane = "packages";
+    };
     python = {
-      directory = ../python;
+      directory = ../python-overlays;
+      lane = "python";
       expose = map (entry: entry.attr) (import ../python/wheels/default.nix);
       definition = {
         file = ../python/wheels/default.nix;
@@ -18,7 +20,7 @@ in {
   inherit overlays;
 
   history = {
-    wasix = ../wasix/history.json;
-    python = ../python/history.json;
+    wasix = ../overlays/history.json;
+    python = ../python-overlays/history.json;
   };
 }

@@ -62,11 +62,11 @@ pub struct Target {
 }
 
 pub fn wheel_history(repo: &Path) -> PathBuf {
-    repo.join("pkgs/python/history.json")
+    repo.join("pkgs/python-overlays/history.json")
 }
 
 fn cli_history(repo: &Path) -> PathBuf {
-    repo.join("pkgs/wasix/history.json")
+    repo.join("pkgs/overlays/history.json")
 }
 
 /// wheels.nix is pure data; keyed by normalized attr for lockfile matching.

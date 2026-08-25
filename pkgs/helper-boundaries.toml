@@ -1,20 +1,20 @@
 host = [
-  "pkgs/native/wasix-rust/update.sh",
-  "pkgs/native/wasix-sysroot/update.sh",
-  "pkgs/python/ddtrace/update.sh",
-  "pkgs/python/tree-sitter-grammars/update.sh",
+  "pkgs/overlays/w/wasix-rust/update.sh",
+  "pkgs/overlays/w/wasix-sysroot/update.sh",
+  "pkgs/python-overlays/d/ddtrace/update.sh",
+  "pkgs/python-overlays/t/tree-sitter-grammars/update.sh",
   "pkgs/python-registry/publish.py",
-  "pkgs/shared/anybuild/update-mirror.py",
-  "pkgs/shared/cargo-registry/derive-lock.py",
-  "pkgs/shared/cargo-registry/update.sh",
-  "pkgs/wasix/yq-go/update-vendor-hash.py",
+  "pkgs/overlays/a/anybuild/update-mirror.py",
+  "pkgs/overlays/c/cargo-registry/derive-lock.py",
+  "pkgs/overlays/c/cargo-registry/update.sh",
+  "pkgs/overlays/y/yq-go/update-vendor-hash.py",
 ]
 
 foundational = [
   "pkgs/cargo-registry/bump-crate-version.py",
   "pkgs/lib/amend-lock.py",
-  "pkgs/native/wasix-rust/merge-cargo-locks.py",
-  "pkgs/native/wasix-sysroot/flang-rt-setup-hook.sh",
+  "pkgs/overlays/w/wasix-rust/merge-cargo-locks.py",
+  "pkgs/overlays/w/wasix-sysroot/flang-rt-setup-hook.sh",
   "pkgs/python/wheels/check-dependencies.py",
   "pkgs/python/wheels/check-dynamic-imports.py",
 ]
@@ -25,14 +25,14 @@ leaf = [
   "pkgs/python-registry/make-index.py",
   "pkgs/python-registry/publish-wheel.py",
   "pkgs/toolchain/tests/wide-arithmetic-repro.sh",
-  "pkgs/wasix/anybuild/tests/check-cross-install.py",
-  "pkgs/wasix/anybuild/tests/make-mirror-index.py",
-  "pkgs/wasix/python3/tests/ctypes-findlib-check.py",
-  "pkgs/wasix/python3/tests/ipv6-bind-check.py",
-  "pkgs/wasix/python3/tests/mp-context-check.py",
-  "pkgs/wasix/python3/tests/pip-usable-check.py",
-  "pkgs/wasix/python3/tests/spawn-passfd-check.py",
-  "pkgs/wasix/python3/tests/subprocess-opts-check.py",
+  "pkgs/overlays/a/anybuild/tests/check-cross-install.py",
+  "pkgs/overlays/a/anybuild/tests/make-mirror-index.py",
+  "pkgs/overlays/p/python3/tests/ctypes-findlib-check.py",
+  "pkgs/overlays/p/python3/tests/ipv6-bind-check.py",
+  "pkgs/overlays/p/python3/tests/mp-context-check.py",
+  "pkgs/overlays/p/python3/tests/pip-usable-check.py",
+  "pkgs/overlays/p/python3/tests/spawn-passfd-check.py",
+  "pkgs/overlays/p/python3/tests/subprocess-opts-check.py",
 ]
 
 research = [
