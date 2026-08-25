@@ -219,7 +219,9 @@ pub(crate) fn parse_overrides(specs: &[String]) -> Result<Vec<Override>> {
 fn selector(word: &str) -> Selector {
     let set = word == "all" || crate::ci::types::SetName::parse(word).is_some();
     Selector {
-        kind: if set {
+        kind: if word.starts_with("source=") {
+            SelectorKind::Filter
+        } else if set {
             SelectorKind::Set
         } else {
             SelectorKind::Job

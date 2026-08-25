@@ -1152,6 +1152,14 @@ in rec {
       selectorSets =
         lib.mapAttrs (_: selected: map (entry: entry.address) selected)
         (lib.groupBy selectorSetFor (lib.attrValues ciEntries));
+      selectorSources = lib.genAttrs requestedCiSources (source: let
+        packageAddresses = lib.attrNames (lib.filterAttrs (_: entry: entry.source == source) ciPackageEntries);
+      in
+        map (entry: entry.address) (lib.filter (entry:
+          entry.source
+          == source
+          || lib.intersectLists entry.packageSubjects packageAddresses != [])
+        (lib.attrValues ciEntries)));
       derivationOf = entry: entry.build;
     in
       assert wasixShapesValid;
@@ -1180,6 +1188,7 @@ in rec {
             selectors = {
               sets = selectorSets;
               groups = ci.groups or {};
+              sources = selectorSources;
             };
           };
         };

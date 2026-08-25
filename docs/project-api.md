@@ -877,6 +877,10 @@ ci = {
 `ci.jobs` contains derivations only. `ci.catalog` contains no derivations. Their
 job key sets must be exactly equal, which the constructor enforces.
 
+`ci.catalog.selectors.sources.<extension-id>` records the jobs in each selected
+source's package closure. This is factual membership for the CLI's
+`source=<extension-id>` filter, not a second selector implementation in Nix.
+
 The project decides which registered sources contribute CI jobs. By default, all
 caller-supplied extensions contribute and the implicit core extension does not.
 The Wasinix repository selects its own `wasinix` source explicitly. Dependencies

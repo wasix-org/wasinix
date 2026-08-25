@@ -178,6 +178,8 @@ pub struct CatalogSelectors {
     pub sets: BTreeMap<String, Vec<String>>,
     #[serde(default)]
     pub groups: BTreeMap<String, SelectorGroup>,
+    #[serde(default)]
+    pub sources: BTreeMap<String, Vec<String>>,
 }
 
 /// The flake's `ci.catalog` evaluation payload.
@@ -210,6 +212,7 @@ impl SelectorCatalog {
             packages: self.packages,
             sets: self.selectors.sets,
             groups: self.selectors.groups,
+            sources: self.selectors.sources,
             ..EvalMap::default()
         }
     }
@@ -241,6 +244,8 @@ pub struct EvalMap {
     pub sets: BTreeMap<String, Vec<String>>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub groups: BTreeMap<String, SelectorGroup>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub sources: BTreeMap<String, Vec<String>>,
     /// Update-note versions as of this evaluation; a later run diffs against
     /// them to decide which notes fired.
     #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
@@ -416,6 +421,24 @@ impl EvalMap {
     /// package across a variant axis selects every build of it, which is how
     /// `packages.wasix.zlib` covers every supported profile.
     pub fn resolve_jobs(&self, requested: &[String]) -> Result<Vec<String>> {
+        let (selectors, source_filters): (Vec<_>, Vec<_>) = requested
+            .iter()
+            .partition(|selector| !selector.starts_with("source="));
+        let selectors: Vec<String> = if selectors.is_empty() && !source_filters.is_empty() {
+            vec!["all".to_string()]
+        } else {
+            selectors.into_iter().cloned().collect()
+        };
+        let mut jobs = self.resolve_unfiltered_jobs(&selectors)?;
+        let sources: Vec<String> = source_filters
+            .into_iter()
+            .map(|selector| selector.trim_start_matches("source=").to_string())
+            .collect();
+        self.filter_jobs(&mut jobs, &sources)?;
+        Ok(jobs)
+    }
+
+    fn resolve_unfiltered_jobs(&self, requested: &[String]) -> Result<Vec<String>> {
         let domain = self.job_domain()?;
         let mut jobs = Vec::new();
         for spec in requested {
@@ -436,8 +459,8 @@ impl EvalMap {
                 continue;
             }
             if spec == "all" {
-                for members in self.sets.values() {
-                    extend_unique(&mut jobs, members);
+                for job in self.catalog_jobs() {
+                    push_unique(&mut jobs, job.as_str());
                 }
                 continue;
             }
@@ -456,6 +479,24 @@ impl EvalMap {
             }
         }
         Ok(jobs)
+    }
+
+    pub fn filter_jobs(&self, jobs: &mut Vec<String>, sources: &[String]) -> Result<()> {
+        if sources.is_empty() {
+            return Ok(());
+        }
+        let mut selected = Vec::new();
+        for source in sources {
+            if source.is_empty() {
+                return request_error("source selector must name a source");
+            }
+            let Some(members) = self.sources.get(source) else {
+                return request_error(format!("unknown CI source {source:?}"));
+            };
+            extend_unique(&mut selected, members);
+        }
+        jobs.retain(|job| selected.contains(job));
+        Ok(())
     }
 
     pub fn resolve_spot_targets(&self, requested: &[String]) -> Result<Vec<String>> {

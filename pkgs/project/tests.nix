@@ -1230,6 +1230,8 @@ in {
       catalogJobNames = lib.attrNames project.ci.catalog.jobs;
       selectorNames = lib.attrNames project.ci.catalog.selectors.sets;
       selectorGroupNames = lib.attrNames project.ci.catalog.selectors.groups;
+      selectorSourceNames = lib.attrNames project.ci.catalog.selectors.sources;
+      sourceSelectorCoversJobs = project.ci.catalog.selectors.sources.consumer == lib.attrNames project.ci.jobs;
       selectablePackageNames = lib.attrNames project.ci.catalog.packages;
       selectorsCoverJobs =
         lib.sort builtins.lessThan (lib.unique (lib.concatLists (lib.attrValues project.ci.catalog.selectors.sets)))
@@ -1372,6 +1374,8 @@ in {
       ];
       selectorNames = ["packages" "python"];
       selectorGroupNames = ["fixture"];
+      selectorSourceNames = ["consumer"];
+      sourceSelectorCoversJobs = true;
       selectablePackageNames = [
         "packages.native.core"
         "packages.python.py.contextProof"
