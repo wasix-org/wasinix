@@ -20,32 +20,26 @@ details live in:
   cargo registry
 - [`python.md`](python.md): CPython, Python package overlays, and wheels
 
-## Package lanes
+## Package inventories
 
 The built-in `wasinix` extension is defined in `pkgs/project/extension.nix`. Its
-overlay lanes are discovered by `loadPackageOverlays`:
+two registered overlays are discovered by `loadPackageOverlays`:
 
-- `shared` applies to native and WASIX sets;
-- `native` applies only to the native set;
-- `wasix` applies to every WASIX profile set;
+- `packages` applies to native and WASIX nixpkgs sets;
 - `python` applies to each supported Python package fixpoint.
 
-`pkgs/shared/<name>/recipe.nix` is the shared recipe for a package built both
-natively and with a WASIX host. Recipe units are cataloged automatically and
-receive the appropriate `stdenv`, `rustPlatform`, and dependency splice from its
-scope.
+Regular entries live under `pkgs/overlays/<first-character>/`. A `package.nix`
+defines a complete package and runs in native and WASIX package sets. A flat
+`<name>.nix` or directory `wasix.nix` adapts a preceding nixpkgs package only
+when the actual host platform is WASIX. This distinction also applies to
+nixpkgs' native build-package splices, so WASIX adaptations never leak into host
+tools. Patches, tests, and other package inputs stay in the owning directory.
 
-Buildable compiler and sysroot recipes use the same form under `pkgs/native/`.
-Their generated overlay remains available to cross-set build stages, while only
-the native application is registered in the catalog.
-
-WASIX-specific policy lives in `pkgs/wasix/`: patches, flags, runtime
-dependencies, Wasm command names, WebC configuration, and tests. A unit normally
-uses `exposeExtendedPackage` to adapt the preceding package. Units are
-shallow-discovered from `<name>.nix` or `<name>/package.nix`; a directory keeps
-patches and behavior tests beside the package that owns them.
-
-Python package adaptations and their history live in `pkgs/python/`.
+Python adaptations and their history live under
+`pkgs/python-overlays/<first-character>/`. Shared Python machinery remains in
+`pkgs/python/lib/` and `pkgs/python/wheels/`. Buildable compiler, sysroot, and
+repository tools are complete package entries in the same regular inventory;
+their role does not create another package category.
 
 Packages declare support through `passthru.wasix`:
 

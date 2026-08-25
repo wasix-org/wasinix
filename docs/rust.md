@@ -5,16 +5,17 @@ Adding a package is covered by [`packaging.md`](packaging.md#a-rust-cli).
 
 ## Building for WASIX
 
-`pkgs/native/wasix-rust/` builds the WASIX Rust sources, and
-`pkgs/native/cargo-wasix/` builds cargo-wasix. `pkgs/set/rust-platform.nix`
+`pkgs/overlays/w/wasix-rust/` builds the WASIX Rust sources, and
+`pkgs/overlays/c/cargo-wasix/` builds cargo-wasix. `pkgs/set/rust-platform.nix`
 routes `buildRustPackage` through cargo-wasix and provides the WASIX defaults.
 Rust has a standard library for `eh` and `ehpic`, so Rust packages are limited
 to those profiles.
 
-A nixpkgs CLI usually needs only
-`{exposePackage, package}: exposePackage package`. For a crate nixpkgs does not
-carry, use `packages.sameProfile.rustPlatform.buildRustPackage`; see
-`pkgs/wasix/crabsay.nix`. Python wheels use the shared maturin and
+A nixpkgs CLI adaptation usually needs only
+`{exposeWasixPackage, package}: exposeWasixPackage package`. For a crate nixpkgs
+does not carry, define a complete `package.nix` with
+`packageSet.rustPlatform.buildRustPackage`; see
+`pkgs/overlays/c/crabsay/package.nix`. Python wheels use the shared maturin and
 setuptools-rust hooks.
 
 ## Crate edits

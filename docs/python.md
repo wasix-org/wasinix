@@ -8,11 +8,12 @@ authoring is covered by
 
 CPython needs dynamic linking for extension modules, so it supports the `ehpic`
 and `exnrefEhpic` profiles and prefers `exnrefEhpic`. Its overlay lives in
-`pkgs/wasix/python3/`; the `py313` and `py314` package fixpoints use that
+`pkgs/overlays/p/python3/`; the `py313` and `py314` package fixpoints use that
 preferred profile.
 
-Python package adaptations live in `pkgs/python/`. They use the same package
-unit API as other lanes: `packages.sameProfile` is the immediate Python
+Python package adaptations live in one-character buckets under
+`pkgs/python-overlays/`. They use the same package unit API as the regular
+inventory: `packages.sameProfile` and `packageSet` are the immediate Python
 fixpoint, while `pkgs` is the enclosing WASIX set. Rust extension modules use
 the shared Rust wheel hooks described in [`rust.md`](rust.md).
 
@@ -23,7 +24,8 @@ the shared Rust wheel hooks described in [`rust.md`](rust.md).
 runs their import tests under Wasmer. The wheel index and publication flow are
 described in [`registry.md`](registry.md#the-python-wheel-index).
 
-Focused wheel behavior tests live in `pkgs/python/<attr>/tests/*.nix` and use
+Focused wheel behavior tests live in
+`pkgs/python-overlays/<first-character>/<attr>/tests/*.nix` and use
 `harnesses.python`. The harness installs the wheel and explicit test
 dependencies into a clean target, then runs it through the packaged Python WebC
 without a Nix store mount.

@@ -654,9 +654,9 @@ current toolchain before relying on it.
   fails with `posix_spawn failed: Exec format error`, the same shape as find's
   `-exec` and xargs. Declaring `wasmer/clang` as a webc dependency does not make
   it resolvable.
-- Workaround: `pkgs/wasix/flang` is `passthru.wasix.broken` and not shipped. The
-  host flang (`native/wasix-flang`) is unaffected and is what builds Fortran for
-  scipy.
+- Workaround: `pkgs/overlays/f/flang/wasix.nix` is `passthru.wasix.broken` and
+  not shipped. The host flang (`pkgs/overlays/w/wasix-flang/`) is unaffected and
+  builds Fortran for scipy.
 - Fix: make a dependency's command resolvable to a spawning guest, or give flang
   the in-process frontend dispatch clang has for `cc1`.
 
