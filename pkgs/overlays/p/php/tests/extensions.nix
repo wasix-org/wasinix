@@ -1,68 +1,56 @@
 {
-  crossPkgs,
-  makeWasmerPackage,
-  testLib,
+  entry,
+  harnesses,
+  packageForEntry,
+  packages,
+  pkgs,
   ...
 }: let
-  versionNames = builtins.attrNames (import ../versions.nix);
-  extensionSetNames = ["php"] ++ versionNames;
-  extensionVersionsMatch = php:
-    builtins.all (extension: extension.phpVersion == php.version) (builtins.attrValues php.extensions);
-  extensionSetsMatch = builtins.all (name: let
-    alias = crossPkgs.${"${name}Extensions"};
-    php = crossPkgs.${name};
-    extensions = php.extensions;
-  in
-    alias.recurseForDerivations
-    && extensionVersionsMatch php
-    && toString alias.igbinary == toString extensions.igbinary
-    && toString alias.imagick == toString extensions.imagick)
-  extensionSetNames;
-  int64ExtensionVersionsMatch = builtins.all (name: extensionVersionsMatch crossPkgs.${"${name}-int64"}) versionNames;
-  phpWithoutExtensions = crossPkgs.php85.withExtensions (_: []);
-  phpInt64WithoutExtensions = crossPkgs.php85-int64.withExtensions (_: []);
+  inherit (pkgs) lib;
+  int64 = lib.hasSuffix "-int64" entry.name;
+  baseName = lib.removeSuffix "-int64" entry.name;
+  php = packageForEntry packages entry;
+  inherit (php) extensions;
+  alias = packages.sameProfile.${baseName + "Extensions"};
+  extensionVersionsMatch = builtins.all (extension: extension.phpVersion == php.version) (builtins.attrValues extensions);
+  extensionSetMatches =
+    int64
+    || (
+      alias.recurseForDerivations
+      && toString alias.igbinary == toString extensions.igbinary
+      && toString alias.imagick == toString extensions.imagick
+    );
+  phpWithoutExtensions = php.withExtensions (_: []);
   phpIgbinaryOnly = phpWithoutExtensions.withExtensions ({
     enabled,
     all,
+    ...
   }:
     enabled ++ [all.igbinary]);
-  phpInt64IgbinaryOnly = phpInt64WithoutExtensions.withExtensions ({
-    enabled,
-    all,
-  }:
-    enabled ++ [all.igbinary]);
+  igbinaryCommand = harnesses.packageCommand {
+    package = phpIgbinaryOnly;
+    name = "php";
+  };
 in
-  assert extensionSetsMatch;
-  assert int64ExtensionVersionsMatch; {
-    package-sets = testLib.mkScriptRun {
-      name = "php-extension-package-sets";
-      packages = [];
-      script = ''
-        echo "php extension package sets match"
-      '';
-    };
+  assert extensionVersionsMatch;
+  assert extensionSetMatches; {
+    package-sets = pkgs.runCommand "${entry.name}-extension-package-sets" {} ''
+      echo "php extension package sets match" >"$out"
+    '';
 
-    extensions-default = testLib.mkWasixRun {
-      name = "php85-extensions-default";
-      wasixPkgs = [(makeWasmerPackage {package = crossPkgs.php85;}).shim];
+    extensions-default = harnesses.hostShell {
+      name = "${entry.name}-extensions-default";
+      wasixCommands = builtins.attrValues entry.commands;
       script = ''
         php -r 'exit(extension_loaded("igbinary") && extension_loaded("imagick") ? 0 : 1);'
       '';
     };
 
-    igbinary-only = testLib.mkWasixRun {
-      name = "php85-igbinary-only";
-      wasixPkgs = [(makeWasmerPackage {package = phpIgbinaryOnly;}).shim];
+    igbinary-only = harnesses.hostShell {
+      name = "${entry.name}-igbinary-only";
+      wasixCommands = [igbinaryCommand];
       script = ''
         php -r 'exit(extension_loaded("igbinary") && !extension_loaded("imagick") ? 0 : 1);'
-      '';
-    };
-
-    int64-igbinary-only = testLib.mkWasixRun {
-      name = "php85-int64-igbinary-only";
-      wasixPkgs = [(makeWasmerPackage {package = phpInt64IgbinaryOnly;}).shim];
-      script = ''
-        php -r 'exit(PHP_INT_SIZE === 8 && extension_loaded("igbinary") && !extension_loaded("imagick") ? 0 : 1);'
       '';
     };
   }

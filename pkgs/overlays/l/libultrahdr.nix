@@ -1,14 +1,13 @@
 {
-  prev,
-  helpers,
-  ...
+  exposePackage,
+  extendPackage,
+  package,
+  profileOf,
 }: let
-  offProfile = (helpers.profileOf prev.stdenv.hostPlatform) == "off";
+  offProfile = profileOf package.stdenv.hostPlatform == "off";
 in
-  if offProfile
-  then
-    helpers.libTweaks {
-      cmakeFlags = ["-DUHDR_BUILD_TESTS=OFF"];
-    }
-    prev.libultrahdr
-  else prev.libultrahdr
+  exposePackage (
+    if offProfile
+    then extendPackage package {cmakeFlags = ["-DUHDR_BUILD_TESTS=OFF"];}
+    else package
+  )
