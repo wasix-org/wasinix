@@ -5843,7 +5843,7 @@ mod corpus {
     }
 
     #[test]
-    fn cached_build_outputs_are_neither_realised_nor_republished() {
+    fn substituted_outputs_are_neither_realised_nor_republished() {
         let source = sources(false)
             .into_iter()
             .find(|(path, _)| path == "nix/buildset.rs")
@@ -5851,9 +5851,10 @@ mod corpus {
             .1;
         assert!(!source.contains("root_cached_inputs"));
         assert_eq!(source.matches("plan.fetched.contains").count(), 2);
-        assert_eq!(source.matches("uploader.push(").count(), 2);
+        assert_eq!(source.matches("uploader.push(").count(), 3);
         assert!(source.contains("uploader.push(report.push.clone())"));
         assert!(source.contains("uploader.push(spec.outputs.clone())"));
+        assert!(source.contains("uploader.push(prebuilt)"));
     }
 
     /// git runs through support::git (repo named on every call, three-way
