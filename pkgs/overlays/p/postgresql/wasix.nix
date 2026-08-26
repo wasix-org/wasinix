@@ -42,8 +42,8 @@ exposeWasixPackage (
       # via __wasi_proc_fork. postmaster.c needs the declaration to compile at all.
       postPatch = ''
         mkdir -p wasix-compat/sys
-        cp ${../git/wasix-compat/unistd.h} wasix-compat/unistd.h
-        cp ${../git/wasix-compat/proc.c} wasix-compat/proc.c
+        cp ${../../g/git/wasix-compat/unistd.h} wasix-compat/unistd.h
+        cp ${../../g/git/wasix-compat/proc.c} wasix-compat/proc.c
         cp ${./wasix-compat/flock.c} wasix-compat/flock.c
         cp ${./wasix-compat/shm.c} wasix-compat/shm.c
         cp ${./wasix-compat/sys/ipc.h} wasix-compat/sys/ipc.h

@@ -35,8 +35,8 @@ exposeWasixPackage (
       # git's wasix-compat shim: unistd.h declaring fork() + proc.c implementing it
       # via __wasi_proc_fork. TODO: lift wasix-compat into shared overlay infra.
       mkdir -p wasix-compat
-      cp ${../git/wasix-compat/unistd.h} wasix-compat/unistd.h
-      cp ${../git/wasix-compat/proc.c} wasix-compat/proc.c
+      cp ${../../g/git/wasix-compat/unistd.h} wasix-compat/unistd.h
+      cp ${../../g/git/wasix-compat/proc.c} wasix-compat/proc.c
 
       # wasix-libc gaps rsync trips over, force-included below:
       #  - <sys/sysmacros.h> makedev/major/minor: no device nodes; stub them
