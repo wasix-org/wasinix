@@ -5253,11 +5253,13 @@ mod mutation_gates {
 
     fn pull() -> Pull {
         Pull {
+            node_id: "PR_kwDOExample".into(),
             head_sha: "b".repeat(40),
             head_ref: "auto/update-wasmer".into(),
             head_repository: "wasix-org/wasinix".into(),
             base_sha: "c".repeat(40),
             body: String::new(),
+            auto_merge_enabled: false,
         }
     }
 
