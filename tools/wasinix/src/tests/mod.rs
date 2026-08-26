@@ -7602,6 +7602,24 @@ mod fold {
     }
 
     #[test]
+    fn a_fully_reused_build_concludes_success() {
+        let request = Request::build(build("case"), Default::default());
+        let plan = plan_of(&request, None, &["case".into()]);
+        assert!(plan.tasks.is_empty());
+        let report = fold(
+            &plan,
+            &BTreeMap::new(),
+            FoldContext {
+                finished: true,
+                reused_cases: 1,
+                ..FoldContext::default()
+            },
+        );
+        assert_eq!(report.conclusion, Some(Conclusion::Success));
+        assert_eq!(report.title, "CI passed from previous results");
+    }
+
+    #[test]
     fn an_uncompared_candidate_with_an_evaluated_base_concludes_failure() {
         let plan = plan_of(&diff_request(), None, &[]);
         let report = fold(
@@ -8050,6 +8068,7 @@ mod scenarios {
                 finished_at: Some(1_755_003_600),
                 comparisons: vec![comparison],
                 request: Some(request),
+                reused_cases: 0,
             },
         );
         (report, fragments)

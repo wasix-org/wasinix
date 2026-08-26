@@ -155,6 +155,7 @@ pub(crate) fn load_running(
             started_at: snapshot.started_at,
             finished_at: None,
             request: Some(loaded.request.clone()),
+            reused_cases: loaded.preparation.reused.len(),
             comparisons: crate::ci::compare::project(run_dir, &loaded.request, false)?,
         },
     );

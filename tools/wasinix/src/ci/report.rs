@@ -369,6 +369,7 @@ pub struct FoldContext {
     pub started_at: Option<u64>,
     pub finished_at: Option<u64>,
     pub request: Option<ResolvedRequest>,
+    pub reused_cases: usize,
     /// The candidates' projections against the baseline, from
     /// [`crate::ci::compare::project`]; empty for a plain build.
     pub comparisons: Vec<Comparison>,
@@ -526,9 +527,11 @@ pub fn fold(plan: &Plan, fragments: &BTreeMap<String, Fragment>, context: FoldCo
             .map(|fragment| fragment.headline.clone())
             .unwrap_or_else(|| view.task.label.clone());
         (Some(Conclusion::Blocked), format!("CI blocked: {detail}"))
-    } else if !plan.tasks.is_empty() || !fragments.is_empty() {
+    } else if !plan.tasks.is_empty() || !fragments.is_empty() || context.reused_cases > 0 {
         let title = if advisory_failures > 0 {
             format!("CI passed with {advisory_failures} advisory failures")
+        } else if plan.tasks.is_empty() && fragments.is_empty() {
+            "CI passed from previous results".to_string()
         } else {
             "CI passed".to_string()
         };

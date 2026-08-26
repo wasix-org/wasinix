@@ -1440,6 +1440,7 @@ pub fn run_tasks(ctx: &Context, loaded: &Loaded, only: &[String]) -> Result<Comm
             started_at: tracker.snapshot().started_at,
             finished_at: Some(unix_secs()),
             request: Some(request.clone()),
+            reused_cases: loaded.preparation.reused.len(),
             comparisons: crate::ci::compare::project(ctx.run_dir, request, true)?,
         },
     );
