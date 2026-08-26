@@ -20,8 +20,8 @@ exposeWasixPackage (
       withFullProtobuf = false;
       pythonSupport = false;
     }) {
-      # onnx, the proto dependency, is declared PIC-only.
       passthru.wasix.supportedProfiles = profileSets.pic;
+      # onnx, the proto dependency, is declared PIC-only.
 
       patches = [
         ./patches/onnxruntime-wasi-no-providers-shared.patch

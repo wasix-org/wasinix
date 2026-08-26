@@ -4,10 +4,11 @@
   commands,
   ...
 }: {
-  compile = harnesses.hostShell {
+  compile = harnesses.wasixShell {
     name = "rust-compile";
-    wasixCommands = builtins.attrValues entry.commands ++ [commands."wasm-ld"];
-    wasmerArgs = ["--enable-threads"];
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands."wasm-ld" commands.coreutils];
+    runtime.threads = true;
     timeout = 600;
     script = ''
       cat > answer.rs <<'EOF'

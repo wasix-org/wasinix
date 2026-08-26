@@ -4,10 +4,11 @@
   commands,
   ...
 }: {
-  compile-and-link = harnesses.hostShell {
+  compile-and-link = harnesses.wasixShell {
     name = "clang-compile-and-link";
-    wasixCommands = builtins.attrValues entry.commands ++ [commands."wasm-ld"];
-    wasmerArgs = ["--enable-threads"];
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands."wasm-ld" commands.coreutils];
+    runtime.threads = true;
     script = ''
       cat > answer.c <<'EOF'
       #include <stdint.h>

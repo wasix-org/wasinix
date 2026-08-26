@@ -1,2 +1,0 @@
-{exposeWasixExtendedPackage}:
-exposeWasixExtendedPackage {}

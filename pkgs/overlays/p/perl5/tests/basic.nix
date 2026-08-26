@@ -1,6 +1,7 @@
 # perl under wasmer. The XS case is the reason this build is PIC-only: the
 # module is a side module reached through dlopen, not linked into perl.
 {
+  commands,
   harnesses,
   entry,
   packages,
@@ -8,9 +9,10 @@
 }: let
   wasix = builtins.attrValues entry.commands;
   run = name: script:
-    harnesses.hostShell {
+    harnesses.wasixShell {
       name = "perl-${name}";
-      wasixCommands = wasix;
+      shell = commands.bash;
+      commands = wasix;
       inherit script;
     };
 in {

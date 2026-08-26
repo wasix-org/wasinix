@@ -12,14 +12,12 @@
 #     neither of which a wasm host exposes. libexpr's own switch leaks instead,
 #     which is what upstream already does on Windows and is fine for a
 #     short-lived evaluator.
-#   - Boost: see packages/boost.nix and the patches.
+#   - Boost: see pkgs/overlays/b/boost and the patches.
 #   - Markdown help off: lowdown doesn't cross-build.
 {
   exposeWasixPackage,
   extendPackage,
-  package,
   packages,
-  profileSets,
   wasmRename,
 }:
 exposeWasixPackage (
@@ -40,7 +38,7 @@ exposeWasixPackage (
     # overrideScope has to come before appendPatches: the other order dies in this
     # spliced cross scope with "expected a set but found a function", though the
     # same chain is fine in a plain nixpkgs cross set.
-    configured = package.overrideScope (_: prevScope: {
+    configured = packages.sameProfile.nixVersions.latest.overrideScope (_: prevScope: {
       nix-expr = prevScope.nix-expr.override {enableGC = false;};
       nix-store = prevScope.nix-store.override {
         withAWS = false;
@@ -84,6 +82,7 @@ exposeWasixPackage (
       # Hydra takes the CLI and component set through nixVersions; keep that
       # versioned pair here so consumers cannot mix patched and stock Nix.
       passthru = {
+        wasix.supportedProfiles = ["eh" "exnrefEh"];
         inherit nixComponents;
         nixVersions =
           packages.sameProfile.nixVersions
@@ -91,11 +90,6 @@ exposeWasixPackage (
             nix_2_34 = nixCli;
             nixComponents_2_34 = nixComponents;
           };
-        wasix = {
-          # C++ exceptions rule out the no-EH profile; PIC is untested.
-          supportedProfiles =
-            builtins.filter (p: builtins.elem p profileSets.withoutPic) profileSets.withEh;
-        };
         wasinix = {
           shipped = true;
           update.notes = [

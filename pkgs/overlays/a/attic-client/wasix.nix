@@ -8,6 +8,18 @@ exposeWasixPackage (
   extendPackage (package.override {
     nixVersions.nix_2_34 = packages.sameProfile.nix;
   }) {
+    passthru = {
+      wasix.supportedProfiles = ["eh" "ehpic"];
+      wasinix.shipped = true;
+      wasmer = {
+        name = "attic-client";
+        entrypoint = "attic";
+        version = v: let
+          d = builtins.match ".*-unstable-([0-9]{4})-([0-9]{2})-([0-9]{2})" v;
+        in
+          assert packages.sameProfile.lib.assertMsg (d != null) "attic-client: version ${v} is not <ver>-unstable-YYYY-MM-DD"; "0.0.${packages.sameProfile.lib.concatStrings d}";
+      };
+    };
     buildInputs = [
       packages.sameProfile.bzip2
       packages.sameProfile.boost
@@ -31,14 +43,5 @@ exposeWasixPackage (
         -o "$out/bin/attic.wasm.exnref"
       mv "$out/bin/attic.wasm.exnref" "$out/bin/attic.wasm"
     '';
-    passthru.wasinix.shipped = true;
-    passthru.wasmer = {
-      name = "attic-client";
-      entrypoint = "attic";
-      version = v: let
-        d = builtins.match ".*-unstable-([0-9]{4})-([0-9]{2})-([0-9]{2})" v;
-      in
-        assert packages.sameProfile.lib.assertMsg (d != null) "attic-client: version ${v} is not <ver>-unstable-YYYY-MM-DD"; "0.0.${packages.sameProfile.lib.concatStrings d}";
-    };
   }
 )

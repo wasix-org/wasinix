@@ -27,10 +27,10 @@ exposeWasixPackage (
             };
         };
     }) {
+      passthru.wasix.supportedProfiles = profileSets.pic;
       passthru.wasinix.shipped = true;
       # The backend loads extensions with dlopen, and only the PIC sysroots ship
       # <dlfcn.h>.
-      passthru.wasix.supportedProfiles = profileSets.pic;
       meta.mainProgram = "postgres";
       # nixpkgs marks every static build broken because dlopen is stubbed there;
       # the wasix dyld answers it in the PIC profiles.
@@ -42,8 +42,8 @@ exposeWasixPackage (
       # via __wasi_proc_fork. postmaster.c needs the declaration to compile at all.
       postPatch = ''
         mkdir -p wasix-compat/sys
-        cp ${../../g/git/wasix-compat/unistd.h} wasix-compat/unistd.h
-        cp ${../../g/git/wasix-compat/proc.c} wasix-compat/proc.c
+        cp ${../git/wasix-compat/unistd.h} wasix-compat/unistd.h
+        cp ${../git/wasix-compat/proc.c} wasix-compat/proc.c
         cp ${./wasix-compat/flock.c} wasix-compat/flock.c
         cp ${./wasix-compat/shm.c} wasix-compat/shm.c
         cp ${./wasix-compat/sys/ipc.h} wasix-compat/sys/ipc.h

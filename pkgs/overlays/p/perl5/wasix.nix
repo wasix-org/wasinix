@@ -7,6 +7,7 @@
   extendPackage,
   package,
   packages,
+  pkgs,
   profileSets,
   wasmRename,
 }:
@@ -25,6 +26,7 @@ exposeWasixPackage (
           # compiles against an interpreter carrying none of the above
           self = perl;
         }) {
+          passthru.wasix.supportedProfiles = profileSets.pic;
           patches = [
             ./patches/perl-cross-non-elf-probes.patch
             ./patches/wasi-spawn-without-fork.patch
@@ -33,7 +35,7 @@ exposeWasixPackage (
             ./patches/cross-perl-stubs.patch
           ];
           postPatch = ''
-            ${packages.sameProfile.lib.getExe packages.sameProfile.buildPackages.perl} -Icnf/stub -MList::Util=pairs,reduce -e '
+            ${pkgs.lib.getExe pkgs.perl} -Icnf/stub -MList::Util=pairs,reduce -e '
               my ($pair) = pairs(key => "value");
               my $reduced = reduce { (defined $a ? $a : "x") . $b } undef, "y";
               die "List::Util stub mismatch\n"
@@ -44,7 +46,6 @@ exposeWasixPackage (
             '
           '';
           # XS modules are dlopened side modules, which the PIC sysroots alone provide.
-          passthru.wasix.supportedProfiles = profileSets.pic;
           # @INC and the XS .so paths are baked into the interpreter, so a webc has to
           # carry them.
           passthru.wasmer.autoSelfMount = true;

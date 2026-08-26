@@ -27,6 +27,7 @@ exposeWasixPackage (
     };
   in
     extendPackage base {
+      passthru.wasix.supportedProfiles = profileSets.withEh;
       # nixpkgs adds --without-python when Python is disabled, but b2 rejects any
       # --without-* together with the --with-url library selection.
       buildPhase = old: packages.sameProfile.lib.replaceStrings ["--without-python"] [""] old;
@@ -63,7 +64,6 @@ exposeWasixPackage (
         install -Dm644 libboost_context.a -t "$out/lib"
       '';
 
-      passthru.wasix.supportedProfiles = profileSets.withEh;
       passthru.wasinix.update.notes = [
         {message = "recheck the Boost.Build WASIX feature patches against the new Boost release";}
       ];

@@ -11,11 +11,12 @@
   # one closure + wheel set per version. omitFromRegistry removes only the named
   # artifacts after computing the closure, so their version-specific deps remain.
   pythonSets,
+  harnesses,
   testLib,
-  # the default python interpreter + its webc (both from the top-level `python3`). The e2e installs
-  # from the merged index, targeting this version's tags, and runs on the webc.
+  # The default interpreter and packaged command. The e2e targets this
+  # interpreter's tags and runs through its WebC command.
   python3,
-  pythonWebc,
+  pythonCommand,
   mkTestGroup,
 }: let
   # The wheels carry their own release (pkgs/python/wheels/publication.nix). Revision
@@ -150,7 +151,7 @@
   # e2e/import tests run on the default python webc, installing from the merged index.
   tests =
     import ./tests.nix {
-      inherit pkgs lib registry testLib pythonWebc python3;
+      inherit harnesses pkgs lib registry testLib pythonCommand python3;
     }
     // import ./resolve-sweep.nix {
       inherit pkgs lib registry testLib projectInterpreters;

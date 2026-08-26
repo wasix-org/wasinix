@@ -1,4 +1,5 @@
 {
+  commands,
   pkgs,
   entry,
   harnesses,
@@ -6,15 +7,24 @@
 }: let
   inherit (helpers) gitSetup setupNativeRemote startLighttpdHttp startLighttpdHttps;
 in {
-  clone-http = harnesses.hostShell {
+  clone-http = harnesses.wasixShell {
     name = "clone-http";
-    hostPackages = [pkgs.git pkgs.lighttpd];
-    wasixCommands = builtins.attrValues entry.commands;
-    wasmerArgs = ["--net"];
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils];
+    runtime.network = true;
+    host = {
+      packages = [pkgs.git pkgs.lighttpd];
+      setup = ''
+        ${gitSetup}
+        ${setupNativeRemote}
+        ${startLighttpdHttp {}}
+      '';
+      teardown = ''
+        kill "$server_pid" 2>/dev/null || true
+        wait "$server_pid" 2>/dev/null || true
+      '';
+    };
     script = ''
-      ${gitSetup}
-      ${setupNativeRemote}
-      ${startLighttpdHttp {}}
       git clone http://127.0.0.1:8765/git-http-backend/remote.git cloned
       cat cloned/hello.txt
     '';
@@ -40,34 +50,54 @@ in {
     '';
   };
 
-  push-http = harnesses.hostShell {
+  push-http = harnesses.wasixShell {
     name = "push-http";
-    hostPackages = [pkgs.git pkgs.lighttpd];
-    wasixCommands = builtins.attrValues entry.commands;
-    wasmerArgs = ["--net"];
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils];
+    runtime.network = true;
+    host = {
+      packages = [pkgs.git pkgs.lighttpd];
+      setup = ''
+        ${gitSetup}
+        ${setupNativeRemote}
+        ${startLighttpdHttp {receivePack = true;}}
+      '';
+      teardown = ''
+        verification_status=0
+        ${pkgs.lib.getExe pkgs.git} -C repos/remote.git log --oneline || verification_status=$?
+        kill "$server_pid" 2>/dev/null || true
+        wait "$server_pid" 2>/dev/null || true
+        test "$verification_status" -eq 0
+      '';
+    };
     script = ''
-      ${gitSetup}
-      ${setupNativeRemote}
-      ${startLighttpdHttp {receivePack = true;}}
       git clone http://127.0.0.1:8765/git-http-backend/remote.git work
       cd work
       echo "world" >> hello.txt
       git add .
       git commit -m "second commit"
       git push origin main
-      ${pkgs.lib.getExe pkgs.git} -C ../repos/remote.git log --oneline
     '';
   };
 
-  clone-https = harnesses.hostShell {
+  clone-https = harnesses.wasixShell {
     name = "clone-https";
-    hostPackages = [pkgs.git pkgs.lighttpd pkgs.openssl];
-    wasixCommands = builtins.attrValues entry.commands;
-    wasmerArgs = ["--net"];
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils];
+    runtime.network = true;
+    host = {
+      packages = [pkgs.git pkgs.lighttpd pkgs.openssl];
+      setup = ''
+        ${gitSetup}
+        ${setupNativeRemote}
+        ${startLighttpdHttps {}}
+      '';
+      teardown = ''
+        kill "$server_pid" 2>/dev/null || true
+        wait "$server_pid" 2>/dev/null || true
+      '';
+    };
     script = ''
-      ${gitSetup}
-      ${setupNativeRemote}
-      ${startLighttpdHttps {}}
       git clone https://127.0.0.1:8766/git-http-backend/remote.git cloned
       cat cloned/hello.txt
     '';
@@ -93,22 +123,33 @@ in {
     '';
   };
 
-  push-https = harnesses.hostShell {
+  push-https = harnesses.wasixShell {
     name = "push-https";
-    hostPackages = [pkgs.git pkgs.lighttpd pkgs.openssl];
-    wasixCommands = builtins.attrValues entry.commands;
-    wasmerArgs = ["--net"];
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils];
+    runtime.network = true;
+    host = {
+      packages = [pkgs.git pkgs.lighttpd pkgs.openssl];
+      setup = ''
+        ${gitSetup}
+        ${setupNativeRemote}
+        ${startLighttpdHttps {receivePack = true;}}
+      '';
+      teardown = ''
+        verification_status=0
+        ${pkgs.lib.getExe pkgs.git} -C repos/remote.git log --oneline || verification_status=$?
+        kill "$server_pid" 2>/dev/null || true
+        wait "$server_pid" 2>/dev/null || true
+        test "$verification_status" -eq 0
+      '';
+    };
     script = ''
-      ${gitSetup}
-      ${setupNativeRemote}
-      ${startLighttpdHttps {receivePack = true;}}
       git clone https://127.0.0.1:8766/git-http-backend/remote.git work
       cd work
       echo "world" >> hello.txt
       git add .
       git commit -m "second commit"
       git push origin main
-      ${pkgs.lib.getExe pkgs.git} -C ../repos/remote.git log --oneline
     '';
   };
 }

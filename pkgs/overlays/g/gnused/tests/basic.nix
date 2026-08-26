@@ -1,4 +1,5 @@
 {
+  commands,
   pkgs,
   entry,
   harnesses,
@@ -7,9 +8,10 @@
   nativeSed = [pkgs.gnused];
   wasixSed = builtins.attrValues entry.commands;
 in {
-  version = harnesses.hostShell {
+  version = harnesses.wasixShell {
     name = "sed-version";
-    wasixCommands = wasixSed;
+    shell = commands.bash;
+    commands = wasixSed;
     script = "sed --version";
   };
 

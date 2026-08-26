@@ -35,26 +35,27 @@ details live in:
 
 ## Package inventories
 
-The built-in `wasinix` extension is defined in `pkgs/project/extension.nix`. Its
-two registered overlays are discovered by `loadPackageOverlays`:
+The built-in `wasinix` extension is defined in `pkgs/project/extension.nix`.
+`loadPackageOverlays` discovers two by-name inventories:
 
-- `packages` applies to native and WASIX nixpkgs sets;
-- `python` applies to each supported Python package fixpoint.
+- `pkgs/overlays/<initial>/<name>/` for native and WASIX packages;
+- `pkgs/python-overlays/<initial>/<name>/` for Python package fixpoints.
 
-Regular entries live under `pkgs/overlays/<first-character>/`. A `package.nix`
-defines a complete package and runs in native and WASIX package sets. A flat
-`<name>.nix` or directory `wasix.nix` adapts a preceding nixpkgs package only
-when the actual host platform is WASIX. This distinction also applies to
+Regular entries live under `pkgs/overlays/<first-character>/<name>/`. A
+`package.nix` defines a complete package and runs in native and WASIX package
+sets. A colocated `wasix.nix` adapts a preceding nixpkgs package only when the
+actual host platform is WASIX. This distinction also applies to
 nixpkgs' native build-package splices, so WASIX adaptations never leak into host
 tools. Patches, tests, and other package inputs stay in the owning directory.
 Existing nixpkgs packages requiring no adaptation are registered by the
 extension's `inherited` attribute set instead of empty units.
 
-Python adaptations and their history live under
-`pkgs/python-overlays/<first-character>/`. Shared Python machinery remains in
-`pkgs/python/lib/` and `pkgs/python/wheels/`. Buildable compiler, sysroot, and
-repository tools are complete package entries in the same regular inventory;
-their role does not create another package category.
+WASIX-specific policy lives with its package: patches, flags, runtime
+dependencies, Wasm command names, WebC configuration, and tests. A unit normally
+uses `exposeWasixExtendedPackage` to adapt the preceding package. The directory
+keeps patches and behavior tests beside the package that owns them.
+
+Python package adaptations and their history live in `pkgs/python-overlays/`.
 
 Packages declare support through `passthru.wasix`:
 

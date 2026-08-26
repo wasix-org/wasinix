@@ -20,11 +20,11 @@ exposeWasixPackage (
         make -C tests -j"''${NIX_BUILD_CORES:-1}" genfile checkseekhole ckmtime
       '';
       passthru = {
+        wasix.supportedProfiles = ["off"];
         wasinix.shipped = true;
         # tar spawns its compression programs with fork, which the off profile
         # asyncifies for; binaryen cannot asyncify the EH instructions the others
         # emit.
-        wasix.supportedProfiles = ["off"];
         wasmer.name = "tar";
       };
       configureFlags = [

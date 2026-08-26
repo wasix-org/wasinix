@@ -12,8 +12,8 @@ Pure-Python packages generally need no adaptation:
 
 - A pure wheel builds through the nixpkgs cross stdenv unchanged, while
   compatible package suites run later under emulation. A
-  `pkgs/python-overlays/<first-character>/<attr>.nix` is a build adaptation, not
-  a prerequisite.
+  `pkgs/python-overlays/<initial>/<attr>.nix` is a build adaptation, not a
+  prerequisite.
 - The registry publishes every shipped wheel plus its transitive python deps
   (`packaging.md`), so shipping one app lands its whole pure closure.
 
@@ -41,9 +41,9 @@ Out-of-scope packages are excluded from the denominator; see below.
 
 The shipped native set is the registry closure, not
 `pkgs/python/wheels/default.nix`: transitive dependencies publish without a
-worklist entry. Per-package build details live in each
-`pkgs/overlays/<first-character>/<pkg>.nix` or
-`pkgs/python-overlays/<first-character>/<pkg>.nix` and the commit that added it.
+worklist entry. Per-package build details live under
+`pkgs/overlays/<initial>/<pkg>/` or `pkgs/python-overlays/<initial>/<pkg>/` and
+the commit that added it.
 
 ## Decide what to add
 

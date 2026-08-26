@@ -14,6 +14,16 @@ exposeWasixPackage (
     # zoneinfo tree, which is platform-independent data
     tzdata = packages.sameProfile.buildPackages.tzdata;
   }) {
+    passthru = {
+      wasix.supportedProfiles = ["eh" "ehpic"];
+      wasinix.shipped = true;
+
+      # RustFS ships prereleases (1.0.0-rc.1), which semver expresses directly, so
+      # publish the upstream version as it stands; the default coercion would read
+      # the trailing number as a fourth component and refuse. `wasmer run
+      # wasmer/rustfs` with no version cannot select a prerelease (WASIX-TODO.md).
+      wasmer.version = v: v;
+    };
     patches = [
       ./patches/rustfs-manifest.patch
       ./patches/rustfs-code.patch
@@ -43,13 +53,5 @@ exposeWasixPackage (
         CARGO_PROFILE_RELEASE_CODEGEN_UNITS = "16";
         CARGO_PROFILE_RELEASE_OPT_LEVEL = "1";
       };
-
-    passthru.wasinix.shipped = true;
-
-    # RustFS ships prereleases (1.0.0-rc.1), which semver expresses directly, so
-    # publish the upstream version as it stands; the default coercion would read
-    # the trailing number as a fourth component and refuse. `wasmer run
-    # wasmer/rustfs` with no version cannot select a prerelease (WASIX-TODO.md).
-    passthru.wasmer.version = v: v;
   }
 )

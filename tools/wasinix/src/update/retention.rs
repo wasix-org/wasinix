@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::support::error::{Result, request_error};
-use crate::support::nix::project_attr;
 use crate::support::ui;
 use crate::update::history::AddOutcome;
 
@@ -195,9 +194,8 @@ pub struct Note {
 fn fired_notes_once(repo: &Path, priors: &Value) -> Result<Value> {
     let output = crate::support::nix::Invocation::flake(
         "eval",
-        format!(
-            ".#{}",
-            project_attr("internals.repository.updates.updateNotes.fired")
+        crate::support::nix::active_project_installable(
+            "internals.repository.updates.updateNotes.fired",
         ),
     )
     .json()

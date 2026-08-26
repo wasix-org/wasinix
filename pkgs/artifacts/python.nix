@@ -127,7 +127,7 @@ in {
     (builtins.attrValues catalog.entries));
     registry = mkPythonRegistry {
       python3 = packageSets.wasix.preferred.${preferredPython};
-      pythonWebc = packages.wasix.preferred.${preferredPython}.artifacts.webc.shim;
+      pythonCommand = packages.wasix.preferred.${preferredPython}.artifacts.webc.commands.python;
       inherit pythonSets;
     };
   in {

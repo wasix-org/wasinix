@@ -11,10 +11,9 @@ routes `buildRustPackage` through cargo-wasix and provides the WASIX defaults.
 Rust has a standard library for `eh` and `ehpic`, so Rust packages are limited
 to those profiles.
 
-A nixpkgs CLI adaptation usually needs only
-`{exposeWasixPackage, package}: exposeWasixPackage package`. For a crate nixpkgs
-does not carry, define a complete `package.nix` with
-`packageSet.rustPlatform.buildRustPackage`; see
+A nixpkgs CLI usually needs only
+`{exposePackage, package}: exposePackage package`. For a crate nixpkgs does not
+carry, use `packages.sameProfile.rustPlatform.buildRustPackage`; see
 `pkgs/overlays/c/crabsay/package.nix`. Python wheels use the shared maturin and
 setuptools-rust hooks.
 

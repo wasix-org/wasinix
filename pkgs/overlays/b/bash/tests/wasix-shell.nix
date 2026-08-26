@@ -16,6 +16,8 @@ in {
     host = {
       packages = [pkgs.python3];
       setup = ''
+        mkdir -p "$WASIX_TEST_ROOT/fixtures"
+        cp ${fixture}/value "$WASIX_TEST_ROOT/fixtures/value"
         mkdir -p "$TMPDIR/server"
         printf 'served\n' > "$TMPDIR/server/value"
         python3 -m http.server 18080 --bind 127.0.0.1 --directory "$TMPDIR/server" > "$TMPDIR/server.log" 2>&1 &
@@ -28,15 +30,9 @@ in {
       '';
     };
     forwardEnv = ["TEST_ENDPOINT"];
-    capabilities.network = true;
-    mounts = [
-      {
-        source = fixture;
-        target = "/fixtures";
-      }
-    ];
+    runtime.network = true;
     script = ''
-      test "$(cat /fixtures/value)" = mounted
+      test "$(cat "$WASIX_TEST_ROOT/fixtures/value")" = mounted
       attempt=0
       until response=$(curl -fsS "$TEST_ENDPOINT"); do
         attempt=$((attempt + 1))

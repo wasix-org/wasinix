@@ -1,17 +1,20 @@
 {
+  commands,
   harnesses,
   entry,
   ...
 }: {
-  version = harnesses.hostShell {
+  version = harnesses.wasixShell {
     name = "anybuild-version";
-    wasixCommands = builtins.attrValues entry.commands;
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands;
     script = "anybuild --version";
   };
 
-  local-build = harnesses.hostShell {
+  local-build = harnesses.wasixShell {
     name = "anybuild-local-build";
-    wasixCommands = builtins.attrValues entry.commands;
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils];
     script = ''
       mkdir project
       printf 'hello\n' > project/index.html

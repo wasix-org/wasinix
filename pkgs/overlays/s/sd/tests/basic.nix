@@ -1,4 +1,5 @@
 {
+  commands,
   pkgs,
   entry,
   harnesses,
@@ -13,9 +14,10 @@
       wasixCommands = wasix;
     };
 in {
-  version = harnesses.hostShell {
+  version = harnesses.wasixShell {
     name = "sd-version";
-    wasixCommands = wasix;
+    shell = commands.bash;
+    commands = wasix;
     script = "sd --version";
   };
 

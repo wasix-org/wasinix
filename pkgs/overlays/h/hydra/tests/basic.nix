@@ -2,6 +2,7 @@
 # evaluator a real Hydra schema to query without depending on the WASIX
 # postmaster, which cannot fork its workers.
 {
+  commands,
   pkgs,
   harnesses,
   entry,
@@ -24,14 +25,6 @@
     "USER"
     "HYDRA_DBI"
   ];
-  run = name: args:
-    harnesses.hostShell ({
-        name = "hydra-${name}";
-        wasixCommands = wasix;
-        wasmerArgs = ["--net"];
-        inherit forwardEnv;
-      }
-      // args);
 in {
   runtime-mounts = pkgs.runCommand "hydra-runtime-mounts" {} ''
     manifest=${hydra}/pkg/hydra/wasmer.toml
@@ -44,7 +37,10 @@ in {
 
   # the argument parser is nix's, so a rejected flag means the module loaded and
   # main() ran
-  arguments = run "arguments" {
+  arguments = harnesses.wasixShell {
+    name = "hydra-arguments";
+    shell = commands.bash;
+    commands = wasix;
     script = ''
       for prog in hydra-evaluator hydra-queue-runner; do
         out=$($prog --help 2>&1 || true)
@@ -56,39 +52,51 @@ in {
     '';
   };
 
-  database = run "database" {
-    hostPackages = [pkgs.postgresql];
+  database = harnesses.wasixShell {
+    name = "hydra-database";
+    shell = commands.bash;
+    commands = wasix;
+    runtime.network = true;
+    inherit forwardEnv;
     timeout = 900;
+    host = {
+      packages = [pkgs.postgresql];
+      setup = ''
+        export LOGNAME=hydra USER=hydra
+        initdb -D db -U hydra --no-locale --encoding=UTF8 >/dev/null
+        postgres -D db -k "$PWD" -h 127.0.0.1 -p 55436 >postgres.log 2>&1 &
+        pid=$!
+
+        for _ in $(seq 1 60); do
+          if pg_isready -h 127.0.0.1 -p 55436 -U hydra >/dev/null 2>&1; then
+            break
+          fi
+          sleep 1
+        done
+        pg_isready -h 127.0.0.1 -p 55436 -U hydra
+        createdb -h 127.0.0.1 -p 55436 -U hydra hydra
+        psql -h 127.0.0.1 -p 55436 -U hydra -d hydra -v ON_ERROR_STOP=1 \
+          -f ${hydraPackage}/libexec/hydra/sql/hydra.sql >/dev/null
+
+        schema_version=1
+        for migration in ${hydraPackage}/libexec/hydra/sql/migrations/upgrade-*.sql; do
+          version=''${migration##*-}
+          version=''${version%.sql}
+          if [ "$version" -gt "$schema_version" ]; then schema_version=$version; fi
+        done
+        psql -h 127.0.0.1 -p 55436 -U hydra -d hydra -q -c \
+          "insert into SchemaVersion(version) values ($schema_version)"
+
+        export HYDRA_DBI='dbi:Pg:dbname=hydra;host=127.0.0.1;port=55436;user=hydra'
+        test "$(psql -h 127.0.0.1 -p 55436 -U hydra -d hydra -Atc \
+          'select version from SchemaVersion')" = "$schema_version"
+      '';
+      teardown = ''
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+      '';
+    };
     script = ''
-      export LOGNAME=hydra USER=hydra
-      initdb -D db -U hydra --no-locale --encoding=UTF8 >/dev/null
-      postgres -D db -k "$PWD" -h 127.0.0.1 -p 55436 >postgres.log 2>&1 &
-      pid=$!
-      trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
-
-      for _ in $(seq 1 60); do
-        if pg_isready -h 127.0.0.1 -p 55436 -U hydra >/dev/null 2>&1; then
-          break
-        fi
-        sleep 1
-      done
-      pg_isready -h 127.0.0.1 -p 55436 -U hydra
-      createdb -h 127.0.0.1 -p 55436 -U hydra hydra
-      psql -h 127.0.0.1 -p 55436 -U hydra -d hydra -v ON_ERROR_STOP=1 \
-        -f ${hydraPackage}/libexec/hydra/sql/hydra.sql >/dev/null
-
-      schema_version=1
-      for migration in ${hydraPackage}/libexec/hydra/sql/migrations/upgrade-*.sql; do
-        version=''${migration##*-}
-        version=''${version%.sql}
-        if [ "$version" -gt "$schema_version" ]; then schema_version=$version; fi
-      done
-      psql -h 127.0.0.1 -p 55436 -U hydra -d hydra -q -c \
-        "insert into SchemaVersion(version) values ($schema_version)"
-
-      export HYDRA_DBI='dbi:Pg:dbname=hydra;host=127.0.0.1;port=55436;user=hydra'
-      test "$(psql -h 127.0.0.1 -p 55436 -U hydra -d hydra -Atc \
-        'select version from SchemaVersion')" = "$schema_version"
 
       out=$(hydra-evaluator missing-project missing-jobset 2>&1 || true)
       case $out in

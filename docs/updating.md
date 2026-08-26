@@ -26,8 +26,8 @@ the stage0 bootstrap pin after moving the Rust source pin.
 
 A script's tools come from its own declaration, not an ambient environment: the
 command is a `writeShellApplication` wrapper naming its `runtimeInputs` and
-re-entering the checkout's script (`pkgs/overlays/c/cargo-registry/build.nix` is
-the model). The declaration must interpolate the wrapper
+re-entering the checkout's script (`pkgs/overlays/c/cargo-registry/package.nix`
+is the model). The declaration must interpolate the wrapper
 (`"${wrapper}/bin/..."`): the interpolation puts the wrapper's drv path in the
 string context the flake collects, and the driver realises those derivations on
 demand. The one ambient tool is `wasinix` itself, on the script's PATH so it

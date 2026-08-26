@@ -10,7 +10,7 @@
 # scipy's f2py wrappers, which pass the Fortran hidden CHARACTER-length args.
 # KMeans reaches flang's dgemm_ through scipy's cython_blas; that wrapper omitted
 # the hidden lengths, so wasm's strict call_indirect turned a latent ABI mismatch
-# (harmless on x86) into a signature_mismatch trap. scipy.nix's
+# (harmless on x86) into a signature_mismatch trap. SciPy's
 # scipy-cython-blas-fortran-charlen.patch regenerates cython_blas/cython_lapack
 # to pass those lengths, so the gemm path runs. The direct _test_dgemm call below
 # is the tightest regression check on that patch.

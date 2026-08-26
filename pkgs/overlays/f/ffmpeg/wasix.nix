@@ -4,6 +4,7 @@
 {
   exposeWasixPackage,
   extendPackage,
+  packageSet,
   packages,
   wasmRename,
 }:
@@ -59,7 +60,7 @@ exposeWasixPackage (
         };
       };
       patches = [./wasi-target.patch];
-      nativeBuildInputs = [packages.sameProfile.disableWasmOptInConfigureHook];
+      nativeBuildInputs = [packageSet.disableWasmOptInConfigureHook];
       configureFlags = [
         "--target_os=wasi"
         "--disable-asm"

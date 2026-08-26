@@ -3,11 +3,12 @@
   exposeWasixPackage,
   extendPackage,
   package,
-  profileSets,
   dropInputsByName,
+  profileSets,
 }:
 exposeWasixPackage (
   extendPackage (package.override {enablePlugins = false;}) {
+    passthru.wasix.supportedProfiles = profileSets.pic;
     # pkg_check_modules scopes PkgConfig::OpenEXR to lib/, so tools/ links without
     # -lOpenEXR and fails on undefined Imf_3_4 symbols.
     patches = [
@@ -40,6 +41,5 @@ exposeWasixPackage (
       "gdk-pixbuf"
       "makeWrapper"
     ];
-    passthru.wasix.supportedProfiles = profileSets.pic;
   }
 )

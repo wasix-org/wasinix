@@ -1,4 +1,5 @@
 {
+  commands,
   pkgs,
   entry,
   harnesses,
@@ -6,21 +7,31 @@
 }: let
   inherit (helpers) gitSetup;
 in {
-  clone-net = harnesses.hostShell {
+  clone-net = harnesses.wasixShell {
     name = "clone-net";
-    hostPackages = [pkgs.git];
-    wasixCommands = builtins.attrValues entry.commands;
-    wasmerArgs = ["--net"];
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils];
+    runtime.network = true;
+    host = {
+      packages = [pkgs.git];
+      setup = ''
+        ${gitSetup}
+        mkdir source && cd source
+        git init
+        echo "hello" > hello.txt
+        git add .
+        git commit -m "initial commit"
+        cd ..
+        ${pkgs.lib.getExe pkgs.git} daemon --base-path=. --export-all --reuseaddr --port=9418 &
+        server_pid=$!
+        sleep 1
+      '';
+      teardown = ''
+        kill "$server_pid" 2>/dev/null || true
+        wait "$server_pid" 2>/dev/null || true
+      '';
+    };
     script = ''
-      ${gitSetup}
-      mkdir source && cd source
-      git init
-      echo "hello" > hello.txt
-      git add .
-      git commit -m "initial commit"
-      cd ..
-      ${pkgs.lib.getExe pkgs.git} daemon --base-path=. --export-all --reuseaddr --port=9418 &
-      sleep 1
       git clone git://127.0.0.1:9418/source cloned
       cat cloned/hello.txt
     '';
@@ -51,17 +62,27 @@ in {
     '';
   };
 
-  push-net = harnesses.hostShell {
+  push-net = harnesses.wasixShell {
     name = "push-net";
-    hostPackages = [pkgs.git];
-    wasixCommands = builtins.attrValues entry.commands;
-    wasmerArgs = ["--net"];
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils];
+    runtime.network = true;
+    host = {
+      packages = [pkgs.git];
+      setup = ''
+        ${gitSetup}
+        ${pkgs.lib.getExe pkgs.git} init --bare remote.git
+        ${pkgs.lib.getExe pkgs.git} daemon --base-path=. --enable=receive-pack \
+          --export-all --reuseaddr --port=9418 &
+        server_pid=$!
+        sleep 1
+      '';
+      teardown = ''
+        kill "$server_pid" 2>/dev/null || true
+        wait "$server_pid" 2>/dev/null || true
+      '';
+    };
     script = ''
-      ${gitSetup}
-      ${pkgs.lib.getExe pkgs.git} init --bare remote.git
-      ${pkgs.lib.getExe pkgs.git} daemon --base-path=. --enable=receive-pack \
-        --export-all --reuseaddr --port=9418 &
-      sleep 1
       mkdir work && cd work
       git init
       git remote add origin git://127.0.0.1:9418/remote.git

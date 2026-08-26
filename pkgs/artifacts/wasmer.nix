@@ -53,7 +53,7 @@
         "${label}: passthru.wasmer.commands contains duplicate name(s): ${lib.concatStringsSep ", " duplicateCommands}"
         (lib.listToAttrs (map (command:
           lib.nameValuePair command.name {
-            inherit artifact version;
+            inherit artifact package version;
             inherit (command) name entrypoint global;
           })
         commandSpecs))));

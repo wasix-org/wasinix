@@ -1,15 +1,13 @@
-# Registry tests on the shared harness (pkgs/wasmer/test-lib.nix): an integrity
-# walk over the generated index, plus resolve tests where the host pip
-# cross-installs from the file:// index with wasi tags and the result runs on
-# the shipped python webc via its run-by-name shim.
+# Registry integrity and resolution tests. Host pip installs with WASIX tags;
+# imports run through the shipped Python WebC command.
 {
   pkgs,
   lib,
   registry,
+  harnesses,
   # eval-only (version tags).
   python3,
-  # run-by-name shim of the shipped python webc.
-  pythonWebc,
+  pythonCommand,
   testLib,
 }: let
   hostPython = pkgs.python3.withPackages (ps: [ps.pip]);
@@ -35,7 +33,7 @@
   pipFlags = "${pipResolveFlags} --index-url file://${registry}/all/simple";
 
   # PYTHONPATH is how the pip --target tree reaches the guest interpreter.
-  forwardEnv = testLib.defaultForwardEnv ++ ["PYTHONPATH"];
+  forwardEnv = harnesses.defaultForwardEnv ++ ["PYTHONPATH"];
 
   fakeRclone = pkgs.writeShellScript "fake-rclone" ''
     printf '%s\n' "$*" >> "$FAKE_RCLONE_LOG"
@@ -49,10 +47,10 @@
     pyImport ? attr,
     expectDeps ? [],
   }:
-    testLib.mkWasixRun {
+    harnesses.hostShell {
       name = "registry-resolve-${attr}";
-      nativePkgs = [hostPython];
-      wasixPkgs = [pythonWebc];
+      hostPackages = [hostPython];
+      wasixCommands = [pythonCommand];
       inherit forwardEnv;
       script = ''
         ${hostPythonExe} -m pip install ${pipFlags} --target site ${attr}
@@ -109,10 +107,10 @@ in {
   # The index served over http: pip's http path (pages + PEP 658 sidecars),
   # then a real socket round trip from the guest through requests/urllib3.
   # Plain http only; the guest python has no _ssl.
-  http-index = testLib.mkWasixRun {
+  http-index = harnesses.hostShell {
     name = "registry-http-index";
-    nativePkgs = [hostPython];
-    wasixPkgs = [pythonWebc];
+    hostPackages = [hostPython];
+    wasixCommands = [pythonCommand];
     wasmerArgs = ["--net"];
     inherit forwardEnv;
     script = ''
@@ -127,10 +125,10 @@ in {
 
   # Full-stack e2e: install e2e/pyproject.toml's deps (one wheel per build tier)
   # from the registry, then e2e/main.py hard-asserts real work with each.
-  e2e-project = testLib.mkWasixRun {
+  e2e-project = harnesses.hostShell {
     name = "registry-e2e-project";
-    nativePkgs = [hostPython];
-    wasixPkgs = [pythonWebc];
+    hostPackages = [hostPython];
+    wasixCommands = [pythonCommand];
     inherit forwardEnv;
     script = ''
       # the pyproject is the single source of the dep list

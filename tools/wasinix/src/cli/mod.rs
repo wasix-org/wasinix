@@ -857,7 +857,7 @@ fn cache_command(command: CacheCommand) -> Result<CommandStatus> {
             );
             let scratch = crate::support::fs::Scratch::create("wasinix-cache-push")?;
             let jobs_path = scratch.path().join("jobs.jsonl");
-            let attr = format!(".#{}", crate::support::nix::project_attr("ci.jobs"));
+            let attr = crate::support::nix::active_project_installable("ci.jobs");
             let catalog = crate::ci::exec::selector_catalog(worktree.path(), &route)?.into_map();
             let selected: Vec<String> = if selectors.is_empty() {
                 catalog.jobs.keys().map(|job| job.0.clone()).collect()

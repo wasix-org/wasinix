@@ -162,7 +162,7 @@
 
   # Package tests follow python/<attr>/tests/*.nix and return
   # named derivations from the supplied scope.
-  pkgTestsDir = attr: ../../python-overlays + "/${lib.substring 0 1 attr}/${attr}/tests";
+  pkgTestsDir = attr: ../. + "/${attr}/tests";
   pkgTests = e: let
     dir = pkgTestsDir e.attr;
     scope = {

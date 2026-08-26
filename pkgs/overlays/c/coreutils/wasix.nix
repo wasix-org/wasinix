@@ -121,8 +121,8 @@ exposeWasixPackage (
   in
     extendPackage (package.override {gmpSupport = false;}) {
       passthru = {
-        wasinix.shipped = true;
         wasix.supportedProfiles = ["off"];
+        wasinix.shipped = true;
         wasmer = {
           entrypoint = "coreutils";
           commands =

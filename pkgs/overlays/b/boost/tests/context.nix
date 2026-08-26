@@ -1,4 +1,5 @@
 {
+  commands,
   entry,
   harnesses,
   packageForEntry,
@@ -23,9 +24,10 @@
     passthru.wasmer.name = "boost-context-test";
   };
 in {
-  coroutine2 = harnesses.hostShell {
+  coroutine2 = harnesses.wasixShell {
     name = "boost-context-coroutine2";
-    wasixCommands = [
+    shell = commands.bash;
+    commands = [
       (harnesses.packageCommand {package = program;})
     ];
     script = ''

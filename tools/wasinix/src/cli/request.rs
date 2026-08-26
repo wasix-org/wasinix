@@ -604,12 +604,13 @@ pub(crate) fn run_on_host(
     if inputs_only {
         payload_tail.push("--inputs-only".to_string());
     }
+    let project = crate::support::nix::active_project_installable("");
     let mut renderer = crate::cli::render::LineRenderer::for_build();
     let status = crate::runs::remote::run(crate::runs::remote::Request {
         repo,
         builder,
         inputs: vec![(shipped, "request.json".to_string())],
-        payload: &|state| host_payload(state, &payload_tail),
+        payload: &|state| host_payload(state, &project, &payload_tail),
         fetch_to: run_dir,
         progress: &mut renderer,
         forward_push_credentials: matches!(cache, CacheIntent::Push),
@@ -618,10 +619,10 @@ pub(crate) fn run_on_host(
     status
 }
 
-pub(crate) fn host_payload(state: &str, tail: &[String]) -> Vec<String> {
+pub(crate) fn host_payload(state: &str, project: &str, tail: &[String]) -> Vec<String> {
     let mut words = vec![
         "--project".to_string(),
-        format!(".#{}", crate::support::nix::project_attr("")),
+        project.to_string(),
         "ci".to_string(),
         "run".to_string(),
         "--request".to_string(),

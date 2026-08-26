@@ -1,5 +1,2 @@
-{
-  exposeNativePackage,
-  package,
-}:
-exposeNativePackage package
+{exposeNativeExtendedPackage}:
+exposeNativeExtendedPackage {passthru.wasix.supportedProfiles = [];}

@@ -4,6 +4,7 @@
 {
   exposeWasixPackage,
   extendPackage,
+  packageSet,
   packages,
   wasmRename,
 }:
@@ -64,6 +65,6 @@ exposeWasixPackage (
         ./no-fork-remote-jit.patch
         ./dlfcn-optional.patch
       ];
-      nativeBuildInputs = [packages.sameProfile.disableWasmOptInConfigureHook];
+      nativeBuildInputs = [packageSet.disableWasmOptInConfigureHook];
     })
 )

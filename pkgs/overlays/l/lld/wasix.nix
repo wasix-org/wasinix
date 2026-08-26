@@ -3,6 +3,7 @@
 {
   exposeWasixPackage,
   extendPackage,
+  packageSet,
   packages,
 }:
 exposeWasixPackage (
@@ -43,7 +44,7 @@ exposeWasixPackage (
         "-DUNIX=ON"
         "-DLLD_BUILD_TOOLS=ON"
       ];
-      nativeBuildInputs = [packages.sameProfile.disableWasmOptInConfigureHook];
+      nativeBuildInputs = [packageSet.disableWasmOptInConfigureHook];
       ninjaFlags = ["lld"];
       installPhase = _old: ''
         runHook preInstall

@@ -4,10 +4,10 @@
 # Patches go in the src, not patchPhase: the python duckdb wheel
 # symlinks this src into its external/duckdb submodule (nixpkgs: ln -s ${duckdb.src}).
 {
-  profileSets,
   exposeWasixExtendedPackage,
   package,
   packages,
+  profileSets,
 }: let
   inherit (packages.sameProfile) lib;
   patchedSrc = packages.sameProfile.buildPackages.applyPatches {
@@ -29,6 +29,7 @@
   };
 in
   exposeWasixExtendedPackage {
+    passthru.wasix.supportedProfiles = profileSets.pic;
     src = patchedSrc;
     cmakeFlags = [
       # Skips a probe that runs a just-built duckdb_platform_binary, here wasm.
@@ -38,7 +39,4 @@ in
       # nixpkgs enables these; the demo extension uses inet_addr, undeclared in wasix-libc.
       "-DBUILD_UNITTESTS=OFF"
     ];
-    # The non-PIC EH sysroots ship no <dlfcn.h>, which dl.hpp includes off Windows;
-    # `off` compiles with -fno-exceptions, which libpg_query's try/throw rejects.
-    passthru.wasix.supportedProfiles = profileSets.pic;
   }

@@ -1,4 +1,5 @@
 {
+  commands,
   entry,
   harnesses,
   ...
@@ -7,9 +8,10 @@
 in {
   # Each program is its own webc command on one shared module, so argv[0] is
   # what selects it.
-  dispatch = harnesses.hostShell {
+  dispatch = harnesses.wasixShell {
     name = "coreutils-dispatch";
-    wasixCommands = coreutilsCommands;
+    shell = commands.bash;
+    commands = coreutilsCommands;
     script = ''
       [ "$(basename /a/b/c.txt)" = "c.txt" ]
       [ "$(echo hi)" = "hi" ]
@@ -20,9 +22,10 @@ in {
   };
 
   # File operations against a real (mapped) directory.
-  files = harnesses.hostShell {
+  files = harnesses.wasixShell {
     name = "coreutils-files";
-    wasixCommands = coreutilsCommands;
+    shell = commands.bash;
+    commands = coreutilsCommands;
     script = ''
       mkdir -p tree/sub
       printf 'one\ntwo\n' > tree/sub/f.txt

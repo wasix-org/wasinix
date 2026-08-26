@@ -6,6 +6,7 @@
 }:
 exposeWasixPackage (
   extendPackage (package.override {alsa-lib = null;}) {
+    passthru.wasix.supportedProfiles = profileSets.pic;
     configureFlags = ["--disable-alsa"];
     patches = [./patches/xi-initial-write-length.patch];
     # libtool records some codec deps as `<dir>/libNAME.la` paths wasm-ld can't read.
@@ -18,6 +19,5 @@ exposeWasixPackage (
     postInstall = ''
       install -Dm755 src/.libs/libsndfile.so "$out/lib/libsndfile.so"
     '';
-    passthru.wasix.supportedProfiles = profileSets.pic;
   }
 )

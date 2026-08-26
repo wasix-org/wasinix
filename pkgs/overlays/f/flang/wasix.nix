@@ -4,6 +4,7 @@
 {
   exposeWasixPackage,
   extendPackage,
+  packageSet,
   packages,
   pkgs,
 }:
@@ -100,7 +101,7 @@ exposeWasixPackage (
       # compiler rejects where size_t is 32 bits. A wasm32 address space cannot
       # hold an object whose subscript needs the discarded bits.
       env.NIX_CFLAGS_COMPILE = "-Wno-error=c++11-narrowing";
-      nativeBuildInputs = [packages.sameProfile.disableWasmOptInConfigureHook];
+      nativeBuildInputs = [packageSet.disableWasmOptInConfigureHook];
       ninjaFlags = ["flang"];
       installPhase = _old: ''
         runHook preInstall

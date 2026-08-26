@@ -1,5 +1,0 @@
-{
-  exposeWasixPackage,
-  package,
-}:
-exposeWasixPackage package

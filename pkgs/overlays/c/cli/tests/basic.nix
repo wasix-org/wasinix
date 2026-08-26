@@ -18,9 +18,9 @@
     touch "$out"
   '';
 
-  find = harnesses.hostShell {
+  find = harnesses.wasixShell {
     name = "cli-find";
-    wasixCommands = builtins.attrValues entry.commands;
+    shell = entry.commands.bash;
     script = ''
       test "$(bash -c 'find /tmp -maxdepth 0')" = /tmp
     '';

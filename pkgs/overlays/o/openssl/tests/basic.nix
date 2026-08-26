@@ -1,6 +1,7 @@
 # The CLI under wasmer, against the native openssl of the same version. The
 # forking OCSP responder is the one app feature wasi cannot have (HAVE_FORK=0).
 {
+  commands,
   pkgs,
   harnesses,
   entry,
@@ -15,9 +16,10 @@
       inherit script;
     };
 in {
-  version = harnesses.hostShell {
+  version = harnesses.wasixShell {
     name = "openssl-version";
-    wasixCommands = wasix;
+    shell = commands.bash;
+    commands = wasix;
     script = "openssl version";
   };
 

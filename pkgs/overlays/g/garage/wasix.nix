@@ -11,6 +11,7 @@
   sysroot = packages.native."wasix-sysroot".profiles.${profileOf packages.sameProfile.stdenv.hostPlatform}.sysroot;
 in
   exposeWasixExtendedPackage {
+    passthru.wasix.supportedProfiles = ["eh" "ehpic"];
     patches = [
       ./patches/garage-manifest.patch
       ./patches/garage-code.patch

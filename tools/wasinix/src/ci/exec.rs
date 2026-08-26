@@ -227,7 +227,7 @@ fn eval_inputs(
     let _lease = route.acquire()?;
     let case_id = case.case_id();
     let logs = crate::ci::prepare::logs_dir(&case_dir(ctx.run_dir, case_id)).join("eval-inputs");
-    let attr = format!("path:.#{}", crate::support::nix::project_attr("ci.jobs"));
+    let attr = crate::support::nix::active_project_installable("ci.jobs");
     let selector_catalog = selector_catalog(worktree, route)?;
     let catalog_path = crate::ci::prepare::selector_catalog_path(&case_dir(ctx.run_dir, case_id));
     crate::support::json::write(&catalog_path, &selector_catalog)?;
@@ -288,7 +288,7 @@ pub(crate) fn selector_catalog(
 ) -> Result<crate::ci::evalmap::SelectorCatalog> {
     let bytes = crate::support::nix::Invocation::flake(
         "eval",
-        format!("path:.#{}", crate::support::nix::project_attr("ci.catalog")),
+        crate::support::nix::active_project_installable("ci.catalog"),
     )
     .json()
     .workdir(worktree)
@@ -313,10 +313,7 @@ pub(crate) fn selector_catalog(
 fn require_project_schema(worktree: &Path, route: &Route) -> Result<()> {
     let bytes = crate::support::nix::Invocation::flake(
         "eval",
-        format!(
-            "path:.#{}",
-            crate::support::nix::project_attr("schemaVersion")
-        ),
+        crate::support::nix::active_project_installable("schemaVersion"),
     )
     .json()
     .offline()
@@ -349,7 +346,7 @@ fn evaluate(
     require_project_schema(worktree, route)?;
     let case_id = case.case_id();
     let maps = crate::ci::prepare::maps_dir(&case_dir(ctx.run_dir, case_id));
-    let attr = format!("path:.#{}", crate::support::nix::project_attr("ci.jobs"));
+    let attr = crate::support::nix::active_project_installable("ci.jobs");
     let catalog: crate::ci::evalmap::SelectorCatalog = crate::support::json::read(
         &crate::ci::prepare::selector_catalog_path(&case_dir(ctx.run_dir, case_id)),
     )?;

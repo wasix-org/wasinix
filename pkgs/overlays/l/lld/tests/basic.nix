@@ -1,4 +1,5 @@
 {
+  commands,
   harnesses,
   entry,
   packages,
@@ -20,10 +21,11 @@
     '';
   };
 in {
-  wasm-link = harnesses.hostShell {
+  wasm-link = harnesses.wasixShell {
     name = "lld-wasm-link";
-    wasixCommands = builtins.attrValues entry.commands;
-    wasmerArgs = ["--enable-threads"];
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils];
+    runtime.threads = true;
     script = ''
       cp ${fixture}/answer.o answer.o
       wasm-ld --no-entry --export=answer answer.o -o answer.wasm

@@ -797,7 +797,7 @@ pub fn verify_mint(repo: &Path, target: &Target, added: &[String], before: &Hist
     }
     let output = crate::support::nix::Invocation::flake(
         "eval",
-        format!(".#{}", crate::support::nix::project_attr("schemaVersion")),
+        crate::support::nix::active_project_installable("schemaVersion"),
     )
     .workdir(repo)
     .probe("verify_mint reports the failing set's own stderr")?;

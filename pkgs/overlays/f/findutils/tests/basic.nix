@@ -1,4 +1,5 @@
 {
+  commands,
   pkgs,
   entry,
   harnesses,
@@ -14,9 +15,10 @@
       wasixCommands = wasix;
     };
 in {
-  version = harnesses.hostShell {
+  version = harnesses.wasixShell {
     name = "find-version";
-    wasixCommands = wasix;
+    shell = commands.bash;
+    commands = wasix;
     script = "find --version";
   };
 
@@ -31,27 +33,23 @@ in {
     find t -name '*.txt' | sort
   '';
 
-  # -exec and xargs fork+exec correctly (wasix-compat fork shim + asyncify) and
-  # cwd is fixed, but the spawned command (cat/echo) isn't resolvable in the
-  # wasm runtime PATH. find -exec swallows the exec failure and exits 0, so it
-  # surfaces as an output diff; xargs propagates it (non-zero exit). Both
-  # tracked until the runtime resolves spawned commands.
-  exec = harnesses.compareShells {
+  exec = harnesses.wasixShell {
     name = "find-exec";
-    hostPackages = native;
-    wasixCommands = wasix;
+    shell = commands.bash;
+    commands = wasix ++ [commands.coreutils];
     script = ''
       mkdir -p t
       printf 'hello\n' > t/a.txt
-      find t -name '*.txt' -exec cat {} \;
+      test "$(find t -name '*.txt' -exec cat {} \;)" = hello
     '';
-    broken = "find -exec's spawned command (cat) isn't resolvable in the wasm runtime PATH";
   };
 
-  xargs = harnesses.hostShell {
+  xargs = harnesses.wasixShell {
     name = "find-xargs";
-    wasixCommands = wasix;
-    script = "printf 'a\\nb\\nc\\n' | xargs -n1 echo line";
-    broken = "xargs's spawned command (echo) isn't resolvable in the wasm runtime PATH";
+    shell = commands.bash;
+    commands = wasix ++ [commands.coreutils];
+    script = ''
+      test "$(printf 'a\nb\nc\n' | xargs -n1 echo line)" = "$(printf 'line a\nline b\nline c')"
+    '';
   };
 }

@@ -1,4 +1,4 @@
-# Reference LAPACK/BLAS/CBLAS for wasix, static archives only. The upstream recipe's
+# Reference LAPACK/BLAS/CBLAS for wasix, static archives only. The upstream package's
 # gfortran is wasixflang in this set (overlay/default.nix), which cmake detects as a
 # normal cross Fortran compiler.
 {
@@ -11,6 +11,7 @@
 }:
 exposeWasixPackage (
   extendPackage (package.override {shared = false;}) {
+    passthru.wasix.supportedProfiles = profileSets.pic;
     # The archives carry unresolved flang-rt symbols; propagation is what puts its
     # setup hook, and so the runtime, on a consumer's link line.
     propagatedBuildInputs = [packages.native."wasix-sysroot".profiles.${profileOf packages.sameProfile.stdenv.hostPlatform}.flangRt];
@@ -25,6 +26,5 @@ exposeWasixPackage (
 
     # flang emits PIC relocations for LAPACK that no relocation-model flag removes, so
     # a non-PIC build fails abiCheck.
-    passthru.wasix.supportedProfiles = profileSets.pic;
   }
 )

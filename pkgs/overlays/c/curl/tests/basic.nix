@@ -1,4 +1,5 @@
 {
+  commands,
   pkgs,
   entry,
   harnesses,
@@ -8,9 +9,10 @@
   nativeCurl = [pkgs.curl];
   wasixCurl = builtins.attrValues entry.commands;
 in {
-  version = harnesses.hostShell {
+  version = harnesses.wasixShell {
     name = "curl-version";
-    wasixCommands = wasixCurl;
+    shell = commands.bash;
+    commands = wasixCurl;
     script = "curl --version";
   };
 

@@ -5,6 +5,7 @@
   exposeWasixPackage,
   extendPackage,
   package,
+  packageSet,
   packages,
 }:
 exposeWasixPackage (
@@ -46,7 +47,7 @@ exposeWasixPackage (
         "-DLLVM_INCLUDE_EXAMPLES=OFF"
         "-DLLVM_INCLUDE_TESTS=OFF"
       ];
-      nativeBuildInputs = [packages.sameProfile.disableWasmOptInConfigureHook];
+      nativeBuildInputs = [packageSet.disableWasmOptInConfigureHook];
     };
     libllvm = extendPackage common {
       # Frontends consume LLVM's libraries and CMake package only. Building every

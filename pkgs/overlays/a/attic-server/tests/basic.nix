@@ -1,11 +1,13 @@
 {
+  commands,
   harnesses,
   entry,
   ...
 }: {
-  version = harnesses.hostShell {
+  version = harnesses.wasixShell {
     name = "attic-server-version";
-    wasixCommands = builtins.attrValues entry.commands;
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands;
     script = "atticd --version";
   };
 }

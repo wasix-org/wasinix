@@ -39,11 +39,11 @@
 
         xz = {};
       };
-      lane = "packages";
+      sharded = true;
     };
     python = {
       directory = ../python-overlays;
-      lane = "python";
+      sharded = true;
       expose = map (entry: entry.attr) (import ../python/wheels/default.nix);
       definition = {
         file = ../python/wheels/default.nix;
