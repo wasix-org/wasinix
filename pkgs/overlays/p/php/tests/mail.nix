@@ -1,8 +1,6 @@
 {
   entry,
   harnesses,
-  packageForEntry,
-  packages,
   pkgs,
   ...
 }: {
@@ -11,10 +9,6 @@
     hostPackages = [pkgs.gnugrep];
     wasixCommands = builtins.attrValues entry.commands;
     forwardEnv = harnesses.defaultForwardEnv ++ ["SENDMAIL_FILE_PATH"];
-    broken =
-      if pkgs.lib.versionOlder (packageForEntry packages entry).version "8.0"
-      then "the off-profile runtime surfaces the spawned sendmail guest's exit as an unhandled exception"
-      else null;
     script = ''
       export SENDMAIL_FILE_PATH="$WASIX_TEST_ROOT/mail.txt"
       php -r 'exit(mail("recipient@example.com", "PHP subject", "PHP body") ? 0 : 1);'

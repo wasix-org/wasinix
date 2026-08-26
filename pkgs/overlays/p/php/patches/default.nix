@@ -48,6 +48,7 @@
     ++ lib.optional (between "8.1" "8.4") ./runtime/fibers-wasix-pre84.patch
     ++ lib.optional (atLeast "8.4") ./runtime/fibers-wasix.patch
     ++ lib.optionals (older "8.0") [
+      ./runtime/cli-server-asyncify-74.patch
       ./runtime/setjmp-off-74.patch
       ./runtime/sockets-optional-sock-rdm-74.patch
     ];
