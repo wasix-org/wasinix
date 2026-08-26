@@ -71,7 +71,7 @@
     final.zstd
   ];
 
-  wasixConfigureFlags = spec: enabledExtensions:
+  wasixConfigureFlags = spec: enabledExtensions: libphpBuild:
     [
       "--enable-bcmath"
       "--enable-calendar"
@@ -106,7 +106,11 @@
       "--with-pdo-pgsql=${libpqPrefix}"
       "--with-pdo-sqlite"
       "--with-pgsql=${libpqPrefix}"
-      "--with-readline=${getDev final.readline}"
+      (
+        if libphpBuild
+        then "--without-readline"
+        else "--with-readline=${getDev final.readline}"
+      )
       "--with-sodium"
       "--with-tidy=${final.html-tidy}"
       "--with-valgrind=no"
@@ -114,13 +118,30 @@
       "--with-zlib"
     ]
     ++ map (extension: extension.configureFlag) enabledExtensions
+    ++ lib.optionals libphpBuild [
+      "--enable-embed=static"
+      "--enable-zts"
+    ]
     ++ lib.optional (lib.versionOlder spec.version "8.5") "--enable-opcache"
     ++ lib.optional (lib.versionAtLeast spec.version "8.0") "--disable-opcache-jit"
     ++ lib.optional (lib.versionAtLeast spec.version "8.1") "--enable-fiber-asm";
 
   defaultExtensionSelector = {enabled, ...}: enabled;
 
-  mkPhp = webcName: spec: int64: history: extensionSelector: let
+  mkPhp = webcName: spec: int64: history: extensionSelector:
+    mkPhpVariant {
+      inherit extensionSelector history int64 spec webcName;
+      libphpBuild = false;
+    };
+
+  mkPhpVariant = {
+    webcName,
+    spec,
+    int64,
+    history,
+    extensionSelector,
+    libphpBuild,
+  }: let
     serverSnapshot = lib.versionAtLeast spec.version "8.1";
     src = final.fetchFromGitHub {
       owner = "php";
@@ -139,6 +160,8 @@
       pearSupport = false;
       phpdbgSupport = false;
       staticSupport = true;
+      embedSupport = libphpBuild;
+      ztsSupport = libphpBuild;
       argon2Support = false;
       systemdSupport = false;
       valgrindSupport = false;
@@ -169,6 +192,14 @@
     });
     extensionBuildInputs = lib.concatMap (extension: extension.buildInputs or []) enabledExtensions;
     extensionEnv = lib.foldl' lib.recursiveUpdate {} (map (extension: extension.env or {}) enabledExtensions);
+    staticLinkDirs = map (input: "-L${getLib input}/lib") (baseBuildInputs ++ extensionBuildInputs);
+    staticLinkLibs =
+      [
+        "-lc++"
+        "-lc++abi"
+        "-lunwind"
+      ]
+      ++ lib.concatMap (extension: extension.staticLinkLibs or []) enabledExtensions;
     upstreamBaseline =
       ./tests/upstream-baselines
       + "/php${lib.versions.major spec.version}${lib.versions.minor spec.version}${lib.optionalString int64 "-int64"}.txt";
@@ -186,7 +217,7 @@
       patches = phpPatches.source;
       nativeBuildInputs = [final.disableWasmOptInConfigureHook];
       buildInputs = _: baseBuildInputs ++ extensionBuildInputs;
-      configureFlags = _: wasixConfigureFlags spec enabledExtensions;
+      configureFlags = _: wasixConfigureFlags spec enabledExtensions libphpBuild;
 
       postPatch =
         lib.optionalString (lib.versionOlder spec.version "8.0") ''
@@ -256,7 +287,21 @@
 
       preInstall = _: ":";
 
-      postInstall = ''
+      installPhase = old:
+        if libphpBuild
+        then ''
+          runHook preInstall
+          make install-headers install-sapi
+          install -Dm755 scripts/php-config "$out/bin/php-config"
+          substituteInPlace "$out/bin/php-config" \
+            --replace-fail \
+            'extension_dir=' \
+            $'ldflags="$ldflags ${lib.concatStringsSep " " staticLinkDirs}"\nlibs="$libs ${lib.concatStringsSep " " staticLinkLibs}"\nextension_dir='
+          runHook postInstall
+        ''
+        else old;
+
+      postInstall = lib.optionalString (!libphpBuild) ''
         install -Dm644 ${phpIni} "$out/lib/php.ini"
       '';
       postFixup = _: "";
@@ -267,15 +312,26 @@
           extensions = extensionPackages;
           inherit enabledExtensions;
           withExtensions = selector:
-            mkPhp webcName spec int64 history ({all, ...}:
-              selector {
-                enabled = enabledExtensions;
-                inherit all;
-              });
+            mkPhpVariant {
+              inherit history int64 libphpBuild spec webcName;
+              extensionSelector = {all, ...}:
+                selector {
+                  enabled = enabledExtensions;
+                  inherit all;
+                };
+            };
           wasix.supportedProfiles =
             if lib.versionOlder spec.version "8.0"
             then ["off"]
             else ["exnrefEh"];
+        }
+        // lib.optionalAttrs (!libphpBuild && lib.versionAtLeast spec.version "8.1") {
+          libphp = mkPhpVariant {
+            inherit extensionSelector history int64 spec webcName;
+            libphpBuild = true;
+          };
+        }
+        // lib.optionalAttrs (!libphpBuild) {
           wasinix = {
             aliases = lib.optional (!history) (
               if int64
@@ -334,7 +390,10 @@
         };
 
       meta = {
-        description = "PHP ${spec.version} interpreter for WASIX";
+        description =
+          if libphpBuild
+          then "PHP ${spec.version} ZTS embed SAPI for WASIX"
+          else "PHP ${spec.version} interpreter for WASIX";
       };
     });
   php32 = lib.mapAttrs (name: spec: mkPhp "php-32" spec false (name != "php85") defaultExtensionSelector) versions;
