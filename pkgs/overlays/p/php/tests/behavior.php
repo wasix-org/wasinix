@@ -8,9 +8,10 @@ function check_value($condition, $message)
 }
 
 $expectedVersion = $argv[1];
-$font = $argv[2];
+$expectedIntSize = (int) $argv[2];
+$font = $argv[3];
 check_value(PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION . "." . PHP_RELEASE_VERSION === $expectedVersion, "wrong version");
-check_value(PHP_INT_SIZE === 4, "wrong integer size");
+check_value(PHP_INT_SIZE === $expectedIntSize, "wrong integer size");
 
 $required = [
     "bcmath", "calendar", "curl", "dom", "fileinfo", "gd", "gettext",

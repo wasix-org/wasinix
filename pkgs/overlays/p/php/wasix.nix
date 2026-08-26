@@ -142,12 +142,13 @@
       argon2Support = false;
       systemdSupport = false;
       valgrindSupport = false;
-      phpAttrsOverrides = _: _: {
+      phpAttrsOverrides = _: previous: {
         outputs = ["out"];
         separateDebugInfo = false;
         doCheck = true;
         checkTarget = "test";
         wasixCheckPrebuild = ''make -j"''${NIX_BUILD_CORES:-1}" all'';
+        meta = previous.meta // {outputsToInstall = ["out"];};
       };
     };
     nixpkgsPhpPackages = final.callPackage "${pkgs.path}/pkgs/top-level/php-packages.nix" {
@@ -334,7 +335,6 @@
 
       meta = {
         description = "PHP ${spec.version} interpreter for WASIX";
-        outputsToInstall = ["out"];
       };
     });
   php32 = lib.mapAttrs (name: spec: mkPhp "php-32" spec false (name != "php85") defaultExtensionSelector) versions;
