@@ -4832,6 +4832,27 @@ mod update {
     }
 
     #[test]
+    fn update_pr_work_is_canonical_and_deterministic() {
+        let targets = vec![flake_target("wasmer"), flake_target("nixpkgs")];
+        let all = crate::update::batch::work_items(&targets, true, &[]).unwrap();
+        assert_eq!(
+            all.iter()
+                .map(|item| item.name.as_str())
+                .collect::<Vec<_>>(),
+            ["nixpkgs", "wasmer"]
+        );
+        let revision = "b".repeat(40);
+        let selected = crate::update::batch::work_items(
+            &targets,
+            false,
+            &[format!("wasmer@rev:{revision}"), "nixpkgs".into()],
+        )
+        .unwrap();
+        assert_eq!(selected[0].spec, "nixpkgs");
+        assert_eq!(selected[1].spec, format!("wasmer@rev:{revision}"));
+    }
+
+    #[test]
     fn version_substitution_only_touches_bounded_matches() {
         assert_eq!(
             substitute_version("url", "https://host:2000/v2/pkg-2.tar.gz", "2", "3").unwrap(),
@@ -5842,7 +5863,6 @@ mod corpus {
             "remote init",
             "ci nix-config",
             "ci start",
-            "ci update-matrix",
             "ci pull-request",
             "ci preview-context",
             "ci preview-cleanup",
@@ -5913,15 +5933,6 @@ mod corpus {
         }
     }
 
-    #[test]
-    fn update_matrix_is_sorted_deduplicated_and_never_empty() {
-        assert_eq!(
-            crate::cli::update_matrix(vec!["zlib".into(), "brotli".into(), "zlib".into()]).unwrap(),
-            r#"[{"name":"brotli"},{"name":"zlib"}]"#
-        );
-        assert!(crate::cli::update_matrix(Vec::new()).is_err());
-    }
-
     /// Every spelling an alias, doc, or self-invocation uses must parse; a
     /// retired spelling must not quietly come back.
     #[test]
@@ -5954,7 +5965,6 @@ mod corpus {
             "ci run --request r.json --run-dir d",
             "ci run --request r.json --run-dir d --inputs-only",
             "ci start --github-output outputs -- wasinix ci run --request r.json --run-dir d",
-            "ci update-matrix --targets wasmer --github-output outputs",
             "ci pull-request --repository base/repo --head-sha aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --head-repository fork/repo --github-output outputs",
             "ci preview-context --repository base/repo --event event.json --github-output outputs",
             "ci preview-cleanup --namespace kilyanni --pull-request 7 --registry wasmer.io",
@@ -5976,6 +5986,7 @@ mod corpus {
             "update wasix-libc",
             "update wasix-libc@2026-08-01.1 wasmer@rev:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "update --all --commit",
+            "update --all --pr --jobs 4",
             "update list --json",
             "update hooks",
             "versions add numpy@1.26.4",
@@ -6775,21 +6786,19 @@ mod corpus {
         );
 
         let update = read("update.yml");
-        let targets = job(&update, "targets");
+        let jobs = field(&update, "jobs").as_mapping().unwrap();
         assert_eq!(
-            field(
-                field(targets, "outputs"),
-                crate::github::actions::OUTPUT_MATRIX
-            )
-            .as_str(),
-            Some("${{ steps.list.outputs.matrix }}")
+            jobs.keys()
+                .filter_map(serde_yaml_ng::Value::as_str)
+                .collect::<Vec<_>>(),
+            ["update"]
         );
-        assert_eq!(
-            field(step(targets, "list"), "run").as_str(),
-            Some(
-                "nix run .#ci -- update-matrix --targets \"$TARGETS\" --github-output \"$GITHUB_OUTPUT\""
-            )
-        );
+        let invocation = field(step(job(&update, "update"), "update"), "run")
+            .as_str()
+            .unwrap();
+        assert!(invocation.contains("nix run .#update --"), "{invocation}");
+        assert!(invocation.contains("--pr --jobs 4"), "{invocation}");
+        assert!(!invocation.contains("update-matrix"), "{invocation}");
 
         let cleanup = read("preview-cleanup.yml");
         let delete = step(job(&cleanup, "cleanup"), "delete_apps");
@@ -6844,8 +6853,7 @@ mod corpus {
             return;
         }
         let apps = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../pkgs/project/apps.nix"),
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../pkgs/project/apps.nix"),
         )
         .unwrap();
         assert!(apps.contains("runtimeInputs = [core];"));

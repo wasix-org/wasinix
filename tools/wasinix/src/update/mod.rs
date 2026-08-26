@@ -2,6 +2,7 @@
 //! and the ChangeSet everything renders from.
 
 pub mod backends;
+pub mod batch;
 pub mod changeset;
 pub mod cratepins;
 pub mod drive;

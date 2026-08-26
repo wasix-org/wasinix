@@ -439,6 +439,7 @@ pub fn mutate(repo: &Path, origin_doc: &Path, out_dir: &Path) -> Result<()> {
                 targets,
                 commit: true,
                 committer: Some(bot_committer()),
+                preflight: None,
             },
         )?,
         MutationCommand::Bump {

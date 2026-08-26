@@ -1,12 +1,9 @@
 name: Update package pins
 
-# Bump the repo's own source pins, scheduled and on demand. One PR per moved
-# target (auto/update-<target>): a broken bump never blocks the others, each
-# PR carries its own CI verdict, and update notes land on the bump that fired
-# them. `wasinix update --pr` commits each bump, pushes the branch, and opens
-# or updates the PR with the ChangeSet body. Inputs mirror the CLI's flags:
-# `targets` are the positional targets (blank = every target, one PR each)
-# and `base` is --base.
+# Bump the repo's own source pins, scheduled and on demand. One runner shares
+# discovery and its Nix store while bounded workers isolate each target in a
+# worktree. Every moved target still owns one auto/update-<target> PR and one
+# ChangeSet, and a broken target does not stop the others.
 on:
   schedule:
     - cron: "0 6 * * 1" # Mondays 06:00 UTC
@@ -26,36 +23,10 @@ permissions:
   pull-requests: write
 
 jobs:
-  targets:
-    name: Discover targets
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    outputs:
-      matrix: ${{ steps.list.outputs.matrix }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Nix
-        uses: ./.github/actions/setup-nix
-
-      - name: List targets
-        id: list
-        env:
-          TARGETS: ${{ github.event.inputs.targets }}
-        run:
-          nix run .#ci -- update-matrix --targets "$TARGETS" --github-output
-          "$GITHUB_OUTPUT"
-
   update:
-    name: bump ${{ matrix.job.name }}
-    needs: targets
+    name: Update targets
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        job: ${{ fromJSON(needs.targets.outputs.matrix) }}
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,18 +36,19 @@ jobs:
       - name: Set up Nix
         uses: ./.github/actions/setup-nix
 
-      # Commit each bump, push auto/update-<target>, and open or update its
-      # PR from the ChangeSet. A failed target does not abort the run: the
-      # binary isolates each and exits non-zero, which fails the job after
-      # the partial PR is opened. UPDATE_PR_TOKEN is a PAT/app token so the
-      # PR's CI cascades; without it, the default token opens a PR that needs
-      # a manual re-run.
-      - name: Update and open PR
+      - name: Update targets and open PRs
+        id: update
         shell: bash
         env:
-          # events from the default token don't cascade CI
           GITHUB_TOKEN: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
-          TARGET: ${{ matrix.job.name }}
+          TARGETS: ${{ github.event.inputs.targets }}
           BASE: ${{ github.event.inputs.base }}
         run: |
-          nix run .#wasinix -- update "$TARGET" --pr --base "${BASE:-$GITHUB_REF_NAME}"
+          targets=()
+          if [ -n "$TARGETS" ]; then
+            read -r -a targets <<< "$TARGETS"
+          else
+            targets=(--all)
+          fi
+          nix run .#update -- "${targets[@]}" --pr --jobs 4 \
+            --base "${BASE:-$GITHUB_REF_NAME}"

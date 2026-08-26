@@ -18,7 +18,6 @@ pub const OUTPUT_BASE_REF: &str = "baseRef";
 pub const OUTPUT_COMMENT_ID: &str = "commentId";
 pub const OUTPUT_HEAD_SHA: &str = "headSha";
 pub const OUTPUT_KIND: &str = "kind";
-pub const OUTPUT_MATRIX: &str = "matrix";
 pub const OUTPUT_PULL_REQUEST: &str = "pullRequest";
 pub const OUTPUT_PROCEED: &str = "proceed";
 pub const OUTPUT_REPORTED: &str = "reported";

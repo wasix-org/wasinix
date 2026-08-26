@@ -112,6 +112,12 @@ pub struct UpdateArgs {
     /// Update every target
     #[arg(long, conflicts_with = "targets")]
     pub all: bool,
+    /// Maximum update PRs running at once
+    #[arg(long, default_value = "4")]
+    pub jobs: std::num::NonZeroUsize,
+    /// Shared batch state prepared by the parent update process
+    #[arg(long, hide = true)]
+    pub batch_preflight: Option<PathBuf>,
     /// With `request`: fail unless the request targets this name
     #[arg(long, value_name = "NAME")]
     pub expect: Option<String>,
@@ -255,6 +261,7 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
                     targets: Vec::new(),
                     commit: args.mode.commits(),
                     committer: args.mode.committer(),
+                    preflight: None,
                 },
             )?;
             conclude(
@@ -269,6 +276,26 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
             )
         }
         _ => {
+            if args.mode.pr && args.batch_preflight.is_none() {
+                let report = crate::update::batch::run(
+                    &repo,
+                    args.all,
+                    &args.targets,
+                    crate::update::batch::Options {
+                        jobs: args.jobs.get(),
+                        repository: args.mode.repository.clone(),
+                        base: args.mode.base.clone(),
+                        branch: args.mode.branch.clone(),
+                        fork: args.mode.fork,
+                    },
+                )?;
+                ui::emit(
+                    &args.mode.json,
+                    &report,
+                    crate::update::batch::Report::render,
+                )?;
+                return Ok(report.status());
+            }
             let branch = args
                 .targets
                 .first()
@@ -280,6 +307,11 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
                 targets: args.targets.clone(),
                 all: args.all,
             };
+            let preflight = args
+                .batch_preflight
+                .as_deref()
+                .map(schema::read)
+                .transpose()?;
             let changes = drive::drive(
                 &repo,
                 drive::Options {
@@ -288,6 +320,7 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
                     targets: args.targets,
                     commit: args.mode.commits(),
                     committer: args.mode.committer(),
+                    preflight,
                 },
             )?;
             conclude(

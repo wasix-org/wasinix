@@ -4,14 +4,15 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::support::error::{Result, request_error};
 use crate::support::naming::{self, Domain};
 use crate::support::nix::{Flake, eval, project_attr};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub enum Backend {
     /// A package's own `passthru.updateScript`.
     UpdateScript,
@@ -21,7 +22,8 @@ pub enum Backend {
     CratePins,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Target {
     pub name: String,
     pub backend: Backend,
@@ -117,14 +119,15 @@ struct Declaration {
     source: Option<Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct PostUpdateHook {
     pub name: String,
     pub action: PostUpdateAction,
     pub version: String,
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(
     tag = "kind",
     rename_all = "camelCase",

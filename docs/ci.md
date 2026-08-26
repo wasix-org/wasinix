@@ -23,9 +23,9 @@ Verbs act on the tree, nouns have lifecycles:
   `field`, `init`.
 - `cargo`, `wasmer`, and `python` are the three registries, each with
   `serve`/`publish`/`preview` (`docs/registry.md`, `docs/rust.md`).
-- `ci` is the adapter surface the workflows call: `start`, `update-matrix`,
-  `run`, `prepare`, `exec`, `publish`, `origin`, `command`, `remote`, `observe`.
-  Hidden from the top-level help; not for interactive use.
+- `ci` is the adapter surface the workflows call: `start`, `run`, `prepare`,
+  `exec`, `publish`, `origin`, `command`, `remote`, `observe`. Hidden from the
+  top-level help; not for interactive use.
 
 Every expensive verb takes `--on local | <remote> | <remote>:<route>`; the
 document-producing commands (`run list|status|report|failures`, `update list`,
@@ -182,12 +182,11 @@ keep their directory until its artifact upload succeeds.
 
 Workflow step outputs go through `github/actions.rs`: it rejects line breaks in
 scalar values and owns the output and artifact names shared with workflow YAML.
-`ci start` returns a durable run id and directory together, while
-`ci update-matrix` produces the update workflow's target matrix without a second
-JSON translator in shell. `ci pull-request` resolves an exact workflow head to
-at most one open pull request, constrained by both the head repository and
-commit. `ci preview-context` applies the preview label, same-repository,
-live-head, and green-Build gates for both preview trigger shapes.
+`ci start` returns a durable run id and directory together. `ci pull-request`
+resolves an exact workflow head to at most one open pull request, constrained by
+both the head repository and commit. `ci preview-context` applies the preview
+label, same-repository, live-head, and green-Build gates for both preview
+trigger shapes.
 
 `build.yml` first runs the source-only `nix flake check`, then one CI run per
 event and publishes through `ci publish`: the sticky "Wasinix CI" comment and

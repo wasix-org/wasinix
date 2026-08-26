@@ -7,6 +7,7 @@ wasinix update llvm wasix-libc              # named targets
 wasinix update wasix-libc@2026-08-01.1      # a specific release
 wasinix update wasmer@rev:<40-hex>          # a specific revision
 wasinix update --all --pr                   # commit, push, open the PRs
+wasinix update --all --pr --jobs 8          # raise per-runner concurrency
 ```
 
 `TARGET@VERSION`, `TARGET@tag:NAME` and `TARGET@rev:SHA` are the whole request
@@ -72,8 +73,11 @@ History retention and rel pruning run after every changed target because each
 can move a served version. Retention fetches and hashes the outgoing release, so
 a bump may do network work beyond the pins themselves; see
 [Registry history](registry.md#registry-history). The `update.yml` workflow runs
-weekly, one PR per moved target (`auto/update-<target>`), each opened by
-`wasinix update <target> --pr`; a manual dispatch with `only` selects targets.
+weekly on one runner. `wasinix update --all --pr` discovers the targets once and
+runs a bounded number concurrently in isolated worktrees. Each moved target
+still owns one `auto/update-<target>` branch and PR, and one failure does not
+stop the others. A manual dispatch with `targets` selects targets; `--jobs`
+controls the worker bound.
 
 Update PRs the bot opens are managed: the PR body records the recipe that
 generated the branch and the head the bot last wrote (a

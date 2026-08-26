@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::support::error::{Result, request_error};
@@ -51,7 +51,7 @@ fn retention_note(prior: &str, level: usize) -> String {
     format!("latest {series}.x (outgoing {which})")
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Served {
     pub version: String,
     pub history_spec: String,

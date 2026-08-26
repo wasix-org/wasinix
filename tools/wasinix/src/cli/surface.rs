@@ -235,6 +235,8 @@ const LEAVES: &[LeafPolicy] = &[
         #[cfg(test)]
         shared_args: &["targets", "all"],
         terminal_args: &[
+            "jobs",
+            "batch_preflight",
             "expect",
             "commit",
             "pr",

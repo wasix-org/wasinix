@@ -24,6 +24,54 @@ pub struct Options {
     pub commit: bool,
     /// The identity commits carry; None keeps the ambient git config.
     pub committer: Option<crate::support::git::Identity<'static>>,
+    pub preflight: Option<Preflight>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Preflight {
+    revision: String,
+    release_priors: bool,
+    targets: Vec<Target>,
+    prior_hooks: Vec<PostUpdateHook>,
+    priors: Value,
+    history_priors: Versions,
+}
+
+impl crate::support::schema::Document for Preflight {
+    const KIND: &'static str = "updatePreflight";
+    const SCHEMA: u32 = 1;
+}
+
+impl Preflight {
+    pub fn collect(repo: &Path, targets: Vec<Target>, release_work: bool) -> Result<Preflight> {
+        let revision = crate::support::git::git(repo, &["rev-parse", "HEAD"])?;
+        let prior_hooks = targets::discovered_post_update_hooks()?;
+        let (priors, history_priors) = if release_work {
+            retention::prior_state(repo)?
+        } else {
+            (Value::Null, Versions::new())
+        };
+        Ok(Preflight {
+            revision,
+            release_priors: release_work,
+            targets,
+            prior_hooks,
+            priors,
+            history_priors,
+        })
+    }
+
+    fn validate(&self, repo: &Path) -> Result<()> {
+        let revision = crate::support::git::git(repo, &["rev-parse", "HEAD"])?;
+        if revision != self.revision {
+            return request_error(format!(
+                "update preflight is for {}, worker is at {revision}",
+                self.revision
+            ));
+        }
+        Ok(())
+    }
 }
 
 fn repo_status(repo: &Path) -> Result<String> {
@@ -206,8 +254,25 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
     if !options.all && options.targets.is_empty() {
         return request_error("update needs --all or at least one target");
     }
-    let prior_hooks = targets::discovered_post_update_hooks()?;
-    let mut targets = targets::all_targets(repo)?;
+    let (prior_hooks, mut targets, shared_priors) = match options.preflight {
+        Some(preflight) => {
+            preflight.validate(repo)?;
+            (
+                preflight.prior_hooks,
+                preflight.targets,
+                Some((
+                    preflight.release_priors,
+                    preflight.priors,
+                    preflight.history_priors,
+                )),
+            )
+        }
+        None => (
+            targets::discovered_post_update_hooks()?,
+            targets::all_targets(repo)?,
+            None,
+        ),
+    };
     let domain = targets::domain(&targets);
     let (wanted, requests) = select::target_requests(&targets, &domain, &options.targets)?;
     if !options.all {
@@ -224,11 +289,17 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
     // A transient eval failure here must abort: retention diffs against these
     // versions, and starting from an empty map means retaining nothing while
     // the prune still runs. Both views come from one package-set evaluation.
-    let (priors, history_priors): (Value, Versions) = if release_work {
-        retention::prior_state(repo)?
-    } else {
-        (Value::Null, Versions::new())
-    };
+    let (priors, history_priors): (Value, Versions) =
+        if let Some((available, priors, versions)) = shared_priors {
+            if release_work && !available {
+                return request_error("update preflight carries no release priors");
+            }
+            (priors, versions)
+        } else if release_work {
+            retention::prior_state(repo)?
+        } else {
+            (Value::Null, Versions::new())
+        };
 
     // One flaky upstream must not abort the rest: isolate each target,
     // collect failures, and let the caller exit non-zero at the end.

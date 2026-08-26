@@ -12,7 +12,7 @@
   wasinixCapabilityFlake ? null,
   writeShellApplication,
 }: let
-  commandAliases = ["build" "spot" "diff" "run" "remote" "ci"];
+  commandAliases = ["build" "spot" "diff" "run" "remote" "update" "ci"];
   source = lib.fileset.toSource {
     root = ../../../..;
     fileset = lib.fileset.unions [

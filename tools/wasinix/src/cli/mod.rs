@@ -321,15 +321,6 @@ pub enum CiCommand {
         #[arg(trailing_var_arg = true, required = true)]
         command: Vec<String>,
     },
-    /// Produce the update workflow's one-entry-per-target matrix
-    UpdateMatrix {
-        /// Space-separated target names; blank discovers every target
-        #[arg(long, default_value = "")]
-        targets: String,
-        /// Where matrix is appended ($GITHUB_OUTPUT)
-        #[arg(long)]
-        github_output: PathBuf,
-    },
     /// Find the one open pull request for a workflow run's exact head
     PullRequest {
         #[arg(long)]
@@ -1386,28 +1377,6 @@ fn ci_bisect(
     Ok(CommandStatus::SUCCESS)
 }
 
-pub(crate) fn update_matrix(names: Vec<String>) -> Result<String> {
-    #[derive(serde::Serialize)]
-    struct Entry {
-        name: String,
-    }
-
-    let names: std::collections::BTreeSet<String> = names.into_iter().collect();
-    if names.is_empty() {
-        return crate::support::error::request_error("the update matrix has no targets");
-    }
-    serde_json::to_string(
-        &names
-            .into_iter()
-            .map(|name| Entry { name })
-            .collect::<Vec<_>>(),
-    )
-    .map_err(|source| crate::support::error::Error::Json {
-        path: "update matrix".into(),
-        source,
-    })
-}
-
 fn ci_command(command: CiCommand) -> Result<CommandStatus> {
     let repo = crate::support::git::repo_root()?;
     match command {
@@ -1433,26 +1402,6 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 ],
             )?;
             ui::result(format!("{run_id}\t{}", run_dir.display()));
-            Ok(CommandStatus::SUCCESS)
-        }
-        CiCommand::UpdateMatrix {
-            targets,
-            github_output,
-        } => {
-            let names = if targets.trim().is_empty() {
-                crate::update::targets::all_targets(&repo)?
-                    .into_iter()
-                    .map(|target| target.name)
-                    .collect()
-            } else {
-                targets.split_whitespace().map(str::to_string).collect()
-            };
-            let matrix = update_matrix(names)?;
-            crate::github::actions::append(
-                &github_output,
-                &[(crate::github::actions::OUTPUT_MATRIX, matrix.clone())],
-            )?;
-            ui::output(matrix);
             Ok(CommandStatus::SUCCESS)
         }
         CiCommand::PullRequest {
