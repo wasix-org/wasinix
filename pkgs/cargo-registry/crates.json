@@ -3,7 +3,8 @@
     "2.6.0": "sha256-HVSEIFWz8kvkqWqSym5OMi57XZX0BLNoy2pJtO1XdH4="
   },
   "async-rs": {
-    "0.8.11": "sha256-VT+YvUuEyhz+vlpF/hd4uHXgqJhZLZzgVwlEDmkAVL0="
+    "0.8.11": "sha256-VT+YvUuEyhz+vlpF/hd4uHXgqJhZLZzgVwlEDmkAVL0=",
+    "0.8.12": "sha256-08Xl7n1iEqzJtcEEWiYALrLHJTKI9khi9a4rx13PT48="
   },
   "async-std": {
     "1.0.0": "sha256-gruB+xgbAwmyGsqiUr0umHUp3fIIlY6f7yXF7H6zFcM=",
@@ -69,7 +70,8 @@
     "0.4.90+curl-8.21.0": "sha256-ySpo1xwX2+/OZCeQbiSZ76vYC66W7X56qvpstnRsy4w="
   },
   "deadpool-postgres": {
-    "0.14.1": "sha256-Wd4cstbjHDsPy/CBspLw+e6OHLJ3fbCRju+a1fI5uoc="
+    "0.14.1": "sha256-Wd4cstbjHDsPy/CBspLw+e6OHLJ3fbCRju+a1fI5uoc=",
+    "0.14.2": "sha256-eTjyk8mYcIi6GAcMCrZS2RoCFBkEPCTl2NMICbW8m78="
   },
   "esaxx-rs": {
     "0.1.10": "sha256-fCxZBEeuGWghPVpuOTdMpjRzCCSsx0nusoQyNW2wR+o="
@@ -243,7 +245,8 @@
     "300.5.5+3.5.5": "sha256-2PAvF+I8r0xyAgwEKSIqNK38h1ER9HYJLdirGWpNXyw=",
     "300.6.0+3.6.2": "sha256-oQf9yjJ/vSW0ahFPT072vAePdd9Q/1Y4kKOXApAXAAk=",
     "300.6.1+3.6.3": "sha256-cqSpegMki2bK7lPf307Dwt+EKFMhnr3uEG3gQXhIR5w=",
-    "400.0.0+4.0.1": "sha256-25ChntNZPUaBF+533bFsxcDvWz6HHX052dwhnkyrsyw="
+    "400.0.0+4.0.1": "sha256-25ChntNZPUaBF+533bFsxcDvWz6HHX052dwhnkyrsyw=",
+    "400.0.1+4.0.2": "sha256-HnV/dxOen0W34gbcUhWDv1CqdokrxXrrwWf4MfJdktM="
   },
   "opentelemetry": {
     "0.17.0": "sha256-mc/u2y6ACVPProFLrr9bwfRuexW2Lco5xUdOmlnXnPY="
