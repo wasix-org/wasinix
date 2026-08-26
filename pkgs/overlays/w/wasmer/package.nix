@@ -1,5 +1,6 @@
 {
-  exposeExtendedPackage,
+  exposeNativePackage,
+  extendPackage,
   package,
   pkgs,
 }: let
@@ -31,11 +32,10 @@
       '';
   });
 in
-  exposeExtendedPackage {
+  exposeNativePackage (extendPackage package {
     inherit src cargoArtifacts;
     patches = [];
-    passthru.wasix.supportedProfiles = [];
     postBuild = ''
       install -Dm644 ${cargoArtifacts}/wasmer.h lib/c-api/wasmer.h
     '';
-  }
+  })

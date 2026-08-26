@@ -41,6 +41,7 @@
     label,
     applyFunction ? function: function,
     extendPackageFor ? null,
+    scope,
   }:
     if builtins.isFunction declared
     then applyFunction declared
@@ -51,6 +52,7 @@
           dir = declared.directory;
           expose = declared.expose or [];
           lane = declared.lane or "packages";
+          inherit scope;
         }
         // lib.optionalAttrs (extendPackageFor != null) {inherit extendPackageFor;})
     else extensionError extension "${label} is not an overlay";
@@ -106,7 +108,7 @@
     variant,
   }: let
     rawOverlay = declaredOverlayFor {
-      inherit contextFor declared extension;
+      inherit contextFor declared extension scope;
       inherit label applyFunction extendPackageFor;
     };
     overlay = final: previous:

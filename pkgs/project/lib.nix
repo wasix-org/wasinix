@@ -220,6 +220,15 @@
   in
     lib.foldl' merge {} files;
 
+  withoutMachineMetadata = package:
+    package.overrideAttrs (old: {
+      passthru =
+        (old.passthru or {})
+        // {
+          wasinix = removeAttrs ((old.passthru or {}).wasinix or {}) machineMetadata;
+        };
+    });
+
   unitResult = {
     context,
     extendPackageFor ? extendPackage,
@@ -235,14 +244,7 @@
       ${name} =
         if previousRegistered
         then package
-        else
-          package.overrideAttrs (old: {
-            passthru =
-              (old.passthru or {})
-              // {
-                wasinix = removeAttrs ((old.passthru or {}).wasinix or {}) machineMetadata;
-              };
-          });
+        else withoutMachineMetadata package;
     };
     exposeExtendedPackage = attrs:
       if !previousAvailable
@@ -544,9 +546,16 @@ in rec {
     extendPackageFor ? extendPackage,
     expose ? [],
     lane ? "packages",
+    scope ? null,
   }: final: prev: let
+    formalsFor = unit: builtins.functionArgs (import unit.file);
     instantiatePackage = unit: final': prev': let
-      formals = builtins.functionArgs (import unit.file);
+      formals = formalsFor unit;
+      context = contextFor {
+        final = final';
+        prev = prev';
+      };
+      nativeOnly = formals ? exposeNativePackage;
       requestsPrevious =
         formals ? package
         || formals ? exposeExtendedPackage
@@ -555,32 +564,30 @@ in rec {
         || formals ? exposeWasixPackage;
       previousAvailable = builtins.hasAttr unit.name prev';
     in
-      unitResult {
-        inherit (unit) file name;
-        inherit extendPackageFor;
-        context = contextFor {
-          final = final';
-          prev = prev';
+      if scope == "wasix" && nativeOnly
+      then {
+        ${unit.name} = withoutMachineMetadata context.packages.native.${unit.name};
+      }
+      else
+        unitResult {
+          inherit (unit) file name;
+          inherit extendPackageFor context;
+          previous =
+            if requestsPrevious && previousAvailable
+            then builtins.addErrorContext "while resolving the preceding package for ${toString unit.file}\n" (prev'.${unit.name} or null)
+            else null;
+          inherit previousAvailable;
+          previousRegistered = builtins.hasAttr unit.name (prev'.${registryAttr} or {});
+          previousSet = prev';
         };
-        previous =
-          if requestsPrevious && previousAvailable
-          then builtins.addErrorContext "while resolving the preceding package for ${toString unit.file}\n" (prev'.${unit.name} or null)
-          else null;
-        inherit previousAvailable;
-        previousRegistered = builtins.hasAttr unit.name (prev'.${registryAttr} or {});
-        previousSet = prev';
-      };
     instantiate = instantiatePackage;
     discoveredUnits = discoverShardedUnits {inherit dir lane;};
     units =
       lib.filter (
-        unit:
-          !(
-            lane
-            == "packages"
-            && unit.kind == "wasix"
-            && !(prev.stdenv.hostPlatform.isWasix or false)
-          )
+        unit: let
+          wrongHost = unit.kind == "wasix" && !(prev.stdenv.hostPlatform.isWasix or false);
+        in
+          !(lane == "packages" && wrongHost)
       )
       discoveredUnits;
     results =
