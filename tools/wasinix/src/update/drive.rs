@@ -73,6 +73,15 @@ impl Preflight {
         })
     }
 
+    pub fn ownership_for(&self, spec: &str) -> crate::update::targets::Ownership {
+        let name = spec.split('@').next().unwrap_or(spec);
+        self.targets
+            .iter()
+            .find(|target| target.name == name)
+            .map(|target| target.ownership.clone())
+            .unwrap_or_default()
+    }
+
     fn validate(&self, repo: &Path) -> Result<()> {
         let revision = crate::support::git::git(repo, &["rev-parse", "HEAD"])?;
         if revision != self.revision {

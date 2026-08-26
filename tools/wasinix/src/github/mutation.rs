@@ -11,6 +11,7 @@ use crate::github::client::Client;
 use crate::support::error::{Error, Result, request_error};
 use crate::support::git::git;
 use crate::update::changeset::ChangeSet;
+use crate::update::targets::Ownership;
 
 pub struct PrOptions {
     pub repository: String,
@@ -24,6 +25,8 @@ pub struct PrOptions {
     /// `/wasinix update` and `/wasinix regenerate` can replay it. None for a
     /// mutation no comment can spell, which then advertises neither.
     pub recipe: Option<String>,
+    /// The package-declared reviewers and assignees for an automated update.
+    pub ownership: Ownership,
 }
 
 /// Push the committed changes to `branch` and open or update its PR. The
@@ -61,25 +64,35 @@ pub fn open_pr(repo: &Path, changes: &ChangeSet, options: &PrOptions) -> Result<
         let state = crate::update::managed::State::new(recipe, head)?;
         body = crate::update::managed::with_state(&body, &state)?;
     }
-    if let Some(number) = existing_pr(&client, options)? {
+    let number = if let Some(number) = existing_pr(&client, options)? {
         client.patch(
             &format!("repos/{}/pulls/{number}", options.repository),
             &json!({ "title": options.title, "body": body }),
         )?;
-        return Ok(number);
+        number
+    } else {
+        let created = client.post(
+            &format!("repos/{}/pulls", options.repository),
+            &json!({
+                "title": options.title,
+                "head": options.branch,
+                "base": options.base,
+                "body": body,
+            }),
+        )?;
+        created["number"]
+            .as_u64()
+            .ok_or_else(|| Error::Failure("created pull request has no number".into()))?
+    };
+    if options.managed && options.recipe.is_some() {
+        crate::github::update_pr::reconcile(
+            &client,
+            &options.repository,
+            number,
+            &options.ownership,
+        )?;
     }
-    let created = client.post(
-        &format!("repos/{}/pulls", options.repository),
-        &json!({
-            "title": options.title,
-            "head": options.branch,
-            "base": options.base,
-            "body": body,
-        }),
-    )?;
-    created["number"]
-        .as_u64()
-        .ok_or_else(|| Error::Failure("created pull request has no number".into()))
+    Ok(number)
 }
 
 fn existing_pr(client: &Client, options: &PrOptions) -> Result<Option<u64>> {
