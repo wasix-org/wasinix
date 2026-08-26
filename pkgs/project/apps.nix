@@ -18,7 +18,7 @@
     pkgs.writeShellApplication {
       inherit name;
       inheritPath = false;
-      runtimeInputs = [cli];
+      runtimeInputs = [core];
       text = ''
         export WASINIX_PROJECT=${lib.escapeShellArg ".#${projectAttr}"}
         exec wasinix ${lib.optionalString (name != "wasinix") name} "$@"

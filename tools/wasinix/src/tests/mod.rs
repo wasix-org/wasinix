@@ -6811,6 +6811,13 @@ mod corpus {
         if !root.is_dir() {
             return;
         }
+        let apps = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../pkgs/project/apps.nix"),
+        )
+        .unwrap();
+        assert!(apps.contains("runtimeInputs = [core];"));
+        assert!(!apps.contains("runtimeInputs = [cli];"));
         let banned = [
             "nix build .#wasinix ",
             "nix run .#wasinix -- build ",
