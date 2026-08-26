@@ -7,6 +7,38 @@ use crate::support::error::Result;
 use crate::update::targets::Ownership;
 
 const AUTOMATION_LABELS: &[&str] = &["3.automated", "3.automated: update"];
+const REBUILD_LABEL_PREFIX: &str = "10.rebuild-wasix: ";
+
+pub fn rebuild_label(count: usize) -> &'static str {
+    match count {
+        0 => "10.rebuild-wasix: 0",
+        1 => "10.rebuild-wasix: 1",
+        2..=10 => "10.rebuild-wasix: 1-10",
+        11..=100 => "10.rebuild-wasix: 11-100",
+        101..=500 => "10.rebuild-wasix: 101-500",
+        _ => "10.rebuild-wasix: 501+",
+    }
+}
+
+pub fn reconcile_rebuild_label(
+    client: &Client,
+    repository: &str,
+    pull_request: u64,
+    count: usize,
+) -> Result<()> {
+    let issue = format!("repos/{repository}/issues/{pull_request}");
+    let current = client.get(&issue)?;
+    let labels = current["labels"]
+        .as_array()
+        .ok_or_else(|| crate::support::error::Error::Failure("pull request has no labels".into()))?
+        .iter()
+        .filter_map(|label| label["name"].as_str())
+        .filter(|label| !label.starts_with(REBUILD_LABEL_PREFIX))
+        .chain(std::iter::once(rebuild_label(count)))
+        .collect::<Vec<_>>();
+    client.put(&format!("{issue}/labels"), &json!({ "labels": labels }))?;
+    Ok(())
+}
 
 /// Apply facts that come from the update declaration, never from a branch
 /// name or title. GitHub additions are idempotent, so replaying an update
@@ -73,4 +105,22 @@ pub fn defer_human_edits(
         body,
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn rebuild_buckets_cover_every_boundary() {
+        use super::rebuild_label;
+
+        assert_eq!(rebuild_label(0), "10.rebuild-wasix: 0");
+        assert_eq!(rebuild_label(1), "10.rebuild-wasix: 1");
+        assert_eq!(rebuild_label(2), "10.rebuild-wasix: 1-10");
+        assert_eq!(rebuild_label(10), "10.rebuild-wasix: 1-10");
+        assert_eq!(rebuild_label(11), "10.rebuild-wasix: 11-100");
+        assert_eq!(rebuild_label(100), "10.rebuild-wasix: 11-100");
+        assert_eq!(rebuild_label(101), "10.rebuild-wasix: 101-500");
+        assert_eq!(rebuild_label(500), "10.rebuild-wasix: 101-500");
+        assert_eq!(rebuild_label(501), "10.rebuild-wasix: 501+");
+    }
 }
