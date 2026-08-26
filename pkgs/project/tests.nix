@@ -22,35 +22,43 @@
         update = {inherit post;};
       };
     };
-  repositoryHooks =
-    (import ./repository.nix {
-      inherit lib;
-      root = ../..;
-      source = "fixture";
-      revisionsFile = ../../release-revisions.json;
-      project = {
-        packages = {
-          native = {
-            command = hookPackage "command" "1" ["./hook"];
-            sync = hookPackage "sync" "2" {
-              syncAttrList = {
-                input = "nixpkgs";
-                attrPath = "legacyPackages.\${system}";
-                match = "^icu([0-9]+)$";
-                capture = 1;
-                probe = "version";
-                sort = "numeric";
-                destination = "versions.nix";
-              };
+  repository = import ./repository.nix {
+    inherit lib;
+    root = ../..;
+    source = "fixture";
+    revisionsFile = ../../release-revisions.json;
+    project = {
+      packages = {
+        native = {
+          command = hookPackage "command" "1" ["./hook"];
+          sync = hookPackage "sync" "2" {
+            syncAttrList = {
+              input = "nixpkgs";
+              attrPath = "legacyPackages.\${system}";
+              match = "^icu([0-9]+)$";
+              capture = 1;
+              probe = "version";
+              sort = "numeric";
+              destination = "versions.nix";
             };
           };
-          wasix.preferred = {};
-          python = {};
         };
-        artifacts = {};
-        catalog.entries = {};
+        wasix.preferred.cli = mkPackage {
+          name = "cli";
+          version = "1";
+          passthru = {
+            updateScript = ["./update"];
+            wasinix.source = "fixture";
+          };
+        };
+        python = {};
       };
-    }).updates.postUpdateHooks;
+      artifacts = {};
+      catalog.entries = {};
+    };
+  };
+  repositoryHooks = repository.updates.postUpdateHooks;
+  repositoryScripts = repository.updates.updateScripts;
 
   dependency = mkPackage {name = "dependency";};
   previous = mkPackage {
@@ -1499,6 +1507,7 @@ in {
       projectTestSerializable = !(projectTestProject.ci.catalog.jobs."tests.project.format" ? check);
       postUpdateCommand = repositoryHooks."packages.native.command";
       postUpdateSync = repositoryHooks."packages.native.sync";
+      updateScriptNames = lib.attrNames repositoryScripts;
     };
     expected = {
       schemaVersion = 1;
@@ -1713,6 +1722,7 @@ in {
         };
         version = "2";
       };
+      updateScriptNames = ["packages.wasix.preferred.cli"];
     };
   };
 }
