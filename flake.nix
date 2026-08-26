@@ -55,6 +55,13 @@
       then throw "repository source contains Git metadata"
       else source;
     repositoryCheckNames = ["deadnix" "nil" "nixf" "project-api" "statix" "treefmt"];
+    testLibFor = checkedProject: let
+      nativePkgs = checkedProject.internals.packageSets.nativeRaw;
+    in
+      import ./pkgs/wasmer/test-lib.nix {
+        pkgs = nativePkgs;
+        wasmer = checkedProject.packages.native.wasmer;
+      };
     project = projectApi.mkProject {
       inherit system;
       importNixpkgs = args: import nixpkgs args;
@@ -74,10 +81,7 @@
             check = checkedProject: let
               nativePkgs = checkedProject.internals.packageSets.nativeRaw;
               toolchain = import ./pkgs/toolchain {pkgs = nativePkgs;};
-              testLib = import ./pkgs/wasmer/test-lib.nix {
-                pkgs = nativePkgs;
-                wasmer = checkedProject.packages.native.wasmer;
-              };
+              testLib = testLibFor checkedProject;
               devEnvFor = import ./pkgs/toolchain/dev-env.nix {
                 pkgs = nativePkgs;
                 inherit toolchain;
@@ -86,6 +90,15 @@
               nativePkgs.callPackage ./pkgs/toolchain/tests/asyncify-eh-test.nix {
                 inherit testLib;
                 toolchain = devEnvFor {wasmExceptions = "yes";};
+              };
+          };
+          host-shell-flags = {
+            source = "wasinix";
+            check = checkedProject: let
+              nativePkgs = checkedProject.internals.packageSets.nativeRaw;
+            in
+              nativePkgs.callPackage ./pkgs/wasmer/tests/flags.nix {
+                testLib = testLibFor checkedProject;
               };
           };
         };

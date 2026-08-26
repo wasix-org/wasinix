@@ -58,6 +58,8 @@
   # Wasix runs are slower than native, so they get a larger budget.
   defaultTimeout = 300;
   defaultWasixTimeout = 600;
+  invocationWasmerArgsEnv = "WASINIX_WASMER_ARGS";
+  invocationWasmerArgsExpansion = "\\$" + "{${invocationWasmerArgsEnv}:-}";
 
   testExpectation = expectFail: broken:
     if broken != null
@@ -76,7 +78,7 @@
   # emulated build-system checks (pkgs/checks/emulated.nix).
   xverdict = import ../lib/xverdict.nix;
 in rec {
-  inherit defaultForwardEnv defaultTimeout defaultWasixTimeout;
+  inherit defaultForwardEnv defaultTimeout defaultWasixTimeout invocationWasmerArgsEnv;
 
   # The runtime the wasix runs use, for a native test that needs the binary
   # itself (a tool shelling out to `wasmer`) rather than mkWasixRun's shims.
@@ -181,7 +183,7 @@ in rec {
       for _v in ${forwardEnvNames}; do
         _val=\$(${lib.getExe' pkgs.coreutils "printenv"} "\$_v" 2>/dev/null) && env_flags="\$env_flags --env \$_v=\$_val"
       done
-      export WASMER_FLAGS="--volume \$HOME:\$HOME --volume \$WASIX_TEST_ROOT:\$WASIX_TEST_ROOT --cwd \$(${lib.getExe' pkgs.coreutils "pwd"})\$env_flags ${extraFlags}"
+      export WASMER_FLAGS="--volume \$HOME:\$HOME --volume \$WASIX_TEST_ROOT:\$WASIX_TEST_ROOT --cwd \$(${lib.getExe' pkgs.coreutils "pwd"})\$env_flags ${extraFlags} ${invocationWasmerArgsExpansion}"
       exec "$original_bin" "\$@"
       SHIMEOF
                 ${lib.getExe' pkgs.coreutils "chmod"} +x "$shim_dir/$bin_name"
