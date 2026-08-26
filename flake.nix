@@ -12,6 +12,7 @@
       url = "git+https://github.com/wasmerio/wasmer";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    crane.follows = "wasmer/crane";
     treefmt-nix = {
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -29,6 +30,7 @@
     self,
     nixpkgs,
     wasmer,
+    crane,
     treefmt-nix,
     ghc-wasm-meta,
     ...
@@ -38,6 +40,7 @@
       inherit (nixpkgs) lib;
       ghcWasm = ghc-wasm-meta.packages.${system};
       wasinixFlake = self;
+      wasinixCrane = crane;
       wasmerPackage = wasmer.packages.${system}.wasmer;
       wasmerRevision = wasmer.shortRev or "dirty";
     };

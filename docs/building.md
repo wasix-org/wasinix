@@ -101,6 +101,24 @@ limits, including a `capacity` bounding concurrent local runs, live in the
 `[local]` table of `builders.toml`; the environment overrides them per
 invocation, and remote builders carry their own limits in their profiles.
 
+## CLI Rust rebuilds
+
+The host CLI has three independent Crane nodes: cached Cargo dependencies, the
+production binary, and repository-aware unit tests. Rust source changes rebuild
+the binary and tests in parallel without recompiling dependencies. Changes to
+test fixtures rebuild only the tests. `Cargo.lock` changes invalidate all three.
+The package and test units expose this one graph from
+`pkgs/overlays/w/wasinix/build.nix`; do not create a second Rust recipe in a
+test unit.
+
+The split was measured on the configured 32-core EC2 builder on 2026-08-26. With
+the Rust outputs absent, the dependency, binary, and test work took 71 seconds;
+that first test run exposed an omitted fixture, and the corrected test-only node
+then passed in 30 seconds. From the passing graph, a Rust-source change rebuilt
+binary and tests in 31 seconds, a fixture-only change rebuilt tests in 30
+seconds, and a lock-file change rebuilt all three in 60 seconds. The
+measurements exclude the repository's Nix evaluation and closure transfer.
+
 ## Build one thing
 
 A CI job name is a build path. `wasinix jobs <pattern>` searches the addresses

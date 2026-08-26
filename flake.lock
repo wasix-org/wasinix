@@ -90,6 +90,10 @@
     },
     "root": {
       "inputs": {
+        "crane": [
+          "wasmer",
+          "crane"
+        ],
         "ghc-wasm-meta": "ghc-wasm-meta",
         "nixpkgs": "nixpkgs",
         "treefmt-nix": "treefmt-nix",
