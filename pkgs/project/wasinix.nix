@@ -171,7 +171,7 @@
       };
       harnesses =
         import ../harnesses {
-          inherit lib testLib;
+          inherit lib makeWasmerPackage testLib;
           pkgs = nativePkgs;
           wasmer = runtime;
         }
