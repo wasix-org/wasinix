@@ -2,13 +2,15 @@
 
 The `wasinix` binary (`tools/wasinix`) is the one tool: it builds, diffs,
 bisects, updates pins, serves the registries, and runs CI. The GitHub workflows
-are thin adapters that call it. This page is the map; each command's `--help` is
-the reference.
+are thin adapters that call it. This page is a map of the command families;
+`wasinix --help` and each command's `--help` are the complete reference.
 
 ## The command tree
 
 Verbs act on the tree, nouns have lifecycles:
 
+- `doctor` reports first-run configuration and `jobs` searches the remembered
+  job catalog.
 - `build <selectors>` builds CI sets, groups, or job addresses.
 - `spot <targets>` rebuilds attrs over a cached base (`docs/spot.md`).
 - `diff <case> --vs <case>` compares two complete build or spot cases; the first
@@ -21,16 +23,18 @@ Verbs act on the tree, nouns have lifecycles:
   `failures`, `watch`, `wait`, `cancel`, `pin`, `unpin`, `gc`.
 - `remote` inspects the configured builders: `list`, `status`, `doctor`,
   `field`, `init`.
+- `cache` pushes cached outputs, and `timings` reports CI cost across revisions.
 - `cargo`, `wasmer`, and `python` are the three registries, each with
   `serve`/`publish`/`preview` (`docs/registry.md`, `docs/rust.md`).
+- `publish`, `preview`, and `serve` operate across registry families.
+- `completions <shell>` generates shell completion registration.
 - `ci` is the adapter surface the workflows call: `start`, `run`, `prepare`,
   `exec`, `publish`, `origin`, `command`, `remote`, `observe`. Hidden from the
   top-level help; not for interactive use.
 
-Every expensive verb takes `--on local | <remote> | <remote>:<route>`; the
-document-producing commands (`run list|status|report|failures`, `update list`,
-`remote list`, `cargo publish`, the build verbs) take `--json`;
-`-v`/`-q`/`--color` are global.
+`build` and `spot` take `--on local | <remote> | <remote>:<route>`; build and
+spot cases inside `diff` and `bisect` use the same option. Commands that render
+structured reports expose `--json`; `-v`/`-q`/`--color` are global.
 
 ## Catalog and selection
 

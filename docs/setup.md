@@ -3,20 +3,37 @@
 What a fresh machine needs before the wasinix CLI is fully useful, in the order
 it comes up. `wasinix doctor` prints where you stand at any point.
 
+## Prerequisites
+
+Wasinix evaluates on `x86_64-linux`. Install Git and Nix with flakes enabled,
+then clone this repository. Other systems cannot substitute their own system
+name in the commands: this flake exposes only `x86_64-linux` outputs.
+
 ## The CLI
 
 `nix develop` puts `wasinix` on PATH; outside a dev shell,
 `nix run .#wasinix -- <args>` is the same binary. Shell completions come from
 `wasinix completions <shell>` (the dev shell installs them).
 
+Start by asking the binary what the machine needs, then inspect the available
+routes:
+
+```sh
+nix run .#wasinix -- doctor
+nix run .#wasinix -- remote list
+```
+
+The first command is read-only. It reports configured and missing builders and
+cache-push credentials.
+
 ## Builders
 
 Heavy builds go to a remote builder, never the local machine
-(`docs/building.md`). `wasinix remote init` writes a commented `builders.toml`
-template to `$XDG_CONFIG_HOME/wasinix/`; fill in a remote profile and verify it
-with `wasinix remote doctor --ifd`. The `[local]` table in the same file holds
-persistent local limits (`max_jobs`, `eval_workers`, `eval_memory`, and a
-`capacity` bounding concurrent local runs).
+([`building.md`](building.md)). `wasinix remote init` writes a commented
+`builders.toml` template to `$XDG_CONFIG_HOME/wasinix/`; fill in a remote
+profile and verify it with `wasinix remote doctor --ifd`. The `[local]` table in
+the same file holds persistent local limits (`max_jobs`, `eval_workers`,
+`eval_memory`, and a `capacity` bounding concurrent local runs).
 
 Every remote profile needs a useful `description`: its intended workload,
 availability or wake-up step, and constraints such as cost or capacity.

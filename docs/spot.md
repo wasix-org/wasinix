@@ -19,7 +19,7 @@ wasinix spot packages.wasix.exnrefEh.zlib --on local  # build here, not on a rem
 ```
 
 Targets and `--from-source` are CI selectors resolved through the selector
-catalog, and `--on` is the placement axis every expensive verb takes. With no
+catalog. `--on` is the placement axis for `build` and `spot`. With no
 `--from-source`, spot takes the toolchain from your working tree and everything
 else from base; `--target-only` narrows that to just the named targets. A
 lower-level dev interface, `nix build -f spot.nix`, takes the resolved `sources`

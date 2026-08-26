@@ -4,6 +4,19 @@
 for this repository. [`project-api.md`](project-api.md) is the v1 contract for
 consumers and extensions; this page explains how Wasinix itself uses it.
 
+## Mental model
+
+The flake evaluates one native package set and five WASIX cross package sets.
+Each cross set is a profile: a compatible combination of exception handling and
+position-independent-code settings. A package unit is a recipe or adaptation
+that is evaluated in the package sets where it applies.
+
+The project catalog records those packages once with their supported profiles.
+Projection rules derive distributable artifacts, runnable commands, and tests
+from catalog entries. CI selects those derived entries by their catalog address.
+This separation lets a package declaration state what it supports while shared
+rules decide how it is built, tested, and published.
+
 ## Toolchains and package sets
 
 `pkgs/project/profiles.nix` is the ABI profile inventory. `mkProject` imports

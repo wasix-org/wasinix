@@ -17,12 +17,14 @@ drive the machine into swap, and a stray system-default builder (a paid
 `nixbuild.net`) costs real money. Expensive builds go to a remote builder you
 control.
 
-The `--on` axis chooses where every expensive verb runs: `--on local` here,
-`--on <remote>` on a configured builder, or `--on <remote>:<route>` to pick the
-route (`builder`, `store`, or `host`). Absent, it uses the configured default
-remote. `wasinix remote list` shows what is configured; `wasinix remote doctor`
-verifies one. Builders live in `builders.toml` (`$XDG_CONFIG_HOME/wasinix/`),
-never in the flake; `wasinix remote init` writes a commented template.
+`build` and `spot` take `--on` to choose where their expensive work runs:
+`--on local` here, `--on <remote>` on a configured builder, or
+`--on <remote>:<route>` to pick the route (`builder`, `store`, or `host`). Build
+and spot cases inside `diff` and `bisect` use the same option. Absent, it uses
+the configured default remote. `wasinix remote list` shows what is configured;
+`wasinix remote doctor` verifies one. Builders live in `builders.toml`
+(`$XDG_CONFIG_HOME/wasinix/`), never in the flake; `wasinix remote init` writes
+a commented template.
 
 ```sh
 wasinix remote list
