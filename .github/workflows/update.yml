@@ -18,9 +18,9 @@ on:
         required: false
         default: ""
       jobs:
-        description: "Maximum updates running at once"
+        description: "Maximum updates running at once (blank = CLI default)"
         required: false
-        default: "4"
+        default: ""
 
 permissions:
   contents: write
@@ -47,13 +47,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
           TARGETS: ${{ github.event.inputs.targets }}
           BASE: ${{ github.event.inputs.base }}
-          JOBS: ${{ github.event.inputs.jobs || 4 }}
+          JOBS: ${{ github.event.inputs.jobs }}
         run: |
           targets=()
+          jobs=()
           if [ -n "$TARGETS" ]; then
             read -r -a targets <<< "$TARGETS"
           else
             targets=(--all)
           fi
-          nix run .#update -- "${targets[@]}" --pr --jobs "$JOBS" \
+          if [ -n "$JOBS" ]; then
+            jobs=(--jobs "$JOBS")
+          fi
+          nix run .#update -- "${targets[@]}" --pr "${jobs[@]}" \
             --base "${BASE:-$GITHUB_REF_NAME}"

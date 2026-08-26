@@ -7,7 +7,7 @@ wasinix update llvm wasix-libc              # named targets
 wasinix update wasix-libc@2026-08-01.1      # a specific release
 wasinix update wasmer@rev:<40-hex>          # a specific revision
 wasinix update --all --pr                   # commit, push, open the PRs
-wasinix update --all --pr --jobs 8          # raise per-runner concurrency
+wasinix update --all --pr --jobs 1          # serialize update targets
 ```
 
 `TARGET@VERSION`, `TARGET@tag:NAME` and `TARGET@rev:SHA` are the whole request
@@ -78,7 +78,9 @@ runs a bounded number concurrently in isolated worktrees. Each moved target
 still owns one `auto/update-<target>` branch and PR, and one failure does not
 stop the others. A manual dispatch with `targets` selects targets; `--jobs`
 controls the worker bound. The workflow exposes the same bound as its `jobs`
-input so concurrency experiments do not require workflow edits.
+input so concurrency experiments do not require workflow edits. The default is
+two; three concurrent Nix evaluations take longer on the hosted runner, and four
+exhaust it.
 
 Update PRs the bot opens are managed: the PR body records the recipe that
 generated the branch and the head the bot last wrote (a

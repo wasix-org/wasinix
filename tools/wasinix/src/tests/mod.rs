@@ -6873,12 +6873,21 @@ mod corpus {
             .as_str()
             .unwrap();
         assert!(invocation.contains("nix run .#update --"), "{invocation}");
-        assert!(invocation.contains("--pr --jobs \"$JOBS\""), "{invocation}");
+        assert!(
+            invocation.contains("jobs=(--jobs \"$JOBS\")"),
+            "{invocation}"
+        );
+        assert!(invocation.contains("--pr \"${jobs[@]}\""), "{invocation}");
         assert!(!invocation.contains("update-matrix"), "{invocation}");
         let update_step = step(job(&update, "update"), "update");
+        let update_inputs = field(field(field(&update, "on"), "workflow_dispatch"), "inputs");
+        assert_eq!(
+            field(field(update_inputs, "jobs"), "default").as_str(),
+            Some("")
+        );
         assert_eq!(
             field(field(update_step, "env"), "JOBS").as_str(),
-            Some("${{ github.event.inputs.jobs || 4 }}")
+            Some("${{ github.event.inputs.jobs }}")
         );
 
         let cleanup = read("preview-cleanup.yml");

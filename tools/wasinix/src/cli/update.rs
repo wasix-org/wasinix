@@ -115,7 +115,7 @@ pub struct UpdateArgs {
     #[arg(long, conflicts_with = "targets")]
     pub all: bool,
     /// Maximum update PRs running at once
-    #[arg(long, default_value = "4")]
+    #[arg(long, default_value = "2")]
     pub jobs: std::num::NonZeroUsize,
     /// Shared batch state prepared by the parent update process
     #[arg(long, hide = true)]
