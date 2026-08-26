@@ -1,8 +1,8 @@
 diff --git a/src/eval-args.cc b/src/eval-args.cc
 --- a/src/eval-args.cc
 +++ b/src/eval-args.cc
-@@ -253,0 +254,15 @@ MyArgs::MyArgs() : MixCommonArgs("nix-eval-jobs") {
-+
+@@ -255,2 +255,17 @@ MyArgs::MyArgs() : MixCommonArgs("nix-eval-jobs") {
+-    // usually in MixFlakeOptions
 +    addFlag({
 +        .longName = "select-file",
 +        .aliases = {},
@@ -17,34 +17,53 @@ diff --git a/src/eval-args.cc b/src/eval-args.cc
 +        .completer = completePath,
 +        .experimentalFeature = std::nullopt,
 +    });
++
++    // usually in MixFlakeOptions
+     addFlag({
 diff --git a/src/eval-args.hh b/src/eval-args.hh
 --- a/src/eval-args.hh
 +++ b/src/eval-args.hh
-@@ -23,0 +24,1 @@ class MyArgs : virtual public nix::MixEvalArgs,
+@@ -21,6 +21,7 @@ class MyArgs : virtual public nix::MixEvalArgs,
+     std::string releaseExpr;
+     std::string applyExpr;
+     std::string selectExpr;
 +    std::filesystem::path selectFile;
+     std::filesystem::path gcRootsDir;
+     bool flake = false;
+     bool fromArgs = false;
 diff --git a/src/nix-eval-jobs.cc b/src/nix-eval-jobs.cc
 --- a/src/nix-eval-jobs.cc
 +++ b/src/nix-eval-jobs.cc
-@@ -550,0 +551,5 @@ void validateIncompatibleFlags(const MyArgs &args) {
+@@ -484,4 +484,9 @@ void validateIncompatibleFlags(const MyArgs &args) {
+ void validateIncompatibleFlags(const MyArgs &args) {
 +    if (!args.selectExpr.empty() && !args.selectFile.empty()) {
 +        throw nix::UsageError(
 +            "--select and --select-file are mutually exclusive");
 +    }
 +
+     if (!args.noInstantiate) {
+         return;
+     }
 diff --git a/src/worker.cc b/src/worker.cc
 --- a/src/worker.cc
 +++ b/src/worker.cc
-@@ -310,1 +310,4 @@ auto initializeRootValue(const nix::ref<nix::EvalState> &state,
+@@ -289,10 +289,13 @@ auto initializeRootValue(const nix::ref<nix::EvalState> &state,
 -    if (args.selectExpr.empty()) {
 +    const auto selectExpr = args.selectFile.empty()
 +                                ? args.selectExpr
 +                                : nix::readFile(args.selectFile);
 +    if (selectExpr.empty()) {
-@@ -315,2 +318,2 @@ auto initializeRootValue(const nix::ref<nix::EvalState> &state,
+         return vEvaluated;
+     }
+-
++
+     // Apply the provided select function
 -    auto *selectExpr =
 -        state->parseExprFromString(args.selectExpr, state->rootPath("."));
 +    auto *parsedSelectExpr =
 +        state->parseExprFromString(selectExpr, state->rootPath("."));
-@@ -319,1 +322,1 @@ auto initializeRootValue(const nix::ref<nix::EvalState> &state,
+-
++
+     nix::Value vSelect;
 -    state->eval(selectExpr, vSelect);
 +    state->eval(parsedSelectExpr, vSelect);
