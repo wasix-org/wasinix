@@ -7,20 +7,25 @@
   ...
 }: let
   phpCommands = builtins.attrValues entry.commands;
+  phpVersion = (packageForEntry packages entry).version;
   instaboot = harnesses.hostShell {
     name = "${entry.name}-instaboot";
     hostPackages = [pkgs.wasmer];
     wasixCommands = phpCommands;
+    broken =
+      if pkgs.lib.versionAtLeast phpVersion "8.0"
+      then "Asyncify cannot unwind first-stdin snapshots through Wasm EH"
+      else null;
     timeout = 180;
     script = ''
       journal=$PWD/php.journal
       code='$token = bin2hex(random_bytes(16)); fwrite(STDOUT, "WARM:$token\n"); fflush(STDOUT); $line = fgets(STDIN); fwrite(STDOUT, "RESUMED:$token:" . trim($line) . "\n");'
 
-      WASMER_FLAGS="--volume $PWD:$PWD --cwd $PWD --journal-writable $journal --snapshot-on first-stdin --stop-after-snapshot" \
+      WASINIX_WASMER_ARGS="--journal-writable $journal --snapshot-on first-stdin --stop-after-snapshot" \
         php -r "$code" >warm.out
 
       printf 'payload\n' | \
-        WASMER_FLAGS="--volume $PWD:$PWD --cwd $PWD --journal $journal --skip-journal-stdio" \
+        WASINIX_WASMER_ARGS="--journal $journal --skip-journal-stdio" \
         php -r "$code" >resumed.out
 
       warm=$(sed -n 's/^WARM:\([0-9a-f]\{32\}\)$/\1/p' warm.out)
@@ -40,6 +45,7 @@
     name = "${entry.name}-server-instaboot";
     hostPackages = [pkgs.curl pkgs.wasmer];
     wasixCommands = phpCommands;
+    wasmerArgs = ["--net"];
     timeout = 180;
     script = ''
       journal=$PWD/php-server.journal
@@ -48,7 +54,7 @@
       printf '%s\n' '<?php echo "restored server ok";' >docroot/index.php
 
       if ! timeout 90 env \
-        WASMER_FLAGS="--net --volume $PWD:$PWD --cwd $PWD --journal-writable $journal --snapshot-on explicit --stop-after-snapshot" \
+        WASINIX_WASMER_ARGS="--journal-writable $journal --snapshot-on explicit --stop-after-snapshot" \
         php -S 127.0.0.1:$port -t "$PWD/docroot" >snapshot.log 2>&1; then
         cat snapshot.log >&2
         exit 1
@@ -62,7 +68,7 @@
         exit 1
       fi
 
-      WASMER_FLAGS="--net --volume $PWD:$PWD --cwd $PWD --journal $journal --skip-journal-stdio" \
+      WASINIX_WASMER_ARGS="--journal $journal --skip-journal-stdio" \
         php -S 127.0.0.1:$port -t "$PWD/docroot" >server.log 2>&1 &
       server_pid=$!
       trap 'kill $server_pid 2>/dev/null || true' EXIT
@@ -83,6 +89,6 @@
   };
 in
   {inherit instaboot;}
-  // pkgs.lib.optionalAttrs (pkgs.lib.versionAtLeast (packageForEntry packages entry).version "8.1") {
+  // pkgs.lib.optionalAttrs (pkgs.lib.versionAtLeast phpVersion "8.1") {
     server-instaboot = serverInstaboot;
   }
