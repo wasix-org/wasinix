@@ -210,19 +210,6 @@ jobs:
           nix run .#ci -- publish --run-dir "$RUN_DIR" --baseline \
             "${update_snapshot[@]}"
 
-      - name: Reconcile update PR
-        if:
-          ${{ always() && steps.run.conclusion != 'skipped' &&
-          github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name == github.repository }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          PULL_REQUEST: ${{ github.event.pull_request.number }}
-          RUN_DIR: ${{ steps.run.outputs.runDir }}
-        run: |
-          nix run .#ci -- reconcile-update-pull-request \
-            --run-dir "$RUN_DIR" --pull-request "$PULL_REQUEST"
-
       - name: Collect durable runs
         id: collect
         if:

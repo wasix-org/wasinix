@@ -1,7 +1,7 @@
 //! Publish one run's report to its GitHub surfaces: the PR comment, the
 //! check run, and the step summary, all rendered from the same report.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde_json::json;
@@ -15,6 +15,19 @@ use crate::support::capability::Capability;
 use crate::support::error::Result;
 
 pub const PROGRESS_INTERVAL_SECONDS: u64 = 5 * 60;
+
+const REBUILD_LABEL_PREFIX: &str = "10.rebuild-wasix: ";
+
+pub fn rebuild_label(count: usize) -> &'static str {
+    match count {
+        0 => "10.rebuild-wasix: 0",
+        1 => "10.rebuild-wasix: 1",
+        2..=10 => "10.rebuild-wasix: 1-10",
+        11..=100 => "10.rebuild-wasix: 11-100",
+        101..=500 => "10.rebuild-wasix: 101-500",
+        _ => "10.rebuild-wasix: 501+",
+    }
+}
 
 pub struct Target {
     pub repository: String,
@@ -51,6 +64,52 @@ pub struct Rendered {
     pub fragments: BTreeMap<String, Fragment>,
     pub snapshot: Option<Snapshot>,
     pub bisect: Option<crate::nix::bisect::Report>,
+}
+
+fn rebuild_count(report: &Report) -> Option<usize> {
+    let [comparison] = report.comparisons.as_slice() else {
+        return None;
+    };
+    if !comparison.base_evaluated || !comparison.head_evaluated {
+        return None;
+    }
+    let eval = comparison.eval.as_ref()?;
+    Some(
+        eval.added
+            .iter()
+            .chain(&eval.removed)
+            .chain(&eval.rebuilt)
+            .collect::<BTreeSet<_>>()
+            .len(),
+    )
+}
+
+pub fn reconcile_rebuild_label(
+    client: &Client,
+    rendered: &Rendered,
+    target: &Target,
+    effects: crate::support::effects::Effects,
+) -> Result<()> {
+    if target.untrusted || effects.is_dry_run() {
+        return Ok(());
+    }
+    let (Some(pull_request), Some(count)) = (target.pull_request, rebuild_count(&rendered.report))
+    else {
+        return Ok(());
+    };
+    let issue = format!("repos/{}/issues/{pull_request}", target.repository);
+    let current = client.get(&issue)?;
+    let labels = current["labels"]
+        .as_array()
+        .ok_or_else(|| crate::support::error::Error::Failure("pull request has no labels".into()))?
+        .iter()
+        .filter_map(|label| label["name"].as_str())
+        .filter(|label| !label.starts_with(REBUILD_LABEL_PREFIX))
+        .chain(std::iter::once(rebuild_label(count)))
+        .collect::<Vec<_>>();
+    client.put(&format!("{issue}/labels"), &json!({ "labels": labels }))?;
+    crate::support::ui::fact("rebuild count", count);
+    Ok(())
 }
 
 fn load_bisect(run_dir: &Path) -> Result<Option<crate::nix::bisect::Report>> {
@@ -614,6 +673,7 @@ impl<'a> Watcher<'a> {
         let Some(rendered) = load_running(self.watch.run_dir, &self.events)? else {
             return Ok(false);
         };
+        reconcile_rebuild_label(self.client, &rendered, self.target, self.effects)?;
         if self.watch.comment {
             comment(
                 self.client,
@@ -656,4 +716,22 @@ pub fn step_summary(
         return Ok(());
     }
     crate::support::fs::append(path, text.as_bytes())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn rebuild_buckets_cover_every_boundary() {
+        use super::rebuild_label;
+
+        assert_eq!(rebuild_label(0), "10.rebuild-wasix: 0");
+        assert_eq!(rebuild_label(1), "10.rebuild-wasix: 1");
+        assert_eq!(rebuild_label(2), "10.rebuild-wasix: 1-10");
+        assert_eq!(rebuild_label(10), "10.rebuild-wasix: 1-10");
+        assert_eq!(rebuild_label(11), "10.rebuild-wasix: 11-100");
+        assert_eq!(rebuild_label(100), "10.rebuild-wasix: 11-100");
+        assert_eq!(rebuild_label(101), "10.rebuild-wasix: 101-500");
+        assert_eq!(rebuild_label(500), "10.rebuild-wasix: 101-500");
+        assert_eq!(rebuild_label(501), "10.rebuild-wasix: 501+");
+    }
 }
