@@ -4,7 +4,7 @@
   helpers,
   packages,
 }:
-helpers.forEachPython packages.preferred ({
+helpers.forEachPython packages.wasix.preferred ({
   python,
   pythonCommands,
   pyVer,

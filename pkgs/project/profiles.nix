@@ -28,7 +28,7 @@ rec {
 
   # Default profile for shipped binaries and the library matrix. A package that
   # needs a different profile declares it via passthru.wasix; the project
-  # constructor reads that to build packages.preferred.
+  # constructor reads that to build packages.wasix.preferred.
   defaultProfileName = "exnrefEh";
 
   # The {eh, pic, exnref} encoding of each profile, which wasix-libc's

@@ -11,10 +11,10 @@
 exposeWasixPackage (
   let
     lib = packages.sameProfile.lib;
-    bash = packages.preferred.bash;
-    nano = packages.preferred.nano;
-    coreutils = packages.preferred.coreutils;
-    gawk = packages.preferred.gawk;
+    bash = packages.wasix.preferred.bash;
+    nano = packages.wasix.preferred.nano;
+    coreutils = packages.wasix.preferred.coreutils;
+    gawk = packages.wasix.preferred.gawk;
   in
     (package.override {
       # gettext lands in nativeBuildInputs too, so the bare argument splices to
@@ -63,8 +63,8 @@ exposeWasixPackage (
               nano
               coreutils
               gawk
-              packages.preferred.gnugrep
-              packages.preferred.gnused
+              packages.wasix.preferred.gnugrep
+              packages.wasix.preferred.gnused
             ];
             # git execs its libexec helpers at absolute /nix/store paths; mount
             # whatever git.wasm embeds (bash is no longer embedded).

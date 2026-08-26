@@ -25,7 +25,7 @@ request `scope`, `variant`, and `packageSet` in `package.nix` and return the
 appropriate derivation from one visible definition.
 
 The results are `packages.native.<name>` and `packages.wasix.<profile>.<name>`.
-`packages.preferred.<name>` remains the convenient canonical WASIX build.
+`packages.wasix.preferred.<name>` remains the convenient canonical WASIX build.
 
 ## Adapting a nixpkgs package for WASIX
 
@@ -46,8 +46,9 @@ A package file is a function over one argument set:
 
 `package` is the preceding value of the discovered attribute.
 `packages.sameProfile.<dep>` is the immediate recursive package set, already
-using the WASIX stdenv for the current profile. `packages.preferred.<tool>` is
-for runtime tools that may deliberately use another profile.
+using the WASIX stdenv for the current profile.
+`packages.wasix.preferred.<tool>` is for runtime tools that may deliberately use
+another profile.
 
 Use `packages.sameProfile` for linked dependencies. Reaching into an absolute
 profile view from a package unit pins a profile the package does not control.
@@ -156,7 +157,7 @@ Crates not in nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
    passthru.wasmer.commands = [
      {
        name = "bash";
-       dependency = wasmerDependencies.any packages.preferred.bash;
+       dependency = wasmerDependencies.any packages.wasix.preferred.bash;
      }
    ];
    ```
@@ -167,11 +168,11 @@ Crates not in nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
 
    ```nix
    passthru.wasmer.dependencies = [
-     packages.preferred.foo
-     (wasmerDependencies.any packages.preferred.bar)
-     (wasmerDependencies.exact packages.preferred.baz)
-     (wasmerDependencies.compatibleMajor packages.preferred.qux)
-     (wasmerDependencies.compatibleMinor packages.preferred.quux)
+     packages.wasix.preferred.foo
+     (wasmerDependencies.any packages.wasix.preferred.bar)
+     (wasmerDependencies.exact packages.wasix.preferred.baz)
+     (wasmerDependencies.compatibleMajor packages.wasix.preferred.qux)
+     (wasmerDependencies.compatibleMinor packages.wasix.preferred.quux)
    ];
    ```
 
@@ -261,7 +262,8 @@ has exercised none of its rewriting.
 
 - Nix only sees git-tracked files, so `git add -N` a new one before building
   (`docs/building.md`).
-- Off-only packages fail in other profiles on purpose; use `packages.preferred`.
+- Off-only packages fail in other profiles on purpose; use
+  `packages.wasix.preferred`.
 - `configure` misdetecting features can be wasm-opt failing on test programs:
   add `disableWasmOptInConfigureHook` to `nativeBuildInputs`.
 - Odd runtime behaviour, such as unexpected exit codes or output formatting, is

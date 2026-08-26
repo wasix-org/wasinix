@@ -13,7 +13,7 @@
       lib.intersectLists (entry.packageSubjects or [entry.address]) subjects != [])
     (builtins.attrValues catalog)));
   nativeSubjects = names: map (name: "packages.native.${name}") names;
-  pandocSubjects = map (profile: "packages.wasix.${profile}.pandoc") (builtins.attrNames project.packages.wasix);
+  pandocSubjects = map (profile: "packages.wasix.${profile}.pandoc") (builtins.attrNames project.internals.packageSets.wasixRaw);
   toolchainNames = [
     "cargo-wasix"
     "cargo-wasix-unwrapped"

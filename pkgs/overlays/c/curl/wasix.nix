@@ -34,7 +34,7 @@ exposeWasixPackage (
       # wcurl is a target-side wrapper script; it execs /bin/bash, mounted from the
       # bash webc dependency at load (like git's SHELL_PATH=/bin/bash). curl-config
       # stays a build-host dev script in -dev (git's build runs it for link flags).
-      passthru.wasmer.dependencies = [packages.preferred.bash];
+      passthru.wasmer.dependencies = [packages.wasix.preferred.bash];
       # patchShebangs bakes the build bash into wcurl, which cross curl forbids in
       # $bin (outputChecks.disallowedReferences); repoint it at the mounted
       # /bin/bash. No -e guard on purpose: if a curl bump drops wcurl, sed errors

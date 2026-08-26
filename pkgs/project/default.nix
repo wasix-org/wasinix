@@ -520,7 +520,7 @@ in rec {
           packageSet = final;
           packages = {
             native = nativeForContext;
-            inherit wasix preferred;
+            wasix = wasix // {inherit preferred;};
             python = python // lib.optionalAttrs (preferredPythonInterpreter != null) {preferred = python.${preferredPythonInterpreter};};
             sameProfile = projectedPackageSet scope variant final;
           };
@@ -656,14 +656,14 @@ in rec {
       harnessesView = harnessesFor callbackArgs;
       runnersView = runnersFor callbackArgs;
       probesView.ifd = nativeRaw.writeText "wasinix-ifd-probe" "ok";
+      preferredPackageSet = lib.genAttrs allWasixNames (name: let
+        profile = preferredProfileNameFor name;
+      in
+        wasixRaw.${profile}.${name});
       packageSetsView = {
         native = nativeRaw;
-        wasix = wasixRaw;
+        wasix = wasixRaw // {preferred = preferredPackageSet;};
         python = pythonRaw;
-        preferred = lib.genAttrs allWasixNames (name: let
-          profile = preferredProfileNameFor name;
-        in
-          wasixRaw.${profile}.${name});
       };
       pythonVariants = {
         all = lib.attrNames pythonSpecs;
@@ -1112,7 +1112,8 @@ in rec {
       in
         projectedPackageFor "wasix" {inherit profile;} wasixRaw.${profile} name wasixRaw.${profile}.${name});
       packageViews = {
-        inherit native wasix preferred;
+        inherit native;
+        wasix = wasix // {inherit preferred;};
         python = python // lib.optionalAttrs (preferredPythonInterpreter != null) {preferred = python.${preferredPythonInterpreter};};
       };
       artifactsView = lib.foldl' lib.recursiveUpdate {} (map (entry:

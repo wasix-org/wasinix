@@ -13,7 +13,7 @@ nix develop                       # shell with wasixcc + cargo-wasix on PATH
 nix build .#legacyPackages.x86_64-linux.packages.native.wasix-sysroot
 
 # example targets under legacyPackages (the system is explicit):
-nix build .#legacyPackages.x86_64-linux.packages.preferred.git     # source package
+nix build .#legacyPackages.x86_64-linux.packages.wasix.preferred.git     # source package
 nix build .#legacyPackages.x86_64-linux.artifacts.webc.git         # its WebC
 nix build .#legacyPackages.x86_64-linux.packages.native.anybuild   # native shared recipe
 nix build .#legacyPackages.x86_64-linux.packages.native.wasixcc    # the C/C++ driver

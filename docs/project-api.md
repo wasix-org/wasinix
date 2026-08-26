@@ -292,7 +292,7 @@ Every constructor receives that same context and requests only the fields it
 uses. The context includes:
 
 - `packages.sameProfile`: the immediate recursive package set.
-- `packages.preferred`: the attribute-wise projection of each package's
+- `packages.wasix.preferred`: the attribute-wise projection of each package's
   preferred WASIX profile.
 - `packageSet`: the immediate undecorated nixpkgs or Python fixpoint.
 - `scope` and `variant`: the actual package-set scope and its profile or
@@ -419,9 +419,11 @@ The structured views are:
 {
   packages = {
     native = ...;
-    wasix.<profile> = ...;
+    wasix = {
+      <profile> = ...;
+      preferred = ...;
+    };
     python.<interpreter> = ...;
-    preferred = ...;
   };
 
   packages.native.wasixcc.profiles.<profile>.stdenv = ...;
@@ -446,10 +448,10 @@ The CLI accepts `--project FLAKE#PROJECT-ATTR`; it defaults to
 `.#legacyPackages.x86_64-linux`. This reference selects the structured project,
 independently of the pinned Wasinix flake supplying the CLI and optional tools.
 
-`packages.preferred` is generally available but is not a coherent nixpkgs
+`packages.wasix.preferred` is generally available but is not a coherent nixpkgs
 package set: two attributes may select different profiles. Linked dependencies
 use the immediate `packages.sameProfile` context. Runtime commands, non-linked
-tools, and default artifacts may deliberately use `packages.preferred`.
+tools, and default artifacts may deliberately use `packages.wasix.preferred`.
 
 ## Package metadata
 
@@ -608,8 +610,8 @@ the entry being constructed or checked:
 ```nix
 packages.sameProfile.openssl
 packages.sameProfile.openssl.versions."1.1.1w"
-packages.preferred.bash
-packages.preferred.bash.versions."5.2"
+packages.wasix.preferred.bash
+packages.wasix.preferred.bash.versions."5.2"
 ```
 
 A release records the artifact identity rather than modifying the source package
@@ -769,12 +771,12 @@ internal catalog entry being projected, and entry-relative conveniences such as
 fields. The fields below are common projection dependencies, not a test-owned
 API:
 
-- `packages.native`, `packages.wasix`, `packages.python`, and
-  `packages.preferred`, with retained history under each package's `versions`;
+- `packages.native`, `packages.wasix.<profile>`, `packages.wasix.preferred`, and
+  `packages.python`, with retained history under each package's `versions`;
 - `packages.sameProfile` for entry callbacks, where the entry supplies a package
   scope and variant;
-- `packageSets`, the undecorated native, WASIX, Python, and preferred package
-  sets;
+- `packageSets`, the undecorated native, WASIX profile and preferred, and Python
+  package sets;
 - `pythonVariants`, including the configured variants, their interpreter
   packages, and the preferred variant;
 - `catalog` and `tests`;

@@ -24,7 +24,7 @@
   examples = "${pkgs.anybuild.src}/examples";
   pythonRegistry = artifacts.registry.python;
   wasmerRuntime = runners.rawWasm.withRuntime.wasmer;
-  bash = packages.preferred.bash.artifacts;
+  bash = packages.wasix.preferred.bash.artifacts;
 
   # Templates whose install steps produce a cross-compiled site-packages: the
   # python provider serves the app off a wasix venv, while mkdocs only uses
@@ -44,11 +44,11 @@
   interpreters = {
     "3.13" = {
       host = pkgs.python313;
-      webc = packages.preferred.python313.artifacts;
+      webc = packages.wasix.preferred.python313.artifacts;
     };
     "3.14" = {
       host = pkgs.python314;
-      webc = packages.preferred.python314.artifacts;
+      webc = packages.wasix.preferred.python314.artifacts;
     };
   };
 

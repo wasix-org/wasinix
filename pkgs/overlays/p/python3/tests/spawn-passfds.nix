@@ -6,7 +6,7 @@
 }: let
   inherit (pkgs) lib;
 in
-  helpers.forEachPython packages.preferred ({
+  helpers.forEachPython packages.wasix.preferred ({
     pythonCommands,
     pyVer,
     tag,

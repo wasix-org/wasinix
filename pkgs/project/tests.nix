@@ -913,12 +913,12 @@
     result = pythonArtifactModule.registryArtifact {
       catalog.entries = {};
       packages = {
-        preferred = lib.mapAttrs' (_: interpreterPackage:
+        wasix.preferred = lib.mapAttrs' (_: interpreterPackage:
           lib.nameValuePair interpreterPackage (webcFor interpreterPackage))
         interpreterPackages;
         python = lib.genAttrs (lib.attrNames interpreterPackages) (_: {});
       };
-      packageSets.preferred = lib.mapAttrs' (_: interpreterPackage:
+      packageSets.wasix.preferred = lib.mapAttrs' (_: interpreterPackage:
         lib.nameValuePair interpreterPackage (runtimeFor interpreterPackage))
       interpreterPackages;
       pythonVariants = {
@@ -1311,15 +1311,19 @@ in {
       inherit (project) schemaVersion;
       nativeNames = lib.attrNames project.packages.native;
       nativeInterfaceName = project.packages.native.core.profiles.default.package.name;
+      wasixViewNames = lib.attrNames project.packages.wasix;
+      topLevelPreferredAbsent = !(project.packages ? preferred);
       defaultNames = lib.attrNames project.packages.wasix.default;
       alternateNames = lib.attrNames project.packages.wasix.alternate;
       coreSource = project.packages.wasix.default.core.passthru.wasinix.source;
       coreLineage = project.packages.wasix.default.core.passthru.wasinix.lineage;
-      preferredProfile = project.packages.preferred.core.name;
-      limitedPreferred = project.packages.preferred.limited.name;
+      preferredProfile = project.packages.wasix.preferred.core.name;
+      limitedPreferred = project.packages.wasix.preferred.limited.name;
       consumerName = project.packages.wasix.alternate.consumer.name;
       inheritedDependencyName = project.packages.wasix.default.uses-inherited.name;
       focusedHelper = project.packages.wasix.default.uses-inherited.passthru.usedFocusedHelper;
+      preferredPackageSetName = project.packages.wasix.default.uses-inherited.passthru.preferredPackageSetName;
+      topLevelPreferredPackageSetAbsent = project.packages.wasix.default.uses-inherited.passthru.topLevelPreferredPackageSetAbsent;
       runnerContextName = project.packages.wasix.default.uses-inherited.passthru.runnerContextName;
       runnerName = project.runners.rawWasm.unbound.name;
       pythonHarnessAvailable = project.harnesses ? python;
@@ -1331,7 +1335,7 @@ in {
       pythonContextName = project.packages.python.py.contextProof.name;
       repairedPythonModules = pythonRepairProject.packages.python.py.repairPython.passthru.requiredPythonModules;
       wasixHistoryVersion = project.packages.wasix.default.core.versions."0.9".version;
-      preferredHistoryVersion = project.packages.preferred.core.versions."0.9".version;
+      preferredHistoryVersion = project.packages.wasix.preferred.core.versions."0.9".version;
       pythonHistoryVersion = project.packages.python.py.inheritedPython.versions."0.8".version;
       historyDependencyVersion = project.packages.python.py.inheritedPython.versions."0.8".passthru.wasinix.historyDependency;
       currentTransformed = project.packages.wasix.default.core.passthru.transformed;
@@ -1410,6 +1414,8 @@ in {
       schemaVersion = 1;
       nativeNames = ["broken" "ciNarrow" "consumer" "core" "dot.name" "limited" "topOwned" "uses-inherited"];
       nativeInterfaceName = "core";
+      wasixViewNames = ["alternate" "default" "preferred"];
+      topLevelPreferredAbsent = true;
       defaultNames = ["broken" "ciNarrow" "consumer" "core" "dot.name" "topOwned" "uses-inherited"];
       alternateNames = ["broken" "ciNarrow" "consumer" "core" "dot.name" "limited" "topOwned" "uses-inherited"];
       coreSource = "consumer";
@@ -1419,6 +1425,8 @@ in {
       consumerName = "consumer-alternate";
       inheritedDependencyName = "uses-inherited";
       focusedHelper = true;
+      preferredPackageSetName = "core";
+      topLevelPreferredPackageSetAbsent = true;
       runnerContextName = "raw-wasm-unbound";
       runnerName = "raw-wasm-unbound";
       pythonHarnessAvailable = true;
