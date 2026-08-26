@@ -63,9 +63,9 @@ inherited = {
 An inherited package is registered and retained like any other project package.
 Move it to an inventory unit once it needs a WASIX-specific transformation.
 
-The regular inventory uses one-character buckets. A WASIX-only adaptation
-lives at `pkgs/overlays/<first-character>/<name>/wasix.nix`; patches and tests
-remain beside it. Version families use one directory whose unit returns several
+The regular inventory uses one-character buckets. A WASIX-only adaptation lives
+at `pkgs/overlays/<first-character>/<name>/wasix.nix`; patches and tests remain
+beside it. Version families use one directory whose unit returns several
 derivations with `exposeWasixExtendedPackages`. See `pkgs/overlays/i/icu/`.
 
 A package file is a function over one argument set:

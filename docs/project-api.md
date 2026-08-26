@@ -286,9 +286,9 @@ unit and must exist in the preceding set.
 `wasix.nix` is instantiated only when the actual package-set host platform is
 WASIX, including across nixpkgs' build-package splices. `package.nix` is
 instantiated in native and WASIX sets. A package that must only be constructed
-natively uses `exposeNativePackageIdentity` or
-`exposeNativeExtendedPackage`. `recipe.nix` and loose package files are
-rejected. Python uses the same bucket layout and permits only `package.nix`.
+natively uses `exposeNativePackageIdentity` or `exposeNativeExtendedPackage`.
+`recipe.nix` and loose package files are rejected. Python uses the same bucket
+layout and permits only `package.nix`.
 
 The loader performs only these jobs:
 
@@ -1027,5 +1027,5 @@ introduces them:
 The directory loader derives package-unit names from their paths and values from
 their returned attrsets. Its eval-only tests must cover base and WASIX units,
 inherited packages, dependencies on the immediate recursive set, multi-package
-units, native-only identities, wrong buckets, conflicting entry forms,
-obsolete `recipe.nix`, bare derivations, and loose files.
+units, native-only identities, wrong buckets, conflicting entry forms, obsolete
+`recipe.nix`, bare derivations, and loose files.

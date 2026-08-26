@@ -44,11 +44,11 @@ The built-in `wasinix` extension is defined in `pkgs/project/extension.nix`.
 Regular entries live under `pkgs/overlays/<first-character>/<name>/`. A
 `package.nix` defines a complete package and runs in native and WASIX package
 sets. A colocated `wasix.nix` adapts a preceding nixpkgs package only when the
-actual host platform is WASIX. This distinction also applies to
-nixpkgs' native build-package splices, so WASIX adaptations never leak into host
-tools. Patches, tests, and other package inputs stay in the owning directory.
-Existing nixpkgs packages requiring no adaptation are registered by the
-extension's `inherited` attribute set instead of empty units.
+actual host platform is WASIX. This distinction also applies to nixpkgs' native
+build-package splices, so WASIX adaptations never leak into host tools. Patches,
+tests, and other package inputs stay in the owning directory. Existing nixpkgs
+packages requiring no adaptation are registered by the extension's `inherited`
+attribute set instead of empty units.
 
 WASIX-specific policy lives with its package: patches, flags, runtime
 dependencies, Wasm command names, WebC configuration, and tests. A unit normally
