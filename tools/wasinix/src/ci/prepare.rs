@@ -47,6 +47,10 @@ pub fn eval_map_path(case: &Path) -> PathBuf {
     maps_dir(case).join("eval-map.json")
 }
 
+pub fn selector_catalog_path(case: &Path) -> PathBuf {
+    maps_dir(case).join("selector-catalog.json")
+}
+
 pub fn eval_jobs_path(case: &Path) -> PathBuf {
     maps_dir(case).join("eval-jobs.jsonl")
 }
