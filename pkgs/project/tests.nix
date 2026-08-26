@@ -203,7 +203,7 @@
     projectLib.loadPackageOverlay {
       inherit contextFor;
       dir = ./tests/units;
-      inherited.dependency = {};
+      inherited.dependency.supportedProfiles = ["eh"];
       scope = "native";
     }
     final
@@ -1341,6 +1341,8 @@ in {
       inheritedProfiles = inheritedLoaded.dependency.passthru.wasix.supportedProfiles;
       replayedInheritedProfiles = replayedInherited.dependency.passthru.wasix.supportedProfiles;
       inheritedAbsentFromNative = !(nativeInherited ? dependency);
+      nativeInheritedIdentity = nativeInherited.${projectLib.identityAttr}.dependency.name;
+      nativeInheritedProfiles = nativeInherited.${projectLib.compatibilityAttr}.dependency.supportedProfiles;
       replayNames = lib.attrNames loadedRaw.${projectLib.unitOverlaysAttr};
       fileUnitDirectory = (lib.findFirst (unit: unit.name == "existing") null discoveredUnits).directory;
       directoryUnitDirectory = toString (lib.findFirst (unit: unit.name == "family") null discoveredUnits).directory;
@@ -1370,6 +1372,8 @@ in {
       inheritedProfiles = ["eh"];
       replayedInheritedProfiles = ["eh"];
       inheritedAbsentFromNative = true;
+      nativeInheritedIdentity = "dependency";
+      nativeInheritedProfiles = ["eh"];
       replayNames = ["existing" "family-a" "family-b" "new"];
       fileUnitDirectory = null;
       directoryUnitDirectory = toString ./tests/units/family;

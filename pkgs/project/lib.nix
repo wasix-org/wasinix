@@ -704,24 +704,29 @@ in rec {
     inheritedResult = previous: name:
       if !(builtins.hasAttr name previous)
       then throw "${name}: inherited package requires a preceding package"
-      else {
-        ${name} = previous.${name}.overrideAttrs (old: {
+      else let
+        package = previous.${name}.overrideAttrs (old: {
           passthru =
             (old.passthru or {})
             // {
               wasix = ((old.passthru or {}).wasix or {}) // inheritedDeclarations.${name};
             };
         });
-      };
+      in
+        if scope == "wasix"
+        then {${name} = package;}
+        else {
+          ${compatibilityAttr}.${name} = inheritedDeclarations.${name};
+          ${identityAttr}.${name} = package;
+        };
     inheritedResults =
-      lib.optionals (scope == "wasix")
-      (map (name: {
-          kind = "inherited";
-          inherit definition;
-          result = inheritedResult prev name;
-          replay = _final: previous: inheritedResult previous name;
-        })
-        selectedInheritedNames);
+      map (name: {
+        kind = "inherited";
+        inherit definition;
+        result = inheritedResult prev name;
+        replay = _final: previous: inheritedResult previous name;
+      })
+      selectedInheritedNames;
     instantiateResults = previous: units:
       map (unit: {
         inherit (unit) kind;
@@ -867,9 +872,13 @@ in rec {
       unitOverlays = result.${unitOverlaysAttr} or {};
       visibleResult = removeAttrs result [compatibilityAttr identityAttr unitOverlaysAttr];
       reserved = lib.intersectLists (lib.attrNames result) [registryAttr extensionContextsAttr];
-      identityNames = lib.attrNames identities ++ lib.attrNames compatibility;
+      identityNames = lib.unique (lib.attrNames identities ++ lib.attrNames compatibility);
       identityConflicts = lib.intersectLists identityNames (lib.attrNames (prev.${registryAttr} or {}));
-      missingIdentities = lib.filter (name: !(builtins.hasAttr name prev) && !(builtins.hasAttr name visibleResult)) identityNames;
+      missingIdentities = lib.filter (name:
+        !(builtins.hasAttr name prev)
+        && !(builtins.hasAttr name visibleResult)
+        && !(builtins.hasAttr name identities))
+      identityNames;
       names = removeAttrs (lib.genAttrs (lib.attrNames visibleResult ++ identityNames) (_: source)) [registryAttr extensionContextsAttr];
       stamped =
         lib.mapAttrs (
