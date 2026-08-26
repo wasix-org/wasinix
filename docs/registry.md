@@ -21,6 +21,12 @@ yet carry. Registry URLs, the Python app directory, and WebC provenance come
 from `repository.publication`, so a consuming flake publishes its own source
 without inheriting Wasinix repository identity.
 
+`wasinix publish --plan [selectors...]` resolves that inventory and its
+destinations without building or contacting a registry. `--json` emits the
+versioned publication-plan document. Planning cannot determine which WebC
+dependencies a remote registry lacks, so `--plan` is disjoint from
+`--with-dependencies` and from the registry-aware `--dry-run`.
+
 `wasinix wasmer serve` yields a directory, not a URL: the wasmer CLI has no
 local-HTTP registry mode (`--registry` always resolves a remote GraphQL
 endpoint), so the cell materializes the selected packages and their dependency

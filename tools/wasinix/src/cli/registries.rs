@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::registries::{cargo, python, wasmer};
 use crate::support::effects::Effects;
@@ -494,7 +494,7 @@ struct PublicationInfo {
     package_subjects: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Copy, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 enum PublicationKind {
     Crate,
@@ -502,9 +502,11 @@ enum PublicationKind {
     Wheel,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 struct PublicationIdentity {
     name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    owner: Option<String>,
 }
 
 #[derive(Default, Deserialize)]
@@ -539,9 +541,13 @@ fn selected_publications<'a>(
     publication: &'a Publication,
     selectors: &[String],
     selector_catalog: crate::ci::evalmap::SelectorCatalog,
-) -> Result<Vec<&'a PublicationInfo>> {
+) -> Result<Vec<(&'a str, &'a PublicationInfo)>> {
     if selectors.is_empty() {
-        return Ok(publication.catalog.values().collect());
+        return Ok(publication
+            .catalog
+            .iter()
+            .map(|(address, info)| (address.as_str(), info))
+            .collect());
     }
     let selected: BTreeSet<String> = selector_catalog
         .into_map()
@@ -558,22 +564,51 @@ fn selected_publications<'a>(
                     .iter()
                     .any(|subject| selected.contains(subject))
         })
-        .map(|(_, info)| info)
+        .map(|(address, info)| (address.as_str(), info))
         .collect())
 }
 
-pub fn run_meta_publish(
-    selectors: &[String],
-    with_dependencies: bool,
-    effects: Effects,
-) -> Result<CommandStatus> {
-    let repo = crate::support::git::repo_root()?;
-    let project: PublishProject = project_value(
-        "",
-        Some(
-            "p: { publication = { inherit (p.internals.repository.publication) catalog destinations; }; selectorCatalog = p.ci.catalog; }",
-        ),
-    )?;
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PublicationPlanArtifact {
+    address: String,
+    identity: PublicationIdentity,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+enum PublicationPlanLeg {
+    Wasmer {
+        registry: String,
+        provenance: wasmer::Provenance,
+        artifacts: Vec<PublicationPlanArtifact>,
+    },
+    Python {
+        registry: String,
+        #[serde(rename = "appDirectory")]
+        app_directory: PathBuf,
+        artifacts: Vec<PublicationPlanArtifact>,
+    },
+    Cargo {
+        registry: String,
+        artifacts: Vec<PublicationPlanArtifact>,
+    },
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PublicationPlan {
+    project_schema_version: u64,
+    selectors: Vec<String>,
+    legs: Vec<PublicationPlanLeg>,
+}
+
+impl crate::support::schema::Document for PublicationPlan {
+    const KIND: &'static str = "publicationPlan";
+    const SCHEMA: u32 = 1;
+}
+
+fn publication_plan(project: PublishProject, selectors: &[String]) -> Result<PublicationPlan> {
     let expected_schema = crate::support::schema::project_version();
     if project.selector_catalog.schema_version != expected_schema {
         return request_error(format!(
@@ -586,72 +621,49 @@ pub fn run_meta_publish(
     if selected.is_empty() {
         return request_error("the publication selectors matched no publishable artifacts");
     }
-    let mut webcs = BTreeSet::new();
-    let mut crates = BTreeSet::new();
-    let mut wheels = false;
-    for info in selected {
-        match info.kind {
-            PublicationKind::Webc => {
-                webcs.insert(info.identity.name.clone());
-            }
-            PublicationKind::Crate => {
-                crates.insert(info.identity.name.clone());
-            }
-            PublicationKind::Wheel => wheels = true,
-        }
-    }
+    let artifacts = |kind| {
+        selected
+            .iter()
+            .filter(|(_, info)| info.kind == kind)
+            .map(|(address, info)| PublicationPlanArtifact {
+                address: (*address).to_string(),
+                identity: info.identity.clone(),
+            })
+            .collect::<Vec<_>>()
+    };
+    let webcs = artifacts(PublicationKind::Webc);
+    let wheels = artifacts(PublicationKind::Wheel);
+    let crates = artifacts(PublicationKind::Crate);
     let destinations = project.publication.destinations;
-    let mut legs: Vec<(&str, Leg<'_>)> = Vec::new();
+    let mut legs = Vec::new();
     if !webcs.is_empty() {
         let Some(destination) = destinations.wasmer else {
             return request_error(
                 "selected WebC artifacts have no repository.publication.wasmer destination",
             );
         };
-        let Some(provenance) = destinations.provenance.clone() else {
+        let Some(provenance) = destinations.provenance else {
             return request_error(
                 "selected WebC artifacts have no repository.publication.provenance",
             );
         };
-        legs.push((
-            "wasmer",
-            Box::new(move || {
-                wasmer::publish(wasmer::Options {
-                    registry: destination.registry,
-                    packages: webcs.into_iter().collect(),
-                    effects,
-                    skip_sha_validation: false,
-                    rev: None,
-                    preview: None,
-                    with_dependencies,
-                    publish_as: None,
-                    namespace: None,
-                    provenance: Some(provenance),
-                })
-            }),
-        ));
+        legs.push(PublicationPlanLeg::Wasmer {
+            registry: destination.registry,
+            provenance,
+            artifacts: webcs,
+        });
     }
-    if wheels {
+    if !wheels.is_empty() {
         let Some(destination) = destinations.python else {
             return request_error(
                 "selected wheels have no repository.publication.python destination",
             );
         };
-        legs.push((
-            "python",
-            Box::new(move || {
-                python::publish_index(python::Index {
-                    registry_path: None,
-                    registry: destination.registry,
-                    rev: String::new(),
-                    effects,
-                    repo,
-                    app_directory: destination.app_directory,
-                    refresh_listings: false,
-                    withdraw_stale: false,
-                })
-            }),
-        ));
+        legs.push(PublicationPlanLeg::Python {
+            registry: destination.registry,
+            app_directory: destination.app_directory,
+            artifacts: wheels,
+        });
     }
     if !crates.is_empty() {
         let Some(destination) = destinations.cargo else {
@@ -659,25 +671,144 @@ pub fn run_meta_publish(
                 "selected crates have no repository.publication.cargo destination",
             );
         };
-        legs.push((
-            "cargo",
-            Box::new(move || {
-                run_cargo(CargoCommand::Publish {
-                    crates: crates.into_iter().collect(),
-                    registry: destination.registry,
-                    mint: None,
-                    dry_run: effects.is_dry_run(),
-                    json: Default::default(),
-                })
-            }),
-        ));
+        legs.push(PublicationPlanLeg::Cargo {
+            registry: destination.registry,
+            artifacts: crates,
+        });
+    }
+    Ok(PublicationPlan {
+        project_schema_version: expected_schema,
+        selectors: selectors.to_vec(),
+        legs,
+    })
+}
+
+fn execute_publication_plan(
+    plan: PublicationPlan,
+    with_dependencies: bool,
+    effects: Effects,
+) -> Result<CommandStatus> {
+    let repo = crate::support::git::repo_root()?;
+    let mut legs: Vec<(&str, Leg<'_>)> = Vec::new();
+    for leg in plan.legs {
+        match leg {
+            PublicationPlanLeg::Wasmer {
+                registry,
+                provenance,
+                artifacts,
+            } => legs.push((
+                "wasmer",
+                Box::new(move || {
+                    wasmer::publish(wasmer::Options {
+                        registry,
+                        packages: artifacts
+                            .into_iter()
+                            .map(|artifact| artifact.identity.name)
+                            .collect(),
+                        effects,
+                        skip_sha_validation: false,
+                        rev: None,
+                        preview: None,
+                        with_dependencies,
+                        publish_as: None,
+                        namespace: None,
+                        provenance: Some(provenance),
+                    })
+                }),
+            )),
+            PublicationPlanLeg::Python {
+                registry,
+                app_directory,
+                ..
+            } => {
+                let repo = repo.clone();
+                legs.push((
+                    "python",
+                    Box::new(move || {
+                        python::publish_index(python::Index {
+                            registry_path: None,
+                            registry,
+                            rev: String::new(),
+                            effects,
+                            repo,
+                            app_directory,
+                            refresh_listings: false,
+                            withdraw_stale: false,
+                        })
+                    }),
+                ));
+            }
+            PublicationPlanLeg::Cargo {
+                registry,
+                artifacts,
+            } => legs.push((
+                "cargo",
+                Box::new(move || {
+                    run_cargo(CargoCommand::Publish {
+                        crates: artifacts
+                            .into_iter()
+                            .map(|artifact| artifact.identity.name)
+                            .collect(),
+                        registry,
+                        mint: None,
+                        dry_run: effects.is_dry_run(),
+                        json: Default::default(),
+                    })
+                }),
+            )),
+        }
     }
     fan_out(legs)
 }
 
+pub fn run_meta_publish(
+    selectors: &[String],
+    with_dependencies: bool,
+    effects: Effects,
+    plan_only: bool,
+    json: ui::JsonArg,
+) -> Result<CommandStatus> {
+    if json.wants() && !plan_only {
+        return request_error("publish --json requires --plan");
+    }
+    let project: PublishProject = project_value(
+        "",
+        Some(
+            "p: { publication = { inherit (p.internals.repository.publication) catalog destinations; }; selectorCatalog = p.ci.catalog; }",
+        ),
+    )?;
+    let plan = publication_plan(project, selectors)?;
+    if plan_only {
+        ui::emit(&json, &plan, |plan| {
+            for leg in &plan.legs {
+                let (kind, registry, count) = match leg {
+                    PublicationPlanLeg::Wasmer {
+                        registry,
+                        artifacts,
+                        ..
+                    } => ("wasmer", registry, artifacts.len()),
+                    PublicationPlanLeg::Python {
+                        registry,
+                        artifacts,
+                        ..
+                    } => ("python", registry, artifacts.len()),
+                    PublicationPlanLeg::Cargo {
+                        registry,
+                        artifacts,
+                    } => ("cargo", registry, artifacts.len()),
+                };
+                ui::fact(kind, format!("{count} artifacts -> {registry}"));
+            }
+        })?;
+        Ok(CommandStatus::SUCCESS)
+    } else {
+        execute_publication_plan(plan, with_dependencies, effects)
+    }
+}
+
 #[cfg(test)]
 mod publication_tests {
-    use super::{Publication, selected_publications};
+    use super::{Publication, PublishProject, publication_plan, selected_publications};
 
     #[test]
     fn source_selection_reaches_publications_through_package_subjects() {
@@ -719,7 +850,54 @@ mod publication_tests {
                 .unwrap();
 
         assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].identity.name, "consumer");
+        assert_eq!(selected[0].0, "artifacts.webc.consumer");
+        assert_eq!(selected[0].1.identity.name, "consumer");
+    }
+
+    #[test]
+    fn a_publication_plan_is_the_sorted_network_free_boundary() {
+        let project: PublishProject = serde_json::from_value(serde_json::json!({
+            "publication": {
+                "catalog": {
+                    "artifacts.webc.second": {
+                        "kind": "webc",
+                        "identity": { "name": "second", "owner": "example" },
+                        "packageSubjects": ["packages.wasix.default.second"]
+                    },
+                    "artifacts.webc.first": {
+                        "kind": "webc",
+                        "identity": { "name": "first", "owner": "example" },
+                        "packageSubjects": ["packages.wasix.default.first"]
+                    }
+                },
+                "destinations": {
+                    "wasmer": { "registry": "registry.example" },
+                    "provenance": {
+                        "flake": "github:example/project",
+                        "repository": "example/project"
+                    }
+                }
+            },
+            "selectorCatalog": {
+                "schemaVersion": crate::support::schema::project_version(),
+                "jobs": {},
+                "selectors": { "sets": {}, "sources": {} }
+            }
+        }))
+        .unwrap();
+        let value =
+            crate::support::schema::to_value(&publication_plan(project, &[]).unwrap()).unwrap();
+
+        assert_eq!(value["kind"], "publicationPlan");
+        assert_eq!(value["projectSchemaVersion"], 1);
+        assert_eq!(
+            value["legs"][0]["artifacts"][0]["address"],
+            "artifacts.webc.first"
+        );
+        assert_eq!(
+            value["legs"][0]["artifacts"][1]["address"],
+            "artifacts.webc.second"
+        );
     }
 }
 

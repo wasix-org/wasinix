@@ -110,6 +110,11 @@ pub enum CommandTree {
         with_dependencies: bool,
         #[arg(long)]
         dry_run: bool,
+        /// Resolve publication entries and destinations without building or contacting registries
+        #[arg(long, conflicts_with_all = ["with_dependencies", "dry_run"])]
+        plan: bool,
+        #[command(flatten)]
+        json: ui::JsonArg,
     },
     /// Publish a pull request's changed packages as an ephemeral preview
     Preview(preview::PreviewArgs),
@@ -581,6 +586,7 @@ impl CommandTree {
                 registries::PythonCommand::Coverage { .. }
                 | registries::PythonCommand::Survey { .. } => vec![Python],
             },
+            CommandTree::Publish { plan: true, .. } => Vec::new(),
             CommandTree::Publish { .. } => vec![Python, Rclone, Wasmer],
             CommandTree::Preview(args) if args.status.is_none() && args.dry_run => {
                 vec![Python, PythonIndex]
@@ -2078,10 +2084,14 @@ fn run(command: CommandTree) -> Result<CommandStatus> {
             selectors,
             with_dependencies,
             dry_run,
+            plan,
+            json,
         } => registries::run_meta_publish(
             &selectors,
             with_dependencies,
             crate::support::effects::Effects::from_dry_run(dry_run),
+            plan,
+            json,
         ),
         CommandTree::Preview(args) => preview::run(args),
         CommandTree::Serve {
@@ -2207,6 +2217,11 @@ mod capability_tests {
         assert_eq!(
             anticipated(&["wasinix", "python", "survey", "refresh"]),
             vec![Capability::Python]
+        );
+        assert_eq!(anticipated(&["wasinix", "publish", "--plan"]), Vec::new());
+        assert!(Cli::try_parse_from(["wasinix", "publish", "--plan", "--dry-run"]).is_err());
+        assert!(
+            Cli::try_parse_from(["wasinix", "publish", "--plan", "--with-dependencies"]).is_err()
         );
         assert_eq!(
             anticipated(&["wasinix", "cargo", "publish", "--dry-run"]),
