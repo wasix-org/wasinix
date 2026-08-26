@@ -352,7 +352,11 @@
             entrypoint = "python${pyVer}";
             # Consumers address the atom as <package>:python; each command
             # shares it while Wasmer exposes the usual names under /bin.
-            commands = map pythonCommand ["python${pyVer}" "python3" "python"];
+            commands =
+              map pythonCommand ["python${pyVer}" "python3" "python"]
+              # The unpacked pip wheel has no atom of its own, so `pip` is the
+              # interpreter with -m pip prepended.
+              ++ [(pythonCommand "pip" // {mainArgs = ["-m" "pip"];})];
             autoSelfMount = true;
             # autoSelfMount only scans bin/*.wasm, but bash is baked into subprocess.py and
             # tzdata into _sysconfigdata (else zoneinfo raises "No time zone found").
