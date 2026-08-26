@@ -501,8 +501,11 @@ pub enum CiCommand {
         #[arg(long)]
         out_dir: PathBuf,
     },
-    /// Disable auto-merge when a managed update is no longer eligible
+    /// Reconcile whether auto-merge belongs to automation or a person
     ReconcileManagedUpdate {
+        /// The pull-request activity that caused this reconciliation
+        #[arg(long, value_enum)]
+        event: ManagedUpdateEvent,
         #[command(flatten)]
         surface: crate::github::surfaces::SurfaceArgs,
     },
@@ -541,6 +544,13 @@ pub enum CiCommand {
         #[arg(long = "failure")]
         failures: Vec<PathBuf>,
     },
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub enum ManagedUpdateEvent {
+    Synchronize,
+    #[value(name = "auto_merge_enabled")]
+    AutoMergeEnabled,
 }
 
 impl CommandTree {
@@ -1843,7 +1853,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             crate::github::mutation::mutate_publish(&repo, &out_dir)?;
             Ok(CommandStatus::SUCCESS)
         }
-        CiCommand::ReconcileManagedUpdate { surface } => {
+        CiCommand::ReconcileManagedUpdate { event, surface } => {
             let pull_request = surface.pull_request.ok_or_else(|| {
                 crate::support::error::Error::Request(
                     "managed update reconciliation needs a pull request".into(),
@@ -1853,7 +1863,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             let client =
                 crate::github::client::Client::new(crate::github::client::token().as_deref());
             let pull = crate::github::mutation::pull(&client, &repository, pull_request)?;
-            let Some(state) = crate::update::managed::decode(&pull.body)? else {
+            let Some(mut state) = crate::update::managed::decode(&pull.body)? else {
                 ui::note("not a managed update pull request");
                 return Ok(CommandStatus::SUCCESS);
             };
@@ -1864,11 +1874,37 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 ui::note("managed pull request is not an update");
                 return Ok(CommandStatus::SUCCESS);
             }
-            if pull.auto_merge_enabled
-                && (!state.auto_merge || crate::update::managed::paused(&state, &pull.head_sha))
-            {
-                crate::github::update_pr::disable_auto_merge(&client, &pull)?;
-                ui::fact("auto-merge", "disabled for ineligible managed update");
+            match event {
+                ManagedUpdateEvent::Synchronize
+                    if pull.auto_merge_enabled
+                        && crate::update::managed::revoke_automatic_auto_merge(
+                            &mut state,
+                            &pull.head_sha,
+                        ) =>
+                {
+                    crate::github::update_pr::disable_auto_merge(&client, &pull)?;
+                    crate::github::update_pr::record_state(
+                        &client,
+                        &repository,
+                        pull_request,
+                        &pull.body,
+                        &state,
+                    )?;
+                    ui::fact("auto-merge", "disabled after human branch edit");
+                }
+                ManagedUpdateEvent::AutoMergeEnabled
+                    if crate::update::managed::record_manual_auto_merge(&mut state) =>
+                {
+                    crate::github::update_pr::record_state(
+                        &client,
+                        &repository,
+                        pull_request,
+                        &pull.body,
+                        &state,
+                    )?;
+                    ui::fact("auto-merge", "manual enablement recorded");
+                }
+                _ => {}
             }
             Ok(CommandStatus::SUCCESS)
         }

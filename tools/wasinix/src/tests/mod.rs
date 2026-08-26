@@ -5190,7 +5190,9 @@ mod update {
 }
 
 mod managed {
-    use crate::update::managed::{State, decode, paused, with_state};
+    use crate::update::managed::{
+        State, decode, paused, record_manual_auto_merge, revoke_automatic_auto_merge, with_state,
+    };
 
     #[test]
     fn state_round_trips_through_the_pr_body() {
@@ -5208,6 +5210,18 @@ mod managed {
     fn a_tampered_record_is_an_error_never_unmanaged() {
         assert!(decode("<!-- wasinix:changeset data=not-base64 -->").is_err());
         assert_eq!(decode("no marker here").unwrap(), None);
+    }
+
+    #[test]
+    fn old_records_default_to_no_manual_auto_merge_choice() {
+        use base64::Engine;
+
+        let state = r#"{"schema":1,"recipe":"update --all","rewriteSafeHead":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","autoMerge":true}"#;
+        let body = format!(
+            "<!-- wasinix:changeset data={} -->",
+            base64::engine::general_purpose::STANDARD.encode(state)
+        );
+        assert!(!decode(&body).unwrap().unwrap().manual_auto_merge);
     }
 
     #[test]
@@ -5243,6 +5257,18 @@ mod managed {
         assert!(paused(&recorded, &"b".repeat(40)));
         let unrecorded = State::new("update --all".into(), String::new()).unwrap();
         assert!(!paused(&unrecorded, &"b".repeat(40)));
+    }
+
+    #[test]
+    fn a_human_reenables_auto_merge_after_automation_relinquishes_it() {
+        let mut state = State::new("update --all".into(), "a".repeat(40)).unwrap();
+        state.auto_merge = true;
+        assert!(revoke_automatic_auto_merge(&mut state, &"b".repeat(40)));
+        assert!(!state.auto_merge);
+        assert!(!state.manual_auto_merge);
+        assert!(record_manual_auto_merge(&mut state));
+        assert!(state.manual_auto_merge);
+        assert!(!revoke_automatic_auto_merge(&mut state, &"c".repeat(40)));
     }
 }
 

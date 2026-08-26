@@ -97,9 +97,9 @@ secret makes pushed heads trigger CI.
 
 An automated update whose ChangeSet fires no update notes enables GitHub
 auto-merge when it opens. GitHub still waits for the repository's required
-checks and reviews. A dedicated update-PR workflow disables auto-merge when a
-managed branch receives human commits, and refresh then defers it instead of
-replacing those commits.
+checks and reviews. A human commit disables that automation-owned setting once;
+a later manual enablement is recorded and preserved across later commits.
+Refresh still defers rather than replacing human commits.
 
 The served-version tables are maintained under the `versions` noun:
 `versions add <package>@<version>` (or `--per-major`/`--per-minor` in bulk)
