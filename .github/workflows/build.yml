@@ -62,15 +62,6 @@ jobs:
       - name: Check Nix source
         run: nix flake check --print-build-logs
 
-      - name: Reconcile managed update
-        if:
-          ${{ github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name == github.repository }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
-          PULL_REQUEST: ${{ github.event.pull_request.number }}
-        run: nix run .#ci -- reconcile-managed-update --pull-request "$PULL_REQUEST"
-
       # One CI run: a PR or merge-group event compares the change against its
       # base (reusing the base's published baseline instead of rebuilding it);
       # a push to main builds everything. The run directory carries the whole
