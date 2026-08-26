@@ -6,14 +6,14 @@
 exposePackage (
   packages.sameProfile.buildPythonPackage (finalAttrs: {
     pname = "langflow";
-    version = "1.11.4";
+    version = "1.12.0";
     pyproject = true;
 
     src = pkgs.fetchFromGitHub {
       owner = "langflow-ai";
       repo = "langflow";
       tag = "v${finalAttrs.version}";
-      hash = "sha256-pC1+vUNTXdeYbsJXNZarntYNLvBr4iI7bLwnfe6D9Qw=";
+      hash = "sha256-i3lbuoHnv2qkOeYO+Tyrx+5dRwqCQxhcqkGu5epk43M=";
     };
 
     postPatch = ''
