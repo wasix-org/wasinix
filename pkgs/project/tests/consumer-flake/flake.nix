@@ -11,44 +11,11 @@
   }: let
     system = "x86_64-linux";
     projectAttr = "legacyPackages.${system}";
-    project = wasinix.lib.mkProject {
+    project = import ./project.nix {
       inherit system;
       importNixpkgs = args: import nixpkgs args;
-      repository = {
-        source = "consumer";
-        root = self;
-        revisionsFile = ./release-revisions.json;
-        publication = {
-          wasmer.registry = "wasmer.io";
-          provenance = {
-            flake = "github:example/consumer";
-            repository = "example/consumer";
-          };
-        };
-      };
-      extensions = [
-        {
-          id = "consumer";
-          overlays.packages = final: _previous: {
-            consumer-tool =
-              final.runCommand "consumer-tool" {
-                passthru.wasix.supportedProfiles = [];
-              } ''
-                mkdir -p "$out/bin"
-                printf '#!/bin/sh\nprintf consumer\\n' > "$out/bin/consumer-tool"
-                chmod +x "$out/bin/consumer-tool"
-              '';
-            consumer-wasm =
-              final.runCommand "consumer-wasm-1.0.0" {
-                passthru.wasinix.shipped = final.stdenv.hostPlatform.isWasix or false;
-                meta.mainProgram = "consumer-wasm";
-              } ''
-                mkdir -p "$out/bin"
-                touch "$out/bin/consumer-wasm.wasm"
-              '';
-          };
-        }
-      ];
+      root = self;
+      wasinixLib = wasinix.lib;
     };
   in {
     apps.${system} = wasinix.lib.appsForProject {inherit project projectAttr;};
