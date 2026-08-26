@@ -43,6 +43,25 @@ pub fn open_pr(repo: &Path, changes: &ChangeSet, options: &PrOptions) -> Result<
     // Managed branches are the bot's, so replacing them is safe; the lease
     // still refuses to clobber a push that landed since this run last read
     // the remote. A human branch is never force-pushed.
+    let client = Client::new(crate::github::client::token().as_deref());
+    let existing = existing_pr(&client, options)?;
+    if let (true, Some(_), Some(number)) = (options.managed, options.recipe.as_ref(), existing) {
+        let live = pull(&client, &options.repository, number)?;
+        if let Some(state) = crate::update::managed::decode(&live.body)? {
+            if crate::update::managed::paused(&state, &live.head_sha) {
+                crate::github::update_pr::defer_human_edits(
+                    &client,
+                    &options.repository,
+                    number,
+                    &state,
+                    &live.head_sha,
+                )?;
+                return request_error(
+                    "managed update deferred: the pull request contains human commits",
+                );
+            }
+        }
+    }
     let head_ref = options.head_ref();
     let lease = format!("--force-with-lease=refs/heads/{}", options.branch);
     let mut push = vec!["push", "origin", &head_ref];
@@ -51,7 +70,6 @@ pub fn open_pr(repo: &Path, changes: &ChangeSet, options: &PrOptions) -> Result<
     }
     git(repo, &push)?;
 
-    let client = Client::new(crate::github::client::token().as_deref());
     let recipe = options.recipe.clone().filter(|_| options.managed);
     let mut body = crate::github::markdown::truncate_sections(
         changeset::pr_body(changes, recipe.is_some()).into_string(),
@@ -64,7 +82,7 @@ pub fn open_pr(repo: &Path, changes: &ChangeSet, options: &PrOptions) -> Result<
         let state = crate::update::managed::State::new(recipe, head)?;
         body = crate::update::managed::with_state(&body, &state)?;
     }
-    let number = if let Some(number) = existing_pr(&client, options)? {
+    let number = if let Some(number) = existing {
         client.patch(
             &format!("repos/{}/pulls/{number}", options.repository),
             &json!({ "title": options.title, "body": body }),

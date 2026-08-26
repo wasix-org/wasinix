@@ -36,3 +36,41 @@ pub fn reconcile(
     }
     Ok(())
 }
+
+pub fn defer_human_edits(
+    client: &Client,
+    repository: &str,
+    pull_request: u64,
+    state: &crate::update::managed::State,
+    head_sha: &str,
+) -> Result<()> {
+    let issue = format!("repos/{repository}/issues/{pull_request}");
+    client.post(
+        &format!("{issue}/labels"),
+        &json!({ "labels": ["3.automated: deferred-human-edits"] }),
+    )?;
+    let mut registry = crate::github::surfaces::Registry::new(
+        client,
+        repository,
+        pull_request,
+        crate::github::surfaces::BOT_AUTHOR,
+        crate::support::effects::Effects::Apply,
+    );
+    let body = crate::github::sanitize::Markdown::concat([
+        crate::github::sanitize::Markdown::constant("### Automated update deferred\n\n"),
+        crate::github::sanitize::Markdown::constant(
+            "A newer update is ready, but this branch moved past the bot-recorded head ",
+        ),
+        crate::github::sanitize::Markdown::code(&state.rewrite_safe_head),
+        crate::github::sanitize::Markdown::constant(" to "),
+        crate::github::sanitize::Markdown::code(head_sha),
+        crate::github::sanitize::Markdown::constant(".\n"),
+        crate::github::changeset::managed_footer(),
+    ]);
+    registry.upsert(
+        &crate::github::surfaces::Surface::UpdateDeferred,
+        &[("state", "deferred-human-edits".into())],
+        body,
+    )?;
+    Ok(())
+}
