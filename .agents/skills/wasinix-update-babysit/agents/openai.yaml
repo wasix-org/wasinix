@@ -1,0 +1,5 @@
+interface:
+  display_name: "Update PR Babysit"
+  short_description: "Repair update PRs until CI is green or stalls."
+  default_prompt:
+    "Babysit the selected Wasinix update PRs, fixing failures until CI is green."

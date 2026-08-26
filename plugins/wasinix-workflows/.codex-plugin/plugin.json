@@ -1,0 +1,18 @@
+{
+  "name": "wasinix-workflows",
+  "version": "0.1.0",
+  "description": "Long-running Wasinix package, triage, and update workflows",
+  "author": {
+    "name": "wasix-org"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Wasinix Workflows",
+    "shortDescription": "Run Wasinix workflows without duplicated guidance.",
+    "longDescription": "Package software, investigate WASIX defects, and repair update pull requests using the repository's canonical documentation.",
+    "developerName": "wasix-org",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Use a Wasinix workflow to complete this scoped task."
+  }
+}

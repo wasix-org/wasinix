@@ -111,6 +111,10 @@ const COMMANDS: &[CommandPolicy] = &[
         availability: Availability::Terminal,
     },
     CommandPolicy {
+        name: "pr",
+        availability: Availability::Terminal,
+    },
+    CommandPolicy {
         name: "ci",
         availability: Availability::Ci,
     },

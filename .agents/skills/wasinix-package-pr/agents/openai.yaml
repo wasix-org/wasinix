@@ -1,0 +1,7 @@
+interface:
+  display_name: "Package and Draft PR"
+  short_description:
+    "Package software and iterate on a draft PR until CI is green."
+  default_prompt:
+    "Package a requested project for WASIX, open a draft PR, and iterate until
+    CI is green."

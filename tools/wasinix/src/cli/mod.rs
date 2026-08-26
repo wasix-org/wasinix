@@ -3,6 +3,7 @@
 
 pub(crate) mod bisect;
 pub(crate) mod preview;
+pub(crate) mod pull_request;
 pub(crate) mod registries;
 pub(crate) mod remote;
 pub(crate) mod render;
@@ -138,6 +139,9 @@ pub enum CommandTree {
     /// Inspect and verify the configured remote builders
     #[command(subcommand)]
     Remote(remote::RemoteCommand),
+    /// Inspect a pull request's Wasinix CI lifecycle
+    #[command(subcommand)]
+    Pr(pull_request::PullRequestCommand),
     /// Internal CI plumbing invoked by adapters and durable runs
     #[command(subcommand, hide = true)]
     Ci(CiCommand),
@@ -449,7 +453,7 @@ pub enum CiCommand {
         #[arg(long, conflicts_with = "watch")]
         failure_logs: bool,
         /// Seconds between watch updates
-        #[arg(long, default_value_t = 300, requires = "watch")]
+        #[arg(long, default_value_t = crate::github::publish::PROGRESS_INTERVAL_SECONDS, requires = "watch")]
         interval: u64,
     },
     /// Authorize a `/wasinix` pull-request comment and describe its run
@@ -592,6 +596,7 @@ impl CommandTree {
             | CommandTree::Update(_)
             | CommandTree::Versions(_)
             | CommandTree::Remote(_)
+            | CommandTree::Pr(_)
             | CommandTree::Ci(_)
             | CommandTree::Completions { .. }
             | CommandTree::Regenerate
@@ -1999,6 +2004,7 @@ fn run(command: CommandTree) -> Result<CommandStatus> {
         CommandTree::Update(args) => update::run_update(args),
         CommandTree::Versions(command) => update::run_versions(command),
         CommandTree::Remote(command) => remote::run(command),
+        CommandTree::Pr(command) => pull_request::run(&crate::support::git::repo_root()?, command),
         CommandTree::Ci(command) => ci_command(command),
         CommandTree::Regenerate | CommandTree::Fmt => {
             crate::support::error::request_error("this command is comment only")

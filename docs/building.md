@@ -207,6 +207,15 @@ To offload the whole thing to a builder host, `--on <remote>:host` ships the
 checkout and supervises the run on the host; `wasinix ci observe` re-attaches to
 it, and losing the observer never loses the run.
 
+**Watch a pull request through its progress heartbeat.** For a same-repository
+PR, `wasinix pr watch <pr>` follows the exact Build run and its matching
+`Wasinix CI` check. It polls GitHub itself, so do not recreate that loop in
+agent turns. The check refreshes from the durable run's event stream; absent a
+refresh for 15 minutes, the command exits `stalled` rather than waiting for
+GitHub to mark a dead runner terminal. `stalled` means the runner or progress
+publisher is unavailable, not that a particular failure is proven. Read the last
+available run state and log before naming a cause.
+
 **Local cargo builds of the crate need the host toolchain.** The dev shell
 exports the wasix cross toolchain as `CC`/`CXX`/`AR`, so a cargo dependency's
 host build script compiles wasm objects and the host link fails with "archive
