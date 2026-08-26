@@ -5,11 +5,27 @@
   profileOf,
   wasmRename,
 }: let
-  versions = import ./versions.nix;
+  versionFamily = import ./versions.nix;
   final = packages.sameProfile;
-  inherit (packages) preferred;
+  inherit (packages.wasix) preferred;
   inherit (pkgs) lib;
   inherit (lib) getDev getLib;
+  versions =
+    lib.mapAttrs (_: spec:
+      spec
+      // {
+        src = final.fetchFromGitHub {
+          owner = "php";
+          repo = "php-src";
+          rev = "php-${spec.version}";
+          inherit (spec) hash;
+        };
+      })
+    versionFamily.historical
+    // lib.genAttrs versionFamily.nixpkgs (name: {
+      inherit (pkgs.${name}) version;
+      src = pkgs.${name}.unwrapped.src;
+    });
   libc = packages.native.wasix-sysroot.profiles.${profileOf final.stdenv.hostPlatform}.libc;
 
   libintlPrefix = final.buildPackages.runCommand "php-libintl-prefix" {} ''
@@ -143,11 +159,7 @@
     libphpBuild,
   }: let
     serverSnapshot = lib.versionAtLeast spec.version "8.1";
-    src = final.fetchFromGitHub {
-      owner = "php";
-      repo = "php-src";
-      inherit (spec) rev hash;
-    };
+    inherit (spec) src;
     phpPatches = import ./patches {
       inherit lib int64 serverSnapshot;
       inherit (spec) version;
@@ -203,15 +215,22 @@
     upstreamBaseline =
       ./tests/upstream-baselines
       + "/php${lib.versions.major spec.version}${lib.versions.minor spec.version}${lib.optionalString int64 "-int64"}.txt";
-    phpIni = final.buildPackages.runCommand "php-${spec.version}.ini" {} ''
-      install -m644 ${src}/php.ini-production "$out"
-      printf '%s\n' \
-        'curl.cainfo = /etc/ssl/certs/ca-bundle.crt' \
-        'openssl.cafile = /etc/ssl/certs/ca-bundle.crt' \
-        'openssl.capath = /etc/ssl/certs' \
-        'opcache.enable_cli = 1' \
-        >> "$out"
-    '';
+    phpIni = final.buildPackages.stdenvNoCC.mkDerivation {
+      pname = "php-ini";
+      inherit (spec) version;
+      inherit src;
+      dontConfigure = true;
+      dontBuild = true;
+      installPhase = ''
+        install -m644 php.ini-production "$out"
+        printf '%s\n' \
+          'curl.cainfo = /etc/ssl/certs/ca-bundle.crt' \
+          'openssl.cafile = /etc/ssl/certs/ca-bundle.crt' \
+          'openssl.capath = /etc/ssl/certs' \
+          'opcache.enable_cli = 1' \
+          >> "$out"
+      '';
+    };
   in
     wasmRename {wasmName = "php";} (extendPackage basePhp {
       patches = phpPatches.source;

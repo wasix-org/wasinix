@@ -9,6 +9,7 @@
 }: final: prev: let
   inherit (prev) lib;
   helpers = import ../lib {inherit lib;};
+  phpVersionFamily = import ../overlays/p/php/versions.nix;
 
   # The per-profile toolchain members picked once, so no package file repeats it.
   profileToolchain = let
@@ -127,7 +128,7 @@
       then lib.recurseIntoAttrs final.${name}.extensions
       else {}
     ))
-  (["php"] ++ builtins.attrNames (import ../overlays/p/php/versions.nix)));
+  (["php"] ++ builtins.attrNames phpVersionFamily.historical ++ phpVersionFamily.nixpkgs));
 
   # `final.haskellPackages`, like nixpkgs' top-level attr: the toolchain's base
   # wasi set plus the per-package overrides in ./haskell-packages (loaded like
