@@ -37,6 +37,15 @@ pub struct Target {
     pub file: String,
     pub accepts: Vec<String>,
     pub source: Option<Value>,
+    #[serde(default)]
+    pub ownership: Ownership,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Ownership {
+    pub assignees: Vec<String>,
+    pub reviewers: Vec<String>,
 }
 
 impl Target {
@@ -52,6 +61,7 @@ impl Target {
             file: String::new(),
             accepts: Vec::new(),
             source: None,
+            ownership: Ownership::default(),
         }
     }
 
@@ -117,6 +127,8 @@ struct Declaration {
     accepts: Vec<String>,
     #[serde(default)]
     source: Option<Value>,
+    #[serde(default)]
+    ownership: Ownership,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -199,6 +211,7 @@ pub(crate) fn declared_target(repo: &Path, attr: &str, value: &Value) -> Result<
             .unwrap_or_default(),
         accepts: declaration.accepts,
         source: declaration.source,
+        ownership: declaration.ownership,
     })
 }
 
@@ -206,12 +219,21 @@ pub(crate) fn declared_target(repo: &Path, attr: &str, value: &Value) -> Result<
 /// declaring a name wins. A wrapper and its unwrapped package (or the same
 /// package under several profiles) declare the same script against the same
 /// file, which is one pin and one target, not one per spelling.
-pub(crate) fn dedupe(declared: Vec<Target>) -> Vec<Target> {
+pub(crate) fn dedupe(declared: Vec<Target>) -> Result<Vec<Target>> {
     let mut targets: Vec<Target> = Vec::new();
     let mut names: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     let mut pins: std::collections::BTreeSet<(String, Vec<String>)> =
         std::collections::BTreeSet::new();
+    let mut ownership = BTreeMap::new();
     for target in declared {
+        if let Some(previous) = ownership.insert(target.name.clone(), target.ownership.clone()) {
+            if previous != target.ownership {
+                return request_error(format!(
+                    "update target {} has conflicting ownership declarations",
+                    target.name
+                ));
+            }
+        }
         if !target.file.is_empty() && !pins.insert((target.file.clone(), target.command.clone())) {
             continue;
         }
@@ -220,7 +242,7 @@ pub(crate) fn dedupe(declared: Vec<Target>) -> Vec<Target> {
         }
         targets.push(target);
     }
-    targets
+    Ok(targets)
 }
 
 pub fn discovered_targets(repo: &Path, declared: &Value) -> Result<Vec<Target>> {
@@ -228,7 +250,7 @@ pub fn discovered_targets(repo: &Path, declared: &Value) -> Result<Vec<Target>> 
     for (attr, value) in declared.as_object().into_iter().flatten() {
         targets.push(declared_target(repo, attr, value)?);
     }
-    Ok(dedupe(targets))
+    dedupe(targets)
 }
 
 /// Package-declared post-update operations, deduped across profile attrs.

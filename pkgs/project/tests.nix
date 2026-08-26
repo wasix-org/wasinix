@@ -22,6 +22,20 @@
         update = {inherit post;};
       };
     };
+  ownedUpdatePackage = mkPackage {
+    name = "owned-update";
+    version = "1";
+    passthru = {
+      updateScript = ["./update-owned"];
+      wasinix = {
+        source = "fixture";
+        ownership = {
+          assignees = [{github = "jane-doe";}];
+          reviewers = [{github = "jane-doe";}];
+        };
+      };
+    };
+  };
   repository = import ./repository.nix {
     inherit lib;
     root = ../..;
@@ -31,6 +45,7 @@
       packages = {
         native = {
           command = hookPackage "command" "1" ["./hook"];
+          ownedUpdate = ownedUpdatePackage;
           sync = hookPackage "sync" "2" {
             syncAttrList = {
               input = "nixpkgs";
@@ -54,6 +69,7 @@
         python = {};
       };
       artifacts = {};
+      ownership.fixture.maintainers.janeDoe.github = "jane-doe";
       catalog.entries = {
         "artifacts.wheel-py313.demo" = {
           kind = "artifact";
@@ -1580,6 +1596,7 @@ in {
       postUpdateCommand = repositoryHooks."packages.native.command";
       postUpdateSync = repositoryHooks."packages.native.sync";
       updateScriptNames = lib.attrNames repositoryScripts;
+      updateOwnership = repositoryScripts."packages.native.ownedUpdate".ownership;
       updateSnapshot = {
         inherit (repository.updates.snapshot) schemaVersion servedVersions;
         hookNames = lib.attrNames repository.updates.snapshot.postUpdateHooks;
@@ -1609,6 +1626,10 @@ in {
       ownership = {
         maintainers.janeDoe.github = "jane-doe";
         teams.php = [{github = "jane-doe";}];
+      };
+      updateOwnership = {
+        assignees = [{github = "jane-doe";}];
+        reviewers = [{github = "jane-doe";}];
       };
       runnerName = "raw-wasm-unbound";
       pythonHarnessAvailable = true;
