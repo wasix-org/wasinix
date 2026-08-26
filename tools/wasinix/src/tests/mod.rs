@@ -4785,7 +4785,7 @@ mod update {
     use crate::update::history::substitute_version;
     use crate::update::retention::retention_crossed;
     use crate::update::select::target_requests;
-    use crate::update::targets::{Backend, PostUpdateAction, Target, domain};
+    use crate::update::targets::{Backend, Ownership, PostUpdateAction, Target, domain};
 
     fn flake_target(name: &str) -> Target {
         Target {
@@ -4799,6 +4799,7 @@ mod update {
             file: String::new(),
             accepts: vec!["revision".into()],
             source: Some(serde_json::json!({"kind": "github", "owner": "o", "repo": "r"})),
+            ownership: Ownership::default(),
         }
     }
 
@@ -4946,6 +4947,7 @@ mod update {
             file: file.into(),
             accepts: Vec::new(),
             source: None,
+            ownership: Ownership::default(),
         };
         let deduped = crate::update::targets::dedupe(vec![
             // A wrapper and its unwrapped package: same file, same command.
@@ -4970,7 +4972,8 @@ mod update {
                 "pkgs/grammars.nix",
                 &["update-grammars", "go"],
             ),
-        ]);
+        ])
+        .unwrap();
         let names: Vec<&str> = deduped.iter().map(|target| target.name.as_str()).collect();
         assert_eq!(names, ["cargo-wasix", "tree-sitter-c", "tree-sitter-go"]);
     }
@@ -4985,6 +4988,10 @@ mod update {
             "command": ["/nix/store/bbb-wasix-libc-update/bin/wasix-libc-update"],
             "commandDrvPaths": ["/nix/store/ccc-wasix-libc-update.drv"],
             "accepts": ["release"],
+            "ownership": {
+                "assignees": ["jane-doe"],
+                "reviewers": ["john-smith", "jane-doe"]
+            }
         });
         let target = crate::update::targets::declared_target(
             std::path::Path::new("/repo"),
@@ -5004,6 +5011,8 @@ mod update {
             target.attr
         );
         assert_eq!(target.file, "pkgs/overlays/w/wasix-sysroot/libc.nix");
+        assert_eq!(target.ownership.assignees, ["jane-doe"]);
+        assert_eq!(target.ownership.reviewers, ["john-smith", "jane-doe"]);
     }
 
     #[test]

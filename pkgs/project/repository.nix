@@ -111,6 +111,28 @@
     else builtins.attrNames (builtins.getContext (toString value)));
   updateScripts = let
     srcRoot = toString root;
+    updateOwnership = package: let
+      declared = package.passthru.wasinix.ownership or {};
+      source = package.passthru.wasinix.source or null;
+      registry = project.ownership.${source}.maintainers or {};
+      people = field: let
+        values = declared.${field} or [];
+        known = builtins.attrValues registry;
+      in
+        lib.throwIf (!lib.isList values)
+        "package ownership.${field} must be a list"
+        (lib.throwIf (!(lib.all (value: builtins.elem value known) values))
+          "package ownership.${field} contains a maintainer outside source '${toString source}'"
+          (map (value: value.github) values));
+    in
+      lib.throwIf (!lib.isAttrs declared || lib.isDerivation declared)
+      "package ownership must be an attribute set"
+      (lib.throwIf (lib.subtractLists ["assignees" "reviewers"] (lib.attrNames declared) != [])
+        "package ownership has unknown field(s)"
+        {
+          assignees = people "assignees";
+          reviewers = people "reviewers";
+        });
     scriptFor = address: package: let
       declaration = package.passthru.updateScript or null;
       commandValues =
@@ -137,6 +159,7 @@
             commandDrvPaths = commandDrvsOf commandValues;
             version = package.version or null;
             position = package.meta.position or null;
+            ownership = updateOwnership package;
           }
           // lib.optionalAttrs (lib.isAttrs declaration && declaration ? name) {inherit (declaration) name;}
           // lib.optionalAttrs (lib.isAttrs declaration && declaration ? attrPath) {inherit (declaration) attrPath;}
