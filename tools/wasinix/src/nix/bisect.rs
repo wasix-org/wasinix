@@ -149,7 +149,8 @@ fn source_repository(source: &Value) -> Option<String> {
 
 /// Resolve the same target names accepted by `update` and `--with`.
 pub fn dependency(repo: &Path, spec: &str) -> Result<Dependency> {
-    let targets = updatetargets::all_targets(repo)?;
+    let snapshot = crate::update::snapshot::load(repo)?;
+    let targets = updatetargets::all_targets(repo, &snapshot)?;
     let names =
         updateselect::selected_names(&updatetargets::domain(&targets), &[spec.to_string()])?;
     require(

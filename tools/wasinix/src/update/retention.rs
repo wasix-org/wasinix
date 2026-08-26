@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::support::error::{Result, request_error};
-use crate::support::nix::{Invocation, SYSTEM, project_attr};
+use crate::support::nix::project_attr;
 use crate::support::ui;
 use crate::update::history::AddOutcome;
 
@@ -51,7 +51,7 @@ fn retention_note(prior: &str, level: usize) -> String {
     format!("latest {series}.x (outgoing {which})")
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Served {
     pub version: String,
     pub history_spec: String,
@@ -73,126 +73,14 @@ pub(crate) fn retention_add_spec(served: &Served) -> String {
     format!("{spec}@{}", served.version)
 }
 
-const WHEEL_APPLY: &str = "builtins.mapAttrs (name: w: \
-    { version = w.version; history_spec = \"packages.python.${name}\"; \
-    retention = w.passthru.wasinix.retention or null; })";
-fn cli_apply() -> String {
-    "builtins.mapAttrs (name: p: { inherit name; \
-     history_spec = \"packages.wasix.${name}\"; \
-     shipped = p.passthru.wasinix.shipped or false; version = p.version or null; \
-     retention = p.passthru.wasinix.retention or null; })"
-        .to_string()
-}
-
-#[derive(Deserialize)]
-struct EvaluatedNotes {
-    ok: bool,
-    value: Value,
-}
-
-#[derive(Deserialize)]
-struct VersionState {
-    wheels: Value,
-    clis: Value,
-    notes: EvaluatedNotes,
-}
-
-fn version_apply(include_notes: bool) -> String {
-    let notes = if include_notes {
-        "let n = builtins.tryEval p.internals.repository.updates.updateNotes.versions; in { ok = n.success; value = if n.success then n.value else {}; }"
-    } else {
-        "{ ok = true; value = {}; }"
-    };
-    format!(
-        "p: {{ wheels = {{ py313 = ({WHEEL_APPLY}) p.artifacts.wheel-py313; py314 = ({WHEEL_APPLY}) p.artifacts.wheel-py314; }}; clis = ({}) p.packages.wasix.preferred; notes = {notes}; }}",
-        cli_apply()
-    )
-}
-
-fn evaluate_versions(repo: &Path, include_notes: bool) -> Result<VersionState> {
-    let apply = version_apply(include_notes);
-    let value = Invocation::flake("eval", format!(".#legacyPackages.{SYSTEM}"))
-        .json()
-        .apply(&apply)
-        .workdir(repo)
-        .run_json("served versions")?;
-    crate::support::json::from_value(value, "served versions")
-}
-
-/// Current served versions, excluding the history entries themselves.
-pub fn current_versions(repo: &Path) -> Result<Versions> {
-    let state = evaluate_versions(repo, false)?;
-    versions_from_state(repo, &state)
-}
-
-fn versions_from_state(repo: &Path, state: &VersionState) -> Result<Versions> {
-    let mut result: Versions = BTreeMap::new();
-    result.insert("wheel".into(), BTreeMap::new());
-    result.insert("cli".into(), BTreeMap::new());
-    let history: Value = crate::support::json::read(&crate::update::history::wheel_history(repo))?;
-    let history_keys: std::collections::BTreeSet<String> = history
-        .as_object()
-        .into_iter()
-        .flatten()
-        .flat_map(|(attr, versions)| {
-            versions
-                .as_object()
-                .into_iter()
-                .flatten()
-                .map(move |(version, _)| format!("{attr}-{version}"))
-        })
-        .collect();
-
-    for (_, by_attr) in state.wheels.as_object().into_iter().flatten() {
-        for (attr, info) in by_attr.as_object().into_iter().flatten() {
-            if history_keys.contains(attr) {
-                continue;
-            }
-            result
-                .get_mut("wheel")
-                .expect("the wheel bucket exists")
-                .entry(attr.clone())
-                .or_insert(crate::support::json::from_value(
-                    info.clone(),
-                    "Python wheel artifact versions",
-                )?);
-        }
-    }
-
-    for (name, info) in state.clis.as_object().into_iter().flatten() {
-        if !info["shipped"].as_bool().unwrap_or(false) {
-            continue;
-        }
-        result
-            .get_mut("cli")
-            .expect("the cli bucket exists")
-            .entry(name.clone())
-            .or_insert(crate::support::json::from_value(
-                info.clone(),
-                "preferred package versions",
-            )?);
-    }
-    Ok(result)
-}
-
-pub fn prior_state(repo: &Path) -> Result<(Value, Versions)> {
-    let state = evaluate_versions(repo, true)?;
-    if !state.notes.ok {
-        ui::warning("note version eval failed");
-    }
-    let versions = versions_from_state(repo, &state)?;
-    Ok((state.notes.value, versions))
-}
-
 /// Retention keeps the outgoing version behind in the registry-history table
 /// so pinned consumers keep resolving. Not keyed to a target: what matters is
 /// that a served version moved, and a package pinning its own src moves on
 /// its own updateScript rather than the nixpkgs bump.
-pub fn regen_history(repo: &Path, priors: &Versions) -> Result<Option<String>> {
+pub fn regen_history(repo: &Path, priors: &Versions, current: &Versions) -> Result<Option<String>> {
     if priors.is_empty() {
         return Ok(None);
     }
-    let current = current_versions(repo)?;
     let mut lines = Vec::new();
     let mut failed = Vec::new();
     for (kind, by_attr) in priors {
@@ -357,36 +245,4 @@ pub fn fired_notes(repo: &Path, priors: &Value) -> Vec<Note> {
         }
     }
     seen.into_values().collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{VersionState, version_apply};
-    use crate::support::nix::Invocation;
-
-    #[test]
-    fn one_package_set_evaluation_returns_every_prior_view() {
-        let expression = format!(
-            "let p = {{ \
-             artifacts.wheel-py313.demo = {{ version = \"1\"; passthru.wasinix.retention = \"minor\"; }}; \
-             artifacts.wheel-py314 = {{}}; \
-             packages.wasix.preferred.cli = {{ version = \"2\"; passthru.wasinix = {{ shipped = true; retention = \"major\"; }}; }}; \
-             packages.wasix.preferred.libiconv = {{ versions = {{}}; passthru.wasinix.shipped = false; }}; \
-             internals.repository.updates.updateNotes.versions.cli = \"2\"; \
-             }}; in ({}) p",
-            version_apply(true)
-        );
-        let value = Invocation::expr("eval", expression)
-            .option("experimental-features", "nix-command")
-            .args(["--store", "dummy://"])
-            .json()
-            .run_json("combined update state")
-            .unwrap();
-        let state: VersionState = crate::support::json::from_value(value, "update state").unwrap();
-        assert_eq!(state.wheels["py313"]["demo"]["version"], "1");
-        assert_eq!(state.clis["cli"]["version"], "2");
-        assert_eq!(state.clis["libiconv"]["version"], serde_json::Value::Null);
-        assert_eq!(state.clis["libiconv"]["shipped"], false);
-        assert_eq!(state.notes.value["cli"], "2");
-    }
 }

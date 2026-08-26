@@ -54,7 +54,45 @@
         python = {};
       };
       artifacts = {};
-      catalog.entries = {};
+      catalog.entries = {
+        "artifacts.wheel-py313.demo" = {
+          kind = "artifact";
+          artifactKind = "wheel-py313";
+          name = "demo";
+          source = "fixture";
+          instance = {
+            kind = "current";
+            version = "3";
+          };
+          policy.retention = "minor";
+        };
+        "artifacts.wheel-py313.demo.versions.\"2\"" = {
+          kind = "artifact";
+          artifactKind = "wheel-py313";
+          name = "demo";
+          source = "fixture";
+          instance = {
+            kind = "history";
+            version = "2";
+          };
+          policy.retention = "minor";
+        };
+        "packages.wasix.default.cli" = {
+          kind = "package";
+          name = "cli";
+          source = "fixture";
+          scope = "wasix";
+          preferred = true;
+          instance = {
+            kind = "current";
+            version = "1";
+          };
+          policy = {
+            shipped = true;
+            retention = "major";
+          };
+        };
+      };
     };
   };
   repositoryHooks = repository.updates.postUpdateHooks;
@@ -1508,6 +1546,11 @@ in {
       postUpdateCommand = repositoryHooks."packages.native.command";
       postUpdateSync = repositoryHooks."packages.native.sync";
       updateScriptNames = lib.attrNames repositoryScripts;
+      updateSnapshot = {
+        inherit (repository.updates.snapshot) schemaVersion servedVersions;
+        hookNames = lib.attrNames repository.updates.snapshot.postUpdateHooks;
+        scriptNames = lib.attrNames repository.updates.snapshot.updateScripts;
+      };
     };
     expected = {
       schemaVersion = 1;
@@ -1723,6 +1766,23 @@ in {
         version = "2";
       };
       updateScriptNames = ["packages.wasix.preferred.cli"];
+      updateSnapshot = {
+        schemaVersion = 1;
+        servedVersions = {
+          cli.cli = {
+            version = "1";
+            history_spec = "packages.wasix.cli";
+            retention = "major";
+          };
+          wheel.demo = {
+            version = "3";
+            history_spec = "packages.python.demo";
+            retention = "minor";
+          };
+        };
+        hookNames = ["packages.native.command" "packages.native.sync"];
+        scriptNames = ["packages.wasix.preferred.cli"];
+      };
     };
   };
 }

@@ -47,6 +47,8 @@ Python set or which package owners make up the C toolchain group.
 The CLI checks `schemaVersion` before interpreting those facts. It resolves
 aliases, omitted profile axes, globs, named sets and groups, unions, and tag
 gates, then requests the exact resulting job addresses from Nix in one batch.
+The evaluation-input phase persists the selector catalog and authoritative job
+evaluation reads that file, so a case evaluates the catalog only once.
 Historical jobs remain cataloged and are tagged `history-tests`; selecting one
 without enabling that tag is an error rather than a silent omission.
 
@@ -133,7 +135,9 @@ blocked under every policy. A directly selected failure is always red.
 A run directory dies with its runner, so the times a main build measures are
 published: per-job build seconds and per-task wall time ride the eval map
 (`eval-maps/<tree>.json`, keyed by git tree), and the workflow's own step
-durations go to `step-timings/<rev>.json`.
+durations go to `step-timings/<rev>.json`. Successful main builds also attach
+the update snapshot described in [`updating.md`](updating.md); pull requests do
+not pay for that projection.
 
 ```sh
 wasinix timings --runs 100 [--by job|task|step|rev]

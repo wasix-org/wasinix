@@ -219,7 +219,8 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
             Ok(CommandStatus::from_code(code.clamp(0, 255) as u8))
         }
         Some("list") if args.targets.len() == 1 => {
-            let targets = targets::all_targets(&repo)?;
+            let snapshot = crate::update::snapshot::load(&repo)?;
+            let targets = targets::all_targets(&repo, &snapshot)?;
             #[derive(serde::Serialize, serde::Deserialize)]
             struct UpdateTargets {
                 targets: Vec<String>,

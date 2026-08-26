@@ -6792,6 +6792,12 @@ mod corpus {
                 "${{ always() && steps.run_artifact.outcome == 'success' && (steps.baseline.outcome == 'success' || steps.baseline.outcome == 'skipped') }}"
             )
         );
+        let baseline = field(step(build_job, "baseline"), "run").as_str().unwrap();
+        assert!(baseline.contains("[ \"$GITHUB_EVENT_NAME\" = push ]"));
+        assert!(baseline.contains("[ \"$GITHUB_REF_NAME\" = main ]"));
+        assert!(baseline.contains("[ \"$RUN_OUTCOME\" = success ]"));
+        assert!(baseline.contains("update_snapshot=(--update-snapshot)"));
+        assert!(baseline.contains("--baseline"));
 
         let command_job = job(&ci_command, "build");
         assert!(
@@ -6817,8 +6823,13 @@ mod corpus {
             .as_str()
             .unwrap();
         assert!(invocation.contains("nix run .#update --"), "{invocation}");
-        assert!(invocation.contains("--pr --jobs 4"), "{invocation}");
+        assert!(invocation.contains("--pr --jobs \"$JOBS\""), "{invocation}");
         assert!(!invocation.contains("update-matrix"), "{invocation}");
+        let update_step = step(job(&update, "update"), "update");
+        assert_eq!(
+            field(field(update_step, "env"), "JOBS").as_str(),
+            Some("${{ github.event.inputs.jobs || 4 }}")
+        );
 
         let cleanup = read("preview-cleanup.yml");
         let delete = step(job(&cleanup, "cleanup"), "delete_apps");
@@ -9556,6 +9567,7 @@ mod baseline {
             scratch.path(),
             "candidate",
             crate::support::effects::Effects::DryRun,
+            None,
         )
         .unwrap();
     }

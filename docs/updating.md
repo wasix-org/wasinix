@@ -77,7 +77,8 @@ weekly on one runner. `wasinix update --all --pr` discovers the targets once and
 runs a bounded number concurrently in isolated worktrees. Each moved target
 still owns one `auto/update-<target>` branch and PR, and one failure does not
 stop the others. A manual dispatch with `targets` selects targets; `--jobs`
-controls the worker bound.
+controls the worker bound. The workflow exposes the same bound as its `jobs`
+input so concurrency experiments do not require workflow edits.
 
 Update PRs the bot opens are managed: the PR body records the recipe that
 generated the branch and the head the bot last wrote (a
@@ -98,6 +99,12 @@ The served-version tables are maintained under the `versions` noun:
 `versions add <package>@<version>` (or `--per-major`/`--per-minor` in bulk)
 backfills registry history, `versions import <lockfile>` pins what a lockfile
 declares, and `versions bump <package>` bumps a publication release counter.
+
+Target discovery, post-update hooks, note priors, and served versions come from
+one typed project snapshot. A successful main build publishes that snapshot in
+the tree-keyed eval map. An update on the same clean tree reuses it; a cache
+miss or a changed checkout evaluates the snapshot once. Batch workers receive
+the same preflight document, so increasing `--jobs` does not repeat discovery.
 
 Things to check on a bump are declared as `passthru.wasinix.update.notes`
 (`pkgs/lib/default.nix`) and surface in the PR body. Toolchain and nixpkgs bumps

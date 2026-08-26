@@ -195,12 +195,19 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
           RUN_DIR: ${{ steps.run.outputs.runDir }}
+          RUN_OUTCOME: ${{ steps.run.outcome }}
         run: |
           if [ -z "$AWS_ACCESS_KEY_ID" ]; then
             echo "no credentials; skipping"
             exit 0
           fi
-          nix run .#ci -- publish --run-dir "$RUN_DIR" --baseline
+          update_snapshot=()
+          if [ "$GITHUB_EVENT_NAME" = push ] && \
+            [ "$GITHUB_REF_NAME" = main ] && [ "$RUN_OUTCOME" = success ]; then
+            update_snapshot=(--update-snapshot)
+          fi
+          nix run .#ci -- publish --run-dir "$RUN_DIR" --baseline \
+            "${update_snapshot[@]}"
 
       - name: Collect durable runs
         id: collect

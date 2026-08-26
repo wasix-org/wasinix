@@ -205,6 +205,50 @@
       else {};
   in
     lib.concatMapAttrs hookFor updateCandidates;
+  currentOwnedEntries = entriesMatching (entry: entry.instance.kind == "current");
+  servedValue = history_spec: entry: {
+    version = toString entry.instance.version;
+    inherit history_spec;
+    retention = entry.policy.retention or null;
+  };
+  uniqueServed = kind: historySpec: entries: let
+    values = lib.unique (map (servedValue historySpec) entries);
+  in
+    lib.throwIf (lib.length values != 1)
+    "current ${kind} entries disagree on served-version metadata"
+    (builtins.head values);
+  wheelEntries = lib.filter (entry:
+    entry.kind
+    == "artifact"
+    && lib.hasPrefix "wheel-" entry.artifactKind)
+  currentOwnedEntries;
+  cliEntries = lib.filter (entry:
+    entry.kind
+    == "package"
+    && entry.scope == "wasix"
+    && entry.preferred
+    && (entry.policy.shipped or false))
+  currentOwnedEntries;
+  servedVersions = {
+    wheel = lib.mapAttrs (name: entries:
+      uniqueServed "wheel ${name}" "packages.python.${name}" entries)
+    (lib.groupBy (entry: entry.name) wheelEntries);
+    cli = lib.mapAttrs (name: entries:
+      uniqueServed "CLI ${name}" "packages.wasix.${name}" entries)
+    (lib.groupBy (entry: entry.name) cliEntries);
+  };
+  noteVersions = builtins.tryEval updateNotes.versions;
+  updateSnapshot = {
+    schemaVersion = 1;
+    inherit postUpdateHooks servedVersions updateScripts;
+    notes = {
+      ok = noteVersions.success;
+      value =
+        if noteVersions.success
+        then noteVersions.value
+        else {};
+    };
+  };
 in {
   inherit root source;
   revisions = builtins.fromJSON (builtins.readFile revisionsFile);
@@ -220,5 +264,6 @@ in {
   };
   updates = {
     inherit postUpdateHooks updateNotes updateScripts;
+    snapshot = updateSnapshot;
   };
 }
