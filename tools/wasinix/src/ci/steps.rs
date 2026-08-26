@@ -145,7 +145,7 @@ impl StepTimings {
                 key(rev.full())
             ))
             .args(["--endpoint-url", crate::support::nix::CACHE_ENDPOINT]);
-        crate::support::tools::checked_output(&mut cmd, "publishing the step timings")?;
+        cmd.capture_checked("publishing the step timings")?;
         crate::support::ui::fact("step timings published", key(rev.full()));
         Ok(())
     }

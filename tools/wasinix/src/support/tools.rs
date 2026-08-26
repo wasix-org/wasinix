@@ -4,12 +4,104 @@
 //! plain ENOENT names neither what was missing nor where to get it.
 
 use std::ffi::OsStr;
+use std::path::Path;
 use std::process::{ChildStderr, ChildStdin, ChildStdout, Command, ExitStatus, Output};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use crate::support::error::{Error, Result};
 use crate::support::ui;
+
+/// A generic process request. Domain-specific runners may still own their
+/// command construction; callers that only need a program and its process
+/// policy use this type instead of handling `std::process::Command`.
+pub struct Process {
+    command: Command,
+}
+
+impl Process {
+    pub fn new(program: impl AsRef<OsStr>) -> Process {
+        Process {
+            command: Command::new(program),
+        }
+    }
+
+    pub fn arg(&mut self, arg: impl AsRef<OsStr>) -> &mut Process {
+        self.command.arg(arg);
+        self
+    }
+
+    pub fn args<I, S>(&mut self, args: I) -> &mut Process
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        self.command.args(args);
+        self
+    }
+
+    pub fn current_dir(&mut self, dir: impl AsRef<Path>) -> &mut Process {
+        self.command.current_dir(dir);
+        self
+    }
+
+    pub fn env(&mut self, key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> &mut Process {
+        self.command.env(key, value);
+        self
+    }
+
+    pub fn stdin_null(&mut self) -> &mut Process {
+        self.command.stdin(std::process::Stdio::null());
+        self
+    }
+
+    pub fn stdout_null(&mut self) -> &mut Process {
+        self.command.stdout(std::process::Stdio::null());
+        self
+    }
+
+    pub fn stderr_null(&mut self) -> &mut Process {
+        self.command.stderr(std::process::Stdio::null());
+        self
+    }
+
+    pub fn run(&mut self) -> Result<ExitStatus> {
+        status(&mut self.command)
+    }
+
+    pub fn capture(&mut self) -> Result<Output> {
+        output(&mut self.command)
+    }
+
+    pub fn run_checked(&mut self, context: &str) -> Result<()> {
+        checked_status(&mut self.command, context)
+    }
+
+    pub fn capture_checked(&mut self, context: &str) -> Result<Vec<u8>> {
+        checked_output(&mut self.command, context)
+    }
+
+    pub(crate) fn check_capture(&self, context: &str, output: Output) -> Result<Vec<u8>> {
+        check_output(&self.command, context, output)
+    }
+
+    pub fn start(&mut self) -> Result<Child> {
+        spawn(&mut self.command)
+    }
+
+    pub fn start_piped(
+        &mut self,
+        stdout: impl FnOnce(ChildStdout) -> Result<()> + Send + 'static,
+        stderr: impl FnOnce(ChildStderr) -> Result<()> + Send + 'static,
+    ) -> Result<(Child, PipeReaders)> {
+        spawn_piped(&mut self.command, stdout, stderr)
+    }
+
+    #[cfg(test)]
+    pub fn program(&self) -> &OsStr {
+        self.command.get_program()
+    }
+}
 
 /// The subcommand as typed, so the message names the app that would have
 /// carried the tool.
@@ -290,16 +382,19 @@ pub fn spawn(cmd: &mut Command) -> Result<Child> {
     })
 }
 
-pub struct PipeReaders(Vec<std::thread::JoinHandle<Result<()>>>);
+pub struct PipeReaders {
+    readers: Vec<std::thread::JoinHandle<Result<()>>>,
+    command: String,
+}
 
 impl PipeReaders {
-    pub fn join(self, cmd: &Command) -> Result<()> {
+    pub fn join(self) -> Result<()> {
         let mut failure = None;
-        for reader in self.0 {
+        for reader in self.readers {
             let result = reader
                 .join()
                 .map_err(|_| {
-                    Error::Failure(format!("reading output from {} panicked", rendered(cmd)))
+                    Error::Failure(format!("reading output from {} panicked", self.command))
                 })
                 .and_then(|result| result);
             if failure.is_none() {
@@ -323,10 +418,13 @@ pub fn spawn_piped(
     let mut child = spawn(cmd)?;
     let child_stdout = child.take_stdout().expect("stdout was piped");
     let child_stderr = child.take_stderr().expect("stderr was piped");
-    let readers = PipeReaders(vec![
-        std::thread::spawn(move || stdout(child_stdout)),
-        std::thread::spawn(move || stderr(child_stderr)),
-    ]);
+    let readers = PipeReaders {
+        command: rendered(cmd),
+        readers: vec![
+            std::thread::spawn(move || stdout(child_stdout)),
+            std::thread::spawn(move || stderr(child_stderr)),
+        ],
+    };
     Ok((child, readers))
 }
 

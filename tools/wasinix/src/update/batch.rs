@@ -3,7 +3,7 @@
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::ExitStatus;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
@@ -172,7 +172,6 @@ struct Running {
     _worktree: crate::ci::workspace::Worktree,
     child: crate::support::tools::Child,
     readers: crate::support::tools::PipeReaders,
-    command: Command,
     stdout: PathBuf,
     stderr: PathBuf,
     started: Instant,
@@ -197,7 +196,7 @@ fn spawn(
         .branch
         .clone()
         .unwrap_or_else(|| format!("auto/update-{}", item.name));
-    let mut command = Command::new(executable);
+    let mut command = crate::support::tools::Process::new(executable);
     command
         .current_dir(worktree.path())
         .args(["--color", "never", "update"])
@@ -212,7 +211,7 @@ fn spawn(
             &options.base,
             "--json",
         ])
-        .stdin(Stdio::null());
+        .stdin_null();
     if let Some(repository) = &options.repository {
         command.args(["--repository", repository]);
     }
@@ -222,8 +221,7 @@ fn spawn(
     ui::fact("update", format!("starting {}", item.name));
     let stdout_path = stdout.clone();
     let stderr_path = stderr.clone();
-    let (child, readers) = crate::support::tools::spawn_piped(
-        &mut command,
+    let (child, readers) = command.start_piped(
         move |mut stream| {
             let mut log = stdout_log;
             std::io::copy(&mut stream, &mut log).map_err(|error| io(&stdout_path, error))?;
@@ -242,7 +240,6 @@ fn spawn(
         _worktree: worktree,
         child,
         readers,
-        command,
         stdout,
         stderr,
         started: Instant::now(),
@@ -262,12 +259,11 @@ fn completed(running: Running, status: ExitStatus) -> Result<TargetResult> {
         _worktree,
         child,
         readers,
-        command,
         stdout,
         stderr,
         started,
     } = running;
-    readers.join(&command)?;
+    readers.join()?;
     drop(child);
     let stdout_text = crate::support::fs::read_to_string(&stdout)?;
     let stderr_text = crate::support::fs::read_to_string(&stderr)?;

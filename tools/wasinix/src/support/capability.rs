@@ -5,7 +5,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
-use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -58,8 +57,8 @@ impl Capability {
         }
     }
 
-    pub fn command(self) -> Result<Command> {
-        Ok(Command::new(resolve(self)?))
+    pub fn command(self) -> Result<crate::support::tools::Process> {
+        Ok(crate::support::tools::Process::new(resolve(self)?))
     }
 }
 
@@ -464,6 +463,6 @@ mod tests {
         crate::support::fs::write(&bin.join("aws"), b"test").unwrap();
         super::finish(&[capability], Ok(vec![scratch.path().to_path_buf()]));
         let command = user.join().unwrap();
-        assert_eq!(command.get_program(), bin.join("aws"));
+        assert_eq!(command.program(), bin.join("aws"));
     }
 }

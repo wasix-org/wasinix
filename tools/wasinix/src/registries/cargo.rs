@@ -3,7 +3,6 @@
 //! The instance has network, so unforked crates pass through to crates.io.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::Duration;
 
 use serde_json::Value;
@@ -349,9 +348,9 @@ pub fn serve(options: ServeOptions) -> Result<CommandStatus> {
     let exec = options.exec.clone();
     let running = start(options)?;
     if !exec.is_empty() {
-        let mut cmd = Command::new(&exec[0]);
+        let mut cmd = crate::support::tools::Process::new(&exec[0]);
         cmd.args(&exec[1..]);
-        let status = crate::support::tools::status(&mut cmd)?;
+        let status = cmd.run()?;
         return Ok(CommandStatus::from_exit(status));
     }
     ui::fact("stop", "Ctrl-C");
@@ -424,7 +423,7 @@ pub fn start(options: ServeOptions) -> Result<Running> {
             "--env",
             "REGISTRY_STORAGE_PATH=/data",
         ]);
-    let process = crate::support::tools::spawn(&mut run)?;
+    let process = run.start()?;
     let mut server = Server {
         process,
         _storage: storage,

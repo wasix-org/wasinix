@@ -285,7 +285,7 @@ fn publish_failure_map(
         ))
         .args(["--content-type", "text/plain; charset=utf-8"])
         .args(["--endpoint-url", crate::support::nix::CACHE_ENDPOINT]);
-    crate::support::tools::checked_output(&mut cmd, "publishing failure logs")?;
+    cmd.capture_checked("publishing failure logs")?;
     crate::support::ui::fact(
         "failure logs",
         format!(

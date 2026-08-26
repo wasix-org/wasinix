@@ -10,7 +10,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -69,8 +68,8 @@ fn package_error<T>(message: impl Into<String>) -> Result<T> {
 
 /// The shared checked runner, demoted to a per-package failure so one bad
 /// publish does not abort the rest.
-fn run(cmd: &mut Command) -> Result<()> {
-    crate::support::tools::checked_status(cmd, "publishing")
+fn run(cmd: &mut crate::support::tools::Process) -> Result<()> {
+    cmd.run_checked("publishing")
         .map_err(|error| Error::Request(error.to_string()))
 }
 
@@ -1233,12 +1232,12 @@ pub fn exec_with_tree(
     tree: &Path,
     exec: &[String],
 ) -> Result<crate::support::process::CommandStatus> {
-    let mut cmd = Command::new(&exec[0]);
+    let mut cmd = crate::support::tools::Process::new(&exec[0]);
     cmd.args(&exec[1..]).env(
         "WASMER_FLAGS",
         format!("--offline --include-webc {}", tree.display()),
     );
-    let status = crate::support::tools::status(&mut cmd)?;
+    let status = cmd.run()?;
     Ok(crate::support::process::CommandStatus::from_exit(status))
 }
 
