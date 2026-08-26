@@ -142,6 +142,19 @@ through the project `harnesses` view. Reusable executable adapters that do not
 construct a test live under `pkgs/runners/`. Package-specific test declarations
 remain beside their package unit.
 
+## Orchestrator build boundary
+
+The main CLI is host-side control-plane software. A helper called by a
+foundational derivation has its own narrowly sourced derivation, so an unrelated
+CLI edit cannot invalidate every package above it. A leaf helper stays beside
+the package or final aggregate that consumes it.
+
+`pkgs/helper-boundaries.toml` classifies every shell, Python, and JavaScript
+helper as host, foundational, leaf, or research code. Corpus tests keep that
+inventory complete and enforce the source boundary. `cargo-registry-wire` is the
+corresponding narrow Rust binary for Cargo protocol work used inside
+derivations; it does not pull the main CLI into their closure.
+
 CA derivations are not used because caches cannot reliably distribute or
 authenticate realisations
 ([nix#11748](https://github.com/NixOS/nix/issues/11748),
@@ -166,11 +179,18 @@ call site. Each of these ships with its own enforcement (rustc visibility where
 possible, a source-scanning test in `src/tests/mod.rs` otherwise), so bypassing
 one is a compile error or a test failure, not a review comment.
 
-[`cli-plan.md`](cli-plan.md) defines the ordered migration that consolidates the
-current CLI onto these boundaries and replaces textual enforcement where a
-structural boundary can express the rule.
+[`cli-plan.md`](cli-plan.md) tracks the boundaries that are not yet fully
+consolidated.
 
 - `support/env.rs`: the process environment, named accessors only.
+- `cli/surface.rs`: terminal and pull-request comments enter one Clap tree; its
+  exhaustive policy controls availability, help, and cross-surface errors. The
+  accepted comment command is still converted in `cli/untrusted.rs`, which the
+  active roadmap tracks.
+- `support/tools.rs`: actual process starts, process groups, timeouts, reaping,
+  and bounded diagnostic tails. Some update and registry modules still construct
+  generic process requests locally; the active roadmap tracks that remaining
+  boundary.
 - `support/capability.rs`: the closed optional-program set and its exact locked
   flake outputs; callers receive executable paths, never choose installables.
 - `support/nix.rs::Invocation`: every nix invocation; construction classifies
