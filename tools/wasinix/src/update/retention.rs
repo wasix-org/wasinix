@@ -79,7 +79,7 @@ const WHEEL_APPLY: &str = "builtins.mapAttrs (name: w: \
 fn cli_apply() -> String {
     "builtins.mapAttrs (name: p: { inherit name; \
      history_spec = \"packages.wasix.${name}\"; \
-     shipped = p.passthru.wasinix.shipped or false; version = p.version; \
+     shipped = p.passthru.wasinix.shipped or false; version = p.version or null; \
      retention = p.passthru.wasinix.retention or null; })"
         .to_string()
 }
@@ -371,6 +371,7 @@ mod tests {
              artifacts.wheel-py313.demo = {{ version = \"1\"; passthru.wasinix.retention = \"minor\"; }}; \
              artifacts.wheel-py314 = {{}}; \
              packages.wasix.preferred.cli = {{ version = \"2\"; passthru.wasinix = {{ shipped = true; retention = \"major\"; }}; }}; \
+             packages.wasix.preferred.libiconv = {{ versions = {{}}; passthru.wasinix.shipped = false; }}; \
              internals.repository.updates.updateNotes.versions.cli = \"2\"; \
              }}; in ({}) p",
             version_apply(true)
@@ -384,6 +385,8 @@ mod tests {
         let state: VersionState = crate::support::json::from_value(value, "update state").unwrap();
         assert_eq!(state.wheels["py313"]["demo"]["version"], "1");
         assert_eq!(state.clis["cli"]["version"], "2");
+        assert_eq!(state.clis["libiconv"]["version"], serde_json::Value::Null);
+        assert_eq!(state.clis["libiconv"]["shipped"], false);
         assert_eq!(state.notes.value["cli"], "2");
     }
 }
