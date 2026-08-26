@@ -1,15 +1,35 @@
 //! The completion name cache. Real evaluations refresh it; completers only
-//! read it, so a keystroke never pays an evaluation and never errors.
+//! read it, so a keystroke never pays an evaluation and never errors. Each
+//! project holds its own cache, so evaluating one never answers for another.
 
 use std::path::{Path, PathBuf};
 
+use sha2::{Digest, Sha256};
+
+use crate::support::nix::ProjectRef;
+
+/// The cache directory one project owns. A path flake ref is canonicalized
+/// first, since `.` is the default ref and every checkout would otherwise
+/// share one key.
+fn project_key(project: &ProjectRef) -> String {
+    let flake = if project.flake.starts_with(['.', '/']) {
+        std::fs::canonicalize(&project.flake)
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|_| project.flake.clone())
+    } else {
+        project.flake.clone()
+    };
+    format!("{:x}", Sha256::digest(format!("{flake}#{}", project.attr)))
+}
+
 fn dir() -> Option<PathBuf> {
-    if let Some(state) = crate::support::env::xdg_state_home() {
-        return Some(state.join("wasinix/completions"));
-    }
-    crate::support::shell::home_dir()
-        .ok()
-        .map(|home| home.join(".local/state/wasinix/completions"))
+    let root = match crate::support::env::xdg_state_home() {
+        Some(state) => state.join("wasinix/completions"),
+        None => crate::support::shell::home_dir()
+            .ok()?
+            .join(".local/state/wasinix/completions"),
+    };
+    Some(root.join(project_key(crate::support::nix::project())))
 }
 
 fn record_at(dir: &Path, kind: &str, names: &[&str]) {
@@ -61,6 +81,11 @@ pub fn age(kind: &str) -> Option<std::time::Duration> {
         .and_then(|meta| meta.modified())
         .ok()
         .and_then(|at| at.elapsed().ok())
+}
+
+#[cfg(test)]
+pub(crate) fn project_key_for_tests(project: &ProjectRef) -> String {
+    project_key(project)
 }
 
 #[cfg(test)]

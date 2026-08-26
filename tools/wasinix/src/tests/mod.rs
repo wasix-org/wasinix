@@ -5101,6 +5101,37 @@ mod update {
     }
 
     #[test]
+    fn each_project_keys_its_own_completion_cache() {
+        use crate::support::completions::project_key_for_tests as key_of;
+        use crate::support::nix::ProjectRef;
+        let key = |value: &str| key_of(&ProjectRef::parse(value).unwrap());
+
+        let scratch = crate::support::fs::Scratch::create("wasinix-test").unwrap();
+        let checkout = scratch.path().join("checkout");
+        std::fs::create_dir_all(&checkout).unwrap();
+        let checkout = checkout.display().to_string();
+        let other = scratch.path().display().to_string();
+
+        assert_eq!(
+            key(&format!("{checkout}#legacyPackages")),
+            key(&format!("{checkout}/.#legacyPackages")),
+            "one project keys one cache however its path is spelled"
+        );
+        assert_ne!(
+            key(&format!("{checkout}#legacyPackages")),
+            key(&format!("{other}#legacyPackages"))
+        );
+        assert_ne!(
+            key(&format!("{checkout}#legacyPackages")),
+            key(&format!("{checkout}#otherProject"))
+        );
+        assert_ne!(
+            key("github:wasix-org/wasinix#legacyPackages"),
+            key("github:wasix-org/other#legacyPackages")
+        );
+    }
+
+    #[test]
     fn script_requests_are_validated_before_a_script_sees_them() {
         use crate::update::request::parse;
         let release = r#"{"schema":1,"mode":"release","target":"wasix-libc","value":"1.2"}"#;

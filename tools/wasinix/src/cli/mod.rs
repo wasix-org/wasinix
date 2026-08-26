@@ -636,11 +636,11 @@ fn jobs_command(pattern: Option<String>, json: ui::JsonArg) -> Result<CommandSta
     }
     let all = crate::support::completions::recall("selectors");
     if all.is_empty() {
-        return Err(crate::support::error::Error::Request(
-            "no evaluation has recorded the job catalog yet; any build, spot, or diff \
-             records it as its evaluation finishes"
-                .into(),
-        ));
+        return Err(crate::support::error::Error::Request(format!(
+            "no evaluation has recorded the job catalog for {}; any build, spot, or diff \
+             records it as its evaluation finishes",
+            crate::support::nix::project().installable("")
+        )));
     }
     if let Some(age) = crate::support::completions::age("selectors") {
         ui::fact(
