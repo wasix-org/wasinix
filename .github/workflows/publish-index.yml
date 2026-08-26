@@ -20,7 +20,8 @@ permissions:
 
 env:
   REGISTRY: wasmer.io
-  INDEX_JOB: pythonRegistry
+  INDEX_ARTIFACT_KIND: registry
+  INDEX_ARTIFACT_NAME: python
 
 jobs:
   publish:
@@ -48,10 +49,24 @@ jobs:
         id: identity
         shell: bash
         run: |
-          mapfile -t paths < <(jq -r --arg job "$INDEX_JOB" \
-            '.outputs[$job].out // empty' run-dir/cases/*/maps/eval-map.json | sort -u)
+          matched="$({
+            jq -r \
+              --arg kind "$INDEX_ARTIFACT_KIND" \
+              --arg name "$INDEX_ARTIFACT_NAME" \
+              '. as $map
+               | .info | to_entries[]
+               | select(.value.role == "artifact"
+                   and .value.artifactKind == $kind
+                   and .value.displayName == $name)
+               | $map.outputs[.key].out // empty' \
+              run-dir/cases/*/maps/eval-map.json
+          } | sort -u)"
+          paths=()
+          if [ -n "$matched" ]; then
+            mapfile -t paths <<< "$matched"
+          fi
           if [ "${#paths[@]}" -ne 1 ]; then
-            echo "expected one $INDEX_JOB output in the Build result, found ${#paths[@]}" >&2
+            echo "expected one $INDEX_ARTIFACT_NAME $INDEX_ARTIFACT_KIND artifact in the Build result, found ${#paths[@]}" >&2
             exit 1
           fi
           echo "path=${paths[0]}" >> "$GITHUB_OUTPUT"

@@ -6735,14 +6735,28 @@ mod corpus {
             field(field(step(publish_job, "download"), "with"), "name").as_str(),
             Some(crate::github::actions::ARTIFACT_CI_RUN)
         );
+        let publish_env = field(&publish_index, "env");
         assert_eq!(
-            field(field(&publish_index, "env"), "INDEX_JOB").as_str(),
-            Some("pythonRegistry")
+            field(publish_env, "INDEX_ARTIFACT_KIND").as_str(),
+            Some("registry")
         );
+        assert_eq!(
+            field(publish_env, "INDEX_ARTIFACT_NAME").as_str(),
+            Some("python")
+        );
+        assert!(field(publish_env, "INDEX_JOB").is_null());
         let identity = field(step(publish_job, "identity"), "run")
             .as_str()
             .unwrap();
-        assert!(identity.contains(".outputs[$job].out // empty"));
+        for contract in [
+            ".info | to_entries[]",
+            ".value.role == \"artifact\"",
+            ".value.artifactKind == $kind",
+            ".value.displayName == $name",
+            "$map.outputs[.key].out // empty",
+        ] {
+            assert!(identity.contains(contract), "missing {contract:?}");
+        }
         let restore_key = field(field(step(publish_job, "published"), "with"), "key");
         let save_key = field(
             field(step(publish_job, "save_publication_state"), "with"),
