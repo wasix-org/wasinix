@@ -1,18 +1,11 @@
 {
   entry,
   harnesses,
-  packageForEntry,
-  packages,
-  pkgs,
   ...
 }: {
   process = harnesses.hostShell {
     name = "${entry.name}-process";
     wasixCommands = builtins.attrValues entry.commands;
-    broken =
-      if pkgs.lib.versionOlder (packageForEntry packages entry).version "8.0"
-      then "the off-profile runtime reports a spawned guest's exit status as 45"
-      else null;
     script = ''
       php -r '
         $descriptors = [

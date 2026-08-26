@@ -1,0 +1,206 @@
+--- a/sapi/cli/php_cli.c
++++ b/sapi/cli/php_cli.c
+@@ -630,7 +630,7 @@ static int do_cli(int argc, char **argv) /* {{{ */
+ 	const char *param_error=NULL;
+ 	int hide_argv = 0;
+ 
+-	zend_try {
++	zend_first_try {
+ 
+ 		CG(in_compilation) = 0; /* not initialized but needed for several options */
+ 
+@@ -1353,17 +1353,15 @@ exit_loop:
+ 		CG(compiler_options) |= ZEND_COMPILE_EXTENDED_INFO;
+ 	}
+ 
+-	zend_first_try {
+ #ifndef PHP_CLI_WIN32_NO_CONSOLE
+-		if (sapi_module == &cli_sapi_module) {
++	if (sapi_module == &cli_sapi_module) {
+ #endif
+-			exit_status = do_cli(argc, argv);
++		exit_status = do_cli(argc, argv);
+ #ifndef PHP_CLI_WIN32_NO_CONSOLE
+-		} else {
+-			exit_status = do_cli_server(argc, argv);
+-		}
++	} else {
++		exit_status = do_cli_server(argc, argv);
++	}
+ #endif
+-	} zend_end_try();
+ out:
+ 	if (ini_path_override) {
+ 		free(ini_path_override);
+--- a/sapi/cli/php_cli_server.c
++++ b/sapi/cli/php_cli_server.c
+@@ -2666,7 +2666,7 @@ int do_cli_server(int argc, char **argv) /* {{{ */
+ {
+ 	char *php_optarg = NULL;
+ 	int php_optind = 1;
+-	int c;
++	int c, result;
+ 	const char *server_bind_address = NULL;
+ 	extern const opt_struct OPTIONS[];
+ 	const char *document_root = NULL;
+@@ -2677,90 +2677,95 @@ int do_cli_server(int argc, char **argv) /* {{{ */
+ 	const char *router = NULL;
+ 	char document_root_buf[MAXPATHLEN];
+ 
+-	while ((c = php_getopt(argc, argv, OPTIONS, &php_optarg, &php_optind, 0, 2))!=-1) {
+-		switch (c) {
+-			case 'S':
+-				server_bind_address = php_optarg;
+-				break;
+-			case 't':
++	zend_first_try {
++		while ((c = php_getopt(argc, argv, OPTIONS, &php_optarg, &php_optind, 0, 2))!=-1) {
++			switch (c) {
++				case 'S':
++					server_bind_address = php_optarg;
++					break;
++				case 't':
+ #ifndef PHP_WIN32
+-				document_root = php_optarg;
++					document_root = php_optarg;
+ #else
+-				k = strlen(php_optarg);
+-				if (k + 1 > MAXPATHLEN) {
+-					fprintf(stderr, "Document root path is too long.\n");
+-					return 1;
+-				}
+-				memmove(document_root_tmp, php_optarg, k + 1);
+-				/* Clean out any trailing garbage that might have been passed
+-					from a batch script. */
+-				do {
+-					document_root_tmp[k] = '\0';
+-					k--;
+-				} while ('"' == document_root_tmp[k] || ' ' == document_root_tmp[k]);
+-				document_root = document_root_tmp;
++					k = strlen(php_optarg);
++					if (k + 1 > MAXPATHLEN) {
++						fprintf(stderr, "Document root path is too long.\n");
++						return 1;
++					}
++					memmove(document_root_tmp, php_optarg, k + 1);
++					/* Clean out any trailing garbage that might have been passed
++						from a batch script. */
++					do {
++						document_root_tmp[k] = '\0';
++						k--;
++					} while ('"' == document_root_tmp[k] || ' ' == document_root_tmp[k]);
++					document_root = document_root_tmp;
+ #endif
+-				break;
+-			case 'q':
+-				if (php_cli_server_log_level > 1) {
+-					php_cli_server_log_level--;
+-				}
+-				break;
++					break;
++				case 'q':
++					if (php_cli_server_log_level > 1) {
++						php_cli_server_log_level--;
++					}
++					break;
++			}
+ 		}
+-	}
+ 
+-	if (document_root) {
+-		zend_stat_t sb;
++		if (document_root) {
++			zend_stat_t sb = {0};
+ 
+-		if (php_sys_stat(document_root, &sb)) {
+-			fprintf(stderr, "Directory %s does not exist.\n", document_root);
+-			return 1;
+-		}
+-		if (!S_ISDIR(sb.st_mode)) {
+-			fprintf(stderr, "%s is not a directory.\n", document_root);
+-			return 1;
+-		}
+-		if (VCWD_REALPATH(document_root, document_root_buf)) {
+-			document_root = document_root_buf;
+-		}
+-	} else {
+-		char *ret = NULL;
++			if (php_sys_stat(document_root, &sb)) {
++				fprintf(stderr, "Directory %s does not exist.\n", document_root);
++				return 1;
++			}
++			if (!S_ISDIR(sb.st_mode)) {
++				fprintf(stderr, "%s is not a directory.\n", document_root);
++				return 1;
++			}
++			if (VCWD_REALPATH(document_root, document_root_buf)) {
++				document_root = document_root_buf;
++			}
++		} else {
++			char *ret = NULL;
+ 
+ #if HAVE_GETCWD
+-		ret = VCWD_GETCWD(document_root_buf, MAXPATHLEN);
++			ret = VCWD_GETCWD(document_root_buf, MAXPATHLEN);
+ #elif HAVE_GETWD
+-		ret = VCWD_GETWD(document_root_buf);
++			ret = VCWD_GETWD(document_root_buf);
+ #endif
+-		document_root = ret ? document_root_buf: ".";
+-	}
++			document_root = ret ? document_root_buf: ".";
++		}
+ 
+-	if (argc > php_optind) {
+-		router = argv[php_optind];
+-	}
++		if (argc > php_optind) {
++			router = argv[php_optind];
++		}
+ 
+-	if (FAILURE == php_cli_server_ctor(&server, server_bind_address, document_root, router)) {
+-		return 1;
+-	}
+-	sapi_module.phpinfo_as_text = 0;
++		if (FAILURE == php_cli_server_ctor(&server, server_bind_address, document_root, router)) {
++			return 1;
++		}
++		sapi_module.phpinfo_as_text = 0;
+ 
+-	{
+-		php_cli_server_logf(
+-			PHP_CLI_SERVER_LOG_PROCESS,
+-			"PHP %s Development Server (http://%s) started",
+-			PHP_VERSION, server_bind_address);
+-	}
++		{
++			result = 0;
++			php_cli_server_logf(
++				PHP_CLI_SERVER_LOG_PROCESS,
++				"PHP %s Development Server (http://%s) started",
++				PHP_VERSION, server_bind_address);
++		}
+ 
+ #if defined(SIGINT)
+-	signal(SIGINT, php_cli_server_sigint_handler);
++		signal(SIGINT, php_cli_server_sigint_handler);
+ #endif
+ 
+ #if defined(SIGPIPE)
+-	signal(SIGPIPE, SIG_IGN);
++		signal(SIGPIPE, SIG_IGN);
+ #endif
+ 
+-	zend_signal_init();
++		zend_signal_init();
+ 
+-	php_cli_server_do_event_loop(&server);
+-	php_cli_server_dtor(&server);
+-	return 0;
++		if (SUCCESS != php_cli_server_do_event_loop(&server)) {
++			result = 1;
++		}
++		php_cli_server_dtor(&server);
++	} zend_end_try()
++	return result;
+ } /* }}} */
