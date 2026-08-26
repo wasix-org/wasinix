@@ -59,7 +59,7 @@ struct PrShape {
     title: Option<String>,
     /// The comment that replays this branch; None for an arm no comment can
     /// spell, whose PR then advertises no refresh.
-    recipe: Option<crate::cli::untrusted::MutationCommand>,
+    recipe: Option<String>,
 }
 
 /// The one mutation exit: PR upsert when asked, then the receipt or the
@@ -88,7 +88,7 @@ fn conclude(
                 title,
                 base: mode.base.clone(),
                 managed: !mode.fork,
-                recipe: shape.recipe.and_then(|command| command.recipe()),
+                recipe: shape.recipe,
             },
         )?;
         ui::fact("pull request", number);
@@ -303,10 +303,7 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
             let title = args
                 .all
                 .then(|| "pins: automated source-pin bump".to_string());
-            let recipe = crate::cli::untrusted::MutationCommand::Update {
-                targets: args.targets.clone(),
-                all: args.all,
-            };
+            let recipe = args.comment_recipe();
             let preflight = args
                 .batch_preflight
                 .as_deref()
@@ -330,7 +327,7 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
                 PrShape {
                     branch,
                     title,
-                    recipe: Some(recipe),
+                    recipe,
                 },
             )
         }
@@ -416,6 +413,7 @@ fn commit_backfill(
 
 pub fn run_versions(command: VersionsCommand) -> Result<CommandStatus> {
     let repo = crate::support::git::repo_root()?;
+    let recipe = command.comment_recipe();
     match command {
         VersionsCommand::Add {
             spec,
@@ -492,11 +490,6 @@ pub fn run_versions(command: VersionsCommand) -> Result<CommandStatus> {
             if changed {
                 return request_error("--changed is comment only; use --changed-from REF");
             }
-            let recipe = crate::cli::untrusted::MutationCommand::Bump {
-                specs: specs.clone(),
-                all_versions,
-                changed: changed_from.is_some(),
-            };
             let changes = bump_rels(
                 &repo,
                 BumpRequest {
@@ -514,7 +507,7 @@ pub fn run_versions(command: VersionsCommand) -> Result<CommandStatus> {
                 PrShape {
                     branch: Some("auto/bump-rel".into()),
                     title: Some("pkgs: bump publication releases".into()),
-                    recipe: Some(recipe),
+                    recipe,
                 },
             )
         }

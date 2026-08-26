@@ -3037,12 +3037,10 @@ mod markdown {
         };
         use crate::ci::plan::{TaskKind, plan_of};
         use crate::ci::report::{FoldContext, Fragment, FragmentData, fold};
-        use crate::cli::untrusted::{UntrustedCommand, parse};
+        use crate::cli::untrusted::{parse, request};
         use crate::support::atoms::{JobAddr, TaskStatus};
-        let UntrustedCommand::Request(request) = parse("build checks.gzip-roundtrip").unwrap()
-        else {
-            panic!("expected a build request");
-        };
+        let command = parse("build checks.gzip-roundtrip").unwrap();
+        let request = request(&command).unwrap();
         let plan = plan_of(&request, Some("golden"), &[]);
         let mut fragments: std::collections::BTreeMap<String, Fragment> = plan
             .tasks
@@ -3207,14 +3205,16 @@ mod markdown {
 
     #[test]
     fn a_comment_bisect_pins_its_predicate_and_owns_the_override() {
-        use crate::cli::untrusted::{UntrustedCommand, parse};
-        let UntrustedCommand::Bisect(bisect) =
+        use crate::cli::CommandTree;
+        use crate::cli::untrusted::{bisect_predicate, parse};
+        let CommandTree::Bisect(bisect) =
             parse("bisect wasmer --good pinned --bad main -- build checks.zlib").unwrap()
         else {
             panic!("expected a bisect");
         };
         assert_eq!(bisect.target, "wasmer");
-        for case in bisect.predicate.cases() {
+        let (_, predicate) = bisect_predicate(&bisect).unwrap();
+        for case in predicate.cases() {
             let on = match case {
                 crate::ci::types::CaseRef::Build(build) => build.on.as_deref(),
                 crate::ci::types::CaseRef::Spot(spot) => spot.on.as_deref(),
@@ -3232,20 +3232,16 @@ mod markdown {
 
     #[test]
     fn comment_commands_pin_every_case_to_the_runner() {
-        use crate::cli::untrusted::{UntrustedCommand, parse};
+        use crate::cli::untrusted::{parse, request};
         let parsed = parse("build checks.zlib --with wasixcc@0.4.3").unwrap();
-        let UntrustedCommand::Request(request) = parsed else {
-            panic!("expected a build request");
-        };
-        let crate::ci::types::RequestAction::Build(case) = request.action else {
+        let build_request = request(&parsed).unwrap();
+        let crate::ci::types::RequestAction::Build(case) = build_request.action else {
             panic!("expected a build request");
         };
         assert_eq!(case.on.as_deref(), Some("local"));
         let parsed = parse("diff build all --vs build all").unwrap();
-        let UntrustedCommand::Request(request) = parsed else {
-            panic!("expected a diff request");
-        };
-        let crate::ci::types::RequestAction::Diff(diff) = request.action else {
+        let diff_request = request(&parsed).unwrap();
+        let crate::ci::types::RequestAction::Diff(diff) = diff_request.action else {
             panic!("expected a diff request");
         };
         for case in &diff.cases {
@@ -3259,36 +3255,32 @@ mod markdown {
 
     #[test]
     fn mutation_comments_classify_as_mutations_and_parse_structurally() {
-        use crate::cli::untrusted::{MutationCommand, UntrustedCommand, parse};
-        let UntrustedCommand::Mutation(MutationCommand::Update { targets, all }) =
-            parse("update wasmer wasix-libc").unwrap()
-        else {
+        use crate::cli::CommandTree;
+        use crate::cli::untrusted::parse;
+        let CommandTree::Update(args) = parse("update wasmer wasix-libc").unwrap() else {
             panic!("expected an update mutation");
         };
-        assert_eq!(targets, ["wasmer", "wasix-libc"]);
-        assert!(!all);
+        assert_eq!(args.targets, ["wasmer", "wasix-libc"]);
+        assert!(!args.all);
         assert!(matches!(
             parse("update --all").unwrap(),
-            UntrustedCommand::Mutation(MutationCommand::Update { all: true, .. })
+            CommandTree::Update(args) if args.all
         ));
         assert!(matches!(
             parse("versions bump numpy@1.26.4 --all-versions").unwrap(),
-            UntrustedCommand::Mutation(MutationCommand::Bump { .. })
+            CommandTree::Versions(crate::cli::update::VersionsCommand::Bump { .. })
         ));
         assert!(matches!(
             parse("versions bump --changed").unwrap(),
-            UntrustedCommand::Mutation(MutationCommand::Bump { changed: true, .. })
+            CommandTree::Versions(crate::cli::update::VersionsCommand::Bump { changed: true, .. })
         ));
         assert!(matches!(
             parse("regenerate").unwrap(),
-            UntrustedCommand::Mutation(MutationCommand::Regenerate)
+            CommandTree::Regenerate
         ));
         // regenerate replays the recipe; there is nothing to aim it at.
         assert!(parse("regenerate --force").is_err());
-        assert!(matches!(
-            parse("fmt").unwrap(),
-            UntrustedCommand::Mutation(MutationCommand::Format)
-        ));
+        assert!(matches!(parse("fmt").unwrap(), CommandTree::Fmt));
         // fmt takes the whole tree; there is nothing to aim it at.
         assert!(parse("fmt pkgs").is_err());
         use crate::ci::origin::{Classifier, CommandKind};
@@ -3328,7 +3320,8 @@ mod markdown {
         );
         // clap already prefixes its rendering; the wrapper must not.
         let refusal = crate::cli::untrusted::parse("frobnicate --now")
-            .unwrap_err()
+            .err()
+            .unwrap()
             .to_string();
         assert!(refusal.starts_with("unrecognized subcommand"), "{refusal}");
         // Adapter-owned mutation flags do not exist in this grammar.
@@ -3341,7 +3334,7 @@ mod markdown {
             "versions add numpy@1.0",
             "versions import uv.lock",
         ] {
-            let error = parse(refused).unwrap_err().to_string();
+            let error = parse(refused).err().unwrap().to_string();
             assert!(!error.contains("not available"), "{refused}: {error}");
             assert!(parse(refused).is_err(), "{refused} must not parse");
         }
@@ -3928,10 +3921,9 @@ mod markdown {
     fn a_failed_build_union_states_its_error() {
         use crate::ci::plan::{TaskKind, plan_of};
         use crate::ci::report::{FoldContext, fold, union_failure_fragment};
-        use crate::cli::untrusted::{UntrustedCommand, parse};
-        let UntrustedCommand::Request(request) = parse("build checks.zlib").unwrap() else {
-            panic!("expected a build request");
-        };
+        use crate::cli::untrusted::{parse, request};
+        let command = parse("build checks.zlib").unwrap();
+        let request = request(&command).unwrap();
         let plan = plan_of(&request, Some("golden"), &[]);
         let build = plan
             .tasks
@@ -5169,56 +5161,27 @@ mod managed {
 
     #[test]
     fn a_recorded_recipe_reparses_to_the_command_it_names() {
-        use crate::cli::untrusted::MutationCommand;
-        let commands = [
-            MutationCommand::Update {
-                targets: Vec::new(),
-                all: true,
-            },
-            MutationCommand::Update {
-                targets: vec!["nixpkgs".into(), "wasmer".into()],
-                all: false,
-            },
-            MutationCommand::Bump {
-                specs: vec!["zlib@1.3.1".into()],
-                all_versions: true,
-                changed: false,
-            },
-            MutationCommand::Bump {
-                specs: Vec::new(),
-                all_versions: false,
-                changed: true,
-            },
-            MutationCommand::Format,
-        ];
-        for command in commands {
-            let recipe = command.recipe().expect("command has a recipe");
+        use crate::cli::untrusted::{mutation_recipe, parse};
+        for recipe in [
+            "update --all",
+            "update nixpkgs wasmer",
+            "versions bump zlib@1.3.1 --all-versions",
+            "versions bump --changed",
+            "fmt",
+        ] {
+            let command = crate::update::managed::parse_recipe(recipe).unwrap();
             assert_eq!(
-                crate::update::managed::parse_recipe(&recipe).unwrap(),
-                command,
+                mutation_recipe(&command).as_deref(),
+                Some(recipe),
                 "{recipe} did not reparse to what it names"
             );
         }
         // Replaying a regenerate would replay a replay; it is never a recipe.
-        assert_eq!(MutationCommand::Regenerate.recipe(), None);
+        assert_eq!(mutation_recipe(&parse("regenerate").unwrap()), None);
         // A bare update means "replay the recipe", so it cannot be one.
-        assert_eq!(
-            MutationCommand::Update {
-                targets: Vec::new(),
-                all: false
-            }
-            .recipe(),
-            None
-        );
+        assert_eq!(mutation_recipe(&parse("update").unwrap()), None);
         // A word the tokenizer would resplit is refused, not quoted.
-        assert_eq!(
-            MutationCommand::Update {
-                targets: vec!["two words".into()],
-                all: false
-            }
-            .recipe(),
-            None
-        );
+        assert_eq!(mutation_recipe(&parse("update 'two words'").unwrap()), None);
     }
 
     #[test]
@@ -5233,7 +5196,7 @@ mod managed {
 }
 
 mod mutation_gates {
-    use crate::cli::untrusted::MutationCommand;
+    use crate::cli::CommandTree;
     use crate::github::mutation::{Pull, Resolved, resolve};
     use crate::update::managed::State;
 
@@ -5291,27 +5254,27 @@ mod mutation_gates {
         assert!(back.changed);
     }
 
-    fn update(targets: &[&str], all: bool) -> MutationCommand {
-        MutationCommand::Update {
-            targets: targets.iter().map(|t| t.to_string()).collect(),
-            all,
-        }
+    fn command(text: &str) -> CommandTree {
+        crate::cli::untrusted::parse(text).unwrap()
     }
 
     #[test]
     fn recipe_forms_demand_the_managed_record() {
-        assert!(resolve(MutationCommand::Regenerate, None, &pull()).is_err());
-        assert!(resolve(update(&[], false), None, &pull()).is_err());
+        assert!(resolve(command("regenerate"), None, &pull()).is_err());
+        assert!(resolve(command("update"), None, &pull()).is_err());
     }
 
     #[test]
     fn a_bare_update_replays_the_recipe_from_the_current_head() {
         let state = State::new("update wasmer".into(), "b".repeat(40)).unwrap();
-        let Resolved::Run(resolution) = resolve(update(&[], false), Some(state), &pull()).unwrap()
+        let Resolved::Run(resolution) = resolve(command("update"), Some(state), &pull()).unwrap()
         else {
             panic!("expected a run");
         };
-        assert_eq!(resolution.command, update(&["wasmer"], false));
+        assert_eq!(
+            crate::cli::untrusted::mutation_recipe(&resolution.command).as_deref(),
+            Some("update wasmer")
+        );
         assert_eq!(resolution.start_sha, "b".repeat(40));
         assert!(!resolution.force);
         assert!(resolution.record_state);
@@ -5321,7 +5284,7 @@ mod mutation_gates {
     fn a_bare_update_on_a_moved_branch_pauses() {
         let state = State::new("update wasmer".into(), "a".repeat(40)).unwrap();
         assert!(matches!(
-            resolve(update(&[], false), Some(state), &pull()).unwrap(),
+            resolve(command("update"), Some(state), &pull()).unwrap(),
             Resolved::Paused(_)
         ));
     }
@@ -5329,7 +5292,7 @@ mod mutation_gates {
     #[test]
     fn a_non_update_recipe_refuses_a_bare_update() {
         let state = State::new("versions bump --changed".into(), "b".repeat(40)).unwrap();
-        assert!(resolve(update(&[], false), Some(state), &pull()).is_err());
+        assert!(resolve(command("update"), Some(state), &pull()).is_err());
     }
 
     #[test]
@@ -5337,7 +5300,7 @@ mod mutation_gates {
         // Even a moved branch regenerates: that is the recovery path.
         let state = State::new("update wasmer".into(), "a".repeat(40)).unwrap();
         let Resolved::Run(resolution) =
-            resolve(MutationCommand::Regenerate, Some(state), &pull()).unwrap()
+            resolve(command("regenerate"), Some(state), &pull()).unwrap()
         else {
             panic!("expected a run");
         };
@@ -5348,7 +5311,7 @@ mod mutation_gates {
 
     #[test]
     fn explicit_targets_run_as_spelled_without_state() {
-        let Resolved::Run(resolution) = resolve(update(&["wasmer"], false), None, &pull()).unwrap()
+        let Resolved::Run(resolution) = resolve(command("update wasmer"), None, &pull()).unwrap()
         else {
             panic!("expected a run");
         };
@@ -6093,6 +6056,19 @@ mod corpus {
             }
         }
         offenders
+    }
+
+    #[test]
+    fn comment_commands_have_no_parallel_type_tree() {
+        let banned: Vec<String> = [
+            ["Untrusted", "Command"].concat(),
+            ["Mutation", "Command"].concat(),
+            ["Bisect", "Command"].concat(),
+        ]
+        .into();
+        let banned: Vec<&str> = banned.iter().map(String::as_str).collect();
+        let found = offenders(false, &[], &banned);
+        assert!(found.is_empty(), "{}", found.join("\n"));
     }
 
     #[test]
@@ -6984,9 +6960,8 @@ mod corpus {
 
 mod untrusted {
     use crate::ci::origin::{Classifier, CommandKind};
-    use crate::cli::untrusted::{
-        ClapClassifier, UntrustedCommand, parse, presentation, split_words,
-    };
+    use crate::cli::CommandTree;
+    use crate::cli::untrusted::{ClapClassifier, parse, presentation, request, split_words};
 
     #[test]
     fn comment_presentations_come_from_the_shared_grammar() {
@@ -7023,33 +6998,32 @@ mod untrusted {
 
     #[test]
     fn comment_commands_reenter_the_shared_grammar() {
-        let UntrustedCommand::Request(request) =
-            parse("build core --enable-tag slow-tests").unwrap()
-        else {
-            panic!("expected a build request");
-        };
-        let crate::ci::types::RequestAction::Build(build) = request.action else {
+        let command = parse("build core --enable-tag slow-tests").unwrap();
+        let first_request = request(&command).unwrap();
+        let crate::ci::types::RequestAction::Build(build) = first_request.action else {
             panic!("expected a build request");
         };
         assert_eq!(build.enabled_tags, ["slow-tests"]);
-        assert!(matches!(parse("help").unwrap(), UntrustedCommand::Help));
+        assert!(matches!(parse("help").unwrap(), CommandTree::SurfaceHelp));
         assert_eq!(
             ClapClassifier.classify("build core").unwrap(),
             CommandKind::Build
         );
         assert!(matches!(
             parse("build core --plan").unwrap(),
-            UntrustedCommand::Plan(_)
+            CommandTree::Build(args) if args.mode.plan
         ));
         assert_eq!(
             ClapClassifier.classify("build core --plan").unwrap(),
             CommandKind::Plan
         );
 
-        let UntrustedCommand::Request(request) = parse("build core --blocked=skip").unwrap() else {
-            panic!("expected a build request");
-        };
-        assert_eq!(request.blocked, crate::support::atoms::BlockedPolicy::Skip);
+        let command = parse("build core --blocked=skip").unwrap();
+        let blocked_request = request(&command).unwrap();
+        assert_eq!(
+            blocked_request.blocked,
+            crate::support::atoms::BlockedPolicy::Skip
+        );
     }
 
     #[test]
@@ -7064,11 +7038,12 @@ mod untrusted {
             "spot packages.wasix.zlib --junit-out out.xml",
             "diff build all --vs build all --on ec2:host",
         ] {
-            let error = parse(command).unwrap_err().to_string();
+            let error = parse(command).err().unwrap().to_string();
             assert!(error.contains("terminal only"), "{command}: {error}");
         }
         let error = parse("build core --trusted-ref main")
-            .unwrap_err()
+            .err()
+            .unwrap()
             .to_string();
         assert!(error.contains("unexpected argument"), "{error}");
     }
@@ -7076,26 +7051,31 @@ mod untrusted {
     #[test]
     fn shared_case_flags_name_the_surface_that_owns_them() {
         let error = parse("diff build all --on ec2 --vs build all")
-            .unwrap_err()
+            .err()
+            .unwrap()
             .to_string();
         assert!(error.contains("--on is terminal only"), "{error}");
-        let error = parse("ci nix-config").unwrap_err().to_string();
+        let error = parse("ci nix-config").err().unwrap().to_string();
         assert!(error.contains("ci is CI only"), "{error}");
-        let error = parse("jobs zlib").unwrap_err().to_string();
+        let error = parse("jobs zlib").err().unwrap().to_string();
         assert!(error.contains("jobs is terminal only"), "{error}");
-        let error = parse("update wasmer --commit").unwrap_err().to_string();
+        let error = parse("update wasmer --commit").err().unwrap().to_string();
         assert!(error.contains("--commit is terminal only"), "{error}");
-        let error = parse("versions add numpy@1.26.4").unwrap_err().to_string();
+        let error = parse("versions add numpy@1.26.4")
+            .err()
+            .unwrap()
+            .to_string();
         assert!(error.contains("versions add is terminal only"), "{error}");
         let error = parse("versions bump --changed-from main")
-            .unwrap_err()
+            .err()
+            .unwrap()
             .to_string();
         assert!(error.contains("--changed-from is terminal only"), "{error}");
     }
 
     #[test]
     fn a_typo_gets_a_suggestion_not_a_shrug() {
-        let error = parse("buld core").unwrap_err().to_string();
+        let error = parse("buld core").err().unwrap().to_string();
         assert!(error.contains("build"), "{error}");
     }
 }

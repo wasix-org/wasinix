@@ -1,9 +1,12 @@
-//! PR-comment commands use the main Clap tree, then surface policy
-//! rejects effects the workflow adapter owns before typed conversion.
+//! PR-comment commands use the main Clap tree. This module tokenizes the
+//! comment and projects authorization, presentation, and requests from that
+//! tree without defining another command hierarchy.
 
 use crate::ci::origin::{Classifier, CommandKind};
 use crate::ci::types::{ParsedRequest, Request, RequestAction};
 use crate::support::error::{Result, request_error};
+
+use super::CommandTree;
 
 const MAX_WORDS: usize = 64;
 
@@ -61,24 +64,6 @@ pub fn split_words(command: &str) -> Result<Vec<String>> {
     Ok(words)
 }
 
-/// A parsed mutation, replayable from the recorded recipe text.
-#[derive(Debug, Clone, PartialEq)]
-pub enum MutationCommand {
-    Update {
-        targets: Vec<String>,
-        all: bool,
-    },
-    Bump {
-        specs: Vec<String>,
-        all_versions: bool,
-        changed: bool,
-    },
-    Regenerate,
-    Format,
-}
-
-/// A word the comment tokenizer returns unchanged, so a recipe built from it
-/// re-parses to the same word without quoting.
 fn plain_words(words: &[String]) -> bool {
     words.iter().all(|word| {
         !word.is_empty()
@@ -87,20 +72,22 @@ fn plain_words(words: &[String]) -> bool {
     })
 }
 
-impl MutationCommand {
-    /// The comment that replays this mutation, recorded as a managed PR's
-    /// recipe. Rendered from the parsed command rather than from the
-    /// invocation that produced the branch, so a recorded recipe always
-    /// re-parses to what it names. A command that replays a recipe rather
-    /// than being one has none.
-    pub fn recipe(&self) -> Option<String> {
+impl super::update::UpdateArgs {
+    pub(crate) fn comment_recipe(&self) -> Option<String> {
+        if self.all {
+            Some("update --all".into())
+        } else {
+            (!self.targets.is_empty() && plain_words(&self.targets))
+                .then(|| format!("update {}", self.targets.join(" ")))
+        }
+    }
+}
+
+impl super::update::VersionsCommand {
+    pub(crate) fn comment_recipe(&self) -> Option<String> {
         match self {
-            MutationCommand::Update { all: true, .. } => Some("update --all".into()),
-            MutationCommand::Update { targets, .. } => (!targets.is_empty()
-                && plain_words(targets))
-            .then(|| format!("update {}", targets.join(" "))),
-            MutationCommand::Bump { changed: true, .. } => Some("versions bump --changed".into()),
-            MutationCommand::Bump {
+            Self::Bump { changed: true, .. } => Some("versions bump --changed".into()),
+            Self::Bump {
                 specs,
                 all_versions,
                 ..
@@ -108,32 +95,21 @@ impl MutationCommand {
                 let versions = if *all_versions { " --all-versions" } else { "" };
                 format!("versions bump {}{versions}", specs.join(" "))
             }),
-            MutationCommand::Format => Some("fmt".into()),
-            MutationCommand::Regenerate => None,
+            Self::Add { .. } | Self::Import { .. } => None,
         }
     }
 }
 
-/// A bisect a comment asked for, with its predicate already parsed and
-/// pinned to the runner.
-#[derive(Debug, Clone, PartialEq)]
-pub struct BisectCommand {
-    pub target: String,
-    pub good: String,
-    pub bad: String,
-    pub first_parent: bool,
-    pub reverse: bool,
-    pub words: Vec<String>,
-    pub predicate: ParsedRequest,
-}
-
-#[derive(Debug)]
-pub enum UntrustedCommand {
-    Request(ParsedRequest),
-    Plan(ParsedRequest),
-    Bisect(BisectCommand),
-    Mutation(MutationCommand),
-    Help,
+/// A replayable recipe for a mutation grammar node. A regenerate replays an
+/// existing recipe and therefore does not have one of its own.
+pub(crate) fn mutation_recipe(command: &CommandTree) -> Option<String> {
+    match command {
+        CommandTree::Update(args) => args.comment_recipe(),
+        CommandTree::Versions(args) => args.comment_recipe(),
+        CommandTree::Fmt => Some("fmt".into()),
+        CommandTree::Regenerate => None,
+        _ => None,
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -186,37 +162,62 @@ impl Presentation {
     }
 }
 
-impl UntrustedCommand {
-    pub fn presentation(&self) -> Presentation {
-        match self {
-            UntrustedCommand::Request(request) => Presentation::request(request, false),
-            UntrustedCommand::Plan(request) => Presentation::request(request, true),
-            UntrustedCommand::Bisect(bisect) => Presentation {
-                heading: "Wasinix bisect",
-                target: Some(bisect.target.clone()),
-            },
-            UntrustedCommand::Mutation(MutationCommand::Update { .. }) => Presentation {
-                heading: "Wasinix update",
-                target: None,
-            },
-            UntrustedCommand::Mutation(MutationCommand::Bump { .. }) => Presentation {
-                heading: "Wasinix versions",
-                target: None,
-            },
-            UntrustedCommand::Mutation(MutationCommand::Regenerate) => Presentation {
-                heading: "Wasinix regenerate",
-                target: None,
-            },
-            UntrustedCommand::Mutation(MutationCommand::Format) => Presentation {
-                heading: "Wasinix fmt",
-                target: None,
-            },
-            UntrustedCommand::Help => Presentation {
-                heading: "Wasinix commands",
-                target: None,
-            },
-        }
+pub(crate) fn is_plan(command: &CommandTree) -> bool {
+    match command {
+        CommandTree::Build(args) => args.mode.plan,
+        CommandTree::Spot(args) => args.mode.plan,
+        CommandTree::Diff(args) => args.mode.plan,
+        _ => false,
     }
+}
+
+pub(crate) fn request(command: &CommandTree) -> Result<ParsedRequest> {
+    match command {
+        CommandTree::Build(args) => Ok(Request::build(
+            super::request::build_case(&args.request, Some("local".to_string()), None)?,
+            args.outcome.blocked,
+        )),
+        CommandTree::Spot(args) => Ok(Request::spot(
+            super::request::spot_case(&args.request, &args.spot, Some("local".to_string()), None)?,
+            args.outcome.blocked,
+        )),
+        CommandTree::Diff(args) => super::request::diff_request(args, super::Surface::Comment),
+        _ => request_error("the command is not a build request"),
+    }
+}
+
+fn project_presentation(command: CommandTree) -> Result<Presentation> {
+    let plan = is_plan(&command);
+    Ok(match command {
+        CommandTree::Build(_) | CommandTree::Spot(_) | CommandTree::Diff(_) => {
+            Presentation::request(&request(&command)?, plan)
+        }
+        CommandTree::Bisect(args) => Presentation {
+            heading: "Wasinix bisect",
+            target: Some(args.target),
+        },
+        CommandTree::Update(_) => Presentation {
+            heading: "Wasinix update",
+            target: None,
+        },
+        CommandTree::Versions(_) => Presentation {
+            heading: "Wasinix versions",
+            target: None,
+        },
+        CommandTree::Regenerate => Presentation {
+            heading: "Wasinix regenerate",
+            target: None,
+        },
+        CommandTree::Fmt => Presentation {
+            heading: "Wasinix fmt",
+            target: None,
+        },
+        CommandTree::SurfaceHelp => Presentation {
+            heading: "Wasinix commands",
+            target: None,
+        },
+        _ => unreachable!("comment surface accepted a non-comment command"),
+    })
 }
 
 pub fn presentation(command: &str) -> Result<Presentation> {
@@ -224,95 +225,62 @@ pub fn presentation(command: &str) -> Result<Presentation> {
         .strip_prefix(crate::ci::origin::PREFIX)
         .map(str::trim_start)
         .unwrap_or(command);
-    Ok(parse(command)?.presentation())
+    project_presentation(parse(command)?)
 }
 
-fn request_command(request: ParsedRequest, plan: bool) -> UntrustedCommand {
-    if plan {
-        UntrustedCommand::Plan(request)
-    } else {
-        UntrustedCommand::Request(request)
-    }
-}
-
-fn shared_command(words: &[String]) -> Result<UntrustedCommand> {
-    let parsed = super::surface::parse_comment(words)?;
-    Ok(match parsed.command {
-        super::CommandTree::Build(args) => {
-            let request = Request::build(
-                super::request::build_case(&args.request, Some("local".to_string()), None)?,
-                args.outcome.blocked,
-            );
-            request_command(request, args.mode.plan)
-        }
-        super::CommandTree::Spot(args) => {
-            let request = Request::spot(
-                super::request::spot_case(
-                    &args.request,
-                    &args.spot,
-                    Some("local".to_string()),
-                    None,
-                )?,
-                args.outcome.blocked,
-            );
-            request_command(request, args.mode.plan)
-        }
-        super::CommandTree::Diff(args) => {
-            let plan = args.mode.plan;
-            let request = super::request::diff_request(&args, super::Surface::Comment)?;
-            request_command(request, plan)
-        }
-        super::CommandTree::Bisect(args) => {
-            let words: Vec<String> = args
-                .command
-                .iter()
-                .skip_while(|word| *word == "--")
-                .cloned()
-                .collect();
-            let predicate = super::bisect::predicate(
-                &words,
-                &args.target,
-                args.outcome.blocked,
-                super::Surface::Comment,
-            )?;
-            UntrustedCommand::Bisect(BisectCommand {
-                target: args.target,
-                good: args.good,
-                bad: args.bad,
-                first_parent: args.first_parent,
-                reverse: args.reverse,
-                words,
-                predicate,
-            })
-        }
-        super::CommandTree::Update(args) => UntrustedCommand::Mutation(MutationCommand::Update {
-            targets: args.targets,
-            all: args.all,
-        }),
-        super::CommandTree::Versions(super::update::VersionsCommand::Bump {
-            specs,
-            all_versions,
-            changed,
-            ..
-        }) => UntrustedCommand::Mutation(MutationCommand::Bump {
-            specs,
-            all_versions,
-            changed,
-        }),
-        super::CommandTree::Regenerate => UntrustedCommand::Mutation(MutationCommand::Regenerate),
-        super::CommandTree::Fmt => UntrustedCommand::Mutation(MutationCommand::Format),
-        super::CommandTree::SurfaceHelp => UntrustedCommand::Help,
-        _ => unreachable!("comment surface accepted a non-comment command"),
-    })
-}
-
-/// Parse an untrusted `/wasinix` command into the shared request family.
-pub fn parse(command: &str) -> Result<UntrustedCommand> {
+/// Parse an untrusted `/wasinix` command with the shared command grammar.
+pub fn parse(command: &str) -> Result<CommandTree> {
     let words = split_words(command)?;
     if words.len() > MAX_WORDS {
         return request_error(format!("command has more than {MAX_WORDS} words"));
     }
-    shared_command(&words)
+    let command = super::surface::parse_comment(&words)?.command;
+    match &command {
+        CommandTree::Build(_) | CommandTree::Spot(_) | CommandTree::Diff(_) => {
+            request(&command)?;
+        }
+        CommandTree::Bisect(args) => {
+            bisect_predicate(args)?;
+        }
+        _ => {}
+    }
+    Ok(command)
+}
+
+pub(crate) fn bisect_predicate(
+    args: &super::bisect::BisectArgs,
+) -> Result<(Vec<String>, ParsedRequest)> {
+    let words: Vec<String> = args
+        .command
+        .iter()
+        .skip_while(|word| *word == "--")
+        .cloned()
+        .collect();
+    let predicate = super::bisect::predicate(
+        &words,
+        &args.target,
+        args.outcome.blocked,
+        super::Surface::Comment,
+    )?;
+    Ok((words, predicate))
+}
+
+fn command_kind(command: &CommandTree) -> CommandKind {
+    match command {
+        CommandTree::Build(args) if args.mode.plan => CommandKind::Plan,
+        CommandTree::Spot(args) if args.mode.plan => CommandKind::Plan,
+        CommandTree::Diff(args) if args.mode.plan => CommandKind::Plan,
+        CommandTree::Build(_)
+        | CommandTree::Spot(_)
+        | CommandTree::Diff(_)
+        | CommandTree::Bisect(_) => CommandKind::Build,
+        CommandTree::Update(_)
+        | CommandTree::Versions(_)
+        | CommandTree::Regenerate
+        | CommandTree::Fmt => CommandKind::Mutation,
+        CommandTree::SurfaceHelp => CommandKind::Help,
+        _ => unreachable!("comment surface accepted a non-comment command"),
+    }
 }
 
 /// The origin seam's classifier, backed by the real grammar: a command that
@@ -321,13 +289,6 @@ pub struct ClapClassifier;
 
 impl Classifier for ClapClassifier {
     fn classify(&self, command: &str) -> Result<CommandKind> {
-        match parse(command)? {
-            // A bisect runs builds and reports; the build job's shape fits
-            // it, and it carries no write credential.
-            UntrustedCommand::Request(_) | UntrustedCommand::Bisect(_) => Ok(CommandKind::Build),
-            UntrustedCommand::Plan(_) => Ok(CommandKind::Plan),
-            UntrustedCommand::Help => Ok(CommandKind::Help),
-            UntrustedCommand::Mutation(_) => Ok(CommandKind::Mutation),
-        }
+        Ok(command_kind(&parse(command)?))
     }
 }

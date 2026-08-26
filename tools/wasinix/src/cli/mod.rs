@@ -1308,7 +1308,7 @@ fn command_reply(command: &crate::ci::origin::Command, reply: ReplyFreshness) ->
 fn ci_bisect(
     repo: &std::path::Path,
     command: &crate::ci::origin::Command,
-    request: untrusted::BisectCommand,
+    request: bisect::BisectArgs,
     run_dir: PathBuf,
 ) -> Result<CommandStatus> {
     // A candidate is a whole build, so the first answer is hours away. The
@@ -1322,6 +1322,7 @@ fn ci_bisect(
     };
     progress(0)?;
     let bisect_dir = run_dir.join("bisect");
+    let (words, predicate) = untrusted::bisect_predicate(&request)?;
     let report = match bisect::drive(
         repo,
         bisect::Bisect {
@@ -1330,8 +1331,8 @@ fn ci_bisect(
             bad: request.bad,
             first_parent: request.first_parent,
             reverse: request.reverse,
-            words: request.words,
-            predicate: request.predicate,
+            words,
+            predicate,
             run_dir: bisect_dir.clone(),
             budget: Some(COMMENT_BISECT_BUDGET),
             event_parent: Some(run_dir),
@@ -1740,41 +1741,46 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 &api,
                 &untrusted::ClapClassifier,
             )?;
-            let mut parsed = match untrusted::parse(&command.command)? {
-                untrusted::UntrustedCommand::Request(request) => request,
-                untrusted::UntrustedCommand::Plan(mut request) => {
-                    request.default_from_pr();
-                    let resolved = crate::ci::normalize::normalize(
-                        &request,
-                        &crate::ci::normalize::Context {
-                            repo: &repo,
-                            origin: Some(&command.origin),
-                        },
-                    )?;
-                    let plan = crate::ci::plan::plan_of(&resolved, None, &[]);
-                    command_reply(
-                        &command,
-                        ReplyFreshness::Final(crate::github::markdown::plan_reply(
-                            &resolved, &plan,
-                        )?),
-                    )?;
-                    return Ok(CommandStatus::SUCCESS);
+            let parsed_command = untrusted::parse(&command.command)?;
+            if untrusted::is_plan(&parsed_command) {
+                let mut request = untrusted::request(&parsed_command)?;
+                request.default_from_pr();
+                let resolved = crate::ci::normalize::normalize(
+                    &request,
+                    &crate::ci::normalize::Context {
+                        repo: &repo,
+                        origin: Some(&command.origin),
+                    },
+                )?;
+                let plan = crate::ci::plan::plan_of(&resolved, None, &[]);
+                command_reply(
+                    &command,
+                    ReplyFreshness::Final(crate::github::markdown::plan_reply(&resolved, &plan)?),
+                )?;
+                return Ok(CommandStatus::SUCCESS);
+            }
+            let mut parsed = match parsed_command {
+                command @ (CommandTree::Build(_) | CommandTree::Spot(_) | CommandTree::Diff(_)) => {
+                    untrusted::request(&command)?
                 }
                 // A bisect answers with its own reply rather than a CI
                 // report: its result is a commit, not a set of job outcomes.
-                untrusted::UntrustedCommand::Bisect(bisect) => {
-                    return ci_bisect(&repo, &command, bisect, run_dir);
+                CommandTree::Bisect(args) => {
+                    return ci_bisect(&repo, &command, args, run_dir);
                 }
                 // The build job carries no write credential; mutations run
                 // through the ci mutate / mutate-publish pair.
-                untrusted::UntrustedCommand::Mutation(_) => {
+                CommandTree::Update(_)
+                | CommandTree::Versions(_)
+                | CommandTree::Regenerate
+                | CommandTree::Fmt => {
                     return crate::support::error::request_error(
                         "mutation commands run through ci mutate, not ci command",
                     );
                 }
                 // Help is a command like any other: it replies to the comment
                 // that asked, rather than erroring into the failure path.
-                untrusted::UntrustedCommand::Help => {
+                CommandTree::SurfaceHelp => {
                     command_reply(
                         &command,
                         ReplyFreshness::Final(crate::github::markdown::help_reply(
@@ -1783,6 +1789,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                     )?;
                     return Ok(CommandStatus::SUCCESS);
                 }
+                _ => unreachable!("comment surface accepted a non-comment command"),
             };
             parsed.default_from_pr();
             request::drive(request::Drive {
