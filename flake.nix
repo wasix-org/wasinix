@@ -67,15 +67,11 @@
       importNixpkgs = args: import nixpkgs args;
       ci.sources = ["wasinix"];
       projectTests =
-        builtins.listToAttrs (map (name: {
-            inherit name;
-            value = {
-              source = "wasinix";
-              check = _project: repositoryChecks.${name};
-            };
-          })
-          repositoryCheckNames)
-        // {
+        {
+          consumer-project = {
+            source = "wasinix";
+            check = _project: consumerProjectCheck;
+          };
           asyncify-eh = {
             source = "wasinix";
             check = checkedProject: let
@@ -101,7 +97,15 @@
                 testLib = testLibFor checkedProject;
               };
           };
-        };
+        }
+        // builtins.listToAttrs (map (name: {
+            inherit name;
+            value = {
+              source = "wasinix";
+              check = _project: repositoryChecks.${name};
+            };
+          })
+          repositoryCheckNames);
       repository = {
         source = "wasinix";
         root = repositorySource;
@@ -200,6 +204,11 @@
         (pkgs.runCommand "wasinix-project-api-tests" {} ''
           touch "$out"
         ''));
+    consumerProjectCheck = import ./pkgs/project/tests/consumer-flake/check.nix {
+      inherit pkgs projectApi system;
+      importNixpkgs = args: import nixpkgs args;
+      root = ./pkgs/project/tests/consumer-flake;
+    };
     repositoryChecks =
       nixLintChecks
       // {
