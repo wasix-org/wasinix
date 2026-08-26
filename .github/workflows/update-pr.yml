@@ -1,0 +1,29 @@
+name: Reconcile update pull request
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  reconcile:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Reconcile managed update
+        env:
+          GITHUB_TOKEN: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+        run: nix run .#ci -- reconcile-managed-update --pull-request "$PULL_REQUEST"
