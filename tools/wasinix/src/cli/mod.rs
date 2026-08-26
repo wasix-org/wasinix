@@ -501,10 +501,8 @@ pub enum CiCommand {
         #[arg(long)]
         out_dir: PathBuf,
     },
-    /// Enable auto-merge for an eligible managed update after CI evaluates its diff
-    ReconcileUpdateAutoMerge {
-        #[arg(long)]
-        run_dir: PathBuf,
+    /// Disable auto-merge when a managed update is no longer eligible
+    ReconcileManagedUpdate {
         #[command(flatten)]
         surface: crate::github::surfaces::SurfaceArgs,
     },
@@ -1845,10 +1843,10 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             crate::github::mutation::mutate_publish(&repo, &out_dir)?;
             Ok(CommandStatus::SUCCESS)
         }
-        CiCommand::ReconcileUpdateAutoMerge { run_dir, surface } => {
+        CiCommand::ReconcileManagedUpdate { surface } => {
             let pull_request = surface.pull_request.ok_or_else(|| {
                 crate::support::error::Error::Request(
-                    "update auto-merge needs a pull request".into(),
+                    "managed update reconciliation needs a pull request".into(),
                 )
             })?;
             let repository = surface.repository(&repo)?;
@@ -1866,27 +1864,11 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 ui::note("managed pull request is not an update");
                 return Ok(CommandStatus::SUCCESS);
             }
-            let report: crate::ci::report::Report =
-                schema::read(&crate::ci::prepare::report_path(&run_dir))?;
-            crate::support::error::require(report.complete, "CI report is incomplete")?;
-            let comparison = match report.comparisons.as_slice() {
-                [comparison] if comparison.base_evaluated && comparison.head_evaluated => {
-                    comparison
-                }
-                _ => {
-                    return crate::support::error::request_error(
-                        "CI report has no complete diff comparison",
-                    )
-                }
-            };
-            crate::support::error::require(
-                comparison.eval.is_some(),
-                "CI report has no evaluated diff",
-            )?;
-            if state.auto_merge && !crate::update::managed::paused(&state, &pull.head_sha) {
-                crate::github::update_pr::enable_auto_merge(&client, &pull)?;
-            } else {
-                ui::note("managed update is not eligible for auto-merge");
+            if pull.auto_merge_enabled
+                && (!state.auto_merge || crate::update::managed::paused(&state, &pull.head_sha))
+            {
+                crate::github::update_pr::disable_auto_merge(&client, &pull)?;
+                ui::fact("auto-merge", "disabled for ineligible managed update");
             }
             Ok(CommandStatus::SUCCESS)
         }

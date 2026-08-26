@@ -5889,6 +5889,7 @@ mod corpus {
             "ci prepare",
             "ci exec",
             "ci publish",
+            "ci reconcile-managed-update",
             "ci step-timings",
             "ci origin",
             "ci command",

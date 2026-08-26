@@ -77,15 +77,19 @@ pub fn open_pr(repo: &Path, changes: &ChangeSet, options: &PrOptions) -> Result<
     );
     // Recorded after the truncation, so a body at the budget drops sections
     // rather than the marker every later comment mutation reads.
-    if let Some(recipe) = recipe {
+    let auto_merge = if let Some(recipe) = recipe {
         let head = git(repo, &["rev-parse", "HEAD"])?.trim().to_string();
         let mut state = crate::update::managed::State::new(recipe, head)?;
         state.auto_merge = !changes
             .entries
             .iter()
             .any(|entry| entry.kind == crate::update::changeset::EntryKind::Notable);
+        let auto_merge = state.auto_merge;
         body = crate::update::managed::with_state(&body, &state)?;
-    }
+        auto_merge
+    } else {
+        false
+    };
     let number = if let Some(number) = existing {
         client.patch(
             &format!("repos/{}/pulls/{number}", options.repository),
@@ -113,6 +117,12 @@ pub fn open_pr(repo: &Path, changes: &ChangeSet, options: &PrOptions) -> Result<
             number,
             &options.ownership,
         )?;
+        let pull = pull(&client, &options.repository, number)?;
+        if auto_merge {
+            crate::github::update_pr::enable_auto_merge(&client, &pull)?;
+        } else {
+            crate::github::update_pr::disable_auto_merge(&client, &pull)?;
+        }
     }
     Ok(number)
 }

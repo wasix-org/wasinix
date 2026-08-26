@@ -19,6 +19,17 @@ pub fn enable_auto_merge(client: &Client, pull: &crate::github::mutation::Pull) 
     Ok(())
 }
 
+pub fn disable_auto_merge(client: &Client, pull: &crate::github::mutation::Pull) -> Result<()> {
+    if !pull.auto_merge_enabled {
+        return Ok(());
+    }
+    client.graphql(&json!({
+        "query": "mutation($id: ID!) { disablePullRequestAutoMerge(input: {pullRequestId: $id}) { pullRequest { number } } }",
+        "variables": { "id": pull.node_id },
+    }))?;
+    Ok(())
+}
+
 /// Apply facts that come from the update declaration, never from a branch
 /// name or title. GitHub additions are idempotent, so replaying an update
 /// reasserts the contract without touching unrelated labels or reviewers.
