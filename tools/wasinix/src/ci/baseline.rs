@@ -174,7 +174,7 @@ pub fn publish_from_run(
             manifest.tree
         ))
         .args(["--endpoint-url", crate::support::nix::CACHE_ENDPOINT]);
-    crate::support::tools::checked_output(&mut cmd, "publishing the baseline map")?;
+    cmd.capture_checked("publishing the baseline map")?;
     crate::support::ui::fact(
         "baseline published",
         format!("tree {} of rev {rev}", manifest.tree),

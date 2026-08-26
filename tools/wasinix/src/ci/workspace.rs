@@ -4,7 +4,6 @@
 //! revision and refuses if either moved.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -61,12 +60,12 @@ fn materialize_overrides(worktree: &Path, overrides: &[Override]) -> Result<()> 
             OverrideKind::Tag => format!("tag:{}", value.value),
         };
         let exe = crate::support::env::current_exe()?;
-        let mut cmd = Command::new(exe);
+        let mut cmd = crate::support::tools::Process::new(exe);
         cmd.arg("update")
             .arg(format!("{}@{source}", value.target))
             .arg("--json")
             .current_dir(worktree);
-        let output = crate::support::tools::output(&mut cmd)?;
+        let output = cmd.capture()?;
         if !output.status.success() {
             return request_error(format!(
                 "update {}: {}",

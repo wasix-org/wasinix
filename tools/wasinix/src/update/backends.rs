@@ -2,7 +2,6 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
-use std::process::Command;
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -57,12 +56,12 @@ pub(crate) fn run_capturing(
     cmd: &[String],
     env: &[(String, String)],
 ) -> Result<(i32, String, String)> {
-    let mut command = Command::new(&cmd[0]);
+    let mut command = crate::support::tools::Process::new(&cmd[0]);
     command.args(&cmd[1..]).current_dir(repo);
     for (key, value) in env {
         command.env(key, value);
     }
-    let output = crate::support::tools::output(&mut command)?;
+    let output = command.capture()?;
     Ok((
         output.status.code().unwrap_or(1),
         String::from_utf8_lossy(&output.stdout).to_string(),
@@ -229,9 +228,9 @@ pub fn run_nix_update(repo: &Path, argv: &[String]) -> Result<i32> {
     }
     let request = crate::update::request::current(None)?;
     let argv = crate::update::request::nix_update_argv(argv, request.as_ref())?;
-    let mut command = Command::new(&argv[0]);
+    let mut command = crate::support::tools::Process::new(&argv[0]);
     command.args(&argv[1..]).current_dir(repo);
-    let status = crate::support::tools::status(&mut command)?;
+    let status = command.run()?;
     Ok(status.code().unwrap_or(1))
 }
 

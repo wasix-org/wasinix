@@ -41,7 +41,7 @@ pub fn preview_site(request: Site<'_>) -> Result<String> {
         .args(["deploy", "--non-interactive", "--no-wait"])
         .args(["--registry", request.registry])
         .current_dir(scratch.path());
-    if !crate::support::tools::status(&mut deploy)?.success() {
+    if !deploy.run()?.success() {
         return request_error(format!(
             "deploying {}/{} failed",
             request.owner, request.app
@@ -52,7 +52,7 @@ pub fn preview_site(request: Site<'_>) -> Result<String> {
     get.args(["app", "get", &format!("{}/{}", request.owner, request.app)])
         .args(["--registry", request.registry])
         .args(["--format", "json"]);
-    let output = crate::support::tools::output(&mut get)?;
+    let output = get.capture()?;
     if !output.status.success() {
         return request_error(format!(
             "reading back {}/{} failed: {}",

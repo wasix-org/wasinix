@@ -11,7 +11,6 @@ pub(crate) use collection::gc_under;
 pub(crate) use collection::{GcPolicy, gc, is_pinned, set_pinned};
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -286,16 +285,16 @@ pub fn start(command: &[String]) -> Result<String> {
     )?;
 
     let exe = crate::support::env::current_exe()?;
-    let mut supervisor = Command::new(exe);
+    let mut supervisor = crate::support::tools::Process::new(exe);
     supervisor
         .arg("run")
         .arg("supervise")
         .arg(&run_dir)
         .args(command)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-    crate::support::tools::spawn(&mut supervisor)?.detach();
+        .stdin_null()
+        .stdout_null()
+        .stderr_null();
+    supervisor.start()?.detach();
     Ok(run_id)
 }
 
@@ -350,18 +349,17 @@ fn supervise_payload(run_dir: &Path, command: &[String]) -> Result<()> {
 
     let log_path = run_dir.join(LOG_FILE);
     let log = crate::support::log::SharedLog::create_followed(&log_path)?;
-    let mut payload = Command::new(&command[0]);
+    let mut payload = crate::support::tools::Process::new(&command[0]);
     payload.args(&command[1..]);
     if !command.iter().any(|word| word == "--run-dir") {
         payload.arg("--run-dir").arg(run_dir);
     }
-    payload.stdin(std::process::Stdio::null());
+    payload.stdin_null();
     let stdout_log = log.clone();
     let stderr_log = log.clone();
     let stdout_path = log_path.clone();
     let stderr_path = log_path.clone();
-    let (mut child, readers) = crate::support::tools::spawn_piped(
-        &mut payload,
+    let (mut child, readers) = payload.start_piped(
         move |mut stream| {
             let mut log = stdout_log;
             std::io::copy(&mut stream, &mut log).map_err(|error| io(&stdout_path, error))?;
@@ -412,7 +410,7 @@ fn supervise_payload(run_dir: &Path, command: &[String]) -> Result<()> {
     // TERM (a signal-shy child like `timeout`) and would run orphaned.
     #[cfg(unix)]
     signal_group(payload_group, libc::SIGKILL).map_err(|e| io(&log_path, e))?;
-    readers.join(&payload)?;
+    readers.join()?;
     log.finish()?;
     let exit = crate::support::process::CommandStatus::from_exit(status);
     // A clean exit is honest even if a cancel raced in: the payload finished

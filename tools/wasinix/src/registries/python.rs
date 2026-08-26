@@ -99,7 +99,7 @@ fn volume_config(app_dir: &Path, registry: &str) -> Result<String> {
             .args(["--registry", registry])
             .args(["--format", "rclone"])
             .current_dir(app_dir);
-        let output = crate::support::tools::output(&mut cmd)?;
+        let output = cmd.capture()?;
         if !output.status.success() {
             return request_error(format!(
                 "could not read the volume credentials: {}",
@@ -117,7 +117,7 @@ fn volume_config(app_dir: &Path, registry: &str) -> Result<String> {
         .args(["app", "volume", "enable-s3"])
         .args(["--registry", registry])
         .current_dir(app_dir);
-    if !crate::support::tools::status(&mut enable)?.success() {
+    if !enable.run()?.success() {
         return request_error("could not enable the volume's S3 endpoint");
     }
     read()
@@ -155,7 +155,7 @@ pub fn publish_index(request: Index) -> Result<CommandStatus> {
         .args(["--retries", "1"])
         .args(["--low-level-retries", "1"])
         .env("RCLONE_CONFIG", &config);
-    let listed = crate::support::tools::output(&mut list)?;
+    let listed = list.capture()?;
     let bucket = String::from_utf8_lossy(&listed.stdout)
         .lines()
         .next()
@@ -186,7 +186,7 @@ pub fn publish_index(request: Index) -> Result<CommandStatus> {
     publish
         .env("RCLONE_CONFIG", &config)
         .current_dir(&request.repo);
-    if !crate::support::tools::status(&mut publish)?.success() {
+    if !publish.run()?.success() {
         return request_error("publishing the index failed");
     }
     Ok(CommandStatus::SUCCESS)
@@ -240,7 +240,7 @@ pub fn start(given: Option<PathBuf>, port: u16) -> Result<Running> {
     let mut cmd = Capability::Python.command()?;
     cmd.args(["-m", "http.server", &port.to_string(), "--directory"])
         .arg(&root);
-    let child = crate::support::tools::spawn(&mut cmd)?;
+    let child = cmd.start()?;
     let mut running = Running { child, url };
     // "Started" means answering: a consumer probing right after start must
     // not race the listener.
@@ -395,7 +395,7 @@ pub fn coverage(cutoff: usize, limit: usize) -> Result<CoverageReport> {
             &limit.to_string(),
         ])
         .current_dir(&repo);
-    let output = crate::support::tools::checked_output(&mut command, "ranking Python coverage")?;
+    let output = command.capture_checked("ranking Python coverage")?;
     serde_json::from_slice(&output).map_err(|error| {
         crate::support::error::Error::Failure(format!("invalid Python coverage report: {error}"))
     })
@@ -423,7 +423,7 @@ pub fn refresh_survey(cutoff: usize) -> Result<()> {
             .arg(scripts.join(script))
             .args(args)
             .current_dir(&repo);
-        crate::support::tools::checked_status(&mut command, "refreshing the PyPI survey")?;
+        command.run_checked("refreshing the PyPI survey")?;
     }
     Ok(())
 }
@@ -582,7 +582,7 @@ pub fn preview_index(
     crate::support::json::write(&dists, &Value::Array(suffixed))?;
     let mut index = Capability::PythonIndex.command()?;
     index.arg(&dists).arg(site).current_dir(repo);
-    if !crate::support::tools::status(&mut index)?.success() {
+    if !index.run()?.success() {
         return request_error("building the preview index failed");
     }
     Ok(())

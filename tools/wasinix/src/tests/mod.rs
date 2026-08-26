@@ -6289,6 +6289,28 @@ mod corpus {
         assert!(found.is_empty(), "{}", found.join("\n"));
     }
 
+    /// Raw commands remain only where a domain owns construction: Nix, Git,
+    /// OpenSSH, and the shared process implementation itself.
+    #[test]
+    fn generic_processes_use_process_requests() {
+        let raw_type = ["std::process::", "Command"].concat();
+        let raw_new = ["Command::", "new("].concat();
+        let found = offenders(
+            false,
+            &[
+                "support/tools.rs",
+                "support/process.rs",
+                "support/nix.rs",
+                "support/git.rs",
+                "nix/builder.rs",
+                "nix/buildset.rs",
+                "nix/route.rs",
+            ],
+            &[&raw_type, &raw_new],
+        );
+        assert!(found.is_empty(), "{}", found.join("\n"));
+    }
+
     /// Direct file creation is reserved for structured streams, finished
     /// archives, and the bounded log owner. A new live transcript must use
     /// support::log so its retention cannot be forgotten at one call site.
@@ -8645,7 +8667,7 @@ mod tools {
     use std::time::Duration;
 
     use crate::support::tools::{
-        Completion, Timeout, checked_text, output_timeout, piped, rendered, status_timeout,
+        Completion, Timeout, checked_text, output_timeout, rendered, status_timeout,
     };
 
     fn read_stream(mut stream: impl Read) -> crate::support::error::Result<Vec<u8>> {
@@ -8658,26 +8680,26 @@ mod tools {
 
     #[test]
     fn piped_commands_drain_both_streams_and_keep_the_status() {
-        let mut command = Command::new("sh");
+        let mut command = crate::support::tools::Process::new("sh");
         command.args(["-c", "printf stdout; printf stderr >&2; exit 17"]);
         let stdout = Arc::new(Mutex::new(Vec::new()));
         let stdout_writer = Arc::clone(&stdout);
         let stderr = Arc::new(Mutex::new(Vec::new()));
         let stderr_writer = Arc::clone(&stderr);
-        let status = piped(
-            &mut command,
-            None,
-            move |stream| {
-                *stdout_writer.lock().unwrap() = read_stream(stream)?;
-                Ok(())
-            },
-            move |stream| {
-                *stderr_writer.lock().unwrap() = read_stream(stream)?;
-                Ok(())
-            },
-        )
-        .unwrap()
-        .value();
+        let (mut child, readers) = command
+            .start_piped(
+                move |stream| {
+                    *stdout_writer.lock().unwrap() = read_stream(stream)?;
+                    Ok(())
+                },
+                move |stream| {
+                    *stderr_writer.lock().unwrap() = read_stream(stream)?;
+                    Ok(())
+                },
+            )
+            .unwrap();
+        let status = child.wait().unwrap();
+        readers.join().unwrap();
 
         assert_eq!(status.code(), Some(17));
         assert_eq!(*stdout.lock().unwrap(), b"stdout");
@@ -8801,11 +8823,19 @@ mod tools {
     fn dropping_a_managed_child_reaps_it() {
         let started = std::time::Instant::now();
         {
-            let mut command = Command::new("sh");
+            let mut command = crate::support::tools::Process::new("sh");
             command.args(["-c", "while :; do :; done"]);
-            let _child = crate::support::tools::spawn(&mut command).unwrap();
+            let _child = command.start().unwrap();
         }
         assert!(started.elapsed() < Duration::from_secs(2));
+    }
+
+    #[test]
+    fn a_process_request_reports_a_failed_spawn() {
+        let mut command = crate::support::tools::Process::new("wasinix-no-such-program");
+        let error = command.start().err().unwrap().to_string();
+        assert!(error.contains("wasinix-no-such-program"), "{error}");
+        assert!(error.contains("not on PATH"), "{error}");
     }
 }
 

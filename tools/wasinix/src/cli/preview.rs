@@ -35,7 +35,7 @@ fn delete_app(app: &str, registry: &str) -> Result<()> {
         .args(["app", "delete", app])
         .args(["--registry", registry, "--non-interactive"])
         .env("NO_COLOR", "1");
-    let output = crate::support::tools::output(&mut delete)?;
+    let output = delete.capture()?;
     if output.status.success() {
         ui::result(format!("deleted {app}"));
         return Ok(());
@@ -44,7 +44,7 @@ fn delete_app(app: &str, registry: &str) -> Result<()> {
         ui::note(format!("{app} does not exist"));
         return Ok(());
     }
-    crate::support::tools::check_output(&delete, &format!("deleting preview app {app}"), output)?;
+    delete.check_capture(&format!("deleting preview app {app}"), output)?;
     Ok(())
 }
 
@@ -176,7 +176,7 @@ fn prod_index_url() -> Option<String> {
     get.args(["app", "get", "wasmer/python-registry"])
         .args(["--registry", "wasmer.io"])
         .args(["--format", "json"]);
-    let output = crate::support::tools::output(&mut get).ok()?;
+    let output = get.capture().ok()?;
     if !output.status.success() {
         return None;
     }
