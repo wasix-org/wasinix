@@ -9,3 +9,4 @@ pub mod mutation;
 pub mod publish;
 pub mod sanitize;
 pub mod surfaces;
+pub mod update_pr;

@@ -60,6 +60,7 @@ struct PrShape {
     /// The comment that replays this branch; None for an arm no comment can
     /// spell, whose PR then advertises no refresh.
     recipe: Option<String>,
+    ownership: targets::Ownership,
 }
 
 /// The one mutation exit: PR upsert when asked, then the receipt or the
@@ -89,6 +90,7 @@ fn conclude(
                 base: mode.base.clone(),
                 managed: !mode.fork,
                 recipe: shape.recipe,
+                ownership: shape.ownership,
             },
         )?;
         ui::fact("pull request", number);
@@ -273,6 +275,7 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
                     branch: None,
                     title: None,
                     recipe: None,
+                    ownership: targets::Ownership::default(),
                 },
             )
         }
@@ -305,11 +308,19 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
                 .all
                 .then(|| "pins: automated source-pin bump".to_string());
             let recipe = args.comment_recipe();
-            let preflight = args
+            let preflight: Option<drive::Preflight> = args
                 .batch_preflight
                 .as_deref()
                 .map(schema::read)
                 .transpose()?;
+            let ownership = preflight
+                .as_ref()
+                .and_then(|preflight| {
+                    args.targets
+                        .first()
+                        .map(|spec| preflight.ownership_for(spec))
+                })
+                .unwrap_or_default();
             let changes = drive::drive(
                 &repo,
                 drive::Options {
@@ -329,6 +340,7 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
                     branch,
                     title,
                     recipe,
+                    ownership,
                 },
             )
         }
@@ -459,6 +471,7 @@ pub fn run_versions(command: VersionsCommand) -> Result<CommandStatus> {
                     branch: Some(branch),
                     title: Some("pkgs: backfill registry history".into()),
                     recipe: None,
+                    ownership: targets::Ownership::default(),
                 },
             )
         }
@@ -478,6 +491,7 @@ pub fn run_versions(command: VersionsCommand) -> Result<CommandStatus> {
                     branch: Some("auto/backfill-import".into()),
                     title: Some("pkgs: backfill registry history".into()),
                     recipe: None,
+                    ownership: targets::Ownership::default(),
                 },
             )
         }
@@ -509,6 +523,7 @@ pub fn run_versions(command: VersionsCommand) -> Result<CommandStatus> {
                     branch: Some("auto/bump-rel".into()),
                     title: Some("pkgs: bump publication releases".into()),
                     recipe,
+                    ownership: targets::Ownership::default(),
                 },
             )
         }
