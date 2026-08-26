@@ -105,6 +105,7 @@ pub fn publish_from_run(
     run_dir: &Path,
     case_id: &str,
     effects: crate::support::effects::Effects,
+    update: Option<(&str, &crate::update::snapshot::Snapshot)>,
 ) -> Result<()> {
     let paths = crate::ci::prepare::case_dir(run_dir, case_id);
     let eval_map = crate::ci::prepare::eval_map_path(&paths);
@@ -148,13 +149,16 @@ pub fn publish_from_run(
             .unwrap_or_default();
     junits.sort();
     let coverage: Vec<JobAddr> = status.keys().cloned().collect();
-    let document = publish_document(
+    let mut document = publish_document(
         &mapping,
         &status,
         &coverage,
         &crate::ci::facts::metrics(&junits).build_seconds,
         &task_timings(run_dir, case_id),
     );
+    if let Some((_, snapshot)) = update.filter(|(tree, _)| *tree == manifest.tree) {
+        document.update_snapshot = Some(snapshot.clone());
+    }
     let scratch = crate::support::fs::Scratch::create("wasinix-baseline")?;
     let file = scratch.path().join("eval-map.json");
     crate::support::schema::write(&file, &document)?;

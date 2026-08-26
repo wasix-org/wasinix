@@ -346,11 +346,16 @@ fn prepare(
     std::thread::scope(|scope| {
         scope.spawn(move || {
             let result = (|| {
-                let targets = crate::update::targets::all_targets(repo)?;
+                let snapshot = crate::update::snapshot::load(repo)?;
+                let targets = crate::update::targets::all_targets(repo, &snapshot)?;
                 let items = work_items(&targets, all, specs)?;
                 let release_work = items.iter().any(|item| item.release_work);
-                let preflight =
-                    crate::update::drive::Preflight::collect(repo, targets, release_work)?;
+                let preflight = crate::update::drive::Preflight::collect(
+                    repo,
+                    targets,
+                    &snapshot,
+                    release_work,
+                )?;
                 Ok((items, preflight))
             })();
             let _ = sender.send(result);

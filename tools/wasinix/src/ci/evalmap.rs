@@ -246,10 +246,8 @@ pub struct EvalMap {
     pub groups: BTreeMap<String, SelectorGroup>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub sources: BTreeMap<String, Vec<String>>,
-    /// Update-note versions as of this evaluation; a later run diffs against
-    /// them to decide which notes fired.
-    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
-    pub note_versions: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub update_snapshot: Option<crate::update::snapshot::Snapshot>,
     /// Per-job status, present only on a published baseline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<StatusMap>,

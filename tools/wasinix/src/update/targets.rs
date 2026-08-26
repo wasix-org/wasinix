@@ -9,7 +9,7 @@ use serde_json::Value;
 
 use crate::support::error::{Result, request_error};
 use crate::support::naming::{self, Domain};
-use crate::support::nix::{Flake, eval, project_attr};
+use crate::support::nix::project_attr;
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -223,12 +223,7 @@ pub(crate) fn dedupe(declared: Vec<Target>) -> Vec<Target> {
     targets
 }
 
-pub fn discovered_targets(repo: &Path) -> Result<Vec<Target>> {
-    let declared = eval(
-        &Flake::default(),
-        "internals.repository.updates.updateScripts",
-        None,
-    )?;
+pub fn discovered_targets(repo: &Path, declared: &Value) -> Result<Vec<Target>> {
     let mut targets: Vec<Target> = Vec::new();
     for (attr, value) in declared.as_object().into_iter().flatten() {
         targets.push(declared_target(repo, attr, value)?);
@@ -237,12 +232,7 @@ pub fn discovered_targets(repo: &Path) -> Result<Vec<Target>> {
 }
 
 /// Package-declared post-update operations, deduped across profile attrs.
-pub fn discovered_post_update_hooks() -> Result<Vec<PostUpdateHook>> {
-    let declared = eval(
-        &Flake::default(),
-        "internals.repository.updates.postUpdateHooks",
-        None,
-    )?;
+pub fn discovered_post_update_hooks(declared: &Value) -> Result<Vec<PostUpdateHook>> {
     let mut hooks: BTreeMap<String, PostUpdateHook> = BTreeMap::new();
     for (attr, value) in declared.as_object().into_iter().flatten() {
         let hook = declared_post_update_hook(attr, value)?;
@@ -258,8 +248,11 @@ pub fn discovered_post_update_hooks() -> Result<Vec<PostUpdateHook>> {
     Ok(hooks.into_values().collect())
 }
 
-pub fn all_targets(repo: &Path) -> Result<Vec<Target>> {
-    let mut targets = discovered_targets(repo)?;
+pub fn all_targets(
+    repo: &Path,
+    snapshot: &crate::update::snapshot::Snapshot,
+) -> Result<Vec<Target>> {
+    let mut targets = discovered_targets(repo, &snapshot.update_scripts)?;
     for mut target in builtin_targets() {
         if target.backend == Backend::FlakeInput {
             let locked = crate::update::flake_lock::locked_input(repo, &target.input)?;

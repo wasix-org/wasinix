@@ -44,11 +44,22 @@ impl crate::support::schema::Document for Preflight {
 }
 
 impl Preflight {
-    pub fn collect(repo: &Path, targets: Vec<Target>, release_work: bool) -> Result<Preflight> {
+    pub fn collect(
+        repo: &Path,
+        targets: Vec<Target>,
+        snapshot: &crate::update::snapshot::Snapshot,
+        release_work: bool,
+    ) -> Result<Preflight> {
         let revision = crate::support::git::git(repo, &["rev-parse", "HEAD"])?;
-        let prior_hooks = targets::discovered_post_update_hooks()?;
+        let prior_hooks = targets::discovered_post_update_hooks(&snapshot.post_update_hooks)?;
         let (priors, history_priors) = if release_work {
-            retention::prior_state(repo)?
+            if !snapshot.notes.ok {
+                ui::warning("note version eval failed");
+            }
+            (
+                snapshot.notes.value.clone(),
+                snapshot.served_versions.clone(),
+            )
         } else {
             (Value::Null, Versions::new())
         };
@@ -218,7 +229,8 @@ fn run_hooks(
     committer: Option<&crate::support::git::Identity<'_>>,
 ) -> Result<ChangeSet> {
     let mut changes = ChangeSet::default();
-    let hooks = targets::discovered_post_update_hooks()?
+    let snapshot = crate::update::snapshot::load(repo)?;
+    let hooks = targets::discovered_post_update_hooks(&snapshot.post_update_hooks)?
         .into_iter()
         .map(|hook| (hook, None))
         .collect();
@@ -254,25 +266,17 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
     if !options.all && options.targets.is_empty() {
         return request_error("update needs --all or at least one target");
     }
-    let (prior_hooks, mut targets, shared_priors) = match options.preflight {
-        Some(preflight) => {
-            preflight.validate(repo)?;
-            (
-                preflight.prior_hooks,
-                preflight.targets,
-                Some((
-                    preflight.release_priors,
-                    preflight.priors,
-                    preflight.history_priors,
-                )),
-            )
+    let preflight = match options.preflight {
+        Some(preflight) => preflight,
+        None => {
+            let snapshot = crate::update::snapshot::load(repo)?;
+            let targets = targets::all_targets(repo, &snapshot)?;
+            Preflight::collect(repo, targets, &snapshot, true)?
         }
-        None => (
-            targets::discovered_post_update_hooks()?,
-            targets::all_targets(repo)?,
-            None,
-        ),
     };
+    preflight.validate(repo)?;
+    let prior_hooks = preflight.prior_hooks;
+    let mut targets = preflight.targets;
     let domain = targets::domain(&targets);
     let (wanted, requests) = select::target_requests(&targets, &domain, &options.targets)?;
     if !options.all {
@@ -289,17 +293,14 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
     // A transient eval failure here must abort: retention diffs against these
     // versions, and starting from an empty map means retaining nothing while
     // the prune still runs. Both views come from one package-set evaluation.
-    let (priors, history_priors): (Value, Versions) =
-        if let Some((available, priors, versions)) = shared_priors {
-            if release_work && !available {
-                return request_error("update preflight carries no release priors");
-            }
-            (priors, versions)
-        } else if release_work {
-            retention::prior_state(repo)?
-        } else {
-            (Value::Null, Versions::new())
-        };
+    if release_work && !preflight.release_priors {
+        return request_error("update preflight carries no release priors");
+    }
+    let (priors, history_priors) = if release_work {
+        (preflight.priors, preflight.history_priors)
+    } else {
+        (Value::Null, Versions::new())
+    };
 
     // One flaky upstream must not abort the rest: isolate each target,
     // collect failures, and let the caller exit non-zero at the end.
@@ -357,11 +358,23 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
     }
 
     let release_changed = release_followups(&changes, release_work);
+    let current_snapshot = if changes.changed() {
+        Some(crate::update::snapshot::evaluate(repo)?)
+    } else {
+        None
+    };
 
     // Retain before pruning: the prune drops the rel key of any version no
     // longer served, which is exactly what retention just brought back.
     if release_changed {
-        match retention::regen_history(repo, &history_priors) {
+        match retention::regen_history(
+            repo,
+            &history_priors,
+            &current_snapshot
+                .as_ref()
+                .expect("a release change has current update state")
+                .served_versions,
+        ) {
             Ok(Some(retained)) => {
                 let entry = Entry {
                     kind: EntryKind::Retain,
@@ -411,10 +424,18 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
 
     // Package-declared re-syncs last, after any release-only history work.
     if changes.changed() {
-        let hooks = changed_hooks(&prior_hooks, targets::discovered_post_update_hooks()?)
-            .into_iter()
-            .map(|(hook, prior)| (hook, Some(prior)))
-            .collect();
+        let hooks = changed_hooks(
+            &prior_hooks,
+            targets::discovered_post_update_hooks(
+                &current_snapshot
+                    .as_ref()
+                    .expect("changed updates have current update state")
+                    .post_update_hooks,
+            )?,
+        )
+        .into_iter()
+        .map(|(hook, prior)| (hook, Some(prior)))
+        .collect();
         hook_stage(repo, &mut changes, options.commit, committer, hooks)?;
     }
 

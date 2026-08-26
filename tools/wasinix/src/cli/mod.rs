@@ -435,6 +435,9 @@ pub enum CiCommand {
         /// Publish every built case's eval map for future reuse
         #[arg(long)]
         baseline: bool,
+        /// Attach the current tree's update state to its published eval map
+        #[arg(long, requires = "baseline")]
+        update_snapshot: bool,
         /// Publish the comment as a reply keyed to this command comment
         /// instead of the sticky report
         #[arg(long)]
@@ -1561,6 +1564,7 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
             check,
             step_summary,
             baseline,
+            update_snapshot,
             reply_to,
             untrusted,
             watch,
@@ -1579,6 +1583,14 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 // materialized trees, so heads and bases alike serve later
                 // runs. A case adopted from a published map is already there.
                 let loaded = crate::ci::prepare::load(&run_dir)?;
+                let cached_update = if update_snapshot {
+                    Some((
+                        crate::support::git::git(&repo, &["rev-parse", "HEAD^{tree}"])?,
+                        crate::update::snapshot::evaluate(&repo)?,
+                    ))
+                } else {
+                    None
+                };
                 for case in loaded.request.cases() {
                     let id = case.case_id();
                     if !matches!(case, crate::ci::types::CaseRef::Build(_)) {
@@ -1587,7 +1599,14 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                     if loaded.preparation.reused.iter().any(|reused| reused == id) {
                         continue;
                     }
-                    crate::ci::baseline::publish_from_run(&run_dir, id, effects)?;
+                    crate::ci::baseline::publish_from_run(
+                        &run_dir,
+                        id,
+                        effects,
+                        cached_update
+                            .as_ref()
+                            .map(|(tree, snapshot)| (tree.as_str(), snapshot)),
+                    )?;
                 }
             }
             if !comment && !check && step_summary.is_none() {

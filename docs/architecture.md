@@ -221,7 +221,9 @@ one is a compile error or a test failure, not a review comment.
   machine-output exit. `Effects{Apply,DryRun}` gates every outward writer at the
   write itself.
 - `cli/update.rs::MutationMode` + `conclude`: every tree mutation's flags and
-  exit; `update/managed.rs` is the managed-PR record.
+  exit; `update/managed.rs` is the managed-PR record, and `update/snapshot.rs`
+  is the typed, tree-keyed Nix view shared by discovery, preflight, hooks, and
+  retention.
 - `cargo-registry-wire`: the Cargo publish payload and sparse-index record come
   from one normalized-manifest translation. The narrow crate is also the
   derivation-facing binary, so foundational checks never depend on the main CLI.

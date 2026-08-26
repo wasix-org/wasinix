@@ -13,6 +13,7 @@ pub mod rels;
 pub mod request;
 pub mod retention;
 pub mod select;
+pub mod snapshot;
 pub mod sync;
 pub mod targets;
 

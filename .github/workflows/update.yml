@@ -17,6 +17,10 @@ on:
         description: "--base: the branch the PRs target (blank = this ref)"
         required: false
         default: ""
+      jobs:
+        description: "Maximum updates running at once"
+        required: false
+        default: "4"
 
 permissions:
   contents: write
@@ -43,6 +47,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
           TARGETS: ${{ github.event.inputs.targets }}
           BASE: ${{ github.event.inputs.base }}
+          JOBS: ${{ github.event.inputs.jobs || 4 }}
         run: |
           targets=()
           if [ -n "$TARGETS" ]; then
@@ -50,5 +55,5 @@ jobs:
           else
             targets=(--all)
           fi
-          nix run .#update -- "${targets[@]}" --pr --jobs 4 \
+          nix run .#update -- "${targets[@]}" --pr --jobs "$JOBS" \
             --base "${BASE:-$GITHUB_REF_NAME}"
