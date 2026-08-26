@@ -197,18 +197,29 @@
       wasinix-capability-rclone = wasinixCapabilities.rclone;
       wasinix-capability-wasmer = wasinixCapabilities.wasmer;
     };
-    devShells.${system}.default = pkgs.mkShell {
-      packages = [
-        wasinix
-        project.packages.native.cargo-wasix
-        project.packages.native.wasixcc
-        project.packages.wasix.preferred.ncurses
-        pkgs.gnumake
-        pkgs.pkg-config
-        project.packages.native.wasmer
-        pkgs.nix-eval-jobs
-        pkgs.nixVersions.latest
-      ];
+    devShells.${system} = {
+      default = pkgs.mkShell {
+        packages = [
+          wasinix
+          pkgs.nixVersions.latest
+          project.packages.native.wasmer
+        ];
+      };
+      building = pkgs.mkShell {
+        packages = [
+          wasinix
+          pkgs.nixVersions.latest
+          project.packages.native.wasmer
+
+          project.packages.native.cargo-wasix
+          project.packages.native.wasixcc
+
+          project.packages.wasix.preferred.ncurses
+
+          pkgs.gnumake
+          pkgs.pkg-config
+        ];
+      };
     };
   };
 }
