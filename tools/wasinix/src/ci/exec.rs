@@ -111,6 +111,29 @@ mod artifact_tests {
         let scan = ["tree_", "bytes("].concat();
         assert!(!source.contains(&scan));
     }
+
+    #[test]
+    fn authoritative_evaluation_reuses_the_input_catalog() {
+        let source = include_str!("exec.rs");
+        let input = source
+            .split("\nfn eval_inputs(")
+            .nth(1)
+            .unwrap()
+            .split("pub(crate) fn selector_catalog(")
+            .next()
+            .unwrap();
+        let evaluation = source
+            .split("\nfn evaluate(")
+            .nth(1)
+            .unwrap()
+            .split("/// Resolve a spot case")
+            .next()
+            .unwrap();
+        assert!(input.contains("selector_catalog_path"));
+        assert!(input.contains("support::json::write"));
+        assert!(evaluation.contains("selector_catalog_path"));
+        assert!(!evaluation.contains("selector_catalog(worktree"));
+    }
 }
 
 /// The tail of a log as fragment content. The full file stays in the run
@@ -146,7 +169,11 @@ fn eval_inputs(
     let case_id = case.case_id();
     let logs = crate::ci::prepare::logs_dir(&case_dir(ctx.run_dir, case_id)).join("eval-inputs");
     let attr = format!("path:.#{}", crate::support::nix::project_attr("ci.jobs"));
-    let catalog = selector_catalog(worktree, route)?.into_map();
+    let selector_catalog = selector_catalog(worktree, route)?;
+    let catalog_path = crate::ci::prepare::selector_catalog_path(&case_dir(ctx.run_dir, case_id));
+    crate::support::json::write(&catalog_path, &selector_catalog)?;
+    artifacts.record(&catalog_path)?;
+    let catalog = selector_catalog.into_map();
     let selected: Vec<String> = crate::ci::compare::selected(case, &catalog)?
         .into_iter()
         .collect();
@@ -264,7 +291,10 @@ fn evaluate(
     let case_id = case.case_id();
     let maps = crate::ci::prepare::maps_dir(&case_dir(ctx.run_dir, case_id));
     let attr = format!("path:.#{}", crate::support::nix::project_attr("ci.jobs"));
-    let catalog = selector_catalog(worktree, route)?.into_map();
+    let catalog: crate::ci::evalmap::SelectorCatalog = crate::support::json::read(
+        &crate::ci::prepare::selector_catalog_path(&case_dir(ctx.run_dir, case_id)),
+    )?;
+    let catalog = catalog.into_map();
     let selected: Vec<String> = crate::ci::compare::selected(case, &catalog)?
         .into_iter()
         .collect();
