@@ -1866,10 +1866,6 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 ui::note("managed pull request is not an update");
                 return Ok(CommandStatus::SUCCESS);
             }
-            if !state.auto_merge || crate::update::managed::paused(&state, &pull.head_sha) {
-                ui::note("managed update is not eligible for auto-merge");
-                return Ok(CommandStatus::SUCCESS);
-            }
             let report: crate::ci::report::Report =
                 schema::read(&crate::ci::prepare::report_path(&run_dir))?;
             crate::support::error::require(report.complete, "CI report is incomplete")?;
@@ -1887,7 +1883,11 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
                 comparison.eval.is_some(),
                 "CI report has no evaluated diff",
             )?;
-            crate::github::update_pr::enable_auto_merge(&client, &pull)?;
+            if state.auto_merge && !crate::update::managed::paused(&state, &pull.head_sha) {
+                crate::github::update_pr::enable_auto_merge(&client, &pull)?;
+            } else {
+                ui::note("managed update is not eligible for auto-merge");
+            }
             Ok(CommandStatus::SUCCESS)
         }
         CiCommand::StepTimings {
