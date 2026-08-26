@@ -230,7 +230,8 @@ pub struct JobCensus {
     /// Answered by a reused baseline, so never part of this run's build.
     pub reused: usize,
     pub to_build: usize,
-    pub to_fetch: usize,
+    #[serde(rename = "toFetch")]
+    pub substitutable: usize,
     pub present: usize,
     pub built: usize,
     pub failed: usize,
@@ -244,7 +245,7 @@ impl JobCensus {
         let mut parts = vec![format!("{} selected", self.selected)];
         for (count, label) in [
             (self.built, "built"),
-            (self.to_fetch, "fetched"),
+            (self.substitutable, "skipped (cached)"),
             (self.present, "already present"),
             (self.reused, "reused"),
             (self.failed, "failed"),

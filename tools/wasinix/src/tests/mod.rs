@@ -2946,7 +2946,7 @@ mod markdown {
             selected: 5340,
             reused: 0,
             to_build: 128,
-            to_fetch: 5100,
+            substitutable: 5100,
             present: 112,
             built: 128,
             failed: 0,
@@ -2954,8 +2954,11 @@ mod markdown {
         };
         assert_eq!(
             crate::support::ui::counts(&warm.parts()),
-            "5340 selected · 128 built · 5100 fetched · 112 already present"
+            "5340 selected · 128 built · 5100 skipped (cached) · 112 already present"
         );
+        let encoded = serde_json::to_value(&warm).unwrap();
+        assert_eq!(encoded["toFetch"], 5100);
+        assert!(encoded.get("substitutable").is_none());
         // A blocked selector build says so without inventing a green count.
         let blocked = JobCensus {
             selected: 1,
@@ -6222,7 +6225,7 @@ mod corpus {
             .unwrap()
             .1;
         assert!(!source.contains("root_cached_inputs"));
-        assert_eq!(source.matches("plan.fetched.contains").count(), 2);
+        assert_eq!(source.matches("plan.substitutable.contains").count(), 2);
         assert_eq!(source.matches("uploader.push(").count(), 3);
         assert!(source.contains("uploader.push(report.push.clone())"));
         assert!(source.contains("uploader.push(spec.outputs.clone())"));
@@ -9166,9 +9169,9 @@ mod buildset {
             ["/nix/store/a.drv", "/nix/store/b.drv"]
         );
         assert_eq!(
-            plan.fetched.iter().collect::<Vec<_>>(),
+            plan.substitutable.iter().collect::<Vec<_>>(),
             ["/nix/store/c", "/nix/store/d", "/nix/store/e"],
-            "the fetch set separates substitutable from locally valid"
+            "the substitutable set is separate from locally valid paths"
         );
         let singular = "this derivation will be built:\n  /nix/store/only.drv\n";
         assert_eq!(dry_run_plan(singular).unwrap().to_build.len(), 1);

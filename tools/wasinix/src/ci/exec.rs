@@ -1056,7 +1056,7 @@ fn run_build_tasks(
             selected: spec.jobs.len(),
             reused,
             to_build,
-            to_fetch: planned(crate::nix::buildset::Planned::Fetch),
+            substitutable: planned(crate::nix::buildset::Planned::Substitutable),
             present: planned(crate::nix::buildset::Planned::Present),
             built: to_build.saturating_sub(failed + blocked),
             failed,

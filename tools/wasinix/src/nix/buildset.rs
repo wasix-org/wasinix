@@ -36,7 +36,7 @@ pub struct UnionRequest<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Planned {
     Build,
-    Fetch,
+    Substitutable,
     Present,
 }
 
@@ -184,7 +184,7 @@ struct JobSpec {
 /// set is already valid locally.
 pub(crate) struct DryRunPlan {
     pub(crate) to_build: BTreeSet<String>,
-    pub(crate) fetched: BTreeSet<String>,
+    pub(crate) substitutable: BTreeSet<String>,
 }
 
 /// Parse `nix-store --realise --dry-run` output. Everything outside the
@@ -193,7 +193,7 @@ pub(crate) struct DryRunPlan {
 /// nothing.
 pub(crate) fn dry_run_plan(plan: &str) -> Result<DryRunPlan> {
     let mut to_build = BTreeSet::new();
-    let mut fetched = BTreeSet::new();
+    let mut substitutable = BTreeSet::new();
     let mut in_build_section = false;
     let mut in_fetch_section = false;
     let mut recognized = false;
@@ -220,7 +220,7 @@ pub(crate) fn dry_run_plan(plan: &str) -> Result<DryRunPlan> {
                 to_build.insert(trimmed.to_string());
             }
             if in_fetch_section {
-                fetched.insert(trimmed.to_string());
+                substitutable.insert(trimmed.to_string());
             }
             continue;
         }
@@ -234,7 +234,10 @@ pub(crate) fn dry_run_plan(plan: &str) -> Result<DryRunPlan> {
             crate::support::error::tail(plan, 500)
         )));
     }
-    Ok(DryRunPlan { to_build, fetched })
+    Ok(DryRunPlan {
+        to_build,
+        substitutable,
+    })
 }
 
 /// A derivation whose builder failed, as nix reported it. The realise
@@ -411,7 +414,7 @@ pub(crate) fn prebuilt_partition(
         }
         let local: Vec<String> = outputs
             .iter()
-            .filter(|output| !plan.fetched.contains(*output))
+            .filter(|output| !plan.substitutable.contains(*output))
             .cloned()
             .collect();
         if local.is_empty() {
@@ -711,9 +714,9 @@ pub fn build_union(
         } else if spec
             .outputs
             .iter()
-            .any(|output| plan.fetched.contains(output))
+            .any(|output| plan.substitutable.contains(output))
         {
-            Planned::Fetch
+            Planned::Substitutable
         } else {
             Planned::Present
         };
@@ -735,9 +738,9 @@ pub fn build_union(
     crate::support::ui::fact(
         "build plan",
         format!(
-            "{} to build · {} to fetch · {} present",
+            "{} to build · {} available from cache · {} already present",
             count(Planned::Build),
-            count(Planned::Fetch),
+            count(Planned::Substitutable),
             count(Planned::Present)
         ),
     );
