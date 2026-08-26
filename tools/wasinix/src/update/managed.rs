@@ -21,6 +21,9 @@ pub struct State {
     /// This update had no fired notes when the bot created its managed state.
     #[serde(default)]
     pub auto_merge: bool,
+    /// A person re-enabled auto-merge after automation gave up ownership.
+    #[serde(default)]
+    pub manual_auto_merge: bool,
 }
 
 impl State {
@@ -35,6 +38,7 @@ impl State {
             recipe,
             rewrite_safe_head: head,
             auto_merge: false,
+            manual_auto_merge: false,
         })
     }
 }
@@ -61,6 +65,7 @@ pub fn decode(body: &str) -> Result<Option<State>> {
     require(state.schema == 1, "unsupported managed PR state schema")?;
     let mut validated = State::new(state.recipe, state.rewrite_safe_head)?;
     validated.auto_merge = state.auto_merge;
+    validated.manual_auto_merge = state.manual_auto_merge;
     Ok(Some(validated))
 }
 
@@ -97,6 +102,26 @@ pub fn with_state(body: &str, state: &State) -> Result<String> {
 /// branch has moved past it, so a refresh would replace someone's commits.
 pub fn paused(state: &State, head_sha: &str) -> bool {
     !state.rewrite_safe_head.is_empty() && !state.rewrite_safe_head.eq_ignore_ascii_case(head_sha)
+}
+
+/// Stop treating auto-merge as automation-owned after a person changes the
+/// branch. A later explicit enablement records a separate human choice.
+pub fn revoke_automatic_auto_merge(state: &mut State, head_sha: &str) -> bool {
+    if !state.auto_merge || state.manual_auto_merge || !paused(state, head_sha) {
+        return false;
+    }
+    state.auto_merge = false;
+    true
+}
+
+/// Record a person opting into auto-merge only after automation no longer
+/// owns that setting. The initial bot enablement therefore remains automatic.
+pub fn record_manual_auto_merge(state: &mut State) -> bool {
+    if state.auto_merge || state.manual_auto_merge {
+        return false;
+    }
+    state.manual_auto_merge = true;
+    true
 }
 
 /// A bare `update` or a `regenerate` replays the recorded recipe; refuse

@@ -2,7 +2,7 @@ name: Reconcile update pull request
 
 on:
   pull_request_target:
-    types: [opened, reopened, synchronize]
+    types: [synchronize, auto_merge_enabled]
 
 permissions:
   contents: read
@@ -26,4 +26,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.UPDATE_PR_TOKEN || github.token }}
           PULL_REQUEST: ${{ github.event.pull_request.number }}
-        run: nix run .#ci -- reconcile-managed-update --pull-request "$PULL_REQUEST"
+        run:
+          nix run .#ci -- reconcile-managed-update --event "${{
+          github.event.action }}" --pull-request "$PULL_REQUEST"

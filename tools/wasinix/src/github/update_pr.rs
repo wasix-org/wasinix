@@ -30,6 +30,21 @@ pub fn disable_auto_merge(client: &Client, pull: &crate::github::mutation::Pull)
     Ok(())
 }
 
+pub fn record_state(
+    client: &Client,
+    repository: &str,
+    pull_request: u64,
+    body: &str,
+    state: &crate::update::managed::State,
+) -> Result<()> {
+    let body = crate::update::managed::with_state(body, state)?;
+    client.patch(
+        &format!("repos/{repository}/pulls/{pull_request}"),
+        &json!({ "body": body }),
+    )?;
+    Ok(())
+}
+
 /// Apply facts that come from the update declaration, never from a branch
 /// name or title. GitHub additions are idempotent, so replaying an update
 /// reasserts the contract without touching unrelated labels or reviewers.
