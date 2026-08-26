@@ -1,0 +1,14 @@
+diff --git a/gnulib-tests/test-sys_socket-h.c b/gnulib-tests/test-sys_socket-h.c
+index 155bc36..616ed5c 100644
+--- a/gnulib-tests/test-sys_socket-h.c
++++ b/gnulib-tests/test-sys_socket-h.c
+@@ -135,7 +135,9 @@ main (void)
+     {
+     case SO_ACCEPTCONN:
+     case SO_BROADCAST:
++#ifdef SO_DEBUG
+     case SO_DEBUG:
++#endif
+ #ifdef SO_DOMAIN
+     case SO_DOMAIN:
+ #endif
