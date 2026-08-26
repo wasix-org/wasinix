@@ -7,7 +7,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::support::error::{Result, request_error};
+use crate::support::error::{request_error, Result};
 use crate::support::naming::{self, Domain};
 use crate::support::nix::project_attr;
 
@@ -44,8 +44,14 @@ pub struct Target {
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Ownership {
-    pub assignees: Vec<String>,
-    pub reviewers: Vec<String>,
+    pub assignees: Vec<Maintainer>,
+    pub reviewers: Vec<Maintainer>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Maintainer {
+    pub github: String,
 }
 
 impl Target {

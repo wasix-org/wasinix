@@ -123,7 +123,7 @@
         "package ownership.${field} must be a list"
         (lib.throwIf (!(lib.all (value: builtins.elem value known) values))
           "package ownership.${field} contains a maintainer outside source '${toString source}'"
-          (map (value: value.github) values));
+          values);
     in
       lib.throwIf (!lib.isAttrs declared || lib.isDerivation declared)
       "package ownership must be an attribute set"
