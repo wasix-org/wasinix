@@ -642,6 +642,12 @@
   };
   unitExtension = {
     id = "unit-consumer";
+    ownership = let
+      maintainers.janeDoe.github = "jane-doe";
+    in {
+      inherit maintainers;
+      teams.php = [maintainers.janeDoe];
+    };
     overlays = projectApi.loadPackageOverlays {
       packages = {
         directory = ./tests/project-units;
@@ -849,6 +855,29 @@
     system = "test-system";
     importNixpkgs = fakeImportNixpkgs;
     extensions = [consumerExtension consumerExtension];
+  };
+  invalidMaintainerOwnership = projectApi.mkProject {
+    system = "test-system";
+    importNixpkgs = fakeImportNixpkgs;
+    extensions = [
+      {
+        id = "invalid-maintainer";
+        ownership.maintainers.invalid.github = "";
+      }
+    ];
+  };
+  invalidTeamOwnership = projectApi.mkProject {
+    system = "test-system";
+    importNixpkgs = fakeImportNixpkgs;
+    extensions = [
+      {
+        id = "invalid-team";
+        ownership = {
+          maintainers.janeDoe.github = "jane-doe";
+          teams.php = [{github = "outside-registry";}];
+        };
+      }
+    ];
   };
   aliasCollisionProject = projectApi.mkProject {
     system = "test-system";
@@ -1459,6 +1488,9 @@ in {
       preferredPackageSetName = project.packages.wasix.default.uses-inherited.passthru.preferredPackageSetName;
       topLevelPreferredPackageSetAbsent = project.packages.wasix.default.uses-inherited.passthru.topLevelPreferredPackageSetAbsent;
       runnerContextName = project.packages.wasix.default.uses-inherited.passthru.runnerContextName;
+      maintainerLogin = project.packages.wasix.default.uses-inherited.passthru.maintainerLogin;
+      reviewerLogins = project.packages.wasix.default.uses-inherited.passthru.reviewerLogins;
+      ownership = project.ownership."unit-consumer";
       runnerName = project.runners.rawWasm.unbound.name;
       pythonHarnessAvailable = project.harnesses ? python;
       ifdProbe = project.probes.ifd.passthru.text;
@@ -1500,6 +1532,8 @@ in {
       testContextName = project.tests."tests.packages.wasix.default.consumer.probe".name;
       unknownCiSourceFails = !(force unknownCiSource).success;
       duplicateExtensionFails = !(force duplicateExtension).success;
+      invalidMaintainerOwnershipFails = !(force invalidMaintainerOwnership).success;
+      invalidTeamOwnershipFails = !(force invalidTeamOwnership).success;
       aliasCollisionFails = !(force aliasCollisionProject).success;
       duplicateProjectionFails = !(force duplicateProjectionProject.tests).success;
       duplicateArtifactFails = !(force duplicateArtifactProject.artifacts).success;
@@ -1570,6 +1604,12 @@ in {
       preferredPackageSetName = "core";
       topLevelPreferredPackageSetAbsent = true;
       runnerContextName = "raw-wasm-unbound";
+      maintainerLogin = "jane-doe";
+      reviewerLogins = ["jane-doe"];
+      ownership = {
+        maintainers.janeDoe.github = "jane-doe";
+        teams.php = [{github = "jane-doe";}];
+      };
       runnerName = "raw-wasm-unbound";
       pythonHarnessAvailable = true;
       ifdProbe = "ok";
@@ -1705,6 +1745,8 @@ in {
       testContextName = "probe-consumer-default-0.9";
       unknownCiSourceFails = true;
       duplicateExtensionFails = true;
+      invalidMaintainerOwnershipFails = true;
+      invalidTeamOwnershipFails = true;
       aliasCollisionFails = true;
       duplicateProjectionFails = true;
       duplicateArtifactFails = true;

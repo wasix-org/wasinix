@@ -107,6 +107,7 @@ The result starts with:
   artifacts = ...;
   runners = ...;
   probes = ...;
+  ownership = ...;
   tests = ...;
   ci = ...;
 }
@@ -183,6 +184,31 @@ an error when there is no preceding registered owner. Repeated layering inside
 one extension needs no declaration; providing one there is an error.
 
 Lineage is derived from the validated overlay chain. It is never handwritten.
+
+### Ownership
+
+An extension may register maintainers and logical review teams. These are
+project-policy identities, not nixpkgs `meta.maintainers`, and a team does not
+need a corresponding GitHub team:
+
+```nix
+{
+  id = "my-project";
+
+  ownership = let
+    maintainers.janeDoe.github = "jane-doe";
+  in {
+    inherit maintainers;
+    teams.php = [maintainers.janeDoe];
+  };
+}
+```
+
+Each maintainer is exactly `{ github = <nonempty login>; }`; each team is a list
+of values from that extension's maintainer registry. Package units receive their
+owning extension's `maintainers` and `teams` arguments, so package policy
+references the typed central values instead of repeating GitHub logins. The
+project exposes the contributions as `ownership.<extension-id>`.
 
 ## File layout and discovery
 

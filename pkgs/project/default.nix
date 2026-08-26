@@ -34,6 +34,40 @@
   extensionError = extension: message:
     throw "Wasinix extension '${extension.id}' ${message}";
 
+  ownershipFor = extension: extension.ownership or {};
+  maintainerFor = extension: name: value:
+    lib.throwIf (
+      !lib.isAttrs value
+      || lib.isDerivation value
+      || lib.attrNames value != ["github"]
+      || !builtins.isString (value.github or null)
+      || value.github == ""
+    )
+    "Wasinix extension '${extension.id}' maintainer '${name}' must be { github = <nonempty login>; }"
+    value;
+  teamFor = extension: maintainers: name: members:
+    lib.throwIf (!builtins.isList members)
+    "Wasinix extension '${extension.id}' team '${name}' must be a list of maintainers"
+    (lib.throwIf (!(lib.all (member: builtins.elem member (lib.attrValues maintainers)) members))
+      "Wasinix extension '${extension.id}' team '${name}' contains a maintainer outside its registry"
+      members);
+  validateOwnership = extension: let
+    ownership = ownershipFor extension;
+    unknown = lib.subtractLists ["maintainers" "teams"] (lib.attrNames ownership);
+    maintainers = ownership.maintainers or {};
+    teams = ownership.teams or {};
+  in
+    lib.throwIf (!lib.isAttrs ownership || lib.isDerivation ownership)
+    "Wasinix extension '${extension.id}' ownership must be an attribute set"
+    (lib.throwIf (unknown != [])
+      "Wasinix extension '${extension.id}' ownership has unknown field(s): ${lib.concatStringsSep ", " unknown}"
+      (lib.throwIf (!lib.isAttrs maintainers || lib.isDerivation maintainers)
+        "Wasinix extension '${extension.id}' ownership.maintainers must be an attribute set"
+        (lib.throwIf (!lib.isAttrs teams || lib.isDerivation teams)
+          "Wasinix extension '${extension.id}' ownership.teams must be an attribute set"
+          (builtins.deepSeq (lib.mapAttrs (maintainerFor extension) maintainers)
+            (builtins.deepSeq (lib.mapAttrs (teamFor extension maintainers) teams) extension)))));
+
   declaredOverlayFor = {
     contextFor,
     declared,
@@ -87,7 +121,7 @@
       "Wasinix extension '${id}' has unknown overlay lane(s): ${lib.concatStringsSep ", " invalidLanes}"
       (lib.throwIf (invalidHistory != [])
         "Wasinix extension '${id}' has unknown history lane(s): ${lib.concatStringsSep ", " invalidHistory}"
-        extension));
+        (validateOwnership extension)));
 
   ensureUniqueExtensions = extensions: let
     grouped = lib.groupBy (extension: extension.id) extensions;
@@ -109,8 +143,15 @@
     scope,
     variant,
   }: let
+    sourceOwnership = ownershipFor extension;
     rawOverlay = declaredOverlayFor {
-      inherit contextFor declared extension scope;
+      contextFor = args:
+        (contextFor args)
+        // {
+          maintainers = sourceOwnership.maintainers or {};
+          teams = sourceOwnership.teams or {};
+        };
+      inherit declared extension scope;
       inherit label applyFunction extendPackageFor;
     };
     overlay = final: previous:
@@ -369,6 +410,12 @@ in rec {
   }: let
     allExtensions = ensureUniqueExtensions (map validateExtension extensions);
     extensionIds = map (extension: extension.id) allExtensions;
+    ownership = lib.listToAttrs (map (extension:
+      lib.nameValuePair extension.id {
+        maintainers = (ownershipFor extension).maintainers or {};
+        teams = (ownershipFor extension).teams or {};
+      })
+    allExtensions);
     requestedCiSources = ci.sources or (map (extension: extension.id) extensions);
     unknownCiSources = lib.subtractLists extensionIds requestedCiSources;
     invalidProjectionRules = lib.attrNames (lib.filterAttrs (_: rule:
@@ -1177,6 +1224,7 @@ in rec {
         runners = runnersView;
         probes = probesView;
         tests = lib.mapAttrs (_: entry: entry.check) testEntries;
+        inherit ownership;
         catalog = {inherit entries;};
         ci = {
           sources = requestedCiSources;
