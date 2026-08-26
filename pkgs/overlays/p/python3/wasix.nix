@@ -1,9 +1,10 @@
-# CPython for wasix, following the wasix-org/cpython recipe. Shipped for 3.13 and 3.14
+# CPython for wasix, following the wasix-org/cpython package. Shipped for 3.13 and 3.14
 # as versions of python/python; `python3` aliases the current 3.14 derivation.
 # ehpic only: dl/ctypes need the PIC sysroot.
 {
   extendPackage,
-  exposeWasixExtendedPackages,
+  exposeExtendedPackageIdentities,
+  packageSet,
   packages,
   pkgs,
   runners,
@@ -335,11 +336,6 @@
             if isCurrent
             then ["python3" "python314"]
             else ["python313"];
-          # dlfcn.h and dlopen/dlsym, needed by ctypes, ship only in the PIC sysroots.
-          wasix = {
-            supportedProfiles = ["ehpic" "exnrefEhpic"];
-            preferredProfile = "exnrefEhpic";
-          };
           # PYO3_CROSS_LIB_DIR and setuptools-rust's pyLibDir, so a 3.13 wheel targets 3.13.
           crossLibDir = "${py}/lib/${py.libPrefix}";
           # cmake Python_INCLUDE_DIR for C-extension wheels; find_package(Python) otherwise
@@ -368,11 +364,12 @@
       };
   in
     py;
-  result = exposeWasixExtendedPackages {
+  python314 = mkWasixPython true packageSet.python314;
+  result = exposeExtendedPackageIdentities {
     python313 = mkWasixPython false;
-    python314 = mkWasixPython true;
+    python314 = _previous: python314;
     python3 = _previous:
-      result.python314.overrideAttrs (old: {
+      python314.overrideAttrs (old: {
         passthru =
           (old.passthru or {})
           // {

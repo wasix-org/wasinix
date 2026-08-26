@@ -1,11 +1,13 @@
 {
+  commands,
   entry,
   harnesses,
   ...
 }: {
-  append = harnesses.hostShell {
+  append = harnesses.wasixShell {
     name = "anew-append";
-    wasixCommands = builtins.attrValues entry.commands;
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.cat];
     script = ''
       values="$WASIX_TEST_ROOT/values"
       printf 'one\ntwo\n' > "$values"

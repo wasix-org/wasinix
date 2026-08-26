@@ -7,6 +7,7 @@
 # local build backend expects the toolchain already on PATH, and the guest has
 # no node/php/go/uv. The python side is covered natively in python-templates.nix.
 {
+  commands,
   pkgs,
   harnesses,
   entry,
@@ -30,14 +31,16 @@
 in {
   # Every template resolves to a provider and plans, with the Anybuild file
   # regenerated from detection rather than read from the committed one.
-  plan = harnesses.hostShell {
+  plan = harnesses.wasixShell {
     name = "anybuild-templates-plan";
-    hostPackages = [pkgs.jq pkgs.diffutils];
-    wasixCommands = builtins.attrValues entry.commands;
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils commands.diff commands.jq commands.sed];
+    host.setup = ''
+      cp -R ${examples} "$WASIX_TEST_ROOT/templates"
+      chmod -R u+w "$WASIX_TEST_ROOT/templates"
+    '';
     timeout = 1800;
     script = ''
-      cp -R ${examples} templates
-      chmod -R u+w templates
       mkdir plans
 
       for template in templates/*; do
@@ -62,26 +65,35 @@ in {
   # The wasix wheel index served over loopback, with anybuild pointed at it: the
   # python providers must carry that exact URL and cross-compile for wasix, and
   # the URL must be a live index rather than an echoed string.
-  overlay-index = harnesses.hostShell {
+  overlay-index = harnesses.wasixShell {
     name = "anybuild-templates-overlay-index";
-    hostPackages = [pkgs.python3 pkgs.curl pkgs.jq];
-    wasixCommands = builtins.attrValues entry.commands;
-    wasmerArgs = ["--net"];
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils commands.curl commands.grep commands.jq];
+    runtime.network = true;
     forwardEnv = harnesses.defaultForwardEnv ++ ["ANYBUILD_PYTHON_EXTRA_INDEX_URL"];
     timeout = 1800;
-    script = ''
-      python3 -m http.server 8731 --bind 127.0.0.1 --directory ${pythonRegistry} &
-      trap 'kill %1 2>/dev/null || true' EXIT
-      for _ in $(seq 1 150); do
-        curl -fsS ${indexUrl}/ >/dev/null 2>&1 && break
-        sleep 0.2
-      done
-      curl -fsS ${indexUrl}/ >/dev/null \
-        || { echo "anybuild: the wheel index never became ready" >&2; exit 1; }
+    host = {
+      packages = [pkgs.python3 pkgs.curl];
+      setup = ''
+        python3 -m http.server 8731 --bind 127.0.0.1 --directory ${pythonRegistry} &
+        server_pid=$!
+        for _ in $(seq 1 150); do
+          curl -fsS ${indexUrl}/ >/dev/null 2>&1 && break
+          sleep 0.2
+        done
+        curl -fsS ${indexUrl}/ >/dev/null \
+          || { echo "anybuild: the wheel index never became ready" >&2; exit 1; }
 
-      export ANYBUILD_PYTHON_EXTRA_INDEX_URL=${indexUrl}
-      cp -R ${examples} templates
-      chmod -R u+w templates
+        export ANYBUILD_PYTHON_EXTRA_INDEX_URL=${indexUrl}
+        cp -R ${examples} "$WASIX_TEST_ROOT/templates"
+        chmod -R u+w "$WASIX_TEST_ROOT/templates"
+      '';
+      teardown = ''
+        kill "$server_pid" 2>/dev/null || true
+        wait "$server_pid" 2>/dev/null || true
+      '';
+    };
+    script = ''
       mkdir plans
       for template in templates/*; do
         name=$(basename "$template")
@@ -117,14 +129,15 @@ in {
 
   # A real build, end to end, of the templates that need no toolchain: the
   # provider's steps run and the served artifacts match the project's sources.
-  static-build = harnesses.hostShell {
+  static-build = harnesses.wasixShell {
     name = "anybuild-templates-static-build";
-    hostPackages = [pkgs.diffutils];
-    wasixCommands = builtins.attrValues entry.commands;
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils commands.diff];
+    host.setup = ''
+      cp -R ${examples} "$WASIX_TEST_ROOT/templates"
+      chmod -R u+w "$WASIX_TEST_ROOT/templates"
+    '';
     script = ''
-      cp -R ${examples} templates
-      chmod -R u+w templates
-
       for name in ${toString staticTemplates}; do
         anybuild build "templates/$name" --skip-prepare
         served="templates/$name/.anybuild/local/build/opt/static_app"

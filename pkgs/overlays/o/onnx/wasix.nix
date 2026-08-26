@@ -1,16 +1,17 @@
 # onnx (the C++ core + its python bindings) for wasix. The python onnx wheel is a
 # format = "wheel" repackaging of this package's `dist` output.
 {
-  profileSets,
   exposeWasixExtendedPackage,
   dropInputsByName,
   dropInputsByNameInfix,
   packages,
+  profileSets,
 }: let
   py = packages.sameProfile.python3;
   buildPy = py.pythonOnBuildForHost;
 in
   exposeWasixExtendedPackage {
+    passthru.wasix.supportedProfiles = profileSets.pic;
     # onnx's cross branch creates Python3::Module; nanobind's config wants Python::Module.
     patches = [./patches/onnx-wasi-nanobind-python-module.patch];
 
@@ -31,5 +32,4 @@ in
       "-DPython_EXECUTABLE=${buildPy.interpreter}"
     ];
     doCheck = false;
-    passthru.wasix.supportedProfiles = profileSets.pic;
   }

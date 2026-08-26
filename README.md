@@ -17,6 +17,18 @@ cd wasinix
 nix run .#wasinix -- doctor
 nix run .#wasinix -- remote list
 nix develop
+
+# example targets under legacyPackages (the system is explicit):
+nix build .#legacyPackages.x86_64-linux.packages.wasix.preferred.git # source package
+nix build .#legacyPackages.x86_64-linux.artifacts.webc.git         # its WebC
+nix build .#legacyPackages.x86_64-linux.packages.native.anybuild   # native package
+nix build .#legacyPackages.x86_64-linux.packages.native.wasixcc    # the C/C++ driver
+nix build .#legacyPackages.x86_64-linux.packages.wasix.eh.anybuild # WASIX package
+nix build .#legacyPackages.x86_64-linux.packages.wasix.exnrefEh.zlib # a library
+nix build .#legacyPackages.x86_64-linux.artifacts.wheel-py314.numpy # a wheel
+nix build .#legacyPackages.x86_64-linux.artifacts.registry.python # static wheel index
+
+nix run .#wasinix -- update --all         # bump the source pins
 ```
 
 `doctor` reports configured and missing builders and cache-push credentials.
@@ -37,9 +49,9 @@ CI builds cataloged packages, artifacts, and tests as separate jobs from
 
 `pkgs/project/` constructs the schema-versioned package catalog;
 `pkgs/project/profiles.nix` and `pkgs/set/` produce five ABI-profile package
-sets; `pkgs/overlays/` and `pkgs/python-overlays/` are the sharded registered
-package inventories; projection rules produce artifacts, commands, and tests.
-Details: [`docs/architecture.md`](docs/architecture.md).
+sets; `pkgs/overlays/` and `pkgs/python-overlays/` are the registered by-name
+inventories; projection rules produce artifacts, commands, and tests. Details:
+[`docs/architecture.md`](docs/architecture.md).
 
 ## Documentation
 

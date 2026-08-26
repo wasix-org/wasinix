@@ -2,6 +2,7 @@
 # the same discovery path scipy uses, and run it under wasmer. lapack-reference is
 # PIC-only, hence crossPkgsPic.
 {
+  commands,
   harnesses,
   entry,
   packageForEntry,
@@ -30,9 +31,10 @@
     passthru.wasmer.name = "lapack-behavior";
   };
 in {
-  behavior = harnesses.hostShell {
+  behavior = harnesses.wasixShell {
     name = "lapack-reference-behavior";
-    wasixCommands = [
+    shell = commands.bash;
+    commands = [
       (harnesses.packageCommand {package = prog;})
     ];
     script = ''

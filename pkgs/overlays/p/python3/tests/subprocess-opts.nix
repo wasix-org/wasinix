@@ -1,4 +1,5 @@
 {
+  commands,
   harnesses,
   helpers,
   packages,
@@ -8,11 +9,12 @@ helpers.forEachPython packages.wasix.preferred ({
   pyVer,
   tag,
 }: {
-  subprocess-opts = harnesses.hostShell {
+  subprocess-opts = harnesses.wasixShell {
     name = "python${tag}-subprocess-opts";
-    wasixCommands = pythonCommands;
+    shell = commands.bash;
+    commands = pythonCommands ++ [commands.coreutils commands.grep];
+    host.setup = ''cp ${./subprocess-opts-check.py} "$WASIX_TEST_ROOT/check.py"'';
     script = ''
-      cp ${./subprocess-opts-check.py} check.py
       python${pyVer} -O check.py | tee out.log
       grep -q SUBPROC_OPTS_OK out.log
     '';

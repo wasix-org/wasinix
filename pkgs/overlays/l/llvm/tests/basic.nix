@@ -1,14 +1,16 @@
 {
+  commands,
   harnesses,
   entry,
   ...
 }: let
   wasix = builtins.attrValues entry.commands;
 in {
-  ir-roundtrip = harnesses.hostShell {
+  ir-roundtrip = harnesses.wasixShell {
     name = "llvm-ir-roundtrip";
-    wasixCommands = wasix;
-    wasmerArgs = ["--enable-threads"];
+    shell = commands.bash;
+    commands = wasix ++ [commands.grep];
+    runtime.threads = true;
     script = ''
       cat > input.ll <<'EOF'
       define i32 @answer() {
@@ -21,10 +23,11 @@ in {
     '';
   };
 
-  wasm-object = harnesses.hostShell {
+  wasm-object = harnesses.wasixShell {
     name = "llvm-wasm-object";
-    wasixCommands = wasix;
-    wasmerArgs = ["--enable-threads"];
+    shell = commands.bash;
+    commands = wasix ++ [commands.grep];
+    runtime.threads = true;
     script = ''
       cat > input.ll <<'EOF'
       target triple = "wasm32-unknown-wasi"

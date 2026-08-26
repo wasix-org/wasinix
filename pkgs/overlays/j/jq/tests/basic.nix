@@ -1,4 +1,5 @@
 {
+  commands,
   pkgs,
   entry,
   harnesses,
@@ -17,9 +18,10 @@
       normalize = harnesses.normalizers.stripAnsi;
     };
 in {
-  version = harnesses.hostShell {
+  version = harnesses.wasixShell {
     name = "jq-version";
-    wasixCommands = wasix;
+    shell = commands.bash;
+    commands = wasix;
     script = "jq --version";
   };
 

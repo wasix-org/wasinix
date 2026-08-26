@@ -1,5 +1,0 @@
-{
-  exposePackage,
-  package,
-}:
-exposePackage package

@@ -36,10 +36,6 @@ exposeWasixPackage (
   in
     extendPackage runtime {
       passthru = {
-        wasix = {
-          supportedProfiles = ["eh"];
-          preferredProfile = "eh";
-        };
         wasinix = {
           shipped = true;
           update.notes = [

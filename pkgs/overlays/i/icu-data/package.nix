@@ -1,6 +1,7 @@
 {
   lib,
   packageSet,
+  profileSets,
 }: let
   versions = import ../icu/versions.nix;
   mk = v: let
@@ -29,6 +30,7 @@
           # history entry when the default alias crosses a major.
           retention = "none";
         };
+        wasix.supportedProfiles = profileSets.all;
         wasmer = {
           commands = [];
           # This data-only WebC has no command; its behavior test mounts the

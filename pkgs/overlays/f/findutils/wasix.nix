@@ -62,8 +62,8 @@ exposeWasixPackage (
       # unistd.h that declares fork + a proc.c implementing it via __wasi_proc_fork.
       # TODO: lift wasix-compat into shared overlay infra (git + findutils both use it).
       mkdir -p wasix-compat
-      cp ${../../g/git/wasix-compat/unistd.h} wasix-compat/unistd.h
-      cp ${../../g/git/wasix-compat/proc.c} wasix-compat/proc.c
+      cp ${../git/wasix-compat/unistd.h} wasix-compat/unistd.h
+      cp ${../git/wasix-compat/proc.c} wasix-compat/proc.c
     '';
     # Build the shim lib, then put it on the include/link path with ABSOLUTE paths
     # ($PWD): findutils compiles in subdirs (find/, xargs/, gl/), so a relative

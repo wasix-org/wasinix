@@ -4,7 +4,7 @@
 # data, so use the build-platform tzdata. tz-aware date functions just won't
 # find the store path at runtime in the sandbox.
 #
-# Older releases (WebC history, overlays/history.json) build here too via the
+# Older releases (webc history, wasix/history.json) build here too via the
 # loader's src rebase; the version conditionals below carry the drift.
 {
   exposeWasixPackage,

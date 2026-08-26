@@ -1,4 +1,5 @@
 {
+  commands,
   pkgs,
   entry,
   harnesses,
@@ -14,9 +15,10 @@
     };
 in {
   # Version banners differ; just assert it runs.
-  version = harnesses.hostShell {
+  version = harnesses.wasixShell {
     name = "grep-version";
-    wasixCommands = wasix;
+    shell = commands.bash;
+    commands = wasix;
     script = "grep --version";
   };
 

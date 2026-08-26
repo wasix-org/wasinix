@@ -7,6 +7,7 @@
   profileSets,
 }:
 exposeWasixExtendedPackage {
+  passthru.wasix.supportedProfiles = profileSets.pic;
   patches = [./patches/wasi-unsupported-calls.patch];
   # Nixpkgs removes the network tests. Emulated checks run with network access.
   postPatch = _: "";
@@ -14,8 +15,6 @@ exposeWasixExtendedPackage {
   doCheck = false;
   # check-output has already observed nixpkgs' doCheck, so skip its prebuild too.
   wasixCheckPrebuild = ":";
-  # its DSO support needs dlopen, so the PIC sysroots
-  passthru.wasix.supportedProfiles = profileSets.pic;
   configureFlags = [
     "ac_cv_func_sendfile=no"
     # a run test, so cross builds take its fallback; wasi's strerror_r is the

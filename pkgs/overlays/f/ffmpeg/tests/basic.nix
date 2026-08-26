@@ -1,21 +1,24 @@
 {
+  commands,
   harnesses,
   entry,
   ...
 }: let
   wasix = builtins.attrValues entry.commands;
 in {
-  version = harnesses.hostShell {
+  version = harnesses.wasixShell {
     name = "ffmpeg-version";
-    wasixCommands = wasix;
-    wasmerArgs = ["--enable-threads"];
+    shell = commands.bash;
+    commands = wasix;
+    runtime.threads = true;
     script = "ffmpeg -version";
   };
 
-  transcode = harnesses.hostShell {
+  transcode = harnesses.wasixShell {
     name = "ffmpeg-transcode";
-    wasixCommands = wasix;
-    wasmerArgs = ["--enable-threads"];
+    shell = commands.bash;
+    commands = wasix ++ [commands.grep];
+    runtime.threads = true;
     script = ''
       ffmpeg -v error -f lavfi -i 'sine=frequency=440:duration=0.1' \
         -c:a pcm_s16le tone.wav

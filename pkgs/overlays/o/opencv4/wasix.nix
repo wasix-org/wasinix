@@ -5,9 +5,9 @@
   extendPackage,
   package,
   packages,
-  profileSets,
   dropInputsByName,
   profileOf,
+  profileSets,
 }:
 exposeWasixPackage (
   let

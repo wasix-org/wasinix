@@ -1,13 +1,13 @@
 {
-  pkgs,
+  commands,
   harnesses,
   entry,
   ...
 }: {
-  file-backend = harnesses.hostShell {
+  file-backend = harnesses.wasixShell {
     name = "wasix-sendmail-file-backend";
-    hostPackages = [pkgs.gnugrep];
-    wasixCommands = builtins.attrValues entry.commands;
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.grep];
     forwardEnv = harnesses.defaultForwardEnv ++ ["SENDMAIL_FILE_PATH"];
     script = ''
       export SENDMAIL_FILE_PATH="$WASIX_TEST_ROOT/mail.txt"

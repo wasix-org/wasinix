@@ -5,9 +5,9 @@ authoring is covered by [`packaging.md`](packaging.md).
 
 ## Toolchain
 
-The buildable toolchain artifacts live under their one-character buckets in
-`pkgs/overlays/` and are exposed as ordinary `packages.native` entries.
-`pkgs/toolchain/` connects them into the profile interfaces:
+The buildable toolchain packages live under `pkgs/overlays/` and are exposed as
+ordinary `packages.native` entries. `pkgs/toolchain/` connects them into the
+profile interfaces:
 
 - `packages.native.wasix-llvm`: WASIX's LLVM sources through nixpkgs' LLVM
   machinery

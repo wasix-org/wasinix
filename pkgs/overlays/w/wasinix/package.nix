@@ -1,5 +1,8 @@
 {
-  exposeNativePackage,
-  pkgs,
+  exposeNativePackageIdentity,
+  packageSet,
 }:
-exposeNativePackage (pkgs.callPackage ./build.nix {})
+exposeNativePackageIdentity {
+  package = packageSet.callPackage ./build.nix {};
+  wasix.supportedProfiles = [];
+}

@@ -5,6 +5,7 @@
 # multiplexing and ProxyCommand, so this builds at the off profile.
 {exposeWasixExtendedPackage}:
 exposeWasixExtendedPackage {
+  passthru.wasix.supportedProfiles = ["off"];
   patches = [./patches/wasi-unsupported-calls.patch];
   # no SCM_RIGHTS: openssh passes descriptors between its privsep processes and
   # for ControlMaster multiplexing, and already carries a switch for platforms
@@ -20,5 +21,4 @@ exposeWasixExtendedPackage {
     # off the header
     "ac_cv_header_ifaddrs_h=no"
   ];
-  passthru.wasix.supportedProfiles = ["off"];
 }

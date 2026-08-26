@@ -73,22 +73,25 @@
     declared,
     extension,
     label,
+    part ? "all",
+    select,
+    scope,
     applyFunction ? function: function,
     extendPackageFor ? null,
-    scope,
   }:
     if builtins.isFunction declared
     then applyFunction declared
     else if lib.isAttrs declared && declared.__wasinixPackageDirectory or false
     then
       projectLib.loadPackageOverlay ({
-          inherit contextFor;
+          inherit contextFor scope;
+          inherit part;
           definition = declared.definition or null;
+          inherited = declared.inherited or {};
+          selectUnit = select;
           dir = declared.directory;
           expose = declared.expose or [];
-          inherited = declared.inherited or {};
-          lane = declared.lane or "packages";
-          inherit scope;
+          sharded = declared.sharded or false;
         }
         // lib.optionalAttrs (extendPackageFor != null) {inherit extendPackageFor;})
     else extensionError extension "${label} is not an overlay";
@@ -140,6 +143,8 @@
     applyFunction ? function: function,
     extendPackageFor ? null,
     preparePackage ? package: package,
+    part ? "all",
+    select ? _name: true,
     scope,
     variant,
   }: let
@@ -151,22 +156,36 @@
           maintainers = sourceOwnership.maintainers or {};
           teams = sourceOwnership.teams or {};
         };
-      inherit declared extension scope;
+      inherit declared extension part scope select;
       inherit label applyFunction extendPackageFor;
     };
     overlay = final: previous:
       lib.optionalAttrs (enabled previous)
-      (lib.mapAttrs (name: value:
-        if lib.isDerivation value
-        then
-          packageTransformFor {
-            inherit scope variant;
-            packageSet = previous;
-          }
-          name
-          (preparePackage value)
-        else value)
-      (rawOverlay final previous));
+      (lib.mapAttrs (
+          name: value:
+            if name == projectLib.identityAttr
+            then
+              lib.mapAttrs (packageName: package:
+                packageTransformFor {
+                  inherit scope variant;
+                  packageSet = previous;
+                }
+                packageName
+                (preparePackage package))
+              value
+            else if builtins.elem name [projectLib.compatibilityAttr projectLib.unitOverlaysAttr]
+            then value
+            else if !lib.isDerivation value
+            then value
+            else
+              packageTransformFor {
+                inherit scope variant;
+                packageSet = previous;
+              }
+              name
+              (preparePackage value)
+        )
+        (lib.filterAttrs (name: _value: select name) (rawOverlay final previous)));
   in
     registerExtensionOverlay {inherit declared extension overlay;};
 
@@ -187,15 +206,18 @@
   }: let
     metadata = projectLib.packageMetadata package;
     policy = removeAttrs metadata projectLib.machineMetadata;
-  in {
-    kind = "package";
-    build = package;
-    inherit address name package preferred projectionPath scope variant;
-    inherit (metadata) definition source lineage instance;
-    subjects = [];
-    packageSubjects = [address];
-    inherit policy;
-  };
+  in
+    lib.throwIf (!(metadata ? definition && metadata ? source && metadata ? lineage && metadata ? instance))
+    "catalog package '${address}' lacks registered provenance"
+    {
+      kind = "package";
+      build = package;
+      inherit address name package preferred projectionPath scope variant;
+      inherit (metadata) definition source lineage instance;
+      subjects = [];
+      packageSubjects = [address];
+      inherit policy;
+    };
 
   serializableEntry = entry:
     {
@@ -434,17 +456,29 @@ in rec {
     projectTests);
     unknownProjectTestSources = lib.subtractLists extensionIds (lib.unique (map (test: test.source) (lib.attrValues projectTests)));
 
-    overlaysFor = contextFor: scope: variant:
+    overlaysFor = contextFor: scope: variant: select:
       lib.concatMap (
         extension: let
           declared = (extension.overlays or {}).packages or (_final: _prev: {});
-        in [
-          (captureExtensionContext extension)
-          (laneOverlay {
-            inherit contextFor declared extension scope variant;
-            label = "package overlay";
+          directoryBacked = lib.isAttrs declared && declared.__wasinixPackageDirectory or false;
+        in
+          [
+            (captureExtensionContext extension)
+            (laneOverlay {
+              inherit contextFor declared extension scope select variant;
+              label = "package overlay";
+              part =
+                if directoryBacked
+                then "base"
+                else "all";
+            })
+          ]
+          ++ lib.optional (scope == "wasix" && directoryBacked) (laneOverlay {
+            inherit contextFor declared extension scope select variant;
+            enabled = previous: previous.stdenv.hostPlatform.isWasix or false;
+            label = "WASIX package overlay";
+            part = "wasix";
           })
-        ]
       )
       allExtensions;
 
@@ -458,17 +492,42 @@ in rec {
         withEh = lib.filter (name: (profiles.profiles.${name}.wasmExceptions or "no") != "no") profileNames;
       };
 
-      supportedProfilesFor = package: let
-        declared = ((package.passthru or {}).wasix or {}).supportedProfiles or profileNames;
+      compatibilityFor = name: let
+        nativePackage =
+          (nativeRaw.${projectLib.identityAttr} or {}).${name}
+          or (nativeRaw.${name} or null);
+        nativeCompatibility =
+          (nativeRaw.${
+              projectLib.compatibilityAttr
+            } or {
+            }).${
+            name
+          }
+          or (
+            if nativePackage == null
+            then {}
+            else ((nativePackage.passthru or {}).wasix or {})
+          );
+        profile = builtins.head profileNames;
+        profileSet = wasixRaw.${profile};
+        wasixCompatibility =
+          if builtins.hasAttr name (profileSet.${projectLib.registryAttr} or {})
+          then (((registeredPackageFor profileSet name).passthru or {}).wasix or {})
+          else {};
+      in
+        nativeCompatibility // wasixCompatibility;
+
+      supportedProfilesFor = name: let
+        declared = (compatibilityFor name).supportedProfiles or profileNames;
         unknown = lib.subtractLists profileNames declared;
       in
         lib.throwIf (unknown != [])
-        "${package.pname or package.name}: supportedProfiles contains unknown profile(s): ${lib.concatStringsSep ", " unknown}"
+        "${name}: supportedProfiles contains unknown profile(s): ${lib.concatStringsSep ", " unknown}"
         declared;
 
-      preferredProfileFor = package: let
-        metadata = (package.passthru or {}).wasix or {};
-        supported = supportedProfilesFor package;
+      preferredProfileFor = name: let
+        metadata = compatibilityFor name;
+        supported = supportedProfilesFor name;
         preferred =
           metadata.preferredProfile
           or (
@@ -478,25 +537,25 @@ in rec {
           );
       in
         lib.throwIf (!(builtins.elem preferred supported))
-        "${package.pname or package.name}: preferred profile '${preferred}' is unsupported"
+        "${name}: preferred profile '${preferred}' is unsupported"
         preferred;
 
-      ciProfilesFor = package: let
-        compatibility = (package.passthru or {}).wasix or {};
+      ciProfilesFor = name: package: let
+        compatibility = compatibilityFor name;
         policy = projectLib.packageMetadata package;
         ci = policy.ci or {};
-        supported = supportedProfilesFor package;
+        supported = supportedProfilesFor name;
         selected =
           ci.profiles
           or (
             if compatibility ? preferredProfile || (policy.shipped or false)
-            then [(preferredProfileFor package)]
+            then [(preferredProfileFor name)]
             else supported
           );
         unsupported = lib.subtractLists supported selected;
       in
         lib.throwIf (unsupported != [])
-        "${package.pname or package.name}: CI selects unsupported profile(s): ${lib.concatStringsSep ", " unsupported}"
+        "${name}: CI selects unsupported profile(s): ${lib.concatStringsSep ", " unsupported}"
         selected;
 
       ciAvailable = package: let
@@ -507,30 +566,81 @@ in rec {
       packageSetView = _scope: _variant: finalSet:
         projectLib.registeredPackages finalSet;
 
-      projectedPackageFor = scope: variant: _finalSet: name: rawPackage: let
-        package = rawPackage;
+      registeredPackageFor = packageSet: name:
+        (packageSet.${projectLib.identityAttr} or {}).${name} or packageSet.${name};
+
+      preparedPackageFor = scope: variant: finalSet: name: rawPackage: let
+        rawMetadata = projectLib.packageMetadata rawPackage;
+        registeredSource = (finalSet.${projectLib.registryAttr} or {}).${name} or null;
+        projectedCompatibility =
+          if scope == "native"
+          then compatibilityFor name
+          else {};
+        package =
+          if (rawMetadata.source or null) != null
+          then
+            if projectedCompatibility == {}
+            then rawPackage
+            else
+              rawPackage.overrideAttrs (old: {
+                passthru = let
+                  previousPassthru = old.passthru or {};
+                in
+                  previousPassthru
+                  // {wasix = (previousPassthru.wasix or {}) // projectedCompatibility;};
+              })
+          else
+            rawPackage.overrideAttrs (old: {
+              passthru = let
+                previousPassthru = old.passthru or {};
+              in
+                previousPassthru
+                // {
+                  wasix = (previousPassthru.wasix or {}) // projectedCompatibility;
+                  wasinix =
+                    rawMetadata
+                    // {
+                      source = registeredSource;
+                      lineage = [registeredSource];
+                      definition = null;
+                      instance = {
+                        kind = "current";
+                        version = toString (rawPackage.version or rawPackage.name);
+                      };
+                    };
+                };
+            });
         address =
           if scope == "native"
           then projectLib.address "packages" ["native" name]
           else if scope == "wasix"
           then projectLib.address "packages" ["wasix" variant.profile name]
           else projectLib.address "packages" ["python" variant.interpreter name];
-        cataloged = (projectLib.packageMetadata package).catalog or true;
-        supported = scope != "wasix" || builtins.elem variant.profile (supportedProfilesFor package);
+        cataloged = rawMetadata.catalog or true;
+        supported = scope != "wasix" || builtins.elem variant.profile (supportedProfilesFor name);
+      in {
+        inherit address cataloged package supported;
+      };
+
+      projectedPackageFor = scope: variant: finalSet: name: rawPackage: let
+        prepared = preparedPackageFor scope variant finalSet name rawPackage;
       in
-        if cataloged && supported
+        if prepared.cataloged && prepared.supported
         then
           (projectEntry (packageEntry {
-            inherit address name package scope variant;
-            preferred = scope == "wasix" && preferredProfileFor package == variant.profile;
+            inherit name scope variant;
+            inherit (prepared) address package;
+            preferred = scope == "wasix" && preferredProfileFor name == variant.profile;
             projectionPath = [name];
           })).value
-        else package;
+        else prepared.package;
 
       projectedPackageSet = scope: variant: finalSet:
         lib.mapAttrs (name: package:
-          if lib.isDerivation package && ((projectLib.packageMetadata package).source or null) != null
-          then projectedPackageFor scope variant finalSet name package
+          if
+            lib.isDerivation package
+            && builtins.hasAttr name (finalSet.${projectLib.registryAttr} or {})
+          then projectedPackageFor scope variant finalSet name (registeredPackageFor finalSet name)
           else package)
         finalSet;
 
@@ -550,19 +660,7 @@ in rec {
         inherit (projectLib) buildHostPypaTools dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix dropSphinxDocs extendPackage linkInputs mergeScript packageForEntry replaceInputsByName wasmRename;
       };
 
-      contextFor = declaredScope: declaredVariant: enclosingPkgs: {
-        final,
-        prev ? final,
-      }: let
-        scope =
-          if declaredScope == "wasix" && !(prev.stdenv.hostPlatform.isWasix or false)
-          then "native"
-          else declaredScope;
-        variant =
-          if scope == declaredScope
-          then declaredVariant
-          else {};
-      in
+      contextFor = scope: variant: enclosingPkgs: {final, ...}:
         sharedProjectionContext
         // {
           inherit scope variant;
@@ -596,7 +694,7 @@ in rec {
             scope = "native";
             variant = {};
           }
-          ++ overlaysFor (contextFor "native" {} null) "native" {};
+          ++ overlaysFor (contextFor "native" {} null) "native" {} (_name: true);
       };
 
       wasixRaw =
@@ -616,7 +714,11 @@ in rec {
                   scope = "wasix";
                   variant = {inherit profile;};
                 }
-                ++ overlaysFor (contextFor "wasix" {inherit profile;} null) "wasix" {inherit profile;};
+                ++ overlaysFor
+                (contextFor "wasix" {inherit profile;} null)
+                "wasix"
+                {inherit profile;}
+                (_name: true);
             }
         )
         profiles.profiles;
@@ -655,25 +757,38 @@ in rec {
         allExtensions))
       pythonSpecs;
 
-      wasixShapesValid = validateVariantShapes "WASIX" extensionIds wasixRaw;
+      expectedWasixNames = profile:
+        lib.filter (name: builtins.elem profile (supportedProfilesFor name))
+        (projectLib.registeredNames nativeRaw);
+      wasixShapeMismatches = lib.concatMap (profile: let
+        expected = expectedWasixNames profile;
+        actual = lib.filter (name: builtins.elem profile (supportedProfilesFor name)) (projectLib.registeredNames wasixRaw.${profile});
+        missing = lib.subtractLists actual expected;
+        unexpected = lib.subtractLists expected actual;
+      in
+        lib.optional (actual != expected)
+        "${profile} (missing: ${lib.concatStringsSep ", " missing}; unexpected: ${lib.concatStringsSep ", " unexpected})")
+      profileNames;
+      wasixShapesValid =
+        lib.throwIf (wasixShapeMismatches != [])
+        "WASIX package projections differ from native supportedProfiles in: ${lib.concatStringsSep ", " wasixShapeMismatches}"
+        true;
       pythonShapesValid = validateVariantShapes "Python" extensionIds pythonRaw;
 
       nativePackageInterfaces = nativePackageInterfacesFor {
         inherit project nativeRaw wasixRaw pythonRaw;
       };
       nativeForContext = lib.genAttrs (projectLib.registeredNames nativeRaw) (name:
-        projectedPackageFor "native" {} nativeRaw name nativeRaw.${name}
+        projectedPackageFor "native" {} nativeRaw name (registeredPackageFor nativeRaw name)
         // (nativePackageInterfaces.${name} or {}));
       unknownInterfacePackages = lib.subtractLists (projectLib.registeredNames nativeRaw) (lib.attrNames nativePackageInterfaces);
       nativeInterfacesValid =
         lib.throwIf (unknownInterfacePackages != [])
         "native package interfaces target unknown package(s): ${lib.concatStringsSep ", " unknownInterfacePackages}"
         true;
-      baseNative = lib.mapAttrs (name: package:
-        package // (nativePackageInterfaces.${name} or {}))
-      (packageSetView "native" {} nativeRaw);
+      baseNative = packageSetView "native" {} nativeRaw;
       baseWasix = lib.mapAttrs (profile: packageSet:
-        lib.filterAttrs (_: package: builtins.elem profile (supportedProfilesFor package))
+        lib.filterAttrs (name: _package: builtins.elem profile (supportedProfilesFor name))
         (packageSetView "wasix" {inherit profile;} packageSet))
       wasixRaw;
       basePython = lib.mapAttrs (interpreter: packageSet:
@@ -687,16 +802,14 @@ in rec {
           python = pythonRaw;
         };
       };
-      allWasixNames = lib.unique (lib.concatMap projectLib.registeredNames (lib.attrValues wasixRaw));
-      availableWasixNames = lib.unique (lib.concatMap lib.attrNames (lib.attrValues baseWasix));
+      allWasixNames = lib.filter (name: supportedProfilesFor name != []) (projectLib.registeredNames nativeRaw);
       preferredProfileNameFor = name: let
         defaultProfile = profiles.defaultProfileName or null;
-        packageAtDefault = wasixRaw.${defaultProfile}.${name};
-        declaredProfile = preferredProfileFor packageAtDefault;
+        declaredProfile = preferredProfileFor name;
       in
         lib.throwIf (defaultProfile == null)
         "the WASIX profile inventory does not define defaultProfileName"
-        (lib.throwIf (!(builtins.elem declaredProfile (supportedProfilesFor wasixRaw.${declaredProfile}.${name})))
+        (lib.throwIf (!(builtins.hasAttr name wasixRaw.${declaredProfile}))
           "${name}: preferred WASIX profile '${declaredProfile}' is unavailable"
           declaredProfile);
       callbackArgs = {
@@ -708,7 +821,7 @@ in rec {
       preferredPackageSet = lib.genAttrs allWasixNames (name: let
         profile = preferredProfileNameFor name;
       in
-        wasixRaw.${profile}.${name});
+        registeredPackageFor wasixRaw.${profile} name);
       packageSetsView = {
         native = nativeRaw;
         wasix = wasixRaw // {preferred = preferredPackageSet;};
@@ -747,22 +860,25 @@ in rec {
           inherit entry packageTransformFor repairPythonPackage;
         });
 
-      nativeEntries = lib.mapAttrs' (name: package: let
-        address = projectLib.address "packages" ["native" name];
+      nativeEntries = lib.mapAttrs' (name: rawPackage: let
+        prepared = preparedPackageFor "native" {} nativeRaw name rawPackage;
+        package = prepared.package // (nativePackageInterfaces.${name} or {});
       in
-        lib.nameValuePair address (packageEntry {
-          inherit address name package;
+        lib.nameValuePair prepared.address (packageEntry {
+          inherit name package;
+          inherit (prepared) address;
           projectionPath = [name];
           scope = "native";
           variant = {};
         }))
       baseNative;
       wasixEntries = lib.concatMapAttrs (profile: packages:
-        lib.mapAttrs' (name: package: let
-          address = projectLib.address "packages" ["wasix" profile name];
+        lib.mapAttrs' (name: rawPackage: let
+          prepared = preparedPackageFor "wasix" {inherit profile;} wasixRaw.${profile} name rawPackage;
         in
-          lib.nameValuePair address (packageEntry {
-            inherit address name package;
+          lib.nameValuePair prepared.address (packageEntry {
+            inherit name;
+            inherit (prepared) address package;
             preferred = preferredProfileNameFor name == profile;
             projectionPath = [name];
             scope = "wasix";
@@ -771,11 +887,12 @@ in rec {
         packages)
       baseWasix;
       pythonEntries = lib.concatMapAttrs (interpreter: packages:
-        lib.mapAttrs' (name: package: let
-          address = projectLib.address "packages" ["python" interpreter name];
+        lib.mapAttrs' (name: rawPackage: let
+          prepared = preparedPackageFor "python" {inherit interpreter;} pythonRaw.${interpreter} name rawPackage;
         in
-          lib.nameValuePair address (packageEntry {
-            inherit address name package;
+          lib.nameValuePair prepared.address (packageEntry {
+            inherit name;
+            inherit (prepared) address package;
             projectionPath = [name];
             scope = "python";
             variant = {inherit interpreter;};
@@ -1156,10 +1273,10 @@ in rec {
           projectedPackageNodes.${projectLib.address "packages" ["python" interpreter name]}.value)
         packages)
       basePython;
-      preferred = lib.genAttrs availableWasixNames (name: let
+      preferred = lib.genAttrs allWasixNames (name: let
         profile = preferredProfileNameFor name;
       in
-        projectedPackageFor "wasix" {inherit profile;} wasixRaw.${profile} name wasixRaw.${profile}.${name});
+        projectedPackageFor "wasix" {inherit profile;} wasixRaw.${profile} name (registeredPackageFor wasixRaw.${profile} name));
       packageViews = {
         inherit native;
         wasix = wasix // {inherit preferred;};
@@ -1177,7 +1294,7 @@ in rec {
         && (
           entry.scope
           != "wasix"
-          || builtins.elem entry.variant.profile (ciProfilesFor entry.package)
+          || builtins.elem entry.variant.profile (ciProfilesFor entry.name entry.package)
         ))
       projectedPackageEntries;
       ciPackageAddresses = lib.attrNames ciPackageEntries;

@@ -1,4 +1,5 @@
 {
+  commands,
   harnesses,
   helpers,
   packages,
@@ -8,11 +9,12 @@ helpers.forEachPython packages.wasix.preferred ({
   pyVer,
   tag,
 }: {
-  ctypes-findlib = harnesses.hostShell {
+  ctypes-findlib = harnesses.wasixShell {
     name = "python${tag}-ctypes-findlib";
-    wasixCommands = pythonCommands;
+    shell = commands.bash;
+    commands = pythonCommands ++ [commands.coreutils commands.grep];
+    host.setup = ''cp ${./ctypes-findlib-check.py} "$WASIX_TEST_ROOT/check.py"'';
     script = ''
-      cp ${./ctypes-findlib-check.py} check.py
       python${pyVer} check.py | tee out.log
       grep -q FINDLIB_OK out.log
     '';

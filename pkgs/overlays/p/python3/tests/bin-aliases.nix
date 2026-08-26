@@ -1,21 +1,21 @@
 {
-  pkgs,
+  commands,
   harnesses,
   helpers,
   packages,
 }:
 helpers.forEachPython packages.wasix.preferred ({
-  python,
   pythonCommands,
   pyVer,
   tag,
 }: {
-  bin-aliases = harnesses.hostShell {
+  bin-aliases = harnesses.wasixShell {
     name = "python${tag}-bin-aliases";
-    wasixCommands = pythonCommands;
+    shell = commands.bash;
+    commands = pythonCommands;
     script = ''
       for command in python python3 python${pyVer}; do
-        "${pkgs.lib.getExe' python "$command"}" -c \
+        "$command" -c \
           'import os; expected = {"python", "python3", "python${pyVer}"}; assert expected <= set(os.listdir("/bin"))'
       done
     '';

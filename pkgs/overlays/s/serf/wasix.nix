@@ -19,9 +19,9 @@ exposeWasixPackage (
       "mkdir -p \"$out\" \"$dev\"";
   in
     extendPackage (package.override {libkrb5 = noKerberos;}) {
+      passthru.wasix.supportedProfiles = profileSets.pic;
       patches = [./patches/wasi-shared-object-suffix.patch];
       # apr is PIC-only, and serf links it
-      passthru.wasix.supportedProfiles = profileSets.pic;
       preConfigure = old:
         packages.sameProfile.lib.concatStringsSep "\n"
         (builtins.filter (l: !(packages.sameProfile.lib.hasInfix "GSSAPI=" l)) (packages.sameProfile.lib.splitString "\n" old));

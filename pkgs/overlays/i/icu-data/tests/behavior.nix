@@ -1,6 +1,7 @@
 # End-to-end behavior check for one ICU data package: a C program statically
 # linking the matching ICU major must load its archive from the WebC mount.
 {
+  commands,
   entry,
   harnesses,
   packageForEntry,
@@ -29,9 +30,10 @@
       meta.mainProgram = "icu-behavior";
     };
 in {
-  behavior = harnesses.hostShell {
+  behavior = harnesses.wasixShell {
     name = "icu-data${major}-behavior";
-    wasixCommands = [
+    shell = commands.bash;
+    commands = [
       (harnesses.packageCommand {
         package = prog [package];
         name = "icu-behavior";
@@ -46,10 +48,11 @@ in {
 
   # The same program without the WebC dependency proves the archive mount is
   # what makes the positive check pass.
-  no-dep = harnesses.hostShell {
+  no-dep = harnesses.wasixShell {
     name = "icu-data${major}-no-dep";
     expectFail = "no icu-data dependency, the data archive is not mounted";
-    wasixCommands = [
+    shell = commands.bash;
+    commands = [
       (harnesses.packageCommand {
         package = prog [];
         name = "icu-behavior";

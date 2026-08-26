@@ -2,6 +2,7 @@
 # WASIX fork() reports ENOTSUP, so it never reaches a listening state. The client
 # tools reach a real server over TCP.
 {
+  commands,
   pkgs,
   entry,
   harnesses,
@@ -12,17 +13,19 @@
   postgres = builtins.attrValues entry.commands;
   native = pkgs."postgresql_${pkgs.lib.versions.major (packageForEntry packages entry).version}";
 in {
-  version = harnesses.hostShell {
+  version = harnesses.wasixShell {
     name = "postgres-version";
-    wasixCommands = postgres;
+    shell = commands.bash;
+    commands = postgres;
     script = "postgres --version";
   };
 
   # plpgsql exercises the dlopen path: its handler is a shared module the
   # backend loads on the first call.
-  single-user = harnesses.hostShell {
+  single-user = harnesses.wasixShell {
     name = "postgres-single-user";
-    wasixCommands = postgres;
+    shell = commands.bash;
+    commands = postgres ++ [commands.coreutils commands.grep];
     timeout = 1800;
     script = ''
       initdb -D db -U postgres --no-locale --encoding=UTF8
@@ -43,26 +46,34 @@ in {
     '';
   };
 
-  client = harnesses.hostShell {
+  client = harnesses.wasixShell {
     name = "postgres-client";
-    wasixCommands = postgres;
-    wasmerArgs = ["--net"];
+    shell = commands.bash;
+    commands = postgres;
+    runtime.network = true;
     timeout = 1800;
-    # WASIX cannot bind an AF_UNIX socket, so the server is TCP-only.
-    script = ''
-      ${pkgs.lib.getExe' native "initdb"} -D native -U postgres --no-locale --encoding=UTF8 >/dev/null
-      ${pkgs.lib.getExe' native "postgres"} -D native -c unix_socket_directories= \
-        -h 127.0.0.1 -p 55434 >native.log 2>&1 &
-      pid=$!
-      trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+    host = {
+      packages = [native];
+      setup = ''
+        ${pkgs.lib.getExe' native "initdb"} -D native -U postgres --no-locale --encoding=UTF8 >/dev/null
+        ${pkgs.lib.getExe' native "postgres"} -D native -c unix_socket_directories= \
+          -h 127.0.0.1 -p 55434 >native.log 2>&1 &
+        pid=$!
 
-      for _ in $(seq 1 60); do
-        if pg_isready -h 127.0.0.1 -p 55434 -U postgres >/dev/null 2>&1; then
-          break
-        fi
-        sleep 1
-      done
-      pg_isready -h 127.0.0.1 -p 55434 -U postgres
+        for _ in $(seq 1 60); do
+          if ${pkgs.lib.getExe' native "pg_isready"} -h 127.0.0.1 -p 55434 -U postgres >/dev/null 2>&1; then
+            break
+          fi
+          sleep 1
+        done
+        ${pkgs.lib.getExe' native "pg_isready"} -h 127.0.0.1 -p 55434 -U postgres
+      '';
+      teardown = ''
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+      '';
+    };
+    script = ''
 
       psql -h 127.0.0.1 -p 55434 -U postgres -d postgres -q -c \
         "create table demo (id int primary key, s text);
@@ -76,10 +87,11 @@ in {
     '';
   };
 
-  postmaster = harnesses.hostShell {
+  postmaster = harnesses.wasixShell {
     name = "postgres-postmaster";
-    wasixCommands = postgres;
-    wasmerArgs = ["--net"];
+    shell = commands.bash;
+    commands = postgres ++ [commands.coreutils];
+    runtime.network = true;
     timeout = 1800;
     broken = "the postmaster forks its background workers, and WASIX fork() reports ENOTSUP";
     script = ''

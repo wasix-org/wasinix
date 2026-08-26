@@ -1,5 +1,5 @@
-{exposeExtendedPackage}:
-exposeExtendedPackage {
+{exposeNativeExtendedPackage}:
+exposeNativeExtendedPackage {
   patches = [
     ./quoted-attribute-names.patch
     ./select-file.patch

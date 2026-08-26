@@ -1,4 +1,5 @@
 {
+  commands,
   pkgs,
   harnesses,
   helpers,
@@ -15,11 +16,12 @@ in
       name,
       fds,
     }:
-      harnesses.hostShell {
+      harnesses.wasixShell {
         name = "python${tag}-${name}";
-        wasixCommands = pythonCommands;
+        shell = commands.bash;
+        commands = pythonCommands ++ [commands.coreutils commands.grep];
+        host.setup = ''cp ${./spawn-passfd-check.py} "$WASIX_TEST_ROOT/check.py"'';
         script = ''
-          cp ${./spawn-passfd-check.py} check.py
           python${pyVer} check.py ${lib.concatMapStringsSep " " toString fds} | tee out.log
           grep -q PASSFDS_OK out.log
         '';

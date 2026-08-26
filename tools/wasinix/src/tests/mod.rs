@@ -5155,7 +5155,7 @@ mod update {
                 "capture": 1,
                 "probe": "version",
                 "sort": "numeric",
-                "destination": "pkgs/overlay/packages/icu/versions.nix"
+                "destination": "pkgs/overlays/i/icu/versions.nix"
             },
             "version": "78.3"
         });
@@ -5168,6 +5168,7 @@ mod update {
         };
         assert_eq!(spec.attr_path, "legacyPackages.${system}");
         assert_eq!(spec.pattern, "^icu([0-9]+)$");
+        assert_eq!(spec.destination, "pkgs/overlays/i/icu/versions.nix");
     }
 
     #[test]
@@ -7440,11 +7441,12 @@ mod remote_runs {
         assert_eq!(
             crate::cli::request::host_payload(
                 "/state",
+                "github:owner/project#projects.release",
                 &["--inputs-only".to_string(), "--push-cache".to_string()],
             ),
             [
                 "--project",
-                ".#legacyPackages.x86_64-linux",
+                "github:owner/project#projects.release",
                 "ci",
                 "run",
                 "--request",
@@ -8197,7 +8199,7 @@ mod scenarios {
                     class: Some("Build".into()),
                     message: Some("builder failed with exit code 1".into()),
                     jobs: Vec::new(),
-                    position: Some("pkgs/overlays/z/zlib.nix:12".into()),
+                    position: Some("pkgs/overlays/z/zlib/wasix.nix:12".into()),
                     log: Some(LogRef {
                         path: "00112233445566778899.log.gz".into(),
                         bytes: Bytes(20_000),

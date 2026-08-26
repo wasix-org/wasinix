@@ -4,21 +4,26 @@
 # module loads, std/env init and the tokio runtime come up, and argv parsing
 # works — without needing storage volumes or a bound port.
 {
+  commands,
   entry,
   harnesses,
   ...
 }: let
   wasix = builtins.attrValues entry.commands;
 in {
-  version = harnesses.hostShell {
+  version = harnesses.wasixShell {
     name = "rustfs-version";
-    wasixCommands = wasix;
+    shell = commands.bash;
+    commands = wasix;
+    runtime.threads = true;
     script = "rustfs --version";
   };
 
-  help = harnesses.hostShell {
+  help = harnesses.wasixShell {
     name = "rustfs-help";
-    wasixCommands = wasix;
+    shell = commands.bash;
+    commands = wasix;
+    runtime.threads = true;
     script = "rustfs --help";
   };
 }

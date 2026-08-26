@@ -1,4 +1,5 @@
 {
+  commands,
   pkgs,
   entry,
   harnesses,
@@ -6,9 +7,10 @@
 }: let
   inherit (helpers) gitSetup;
 in {
-  clone-local = harnesses.hostShell {
+  clone-local = harnesses.wasixShell {
     name = "clone-local";
-    wasixCommands = builtins.attrValues entry.commands;
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils];
     script = ''
       ${gitSetup}
       mkdir source
@@ -23,13 +25,18 @@ in {
     '';
   };
 
-  push-local = harnesses.hostShell {
+  push-local = harnesses.wasixShell {
     name = "push-local";
-    hostPackages = [pkgs.git];
-    wasixCommands = builtins.attrValues entry.commands;
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils];
+    host = {
+      packages = [pkgs.git];
+      setup = ''
+        ${gitSetup}
+        ${pkgs.lib.getExe pkgs.git} init --bare --initial-branch=main remote.git
+      '';
+    };
     script = ''
-      ${gitSetup}
-      ${pkgs.lib.getExe pkgs.git} init --bare --initial-branch=main remote.git
       mkdir work && cd work
       git init
       git remote add origin "$WASIX_TEST_ROOT/remote.git"

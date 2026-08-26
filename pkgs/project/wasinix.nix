@@ -7,6 +7,7 @@
   wasmerRevision ? "dirty",
 }: let
   profiles = import ./profiles.nix;
+  wasixSystem = "wasm32-unknown-wasi";
   compatibility = import ../lib {inherit lib;};
   projectLib = import ./lib.nix {inherit lib;};
   repairPythonPackage = import ../python/lib/repair.nix {
@@ -160,7 +161,7 @@
           // args);
       mkPythonRegistry = args:
         import ../python-registry ({
-            inherit lib mkTestGroup testLib;
+            inherit harnesses lib mkTestGroup testLib;
             pkgs = nativePkgs;
           }
           // args);
@@ -181,7 +182,7 @@
             name ? (webcIdent package).name,
             entrypoint ? (package.passthru.wasmer or {}).entrypoint or name,
           }: {
-            inherit name entrypoint;
+            inherit name entrypoint package;
             artifact = (makeWasmerPackage {inherit package;}).webc;
           };
           packageCommands = package: let
@@ -333,7 +334,7 @@
       projectionRules = wasinixProjectionRules;
       crossSystemFor = _profile: spec:
         {
-          config = "wasm32-unknown-wasi";
+          config = wasixSystem;
           useLLVM = true;
           isWasix = true;
         }
@@ -373,9 +374,7 @@
               };
             })
         ]
-        ++ lib.optionals (scope == "wasix") [
-          (constructionFor nativeRaw).wasixInfrastructureOverlay
-        ];
+        ++ lib.optionals (scope == "wasix") [(constructionFor nativeRaw).wasixInfrastructureOverlay];
       nativePackageInterfacesFor = {
         nativeRaw,
         wasixRaw,
@@ -409,13 +408,13 @@
       packageTransformFor = {
         scope,
         variant,
-        packageSet,
+        ...
       }: _name: package:
         if scope == "wasix"
         then
           compatibility.applyWasixMeta
           variant.profile
-          packageSet.stdenv.hostPlatform.system
+          wasixSystem
           package
         else package;
       harnessesFor = {nativeRaw, ...}: (constructionFor nativeRaw).harnesses;
@@ -423,12 +422,12 @@
         py313 = {
           pkgs = wasixRaw.exnrefEhpic;
           interpreterPackage = "python313";
-          packageSet = wasixRaw.exnrefEhpic.python313.pkgs;
+          packageSet = wasixRaw.exnrefEhpic.${projectLib.identityAttr}.python313.pkgs;
         };
         py314 = {
           pkgs = wasixRaw.exnrefEhpic;
           interpreterPackage = "python314";
-          packageSet = wasixRaw.exnrefEhpic.python314.pkgs;
+          packageSet = wasixRaw.exnrefEhpic.${projectLib.identityAttr}.python314.pkgs;
           preferred = true;
         };
       };

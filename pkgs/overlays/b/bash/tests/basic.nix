@@ -1,4 +1,5 @@
 {
+  commands,
   pkgs,
   entry,
   harnesses,
@@ -7,9 +8,9 @@
   bashCommands = builtins.attrValues entry.commands;
 in {
   # Core shell behavior: conditionals, loops, arrays, functions, pattern matching.
-  core = harnesses.hostShell {
+  core = harnesses.wasixShell {
     name = "bash-core";
-    wasixCommands = bashCommands;
+    shell = entry.commands.bash;
     script = ''
       set +e
       bash -c 'exit 7'
@@ -37,9 +38,9 @@ in {
   # test/[ returns its result through setjmp/longjmp; off-EH must yield ordinary
   # statuses where EH profiles crash with an uncaught exception. Covers empty
   # tests, unquoted-empty-var collapse, and syntax errors (deep-frame longjmp).
-  conditionals = harnesses.hostShell {
+  conditionals = harnesses.wasixShell {
     name = "bash-conditionals";
-    wasixCommands = bashCommands;
+    shell = entry.commands.bash;
     script = ''
       check() { # check <expected-status> <script>
         local want=$1 got
@@ -66,9 +67,9 @@ in {
   };
 
   # Fork-backed features: command substitution, pipelines, subshells.
-  fork = harnesses.hostShell {
+  fork = harnesses.wasixShell {
     name = "bash-fork";
-    wasixCommands = bashCommands;
+    shell = entry.commands.bash;
     script = ''
       bash -c 'v=$(echo hi); [ "$v" = hi ]; echo "$v"'
       bash -c 'printf "a\nb\n" | while read line; do echo "$line"; done'
@@ -78,9 +79,10 @@ in {
 
   # Process substitution names a pipe as /dev/fd/<n> and hands it to a child,
   # so the runtime has to resolve that path against the opener's own fds.
-  process-substitution = harnesses.hostShell {
+  process-substitution = harnesses.wasixShell {
     name = "bash-process-substitution";
-    wasixCommands = bashCommands;
+    shell = entry.commands.bash;
+    commands = [commands.coreutils];
     script = ''
       out=$(bash -c 'read -r line < <(echo from-procsub); echo "$line"')
       if [ "$out" != "from-procsub" ]; then
@@ -100,9 +102,9 @@ in {
 
   # Interactive mode: readline must initialize and run commands. Feed a line on
   # stdin (a pipe, not a tty); -i forces interactive, EOF exits.
-  interactive = harnesses.hostShell {
+  interactive = harnesses.wasixShell {
     name = "bash-interactive";
-    wasixCommands = bashCommands;
+    shell = entry.commands.bash;
     script = ''
       out=$(printf 'echo readline-live-$((6 * 7))\n' | bash -i 2>&1)
       case "$out" in
@@ -151,9 +153,9 @@ in {
   # The sh command atom shares bash's module, and dependents exec it by that
   # name, so argv[0] must arrive as sh. PATH must reach the /bin where wasmer
   # mounts a webc's dependency commands.
-  sh = harnesses.hostShell {
+  sh = harnesses.wasixShell {
     name = "bash-sh";
-    wasixCommands = bashCommands;
+    shell = entry.commands.bash;
     script = ''
       out=$(sh -c 'echo "argv0=$0 path=$PATH"')
       if [ "$out" != "argv0=sh path=/bin:/usr/bin" ]; then

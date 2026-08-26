@@ -4,9 +4,10 @@
 {
   extendPackage,
   exposeWasixExtendedPackages,
-  lib,
+  pkgs,
 }: let
   versions = import ./versions.nix;
+  inherit (pkgs) lib;
   tweak = base:
     extendPackage base {
       configureFlags = [

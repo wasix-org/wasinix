@@ -1,13 +1,15 @@
 {
+  commands,
   entry,
   harnesses,
   helpers,
 }: let
   inherit (helpers) gitNative normalizeGitPaths gitSetup;
 in {
-  version = harnesses.hostShell {
+  version = harnesses.wasixShell {
     name = "version";
-    wasixCommands = builtins.attrValues entry.commands;
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands;
     script = "git --version";
   };
 
@@ -19,9 +21,10 @@ in {
     script = "git --version";
   };
 
-  workflow = harnesses.hostShell {
+  workflow = harnesses.wasixShell {
     name = "workflow";
-    wasixCommands = builtins.attrValues entry.commands;
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils];
     script = ''
       ${gitSetup}
       git init
@@ -50,9 +53,10 @@ in {
     '';
   };
 
-  diff = harnesses.hostShell {
+  diff = harnesses.wasixShell {
     name = "diff";
-    wasixCommands = builtins.attrValues entry.commands;
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils];
     script = ''
       ${gitSetup}
       git init
@@ -86,9 +90,10 @@ in {
     '';
   };
 
-  branch = harnesses.hostShell {
+  branch = harnesses.wasixShell {
     name = "branch";
-    wasixCommands = builtins.attrValues entry.commands;
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils];
     script = ''
       ${gitSetup}
       git init
@@ -107,9 +112,10 @@ in {
   };
 
   # -P needs USE_LIBPCRE2; without it git fails the command outright.
-  grep-pcre = harnesses.hostShell {
+  grep-pcre = harnesses.wasixShell {
     name = "grep-pcre";
-    wasixCommands = builtins.attrValues entry.commands;
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils];
     script = ''
       ${gitSetup}
       git init
@@ -127,9 +133,10 @@ in {
   # A shell subcommand: git-filter-branch runs through /bin/bash, calls the
   # coreutils and sed the webc mounts by store path, and resolves the filter's
   # own sed from PATH.
-  filter-branch = harnesses.hostShell {
+  filter-branch = harnesses.wasixShell {
     name = "filter-branch";
-    wasixCommands = builtins.attrValues entry.commands;
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands ++ [commands.coreutils];
     script = ''
       ${gitSetup}
       git init
@@ -148,9 +155,10 @@ in {
 
   # The editor is nano's command atom, mounted at /bin by the webc dependency.
   # The alias runs it through git's own shell, the way `git commit` would.
-  editor = harnesses.hostShell {
+  editor = harnesses.wasixShell {
     name = "editor";
-    wasixCommands = builtins.attrValues entry.commands;
+    shell = commands.bash;
+    commands = builtins.attrValues entry.commands;
     script = ''
       ${gitSetup}
       editor=$(git var GIT_EDITOR)

@@ -3,12 +3,18 @@
   extendPackage,
   packageSet,
   profileSets,
-  scope,
-  wasmRename,
-}: let
-  common = extendPackage packageSet.libpq {
+}:
+exposePackage (
+  extendPackage packageSet.libpq {
     pname = "psql";
-    passthru.wasix.supportedProfiles = profileSets.withEh;
+    passthru = old: let
+      previous =
+        if old == null
+        then {}
+        else old;
+    in
+      previous
+      // {wasix = (previous.wasix or {}) // {supportedProfiles = profileSets.withEh;};};
     meta = {
       mainProgram = "psql";
       description = "PostgreSQL interactive terminal";
@@ -25,17 +31,5 @@
     postInstall = ''
       rm -rf "$out/share"
     '';
-  };
-  wasix = wasmRename {wasmName = "psql";} (extendPackage common {
-    passthru.wasinix.shipped = true;
-    passthru.wasmer = {
-      env.PATH = "/bin";
-      fs."/etc" = packageSet.writeTextDir "passwd" "postgres:x:0:0:PostgreSQL:/:/bin/sh\n";
-    };
-  });
-in
-  exposePackage (
-    if scope == "wasix"
-    then wasix
-    else common
-  )
+  }
+)

@@ -3,14 +3,14 @@
 # block) rather than bundled. gnugrep/gnused/gawk/coreutils are our wasix
 # builds, since git bakes their paths into the shell subcommands.
 {
-  exposeWasixPackage,
+  exposePackageIdentity,
   package,
   packages,
   dropInputsByName,
 }:
-exposeWasixPackage (
-  let
-    lib = packages.sameProfile.lib;
+exposePackageIdentity {
+  package = let
+    inherit (packages.sameProfile) lib;
     bash = packages.wasix.preferred.bash;
     nano = packages.wasix.preferred.nano;
     coreutils = packages.wasix.preferred.coreutils;
@@ -163,5 +163,5 @@ exposeWasixPackage (
             fi
           done
         '';
-    })
-)
+    });
+}

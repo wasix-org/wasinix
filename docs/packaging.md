@@ -1,28 +1,48 @@
 # Adding a package
 
-Writing the recipe and its tests. Getting the result out to consumers, and
+Writing the package and its tests. Getting the result out to consumers, and
 keeping older versions rebuildable, is `docs/registry.md`.
 
-## A package provided natively and for WASIX
+## Package layout
 
-Put the complete definition in
-`pkgs/overlays/<first-character>/<name>/package.nix`. The unit runs in the
-native package set and every WASIX profile set:
+Each package lives under `pkgs/overlays/<initial>/<name>/`. The loader checks
+the first character and discovers two optional files:
+
+- `package.nix` defines the base package in the native set and every WASIX
+  profile set;
+- `wasix.nix` specializes the package in WASIX profile sets only.
+
+For a package nixpkgs already provides, omit `package.nix` and adapt the
+inherited package in `wasix.nix`. For a package defined here, put the definition
+and shared `passthru.wasix` policy in `package.nix`, then add `wasix.nix` only
+when the cross build needs further changes. Patches, tests, lockfiles, and
+update scripts stay in the same directory.
+
+A base package unit uses the package set from its context:
 
 ```nix
 {
   exposePackage,
   packageSet,
 }:
-exposePackage (packageSet.callPackage ./build.nix {})
+exposePackage (packageSet.buildGoModule {
+  pname = "my-tool";
+  # ...
+})
 ```
 
-`build.nix` is an ordinary nixpkgs-style package function. Use arguments such as
-`stdenv`, `rustPlatform`, and named dependencies. Where the native and WASIX
-builds differ in something small, branch on `stdenv.hostPlatform.isWasix` inside
-that definition. A unit needing different top-level constructions may instead
-request `scope`, `variant`, and `packageSet` in `package.nix` and return the
-appropriate derivation from one visible definition.
+A WASIX specialization derives from the preceding package:
+
+```nix
+{
+  exposeWasixExtendedPackage,
+  profileSets,
+}:
+exposeWasixExtendedPackage {
+  passthru.wasix.supportedProfiles = profileSets.withEh;
+  configureFlags = ["--disable-bar"];
+}
+```
 
 The results are `packages.native.<name>` and `packages.wasix.<profile>.<name>`.
 `packages.wasix.preferred.<name>` remains the convenient canonical WASIX build.
@@ -43,19 +63,15 @@ inherited = {
 An inherited package is registered and retained like any other project package.
 Move it to an inventory unit once it needs a WASIX-specific transformation.
 
-The regular inventory uses one-character buckets. A WASIX-only adaptation uses
-one of these forms:
-
-- No colocated support files: `pkgs/overlays/<first-character>/<name>.nix`.
-- Patches or tests: `pkgs/overlays/<first-character>/<name>/wasix.nix` with
-  sibling `patches/` and `tests/` directories.
-- Version families: one directory whose unit returns several derivations with
-  `exposeWasixExtendedPackages`. See `pkgs/overlays/i/icu/`.
+The regular inventory uses one-character buckets. A WASIX-only adaptation
+lives at `pkgs/overlays/<first-character>/<name>/wasix.nix`; patches and tests
+remain beside it. Version families use one directory whose unit returns several
+derivations with `exposeWasixExtendedPackages`. See `pkgs/overlays/i/icu/`.
 
 A package file is a function over one argument set:
 
 ```nix
-{package, packages, exposeWasixPackage, exposeWasixExtendedPackage, ...}: ...
+{package, packages, exposePackage, exposeWasixExtendedPackage, ...}: ...
 ```
 
 `package` is the preceding value of the discovered attribute.
@@ -67,32 +83,20 @@ another profile.
 Use `packages.sameProfile` for linked dependencies. Reaching into an absolute
 profile view from a package unit pins a profile the package does not control.
 
-The loader never instantiates `wasix.nix` in a native package set or native
-build-package splice. A `package.nix` is the form for a definition that owns its
-native behavior too. `exposeNativePackage` declares a complete package with no
-WASIX variant; WASIX package sets reuse that native result as host-side
-construction plumbing instead of instantiating the unit again. An entry cannot
-contain both files, and `recipe.nix` is not a supported entry form.
-
-An empty `supportedProfiles` only keeps an instantiated package out of WASIX
-catalog projections. It does not make the package native-only;
-`exposeNativePackage` is the construction-level declaration for that behavior.
-
 Patches live next to the file that applies them, so a package's patches belong
-in its own `patches/` directory and shared toolchain plumbing remains under
-`pkgs/toolchain/`. Do not vendor a file, lockfile, or bindist without stating
-the reason in the commit. Prefer nixpkgs plus a vendored patch over maintaining
-separate sources, and a version tag over a pinned hash.
+in its own `patches/` directory and toolchain patches under `pkgs/toolchain/`.
+Do not vendor a file, lockfile, or bindist without stating the reason in the
+commit. Prefer nixpkgs plus a vendored patch over maintaining separate sources,
+and a version tag over a pinned hash.
 
 ## Tweaks
 
 `exposeWasixExtendedPackage {<attrs>}` extends and exposes the preceding package
-inside a WASIX adaptation. `exposeExtendedPackage` is the scope-independent form
-for a complete package unit that deliberately extends a preceding value. Their
-`extendPackage` merge concatenates phases, appends lists, recursively merges
-non-derivation attrsets, lets a function transform the old value, and replaces
-other values. It does not choose check policy. Use `extendPackage package attrs`
-directly when a unit needs the intermediate derivation.
+in a `wasix.nix` unit. Its `extendPackage` merge concatenates phases, appends
+lists, recursively merges non-derivation attrsets, lets a function transform the
+old value, and replaces other values. It does not choose check policy. Use
+`extendPackage package attrs` directly when a unit needs the intermediate
+derivation.
 
 ## A library
 
@@ -127,7 +131,7 @@ that matrix using the package declaration.
 
 ## A Rust CLI
 
-Usually `{exposeWasixPackage, package}: exposeWasixPackage package`; the WASIX
+Usually `{exposePackage, package}: exposePackage package`; the WASIX
 `rustPlatform` builds it through cargo-wasix and installs the `.wasm` files.
 Crates not in nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
 
@@ -136,8 +140,8 @@ Crates not in nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
 1. Rename the binary to `<name>.wasm` and declare it shipped:
 
    ```nix
-   {exposeWasixPackage, extendPackage, package, wasmRename}:
-   exposeWasixPackage (wasmRename {wasmName = "foo";} (extendPackage package {
+   {exposePackage, extendPackage, package, wasmRename}:
+   exposePackage (wasmRename {wasmName = "foo";} (extendPackage package {
      passthru.wasinix.shipped = true;
    }))
    ```
@@ -202,10 +206,10 @@ Crates not in nixpkgs, crate edits, and the overlay registry: `docs/rust.md`.
   `pkgs/python/wheels/default.nix` (`pyImport` if the module name differs). Most
   need no adaptation; compatible package suites run through the emulated check
   machinery.
-- Fix a build: `pkgs/python-overlays/<first-character>/<attr>.nix`, using
+- Fix a build in `pkgs/python-overlays/<initial>/<attr>.nix`, using
   `packages.sameProfile` for Python dependencies and `pkgs` for the enclosing
-  WASIX set. An entry with support files uses `<attr>/package.nix`; patches stay
-  in that directory. Rust-wheel helpers live in `pkgs/python/lib/`.
+  WASIX set. Expand the entry to `<attr>/package.nix` when it needs colocated
+  patches or tests. Rust-wheel helpers live in `pkgs/python/lib/`.
 - Ship an older release too (a version consumers pin): see
   [Registry history](registry.md#registry-history).
 - Which wheel to add next, and what it unblocks: `python-coverage.md`.
@@ -240,9 +244,9 @@ the same two package names.
 
 ## Tests
 
-`pkgs/overlays/<first-character>/<name>/tests/*.nix` files receive the same
-final context as package construction plus `entry`, the completed catalog entry.
-Each returns an attrset of test derivations. A sibling `helpers.nix` can provide
+`pkgs/overlays/<initial>/<name>/tests/*.nix` files receive the same final
+context as package construction plus `entry`, the completed catalog entry. Each
+returns an attrset of test derivations. A sibling `helpers.nix` can provide
 shared setup. Tests are catalog projections under `tests.<subject>.<name>`; they
 are not attached back to packages as an authoritative `passthru.tests` tree.
 
@@ -255,8 +259,8 @@ consumer, build against `packages.sameProfile` and use
 Python wheel tests use `harnesses.python`. It copies the wheel and explicit test
 dependencies into a clean target, runs the packaged Python WebC under Wasmer,
 and does not mount the Nix store. Python tests live at
-`pkgs/python-overlays/<first-character>/<attr>/tests/*.nix`; use the directory
-form whenever an adaptation needs tests or other support files.
+`pkgs/python-overlays/<initial>/<attr>/tests/*.nix`, including when the package
+adaptation itself is the flat `<attr>.nix` form.
 
 Every wheel also gets the guards in `pkgs/python/wheels/project.nix`: `import`
 runs the module on the shipped python, `self-contained` rejects a baked

@@ -1,4 +1,5 @@
 {
+  commands,
   pkgs,
   entry,
   harnesses,
@@ -15,9 +16,10 @@
       wasixCommands = wasix;
     };
 in {
-  version = harnesses.hostShell {
+  version = harnesses.wasixShell {
     name = "tar-version";
-    wasixCommands = wasix;
+    shell = commands.bash;
+    commands = wasix;
     script = "tar --version";
   };
 

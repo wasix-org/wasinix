@@ -78,6 +78,7 @@
     cgi.assign = ("git-http-backend" => "")
     EOF
         ${pkgs.lighttpd}/sbin/lighttpd -D -f lighttpd.conf &
+        server_pid=$!
         sleep 1
   '';
 
@@ -101,6 +102,7 @@
     ssl.privkey = "$(pwd)/server.key"
     EOF
         ${pkgs.lighttpd}/sbin/lighttpd -D -f lighttpd.conf &
+        server_pid=$!
         sleep 1
         cp server.crt "$HOME/server.crt"
         export GIT_SSL_CAINFO=$HOME/server.crt

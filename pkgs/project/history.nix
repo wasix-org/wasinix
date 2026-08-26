@@ -92,22 +92,25 @@
       (lib.attrNames ((historyTables.${extension.id} or {}).${scope} or {})))
     extensions;
 
-  validateHistory = historyTables: extensions: scope: packageSet: let
+  validateHistory = historyTables: extensions: scope: packageSets: let
     declarations = historyDeclarationsFor historyTables extensions scope;
     grouped = lib.groupBy (declaration: declaration.name) declarations;
     duplicates = lib.attrNames (lib.filterAttrs (_: values: lib.length values > 1) grouped);
-    invalid = lib.filter (declaration: let
-      package = packageSet.${declaration.name} or null;
-    in
-      package
-      == null
-      || (projectLib.packageMetadata package).source or null != declaration.source)
-    declarations;
+    ownersFor = declaration:
+      lib.unique (lib.filter (owner: owner != null) (map (
+          packageSet:
+            (packageSet.${projectLib.registryAttr} or {}).${declaration.name} or null
+        )
+        packageSets));
+    invalid = lib.filter (declaration: ownersFor declaration != [declaration.source]) declarations;
   in
     lib.throwIf (duplicates != [])
     "multiple Wasinix sources retain history for ${scope} package(s): ${lib.concatStringsSep ", " duplicates}"
     (lib.throwIf (invalid != [])
-      "${scope} history does not match its current package owner: ${lib.concatStringsSep ", " (map (declaration: "${declaration.source}.${declaration.name}") invalid)}"
+      "${scope} history does not match its current package owner: ${lib.concatStringsSep ", " (map (declaration: let
+        owners = ownersFor declaration;
+      in "${declaration.source}.${declaration.name} (owners: ${lib.concatStringsSep ", " owners})")
+      invalid)}"
       true);
 
   validateProject = {
@@ -117,8 +120,8 @@
   }: let
     historyTables = historyTablesFor extensions;
   in
-    lib.all (validateHistory historyTables extensions "wasix") (lib.attrValues packageSets.wasix)
-    && lib.all (validateHistory historyTables extensions "python") (lib.attrValues packageSets.python);
+    validateHistory historyTables extensions "wasix" (lib.attrValues packageSets.wasix)
+    && validateHistory historyTables extensions "python" (lib.attrValues packageSets.python);
 
   projectionContextFor = {
     entry,

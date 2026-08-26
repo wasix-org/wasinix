@@ -1,5 +1,7 @@
 {lib}: let
   registryAttr = "__wasinixRegisteredPackages";
+  compatibilityAttr = "__wasinixPackageCompatibility";
+  identityAttr = "__wasinixPackageIdentities";
   extensionContextsAttr = "__wasinixExtensionContexts";
   unitOverlaysAttr = "__wasinixUnitOverlays";
   historyBaseAttr = "__wasinixHistoryBase";
@@ -220,15 +222,6 @@
   in
     lib.foldl' merge {} files;
 
-  withoutMachineMetadata = package:
-    package.overrideAttrs (old: {
-      passthru =
-        (old.passthru or {})
-        // {
-          wasinix = removeAttrs ((old.passthru or {}).wasinix or {}) machineMetadata;
-        };
-    });
-
   unitResult = {
     context,
     extendPackageFor ? extendPackage,
@@ -236,64 +229,78 @@
     name,
     previous ? null,
     previousAvailable ? previous != null,
-    previousRegistered ? previous != null && ((packageMetadata previous).source or null) != null,
+    previousRegistered ? false,
     previousSet ? {},
   }: let
     function = import file;
-    exposePackage = package: {
-      ${name} =
-        if previousRegistered
-        then package
-        else withoutMachineMetadata package;
-    };
-    exposeExtendedPackage = attrs:
-      if !previousAvailable
-      then throw "${name}: exposeExtendedPackage requires a preceding package"
-      else exposePackage (extendPackageFor previous attrs);
-    exposeNativePackage = package:
-      exposePackage (package.overrideAttrs (old: {
+    cleanMachineMetadata = package:
+      package.overrideAttrs (old: {
         passthru =
           (old.passthru or {})
           // {
-            wasix = ((old.passthru or {}).wasix or {}) // {supportedProfiles = [];};
+            wasinix = removeAttrs ((old.passthru or {}).wasinix or {}) machineMetadata;
           };
-      }));
-    exposePackageVariants = {
-      native,
-      wasix,
-    }:
-      exposePackage (
-        if context.scope == "wasix"
-        then wasix
-        else native
-      );
-    exposeWasixPackage = candidate:
+      });
+    exposeNamedPackage = resultName: package:
+      if !lib.isDerivation package
+      then throw "package unit ${toString file} exposed non-derivation attribute '${resultName}'"
+      else if resultName == name && previousRegistered
+      then package
+      else cleanMachineMetadata package;
+    exposePackage = package: {${name} = exposeNamedPackage name package;};
+    exposePackageIdentity = {
+      package,
+      wasix ? ((package.passthru or {}).wasix or {}),
+    }: {
+      ${compatibilityAttr}.${name} = wasix;
+      ${identityAttr}.${name} = cleanMachineMetadata package;
+    };
+    exposeNativePackageIdentity = args:
+      if (context.scope or "native") == "wasix"
+      then {}
+      else exposePackageIdentity args;
+    exposeExtendedPackage = attrs:
       if !previousAvailable
-      then throw "${name}: exposeWasixPackage requires a preceding package"
-      else if context.scope != "wasix"
-      then throw "${name}: exposeWasixPackage is only valid in a WASIX package set"
-      else exposePackage candidate;
+      then throw "${name}: exposeExtendedPackage requires a preceding package"
+      else
+        exposePackage (
+          builtins.addErrorContext "while extending the preceding package for ${toString file}\n"
+          (extendPackageFor previous attrs)
+        );
+    exposeNativeExtendedPackage = attrs:
+      if (context.scope or "native") == "wasix"
+      then {}
+      else exposeExtendedPackage attrs;
+    exposePackages = names:
+      if (context.scope or "native") == "wasix"
+      then {}
+      else {
+        ${identityAttr} = lib.genAttrs names (resultName:
+          if !(builtins.hasAttr resultName previousSet)
+          then throw "${name}: exposePackages requires preceding package '${resultName}'"
+          else cleanMachineMetadata previousSet.${resultName});
+      };
+    exposePackagesWithWasix = declarations:
+      if (context.scope or "native") == "wasix"
+      then {}
+      else {${compatibilityAttr} = declarations;};
+    exposeWasixPackage = package:
+      if (context.scope or "native") == "wasix"
+      then exposePackage package
+      else if !previousAvailable
+      then throw "${name}: every project package requires a native package"
+      else exposePackage previous;
     exposeWasixExtendedPackage = attrs:
       if !previousAvailable
       then throw "${name}: exposeWasixExtendedPackage requires a preceding package"
-      else exposeWasixPackage (extendPackageFor previous attrs);
-    exposeWasixExtendedPackages = updates:
-      lib.mapAttrs (
-        resultName: update:
-          if !(builtins.hasAttr resultName previousSet)
-          then throw "${name}: exposeWasixExtendedPackages requires preceding package '${resultName}'"
-          else let
-            base = previousSet.${resultName};
-            candidate =
-              if builtins.isFunction update
-              then update base
-              else extendPackageFor base update;
-          in
-            if context.scope != "wasix"
-            then throw "${name}: exposeWasixExtendedPackages is only valid in a WASIX package set"
-            else candidate
-      )
-      updates;
+      else let
+        package = extendPackageFor previous attrs;
+      in
+        exposePackage (
+          if (context.scope or "native") == "wasix"
+          then package
+          else previous
+        );
     exposeExtendedPackages = updates:
       lib.mapAttrs (
         resultName: update:
@@ -304,15 +311,48 @@
           else extendPackageFor previousSet.${resultName} update
       )
       updates;
+    exposeExtendedPackageIdentities = updates: {
+      ${identityAttr} =
+        lib.mapAttrs (
+          resultName: update:
+            if !(builtins.hasAttr resultName previousSet)
+            then throw "${name}: exposeExtendedPackageIdentities requires preceding package '${resultName}'"
+            else
+              cleanMachineMetadata (
+                if builtins.isFunction update
+                then update previousSet.${resultName}
+                else extendPackageFor previousSet.${resultName} update
+              )
+        )
+        updates;
+    };
+    exposeWasixExtendedPackages = updates:
+      lib.mapAttrs (
+        resultName: update:
+          if !(builtins.hasAttr resultName previousSet)
+          then throw "${name}: exposeWasixExtendedPackages requires preceding package '${resultName}'"
+          else let
+            base = previousSet.${resultName};
+            package =
+              if builtins.isFunction update
+              then update base
+              else extendPackageFor base update;
+          in
+            if (context.scope or "native") == "wasix"
+            then package
+            else base
+      )
+      updates;
     value =
       callWithLabel "package unit ${toString file}" (
         context
         // {
-          inherit exposeExtendedPackage exposeExtendedPackages exposeNativePackage exposePackage exposePackageVariants exposeWasixExtendedPackage exposeWasixExtendedPackages exposeWasixPackage;
+          inherit exposeExtendedPackage exposeExtendedPackageIdentities exposeExtendedPackages exposeNativeExtendedPackage exposeNativePackageIdentity exposePackage exposePackageIdentity exposePackages exposePackagesWithWasix exposeWasixExtendedPackage exposeWasixExtendedPackages exposeWasixPackage;
         }
         // lib.optionalAttrs previousAvailable {package = previous;}
       )
       function;
+    visibleValue = removeAttrs value [compatibilityAttr identityAttr];
     packages =
       lib.mapAttrs (
         resultName: package:
@@ -320,7 +360,11 @@
           "package unit ${toString file} returned non-derivation attribute '${resultName}'"
           package
       )
-      value;
+      visibleValue;
+    result =
+      packages
+      // lib.optionalAttrs (value ? ${compatibilityAttr}) {${compatibilityAttr} = value.${compatibilityAttr};}
+      // lib.optionalAttrs (value ? ${identityAttr}) {${identityAttr} = value.${identityAttr};};
   in
     lib.throwIf (!builtins.isFunction function)
     "package unit ${toString file} must be a function"
@@ -328,98 +372,148 @@
       "package unit ${toString file} returned a bare derivation; use exposePackage"
       (lib.throwIf (!lib.isAttrs value)
         "package unit ${toString file} must return an attribute set of derivations"
-        packages));
+        result));
 
-  discoverShardedUnits = {
+  discoverUnits = dir: let
+    entries = builtins.readDir dir;
+    files =
+      map (name: {
+        inherit name;
+        directory = null;
+        file = dir + "/${name}.nix";
+        kind = "package";
+      })
+      (lib.filter (name: name != "default" && name != "history")
+        (map (lib.removeSuffix ".nix")
+          (lib.attrNames (lib.filterAttrs (name: type: type == "regular" && lib.hasSuffix ".nix" name) entries))));
+    directoryNames = lib.attrNames (lib.filterAttrs (_: type: type == "directory") entries);
+    recipes = lib.filter (name: builtins.pathExists (dir + "/${name}/recipe.nix")) directoryNames;
+    directories = lib.concatMap (name: let
+      packageFile = dir + "/${name}/package.nix";
+    in
+      lib.optional (builtins.pathExists packageFile) {
+        inherit name;
+        directory = dir + "/${name}";
+        file = packageFile;
+        kind = "package";
+      })
+    directoryNames;
+  in
+    lib.throwIf (recipes != [])
+    "package inventory ${toString dir} contains obsolete recipe.nix entries: ${lib.concatStringsSep ", " recipes}"
+    (files ++ directories);
+
+  discoverShardedInventory = {
     dir,
     lane,
   }: let
-    rootEntries = builtins.readDir dir;
-    rootFiles = lib.attrNames (lib.filterAttrs (_: type: type == "regular") rootEntries);
-    invalidRootFiles = lib.filter (name: name != "history.json") rootFiles;
-    buckets = lib.attrNames (lib.filterAttrs (_: type: type == "directory") rootEntries);
-    invalidBuckets = lib.filter (name: builtins.match "[a-z0-9]" name == null) buckets;
-    unitsForBucket = bucket: let
+    entries = builtins.readDir dir;
+    buckets = lib.attrNames (lib.filterAttrs (_: type: type == "directory") entries);
+    invalidBuckets = lib.filter (bucket: builtins.match "[a-z0-9]" bucket == null) buckets;
+    discoverBucket = bucket: let
       bucketDir = dir + "/${bucket}";
-      entries = builtins.readDir bucketDir;
-      regularFiles = lib.attrNames (lib.filterAttrs (_: type: type == "regular") entries);
-      invalidFiles = lib.filter (name: !lib.hasSuffix ".nix" name) regularFiles;
-      flatUnits =
-        map (fileName: {
-          name = lib.removeSuffix ".nix" fileName;
-          directory = null;
-          file = bucketDir + "/${fileName}";
-          kind =
-            if lane == "packages"
-            then "wasix"
-            else "package";
-        })
-        regularFiles;
-      directoryNames = lib.attrNames (lib.filterAttrs (_: type: type == "directory") entries);
-      stateFor = name: let
+      bucketEntries = builtins.readDir bucketDir;
+      regularNames = lib.attrNames (lib.filterAttrs (_name: type: type == "regular") bucketEntries);
+      invalidFiles = lib.filter (name: !lib.hasSuffix ".nix" name) regularNames;
+      files = map (name: {
+        inherit name;
+        directory = null;
+        file = bucketDir + "/${name}.nix";
+        specializationFile = null;
+        kind =
+          if lane == "packages"
+          then "wasix"
+          else "package";
+      }) (map (lib.removeSuffix ".nix") (lib.filter (lib.hasSuffix ".nix") regularNames));
+      directoryNames = lib.attrNames (lib.filterAttrs (_name: type: type == "directory") bucketEntries);
+      directoryState = name: let
         directory = bucketDir + "/${name}";
+        packageFile = directory + "/package.nix";
+        wasixFile = directory + "/wasix.nix";
+        recipeFile = directory + "/recipe.nix";
+        hasPackage = builtins.pathExists packageFile;
+        hasWasix = builtins.pathExists wasixFile;
+        hasRecipe = builtins.pathExists recipeFile;
       in {
-        inherit directory name;
-        package = builtins.pathExists (directory + "/package.nix");
-        recipe = builtins.pathExists (directory + "/recipe.nix");
-        wasix = builtins.pathExists (directory + "/wasix.nix");
+        inherit directory hasPackage hasRecipe hasWasix name packageFile recipeFile wasixFile;
       };
-      states = map stateFor directoryNames;
-      conflicts = lib.filter (state: state.package && state.wasix) states;
-      recipes = lib.filter (state: state.recipe) states;
-      invalidWasix = lib.filter (state: lane == "python" && state.wasix) states;
-      missing = lib.filter (state: !state.package && !state.wasix && !state.recipe) states;
-      directoryUnits = map (state: {
+      states = map directoryState directoryNames;
+      recipes = lib.filter (state: state.hasRecipe) states;
+      invalidWasix = lib.filter (state: lane == "python" && state.hasWasix) states;
+      missing = lib.filter (state: !state.hasPackage && !state.hasWasix && !state.hasRecipe) states;
+      directories = map (state: {
         inherit (state) directory name;
         file =
-          state.directory
-          + (
-            if state.package
-            then "/package.nix"
-            else "/wasix.nix"
-          );
+          if state.hasPackage
+          then state.packageFile
+          else state.wasixFile;
         kind =
-          if state.package
+          if state.hasPackage
           then "package"
           else "wasix";
-      }) (lib.filter (state: state.package || state.wasix) states);
-      flatConflicts = lib.intersectLists (map (unit: unit.name) flatUnits) (map (unit: unit.name) directoryUnits);
+        specializationFile =
+          if state.hasWasix
+          then state.wasixFile
+          else null;
+      }) (lib.filter (state: state.hasPackage || state.hasWasix) states);
+      flatNames = map (unit: unit.name) files;
+      directoryNames' = map (unit: unit.name) directories;
+      flatConflicts = lib.intersectLists flatNames directoryNames';
       names = values: lib.concatStringsSep ", " (map (value: value.name) values);
     in
       lib.throwIf (invalidFiles != [])
-      "inventory ${toString dir} has loose support file(s) in bucket '${bucket}': ${lib.concatStringsSep ", " invalidFiles}"
-      (lib.throwIf (conflicts != [])
-        "inventory ${toString dir} has entries containing both package.nix and wasix.nix: ${names conflicts}"
-        (lib.throwIf (recipes != [])
-          "inventory ${toString dir} contains obsolete recipe.nix entries: ${names recipes}"
-          (lib.throwIf (invalidWasix != [])
-            "Python inventory ${toString dir} contains wasix.nix entries: ${names invalidWasix}"
-            (lib.throwIf (missing != [])
-              "inventory ${toString dir} has directories without an entry file: ${names missing}"
-              (lib.throwIf (flatConflicts != [])
-                "inventory ${toString dir} defines both flat and directory entries: ${lib.concatStringsSep ", " flatConflicts}"
-                (flatUnits ++ directoryUnits))))));
-    units = lib.concatMap unitsForBucket buckets;
-    misplaced = lib.filter (unit: let
-      relative = lib.removePrefix (toString dir + "/") (toString unit.file);
-    in
-      lib.substring 0 1 unit.name != lib.substring 0 1 relative)
-    units;
+      "inventory bucket ${toString bucketDir} contains non-Nix file(s): ${lib.concatStringsSep ", " invalidFiles}"
+      (lib.throwIf (recipes != [])
+        "inventory ${toString dir} contains obsolete recipe.nix entries: ${names recipes}"
+        (lib.throwIf (invalidWasix != [])
+          "Python inventory ${toString dir} contains wasix.nix entries: ${names invalidWasix}"
+          (lib.throwIf (missing != [])
+            "inventory ${toString dir} has directories without an entry file: ${names missing}"
+            (lib.throwIf (flatConflicts != [])
+              "inventory ${toString dir} defines both flat and directory entries: ${lib.concatStringsSep ", " flatConflicts}"
+              (files ++ directories)))));
+    unitsByBucket = lib.genAttrs buckets discoverBucket;
+    misplaced = lib.concatMap (bucket:
+      map (unit: "${bucket}/${unit.name}")
+      (lib.filter (unit: lib.substring 0 1 unit.name != bucket) unitsByBucket.${bucket}))
+    buckets;
+    units = lib.concatMap (bucket: unitsByBucket.${bucket}) buckets;
+    grouped = lib.groupBy (unit: unit.name) units;
+    duplicates = lib.attrNames (lib.filterAttrs (_: values: lib.length values > 1) grouped);
   in
-    lib.throwIf (invalidRootFiles != [])
-    "inventory ${toString dir} has loose root file(s): ${lib.concatStringsSep ", " invalidRootFiles}"
-    (lib.throwIf (invalidBuckets != [])
-      "inventory ${toString dir} has invalid bucket(s): ${lib.concatStringsSep ", " invalidBuckets}"
-      (lib.throwIf (misplaced != [])
-        "inventory ${toString dir} has entries in the wrong bucket: ${lib.concatStringsSep ", " (map (unit: unit.name) misplaced)}"
-        units));
+    lib.throwIf (invalidBuckets != [])
+    "inventory ${toString dir} has invalid bucket(s): ${lib.concatStringsSep ", " invalidBuckets}"
+    (lib.throwIf (misplaced != [])
+      "inventory ${toString dir} has entries in the wrong bucket: ${lib.concatStringsSep ", " misplaced}"
+      (lib.throwIf (duplicates != [])
+        "inventory ${toString dir} defines duplicate package name(s): ${lib.concatStringsSep ", " duplicates}"
+        {inherit units;}));
 
   mergeDisjoint = state: unit: let
-    duplicate = lib.intersectLists (lib.attrNames state) (lib.attrNames unit);
+    stateCompatibility = state.${compatibilityAttr} or {};
+    unitCompatibility = unit.${compatibilityAttr} or {};
+    stateIdentities = state.${identityAttr} or {};
+    unitIdentities = unit.${identityAttr} or {};
+    statePackages = removeAttrs state [compatibilityAttr identityAttr];
+    unitPackages = removeAttrs unit [compatibilityAttr identityAttr];
+    duplicate = lib.intersectLists (lib.attrNames statePackages) (lib.attrNames unitPackages);
+    duplicateCompatibility = lib.intersectLists (lib.attrNames stateCompatibility) (lib.attrNames unitCompatibility);
+    duplicateIdentities = lib.intersectLists (lib.attrNames stateIdentities) (lib.attrNames unitIdentities);
   in
     lib.throwIf (duplicate != [])
     "package units define duplicate attribute(s): ${lib.concatStringsSep ", " duplicate}"
-    (state // unit);
+    (lib.throwIf (duplicateCompatibility != [])
+      "package units define duplicate compatibility for: ${lib.concatStringsSep ", " duplicateCompatibility}"
+      (lib.throwIf (duplicateIdentities != [])
+        "package units define duplicate identities for: ${lib.concatStringsSep ", " duplicateIdentities}"
+        (statePackages
+          // unitPackages
+          // lib.optionalAttrs (stateCompatibility != {} || unitCompatibility != {}) {
+            ${compatibilityAttr} = stateCompatibility // unitCompatibility;
+          }
+          // lib.optionalAttrs (stateIdentities != {} || unitIdentities != {}) {
+            ${identityAttr} = stateIdentities // unitIdentities;
+          })));
 
   packageMetadata = package: (package.passthru or {}).wasinix or {};
 
@@ -536,7 +630,7 @@
         })
         // {versions = {};}));
 in rec {
-  inherit address addressSegment buildHostPypaTools callWith callWithLabel discoverShardedUnits dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix dropSphinxDocs extendAttrs extendPythonPackage extensionContextsAttr historyBaseAttr historyOverlaysAttr linkInputs loadPackageOverlays loadTestDirectory machineMetadata mergeScript packageForEntry packageMetadata registryAttr replaceInputsByName stampPackage unitOverlaysAttr unitResult wasmRename;
+  inherit address addressSegment buildHostPypaTools callWith callWithLabel compatibilityAttr discoverShardedInventory discoverUnits dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix dropSphinxDocs extendAttrs extendPythonPackage extensionContextsAttr historyBaseAttr historyOverlaysAttr identityAttr linkInputs loadPackageOverlays loadTestDirectory machineMetadata mergeScript packageForEntry packageMetadata registryAttr replaceInputsByName stampPackage unitOverlaysAttr unitResult wasmRename;
 
   inherit extendPackage;
 
@@ -547,50 +641,66 @@ in rec {
     extendPackageFor ? extendPackage,
     expose ? [],
     inherited ? {},
-    lane ? "packages",
-    scope ? null,
+    part ? "all",
+    selectUnit ? _name: true,
+    sharded ? false,
+    scope ? "native",
   }: final: prev: let
-    formalsFor = unit: builtins.functionArgs (import unit.file);
-    instantiatePackage = unit: final': prev': let
-      formals = formalsFor unit;
-      context = contextFor {
-        final = final';
-        prev = prev';
+    inventory =
+      if sharded
+      then
+        discoverShardedInventory {
+          inherit dir;
+          lane =
+            if scope == "python"
+            then "python"
+            else "packages";
+        }
+      else {
+        units = discoverUnits dir;
+        directories =
+          lib.mapAttrsToList (name: _type: {
+            inherit name;
+            directory = dir + "/${name}";
+          })
+          (lib.filterAttrs (_: type: type == "directory") (builtins.readDir dir));
       };
-      nativeOnly = formals ? exposeNativePackage;
+    instantiatePackage = unit: final': prev': let
+      formals = builtins.functionArgs (import unit.file);
       requestsPrevious =
         formals ? package
         || formals ? exposeExtendedPackage
-        || formals ? exposeWasixExtendedPackage
-        || formals ? exposeWasixExtendedPackages
-        || formals ? exposeWasixPackage;
+        || formals ? exposeExtendedPackageIdentities
+        || formals ? exposeNativeExtendedPackage
+        || formals ? exposePackages
+        || formals ? exposePackagesWithWasix
+        || formals ? exposeWasixPackage
+        || formals ? exposeWasixExtendedPackage;
       previousAvailable = builtins.hasAttr unit.name prev';
     in
-      if scope == "wasix" && nativeOnly
-      then {
-        ${unit.name} = withoutMachineMetadata context.packages.native.${unit.name};
-      }
-      else
-        unitResult {
-          inherit (unit) file name;
-          inherit extendPackageFor context;
-          previous =
-            if requestsPrevious && previousAvailable
-            then builtins.addErrorContext "while resolving the preceding package for ${toString unit.file}\n" (prev'.${unit.name} or null)
-            else null;
-          inherit previousAvailable;
-          previousRegistered = builtins.hasAttr unit.name (prev'.${registryAttr} or {});
-          previousSet = prev';
+      unitResult {
+        inherit (unit) file name;
+        inherit extendPackageFor;
+        context = contextFor {
+          final = final';
+          prev = prev';
         };
+        previous =
+          if requestsPrevious && previousAvailable
+          then builtins.addErrorContext "while resolving the preceding package for ${toString unit.file}\n" (prev'.${unit.name} or null)
+          else null;
+        inherit previousAvailable;
+        previousRegistered = builtins.hasAttr unit.name (prev'.${registryAttr} or {});
+        previousSet = prev';
+      };
     instantiate = instantiatePackage;
-    discoveredUnits = discoverShardedUnits {inherit dir lane;};
     inheritedDeclarations =
       lib.throwIf (!lib.isAttrs inherited || lib.isDerivation inherited)
       "package directory ${toString dir} has a non-attribute inherited declaration"
       inherited;
     inheritedDeclarationNames = lib.attrNames inheritedDeclarations;
+    selectedInheritedNames = lib.filter selectUnit inheritedDeclarationNames;
     invalidInheritedDeclarations = lib.attrNames (lib.filterAttrs (_: value: !lib.isAttrs value || lib.isDerivation value) inheritedDeclarations);
-    inheritedUnitConflicts = lib.intersectLists inheritedDeclarationNames (map (unit: unit.name) discoveredUnits);
     inheritedResult = previous: name:
       if !(builtins.hasAttr name previous)
       then throw "${name}: inherited package requires a preceding package"
@@ -604,43 +714,124 @@ in rec {
         });
       };
     inheritedResults =
-      lib.optionals (prev.stdenv.hostPlatform.isWasix or false)
+      lib.optionals (scope == "wasix")
       (map (name: {
           kind = "inherited";
           inherit definition;
           result = inheritedResult prev name;
           replay = _final: previous: inheritedResult previous name;
         })
-        inheritedDeclarationNames);
-    units =
-      lib.filter (
-        unit: let
-          wrongHost = unit.kind == "wasix" && !(prev.stdenv.hostPlatform.isWasix or false);
-        in
-          !(lane == "packages" && wrongHost)
-      )
-      discoveredUnits;
-    discoveredResults =
+        selectedInheritedNames);
+    instantiateResults = previous: units:
       map (unit: {
         inherit (unit) kind;
         definition = {
           inherit (unit) directory file;
         };
-        result = instantiate unit final prev;
+        result = instantiate unit final previous;
         replay = instantiate unit;
       })
       units;
-    results = inheritedResults ++ discoveredResults;
-    packages = builtins.foldl' mergeDisjoint {} (map (item: item.result) results);
-    completeNames = lib.concatMap (item: lib.optionals (item.kind == "package") (lib.attrNames item.result)) results;
-    precedingNames = lib.subtractLists (lib.attrNames packages) (expose ++ completeNames);
+    discoveredUnits =
+      if part == "wasix"
+      then []
+      else
+        lib.filter (unit:
+          selectUnit unit.name
+          && (
+            if sharded
+            then unit.kind == "package"
+            else
+              scope
+              != "wasix"
+              || unit.kind == "package"
+              || (unit.directory != null && builtins.pathExists (unit.directory + "/wasix.nix"))
+          ))
+        inventory.units;
+    discoveredNames = map (unit: unit.name) discoveredUnits;
+    implicitUnits =
+      if sharded
+      then
+        map (unit: {
+          inherit (unit) name directory;
+        })
+        (lib.filter (unit: selectUnit unit.name && unit.kind == "wasix") inventory.units)
+      else
+        map (entry: {
+          inherit (entry) name directory;
+          file = entry.directory + "/wasix.nix";
+          kind = "implicit";
+        })
+        (lib.filter (entry:
+          selectUnit entry.name
+          && !(builtins.elem entry.name discoveredNames)
+          && builtins.pathExists (entry.directory + "/wasix.nix"))
+        inventory.directories);
+    units = discoveredUnits;
+    inheritedUnitConflicts = lib.intersectLists inheritedDeclarationNames (map (unit: unit.name) inventory.units);
+    baseResults = inheritedResults ++ instantiateResults prev units;
+    basePackages = builtins.foldl' mergeDisjoint {} (map (item: item.result) baseResults);
+    wasixUnits =
+      if scope != "wasix" || part == "base"
+      then []
+      else if sharded
+      then
+        map (unit: {
+          inherit (unit) name directory;
+          file = unit.specializationFile;
+          kind = "package";
+        })
+        (lib.filter (unit: selectUnit unit.name && unit.specializationFile != null) inventory.units)
+      else
+        map (entry: {
+          inherit (entry) name directory;
+          file = entry.directory + "/wasix.nix";
+          kind = "package";
+        })
+        (lib.filter (entry:
+          selectUnit entry.name
+          && builtins.pathExists (entry.directory + "/wasix.nix"))
+        inventory.directories);
+    specializationResults = instantiateResults (prev // basePackages) wasixUnits;
+    specializationPackages = builtins.foldl' mergeDisjoint {} (map (item: item.result) specializationResults);
+    results = baseResults ++ specializationResults;
+    compatibility = (basePackages.${compatibilityAttr} or {}) // (specializationPackages.${compatibilityAttr} or {});
+    declaredIdentities = (basePackages.${identityAttr} or {}) // (specializationPackages.${identityAttr} or {});
+    packages = removeAttrs (basePackages // specializationPackages) [compatibilityAttr identityAttr];
+    precedingNames = lib.subtractLists (lib.attrNames packages) expose;
     missingPreceding = lib.filter (name: !(builtins.hasAttr name prev)) precedingNames;
     preceding = lib.genAttrs precedingNames (name: prev.${name});
-    unitOverlays = builtins.foldl' (state: item:
+    implicitIdentities =
+      if scope != "native"
+      then {}
+      else
+        lib.genAttrs (map (unit: unit.name) implicitUnits) (name:
+          if !(builtins.hasAttr name prev)
+          then throw "${name}: every project package requires a native package"
+          else prev.${name});
+    identities = declaredIdentities // implicitIdentities;
+    unitOverlays = builtins.foldl' (state: item: let
+      identityNames = lib.attrNames (item.result.${identityAttr} or {});
+      resultNames = lib.attrNames (removeAttrs item.result [compatibilityAttr identityAttr]) ++ identityNames;
+      replay = final': prev': let
+        replayed = item.replay final' prev';
+      in
+        removeAttrs replayed [compatibilityAttr identityAttr]
+        // lib.genAttrs identityNames (name: replayed.${identityAttr}.${name});
+    in
       state
-      // lib.genAttrs (lib.attrNames item.result) (_: {
+      // lib.genAttrs resultNames (name: let
+        preceding = state.${name} or null;
+      in {
         inherit (item) definition;
-        overlay = item.replay;
+        overlay =
+          if preceding == null
+          then replay
+          else
+            final': prev': let
+              base = preceding.overlay final' prev';
+            in
+              replay final' (prev' // base);
       })) {}
     results;
   in
@@ -650,7 +841,13 @@ in rec {
       "package directory ${toString dir} declares inherited package unit(s): ${lib.concatStringsSep ", " inheritedUnitConflicts}"
       (lib.throwIf (missingPreceding != [])
         "package directory ${toString dir} exposes missing preceding package(s): ${lib.concatStringsSep ", " missingPreceding}"
-        (preceding // packages // {${unitOverlaysAttr} = unitOverlays;})));
+        (preceding
+          // packages
+          // {
+            ${compatibilityAttr} = compatibility;
+            ${identityAttr} = identities;
+            ${unitOverlaysAttr} = unitOverlays;
+          })));
 
   registerOverlay = {
     definition ? null,
@@ -665,57 +862,92 @@ in rec {
     "invalid Wasinix extension ID '${source}'"
     (final: prev: let
       result = overlay final prev;
+      compatibility = result.${compatibilityAttr} or {};
+      identities = result.${identityAttr} or {};
       unitOverlays = result.${unitOverlaysAttr} or {};
-      visibleResult = removeAttrs result [unitOverlaysAttr];
+      visibleResult = removeAttrs result [compatibilityAttr identityAttr unitOverlaysAttr];
       reserved = lib.intersectLists (lib.attrNames result) [registryAttr extensionContextsAttr];
-      names = removeAttrs (lib.genAttrs (lib.attrNames visibleResult) (_: source)) [registryAttr extensionContextsAttr];
+      identityNames = lib.attrNames identities ++ lib.attrNames compatibility;
+      identityConflicts = lib.intersectLists identityNames (lib.attrNames (prev.${registryAttr} or {}));
+      missingIdentities = lib.filter (name: !(builtins.hasAttr name prev) && !(builtins.hasAttr name visibleResult)) identityNames;
+      names = removeAttrs (lib.genAttrs (lib.attrNames visibleResult ++ identityNames) (_: source)) [registryAttr extensionContextsAttr];
       stamped =
         lib.mapAttrs (
-          name: value:
-            if lib.isDerivation value
-            then let
-              unit = unitOverlays.${name} or null;
-            in
-              stampPackage {
-                inherit name source;
-                definition =
-                  if unit == null
-                  then definition
-                  else unit.definition;
-                package = value;
-                previous =
-                  if builtins.hasAttr name (prev.${registryAttr} or {})
-                  then prev.${name}
-                  else null;
-                previousSet = prev;
-                overlay =
-                  if unit == null
-                  then overlay
-                  else unit.overlay;
-                instance = instanceFor name value;
-              }
-            else value
+          name: value: let
+            unit = unitOverlays.${name} or null;
+          in
+            lib.throwIf (!lib.isDerivation value)
+            "registered overlay '${source}' returned non-derivation attribute '${name}'"
+            (stampPackage {
+              inherit name source;
+              definition =
+                if unit == null
+                then definition
+                else unit.definition;
+              package = value;
+              previous =
+                if builtins.hasAttr name (prev.${registryAttr} or {})
+                then prev.${name}
+                else null;
+              previousSet = prev;
+              overlay =
+                if unit == null
+                then overlay
+                else unit.overlay;
+              instance = instanceFor name value;
+            })
         )
         visibleResult;
+      stampedIdentities =
+        lib.mapAttrs (
+          name: value: let
+            unit = unitOverlays.${name} or null;
+            previous =
+              if builtins.hasAttr name (prev.${registryAttr} or {})
+              then (prev.${identityAttr} or {}).${name} or prev.${name}
+              else null;
+          in
+            stampPackage {
+              inherit name previous source;
+              definition =
+                if unit == null
+                then definition
+                else unit.definition;
+              package = value;
+              previousSet = prev;
+              overlay =
+                if unit == null
+                then overlay
+                else unit.overlay;
+              instance = instanceFor name value;
+            }
+        )
+        identities;
     in
       lib.throwIf (reserved != [])
       "registered overlay '${source}' sets reserved attribute(s): ${lib.concatStringsSep ", " reserved}"
-      (stamped
-        // {
-          ${registryAttr} = (prev.${registryAttr} or {}) // names;
-        }));
+      (lib.throwIf (identityConflicts != [])
+        "registered overlay '${source}' redeclares package identity attribute(s): ${lib.concatStringsSep ", " identityConflicts}"
+        (lib.throwIf (missingIdentities != [])
+          "registered overlay '${source}' declares missing package identity attribute(s): ${lib.concatStringsSep ", " missingIdentities}"
+          (stamped
+            // {
+              ${compatibilityAttr} = (prev.${compatibilityAttr} or {}) // compatibility;
+              ${identityAttr} = (prev.${identityAttr} or {}) // stampedIdentities;
+              ${registryAttr} = (prev.${registryAttr} or {}) // names;
+            }))));
 
   registeredNames = packageSet:
     lib.attrNames (packageSet.${registryAttr} or {});
 
   registeredPackages = packageSet: let
     names = registeredNames packageSet;
-    registered = lib.genAttrs names (name: packageSet.${name});
+    identities = packageSet.${identityAttr} or {};
+    registered = lib.genAttrs names (name: identities.${name} or packageSet.${name});
   in
     lib.filterAttrs (
       _: package:
         lib.isDerivation package
-        && (packageMetadata package).source or null != null
         && (packageMetadata package).catalog or true
     )
     registered;

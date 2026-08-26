@@ -2,6 +2,7 @@
 # version. `--store dummy://` keeps the store in memory, so nothing here needs
 # a store directory and nothing builds.
 {
+  commands,
   pkgs,
   entry,
   harnesses,
@@ -34,9 +35,10 @@
       '';
     };
 in {
-  version = harnesses.hostShell {
+  version = harnesses.wasixShell {
     name = "nix-version";
-    wasixCommands = wasix;
+    shell = commands.bash;
+    commands = wasix;
     script = "nix --version";
   };
 
