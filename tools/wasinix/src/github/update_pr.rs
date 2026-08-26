@@ -25,13 +25,13 @@ pub fn reconcile(
     if !ownership.assignees.is_empty() {
         client.post(
             &format!("{issue}/assignees"),
-            &json!({ "assignees": ownership.assignees }),
+            &json!({ "assignees": ownership.assignees.iter().map(|maintainer| &maintainer.github).collect::<Vec<_>>() }),
         )?;
     }
     if !ownership.reviewers.is_empty() {
         client.post(
             &format!("repos/{repository}/pulls/{pull_request}/requested_reviewers"),
-            &json!({ "reviewers": ownership.reviewers }),
+            &json!({ "reviewers": ownership.reviewers.iter().map(|maintainer| &maintainer.github).collect::<Vec<_>>() }),
         )?;
     }
     Ok(())
