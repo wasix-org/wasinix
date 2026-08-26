@@ -351,7 +351,7 @@
         nativeRaw,
         ...
       }:
-        lib.optionals includeWasinix [
+        lib.optionals (includeWasinix && scope == "native") [
           (final: _previous:
             {
               wasi-ghc = import ../overlays/w/wasi-ghc/input.nix {

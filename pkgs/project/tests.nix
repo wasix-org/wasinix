@@ -1,5 +1,6 @@
 {lib}: let
   projectLib = import ./lib.nix {inherit lib;};
+  compatibility = import ../lib {inherit lib;};
 
   mkPackage = attrs: let
     package =
@@ -52,6 +53,16 @@
     pythonModule = repairPython;
   });
   historyRepairTwice = repairPythonPackage historyRepairOnce;
+  nativeOnlyPackage = mkPackage {
+    name = "native-only";
+    meta.badPlatforms = [];
+    passthru.wasix.supportedProfiles = [];
+  };
+  unsupportedPackage = mkPackage {
+    name = "unsupported";
+    meta.badPlatforms = [];
+    passthru.wasix.supportedProfiles = ["alternate"];
+  };
   newRecipe = mkPackage {name = "new";};
   familyA = mkPackage {name = "family-a";};
   familyB = mkPackage {name = "family-b";};
@@ -126,9 +137,17 @@
       };
   in
     projectLib.loadPackageOverlay {
-      contextFor = args: contextFor args // {inherit scope;};
+      contextFor = args: let
+        base = contextFor args;
+      in
+        base
+        // {
+          inherit scope;
+          packages = base.packages // {native = shardedNative;};
+        };
       dir = ./tests/sharded-packages;
       lane = "packages";
+      inherit scope;
     }
     final
     previousSet;
@@ -992,6 +1011,17 @@
   };
   extensionDeclaration = import ./extension.nix {inherit (projectLib) loadPackageOverlays;};
 in {
+  wasixMetadata = {
+    expr = {
+      nativeOnlyBadPlatforms = (compatibility.applyWasixMeta "default" "x86_64-linux" nativeOnlyPackage).meta.badPlatforms;
+      unsupportedBadPlatforms = (compatibility.applyWasixMeta "default" "x86_64-linux" unsupportedPackage).meta.badPlatforms;
+    };
+    expected = {
+      nativeOnlyBadPlatforms = [];
+      unsupportedBadPlatforms = ["x86_64-linux"];
+    };
+  };
+
   pythonRepair = {
     expr = {
       idempotentPreBuild = historyRepairTwice.preBuild == historyRepairOnce.preBuild;
@@ -1067,6 +1097,7 @@ in {
     expr = {
       nativeNames = lib.attrNames (removeAttrs shardedNative [projectLib.unitOverlaysAttr]);
       wasixNames = lib.attrNames (removeAttrs shardedWasix [projectLib.unitOverlaysAttr]);
+      nativeOnlyName = shardedWasix.native-only.name;
       wasixAbsentFromNative = !(shardedNative ? zlib);
       wasixInputs = shardedWasix.zlib.buildInputs;
       supportedProfiles = shardedWasix.zlib.passthru.wasix.supportedProfiles;
@@ -1074,8 +1105,9 @@ in {
       invalidLayoutsFail = lib.all (result: !result.success) invalidSharded;
     };
     expected = {
-      nativeNames = ["custom"];
-      wasixNames = ["custom" "zlib"];
+      nativeNames = ["custom" "native-only"];
+      wasixNames = ["custom" "native-only" "zlib"];
+      nativeOnlyName = "new";
       wasixAbsentFromNative = true;
       wasixInputs = ["wasix-input"];
       supportedProfiles = ["default"];

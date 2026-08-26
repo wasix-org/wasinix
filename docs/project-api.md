@@ -246,8 +246,11 @@ The regular package inventory accepts three forms:
 
 `wasix.nix` is instantiated only when the actual package-set host platform is
 WASIX, including across nixpkgs' build-package splices. `package.nix` is
-instantiated in native and WASIX sets and may branch on its `scope` argument. An
-entry cannot contain both files. `recipe.nix` is obsolete and rejected.
+instantiated in native and WASIX sets and may branch on its `scope` argument. A
+complete unit requesting `exposeNativePackage` is instantiated in the native
+set, receives `supportedProfiles = []`, and is reused as host-side plumbing in
+WASIX sets. An entry cannot contain both files. `recipe.nix` is obsolete and
+rejected.
 
 The Python inventory accepts `<bucket>/<name>.nix` or
 `<bucket>/<name>/package.nix`. Package-specific patches and tests belong inside

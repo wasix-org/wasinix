@@ -193,14 +193,15 @@ in rec {
     "${drv.pname or drv.name}: ciProfiles contains unsupported profile(s): ${lib.concatStringsSep ", " invalid}"
     selected;
 
-  # Applied to every package by the overlay loader. All profiles share one system
-  # string, so badPlatforms is only meaningful within the setting profile's set.
+  # Applied to WASIX-capable packages by the overlay loader. Native-only packages
+  # remain host plumbing in cross package sets and keep their native availability.
   applyWasixMeta = profileName: hostSystem: drv: let
     w = wasixMetaOf drv;
+    nativeOnly = (w.supportedProfiles or null) == [];
     unsupported = !(supportedIn profileName drv);
     broken = (w.broken or null) != null;
   in
-    if !unsupported && !broken
+    if nativeOnly || (!unsupported && !broken)
     then drv
     else
       drv.overrideAttrs (old: {

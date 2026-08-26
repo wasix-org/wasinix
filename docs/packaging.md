@@ -54,8 +54,10 @@ profile view from a package unit pins a profile the package does not control.
 
 The loader never instantiates `wasix.nix` in a native package set or native
 build-package splice. A `package.nix` is the form for a definition that owns its
-native behavior too. An entry cannot contain both files, and `recipe.nix` is not
-a supported entry form.
+native behavior too. `exposeNativePackage` declares a complete package with no
+WASIX variant; WASIX package sets reuse that native result as host-side
+construction plumbing instead of instantiating the unit again. An entry cannot
+contain both files, and `recipe.nix` is not a supported entry form.
 
 Patches live next to the file that applies them, so a package's patches belong
 in its own `patches/` directory and shared toolchain plumbing remains under
