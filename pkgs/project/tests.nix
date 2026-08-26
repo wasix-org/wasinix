@@ -44,7 +44,7 @@
               };
             };
           };
-          preferred = {};
+          wasix.preferred = {};
           python = {};
         };
         artifacts = {};
