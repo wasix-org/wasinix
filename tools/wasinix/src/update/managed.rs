@@ -18,6 +18,9 @@ pub struct State {
     pub recipe: String,
     /// The head the bot last wrote; a branch past it is paused.
     pub rewrite_safe_head: String,
+    /// This update had no fired notes when the bot created its managed state.
+    #[serde(default)]
+    pub auto_merge: bool,
 }
 
 impl State {
@@ -31,6 +34,7 @@ impl State {
             schema: 1,
             recipe,
             rewrite_safe_head: head,
+            auto_merge: false,
         })
     }
 }
@@ -55,7 +59,9 @@ pub fn decode(body: &str) -> Result<Option<State>> {
             source,
         })?;
     require(state.schema == 1, "unsupported managed PR state schema")?;
-    State::new(state.recipe, state.rewrite_safe_head).map(Some)
+    let mut validated = State::new(state.recipe, state.rewrite_safe_head)?;
+    validated.auto_merge = state.auto_merge;
+    Ok(Some(validated))
 }
 
 /// The marker line carrying the state; appended to (or replaced in) the PR

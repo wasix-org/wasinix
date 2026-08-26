@@ -95,6 +95,11 @@ own update scripts execute there); a second job re-verifies the bundle and
 pushes with a lease. `ci-command.yml` carries the split; the `UPDATE_PR_TOKEN`
 secret makes pushed heads trigger CI.
 
+An automated update whose ChangeSet fires no update notes enables GitHub
+auto-merge after its CI diff completes. It still waits for the repository's
+required checks and reviews. A managed branch with human commits is deferred
+instead, so it never enables auto-merge or replaces those commits.
+
 The served-version tables are maintained under the `versions` noun:
 `versions add <package>@<version>` (or `--per-major`/`--per-minor` in bulk)
 backfills registry history, `versions import <lockfile>` pins what a lockfile

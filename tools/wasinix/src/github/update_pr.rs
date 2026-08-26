@@ -8,6 +8,17 @@ use crate::update::targets::Ownership;
 
 const AUTOMATION_LABELS: &[&str] = &["3.automated", "3.automated: update"];
 
+pub fn enable_auto_merge(client: &Client, pull: &crate::github::mutation::Pull) -> Result<()> {
+    if pull.auto_merge_enabled {
+        return Ok(());
+    }
+    client.graphql(&json!({
+        "query": "mutation($id: ID!) { enablePullRequestAutoMerge(input: {pullRequestId: $id, mergeMethod: SQUASH}) { pullRequest { number } } }",
+        "variables": { "id": pull.node_id },
+    }))?;
+    Ok(())
+}
+
 /// Apply facts that come from the update declaration, never from a branch
 /// name or title. GitHub additions are idempotent, so replaying an update
 /// reasserts the contract without touching unrelated labels or reviewers.

@@ -501,6 +501,13 @@ pub enum CiCommand {
         #[arg(long)]
         out_dir: PathBuf,
     },
+    /// Enable auto-merge for an eligible managed update after CI evaluates its diff
+    ReconcileUpdateAutoMerge {
+        #[arg(long)]
+        run_dir: PathBuf,
+        #[command(flatten)]
+        surface: crate::github::surfaces::SurfaceArgs,
+    },
     /// Record a workflow run's step durations: a step-summary table, and
     /// with --publish a document the timings fold reads back
     StepTimings {
@@ -1836,6 +1843,51 @@ fn ci_command(command: CiCommand) -> Result<CommandStatus> {
         }
         CiCommand::MutatePublish { out_dir } => {
             crate::github::mutation::mutate_publish(&repo, &out_dir)?;
+            Ok(CommandStatus::SUCCESS)
+        }
+        CiCommand::ReconcileUpdateAutoMerge { run_dir, surface } => {
+            let pull_request = surface.pull_request.ok_or_else(|| {
+                crate::support::error::Error::Request(
+                    "update auto-merge needs a pull request".into(),
+                )
+            })?;
+            let repository = surface.repository(&repo)?;
+            let client =
+                crate::github::client::Client::new(crate::github::client::token().as_deref());
+            let pull = crate::github::mutation::pull(&client, &repository, pull_request)?;
+            let Some(state) = crate::update::managed::decode(&pull.body)? else {
+                ui::note("not a managed update pull request");
+                return Ok(CommandStatus::SUCCESS);
+            };
+            if !matches!(
+                crate::update::managed::parse_recipe(&state.recipe)?,
+                CommandTree::Update(_)
+            ) {
+                ui::note("managed pull request is not an update");
+                return Ok(CommandStatus::SUCCESS);
+            }
+            if !state.auto_merge || crate::update::managed::paused(&state, &pull.head_sha) {
+                ui::note("managed update is not eligible for auto-merge");
+                return Ok(CommandStatus::SUCCESS);
+            }
+            let report: crate::ci::report::Report =
+                schema::read(&crate::ci::prepare::report_path(&run_dir))?;
+            crate::support::error::require(report.complete, "CI report is incomplete")?;
+            let comparison = match report.comparisons.as_slice() {
+                [comparison] if comparison.base_evaluated && comparison.head_evaluated => {
+                    comparison
+                }
+                _ => {
+                    return crate::support::error::request_error(
+                        "CI report has no complete diff comparison",
+                    )
+                }
+            };
+            crate::support::error::require(
+                comparison.eval.is_some(),
+                "CI report has no evaluated diff",
+            )?;
+            crate::github::update_pr::enable_auto_merge(&client, &pull)?;
             Ok(CommandStatus::SUCCESS)
         }
         CiCommand::StepTimings {
