@@ -436,8 +436,20 @@ pub fn comment(
     registry.upsert(&surface, &attributes, body)
 }
 
-/// Create or complete the one "Wasinix CI" check run on the head sha. A dry
-/// run renders the projection and stops before touching the API.
+pub(crate) fn check_run_id(response: &serde_json::Value, run_url: &str) -> Option<u64> {
+    response["check_runs"]
+        .as_array()?
+        .iter()
+        .filter(|run| {
+            run["external_id"].as_str() == Some(run_url)
+                || run["details_url"].as_str() == Some(run_url)
+        })
+        .filter_map(|run| run["id"].as_u64())
+        .max()
+}
+
+/// Create or complete this workflow run's "Wasinix CI" check. A dry run
+/// renders the projection and stops before touching the API.
 pub fn check(
     client: &Client,
     rendered: &Rendered,
@@ -447,11 +459,18 @@ pub fn check(
     let head_sha = target.head_sha.as_deref().ok_or_else(|| {
         crate::support::error::Error::Request("publishing a check needs the head sha".into())
     })?;
+    let run_url = target.run_url.as_deref().ok_or_else(|| {
+        crate::support::error::Error::Request(
+            "publishing a check needs --run-url to identify the workflow run".into(),
+        )
+    })?;
     let links = links(rendered, target, None);
     let projected = markdown::check(&rendered.report, &rendered.fragments, &links);
     let mut body = json!({
         "name": "Wasinix CI",
         "head_sha": head_sha,
+        "external_id": run_url,
+        "details_url": run_url,
         "output": {
             "title": projected.title,
             "summary": projected.summary,
@@ -498,22 +517,17 @@ pub fn check(
             body["status"] = "in_progress".into();
         }
     }
-    if let Some(url) = &target.run_url {
-        body["details_url"] = url.as_str().into();
-    }
     if effects.is_dry_run() {
         crate::support::ui::fact("check run", "skipped (dry run)");
         return Ok(());
     }
-    // Reuse this sha's existing "Wasinix CI" check run so re-publishing updates
-    // one authoritative status instead of stacking a duplicate each time, and
-    // so a run left in_progress is later completed rather than stranded.
-    let existing = client.get(&format!(
+    // A commit can be built by multiple workflow runs. Their checks share a
+    // name and sha, so only the external identity distinguishes their state.
+    let response = client.get(&format!(
         "repos/{}/commits/{head_sha}/check-runs?check_name=Wasinix%20CI",
         target.repository
-    ))?["check_runs"]
-        .as_array()
-        .and_then(|runs| runs.iter().filter_map(|run| run["id"].as_u64()).max());
+    ))?;
+    let existing = check_run_id(&response, run_url);
     match existing {
         Some(id) => client.patch(
             &format!("repos/{}/check-runs/{id}", target.repository),

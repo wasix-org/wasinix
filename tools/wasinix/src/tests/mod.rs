@@ -4326,6 +4326,38 @@ mod surfaces {
         assert!(reply.starts_with("<!-- wasinix:ci-report:42 "));
         assert!(!reply.starts_with("<!-- wasinix:ci-report "));
     }
+
+    #[test]
+    fn check_runs_are_scoped_to_the_workflow_run() {
+        let response = json!({
+            "check_runs": [
+                {
+                    "id": 10,
+                    "external_id": "https://github.com/wasix-org/wasinix/actions/runs/1",
+                    "details_url": "https://github.com/wasix-org/wasinix/actions/runs/1"
+                },
+                {
+                    "id": 20,
+                    "external_id": "https://github.com/wasix-org/wasinix/actions/runs/2",
+                    "details_url": "https://github.com/wasix-org/wasinix/actions/runs/2"
+                },
+                {
+                    "id": 30,
+                    "details_url": "https://github.com/wasix-org/wasinix/actions/runs/3"
+                }
+            ]
+        });
+        let id = |run| {
+            crate::github::publish::check_run_id(
+                &response,
+                &format!("https://github.com/wasix-org/wasinix/actions/runs/{run}"),
+            )
+        };
+        assert_eq!(id(1), Some(10));
+        assert_eq!(id(2), Some(20));
+        assert_eq!(id(3), Some(30));
+        assert_eq!(id(4), None);
+    }
 }
 
 mod render {
