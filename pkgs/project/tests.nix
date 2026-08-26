@@ -1828,7 +1828,7 @@ in {
         };
         version = "2";
       };
-      updateScriptNames = ["packages.wasix.preferred.cli"];
+      updateScriptNames = ["packages.native.ownedUpdate" "packages.wasix.preferred.cli"];
       updateSnapshot = {
         schemaVersion = 1;
         servedVersions = {
@@ -1844,7 +1844,7 @@ in {
           };
         };
         hookNames = ["packages.native.command" "packages.native.sync"];
-        scriptNames = ["packages.wasix.preferred.cli"];
+        scriptNames = ["packages.native.ownedUpdate" "packages.wasix.preferred.cli"];
       };
     };
   };
