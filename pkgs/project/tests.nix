@@ -14,6 +14,44 @@
   in
     package;
 
+  hookPackage = name: version: post:
+    mkPackage {
+      inherit name version;
+      passthru.wasinix = {
+        source = "fixture";
+        update = {inherit post;};
+      };
+    };
+  repositoryHooks =
+    (import ./repository.nix {
+      inherit lib;
+      root = ../..;
+      source = "fixture";
+      revisionsFile = ../../release-revisions.json;
+      project = {
+        packages = {
+          native = {
+            command = hookPackage "command" "1" ["./hook"];
+            sync = hookPackage "sync" "2" {
+              syncAttrList = {
+                input = "nixpkgs";
+                attrPath = "legacyPackages.\${system}";
+                match = "^icu([0-9]+)$";
+                capture = 1;
+                probe = "version";
+                sort = "numeric";
+                destination = "versions.nix";
+              };
+            };
+          };
+          preferred = {};
+          python = {};
+        };
+        artifacts = {};
+        catalog.entries = {};
+      };
+    }).updates.postUpdateHooks;
+
   dependency = mkPackage {name = "dependency";};
   previous = mkPackage {
     name = "existing";
@@ -1459,6 +1497,8 @@ in {
       perProjectRule = emptyProject.tests."tests.packages.wasix.default.core.per-project".name;
       projectTestName = projectTestProject.tests."tests.project.format".name;
       projectTestSerializable = !(projectTestProject.ci.catalog.jobs."tests.project.format" ? check);
+      postUpdateCommand = repositoryHooks."packages.native.command";
+      postUpdateSync = repositoryHooks."packages.native.sync";
     };
     expected = {
       schemaVersion = 1;
@@ -1652,6 +1692,27 @@ in {
       perProjectRule = "per-project";
       projectTestName = "format";
       projectTestSerializable = true;
+      postUpdateCommand = {
+        action = {
+          kind = "command";
+          command = ["./hook"];
+          commandDrvPaths = [];
+        };
+        version = "1";
+      };
+      postUpdateSync = {
+        action = {
+          kind = "syncAttrList";
+          input = "nixpkgs";
+          attrPath = "legacyPackages.\${system}";
+          match = "^icu([0-9]+)$";
+          capture = 1;
+          probe = "version";
+          sort = "numeric";
+          destination = "versions.nix";
+        };
+        version = "2";
+      };
     };
   };
 }

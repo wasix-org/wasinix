@@ -168,21 +168,33 @@
     srcRoot = toString root;
     hookFor = address: package: let
       declaration = (package.passthru.wasinix.update or {}).post or null;
-      command =
-        if declaration == null
+      syncAttrList =
+        if lib.isAttrs declaration
+        then declaration.syncAttrList or null
+        else null;
+      commandValues =
+        if declaration == null || syncAttrList != null
         then null
-        else map toString (lib.toList declaration);
+        else lib.toList declaration;
+      action =
+        if syncAttrList != null
+        then syncAttrList // {kind = "syncAttrList";}
+        else if commandValues != null
+        then {
+          kind = "command";
+          command = map toString commandValues;
+          commandDrvPaths = commandDrvsOf commandValues;
+        }
+        else null;
       position = builtins.unsafeGetAttrPos "wasinix" (package.passthru or {});
       ours =
-        command
+        action
         != null
-        && command != []
         && position != null
         && lib.hasPrefix srcRoot position.file;
       value = lib.optionalAttrs ours {
         ${address} = {
-          inherit command;
-          commandDrvPaths = commandDrvsOf (lib.toList declaration);
+          inherit action;
           version = package.version or null;
         };
       };

@@ -5043,7 +5043,7 @@ mod update {
         assert_eq!(command_drv_paths, ["/nix/store/bbb-anybuild-update.drv"]);
         assert!(
             include_str!("../../../../pkgs/project/repository.nix")
-                .contains("commandDrvPaths = commandDrvsOf (lib.toList declaration);")
+                .contains("commandDrvPaths = commandDrvsOf commandValues;")
         );
     }
 
