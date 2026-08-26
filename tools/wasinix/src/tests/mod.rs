@@ -4989,8 +4989,8 @@ mod update {
             "commandDrvPaths": ["/nix/store/ccc-wasix-libc-update.drv"],
             "accepts": ["release"],
             "ownership": {
-                "assignees": ["jane-doe"],
-                "reviewers": ["john-smith", "jane-doe"]
+                "assignees": [{"github": "jane-doe"}],
+                "reviewers": [{"github": "john-smith"}, {"github": "jane-doe"}]
             }
         });
         let target = crate::update::targets::declared_target(
@@ -5011,8 +5011,16 @@ mod update {
             target.attr
         );
         assert_eq!(target.file, "pkgs/overlays/w/wasix-sysroot/libc.nix");
-        assert_eq!(target.ownership.assignees, ["jane-doe"]);
-        assert_eq!(target.ownership.reviewers, ["john-smith", "jane-doe"]);
+        assert_eq!(target.ownership.assignees[0].github, "jane-doe");
+        assert_eq!(
+            target
+                .ownership
+                .reviewers
+                .iter()
+                .map(|maintainer| maintainer.github.as_str())
+                .collect::<Vec<_>>(),
+            ["john-smith", "jane-doe"]
+        );
     }
 
     #[test]
