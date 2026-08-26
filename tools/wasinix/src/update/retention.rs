@@ -104,7 +104,7 @@ fn version_apply(include_notes: bool) -> String {
         "{ ok = true; value = {}; }"
     };
     format!(
-        "p: {{ wheels = {{ py313 = ({WHEEL_APPLY}) p.artifacts.wheel-py313; py314 = ({WHEEL_APPLY}) p.artifacts.wheel-py314; }}; clis = ({}) p.packages.preferred; notes = {notes}; }}",
+        "p: {{ wheels = {{ py313 = ({WHEEL_APPLY}) p.artifacts.wheel-py313; py314 = ({WHEEL_APPLY}) p.artifacts.wheel-py314; }}; clis = ({}) p.packages.wasix.preferred; notes = {notes}; }}",
         cli_apply()
     )
 }
@@ -370,7 +370,7 @@ mod tests {
             "let p = {{ \
              artifacts.wheel-py313.demo = {{ version = \"1\"; passthru.wasinix.retention = \"minor\"; }}; \
              artifacts.wheel-py314 = {{}}; \
-             packages.preferred.cli = {{ version = \"2\"; passthru.wasinix = {{ shipped = true; retention = \"major\"; }}; }}; \
+             packages.wasix.preferred.cli = {{ version = \"2\"; passthru.wasinix = {{ shipped = true; retention = \"major\"; }}; }}; \
              internals.repository.updates.updateNotes.versions.cli = \"2\"; \
              }}; in ({}) p",
             version_apply(true)

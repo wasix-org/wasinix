@@ -199,7 +199,7 @@
         wasinix
         project.packages.native.cargo-wasix
         project.packages.native.wasixcc
-        project.packages.preferred.ncurses
+        project.packages.wasix.preferred.ncurses
         pkgs.gnumake
         pkgs.pkg-config
         project.packages.native.wasmer

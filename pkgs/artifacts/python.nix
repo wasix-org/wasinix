@@ -17,8 +17,8 @@
     select,
   }: let
     pythonName = pythonVariants.specs.${interpreter}.interpreterPackage;
-    python = packageSets.preferred.${pythonName};
-    pythonArtifact = packages.preferred.${pythonName};
+    python = packageSets.wasix.preferred.${pythonName};
+    pythonArtifact = packages.wasix.preferred.${pythonName};
   in
     mkPythonWheels {
       inherit pyKey select;
@@ -112,7 +112,7 @@ in {
     publishOnce = map (entry': entry'.attr) (lib.filter (entry': entry'.publishOnce or false) wheelList);
     pythonSets =
       lib.mapAttrs (interpreter: spec: {
-        python3 = packageSets.preferred.${spec.interpreterPackage};
+        python3 = packageSets.wasix.preferred.${spec.interpreterPackage};
         pythonWheels =
           wheelsFor packages interpreter (wheelArtifactKind interpreter)
           // lib.optionalAttrs (interpreter == preferred) (wheelsFor packages interpreter "wheel-noarch");
@@ -126,8 +126,8 @@ in {
       && builtins.elem entry.artifactKind wheelArtifactKinds)
     (builtins.attrValues catalog.entries));
     registry = mkPythonRegistry {
-      python3 = packageSets.preferred.${preferredPython};
-      pythonWebc = packages.preferred.${preferredPython}.artifacts.webc.shim;
+      python3 = packageSets.wasix.preferred.${preferredPython};
+      pythonWebc = packages.wasix.preferred.${preferredPython}.artifacts.webc.shim;
       inherit pythonSets;
     };
   in {

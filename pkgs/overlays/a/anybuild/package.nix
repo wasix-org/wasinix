@@ -11,7 +11,7 @@
       entrypoint = "anybuild";
       dependencies = [
         {
-          package = packages.preferred.bash;
+          package = packages.wasix.preferred.bash;
           version = "*";
         }
       ];

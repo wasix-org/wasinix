@@ -48,7 +48,7 @@ in
         # A shell with nothing to run is not a shell: wasmer mounts each
         # dependency command under /bin, which is where DEFAULT_PATH_VALUE
         # points.
-        dependencies = [packages.preferred.coreutils];
+        dependencies = [packages.wasix.preferred.coreutils];
         commands = [
           {name = "bash";}
           {

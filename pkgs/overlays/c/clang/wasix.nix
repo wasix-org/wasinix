@@ -46,7 +46,7 @@ exposeWasixPackage (
           "clang"
           "clang++"
         ];
-        dependencies = [packages.preferred.lld];
+        dependencies = [packages.wasix.preferred.lld];
         fs = {
           "/sysroot" = packages.native."wasix-sysroot".profiles.exnrefEh.sysroot;
           "/lib/clang/${major}/include" = "${monorepoSrc}/clang/lib/Headers";

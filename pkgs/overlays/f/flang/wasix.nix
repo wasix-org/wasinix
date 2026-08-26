@@ -91,7 +91,7 @@ exposeWasixPackage (
           # The Fortran job is flang's own, but the driver hands codegen to a
           # clang -cc1 command, so this needs a clang to spawn as clang needs an
           # lld.
-          dependencies = [packages.preferred.clang];
+          dependencies = [packages.wasix.preferred.clang];
         };
       };
 

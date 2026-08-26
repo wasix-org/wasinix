@@ -130,7 +130,7 @@ fn wheel_path(attr: &str) -> Result<String> {
 fn cli_map() -> Result<BTreeMap<String, String>> {
     let packages = eval(
         &Flake::default(),
-        "packages.preferred",
+        "packages.wasix.preferred",
         Some(
             "builtins.mapAttrs (_: p: { aliases = p.passthru.wasinix.aliases or []; shipped = p.passthru.wasinix.shipped or false; })",
         ),
@@ -237,7 +237,7 @@ impl Sets {
         Ok(Target {
             attr: attr.clone(),
             path: format!(
-                "packages.preferred.{}",
+                "packages.wasix.preferred.{}",
                 crate::support::naming::quoted_attr(attr)?
             ),
             history: cli_history(repo),

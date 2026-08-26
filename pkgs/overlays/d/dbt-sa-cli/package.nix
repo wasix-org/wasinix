@@ -54,7 +54,7 @@ exposePackage (
     doCheck = false;
 
     # 113 MB of wasm from an 819-crate workspace, and the wheel takes it through
-    # packages.preferred, so one profile is the build anyone consumes.
+    # packages.wasix.preferred, so one profile is the build anyone consumes.
     passthru.wasix = {
       supportedProfiles = ["eh" "ehpic"];
       preferredProfile = "eh";

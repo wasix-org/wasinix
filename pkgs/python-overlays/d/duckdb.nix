@@ -17,7 +17,7 @@ exposePackage (
       then package
       else
         package.override {
-          duckdb = packages.preferred.duckdb.versions.${package.version};
+          duckdb = packages.wasix.preferred.duckdb.versions.${package.version};
         };
   in
     extendPackage wheel {

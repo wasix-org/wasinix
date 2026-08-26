@@ -17,8 +17,8 @@
   isHistory = (package.passthru.wasix.historySpec or null) != null;
   arrowCpp =
     if isHistory
-    then packages.preferred.arrow-cpp.versions.${version}
-    else packages.preferred.arrow-cpp;
+    then packages.wasix.preferred.arrow-cpp.versions.${version}
+    else packages.wasix.preferred.arrow-cpp;
   # Before 24, setup.py reads PYARROW_CMAKE_OPTIONS and PYARROW_WITH_*.
   # Newer releases read the equivalent CMake variables.
   preSkbuild = lib.versionOlder version "24";

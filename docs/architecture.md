@@ -49,7 +49,7 @@ Packages declare support through `passthru.wasix`:
 
 CI policy is separate under `passthru.wasinix.ci`; `profiles` selects the
 supported subset built continuously. `packages.wasix.<profile>` exposes every
-supported build, while `packages.preferred.<name>` projects each package's
+supported build, while `packages.wasix.preferred.<name>` projects each package's
 preferred profile. The latter is useful for runtime commands and artifacts but
 is not a coherent package set for linked dependencies.
 

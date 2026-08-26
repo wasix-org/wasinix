@@ -17,7 +17,7 @@
         pkgs.gzip
         pkgs.writableTmpDirAsHomeHook
       ];
-      server = packages.preferred.cargo-registry;
+      server = packages.wasix.preferred.cargo-registry;
     } ''
       set -u
       port=8733

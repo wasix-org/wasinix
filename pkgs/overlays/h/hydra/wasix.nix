@@ -10,9 +10,9 @@
 }:
 exposeWasixPackage (
   let
-    coreutils = packages.preferred.coreutils;
-    gnutar = packages.preferred.gnutar;
-    openssh = packages.preferred.openssh;
+    coreutils = packages.wasix.preferred.coreutils;
+    gnutar = packages.wasix.preferred.gnutar;
+    openssh = packages.wasix.preferred.openssh;
     runtimeTools = [coreutils gnutar openssh];
 
     # a Makefile.PL that runs a binary built for the target reaches it through the

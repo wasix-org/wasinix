@@ -127,8 +127,8 @@ exposeWasixPackage (
           # popen() runs `/bin/sh -c`, which initdb and pg_ctl use to start the
           # server. icu-data carries the collation archive icu compiles a path to.
           dependencies = [
-            packages.preferred.bash
-            packages.preferred.icu-data
+            packages.wasix.preferred.bash
+            packages.wasix.preferred.icu-data
           ];
           fs = {
             # WASIX has no passwd database, and initdb names the bootstrap

@@ -16,7 +16,7 @@
     gnused
     gnutar
   ];
-  wasixTools = with packages.preferred; [
+  wasixTools = with packages.wasix.preferred; [
     curl
     findutils
     gnugrep
@@ -45,7 +45,7 @@
             {
               name = "bash";
               dependency = {
-                package = packages.preferred.bash;
+                package = packages.wasix.preferred.bash;
                 version = "*";
               };
             }

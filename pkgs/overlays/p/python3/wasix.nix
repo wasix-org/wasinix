@@ -222,7 +222,7 @@
         # ac_sys_system stays WASI. Setup.local forces the modules configure marks n/a.
         postPatch = ''
                   substituteInPlace Lib/subprocess.py \
-                    --replace-fail '${lib.getExe' packages.sameProfile.buildPackages.bashNonInteractive "sh"}' '${lib.getExe' packages.preferred.bash "sh"}'
+                    --replace-fail '${lib.getExe' packages.sameProfile.buildPackages.bashNonInteractive "sh"}' '${lib.getExe' packages.wasix.preferred.bash "sh"}'
 
                   substituteInPlace configure.ac \
                     --replace-fail ' -lwasi-emulated-signal -lwasi-emulated-getpid -lwasi-emulated-process-clocks' \
@@ -356,7 +356,7 @@
             autoSelfMount = true;
             # autoSelfMount only scans bin/*.wasm, but bash is baked into subprocess.py and
             # tzdata into _sysconfigdata (else zoneinfo raises "No time zone found").
-            selfMounts = [packages.preferred.bash packages.sameProfile.buildPackages.tzdata];
+            selfMounts = [packages.wasix.preferred.bash packages.sameProfile.buildPackages.tzdata];
             # Without a bundled CA set, https raises SSLCertVerificationError.
             fs."/etc/ssl" = "${packages.sameProfile.cacert}/etc/ssl";
           };

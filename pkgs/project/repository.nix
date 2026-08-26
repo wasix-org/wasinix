@@ -102,7 +102,7 @@
     (lib.filterAttrs (_: package: (package.passthru.wasinix.source or null) == source) packages);
   updateCandidates =
     packagesFrom "packages.native" project.packages.native
-    // packagesFrom "packages.wasix" project.packages.preferred
+    // packagesFrom "packages.wasix" project.packages.wasix.preferred
     // lib.optionalAttrs (project.packages.python ? preferred)
     (packagesFrom "packages.python.preferred" project.packages.python.preferred);
   commandDrvsOf = lib.concatMap (value:

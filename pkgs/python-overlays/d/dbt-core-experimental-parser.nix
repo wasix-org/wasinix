@@ -9,7 +9,7 @@
 }:
 exposePackage (
   let
-    engine = packages.preferred.dbt-sa-cli;
+    engine = packages.wasix.preferred.dbt-sa-cli;
     # PEP 440 spelling of the engine's 2.0.0-alpha.5, which is what dbt-core's
     # `>=2.0.0a4` resolves against.
     version = "2.0.0a5";

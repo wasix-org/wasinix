@@ -20,7 +20,7 @@ exposeWasixPackage (
       } (extendPackage (package.override {
           # The coreutils pwd executable is a runtime path baked into Cwd, and coreutils
           # builds at the off profile only.
-          coreutils = packages.preferred.coreutils;
+          coreutils = packages.wasix.preferred.coreutils;
           # the module set is built against `self`, so without this every perl module
           # compiles against an interpreter carrying none of the above
           self = perl;

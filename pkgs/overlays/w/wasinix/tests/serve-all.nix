@@ -16,7 +16,7 @@
         pkgs.gzip
         pkgs.writableTmpDirAsHomeHook
       ];
-      server = packages.preferred.cargo-registry;
+      server = packages.wasix.preferred.cargo-registry;
       bashWebc = artifacts.webc.bash;
     } ''
       export WASMER_DIR="$PWD/.wasmer"

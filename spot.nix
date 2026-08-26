@@ -17,7 +17,7 @@
   baseNative = baseProject.internals.packageSets.nativeRaw;
   baseByProfile = baseProject.internals.packageSets.wasixRaw;
   nativeNames = builtins.attrNames baseProject.packages.native;
-  packageNames = lib.unique (lib.concatMap builtins.attrNames (builtins.attrValues baseProject.packages.wasix));
+  packageNames = lib.unique (lib.concatMap builtins.attrNames (builtins.attrValues baseByProfile));
   defaultSources = lib.filter (address: builtins.hasAttr address workProject.ci.catalog.packages) workProject.ci.catalog.selectors.groups.toolchain.jobs;
   sourceAddresses =
     if sources == null
