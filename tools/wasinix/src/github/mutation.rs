@@ -294,16 +294,14 @@ fn paused_reply(
 }
 
 /// What a comment mutation resolves to once the managed record has spoken.
-#[derive(Debug, PartialEq)]
 pub(crate) struct Resolution {
-    pub command: crate::cli::untrusted::MutationCommand,
+    pub command: crate::cli::CommandTree,
     pub start_sha: String,
     pub force: bool,
     pub record_state: bool,
     pub recipe: Option<String>,
 }
 
-#[derive(Debug, PartialEq)]
 pub(crate) enum Resolved {
     Run(Resolution),
     /// "Pushing pauses refreshes": the branch moved past the recorded head.
@@ -314,17 +312,16 @@ pub(crate) enum Resolved {
 /// recipe (and only a managed PR has one); everything else runs as spelled
 /// from the current head.
 pub(crate) fn resolve(
-    mutation: crate::cli::untrusted::MutationCommand,
+    mutation: crate::cli::CommandTree,
     state: Option<crate::update::managed::State>,
     pull: &Pull,
 ) -> Result<Resolved> {
-    use crate::cli::untrusted::MutationCommand;
     let bare_update = matches!(
         &mutation,
-        MutationCommand::Update { targets, all } if targets.is_empty() && !all
+        crate::cli::CommandTree::Update(args) if args.targets.is_empty() && !args.all
     );
     Ok(Resolved::Run(match mutation {
-        MutationCommand::Regenerate => {
+        crate::cli::CommandTree::Regenerate => {
             let state = crate::update::managed::require_state(state, "regenerate")?;
             let replay = crate::update::managed::parse_recipe(&state.recipe)?;
             Resolution {
@@ -335,13 +332,13 @@ pub(crate) fn resolve(
                 recipe: Some(state.recipe),
             }
         }
-        MutationCommand::Update { .. } if bare_update => {
+        crate::cli::CommandTree::Update(_) if bare_update => {
             let state = crate::update::managed::require_state(state, "a bare update")?;
             if crate::update::managed::paused(&state, &pull.head_sha) {
                 return Ok(Resolved::Paused(state));
             }
             let replay = crate::update::managed::parse_recipe(&state.recipe)?;
-            if !matches!(replay, MutationCommand::Update { .. }) {
+            if !matches!(replay, crate::cli::CommandTree::Update(_)) {
                 return request_error("this managed pull request is not an update");
             }
             Resolution {
@@ -380,7 +377,10 @@ pub fn mutate(repo: &Path, origin_doc: &Path, out_dir: &Path) -> Result<()> {
         &crate::cli::untrusted::ClapClassifier,
     )?;
     let mutation = match crate::cli::untrusted::parse(&command.command)? {
-        crate::cli::untrusted::UntrustedCommand::Mutation(mutation) => mutation,
+        mutation @ (crate::cli::CommandTree::Update(_)
+        | crate::cli::CommandTree::Versions(_)
+        | crate::cli::CommandTree::Regenerate
+        | crate::cli::CommandTree::Fmt) => mutation,
         _ => return request_error("not a mutation command"),
     };
     let current = crate::github::surfaces::detected_repository(repo).unwrap_or_default();
@@ -428,25 +428,25 @@ pub fn mutate(repo: &Path, origin_doc: &Path, out_dir: &Path) -> Result<()> {
         }
     };
 
-    use crate::cli::untrusted::MutationCommand;
     let worktree = crate::ci::workspace::Worktree::add(repo, &start_sha)?;
     let changes = match resolved {
-        MutationCommand::Update { targets, all } => crate::update::drive::drive(
+        crate::cli::CommandTree::Update(args) => crate::update::drive::drive(
             worktree.path(),
             crate::update::drive::Options {
                 hooks_only: false,
-                all,
-                targets,
+                all: args.all,
+                targets: args.targets,
                 commit: true,
                 committer: Some(bot_committer()),
                 preflight: None,
             },
         )?,
-        MutationCommand::Bump {
+        crate::cli::CommandTree::Versions(crate::cli::update::VersionsCommand::Bump {
             specs,
             all_versions,
             changed,
-        } => crate::cli::update::bump_rels(
+            ..
+        }) => crate::cli::update::bump_rels(
             worktree.path(),
             crate::cli::update::BumpRequest {
                 specs,
@@ -456,8 +456,9 @@ pub fn mutate(repo: &Path, origin_doc: &Path, out_dir: &Path) -> Result<()> {
                 committer: Some(bot_committer()),
             },
         )?,
-        MutationCommand::Format => format_tree(worktree.path())?,
-        MutationCommand::Regenerate => unreachable!("resolved to its recipe above"),
+        crate::cli::CommandTree::Fmt => format_tree(worktree.path())?,
+        crate::cli::CommandTree::Regenerate => unreachable!("resolved to its recipe above"),
+        _ => unreachable!("mutation validation admitted a non-mutation command"),
     };
     if !git(worktree.path(), &["status", "--porcelain"])?
         .trim()

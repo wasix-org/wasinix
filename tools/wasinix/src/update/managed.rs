@@ -103,9 +103,11 @@ pub fn require_state(state: Option<State>, what: &str) -> Result<State> {
     })
 }
 
-pub fn parse_recipe(recipe: &str) -> Result<crate::cli::untrusted::MutationCommand> {
-    match crate::cli::untrusted::parse(recipe)? {
-        crate::cli::untrusted::UntrustedCommand::Mutation(mutation) => Ok(mutation),
-        _ => request_error("the recorded recipe is not a mutation command"),
+pub fn parse_recipe(recipe: &str) -> Result<crate::cli::CommandTree> {
+    let command = crate::cli::untrusted::parse(recipe)?;
+    if crate::cli::untrusted::mutation_recipe(&command).is_some() {
+        Ok(command)
+    } else {
+        request_error("the recorded recipe is not a replayable mutation command")
     }
 }
