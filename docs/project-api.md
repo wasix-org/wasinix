@@ -286,9 +286,10 @@ unit and must exist in the preceding set.
 `wasix.nix` is instantiated only when the actual package-set host platform is
 WASIX, including across nixpkgs' build-package splices. `package.nix` is
 instantiated in native and WASIX sets. A package that must only be constructed
-natively uses `exposeNativePackageIdentity` or `exposeNativeExtendedPackage`.
-`recipe.nix` and loose package files are rejected. Python uses the same bucket
-layout and permits only `package.nix`.
+natively uses `exposeNativePackage` or `exposeNativeExtendedPackage`.
+`exposeNativePackageIdentity` registers a native catalog subject without adding
+another CI build of that derivation. `recipe.nix` and loose package files are
+rejected. Python uses the same bucket layout and permits only `package.nix`.
 
 The loader performs only these jobs:
 

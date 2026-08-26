@@ -47,6 +47,11 @@ exposeWasixExtendedPackage {
 The results are `packages.native.<name>` and `packages.wasix.<profile>.<name>`.
 `packages.wasix.preferred.<name>` remains the convenient canonical WASIX build.
 
+A package constructed only in the native set uses `exposeNativePackage`. When an
+existing native package only supplies the catalog identity for a differently
+constructed WASIX package, use `exposeNativePackageIdentity`; the identity does
+not become a duplicate native CI job.
+
 ## Adapting a nixpkgs package for WASIX
 
 When the preceding nixpkgs package needs no adaptation, declare it in the
