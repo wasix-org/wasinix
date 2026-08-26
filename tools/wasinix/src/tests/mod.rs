@@ -6744,7 +6744,12 @@ mod corpus {
             field(publish_env, "INDEX_ARTIFACT_NAME").as_str(),
             Some("python")
         );
-        assert!(field(publish_env, "INDEX_JOB").is_null());
+        assert!(
+            !publish_env
+                .as_mapping()
+                .unwrap()
+                .contains_key(serde_yaml_ng::Value::String("INDEX_JOB".into()))
+        );
         let identity = field(step(publish_job, "identity"), "run")
             .as_str()
             .unwrap();
