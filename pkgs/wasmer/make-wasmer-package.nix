@@ -247,14 +247,17 @@ in
       # vs the pkg .shim below which drives the wasmer.toml source dir.
       webc = let
         built = pkgs.runCommand "webc-${owner}-${name}-${version}" ({
-            passthru.wasinix =
-              ciWasinix
-              // {
-                update.notes = lib.optional (staleRels != []) {
-                  message = "release-revisions.json has stale keys (${lib.concatMapStringsSep ", " (v: "artifacts.webc.${name} ${v}") staleRels}); nix run .#update -- nixpkgs drops them";
-                  when = _: _: true;
+            passthru = {
+              wasmer.package = package;
+              wasinix =
+                ciWasinix
+                // {
+                  update.notes = lib.optional (staleRels != []) {
+                    message = "release-revisions.json has stale keys (${lib.concatMapStringsSep ", " (v: "artifacts.webc.${name} ${v}") staleRels}); nix run .#update -- nixpkgs drops them";
+                    when = _: _: true;
+                  };
                 };
-              };
+            };
           }
           // pkgs.lib.optionalAttrs (packagePos != null) {pos = packagePos;}) ''
           d="$out/${owner}/${name}"

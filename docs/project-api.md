@@ -770,7 +770,9 @@ project it according to the execution environment:
 
 - a host-shell harness creates a host-visible Wasmer wrapper;
 - a WASIX-shell harness adds the WebC as a guest dependency;
-- a direct-command harness executes the artifact entrypoint.
+
+Specialized harnesses may use the internal packaged-command executor when they
+need to invoke one artifact entrypoint without constructing a shell workflow.
 
 Raw build-tree Wasm execution is separate from packaged WebC execution. Both
 late-bind the Wasmer runtime so a runtime update reruns checks without
@@ -898,7 +900,7 @@ adds selected commands as WebC dependencies:
 ```nix
 harnesses.wasixShell {
   shell = commands.bash;
-  commands = [commands.curl commands.coreutils];
+  commands = [commands.cat commands.curl commands.sleep];
 
   host = {
     packages = [pkgs.minio];
@@ -914,6 +916,7 @@ harnesses.wasixShell {
 
   forwardEnv = ["TEST_ENDPOINT"];
   capabilities.network = true;
+  mounts = [{source = ./fixtures; target = "/fixtures";}];
 
   script = ''
     curl "$TEST_ENDPOINT/health"
@@ -923,7 +926,11 @@ harnesses.wasixShell {
 
 The harness installs cleanup handling before setup, runs teardown after success,
 failure, or interruption, and keeps setup and teardown in the same host shell.
-Only named environment variables, capabilities, and mounts cross into the guest.
+Forwarded values are captured after setup. A mount names a path or derivation
+and a unique absolute non-root guest target. `network` is the v1 capability;
+unknown host fields, capabilities, mount fields, and duplicate command or mount
+names are errors. Only named environment variables, capabilities, and mounts
+cross into the guest.
 
 Host shell remains appropriate for native fixtures, host comparisons, and
 runtime coordination. WASIX shell is preferred when the behavior under test is a

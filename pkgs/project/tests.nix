@@ -456,11 +456,12 @@
   };
   fakeMakeWasmerPackage = {
     package,
-    servedVersions,
+    servedVersions ? null,
   }: let
     webc = mkPackage {
       name = "webc-${package.name}";
       shim = mkPackage {name = "shim-${package.name}";};
+      passthru.wasmer.package = package;
     };
   in
     mkPackage {
@@ -508,11 +509,15 @@
   fakeHarnesses =
     import ../harnesses {
       inherit lib;
-      pkgs.runCommand = name: attrs: script:
-        mkPackage {
-          inherit name script;
-          passthru.runCommandAttrs = attrs;
-        };
+      makeWasmerPackage = fakeMakeWasmerPackage;
+      pkgs = {
+        runCommand = name: attrs: script:
+          mkPackage {
+            inherit name script;
+            passthru.runCommandAttrs = attrs;
+          };
+        writeText = name: text: mkPackage {inherit name text;};
+      };
       testLib = fakeTestLib;
       wasmer = mkPackage {name = "wasmer";};
     }
@@ -522,6 +527,7 @@
           artifact = mkPackage {
             name = "webc-${package.name}";
             shim = mkPackage {name = "shim-${package.name}";};
+            passthru.wasmer.package = package;
           };
           entrypoint = package.pname or package.name;
           name = package.pname or package.name;
@@ -534,6 +540,7 @@
     artifact = mkPackage {
       name = "duplicate-webc";
       shim = mkPackage {name = "duplicate-shim";};
+      passthru.wasmer.package = mkPackage {name = "duplicate-package";};
     };
   };
   projectApi = import ./default.nix (projectApiArgs
@@ -1416,6 +1423,64 @@ in {
           script = "true";
           wasixCommands = [duplicateHarnessCommand duplicateHarnessCommand];
         })).success;
+      wasixShell = let
+        check = fakeHarnesses.wasixShell {
+          shell = duplicateHarnessCommand;
+          commands = [];
+          script = "echo guest";
+          host = {
+            packages = [duplicateHarnessCommand.artifact.passthru.wasmer.package];
+            setup = "export ENDPOINT=local";
+            teardown = "touch cleaned";
+          };
+          forwardEnv = ["ENDPOINT"];
+          capabilities.network = true;
+          mounts = [
+            {
+              source = ./tests;
+              target = "/fixtures";
+            }
+          ];
+        };
+      in {
+        hostSetup = check.passthru.harnessArgs.hostSetup;
+        hostTeardown = check.passthru.harnessArgs.hostTeardown;
+        nativePackages = map (package: package.name) check.passthru.harnessArgs.nativePkgs;
+        forwardEnv = check.passthru.harnessArgs.forwardEnv;
+        wasmerArgs = check.passthru.harnessArgs.wasmerArgs;
+      };
+      invalidWasixShellCapabilityFails =
+        !(force (fakeHarnesses.wasixShell {
+          shell = duplicateHarnessCommand;
+          script = "true";
+          capabilities.threads = true;
+        })).success;
+      invalidWasixShellMountFails =
+        !(force (fakeHarnesses.wasixShell {
+          shell = duplicateHarnessCommand;
+          script = "true";
+          mounts = [
+            {
+              source = ./tests;
+              target = "relative";
+            }
+          ];
+        })).success;
+      duplicateWasixShellMountFails =
+        !(force (fakeHarnesses.wasixShell {
+          shell = duplicateHarnessCommand;
+          script = "true";
+          mounts = [
+            {
+              source = ./tests;
+              target = "/fixtures";
+            }
+            {
+              source = ./tests;
+              target = "/fixtures";
+            }
+          ];
+        })).success;
     };
     expected = {
       current = "host-shell-behavior-1.0";
@@ -1431,6 +1496,16 @@ in {
       nonDerivationFails = true;
       duplicateTestFails = true;
       duplicateCommandFails = true;
+      wasixShell = {
+        hostSetup = "export ENDPOINT=local";
+        hostTeardown = "touch cleaned";
+        nativePackages = ["duplicate-package"];
+        forwardEnv = ["ENDPOINT"];
+        wasmerArgs = ["--net" "--volume" "${./tests}:/fixtures"];
+      };
+      invalidWasixShellCapabilityFails = true;
+      invalidWasixShellMountFails = true;
+      duplicateWasixShellMountFails = true;
     };
   };
 

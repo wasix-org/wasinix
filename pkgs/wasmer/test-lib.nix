@@ -134,6 +134,8 @@ in rec {
   mkWasixRun = {
     name,
     script,
+    hostSetup ? "",
+    hostTeardown ? "",
     nativePkgs ? [],
     wasixPkgs ? [],
     wasmer ? effectiveWasmer,
@@ -167,6 +169,22 @@ in rec {
       // lib.optionalAttrs (localBacktrace != "") {RUST_BACKTRACE = localBacktrace;}) ''
             export HOME=$TMPDIR/home
             ${lib.getExe' pkgs.coreutils "mkdir"} -p "$HOME"
+
+            cleanup() {
+              status=$?
+              trap - EXIT INT TERM
+              set +eu
+              ${hostTeardown}
+              cleanup_status=$?
+              if [ "$status" -eq 0 ] && [ "$cleanup_status" -ne 0 ]; then
+                status=$cleanup_status
+              fi
+              exit "$status"
+            }
+            trap cleanup EXIT
+            trap 'exit 130' INT
+            trap 'exit 143' TERM
+            ${hostSetup}
 
             # The harness and the shims call their own tools by store path: a
             # wasixPkgs entry can put wasm builds of the same names on PATH
