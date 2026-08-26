@@ -542,9 +542,11 @@ in rec {
 
   loadPackageOverlay = {
     contextFor,
+    definition ? null,
     dir,
     extendPackageFor ? extendPackage,
     expose ? [],
+    inherited ? {},
     lane ? "packages",
     scope ? null,
   }: final: prev: let
@@ -582,6 +584,34 @@ in rec {
         };
     instantiate = instantiatePackage;
     discoveredUnits = discoverShardedUnits {inherit dir lane;};
+    inheritedDeclarations =
+      lib.throwIf (!lib.isAttrs inherited || lib.isDerivation inherited)
+      "package directory ${toString dir} has a non-attribute inherited declaration"
+      inherited;
+    inheritedDeclarationNames = lib.attrNames inheritedDeclarations;
+    invalidInheritedDeclarations = lib.attrNames (lib.filterAttrs (_: value: !lib.isAttrs value || lib.isDerivation value) inheritedDeclarations);
+    inheritedUnitConflicts = lib.intersectLists inheritedDeclarationNames (map (unit: unit.name) discoveredUnits);
+    inheritedResult = previous: name:
+      if !(builtins.hasAttr name previous)
+      then throw "${name}: inherited package requires a preceding package"
+      else {
+        ${name} = previous.${name}.overrideAttrs (old: {
+          passthru =
+            (old.passthru or {})
+            // {
+              wasix = ((old.passthru or {}).wasix or {}) // inheritedDeclarations.${name};
+            };
+        });
+      };
+    inheritedResults =
+      lib.optionals (prev.stdenv.hostPlatform.isWasix or false)
+      (map (name: {
+          kind = "inherited";
+          inherit definition;
+          result = inheritedResult prev name;
+          replay = _final: previous: inheritedResult previous name;
+        })
+        inheritedDeclarationNames);
     units =
       lib.filter (
         unit: let
@@ -590,7 +620,7 @@ in rec {
           !(lane == "packages" && wrongHost)
       )
       discoveredUnits;
-    results =
+    discoveredResults =
       map (unit: {
         inherit (unit) kind;
         definition = {
@@ -600,11 +630,12 @@ in rec {
         replay = instantiate unit;
       })
       units;
+    results = inheritedResults ++ discoveredResults;
     packages = builtins.foldl' mergeDisjoint {} (map (item: item.result) results);
     completeNames = lib.concatMap (item: lib.optionals (item.kind == "package") (lib.attrNames item.result)) results;
-    inheritedNames = lib.subtractLists (lib.attrNames packages) (expose ++ completeNames);
-    missingInherited = lib.filter (name: !(builtins.hasAttr name prev)) inheritedNames;
-    inherited = lib.genAttrs inheritedNames (name: prev.${name});
+    precedingNames = lib.subtractLists (lib.attrNames packages) (expose ++ completeNames);
+    missingPreceding = lib.filter (name: !(builtins.hasAttr name prev)) precedingNames;
+    preceding = lib.genAttrs precedingNames (name: prev.${name});
     unitOverlays = builtins.foldl' (state: item:
       state
       // lib.genAttrs (lib.attrNames item.result) (_: {
@@ -613,9 +644,13 @@ in rec {
       })) {}
     results;
   in
-    lib.throwIf (missingInherited != [])
-    "package directory ${toString dir} exposes missing preceding package(s): ${lib.concatStringsSep ", " missingInherited}"
-    (inherited // packages // {${unitOverlaysAttr} = unitOverlays;});
+    lib.throwIf (invalidInheritedDeclarations != [])
+    "package directory ${toString dir} has invalid inherited declaration(s): ${lib.concatStringsSep ", " invalidInheritedDeclarations}"
+    (lib.throwIf (inheritedUnitConflicts != [])
+      "package directory ${toString dir} declares inherited package unit(s): ${lib.concatStringsSep ", " inheritedUnitConflicts}"
+      (lib.throwIf (missingPreceding != [])
+        "package directory ${toString dir} exposes missing preceding package(s): ${lib.concatStringsSep ", " missingPreceding}"
+        (preceding // packages // {${unitOverlaysAttr} = unitOverlays;})));
 
   registerOverlay = {
     definition ? null,

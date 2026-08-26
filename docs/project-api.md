@@ -197,6 +197,10 @@ loader for repositories that keep one package unit per file:
     packages = {
       directory = ./pkgs/overlays;
       lane = "packages";
+      inherited = {
+        libfoo = {};
+        libbar.supportedProfiles = ["eh" "ehpic"];
+      };
     };
     python = {
       directory = ./pkgs/python-overlays;
@@ -244,6 +248,11 @@ The regular package inventory accepts three forms:
 - `<bucket>/<name>/package.nix`: a complete package definition, with native and
   WASIX behavior in one file.
 
+The package declaration's `inherited` attribute set registers preceding nixpkgs
+packages which require no WASIX adaptation. Each value is merged into the
+package's `passthru.wasix`. An inherited name cannot also have an inventory
+unit, and every inherited name must exist in the preceding package set.
+
 `wasix.nix` is instantiated only when the actual package-set host platform is
 WASIX, including across nixpkgs' build-package splices. `package.nix` is
 instantiated in native and WASIX sets and may branch on its `scope` argument. A
@@ -264,6 +273,7 @@ wheel declarations remain under `pkgs/python/lib/` and `pkgs/python/wheels/`.
 The loader performs only these jobs:
 
 - discover package units;
+- register declared inherited packages;
 - turn them into an overlay for their lane;
 - preserve source positions for diagnostics;
 - reject duplicate attributes between discovered units;
@@ -970,6 +980,7 @@ introduces them:
 
 The directory loader derives package-unit names from their sharded paths and
 values from their returned attrsets. Its eval-only tests must cover complete and
-WASIX-only units, a singleton adaptation depending on the immediate recursive
-set, a multi-package unit, rejection of a bare derivation, wrong buckets,
-conflicting entry forms, obsolete `recipe.nix`, and loose support files.
+WASIX-only units, inherited packages, a singleton adaptation depending on the
+immediate recursive set, a multi-package unit, rejection of a bare derivation,
+wrong buckets, conflicting entry forms, obsolete `recipe.nix`, and loose support
+files.
