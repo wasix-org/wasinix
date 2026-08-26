@@ -108,6 +108,10 @@ impl Client {
         self.send_retrying("PATCH", path, Some(body))
     }
 
+    pub(in crate::github) fn put(&self, path: &str, body: &Value) -> Result<Value> {
+        self.send_retrying("PUT", path, Some(body))
+    }
+
     /// Every page of a list endpoint, flattened.
     pub(in crate::github) fn paginate(&self, path: &str) -> Result<Vec<Value>> {
         paginate(self, path)
