@@ -252,6 +252,10 @@ set, receives `supportedProfiles = []`, and is reused as host-side plumbing in
 WASIX sets. An entry cannot contain both files. `recipe.nix` is obsolete and
 rejected.
 
+`supportedProfiles = []` controls catalog support, not overlay instantiation.
+Use `exposeNativePackage` when the package itself must only be constructed in
+the native set.
+
 The Python inventory accepts `<bucket>/<name>.nix` or
 `<bucket>/<name>/package.nix`. Package-specific patches and tests belong inside
 the directory entry that owns them. Shared Python construction helpers and the

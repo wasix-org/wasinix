@@ -77,6 +77,7 @@
     family-a = familyA;
     family-b = familyB;
     new = throw "an exposePackage unit must not force its preceding value";
+    target-dependency = previous;
     zlib = previous;
   };
   wasixPrev =
@@ -1098,6 +1099,7 @@ in {
       nativeNames = lib.attrNames (removeAttrs shardedNative [projectLib.unitOverlaysAttr]);
       wasixNames = lib.attrNames (removeAttrs shardedWasix [projectLib.unitOverlaysAttr]);
       nativeOnlyName = shardedWasix.native-only.name;
+      targetDependencyScope = shardedWasix.target-dependency.scopeMarker;
       wasixAbsentFromNative = !(shardedNative ? zlib);
       wasixInputs = shardedWasix.zlib.buildInputs;
       supportedProfiles = shardedWasix.zlib.passthru.wasix.supportedProfiles;
@@ -1105,9 +1107,10 @@ in {
       invalidLayoutsFail = lib.all (result: !result.success) invalidSharded;
     };
     expected = {
-      nativeNames = ["custom" "native-only"];
-      wasixNames = ["custom" "native-only" "zlib"];
+      nativeNames = ["custom" "native-only" "target-dependency"];
+      wasixNames = ["custom" "native-only" "target-dependency" "zlib"];
       nativeOnlyName = "new";
+      targetDependencyScope = "wasix";
       wasixAbsentFromNative = true;
       wasixInputs = ["wasix-input"];
       supportedProfiles = ["default"];

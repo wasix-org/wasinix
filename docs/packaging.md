@@ -59,6 +59,10 @@ WASIX variant; WASIX package sets reuse that native result as host-side
 construction plumbing instead of instantiating the unit again. An entry cannot
 contain both files, and `recipe.nix` is not a supported entry form.
 
+An empty `supportedProfiles` only keeps an instantiated package out of WASIX
+catalog projections. It does not make the package native-only;
+`exposeNativePackage` is the construction-level declaration for that behavior.
+
 Patches live next to the file that applies them, so a package's patches belong
 in its own `patches/` directory and shared toolchain plumbing remains under
 `pkgs/toolchain/`. Do not vendor a file, lockfile, or bindist without stating
