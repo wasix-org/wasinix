@@ -122,6 +122,8 @@ pub enum Surface {
     Mutation { comment_id: u64 },
     /// The registry preview for a PR.
     Preview,
+    /// A managed update has newer work, but the branch has human commits.
+    UpdateDeferred,
 }
 
 /// The web address of the comment a reply answers, so a reader arriving at
@@ -137,6 +139,7 @@ impl Surface {
             Surface::CiReportReply { comment_id } => format!("ci-report:{comment_id}"),
             Surface::Mutation { comment_id } => format!("mutation:{comment_id}"),
             Surface::Preview => "preview".to_string(),
+            Surface::UpdateDeferred => "update-deferred".to_string(),
         }
     }
 
@@ -167,6 +170,7 @@ impl Surface {
         match self {
             Surface::CiReport => &["<!-- wasinix-ci-report -->"],
             Surface::Preview => &["<!-- wasinix-preview -->"],
+            Surface::UpdateDeferred => &[],
             _ => &[],
         }
     }

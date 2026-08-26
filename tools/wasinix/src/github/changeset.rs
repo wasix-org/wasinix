@@ -118,9 +118,13 @@ pub fn pr_body(changes: &ChangeSet, replayable: bool) -> Markdown {
     let mut body = Markdown::constant("### Automated pin update\n\n");
     body = body.push(sections(changes));
     if replayable {
-        body = body.push(Markdown::constant(MANAGED_FOOTER));
+        body = body.push(managed_footer());
     }
     body
+}
+
+pub fn managed_footer() -> Markdown {
+    Markdown::constant(MANAGED_FOOTER)
 }
 
 /// The `/wasinix` mutation reply: the same sections under the outcome
