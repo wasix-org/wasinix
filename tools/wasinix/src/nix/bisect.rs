@@ -214,9 +214,10 @@ fn resolve_end(
     // The spelling every other source grammar takes, so a reader who learned
     // it from `--with` can write it here. A bare value stays a git ref,
     // which is what a bisect range is made of.
+    let reference = endpoint_source(reference, dependency)?;
     use crate::support::naming::SourceSpec;
     let tagged;
-    let reference = match crate::support::naming::source_spec(reference)? {
+    let reference = match crate::support::naming::source_spec(&reference)? {
         SourceSpec::Revision(rev) => rev,
         SourceSpec::Tag(tag) => {
             tagged = format!("refs/tags/{tag}");
@@ -236,6 +237,24 @@ fn resolve_end(
         "--{flag} {reference}: {} has no such revision{hint}",
         dependency.repository
     ))
+}
+
+/// Accept the update grammar at a bisect endpoint without letting one
+/// dependency's range accidentally name another target.
+fn endpoint_source(reference: &str, dependency: &Dependency) -> Result<String> {
+    let spec = crate::support::naming::parse(reference)?;
+    let Some(source) = spec.value else {
+        return Ok(reference.to_string());
+    };
+    let target = crate::support::naming::render(&spec.segments);
+    require(
+        target == dependency.target,
+        format!(
+            "{reference:?} names {target:?}, but this bisect is for {:?}",
+            dependency.target
+        ),
+    )?;
+    Ok(source)
 }
 
 /// Tags whose name contains the text. Repositories differ on the `v`
@@ -620,13 +639,23 @@ mod tests {
         assert!(error.contains("did you mean v0.4.3?"), "{error}");
         // The shared spellings resolve here too.
         let head = command(&source, &["rev-parse", "HEAD"]);
-        for spelling in [format!("rev:{head}"), "tag:v0.4.3".to_string()] {
+        for spelling in [
+            format!("rev:{head}"),
+            "tag:v0.4.3".to_string(),
+            format!("wasixcc@rev:{head}"),
+            "wasixcc@tag:v0.4.3".to_string(),
+        ] {
             assert_eq!(
                 super::resolve_end(&source, "good", &spelling, &dependency).unwrap(),
                 head,
                 "{spelling}"
             );
         }
+        let wrong_target =
+            super::resolve_end(&source, "good", "wasmer@tag:v0.4.3", &dependency)
+                .unwrap_err()
+                .to_string();
+        assert!(wrong_target.contains("this bisect is for \"wasixcc\""), "{wrong_target}");
         // Nothing near it: the refusal still names the end and the repo.
         let bare = super::resolve_end(&source, "bad", "9.9.9", &dependency)
             .unwrap_err()
