@@ -41,6 +41,16 @@
       wasmerPackage = wasmer.packages.${system}.wasmer;
       wasmerRevision = wasmer.shortRev or "dirty";
     };
+    repositorySource = let
+      source = builtins.path {
+        path = self;
+        name = "source";
+        filter = path: _type: baseNameOf path != ".git";
+      };
+    in
+      if builtins.pathExists (source + "/.git")
+      then throw "repository source contains Git metadata"
+      else source;
     repositoryCheckNames = ["deadnix" "nil" "nixf" "project-api" "statix" "treefmt"];
     project = projectApi.mkProject {
       inherit system;
@@ -56,7 +66,7 @@
         repositoryCheckNames);
       repository = {
         source = "wasinix";
-        root = self;
+        root = repositorySource;
         revisionsFile = ./release-revisions.json;
         publication = {
           cargo.registry = "https://cargo-registry.wasix.org";
@@ -101,8 +111,8 @@
         rustfmt.enable = true;
       };
     };
-    treefmtCheck = treefmtEval.config.build.check self;
-    nixLintChecks = lib.mapAttrs (_name: module: (treefmtFor module).config.build.check self) {
+    treefmtCheck = treefmtEval.config.build.check repositorySource;
+    nixLintChecks = lib.mapAttrs (_name: module: (treefmtFor module).config.build.check repositorySource) {
       deadnix.programs.deadnix = {
         enable = true;
         no-lambda-pattern-names = true;
