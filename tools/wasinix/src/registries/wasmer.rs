@@ -27,7 +27,7 @@ use crate::support::nix::{Flake, active_project_installable};
 static REV: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?m)^    nix build '[^']+/([^/#']+)#").unwrap());
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct Provenance {
     pub flake: String,
     pub repository: String,

@@ -34,7 +34,9 @@ Verbs act on the tree, nouns have lifecycles:
 
 `build` and `spot` take `--on local | <remote> | <remote>:<route>`; build and
 spot cases inside `diff` and `bisect` use the same option. Commands that render
-structured reports expose `--json`; `-v`/`-q`/`--color` are global.
+structured reports expose `--json`; `-v`/`-q`/`--color` are global. Repository
+publication also exposes `publish --plan`, which resolves selectors and
+destinations without realizing optional tools or contacting registries.
 
 ## Catalog and selection
 
