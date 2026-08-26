@@ -79,7 +79,11 @@ pub fn open_pr(repo: &Path, changes: &ChangeSet, options: &PrOptions) -> Result<
     // rather than the marker every later comment mutation reads.
     if let Some(recipe) = recipe {
         let head = git(repo, &["rev-parse", "HEAD"])?.trim().to_string();
-        let state = crate::update::managed::State::new(recipe, head)?;
+        let mut state = crate::update::managed::State::new(recipe, head)?;
+        state.auto_merge = !changes
+            .entries
+            .iter()
+            .any(|entry| entry.kind == crate::update::changeset::EntryKind::Notable);
         body = crate::update::managed::with_state(&body, &state)?;
     }
     let number = if let Some(number) = existing {
@@ -132,11 +136,13 @@ impl PrOptions {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Pull {
+    pub node_id: String,
     pub head_sha: String,
     pub head_ref: String,
     pub head_repository: String,
     pub base_sha: String,
     pub body: String,
+    pub auto_merge_enabled: bool,
 }
 
 pub fn pull(client: &Client, repository: &str, number: u64) -> Result<Pull> {
@@ -149,11 +155,13 @@ pub fn pull(client: &Client, repository: &str, number: u64) -> Result<Pull> {
             .ok_or_else(|| Error::Failure(format!("pull request has no {pointer}")))
     };
     Ok(Pull {
+        node_id: field("/node_id")?,
         head_sha: field("/head/sha")?.to_lowercase(),
         head_ref: field("/head/ref")?,
         head_repository: field("/head/repo/full_name")?.to_lowercase(),
         base_sha: field("/base/sha")?.to_lowercase(),
         body: value["body"].as_str().unwrap_or_default().to_string(),
+        auto_merge_enabled: !value["auto_merge"].is_null(),
     })
 }
 
@@ -672,13 +680,17 @@ pub fn mutate_publish(repo: &Path, out_dir: &Path) -> Result<()> {
             .recipe
             .clone()
             .ok_or_else(|| Error::Failure("a state-recording mutation carries no recipe".into()))?;
-        let state = crate::update::managed::State::new(recipe, new_head)?;
         // The body may have moved since mutate ran; record into the fresh one.
         let fresh = pull(
             &client,
             &context.origin.repository,
             context.origin.pull_request,
         )?;
+        let mut state = crate::update::managed::State::new(recipe, new_head)?;
+        state.auto_merge = !changes
+            .entries
+            .iter()
+            .any(|entry| entry.kind == crate::update::changeset::EntryKind::Notable);
         let rendered = crate::update::managed::with_state(&fresh.body, &state)?;
         client.patch(
             &format!(

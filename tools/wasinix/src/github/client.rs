@@ -112,6 +112,28 @@ impl Client {
         self.send_retrying("PUT", path, Some(body))
     }
 
+    pub(in crate::github) fn graphql(&self, body: &Value) -> Result<Value> {
+        let mut request = ureq::post("https://api.github.com/graphql")
+            .set("Accept", "application/vnd.github+json")
+            .set("X-GitHub-Api-Version", "2022-11-28")
+            .set("User-Agent", "wasinix");
+        if let Some(token) = &self.token {
+            request = request.set("Authorization", &format!("Bearer {token}"));
+        }
+        let response = request.send_json(body.clone()).map_err(|error| Error::Http {
+            context: "GitHub GraphQL POST".into(),
+            source: Box::new(error),
+        })?;
+        let value: Value = response.into_json().map_err(|source| Error::Io {
+            path: "GitHub GraphQL response".into(),
+            source,
+        })?;
+        if let Some(errors) = value["errors"].as_array().filter(|errors| !errors.is_empty()) {
+            return Err(Error::Failure(format!("GitHub GraphQL rejected request: {errors:?}")));
+        }
+        Ok(value)
+    }
+
     /// Every page of a list endpoint, flattened.
     pub(in crate::github) fn paginate(&self, path: &str) -> Result<Vec<Value>> {
         paginate(self, path)
