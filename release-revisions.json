@@ -2,15 +2,9 @@
   "artifacts.registry.python.wheels.apsw": {
     "3.51.0.0": 2
   },
-  "artifacts.registry.python.wheels.backports-zstd": {
-    "1.6.0": 2
-  },
   "artifacts.registry.python.wheels.black": {
     "24.10.0": 2,
     "25.1.0": 2
-  },
-  "artifacts.registry.python.wheels.brotli": {
-    "1.2.0": 2
   },
   "artifacts.registry.python.wheels.brotlicffi": {
     "1.2.0.0": 2
@@ -46,9 +40,6 @@
   },
   "artifacts.registry.python.wheels.fastuuid": {
     "0.14.0": 2
-  },
-  "artifacts.registry.python.wheels.fonttools": {
-    "4.63.0": 2
   },
   "artifacts.registry.python.wheels.frozenlist": {
     "1.8.0": 2
@@ -130,16 +121,10 @@
   "artifacts.registry.python.wheels.psycopg-binary": {
     "3.3.4": 2
   },
-  "artifacts.registry.python.wheels.psycopg-c": {
-    "3.3.4": 2
-  },
   "artifacts.registry.python.wheels.pyarrow": {
     "19.0.1": 2,
     "21.0.0": 2,
     "24.0.0": 2
-  },
-  "artifacts.registry.python.wheels.pycares": {
-    "5.0.1": 2
   },
   "artifacts.registry.python.wheels.pycryptodome": {
     "3.23.0": 2
@@ -209,12 +194,6 @@
   },
   "artifacts.registry.python.wheels.watchfiles": {
     "1.2.0": 2
-  },
-  "artifacts.registry.python.wheels.websockets": {
-    "16.1": 2
-  },
-  "artifacts.registry.python.wheels.wrapt": {
-    "2.2.2": 2
   },
   "artifacts.registry.python.wheels.xxhash": {
     "2.0.2": 2,
