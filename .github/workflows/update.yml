@@ -60,4 +60,5 @@ jobs:
             jobs=(--jobs "$JOBS")
           fi
           nix run .#update -- "${targets[@]}" --pr "${jobs[@]}" \
-            --base "${BASE:-$GITHUB_REF_NAME}"
+            --base "${BASE:-$GITHUB_REF_NAME}" \
+            --step-summary "$GITHUB_STEP_SUMMARY"

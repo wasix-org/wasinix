@@ -15,6 +15,7 @@ use crate::support::{schema, ui};
 use crate::update::Mode;
 use crate::update::changeset::ChangeSet;
 use crate::update::targets::Target;
+use crate::update::timing::{Phase, PhaseTiming, Timings};
 
 const HEARTBEAT: Duration = Duration::from_secs(60);
 
@@ -35,7 +36,9 @@ pub struct TargetResult {
     pub error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pull_request: Option<u64>,
-    pub duration_seconds: u64,
+    pub duration_milliseconds: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub phases: Vec<PhaseTiming>,
 }
 
 impl TargetResult {
@@ -50,17 +53,64 @@ impl TargetResult {
     fn changed(&self) -> bool {
         self.changes.as_ref().is_some_and(ChangeSet::changed)
     }
+
+    fn outcome(&self) -> &'static str {
+        if self.failed() {
+            "failed"
+        } else if self.changed() {
+            "updated"
+        } else {
+            "up to date"
+        }
+    }
+
+    fn phase_milliseconds(&self, phase: Phase) -> Option<u64> {
+        self.phases
+            .iter()
+            .find(|timing| timing.phase == phase)
+            .map(|timing| timing.duration_milliseconds)
+    }
+
+    fn dominant_phase(&self) -> Option<&PhaseTiming> {
+        self.phases
+            .iter()
+            .max_by_key(|timing| timing.duration_milliseconds)
+    }
+
+    fn other_milliseconds(&self) -> u64 {
+        self.duration_milliseconds.saturating_sub(
+            self.phases
+                .iter()
+                .map(|timing| timing.duration_milliseconds)
+                .sum(),
+        )
+    }
+
+    fn slowest_part(&self) -> String {
+        let other = self.other_milliseconds();
+        let (label, milliseconds) = match self.dominant_phase() {
+            Some(timing) if timing.duration_milliseconds >= other => {
+                (timing.phase.label(), timing.duration_milliseconds)
+            }
+            _ => ("other", other),
+        };
+        format!(
+            "{label} ({})",
+            crate::support::format::duration(milliseconds as f64 / 1_000.0)
+        )
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Report {
+    pub preparation_milliseconds: u64,
     pub targets: Vec<TargetResult>,
 }
 
 impl schema::Document for Report {
     const KIND: &'static str = "updateBatch";
-    const SCHEMA: u32 = 1;
+    const SCHEMA: u32 = 2;
 }
 
 impl Report {
@@ -95,6 +145,87 @@ impl Report {
             format!("{changed} updated"),
             format!("{failed} failed"),
         ]));
+        if !self.targets.is_empty() {
+            let rows = self
+                .by_duration()
+                .into_iter()
+                .map(|result| {
+                    vec![
+                        result.target.clone(),
+                        crate::support::format::duration(
+                            result.duration_milliseconds as f64 / 1_000.0,
+                        ),
+                        result.slowest_part(),
+                        result.outcome().into(),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            ui::result("update timings (slowest first)");
+            ui::output(crate::support::table::render(
+                Some(&["target", "total", "slowest phase", "outcome"]),
+                &rows,
+            ));
+        }
+    }
+
+    fn by_duration(&self) -> Vec<&TargetResult> {
+        let mut targets = self.targets.iter().collect::<Vec<_>>();
+        targets.sort_by(|left, right| {
+            right
+                .duration_milliseconds
+                .cmp(&left.duration_milliseconds)
+                .then_with(|| left.target.cmp(&right.target))
+        });
+        targets
+    }
+
+    pub fn append_step_summary(&self, path: &Path) -> Result<()> {
+        use crate::github::sanitize::Markdown;
+
+        let mut body = Markdown::constant("## Update timings\n\nShared preparation: ")
+            .push(Markdown::text(&crate::support::format::duration(
+                self.preparation_milliseconds as f64 / 1_000.0,
+            )))
+            .push(Markdown::constant("\n\n| target | total"));
+        for phase in Phase::ALL {
+            body = body
+                .push(Markdown::constant(" | "))
+                .push(Markdown::text(phase.label()));
+        }
+        body = body.push(Markdown::constant(" | other | outcome |\n|:--|--:"));
+        for _ in Phase::ALL {
+            body = body.push(Markdown::constant("|--:"));
+        }
+        body = body.push(Markdown::constant("|--:|:--|\n"));
+        for result in self.by_duration() {
+            body = body
+                .push(Markdown::constant("| "))
+                .push(Markdown::cell_code(&result.target))
+                .push(Markdown::constant(" | "))
+                .push(Markdown::cell(&crate::support::format::duration(
+                    result.duration_milliseconds as f64 / 1_000.0,
+                )));
+            for phase in Phase::ALL {
+                let value = match result.phase_milliseconds(phase) {
+                    Some(milliseconds) => {
+                        crate::support::format::duration(milliseconds as f64 / 1_000.0)
+                    }
+                    None => "-".to_string(),
+                };
+                body = body
+                    .push(Markdown::constant(" | "))
+                    .push(Markdown::cell(&value));
+            }
+            body = body
+                .push(Markdown::constant(" | "))
+                .push(Markdown::cell(&crate::support::format::duration(
+                    result.other_milliseconds() as f64 / 1_000.0,
+                )))
+                .push(Markdown::constant(" | "))
+                .push(Markdown::cell(result.outcome()))
+                .push(Markdown::constant(" |\n"));
+        }
+        crate::support::fs::append(path, body.into_string().as_bytes())
     }
 }
 
@@ -174,6 +305,7 @@ struct Running {
     readers: crate::support::tools::PipeReaders,
     stdout: PathBuf,
     stderr: PathBuf,
+    timings: PathBuf,
     started: Instant,
 }
 
@@ -189,6 +321,7 @@ fn spawn(
     let worktree = crate::ci::workspace::Worktree::add(repo, revision)?;
     let stdout = scratch.join(format!("{sequence}.stdout"));
     let stderr = scratch.join(format!("{sequence}.stderr"));
+    let timings = scratch.join(format!("{sequence}.timings.json"));
     let stdout_log = crate::support::log::BoundedLog::create(&stdout)?;
     let stderr_log = crate::support::log::BoundedLog::create(&stderr)?;
     let executable = crate::support::env::current_exe()?;
@@ -203,6 +336,8 @@ fn spawn(
         .arg(&item.spec)
         .arg("--batch-preflight")
         .arg(preflight)
+        .arg("--batch-timings")
+        .arg(&timings)
         .args([
             "--pr",
             "--branch",
@@ -242,6 +377,7 @@ fn spawn(
         readers,
         stdout,
         stderr,
+        timings,
         started: Instant::now(),
     })
 }
@@ -261,12 +397,18 @@ fn completed(running: Running, status: ExitStatus) -> Result<TargetResult> {
         readers,
         stdout,
         stderr,
+        timings,
         started,
     } = running;
     readers.join()?;
     drop(child);
     let stdout_text = crate::support::fs::read_to_string(&stdout)?;
     let stderr_text = crate::support::fs::read_to_string(&stderr)?;
+    let phases = if timings.exists() {
+        schema::read::<Timings>(&timings)?.phases
+    } else {
+        Vec::new()
+    };
     let value = serde_json::from_str(&stdout_text).ok();
     let changes = value
         .clone()
@@ -297,7 +439,8 @@ fn completed(running: Running, status: ExitStatus) -> Result<TargetResult> {
         changes,
         error,
         pull_request: pull_request(&stderr_text),
-        duration_seconds: started.elapsed().as_secs(),
+        duration_milliseconds: started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
+        phases,
     };
     let outcome = if result.failed() {
         "failed"
@@ -315,7 +458,7 @@ fn completed(running: Running, status: ExitStatus) -> Result<TargetResult> {
         format!(
             "{} · {outcome}{pull} · took {}",
             result.target,
-            crate::support::format::duration(result.duration_seconds as f64)
+            crate::support::format::duration(result.duration_milliseconds as f64 / 1_000.0)
         ),
     );
     if result.failed() {
@@ -392,6 +535,10 @@ pub fn run(repo: &Path, all: bool, specs: &[String], options: Options) -> Result
     let scratch = crate::support::fs::Scratch::create("wasinix-update-batch")?;
     let prepare_started = Instant::now();
     let (items, preflight) = prepare(repo, all, specs)?;
+    let preparation_milliseconds = prepare_started
+        .elapsed()
+        .as_millis()
+        .min(u128::from(u64::MAX)) as u64;
     if items.len() > 1 && options.branch.is_some() {
         return request_error("--branch names one branch and needs exactly one update target");
     }
@@ -402,7 +549,7 @@ pub fn run(repo: &Path, all: bool, specs: &[String], options: Options) -> Result
         "updates",
         format!(
             "shared state ready · {total} targets · took {}",
-            crate::support::format::duration(prepare_started.elapsed().as_secs_f64())
+            crate::support::format::duration(preparation_milliseconds as f64 / 1_000.0)
         ),
     );
     let started = Instant::now();
@@ -465,5 +612,72 @@ pub fn run(repo: &Path, all: bool, specs: &[String], options: Options) -> Result
         std::thread::sleep(Duration::from_millis(250));
     }
     results.sort_by(|left, right| left.target.cmp(&right.target));
-    Ok(Report { targets: results })
+    Ok(Report {
+        preparation_milliseconds,
+        targets: results,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn result(target: &str, seconds: u64, phase: Phase) -> TargetResult {
+        TargetResult {
+            target: target.into(),
+            changes: Some(ChangeSet::default()),
+            error: None,
+            pull_request: None,
+            duration_milliseconds: seconds * 1_000,
+            phases: vec![PhaseTiming {
+                phase,
+                duration_milliseconds: seconds * 800,
+            }],
+        }
+    }
+
+    #[test]
+    fn timing_projection_is_slowest_first() {
+        let report = Report {
+            preparation_milliseconds: 1_500,
+            targets: vec![
+                result("fast", 4, Phase::Backend),
+                result("slow", 12, Phase::Reevaluation),
+            ],
+        };
+        assert_eq!(
+            report
+                .by_duration()
+                .iter()
+                .map(|result| result.target.as_str())
+                .collect::<Vec<_>>(),
+            ["slow", "fast"]
+        );
+        assert_eq!(
+            report.targets[1].dominant_phase().unwrap().phase,
+            Phase::Reevaluation
+        );
+    }
+
+    #[test]
+    fn step_summary_uses_the_structured_phase_report() {
+        let scratch = crate::support::fs::Scratch::create("update-step-summary").unwrap();
+        let path = scratch.path().join("summary.md");
+        let report = Report {
+            preparation_milliseconds: 1_500,
+            targets: vec![
+                result("fast", 4, Phase::Backend),
+                result("slow|target", 12, Phase::Reevaluation),
+            ],
+        };
+        report.append_step_summary(&path).unwrap();
+        let summary = crate::support::fs::read_to_string(&path).unwrap();
+        assert!(summary.contains("| updater | changelog | reevaluation |"));
+        assert!(summary.contains(&format!(
+            "Shared preparation: {}",
+            crate::support::format::duration(1.5)
+        )));
+        assert!(summary.find("slow\\|target").unwrap() < summary.find("fast").unwrap());
+        assert!(summary.contains(&crate::support::format::duration(9.6)));
+    }
 }

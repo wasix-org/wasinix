@@ -82,6 +82,13 @@ input so concurrency experiments do not require workflow edits. The default is
 two; three concurrent Nix evaluations take longer on the hosted runner, and four
 exhaust it.
 
+The aggregate receipt lists every target slowest first and identifies its
+largest phase. Workflow runs also publish shared preparation time and a full
+phase table to the Actions step summary, with updater, changelog, reevaluation,
+format/commit, retention, pruning, hook, pull-request, and other time kept
+separate. The JSON batch report carries the same measurements in milliseconds
+for comparisons between runs.
+
 Update PRs the bot opens are managed: the PR body records the recipe that
 generated the branch and the head the bot last wrote (a
 `<!-- wasinix:changeset ... -->` marker). Only a mutation a comment can spell

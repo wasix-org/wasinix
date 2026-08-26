@@ -16,5 +16,6 @@ pub mod select;
 pub mod snapshot;
 pub mod sync;
 pub mod targets;
+pub mod timing;
 
 pub use request::{Mode, REQUEST_ENV, Request};

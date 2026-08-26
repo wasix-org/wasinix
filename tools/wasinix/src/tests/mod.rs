@@ -6878,6 +6878,10 @@ mod corpus {
             "{invocation}"
         );
         assert!(invocation.contains("--pr \"${jobs[@]}\""), "{invocation}");
+        assert!(
+            invocation.contains("--step-summary \"$GITHUB_STEP_SUMMARY\""),
+            "{invocation}"
+        );
         assert!(!invocation.contains("update-matrix"), "{invocation}");
         let update_step = step(job(&update, "update"), "update");
         let update_inputs = field(field(field(&update, "on"), "workflow_dispatch"), "inputs");

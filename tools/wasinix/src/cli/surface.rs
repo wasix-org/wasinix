@@ -241,6 +241,8 @@ const LEAVES: &[LeafPolicy] = &[
         terminal_args: &[
             "jobs",
             "batch_preflight",
+            "batch_timings",
+            "step_summary",
             "expect",
             "commit",
             "pr",

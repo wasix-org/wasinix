@@ -2,6 +2,7 @@
 //! and one ChangeSet describing everything that happened.
 
 use std::path::Path;
+use std::time::Instant;
 
 use serde_json::Value;
 
@@ -12,6 +13,7 @@ use crate::update::backends;
 use crate::update::changeset::{ChangeSet, Entry, EntryKind, FailedStep, Unchanged};
 use crate::update::retention::{self, Versions};
 use crate::update::targets::{self, PostUpdateAction, PostUpdateHook, Target};
+use crate::update::timing::{Phase, Recorder};
 use crate::update::{Mode, select};
 
 pub struct Options {
@@ -197,11 +199,12 @@ fn hook_stage(
     commit: bool,
     committer: Option<&crate::support::git::Identity<'_>>,
     hooks: Vec<(PostUpdateHook, Option<String>)>,
+    timings: &mut Recorder,
 ) -> Result<()> {
     for (hook, prior) in hooks {
         let before = repo_status(repo)?;
         let versions = prior.as_deref().map(|prior| (prior, hook.version.as_str()));
-        match run_post_update_hook(repo, &hook, versions) {
+        match timings.measure(Phase::Hooks, || run_post_update_hook(repo, &hook, versions)) {
             Ok(outcome) => {
                 let after = repo_status(repo)?;
                 // Only a hook that changed something enters the ChangeSet:
@@ -218,7 +221,9 @@ fn hook_stage(
                         files: changed_files(&before, &after),
                     };
                     if commit {
-                        commit_step(repo, &ChangeSet::commit_message(&entry), committer)?;
+                        timings.measure(Phase::FormatCommit, || {
+                            commit_step(repo, &ChangeSet::commit_message(&entry), committer)
+                        })?;
                     }
                     changes.entries.push(entry);
                 }
@@ -236,6 +241,7 @@ fn run_hooks(
     repo: &Path,
     commit: bool,
     committer: Option<&crate::support::git::Identity<'_>>,
+    timings: &mut Recorder,
 ) -> Result<ChangeSet> {
     let mut changes = ChangeSet::default();
     let snapshot = crate::update::snapshot::load(repo)?;
@@ -243,7 +249,7 @@ fn run_hooks(
         .into_iter()
         .map(|hook| (hook, None))
         .collect();
-    hook_stage(repo, &mut changes, commit, committer, hooks)?;
+    hook_stage(repo, &mut changes, commit, committer, hooks, timings)?;
     Ok(changes)
 }
 
@@ -265,9 +271,13 @@ fn bump_entry(target: &Target, outcome: &str, files: Vec<String>) -> Entry {
 }
 
 pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
+    drive_timed(repo, options, &mut Recorder::new(None))
+}
+
+pub fn drive_timed(repo: &Path, options: Options, timings: &mut Recorder) -> Result<ChangeSet> {
     let committer = options.committer.as_ref();
     if options.hooks_only {
-        return run_hooks(repo, options.commit, committer);
+        return run_hooks(repo, options.commit, committer, timings);
     }
     if options.all && !options.targets.is_empty() {
         return request_error("--all cannot be combined with target arguments");
@@ -320,9 +330,11 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
     let mut moved: Vec<&Target> = Vec::new();
     for target in &targets {
         ui::fact("target", &target.name);
-        let started = std::time::Instant::now();
         let before = repo_status(repo)?;
-        let outcome = backends::run_backend(repo, target, requests.get(&target.name));
+        let started = Instant::now();
+        let outcome = timings.measure(Phase::Backend, || {
+            backends::run_backend(repo, target, requests.get(&target.name))
+        });
         ui::note(format!(
             "  took {}",
             crate::support::format::duration(started.elapsed().as_secs_f64())
@@ -337,7 +349,9 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
                 if changed {
                     let entry = bump_entry(target, &outcome, changed_files(&before, &after));
                     if options.commit {
-                        commit_step(repo, &ChangeSet::commit_message(&entry), committer)?;
+                        timings.measure(Phase::FormatCommit, || {
+                            commit_step(repo, &ChangeSet::commit_message(&entry), committer)
+                        })?;
                     }
                     changes.entries.push(entry);
                     moved.push(target);
@@ -359,7 +373,7 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
 
     // Changelogs in one evaluation after the bumps, so each url names the
     // release that actually landed.
-    let links = backends::changelogs(&moved);
+    let links = timings.measure(Phase::Changelog, || Ok(backends::changelogs(&moved)))?;
     for entry in &mut changes.entries {
         if entry.kind == EntryKind::Bump {
             entry.changelog = links.get(&entry.subject).cloned();
@@ -368,7 +382,9 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
 
     let release_changed = release_followups(&changes, release_work);
     let current_snapshot = if changes.changed() {
-        Some(crate::update::snapshot::evaluate(repo)?)
+        Some(timings.measure(Phase::Reevaluation, || {
+            crate::update::snapshot::evaluate(repo)
+        })?)
     } else {
         None
     };
@@ -376,14 +392,16 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
     // Retain before pruning: the prune drops the rel key of any version no
     // longer served, which is exactly what retention just brought back.
     if release_changed {
-        match retention::regen_history(
-            repo,
-            &history_priors,
-            &current_snapshot
-                .as_ref()
-                .expect("a release change has current update state")
-                .served_versions,
-        ) {
+        match timings.measure(Phase::Retention, || {
+            retention::regen_history(
+                repo,
+                &history_priors,
+                &current_snapshot
+                    .as_ref()
+                    .expect("a release change has current update state")
+                    .served_versions,
+            )
+        }) {
             Ok(Some(retained)) => {
                 let entry = Entry {
                     kind: EntryKind::Retain,
@@ -395,7 +413,9 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
                     files: Vec::new(),
                 };
                 if options.commit {
-                    commit_step(repo, &ChangeSet::commit_message(&entry), committer)?;
+                    timings.measure(Phase::FormatCommit, || {
+                        commit_step(repo, &ChangeSet::commit_message(&entry), committer)
+                    })?;
                 }
                 changes.entries.push(entry);
             }
@@ -407,7 +427,7 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
         }
     }
     if release_changed {
-        match retention::prune_rels(repo) {
+        match timings.measure(Phase::Pruning, || retention::prune_rels(repo)) {
             Ok(Some(pruned)) => {
                 let entry = Entry {
                     kind: EntryKind::Prune,
@@ -419,7 +439,9 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
                     files: Vec::new(),
                 };
                 if options.commit {
-                    commit_step(repo, &ChangeSet::commit_message(&entry), committer)?;
+                    timings.measure(Phase::FormatCommit, || {
+                        commit_step(repo, &ChangeSet::commit_message(&entry), committer)
+                    })?;
                 }
                 changes.entries.push(entry);
             }
@@ -445,7 +467,14 @@ pub fn drive(repo: &Path, options: Options) -> Result<ChangeSet> {
         .into_iter()
         .map(|(hook, prior)| (hook, Some(prior)))
         .collect();
-        hook_stage(repo, &mut changes, options.commit, committer, hooks)?;
+        hook_stage(
+            repo,
+            &mut changes,
+            options.commit,
+            committer,
+            hooks,
+            timings,
+        )?;
     }
 
     if release_changed {

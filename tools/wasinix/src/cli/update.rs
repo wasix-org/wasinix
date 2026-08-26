@@ -8,7 +8,7 @@ use crate::support::error::{Result, request_error};
 use crate::support::process::CommandStatus;
 use crate::support::{schema, table, ui};
 use crate::update::changeset::{ChangeSet, Entry, EntryKind, Unchanged};
-use crate::update::{drive, history, rels, targets};
+use crate::update::{drive, history, rels, targets, timing};
 
 /// How a mutation leaves the tree; every mutating arm carries these flags.
 #[derive(clap::Args)]
@@ -70,6 +70,7 @@ fn conclude(
     changes: &ChangeSet,
     mode: &MutationMode,
     shape: PrShape,
+    timings: Option<&mut timing::Recorder>,
 ) -> Result<CommandStatus> {
     if mode.pr && changes.changed() {
         let repository =
@@ -80,19 +81,20 @@ fn conclude(
             )
         })?;
         let title = shape.title.unwrap_or_else(|| changes.title());
-        let number = crate::github::mutation::open_pr(
-            repo,
-            changes,
-            &crate::github::mutation::PrOptions {
-                repository,
-                branch,
-                title,
-                base: mode.base.clone(),
-                managed: !mode.fork,
-                recipe: shape.recipe,
-                ownership: shape.ownership,
-            },
-        )?;
+        let options = crate::github::mutation::PrOptions {
+            repository,
+            branch,
+            title,
+            base: mode.base.clone(),
+            managed: !mode.fork,
+            recipe: shape.recipe,
+            ownership: shape.ownership,
+        };
+        let open = || crate::github::mutation::open_pr(repo, changes, &options);
+        let number = match timings {
+            Some(timings) => timings.measure(timing::Phase::PullRequest, open)?,
+            None => open()?,
+        };
         ui::fact("pull request", number);
     }
     ui::emit(&mode.json, changes, |changes| {
@@ -120,6 +122,12 @@ pub struct UpdateArgs {
     /// Shared batch state prepared by the parent update process
     #[arg(long, hide = true)]
     pub batch_preflight: Option<PathBuf>,
+    /// Worker timing sidecar collected by the parent update process
+    #[arg(long, hide = true)]
+    pub batch_timings: Option<PathBuf>,
+    /// Append aggregate update timings to a GitHub step summary
+    #[arg(long, hide = true)]
+    pub step_summary: Option<PathBuf>,
     /// With `request`: fail unless the request targets this name
     #[arg(long, value_name = "NAME")]
     pub expect: Option<String>,
@@ -277,6 +285,7 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
                     recipe: None,
                     ownership: targets::Ownership::default(),
                 },
+                None,
             )
         }
         _ => {
@@ -293,6 +302,9 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
                         fork: args.mode.fork,
                     },
                 )?;
+                if let Some(path) = &args.step_summary {
+                    report.append_step_summary(path)?;
+                }
                 ui::emit(
                     &args.mode.json,
                     &report,
@@ -321,7 +333,8 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
                         .map(|spec| preflight.ownership_for(spec))
                 })
                 .unwrap_or_default();
-            let changes = drive::drive(
+            let mut timings = timing::Recorder::new(args.batch_timings);
+            let changes = drive::drive_timed(
                 &repo,
                 drive::Options {
                     hooks_only: false,
@@ -331,18 +344,27 @@ pub fn run_update(args: UpdateArgs) -> Result<CommandStatus> {
                     committer: args.mode.committer(),
                     preflight,
                 },
-            )?;
-            conclude(
-                &repo,
-                &changes,
-                &args.mode,
-                PrShape {
-                    branch,
-                    title,
-                    recipe,
-                    ownership,
-                },
-            )
+                &mut timings,
+            );
+            let status = changes.and_then(|changes| {
+                conclude(
+                    &repo,
+                    &changes,
+                    &args.mode,
+                    PrShape {
+                        branch,
+                        title,
+                        recipe,
+                        ownership,
+                    },
+                    Some(&mut timings),
+                )
+            });
+            let timing_status = timings.finish();
+            match (status, timing_status) {
+                (Ok(status), Ok(())) => Ok(status),
+                (Err(error), _) | (Ok(_), Err(error)) => Err(error),
+            }
         }
     }
 }
@@ -473,6 +495,7 @@ pub fn run_versions(command: VersionsCommand) -> Result<CommandStatus> {
                     recipe: None,
                     ownership: targets::Ownership::default(),
                 },
+                None,
             )
         }
         VersionsCommand::Import {
@@ -493,6 +516,7 @@ pub fn run_versions(command: VersionsCommand) -> Result<CommandStatus> {
                     recipe: None,
                     ownership: targets::Ownership::default(),
                 },
+                None,
             )
         }
         VersionsCommand::Bump {
@@ -525,6 +549,7 @@ pub fn run_versions(command: VersionsCommand) -> Result<CommandStatus> {
                     recipe,
                     ownership: targets::Ownership::default(),
                 },
+                None,
             )
         }
     }
