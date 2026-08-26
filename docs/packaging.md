@@ -29,10 +29,24 @@ The results are `packages.native.<name>` and `packages.wasix.<profile>.<name>`.
 
 ## Adapting a nixpkgs package for WASIX
 
+When the preceding nixpkgs package needs no adaptation, declare it in the
+package overlay's `inherited` attribute set. Each value is its `passthru.wasix`
+compatibility declaration:
+
+```nix
+inherited = {
+  libfoo = {};
+  libbar.supportedProfiles = ["eh" "ehpic"];
+};
+```
+
+An inherited package is registered and retained like any other project package.
+Move it to an inventory unit once it needs a WASIX-specific transformation.
+
 The regular inventory uses one-character buckets. A WASIX-only adaptation uses
 one of these forms:
 
-- No support files: `pkgs/overlays/<first-character>/<name>.nix`.
+- No colocated support files: `pkgs/overlays/<first-character>/<name>.nix`.
 - Patches or tests: `pkgs/overlays/<first-character>/<name>/wasix.nix` with
   sibling `patches/` and `tests/` directories.
 - Version families: one directory whose unit returns several derivations with

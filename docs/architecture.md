@@ -34,6 +34,8 @@ defines a complete package and runs in native and WASIX package sets. A flat
 when the actual host platform is WASIX. This distinction also applies to
 nixpkgs' native build-package splices, so WASIX adaptations never leak into host
 tools. Patches, tests, and other package inputs stay in the owning directory.
+Existing nixpkgs packages requiring no adaptation are registered by the
+extension's `inherited` attribute set instead of empty units.
 
 Python adaptations and their history live under
 `pkgs/python-overlays/<first-character>/`. Shared Python machinery remains in

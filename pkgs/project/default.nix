@@ -49,8 +49,10 @@
     then
       projectLib.loadPackageOverlay ({
           inherit contextFor;
+          definition = declared.definition or null;
           dir = declared.directory;
           expose = declared.expose or [];
+          inherited = declared.inherited or {};
           lane = declared.lane or "packages";
           inherit scope;
         }

@@ -94,11 +94,22 @@
     projectLib.loadPackageOverlay {
       inherit contextFor;
       dir = ./tests/units;
+      inherited.dependency.supportedProfiles = ["eh"];
       lane = "packages";
     }
     final
     wasixPrev;
   loaded = removeAttrs loadedRaw [projectLib.unitOverlaysAttr];
+  replayedInherited = loadedRaw.${projectLib.unitOverlaysAttr}.dependency.overlay final wasixPrev;
+  nativeInherited =
+    projectLib.loadPackageOverlay {
+      inherit contextFor;
+      dir = ./tests/units;
+      inherited.dependency = {};
+      lane = "packages";
+    }
+    final
+    (prev // {stdenv.hostPlatform.isWasix = false;});
   discoveredUnits = projectLib.discoverShardedUnits {
     dir = ./tests/units;
     lane = "packages";
@@ -126,6 +137,33 @@
       inherit contextFor;
       dir = ./tests/units;
       expose = ["missing"];
+      lane = "packages";
+    }
+    final
+    wasixPrev;
+  missingInherited =
+    projectLib.loadPackageOverlay {
+      inherit contextFor;
+      dir = ./tests/units;
+      inherited.missing = {};
+      lane = "packages";
+    }
+    final
+    wasixPrev;
+  conflictingInherited =
+    projectLib.loadPackageOverlay {
+      inherit contextFor;
+      dir = ./tests/units;
+      inherited.existing = {};
+      lane = "packages";
+    }
+    final
+    wasixPrev;
+  invalidInherited =
+    projectLib.loadPackageOverlay {
+      inherit contextFor;
+      dir = ./tests/units;
+      inherited.dependency = true;
       lane = "packages";
     }
     final
@@ -1064,6 +1102,9 @@ in {
       names = lib.attrNames loaded;
       existingInputs = map (package: package.name) loaded.existing.buildInputs;
       existingPolicy = loaded.existing.passthru.wasinix.test;
+      inheritedProfiles = loaded.dependency.passthru.wasix.supportedProfiles;
+      replayedInheritedProfiles = replayedInherited.dependency.passthru.wasix.supportedProfiles;
+      inheritedAbsentFromNative = !(nativeInherited ? dependency);
       replayNames = lib.attrNames loadedRaw.${projectLib.unitOverlaysAttr};
       fileUnitDirectory = toString (lib.findFirst (unit: unit.name == "existing") null discoveredUnits).directory;
       directoryUnitDirectory = toString (lib.findFirst (unit: unit.name == "family") null discoveredUnits).directory;
@@ -1072,15 +1113,21 @@ in {
       inherit topLevelPackageFiles;
       exposed = exposedUnits.dependency.name;
       missingExposureFails = !(force missingExposure).success;
+      missingInheritedFails = !(force missingInherited).success;
+      conflictingInheritedFails = !(force conflictingInherited).success;
+      invalidInheritedFails = !(force invalidInherited).success;
       wasmRename = lib.hasInfix "tool.wasm" (projectLib.wasmRename {wasmName = "tool";} (mkPackage {name = "tool";})).postInstall;
       buildEditSupersedesPyPI = pythonBuildEdit.passthru.wasinix.publication.supersedesPyPI;
       testEditSupersedesPyPI = pythonTestEdit.passthru.wasinix.publication.supersedesPyPI or false;
     };
     expected = {
-      names = ["complete" "existing" "family-a" "family-b" "new"];
+      names = ["complete" "dependency" "existing" "family-a" "family-b" "new"];
       existingInputs = ["dependency"];
       existingPolicy = true;
-      replayNames = ["complete" "existing" "family-a" "family-b" "new"];
+      inheritedProfiles = ["eh"];
+      replayedInheritedProfiles = ["eh"];
+      inheritedAbsentFromNative = true;
+      replayNames = ["complete" "dependency" "existing" "family-a" "family-b" "new"];
       fileUnitDirectory = toString ./tests/units/e/existing;
       directoryUnitDirectory = toString ./tests/units/f/family;
       completeUnitDirectory = toString ./tests/units/c/complete;
@@ -1088,6 +1135,9 @@ in {
       topLevelPackageFiles = [];
       exposed = "dependency";
       missingExposureFails = true;
+      missingInheritedFails = true;
+      conflictingInheritedFails = true;
+      invalidInheritedFails = true;
       wasmRename = true;
       buildEditSupersedesPyPI = true;
       testEditSupersedesPyPI = false;
