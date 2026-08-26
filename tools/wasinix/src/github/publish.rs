@@ -14,6 +14,8 @@ use crate::github::surfaces::{Registry, Surface};
 use crate::support::capability::Capability;
 use crate::support::error::Result;
 
+pub const PROGRESS_INTERVAL_SECONDS: u64 = 5 * 60;
+
 pub struct Target {
     pub repository: String,
     pub pull_request: Option<u64>,

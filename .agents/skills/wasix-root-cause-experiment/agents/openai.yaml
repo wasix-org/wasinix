@@ -1,0 +1,5 @@
+interface:
+  display_name: "WASIX Root Cause Experiment"
+  short_description: "Test bounded root-cause fixes for WASIX failures."
+  default_prompt:
+    "Experiment with root-cause fixes for the selected triaged WASIX bugs."

@@ -1,0 +1,6 @@
+interface:
+  display_name: "WASIX Bug Triage"
+  short_description: "Reduce WASIX failures to evidence-backed reproducers."
+  default_prompt:
+    "Find and triage WASIX bugs from existing workarounds, then present minimal
+    reproducers."
