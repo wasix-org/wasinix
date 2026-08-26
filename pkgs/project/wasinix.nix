@@ -2,6 +2,7 @@
   lib,
   ghcWasm,
   wasinixFlake ? null,
+  wasinixCrane ? null,
   wasmerPackage ? null,
   wasmerRevision ? "dirty",
 }: let
@@ -361,6 +362,9 @@
             }
             // lib.optionalAttrs (wasinixFlake != null) {
               wasinixCapabilityFlake = wasinixFlake;
+            }
+            // lib.optionalAttrs (wasinixCrane != null) {
+              wasinixCraneLib = wasinixCrane.mkLib final;
             }
             // lib.optionalAttrs (wasmerPackage != null) {
               wasmer = import ../overlays/w/wasmer/input.nix {

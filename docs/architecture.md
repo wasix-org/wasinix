@@ -155,6 +155,14 @@ inventory complete and enforce the source boundary. `cargo-registry-wire` is the
 corresponding narrow Rust binary for Cargo protocol work used inside
 derivations; it does not pull the main CLI into their closure.
 
+The host CLI uses one Crane graph in `pkgs/overlays/w/wasinix/build.nix`.
+`buildDepsOnly` owns third-party and development dependencies, `buildPackage`
+owns the production binary, and `cargoTest` owns repository-aware unit tests.
+The production source excludes test modules and fixtures. The test source adds
+the workflow files and helper inventory that corpus tests inspect. A Rust edit
+therefore reuses the dependency artifact, a test fixture changes only the test
+derivation, and `Cargo.lock` changes all three nodes.
+
 CA derivations are not used because caches cannot reliably distribute or
 authenticate realisations
 ([nix#11748](https://github.com/NixOS/nix/issues/11748),
@@ -179,18 +187,15 @@ call site. Each of these ships with its own enforcement (rustc visibility where
 possible, a source-scanning test in `src/tests/mod.rs` otherwise), so bypassing
 one is a compile error or a test failure, not a review comment.
 
-[`cli-plan.md`](cli-plan.md) tracks the boundaries that are not yet fully
-consolidated.
-
 - `support/env.rs`: the process environment, named accessors only.
 - `cli/surface.rs`: terminal and pull-request comments enter one Clap tree; its
-  exhaustive policy controls availability, help, and cross-surface errors. The
-  accepted comment command is still converted in `cli/untrusted.rs`, which the
-  active roadmap tracks.
-- `support/tools.rs`: actual process starts, process groups, timeouts, reaping,
-  and bounded diagnostic tails. Some update and registry modules still construct
-  generic process requests locally; the active roadmap tracks that remaining
-  boundary.
+  exhaustive policy controls availability, help, and cross-surface errors.
+  `cli/untrusted.rs` tokenizes comments and projects authorization,
+  presentation, recipes, and domain requests directly from that tree.
+- `support/tools.rs::Process`: generic process requests, starts, process groups,
+  timeouts, reaping, I/O policy, and bounded diagnostic tails. Nix, Git, and
+  OpenSSH keep domain-specific command construction in their owning modules but
+  delegate lifecycle operations here.
 - `support/capability.rs`: the closed optional-program set and its exact locked
   flake outputs; callers receive executable paths, never choose installables.
 - `support/nix.rs::Invocation`: every nix invocation; construction classifies

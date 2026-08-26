@@ -7,28 +7,70 @@
   nix-eval-jobs,
   nixVersions,
   openssh,
-  rustPlatform,
   symlinkJoin,
+  wasinixCraneLib,
   wasinixCapabilityFlake ? null,
   writeShellApplication,
 }: let
   commandAliases = ["build" "spot" "diff" "run" "remote" "update" "ci"];
-  source = lib.fileset.toSource {
-    root = ../../../..;
+  root = ../../../..;
+  crateRoot = ../../../../tools/wasinix;
+  productionSource = lib.fileset.toSource {
+    inherit root;
     fileset = lib.fileset.unions [
       ../../../../schema/project.json
-      ../../../../tools/wasinix
+      ../../../../tools/wasinix/Cargo.lock
+      ../../../../tools/wasinix/Cargo.toml
+      ../../../../tools/wasinix/cargo-registry-wire
+      (lib.fileset.difference ../../../../tools/wasinix/src ../../../../tools/wasinix/src/tests)
     ];
   };
-  unwrapped = rustPlatform.buildRustPackage {
+  cargoArgs = {
     pname = "wasinix";
     version = "0.1.0";
-    src = source;
-    sourceRoot = "${source.name}/tools/wasinix";
-    cargoLock.lockFile = ../../../../tools/wasinix/Cargo.lock;
-    doCheck = false;
-    meta.mainProgram = "wasinix";
+    src = productionSource;
+    cargoToml = crateRoot + /Cargo.toml;
+    cargoLock = crateRoot + /Cargo.lock;
+    strictDeps = true;
+    postUnpack = ''
+      cd "$sourceRoot/tools/wasinix"
+      sourceRoot="."
+    '';
   };
+  cargoArtifacts = wasinixCraneLib.buildDepsOnly cargoArgs;
+  helperFiles =
+    lib.concatLists
+    (builtins.attrValues (fromTOML (builtins.readFile ../../../helper-boundaries.toml)));
+  testSource = lib.fileset.toSource {
+    inherit root;
+    fileset = lib.fileset.unions (
+      [
+        ../../../../.github
+        ../../../../flake.nix
+        ../../../project/apps.nix
+        ../../../project/repository.nix
+        ../../../../schema/project.json
+        ../../../helper-boundaries.toml
+        ../../../../tools/wasinix
+      ]
+      ++ map (path: root + "/${path}") helperFiles
+    );
+  };
+  unit = wasinixCraneLib.cargoTest (cargoArgs
+    // {
+      src = testSource;
+      inherit cargoArtifacts;
+      nativeCheckInputs = [gitMinimal nixVersions.latest];
+    });
+  unwrapped = wasinixCraneLib.buildPackage (cargoArgs
+    // {
+      inherit cargoArtifacts;
+      doCheck = false;
+      meta.mainProgram = "wasinix";
+      passthru = {
+        inherit cargoArtifacts unit;
+      };
+    });
   coreInputs = [
     bash
     coreutils
