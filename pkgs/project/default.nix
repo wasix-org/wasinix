@@ -173,7 +173,7 @@
                 packageName
                 (preparePackage package))
               value
-            else if builtins.elem name [projectLib.compatibilityAttr projectLib.unitOverlaysAttr]
+            else if builtins.elem name [projectLib.ciPackageAttr projectLib.compatibilityAttr projectLib.unitOverlaysAttr]
             then value
             else if !lib.isDerivation value
             then value
@@ -515,7 +515,7 @@ in rec {
           then (((registeredPackageFor profileSet name).passthru or {}).wasix or {})
           else {};
       in
-        nativeCompatibility // wasixCompatibility;
+        wasixCompatibility // nativeCompatibility;
 
       supportedProfilesFor = name: let
         declared = (compatibilityFor name).supportedProfiles or profileNames;
@@ -1291,6 +1291,11 @@ in rec {
       ciPackageEntries = lib.filterAttrs (_: entry:
         builtins.elem entry.source requestedCiSources
         && ciAvailable entry.package
+        && (
+          entry.scope
+          != "native"
+          || (nativeRaw.${projectLib.ciPackageAttr} or {}).${entry.name} or true
+        )
         && (
           entry.scope
           != "wasix"

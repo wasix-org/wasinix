@@ -1,6 +1,7 @@
 {lib}: let
   registryAttr = "__wasinixRegisteredPackages";
   compatibilityAttr = "__wasinixPackageCompatibility";
+  ciPackageAttr = "__wasinixCiPackages";
   identityAttr = "__wasinixPackageIdentities";
   extensionContextsAttr = "__wasinixExtensionContexts";
   unitOverlaysAttr = "__wasinixUnitOverlays";
@@ -255,10 +256,16 @@
       ${compatibilityAttr}.${name} = wasix;
       ${identityAttr}.${name} = cleanMachineMetadata package;
     };
+    exposeNativePackage = package:
+      if (context.scope or "native") == "wasix"
+      then {}
+      else exposePackage package;
     exposeNativePackageIdentity = args:
       if (context.scope or "native") == "wasix"
       then {}
-      else exposePackageIdentity args;
+      else
+        exposePackageIdentity args
+        // {${ciPackageAttr}.${name} = false;};
     exposeExtendedPackage = attrs:
       if !previousAvailable
       then throw "${name}: exposeExtendedPackage requires a preceding package"
@@ -275,6 +282,7 @@
       if (context.scope or "native") == "wasix"
       then {}
       else {
+        ${ciPackageAttr} = lib.genAttrs names (_resultName: false);
         ${identityAttr} = lib.genAttrs names (resultName:
           if !(builtins.hasAttr resultName previousSet)
           then throw "${name}: exposePackages requires preceding package '${resultName}'"
@@ -283,7 +291,10 @@
     exposePackagesWithWasix = declarations:
       if (context.scope or "native") == "wasix"
       then {}
-      else {${compatibilityAttr} = declarations;};
+      else {
+        ${ciPackageAttr} = lib.mapAttrs (_resultName: _declaration: false) declarations;
+        ${compatibilityAttr} = declarations;
+      };
     exposeWasixPackage = package:
       if (context.scope or "native") == "wasix"
       then exposePackage package
@@ -347,12 +358,12 @@
       callWithLabel "package unit ${toString file}" (
         context
         // {
-          inherit exposeExtendedPackage exposeExtendedPackageIdentities exposeExtendedPackages exposeNativeExtendedPackage exposeNativePackageIdentity exposePackage exposePackageIdentity exposePackages exposePackagesWithWasix exposeWasixExtendedPackage exposeWasixExtendedPackages exposeWasixPackage;
+          inherit exposeExtendedPackage exposeExtendedPackageIdentities exposeExtendedPackages exposeNativeExtendedPackage exposeNativePackage exposeNativePackageIdentity exposePackage exposePackageIdentity exposePackages exposePackagesWithWasix exposeWasixExtendedPackage exposeWasixExtendedPackages exposeWasixPackage;
         }
         // lib.optionalAttrs previousAvailable {package = previous;}
       )
       function;
-    visibleValue = removeAttrs value [compatibilityAttr identityAttr];
+    visibleValue = removeAttrs value [compatibilityAttr ciPackageAttr identityAttr];
     packages =
       lib.mapAttrs (
         resultName: package:
@@ -364,6 +375,7 @@
     result =
       packages
       // lib.optionalAttrs (value ? ${compatibilityAttr}) {${compatibilityAttr} = value.${compatibilityAttr};}
+      // lib.optionalAttrs (value ? ${ciPackageAttr}) {${ciPackageAttr} = value.${ciPackageAttr};}
       // lib.optionalAttrs (value ? ${identityAttr}) {${identityAttr} = value.${identityAttr};};
   in
     lib.throwIf (!builtins.isFunction function)
@@ -492,10 +504,12 @@
   mergeDisjoint = state: unit: let
     stateCompatibility = state.${compatibilityAttr} or {};
     unitCompatibility = unit.${compatibilityAttr} or {};
+    stateCiPackages = state.${ciPackageAttr} or {};
+    unitCiPackages = unit.${ciPackageAttr} or {};
     stateIdentities = state.${identityAttr} or {};
     unitIdentities = unit.${identityAttr} or {};
-    statePackages = removeAttrs state [compatibilityAttr identityAttr];
-    unitPackages = removeAttrs unit [compatibilityAttr identityAttr];
+    statePackages = removeAttrs state [compatibilityAttr ciPackageAttr identityAttr];
+    unitPackages = removeAttrs unit [compatibilityAttr ciPackageAttr identityAttr];
     duplicate = lib.intersectLists (lib.attrNames statePackages) (lib.attrNames unitPackages);
     duplicateCompatibility = lib.intersectLists (lib.attrNames stateCompatibility) (lib.attrNames unitCompatibility);
     duplicateIdentities = lib.intersectLists (lib.attrNames stateIdentities) (lib.attrNames unitIdentities);
@@ -513,6 +527,9 @@
           }
           // lib.optionalAttrs (stateIdentities != {} || unitIdentities != {}) {
             ${identityAttr} = stateIdentities // unitIdentities;
+          }
+          // lib.optionalAttrs (stateCiPackages != {} || unitCiPackages != {}) {
+            ${ciPackageAttr} = stateCiPackages // unitCiPackages;
           })));
 
   packageMetadata = package: (package.passthru or {}).wasinix or {};
@@ -630,7 +647,7 @@
         })
         // {versions = {};}));
 in rec {
-  inherit address addressSegment buildHostPypaTools callWith callWithLabel compatibilityAttr discoverShardedInventory discoverUnits dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix dropSphinxDocs extendAttrs extendPythonPackage extensionContextsAttr historyBaseAttr historyOverlaysAttr identityAttr linkInputs loadPackageOverlays loadTestDirectory machineMetadata mergeScript packageForEntry packageMetadata registryAttr replaceInputsByName stampPackage unitOverlaysAttr unitResult wasmRename;
+  inherit address addressSegment buildHostPypaTools callWith callWithLabel ciPackageAttr compatibilityAttr discoverShardedInventory discoverUnits dropFlagsByPrefix dropInputsByName dropInputsByNameInfix dropPatchesByNameInfix dropSphinxDocs extendAttrs extendPythonPackage extensionContextsAttr historyBaseAttr historyOverlaysAttr identityAttr linkInputs loadPackageOverlays loadTestDirectory machineMetadata mergeScript packageForEntry packageMetadata registryAttr replaceInputsByName stampPackage unitOverlaysAttr unitResult wasmRename;
 
   inherit extendPackage;
 
@@ -717,6 +734,7 @@ in rec {
         then {${name} = package;}
         else {
           ${compatibilityAttr}.${name} = inheritedDeclarations.${name};
+          ${ciPackageAttr}.${name} = false;
           ${identityAttr}.${name} = package;
         };
     inheritedResults =
@@ -801,8 +819,9 @@ in rec {
     specializationPackages = builtins.foldl' mergeDisjoint {} (map (item: item.result) specializationResults);
     results = baseResults ++ specializationResults;
     compatibility = (basePackages.${compatibilityAttr} or {}) // (specializationPackages.${compatibilityAttr} or {});
+    declaredCiPackages = (basePackages.${ciPackageAttr} or {}) // (specializationPackages.${ciPackageAttr} or {});
     declaredIdentities = (basePackages.${identityAttr} or {}) // (specializationPackages.${identityAttr} or {});
-    packages = removeAttrs (basePackages // specializationPackages) [compatibilityAttr identityAttr];
+    packages = removeAttrs (basePackages // specializationPackages) [compatibilityAttr ciPackageAttr identityAttr];
     precedingNames = lib.subtractLists (lib.attrNames packages) expose;
     missingPreceding = lib.filter (name: !(builtins.hasAttr name prev)) precedingNames;
     preceding = lib.genAttrs precedingNames (name: prev.${name});
@@ -814,14 +833,17 @@ in rec {
           if !(builtins.hasAttr name prev)
           then throw "${name}: every project package requires a native package"
           else prev.${name});
+    ciPackages =
+      declaredCiPackages
+      // lib.optionalAttrs (scope == "native") (lib.genAttrs (map (unit: unit.name) implicitUnits) (_name: false));
     identities = declaredIdentities // implicitIdentities;
     unitOverlays = builtins.foldl' (state: item: let
       identityNames = lib.attrNames (item.result.${identityAttr} or {});
-      resultNames = lib.attrNames (removeAttrs item.result [compatibilityAttr identityAttr]) ++ identityNames;
+      resultNames = lib.attrNames (removeAttrs item.result [compatibilityAttr ciPackageAttr identityAttr]) ++ identityNames;
       replay = final': prev': let
         replayed = item.replay final' prev';
       in
-        removeAttrs replayed [compatibilityAttr identityAttr]
+        removeAttrs replayed [compatibilityAttr ciPackageAttr identityAttr]
         // lib.genAttrs identityNames (name: replayed.${identityAttr}.${name});
     in
       state
@@ -850,6 +872,7 @@ in rec {
           // packages
           // {
             ${compatibilityAttr} = compatibility;
+            ${ciPackageAttr} = ciPackages;
             ${identityAttr} = identities;
             ${unitOverlaysAttr} = unitOverlays;
           })));
@@ -868,18 +891,26 @@ in rec {
     (final: prev: let
       result = overlay final prev;
       compatibility = result.${compatibilityAttr} or {};
+      declaredCiPackages = result.${ciPackageAttr} or {};
       identities = result.${identityAttr} or {};
       unitOverlays = result.${unitOverlaysAttr} or {};
-      visibleResult = removeAttrs result [compatibilityAttr identityAttr unitOverlaysAttr];
+      visibleResult = removeAttrs result [compatibilityAttr ciPackageAttr identityAttr unitOverlaysAttr];
       reserved = lib.intersectLists (lib.attrNames result) [registryAttr extensionContextsAttr];
       identityNames = lib.unique (lib.attrNames identities ++ lib.attrNames compatibility);
+      packageNames = lib.unique (lib.attrNames visibleResult ++ identityNames);
+      invalidCiPackageNames = lib.subtractLists packageNames (lib.attrNames declaredCiPackages);
+      invalidCiPackageValues = lib.attrNames (lib.filterAttrs (_name: value: !builtins.isBool value) declaredCiPackages);
       identityConflicts = lib.intersectLists identityNames (lib.attrNames (prev.${registryAttr} or {}));
       missingIdentities = lib.filter (name:
         !(builtins.hasAttr name prev)
         && !(builtins.hasAttr name visibleResult)
         && !(builtins.hasAttr name identities))
       identityNames;
-      names = removeAttrs (lib.genAttrs (lib.attrNames visibleResult ++ identityNames) (_: source)) [registryAttr extensionContextsAttr];
+      names = removeAttrs (lib.genAttrs packageNames (_: source)) [registryAttr extensionContextsAttr];
+      ciPackages =
+        (prev.${ciPackageAttr} or {})
+        // lib.genAttrs packageNames (_name: true)
+        // declaredCiPackages;
       stamped =
         lib.mapAttrs (
           name: value: let
@@ -937,14 +968,19 @@ in rec {
       "registered overlay '${source}' sets reserved attribute(s): ${lib.concatStringsSep ", " reserved}"
       (lib.throwIf (identityConflicts != [])
         "registered overlay '${source}' redeclares package identity attribute(s): ${lib.concatStringsSep ", " identityConflicts}"
-        (lib.throwIf (missingIdentities != [])
-          "registered overlay '${source}' declares missing package identity attribute(s): ${lib.concatStringsSep ", " missingIdentities}"
-          (stamped
-            // {
-              ${compatibilityAttr} = (prev.${compatibilityAttr} or {}) // compatibility;
-              ${identityAttr} = (prev.${identityAttr} or {}) // stampedIdentities;
-              ${registryAttr} = (prev.${registryAttr} or {}) // names;
-            }))));
+        (lib.throwIf (invalidCiPackageNames != [])
+          "registered overlay '${source}' declares CI policy for unknown package attribute(s): ${lib.concatStringsSep ", " invalidCiPackageNames}"
+          (lib.throwIf (invalidCiPackageValues != [])
+            "registered overlay '${source}' declares non-boolean CI package policy for: ${lib.concatStringsSep ", " invalidCiPackageValues}"
+            (lib.throwIf (missingIdentities != [])
+              "registered overlay '${source}' declares missing package identity attribute(s): ${lib.concatStringsSep ", " missingIdentities}"
+              (stamped
+                // {
+                  ${compatibilityAttr} = (prev.${compatibilityAttr} or {}) // compatibility;
+                  ${ciPackageAttr} = ciPackages;
+                  ${identityAttr} = (prev.${identityAttr} or {}) // stampedIdentities;
+                  ${registryAttr} = (prev.${registryAttr} or {}) // names;
+                }))))));
 
   registeredNames = packageSet:
     lib.attrNames (packageSet.${registryAttr} or {});

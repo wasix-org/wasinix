@@ -1,8 +1,8 @@
 {
-  exposeNativePackageIdentity,
+  extendPackage,
+  exposeNativePackage,
   packageSet,
 }:
-exposeNativePackageIdentity {
-  package = packageSet.callPackage ./build.nix {};
-  wasix.supportedProfiles = [];
-}
+exposeNativePackage (extendPackage (packageSet.callPackage ./build.nix {}) {
+  passthru.wasix.supportedProfiles = [];
+})

@@ -160,9 +160,9 @@
       echo "OK ${name}: artifact is $got" > "$out"
     '';
 
-  # Package tests follow python/<attr>/tests/*.nix and return
+  # Package tests follow python-overlays/<initial>/<attr>/tests/*.nix and return
   # named derivations from the supplied scope.
-  pkgTestsDir = attr: ../. + "/${attr}/tests";
+  pkgTestsDir = attr: ../../python-overlays + "/${lib.substring 0 1 attr}/${attr}/tests";
   pkgTests = e: let
     dir = pkgTestsDir e.attr;
     scope = {

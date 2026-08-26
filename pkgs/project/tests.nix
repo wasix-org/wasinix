@@ -181,7 +181,7 @@
     }
     final
     prev;
-  loaded = removeAttrs loadedRaw [projectLib.compatibilityAttr projectLib.identityAttr projectLib.unitOverlaysAttr];
+  loaded = removeAttrs loadedRaw [projectLib.ciPackageAttr projectLib.compatibilityAttr projectLib.identityAttr projectLib.unitOverlaysAttr];
   discoveredUnits = projectLib.discoverUnits ./tests/units;
   conflictingUnits = projectLib.discoverUnits ./tests/conflicting-units;
   invalidShardedUnits = projectLib.discoverShardedInventory {
@@ -197,7 +197,7 @@
     }
     final
     prev;
-  inheritedLoaded = removeAttrs inheritedRaw [projectLib.compatibilityAttr projectLib.identityAttr projectLib.unitOverlaysAttr];
+  inheritedLoaded = removeAttrs inheritedRaw [projectLib.ciPackageAttr projectLib.compatibilityAttr projectLib.identityAttr projectLib.unitOverlaysAttr];
   replayedInherited = inheritedRaw.${projectLib.unitOverlaysAttr}.dependency.overlay final prev;
   nativeInherited =
     projectLib.loadPackageOverlay {
@@ -262,6 +262,7 @@
   shardedPrev = {
     alpha = mkPackage {name = "alpha-native";};
     beta = mkPackage {name = "beta-native";};
+    delta = mkPackage {name = "delta-native";};
   };
   shardedFinal = shardedPrev // {alphaBase = mkPackage {name = "alpha-base";};};
   shardedContextFor = scope: {final, ...}: {
@@ -607,9 +608,17 @@
           };
       };
     });
+  shardedProjectApi = import ./default.nix (projectApiArgs
+    // {
+      nativePackageInterfacesFor = _args: {};
+      projectionRules = {};
+    });
   fakeImportNixpkgs = args: let
     base = {
       inherit dependency newRecipe familyA familyB;
+      alphaBase = mkPackage {name = "alpha-base";};
+      beta = mkPackage {name = "beta-native";};
+      delta = mkPackage {name = "delta-native";};
       family-a = familyA;
       family-b = familyB;
       behavior = mkPackage {
@@ -701,6 +710,15 @@
       packages = ./tests/project-units;
     };
   };
+  shardedExtension = {
+    id = "sharded";
+    overlays = projectApi.loadPackageOverlays {
+      packages = {
+        directory = ./tests/sharded-units;
+        sharded = true;
+      };
+    };
+  };
   definitionExtension = {
     id = "definition-consumer";
     history.wasix = ./tests/unit-history.json;
@@ -761,6 +779,11 @@
         jobs = ["packages.wasix.alternate.consumer"];
       };
     };
+  };
+  shardedProject = shardedProjectApi.mkEmptyProject {
+    system = "test-system";
+    importNixpkgs = fakeImportNixpkgs;
+    extensions = [shardedExtension];
   };
   definitionProject = projectApi.mkProject {
     system = "test-system";
@@ -1343,6 +1366,7 @@ in {
       inheritedAbsentFromNative = !(nativeInherited ? dependency);
       nativeInheritedIdentity = nativeInherited.${projectLib.identityAttr}.dependency.name;
       nativeInheritedProfiles = nativeInherited.${projectLib.compatibilityAttr}.dependency.supportedProfiles;
+      nativeInheritedIsCiPackage = nativeInherited.${projectLib.ciPackageAttr}.dependency;
       replayNames = lib.attrNames loadedRaw.${projectLib.unitOverlaysAttr};
       fileUnitDirectory = (lib.findFirst (unit: unit.name == "existing") null discoveredUnits).directory;
       directoryUnitDirectory = toString (lib.findFirst (unit: unit.name == "family") null discoveredUnits).directory;
@@ -1357,10 +1381,14 @@ in {
       invalidInheritedFails = !(force invalidInherited).success;
       shardedNativeBase = shardedNative.alpha.name;
       shardedNativeIdentity = shardedNative.${projectLib.identityAttr}.beta.name;
+      shardedNativeIdentityIsCiPackage = shardedNative.${projectLib.ciPackageAttr}.beta;
+      shardedImplicitIdentity = shardedNative.${projectLib.identityAttr}.delta.name;
+      shardedImplicitIdentityIsCiPackage = shardedNative.${projectLib.ciPackageAttr}.delta;
       shardedNativeDoesNotRunWasix = !(shardedNative ? beta);
       shardedWasixBase = shardedWasixBase.alpha.name;
       shardedWasixAlpha = shardedWasix.alpha.variant;
       shardedWasixBeta = shardedWasix.beta.variant;
+      shardedWasixDelta = shardedWasix.delta.variant;
       wasmRename = lib.hasInfix "tool.wasm" (projectLib.wasmRename {wasmName = "tool";} (mkPackage {name = "tool";})).postInstall;
       buildEditSupersedesPyPI = pythonBuildEdit.passthru.wasinix.publication.supersedesPyPI;
       testEditSupersedesPyPI = pythonTestEdit.passthru.wasinix.publication.supersedesPyPI or false;
@@ -1374,6 +1402,7 @@ in {
       inheritedAbsentFromNative = true;
       nativeInheritedIdentity = "dependency";
       nativeInheritedProfiles = ["eh"];
+      nativeInheritedIsCiPackage = false;
       replayNames = ["existing" "family-a" "family-b" "new"];
       fileUnitDirectory = null;
       directoryUnitDirectory = toString ./tests/units/family;
@@ -1388,10 +1417,14 @@ in {
       invalidInheritedFails = true;
       shardedNativeBase = "alpha-base";
       shardedNativeIdentity = "beta-native";
+      shardedNativeIdentityIsCiPackage = false;
+      shardedImplicitIdentity = "delta-native";
+      shardedImplicitIdentityIsCiPackage = false;
       shardedNativeDoesNotRunWasix = true;
       shardedWasixBase = "alpha-base";
       shardedWasixAlpha = "wasix";
       shardedWasixBeta = "wasix";
+      shardedWasixDelta = "wasix";
       wasmRename = true;
       buildEditSupersedesPyPI = true;
       testEditSupersedesPyPI = false;
@@ -1664,6 +1697,16 @@ in {
       selectorSourceNames = lib.attrNames project.ci.catalog.selectors.sources;
       sourceSelectorCoversJobs = project.ci.catalog.selectors.sources.consumer == lib.attrNames project.ci.jobs;
       selectablePackageNames = lib.attrNames project.ci.catalog.packages;
+      implicitNativeIdentity = {
+        cataloged = shardedProject.ci.catalog.packages ? "packages.native.delta";
+        selected = shardedProject.ci.jobs ? "packages.native.delta";
+        wasixSelected = shardedProject.ci.jobs ? "packages.wasix.default.delta";
+      };
+      explicitNativeIdentity = {
+        cataloged = shardedProject.ci.catalog.packages ? "packages.native.beta";
+        selected = shardedProject.ci.jobs ? "packages.native.beta";
+        wasixSelected = shardedProject.ci.jobs ? "packages.wasix.default.beta";
+      };
       selectorsCoverJobs =
         lib.sort builtins.lessThan (lib.unique (lib.concatLists (lib.attrValues project.ci.catalog.selectors.sets)))
         == lib.sort builtins.lessThan (lib.attrNames project.ci.jobs);
@@ -1792,6 +1835,16 @@ in {
       selectorSourceNames = ["consumer"];
       sourceSelectorCoversJobs = true;
       selectablePackageNames = expectedSelectablePackageNames;
+      implicitNativeIdentity = {
+        cataloged = true;
+        selected = false;
+        wasixSelected = true;
+      };
+      explicitNativeIdentity = {
+        cataloged = true;
+        selected = false;
+        wasixSelected = true;
+      };
       selectorsCoverJobs = true;
       brokenCiAbsent = true;
       testNames = expectedTestNames;
