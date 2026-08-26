@@ -651,11 +651,13 @@ mod tests {
                 "{spelling}"
             );
         }
-        let wrong_target =
-            super::resolve_end(&source, "good", "wasmer@tag:v0.4.3", &dependency)
-                .unwrap_err()
-                .to_string();
-        assert!(wrong_target.contains("this bisect is for \"wasixcc\""), "{wrong_target}");
+        let wrong_target = super::resolve_end(&source, "good", "wasmer@tag:v0.4.3", &dependency)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            wrong_target.contains("this bisect is for \"wasixcc\""),
+            "{wrong_target}"
+        );
         // Nothing near it: the refusal still names the end and the repo.
         let bare = super::resolve_end(&source, "bad", "9.9.9", &dependency)
             .unwrap_err()
