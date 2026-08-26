@@ -4,7 +4,7 @@
   nixpkgsExtensions,
   phpVersion,
 }: let
-  inherit (lib) getDev;
+  inherit (lib) getDev getLib;
   extensionPassthru = attrs: attrs // {inherit phpVersion;};
 in {
   imagick = let
@@ -15,6 +15,13 @@ in {
         inherit (upstream) extensionName version;
         configureFlag = "--with-imagick";
         buildInputs = [final.imagemagick];
+        staticLinkLibs = [
+          "${getLib final.lcms2}/lib/liblcms2.a"
+          "${getLib final.openjpeg}/lib/libopenjp2.a"
+          "${getLib final.libultrahdr}/lib/libuhdr.a"
+          "${getLib final.libjpeg}/lib/libjpeg.a"
+          "-lm"
+        ];
         # PECL ships these headers; cross install must not regenerate them with target PHP.
         crossPostBuild = ''
           touch ext/imagick/*_arginfo.h
