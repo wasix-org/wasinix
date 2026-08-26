@@ -13,7 +13,7 @@ use crate::support::error::{Error, Result, request_error};
 use crate::support::ui;
 use crate::update::retention::Versions;
 
-const SCHEMA: u64 = 1;
+const SCHEMA: u64 = 2;
 const HEARTBEAT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -27,6 +27,7 @@ pub struct Notes {
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
     pub schema_version: u64,
+    pub default_update_ownership: crate::update::targets::Ownership,
     pub update_scripts: Value,
     pub post_update_hooks: Value,
     pub served_versions: Versions,
@@ -143,6 +144,7 @@ mod tests {
     fn snapshot(schema_version: u64) -> Snapshot {
         Snapshot {
             schema_version,
+            default_update_ownership: Default::default(),
             update_scripts: serde_json::json!({}),
             post_update_hooks: serde_json::json!({}),
             served_versions: Default::default(),
@@ -155,8 +157,8 @@ mod tests {
 
     #[test]
     fn cached_update_state_rejects_an_unknown_schema() {
-        assert!(snapshot(1).validate().is_ok());
-        assert!(snapshot(2).validate().is_err());
+        assert!(snapshot(2).validate().is_ok());
+        assert!(snapshot(1).validate().is_err());
     }
 
     #[test]

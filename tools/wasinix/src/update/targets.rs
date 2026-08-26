@@ -102,14 +102,19 @@ impl Target {
 
 /// Flake inputs are their own targets so `update nixpkgs` works like a
 /// package; the crate-pin set is named for the file it regenerates.
-fn builtin_targets() -> Vec<Target> {
+pub(crate) fn builtin_targets(ownership: Ownership) -> Vec<Target> {
     let mut targets: Vec<Target> = ["nixpkgs", "wasmer", "treefmt-nix", "ghc-wasm-meta"]
         .into_iter()
-        .map(Target::flake)
+        .map(|name| {
+            let mut target = Target::flake(name);
+            target.ownership = ownership.clone();
+            target
+        })
         .collect();
     targets.push(Target {
         name: "cargo-registry".into(),
         backend: Backend::CratePins,
+        ownership,
         ..Target::flake("cargo-registry")
     });
     targets
@@ -281,7 +286,7 @@ pub fn all_targets(
     snapshot: &crate::update::snapshot::Snapshot,
 ) -> Result<Vec<Target>> {
     let mut targets = discovered_targets(repo, &snapshot.update_scripts)?;
-    for mut target in builtin_targets() {
+    for mut target in builtin_targets(snapshot.default_update_ownership.clone()) {
         if target.backend == Backend::FlakeInput {
             let locked = crate::update::flake_lock::locked_input(repo, &target.input)?;
             target.version = locked["rev"].as_str().unwrap_or_default().to_string();

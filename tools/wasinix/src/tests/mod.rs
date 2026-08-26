@@ -5024,6 +5024,21 @@ mod update {
     }
 
     #[test]
+    fn builtin_targets_inherit_the_default_update_ownership() {
+        let ownership = crate::update::targets::Ownership {
+            assignees: vec![crate::update::targets::Maintainer {
+                github: "jane-doe".into(),
+            }],
+            reviewers: vec![],
+        };
+        assert!(
+            crate::update::targets::builtin_targets(ownership.clone())
+                .into_iter()
+                .all(|target| target.ownership == ownership)
+        );
+    }
+
+    #[test]
     fn attr_list_hooks_parse_the_flakes_tagged_operation() {
         let value = serde_json::json!({
             "action": {

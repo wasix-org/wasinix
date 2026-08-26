@@ -11,6 +11,12 @@
   registry = project.artifacts.registry.python or null;
   cargoRegistryArtifact = project.artifacts.registry.cargo-registry or null;
   ownedEntries = projectLib.entriesForSource project.catalog.entries source;
+  defaultUpdateOwnership = let
+    core = project.ownership.${source}.teams.core or (throw "project source '${source}' has no core update team");
+  in {
+    assignees = core;
+    reviewers = core;
+  };
 
   subjectsOf = entries:
     lib.unique (lib.concatMap (entry: entry.packageSubjects or []) entries);
@@ -116,7 +122,7 @@
       source = package.passthru.wasinix.source or null;
       registry = project.ownership.${source}.maintainers or {};
       people = field: let
-        values = declared.${field} or [];
+        values = declared.${field} or defaultUpdateOwnership.${field};
         known = builtins.attrValues registry;
       in
         lib.throwIf (!lib.isList values)
@@ -262,8 +268,8 @@
   };
   noteVersions = builtins.tryEval updateNotes.versions;
   updateSnapshot = {
-    schemaVersion = 1;
-    inherit postUpdateHooks servedVersions updateScripts;
+    schemaVersion = 2;
+    inherit defaultUpdateOwnership postUpdateHooks servedVersions updateScripts;
     notes = {
       ok = noteVersions.success;
       value =

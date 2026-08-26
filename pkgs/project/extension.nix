@@ -56,6 +56,8 @@ in {
 
   inherit overlays;
 
+  ownership.teams.core = [];
+
   history = {
     wasix = ../overlays/history.json;
     python = ../python-overlays/history.json;

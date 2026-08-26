@@ -69,7 +69,10 @@
         python = {};
       };
       artifacts = {};
-      ownership.fixture.maintainers.janeDoe.github = "jane-doe";
+      ownership.fixture = {
+        maintainers.janeDoe.github = "jane-doe";
+        teams.core = [];
+      };
       catalog.entries = {
         "artifacts.wheel-py313.demo" = {
           kind = "artifact";
@@ -1625,6 +1628,7 @@ in {
       reviewerLogins = ["jane-doe"];
       ownership = {
         maintainers.janeDoe.github = "jane-doe";
+        teams.core = [];
         teams.php = [{github = "jane-doe";}];
       };
       updateOwnership = {
@@ -1830,7 +1834,11 @@ in {
       };
       updateScriptNames = ["packages.native.ownedUpdate" "packages.wasix.preferred.cli"];
       updateSnapshot = {
-        schemaVersion = 1;
+        schemaVersion = 2;
+        defaultUpdateOwnership = {
+          assignees = [];
+          reviewers = [];
+        };
         servedVersions = {
           cli.cli = {
             version = "1";

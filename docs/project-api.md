@@ -210,6 +210,10 @@ owning extension's `maintainers` and `teams` arguments, so package policy
 references the typed central values instead of repeating GitHub logins. The
 project exposes the contributions as `ownership.<extension-id>`.
 
+The repository's `core` team is the default assignee and reviewer set for all
+updates, including flake inputs. It may be empty while the project establishes
+its roster; package declarations can still name a narrower typed owner set.
+
 ## File layout and discovery
 
 Extensions may handwrite every overlay. Wasinix also provides a convenience
