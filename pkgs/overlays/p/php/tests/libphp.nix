@@ -7,10 +7,10 @@
   ...
 }: let
   php = packageForEntry packages entry;
-  libphp = php.libphp;
+  inherit (php) libphp;
   program = packages.sameProfile.stdenv.mkDerivation {
     pname = "${entry.name}-libphp-smoke";
-    version = php.version;
+    inherit (php) version;
     dontUnpack = true;
     buildInputs = [libphp];
     buildPhase = ''
