@@ -6,11 +6,13 @@
   extendPackage,
   package,
   packages,
+  profileOf,
   profileSets,
 }:
 exposeWasixPackage (
   let
     lib = packages.sameProfile.lib;
+    offProfile = profileOf package.stdenv.hostPlatform == "off";
   in
     extendPackage (package.override {
       bzip2Support = false;
@@ -39,8 +41,9 @@ exposeWasixPackage (
       coreutils = packages.sameProfile.buildPackages.coreutils;
       potrace = packages.sameProfile.buildPackages.runCommand "potrace-placeholder" {} ''mkdir -p "$out"'';
     }) {
-      # Magick++ throws; the off profile compiles C++ with -fno-exceptions.
-      passthru.wasix.supportedProfiles = profileSets.withEh;
+      passthru.wasix.supportedProfiles = profileSets.all;
+      # Magick++ requires C++ exceptions, which the off profile disables.
+      configureFlags = lib.optionals offProfile ["--without-magick-plus-plus"];
       postPatch = ''
         substituteInPlace MagickCore/delegate.c \
           --replace-fail 'child_pid=(pid_t) fork();' 'child_pid=(pid_t) -1; /* WASIX: fork unsupported */'

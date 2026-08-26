@@ -7,18 +7,33 @@
   extendPackage,
   package,
   packages,
+  profileOf,
   profileSets,
-}:
-exposeWasixPackage (
-  extendPackage (package.override {
-    curlSupport = false;
-    gssSupport = false;
-    nlsSupport = false;
-    tzdata = packages.sameProfile.buildPackages.tzdata;
-  }) {
-    # off sysroot's <setjmp.h> lacks the sigsetjmp postgres error handling needs.
-    passthru.wasix.supportedProfiles = profileSets.withEh;
-    # wasm32-wasi matches no configure template; pick one explicitly.
-    configureFlags = old: old ++ ["--with-template=linux"];
-  }
-)
+}: let
+  lib = packages.sameProfile.lib;
+  offProfile = profileOf package.stdenv.hostPlatform == "off";
+in
+  exposeWasixPackage (
+    extendPackage (package.override {
+      curlSupport = false;
+      gssSupport = false;
+      nlsSupport = false;
+      tzdata = packages.sameProfile.buildPackages.tzdata;
+    }) {
+      passthru.wasix.supportedProfiles = profileSets.all;
+      # The off sysroot lacks the signal-mask-preserving setjmp variants.
+      postPatch = lib.optionalString offProfile ''
+        substituteInPlace src/include/c.h \
+          --replace-fail \
+            '/* /port compatibility functions */' \
+            '#if defined(__wasi__) && !defined(__wasm_exception_handling__)
+        #define sigsetjmp(x,y) setjmp(x)
+        #define siglongjmp longjmp
+        #endif
+
+        /* /port compatibility functions */'
+      '';
+      # wasm32-wasi matches no configure template; pick one explicitly.
+      configureFlags = old: old ++ ["--with-template=linux"];
+    }
+  )
