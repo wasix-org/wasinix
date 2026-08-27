@@ -37,6 +37,11 @@
   # PYTHONPATH is how the pip --target tree reaches the guest interpreter.
   forwardEnv = testLib.defaultForwardEnv ++ ["PYTHONPATH"];
 
+  fakeRclone = pkgs.writeShellScript "fake-rclone" ''
+    printf '%s\n' "$*" >> "$FAKE_RCLONE_LOG"
+    exit 3
+  '';
+
   # pip-install <attr> from the index, assert expectDeps (top-level module/dir
   # names) were resolved along, then import <pyImport> on the shipped python.
   resolveTest = {
@@ -63,6 +68,21 @@
       '';
     };
 in {
+  publisher-explicit-rclone = testLib.mkScriptRun {
+    name = "registry-publisher-explicit-rclone";
+    packages = [pkgs.python3];
+    script = ''
+      mkdir registry
+      echo '{}' > registry/provenance.json
+      export FAKE_RCLONE_LOG="$PWD/rclone.log"
+      python3 ${./.}/publish.py \
+        --registry registry \
+        --remote test:bucket \
+        --rclone ${fakeRclone}
+      grep -F 'copy test:bucket/manifests' "$FAKE_RCLONE_LOG"
+    '';
+  };
+
   integrity = testLib.mkScriptRun {
     name = "registry-integrity";
     packages = [(pkgs.python3.withPackages (ps: [ps.packaging]))];

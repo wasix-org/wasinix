@@ -20,6 +20,7 @@ downloads a wheel. Provenance lets `nix build
 github:wasix-org/wasinix/<wasinix_rev>#<attr>` rebuild a given wheel.
 
 Usage: publish.py --registry <path> --remote <rclone-remote:bucket>
+                  --rclone <executable>
                   [--rev <wasinix git rev>] [--dry-run] [--withdraw-stale]
 Credentials come from rclone env vars (RCLONE_CONFIG_<NAME>_*).
 """
@@ -42,12 +43,12 @@ make_index = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(make_index)
 
 
-def rclone(*args):
+def rclone(executable, *args):
     # The wasmer S3 proxy fails signature verification on concurrent requests
     # (SignatureDoesNotMatch) and hangs on multipart uploads, so force serial,
     # single-part transfers. 5Gi is the S3 single-PutObject ceiling.
     cmd = [
-        "rclone",
+        str(executable),
         "--quiet",
         "--transfers",
         "1",
@@ -63,6 +64,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--registry", required=True, type=Path)
     ap.add_argument("--remote", required=True)
+    ap.add_argument("--rclone", required=True, type=Path)
     ap.add_argument("--rev", help="wasinix git rev that built this registry")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument(
@@ -88,7 +90,7 @@ def main():
     published_dir.mkdir()
     # a partial manifest view would defeat the immutability check, so only
     # "directory not found" (exit 3: first publish) may pass
-    fetch = rclone("copy", f"{args.remote}/manifests", published_dir)
+    fetch = rclone(args.rclone, "copy", f"{args.remote}/manifests", published_dir)
     if fetch.returncode == 3:
         print("no published manifests yet (first publish)", file=sys.stderr)
     elif fetch.returncode != 0:
@@ -209,7 +211,12 @@ def main():
     # staging holds only new wheels plus regenerated HTML/manifests;
     # --ignore-times forces the HTML over unreliable S3 modtimes
     flags = ["--dry-run"] if args.dry_run else []
-    if rclone("copy", "--ignore-times", *flags, staging, args.remote).returncode != 0:
+    if (
+        rclone(
+            args.rclone, "copy", "--ignore-times", *flags, staging, args.remote
+        ).returncode
+        != 0
+    ):
         sys.exit("upload failed")
 
     # Published URLs are meant to keep resolving, so withdrawing one is a
@@ -229,7 +236,7 @@ def main():
         # a project that was never listed has no page, and deleting a missing
         # object reports failure, so one miss must not stop the rest
         page = f"{args.remote}/simple/{project}/index.html"
-        if rclone("deletefile", *flags, page).returncode == 0:
+        if rclone(args.rclone, "deletefile", *flags, page).returncode == 0:
             withdrawn.append(project)
             print(f"  - simple/{project}/index.html")
     print(f"withdrew {len(withdrawn)} of {len(stale)} listing(s) PyPI can supply")

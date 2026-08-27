@@ -58,7 +58,11 @@ impl Capability {
     }
 
     pub fn command(self) -> Result<crate::support::tools::Process> {
-        Ok(crate::support::tools::Process::new(resolve(self)?))
+        Ok(crate::support::tools::Process::new(self.path()?))
+    }
+
+    pub fn path(self) -> Result<PathBuf> {
+        resolve(self)
     }
 }
 

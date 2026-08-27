@@ -184,6 +184,8 @@ pub fn publish_index(request: Index) -> Result<CommandStatus> {
         publish.arg("--withdraw-stale");
     }
     publish
+        .arg("--rclone")
+        .arg(Capability::Rclone.path()?)
         .env("RCLONE_CONFIG", &config)
         .current_dir(&request.repo);
     if !publish.run()?.success() {
