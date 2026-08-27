@@ -829,10 +829,18 @@ fn comparison_block(report: &Report) -> Markdown {
 }
 
 const COMPARE_LIST_ROWS: usize = 250;
+const PROJECT_CHECK_PREFIX: &str = "tests.project.";
+
+#[derive(Clone, Copy)]
+enum JobListPresentation {
+    Individual,
+    CollapseProjectChecks,
+}
 
 /// One collapsible job list, each row naming the version the job serves.
 fn job_list(
     title: &'static str,
+    presentation: JobListPresentation,
     jobs: &[crate::support::atoms::JobAddr],
     rebuild_roles: &BTreeMap<crate::support::atoms::JobAddr, RebuildRole>,
     identities: &BTreeMap<crate::support::atoms::JobAddr, String>,
@@ -861,7 +869,27 @@ fn job_list(
         Markdown::text(&jobs.len().to_string()),
         Markdown::constant(")</summary>\n\n"),
     ]);
+    let project_checks = matches!(presentation, JobListPresentation::CollapseProjectChecks)
+        .then(|| {
+            jobs.iter()
+                .filter(|job| job.as_str().starts_with(PROJECT_CHECK_PREFIX))
+                .count()
+        })
+        .unwrap_or_default();
+    let mut rendered_project_checks = false;
     for job in jobs.iter().take(COMPARE_LIST_ROWS) {
+        if project_checks > 0 && job.as_str().starts_with(PROJECT_CHECK_PREFIX) {
+            if !rendered_project_checks {
+                body = Markdown::concat([
+                    body,
+                    Markdown::constant("- "),
+                    Markdown::text(&format!("{project_checks} project checks at project")),
+                    Markdown::constant("\n"),
+                ]);
+                rendered_project_checks = true;
+            }
+            continue;
+        }
         body = Markdown::concat([
             body,
             Markdown::constant("- "),
@@ -957,6 +985,7 @@ fn comparison_lists(comparison: &Comparison) -> Markdown {
     }
     body = body.push(job_list(
         "New evaluation failures",
+        JobListPresentation::Individual,
         &eval.new_eval_errors,
         &eval.rebuild_roles,
         &eval.identities,
@@ -966,6 +995,7 @@ fn comparison_lists(comparison: &Comparison) -> Markdown {
     if let Some(builds) = &comparison.builds {
         body = body.push(job_list(
             "Removed jobs that passed",
+            JobListPresentation::Individual,
             &builds.dropped_successes,
             &eval.rebuild_roles,
             &eval.identities,
@@ -974,6 +1004,7 @@ fn comparison_lists(comparison: &Comparison) -> Markdown {
         ));
         body = body.push(job_list(
             "Fixed",
+            JobListPresentation::Individual,
             &builds.fixes,
             &eval.rebuild_roles,
             &eval.identities,
@@ -1011,6 +1042,7 @@ fn comparison_lists(comparison: &Comparison) -> Markdown {
     } else {
         body = body.push(job_list(
             "Rebuilt",
+            JobListPresentation::CollapseProjectChecks,
             &eval.rebuilt,
             &eval.rebuild_roles,
             &eval.identities,
@@ -1020,6 +1052,7 @@ fn comparison_lists(comparison: &Comparison) -> Markdown {
     }
     body = body.push(job_list(
         "Added",
+        JobListPresentation::Individual,
         &eval.added,
         &eval.rebuild_roles,
         &eval.identities,
@@ -1028,6 +1061,7 @@ fn comparison_lists(comparison: &Comparison) -> Markdown {
     ));
     body = body.push(job_list(
         "Removed",
+        JobListPresentation::Individual,
         &eval.removed,
         &eval.rebuild_roles,
         &eval.identities,

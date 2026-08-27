@@ -4062,6 +4062,32 @@ mod markdown {
     }
 
     #[test]
+    fn rebuilt_project_checks_share_one_detail_row() {
+        use crate::ci::compare::{RebuildCategory, RebuildRole};
+        use crate::support::atoms::JobAddr;
+
+        let (mut report, fragments) = scenarios::diff_green();
+        let eval = report.comparisons[0].eval.as_mut().unwrap();
+        for name in ["deadnix", "nil", "nixf", "statix", "treefmt"] {
+            let job = JobAddr(format!("tests.project.{name}"));
+            eval.rebuilt.push(job.clone());
+            eval.rebuild_roles.insert(
+                job,
+                RebuildRole {
+                    category: RebuildCategory::Tests,
+                    native: false,
+                },
+            );
+        }
+
+        let body = comment(&report, &fragments, None, &links()).into_string();
+        assert!(body.contains("- 5 project checks at project"), "{body}");
+        for name in ["deadnix", "nil", "nixf", "statix", "treefmt"] {
+            assert!(!body.contains(&format!("tests.project.{name}")), "{body}");
+        }
+    }
+
+    #[test]
     fn the_check_run_names_failing_jobs_and_stays_short() {
         let (report, fragments) = scenarios::failing();
         let projected = check(&report, &fragments, &links());
