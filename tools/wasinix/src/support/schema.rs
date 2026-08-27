@@ -14,8 +14,8 @@ use crate::support::error::{Error, Result, request_error};
 const PROJECT_SCHEMA: &str = include_str!("../../../../schema/project.json");
 
 pub fn project_version() -> u64 {
-    serde_json::from_str::<Value>(PROJECT_SCHEMA)
-        .expect("schema/project.json must be valid JSON")["version"]
+    serde_json::from_str::<Value>(PROJECT_SCHEMA).expect("schema/project.json must be valid JSON")
+        ["version"]
         .as_u64()
         .expect("schema/project.json version must be an unsigned integer")
 }

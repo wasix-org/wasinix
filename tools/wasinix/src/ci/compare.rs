@@ -76,6 +76,42 @@ pub struct RebuildRole {
     pub native: bool,
 }
 
+impl RebuildCategory {
+    pub fn label(self) -> &'static str {
+        match self {
+            RebuildCategory::Packages => "packages",
+            RebuildCategory::Tests => "tests",
+            RebuildCategory::Artifacts => "artifacts",
+            RebuildCategory::Python => "python",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RebuildCounts {
+    pub categories: BTreeMap<RebuildCategory, usize>,
+    pub native: usize,
+}
+
+pub fn rebuild_counts(eval: &EvalDiff) -> Option<RebuildCounts> {
+    let jobs: BTreeSet<_> = eval
+        .added
+        .iter()
+        .chain(&eval.removed)
+        .chain(&eval.rebuilt)
+        .collect();
+    let roles = jobs
+        .iter()
+        .map(|job| eval.rebuild_roles.get(*job))
+        .collect::<Option<Vec<_>>>()?;
+    let mut counts = RebuildCounts::default();
+    for role in roles {
+        *counts.categories.entry(role.category).or_default() += 1;
+        counts.native += usize::from(role.native);
+    }
+    Some(counts)
+}
+
 pub fn rebuild_role(job: &JobAddr, info: Option<&JobInfo>) -> Option<RebuildRole> {
     let legacy = || {
         let parts = job.as_str().split('.').collect::<Vec<_>>();

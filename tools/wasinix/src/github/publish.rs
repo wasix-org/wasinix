@@ -6,7 +6,7 @@ use std::path::Path;
 
 use serde_json::json;
 
-use crate::ci::compare::RebuildCategory;
+use crate::ci::compare::rebuild_counts;
 use crate::ci::events::Snapshot;
 use crate::ci::report::{Conclusion, Fragment, Report};
 use crate::github::client::Client;
@@ -28,6 +28,19 @@ fn rebuild_label(name: &str, count: usize) -> String {
         _ => "501+",
     };
     format!("10.rebuilds-{name}: {bucket}")
+}
+
+fn rebuild_labels_match(current_labels: &[serde_json::Value], desired_labels: &[String]) -> bool {
+    let current = current_labels
+        .iter()
+        .filter_map(|label| label["name"].as_str())
+        .filter(|label| label.starts_with(REBUILD_LABEL_PREFIX))
+        .collect::<BTreeSet<_>>();
+    let desired = desired_labels
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    current == desired
 }
 
 pub struct Target {
@@ -77,42 +90,16 @@ fn rebuild_labels(report: &Report) -> Result<Option<Vec<String>>> {
     let Some(eval) = comparison.eval.as_ref() else {
         return Ok(None);
     };
-    let jobs: BTreeSet<_> = eval
-        .added
-        .iter()
-        .chain(&eval.removed)
-        .chain(&eval.rebuilt)
-        .collect();
-    let roles = jobs
-        .iter()
-        .map(|job| {
-            eval.rebuild_roles.get(*job).ok_or_else(|| {
-                crate::support::error::Error::Failure(format!(
-                    "comparison lacks a rebuild role for {job}"
-                ))
-            })
-        })
-        .collect::<Result<Vec<_>>>()?;
-    let mut counts = BTreeMap::<RebuildCategory, usize>::new();
-    let mut native = 0;
-    for role in roles {
-        *counts.entry(role.category).or_default() += 1;
-        native += usize::from(role.native);
-    }
+    let counts = rebuild_counts(eval).ok_or_else(|| {
+        crate::support::error::Error::Failure("comparison has unclassified rebuilds".into())
+    })?;
     let mut labels = counts
+        .categories
         .into_iter()
-        .map(|(category, count)| {
-            let name = match category {
-                RebuildCategory::Packages => "packages",
-                RebuildCategory::Tests => "tests",
-                RebuildCategory::Artifacts => "artifacts",
-                RebuildCategory::Python => "python",
-            };
-            rebuild_label(name, count)
-        })
+        .map(|(category, count)| rebuild_label(category.label(), count))
         .collect::<Vec<_>>();
-    if native > 0 {
-        labels.push(rebuild_label("native", native));
+    if counts.native > 0 {
+        labels.push(rebuild_label("native", counts.native));
     }
     Ok(Some(labels))
 }
@@ -133,16 +120,19 @@ pub fn reconcile_rebuild_label(
     };
     let issue = format!("repos/{}/issues/{pull_request}", target.repository);
     let current = client.get(&issue)?;
-    let labels = current["labels"]
-        .as_array()
-        .ok_or_else(|| crate::support::error::Error::Failure("pull request has no labels".into()))?
+    let current_labels = current["labels"].as_array().ok_or_else(|| {
+        crate::support::error::Error::Failure("pull request has no labels".into())
+    })?;
+    if rebuild_labels_match(current_labels, &rebuild_labels) {
+        return Ok(());
+    }
+    let labels = current_labels
         .iter()
         .filter_map(|label| label["name"].as_str())
         .filter(|label| !label.starts_with(REBUILD_LABEL_PREFIX))
         .chain(rebuild_labels.iter().map(String::as_str))
         .collect::<Vec<_>>();
     client.put(&format!("{issue}/labels"), &json!({ "labels": labels }))?;
-    crate::support::ui::fact("rebuild labels", rebuild_labels.join(", "));
     Ok(())
 }
 
@@ -775,5 +765,26 @@ mod tests {
             "10.rebuilds-packages: 101-500"
         );
         assert_eq!(rebuild_label("packages", 501), "10.rebuilds-packages: 501+");
+    }
+
+    #[test]
+    fn matching_rebuild_labels_need_no_update() {
+        use serde_json::json;
+
+        let current = vec![
+            json!({ "name": "automated" }),
+            json!({ "name": "10.rebuilds-packages: 1" }),
+            json!({ "name": "10.rebuilds-tests: 1-10" }),
+        ];
+        let desired = vec![
+            "10.rebuilds-tests: 1-10".into(),
+            "10.rebuilds-packages: 1".into(),
+        ];
+
+        assert!(super::rebuild_labels_match(&current, &desired));
+        assert!(!super::rebuild_labels_match(
+            &current,
+            &["10.rebuilds-packages: 1".into()]
+        ));
     }
 }
