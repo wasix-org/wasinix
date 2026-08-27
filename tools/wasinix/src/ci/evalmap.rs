@@ -23,7 +23,7 @@ pub struct TestExpectation {
     pub reason: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JobInfo {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -71,6 +71,31 @@ pub struct JobInfo {
 
 fn yes() -> bool {
     true
+}
+
+impl Default for JobInfo {
+    fn default() -> Self {
+        Self {
+            rebuild_signal: true,
+            display_name: None,
+            subject: None,
+            package_subject: None,
+            package_subjects: Vec::new(),
+            test_name: None,
+            test_family: None,
+            variant: None,
+            artifact_kind: None,
+            version: None,
+            changelog: None,
+            rel: None,
+            role: None,
+            aliases: Vec::new(),
+            tags: Vec::new(),
+            content_diff: false,
+            test_expectation: None,
+            spot_target: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

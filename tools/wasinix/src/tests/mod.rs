@@ -639,6 +639,7 @@ mod evalmap {
         assert_eq!(map.info[&address].test_name.as_deref(), Some("abi"));
         assert_eq!(map.info[&address].variant.as_deref(), Some("eh"));
         assert_eq!(map.info[&address].tags, ["slow"]);
+        assert!(map.info[&address].rebuild_signal);
         assert_eq!(
             map.resolve_jobs(&["packages.wasix.eh.zlib-ng".into()])
                 .unwrap(),
