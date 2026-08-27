@@ -27,6 +27,10 @@ pub struct TestExpectation {
 #[serde(rename_all = "camelCase")]
 pub struct JobInfo {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subject: Option<String>,
@@ -77,6 +81,8 @@ impl Default for JobInfo {
     fn default() -> Self {
         Self {
             rebuild_signal: true,
+            kind: None,
+            scope: None,
             display_name: None,
             subject: None,
             package_subject: None,
@@ -143,6 +149,8 @@ pub struct CatalogInstance {
 #[serde(rename_all = "camelCase")]
 pub struct CatalogJob {
     pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subject: Option<String>,
@@ -174,6 +182,8 @@ impl CatalogJob {
             .map(str::to_owned);
         let is_test = self.kind == "test";
         JobInfo {
+            kind: Some(self.kind),
+            scope: self.scope,
             display_name: Some(self.name.clone()),
             subject: self.subject.or(Some(self.name)),
             package_subject: self.package_subject,

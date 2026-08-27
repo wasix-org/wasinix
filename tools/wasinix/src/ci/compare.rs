@@ -11,7 +11,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ci::evalmap::{EvalMap, StatusMap};
+use crate::ci::evalmap::{EvalMap, JobInfo, StatusMap};
 use crate::ci::types::{Build, CaseRef, RevSource};
 use crate::support::atoms::{JobAddr, JobStatus};
 use crate::support::error::{Result, request_error};
@@ -54,6 +54,71 @@ pub struct CaseCoverage {
 pub struct ComparisonCoverage {
     pub base: CaseCoverage,
     pub head: CaseCoverage,
+}
+
+/// The mutually exclusive rebuild buckets shown on pull requests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RebuildCategory {
+    Packages,
+    Tests,
+    Artifacts,
+    Python,
+}
+
+/// A changed job's presentation bucket and whether it also touches native
+/// outputs. Native is a facet, rather than another bucket, so the four bucket
+/// counts remain a partition of the rebuild count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RebuildRole {
+    pub category: RebuildCategory,
+    pub native: bool,
+}
+
+pub fn rebuild_role(job: &JobAddr, info: Option<&JobInfo>) -> Option<RebuildRole> {
+    let legacy = || {
+        let parts = job.as_str().split('.').collect::<Vec<_>>();
+        let category = match parts.as_slice() {
+            ["packages", "python", ..] => RebuildCategory::Python,
+            ["packages", ..] | ["artifacts", "pkg", ..] => RebuildCategory::Packages,
+            ["tests", ..] | ["checks", ..] => RebuildCategory::Tests,
+            ["artifacts", "registry", "python", ..] => RebuildCategory::Python,
+            ["artifacts", ..] => RebuildCategory::Artifacts,
+            _ => return None,
+        };
+        Some(RebuildRole {
+            category,
+            native: parts.contains(&"native"),
+        })
+    };
+    let Some(info) = info else {
+        return legacy();
+    };
+    let category = match info.kind.as_deref() {
+        Some("test") => RebuildCategory::Tests,
+        Some("package") if info.scope.as_deref() == Some("python") => RebuildCategory::Python,
+        Some("package") => RebuildCategory::Packages,
+        Some("artifact") if info.artifact_kind.as_deref() == Some("pkg") => {
+            RebuildCategory::Packages
+        }
+        Some("artifact")
+            if info.scope.as_deref() == Some("python")
+                && !info
+                    .artifact_kind
+                    .as_deref()
+                    .is_some_and(|kind| kind.starts_with("wheel-")) =>
+        {
+            RebuildCategory::Python
+        }
+        Some("artifact") => RebuildCategory::Artifacts,
+        Some(_) => return None,
+        None => return legacy(),
+    };
+    Some(RebuildRole {
+        category,
+        native: info.scope.as_deref() == Some("native"),
+    })
 }
 
 #[derive(Default)]
@@ -226,6 +291,9 @@ pub struct EvalDiff {
     pub removed: Vec<JobAddr>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub rebuilt: Vec<JobAddr>,
+    /// Changed jobs' one partitioning rebuild category and native facet.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub rebuild_roles: BTreeMap<JobAddr, RebuildRole>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub identity_transitions: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -424,16 +492,30 @@ fn eval_diff(coverage: &Coverage, base_map: &EvalMap, head_map: &EvalMap) -> Eva
             });
         update.jobs.push(JobAddr(job.clone()));
     }
+    let rebuilt: Vec<JobAddr> = coverage
+        .both
+        .iter()
+        .filter(|job| {
+            base_map.jobs.get(job.as_str()) != head_map.jobs.get(job.as_str())
+                && head_map.rebuild_signal(job)
+        })
+        .map(|job| JobAddr(job.clone()))
+        .collect();
+    let rebuild_roles = added
+        .iter()
+        .chain(&removed)
+        .chain(&rebuilt)
+        .filter_map(|job| {
+            rebuild_role(
+                job,
+                head_map.info.get(job).or_else(|| base_map.info.get(job)),
+            )
+            .map(|role| (job.clone(), role))
+        })
+        .collect();
     EvalDiff {
-        rebuilt: coverage
-            .both
-            .iter()
-            .filter(|job| {
-                base_map.jobs.get(job.as_str()) != head_map.jobs.get(job.as_str())
-                    && head_map.rebuild_signal(job)
-            })
-            .map(|job| JobAddr(job.clone()))
-            .collect(),
+        rebuilt,
+        rebuild_roles,
         identity_transitions: identity_changed
             .iter()
             .map(|job| {

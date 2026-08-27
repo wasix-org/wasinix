@@ -17,8 +17,8 @@
 
 <details><summary>Rebuilt (2)</summary>
 
-- `checks.zlib` at 1.3.2
 - `packages.wasix.eh.zlib`
+- `checks.zlib` at 1.3.2
 
 </details>
 
