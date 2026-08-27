@@ -1,10 +1,9 @@
 {
-  testLib,
+  harnesses,
   toolchain,
 }:
-testLib.mkWasixRun {
+harnesses.hostShell {
   name = "wasixcc-asyncify-eh";
-  wasixPkgs = [];
   script = ''
     ${toolchain.commonPreConfigure}
     export WASIXCC_RUN_WASM_OPT=yes

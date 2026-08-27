@@ -87,11 +87,11 @@
       trap 'exit 143' TERM
 
       ${setup}
-      cp ${guestScript} "$WASIX_TEST_ROOT/script.sh"
-      ${lib.escapeShellArg shell} "$WASIX_TEST_ROOT/script.sh"
+      cp ${guestScript} "$HOME/wasinix-test-script.sh"
+      ${lib.escapeShellArg shell} "$HOME/wasinix-test-script.sh"
     '';
 in {
-  inherit (testLib) defaultForwardEnv normalizers;
+  inherit (testLib) defaultForwardEnv invocationWasmerArgsEnv normalizers;
 
   python = args:
     import ./python.nix ({inherit lib pkgs wasmer;} // args);

@@ -14,14 +14,24 @@
     inherit project;
     projectAttr = "legacyPackages.${system}";
   };
-  paths =
-    pkgs.lib.mapAttrsToList (name: path: {inherit name path;}) project.ci.jobs
-    ++ [
-      {
-        name = "wasinix";
-        path = apps.wasinix.program;
-      }
-    ];
+  paths = [
+    {
+      name = "consumer-tool";
+      path = project.packages.native.consumer-tool;
+    }
+    {
+      name = "consumer-wasm";
+      path = project.packages.wasix.preferred.consumer-wasm;
+    }
+    {
+      name = "consumer-webc";
+      path = project.artifacts.webc.consumer-wasm;
+    }
+    {
+      name = "wasinix";
+      path = apps.wasinix.program;
+    }
+  ];
   validPublication =
     builtins.attrNames publication.catalog
     == ["artifacts.webc.consumer-wasm"]

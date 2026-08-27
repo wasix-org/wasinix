@@ -26,8 +26,8 @@ in {
     shell = commands.bash;
     commands = builtins.attrValues entry.commands ++ [commands.coreutils];
     runtime.threads = true;
+    host.setup = ''cp ${fixture}/answer.o "$WASIX_TEST_ROOT/answer.o"'';
     script = ''
-      cp ${fixture}/answer.o answer.o
       wasm-ld --no-entry --export=answer answer.o -o answer.wasm
       test -s answer.wasm
     '';
