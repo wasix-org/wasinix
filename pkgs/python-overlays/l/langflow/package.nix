@@ -16,6 +16,11 @@ exposePackage (
       hash = "sha256-i3lbuoHnv2qkOeYO+Tyrx+5dRwqCQxhcqkGu5epk43M=";
     };
 
+    postPatch = ''
+      substituteInPlace pyproject.toml \
+        --replace-fail '"langflow-base~=1.12.0",' '"langflow-base",'
+    '';
+
     pythonRemoveDeps = [
       "lfx-amazon"
       "lfx-anthropic"
