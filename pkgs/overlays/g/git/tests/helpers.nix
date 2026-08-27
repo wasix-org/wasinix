@@ -30,6 +30,15 @@
     export GIT_COMMITTER_DATE="2000-01-01T00:00:00+00:00"
   '';
 
+  assertFile = path: expected: ''
+    actual=$(<${pkgs.lib.escapeShellArg path})
+    if [ "$actual" != ${pkgs.lib.escapeShellArg expected} ]; then
+      printf 'unexpected contents of %s: %s\n' ${pkgs.lib.escapeShellArg path} "$actual" >&2
+      exit 1
+    fi
+    printf '%s\n' "$actual"
+  '';
+
   # Create repos/remote.git (bare, one "hello" commit) and docroot/ via native git.
   setupNativeRemote = ''
     mkdir -p repos source docroot
@@ -82,14 +91,28 @@
         sleep 1
   '';
 
-  # Start lighttpd on port 8766 (HTTPS). Generates a self-signed cert and
-  # copies it to $HOME/server.crt so WASM git can find it via GIT_SSL_CAINFO.
+  # Start lighttpd on port 8766 (HTTPS). A local CA signs the server certificate
+  # so the OpenSSL-backed WASIX client exercises normal chain verification.
   startLighttpdHttps = {receivePack ? false}: ''
         mkdir -p docroot
         ${makeGitHttpBackendWrapper {inherit receivePack;}}
         ${pkgs.lib.getExe pkgs.openssl} req -x509 -newkey rsa:2048 \
-          -keyout server.key -out server.crt -days 1 -nodes \
+          -keyout ca.key -out ca.crt -days 1 -nodes \
+          -subj "/CN=Wasinix test CA" \
+          -addext "basicConstraints=critical,CA:TRUE" \
+          -addext "keyUsage=critical,keyCertSign,cRLSign"
+        ${pkgs.lib.getExe pkgs.openssl} req -newkey rsa:2048 \
+          -keyout server.key -out server.csr -nodes \
           -subj "/CN=127.0.0.1"
+        cat > server.ext << EOF
+    basicConstraints=critical,CA:FALSE
+    keyUsage=critical,digitalSignature,keyEncipherment
+    extendedKeyUsage=serverAuth
+    subjectAltName=IP:127.0.0.1
+    EOF
+        ${pkgs.lib.getExe pkgs.openssl} x509 -req -in server.csr \
+          -CA ca.crt -CAkey ca.key -CAcreateserial \
+          -out server.crt -days 1 -extfile server.ext
         cat > lighttpd.conf << EOF
     server.document-root = "$(pwd)/docroot"
     server.port = 8766
@@ -104,7 +127,7 @@
         ${pkgs.lighttpd}/sbin/lighttpd -D -f lighttpd.conf &
         server_pid=$!
         sleep 1
-        cp server.crt "$HOME/server.crt"
-        export GIT_SSL_CAINFO=$HOME/server.crt
+        export GIT_SSL_CAINFO=$WASIX_TEST_ROOT/ca.crt
+        export SSL_CERT_FILE=$WASIX_TEST_ROOT/ca.crt
   '';
 }

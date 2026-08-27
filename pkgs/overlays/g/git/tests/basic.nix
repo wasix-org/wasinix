@@ -4,7 +4,7 @@
   harnesses,
   helpers,
 }: let
-  inherit (helpers) gitNative normalizeGitPaths gitSetup;
+  inherit (helpers) assertFile gitNative normalizeGitPaths gitSetup;
 in {
   version = harnesses.wasixShell {
     name = "version";
@@ -107,7 +107,7 @@ in {
       git checkout main
       git merge --no-edit feature
       git --no-pager log --oneline
-      cat feature.txt
+      ${assertFile "feature.txt" "feature content"}
     '';
   };
 
