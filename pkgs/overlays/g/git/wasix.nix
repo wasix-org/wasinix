@@ -3,13 +3,13 @@
 # block) rather than bundled. gnugrep/gnused/gawk/coreutils are our wasix
 # builds, since git bakes their paths into the shell subcommands.
 {
-  exposePackageIdentity,
+  exposeWasixPackage,
   package,
   packages,
   dropInputsByName,
 }:
-exposePackageIdentity {
-  package = let
+exposeWasixPackage (
+  let
     inherit (packages.sameProfile) lib;
     bash = packages.wasix.preferred.bash;
     nano = packages.wasix.preferred.nano;
@@ -47,7 +47,6 @@ exposePackageIdentity {
             fs."/etc/ssl" = "${packages.sameProfile.cacert}/etc/ssl";
             commandEnv.git = {
               SSL_CERT_FILE = "/etc/ssl/certs/ca-bundle.crt";
-              GIT_SSL_CAINFO = "/etc/ssl/certs/ca-bundle.crt";
               # nano is a dependency command wasmer mounts under /bin. Without an
               # editor `git commit` and `git rebase -i` have nothing to open.
               # No pager: git's pager child hangs, see WASIX-TODO.md.
@@ -163,5 +162,5 @@ exposePackageIdentity {
             fi
           done
         '';
-    });
-}
+    })
+)

@@ -3,8 +3,7 @@
 # ehpic only: dl/ctypes need the PIC sysroot.
 {
   extendPackage,
-  exposeExtendedPackageIdentities,
-  packageSet,
+  exposeWasixExtendedPackages,
   packages,
   pkgs,
   runners,
@@ -364,12 +363,11 @@
       };
   in
     py;
-  python314 = mkWasixPython true packageSet.python314;
-  result = exposeExtendedPackageIdentities {
+  result = exposeWasixExtendedPackages {
     python313 = mkWasixPython false;
-    python314 = _previous: python314;
+    python314 = mkWasixPython true;
     python3 = _previous:
-      python314.overrideAttrs (old: {
+      result.python314.overrideAttrs (old: {
         passthru =
           (old.passthru or {})
           // {

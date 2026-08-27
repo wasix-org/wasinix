@@ -1,5 +1,5 @@
-{exposeExtendedPackage}:
-exposeExtendedPackage {
+{exposeWasixExtendedPackage}:
+exposeWasixExtendedPackage {
   cmakeFlags = old: old ++ ["-DBUILD_SHARED_LIB=OFF"];
   postPatch = ''
     substituteInPlace include/tidyplatform.h \

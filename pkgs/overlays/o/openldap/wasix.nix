@@ -1,12 +1,12 @@
 {
   dropFlagsByPrefix,
   dropInputsByNameInfix,
-  exposePackage,
+  exposeWasixPackage,
   extendPackage,
   linkInputs,
   package,
 }:
-exposePackage (
+exposeWasixPackage (
   extendPackage (package.override {
     libtool = null;
     withModules = false;
