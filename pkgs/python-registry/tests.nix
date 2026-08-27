@@ -13,7 +13,7 @@
   hostPython = pkgs.python3.withPackages (ps: [ps.pip]);
   hostPythonExe = lib.getExe hostPython;
   pyVersion = python3.pythonVersion;
-  guestPython = "python${pyVersion}";
+  guestPython = pythonCommand.name;
 
   # Platform tag of the wasix wheels; if the target triple drifts, re-derive
   # from a wheel filename in the registry.
