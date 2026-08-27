@@ -17,4 +17,4 @@
 
 </details>
 
-<sub>baseline: Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ⏳<br>candidate-1: Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ⏳</sub>
+<sub>candidate-1: Repository checks ✅ · Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ⏳<br>baseline: Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ⏳</sub>

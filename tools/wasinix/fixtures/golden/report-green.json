@@ -27,6 +27,17 @@
       "enabled": true,
       "gate": true,
       "headline": "ok",
+      "kind": "validation",
+      "label": "case: Repository checks",
+      "status": "success",
+      "taskId": "case.repository"
+    },
+    {
+      "case": "case",
+      "elapsedSeconds": 12.0,
+      "enabled": true,
+      "gate": true,
+      "headline": "ok",
       "kind": "eval",
       "label": "case: Preparing evaluation inputs",
       "status": "success",

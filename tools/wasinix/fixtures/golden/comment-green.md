@@ -1,6 +1,6 @@
 ### ✅ Wasinix build · `core` · green · [run](https://github.com/wasix-org/wasinix/actions/runs/1) · `aaaaaaaaaaaa`
 
-<sub>case: Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ✅<br><a href="https://github.com/wasix-org/wasinix/actions/runs/1">full pipeline</a></sub>
+<sub>case: Repository checks ✅ · Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ✅<br><a href="https://github.com/wasix-org/wasinix/actions/runs/1">full pipeline</a></sub>
 
 <details><summary>Details</summary>
 
@@ -30,6 +30,7 @@
 
 | task | status | result | time |
 |:--|:--:|:--|--:|
+| case: Repository checks | ✅ | ok | 12s |
 | case: Preparing evaluation inputs | ✅ | ok | 12s |
 | case: Evaluating jobs | ✅ | ok | 12s |
 | case: Core | ✅ | ok | 12s |

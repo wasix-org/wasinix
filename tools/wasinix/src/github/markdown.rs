@@ -1118,7 +1118,7 @@ fn failing(report: &Report, fragments: &BTreeMap<String, Fragment>, links: &Link
         let what = plural(count, "failure").push(Markdown::constant(" new"));
         (regressed, existing, what)
     };
-    // Failed gates without failure atoms (treefmt, a timed-out eval) still
+    // Failed gates without failure atoms (repository checks, a timed-out eval) still
     // deserve an honest count; a report with no failed tasks at all (a
     // synthesized terminal report for a lost or cancelled run) carries its
     // whole story in the title.

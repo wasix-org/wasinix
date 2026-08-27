@@ -34,7 +34,7 @@
 
 </details>
 
-<sub>baseline: Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ✅<br>candidate-1: Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ✅<br><a href="https://github.com/wasix-org/wasinix/actions/runs/1">full pipeline</a></sub>
+<sub>candidate-1: Repository checks ✅ · Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ✅<br>baseline: Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ✅<br><a href="https://github.com/wasix-org/wasinix/actions/runs/1">full pipeline</a></sub>
 
 <details><summary>Details</summary>
 
@@ -85,6 +85,7 @@
 
 | task | status | result | time |
 |:--|:--:|:--|--:|
+| candidate-1: Repository checks | ✅ | ok | 12s |
 | baseline: Preparing evaluation inputs | ✅ | ok | 12s |
 | baseline: Evaluating jobs | ✅ | ok | 12s |
 | candidate-1: Preparing evaluation inputs | ✅ | ok | 12s |

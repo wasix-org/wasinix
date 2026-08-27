@@ -24,6 +24,16 @@
       "enabled": true,
       "gate": true,
       "headline": "ok",
+      "kind": "validation",
+      "label": "case: Repository checks",
+      "status": "success",
+      "taskId": "case.repository"
+    },
+    {
+      "case": "case",
+      "enabled": true,
+      "gate": true,
+      "headline": "ok",
       "kind": "eval",
       "label": "case: Preparing evaluation inputs",
       "status": "success",
@@ -33,10 +43,10 @@
       "case": "case",
       "enabled": true,
       "gate": true,
-      "headline": "ok",
+      "headline": "",
       "kind": "eval",
       "label": "case: Evaluating jobs",
-      "status": "success",
+      "status": "pending",
       "taskId": "case.eval"
     },
     {

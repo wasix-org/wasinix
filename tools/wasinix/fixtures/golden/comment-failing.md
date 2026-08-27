@@ -6,7 +6,7 @@
 
 1 job blocked behind these failures
 
-<sub>case: Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ❌<br><a href="https://github.com/wasix-org/wasinix/actions/runs/1">full pipeline</a></sub>
+<sub>case: Repository checks ✅ · Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ❌<br><a href="https://github.com/wasix-org/wasinix/actions/runs/1">full pipeline</a></sub>
 
 <details><summary>Details</summary>
 
@@ -36,6 +36,7 @@
 
 | task | status | result | time |
 |:--|:--:|:--|--:|
+| case: Repository checks | ✅ | ok | 12s |
 | case: Preparing evaluation inputs | ✅ | ok | 12s |
 | case: Evaluating jobs | ✅ | ok | 12s |
 | case: Core | ❌ | 1 failed · 39 built |  |

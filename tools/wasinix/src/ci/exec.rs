@@ -13,7 +13,7 @@ use crate::ci::compare::JobStatuses;
 use crate::ci::evalmap::EvalMap;
 use crate::ci::events::{Event, Tracker};
 use crate::ci::facts;
-use crate::ci::plan::{BuildTarget, Phase, Task, TaskKind};
+use crate::ci::plan::{BuildTarget, Phase, REPOSITORY_LABEL, REPOSITORY_TASK, Task, TaskKind};
 use crate::ci::prepare::{Loaded, case_dir, fragments_dir};
 use crate::ci::report::{Fragment, FragmentData, LogExcerpt};
 use crate::ci::types::{Build, CaseRef, RequestAction, ResolvedRequest, RevSource, Spot};
@@ -155,6 +155,65 @@ fn excerpt_of(text: &str) -> LogExcerpt {
         lines: lines[start..].iter().map(|line| line.to_string()).collect(),
         truncated: start > 0,
     }
+}
+
+fn repository_checks(
+    ctx: &Context,
+    worktree: &Path,
+    case_id: &str,
+    route: &Route,
+    artifacts: &mut Artifacts,
+) -> Result<Fragment> {
+    use std::io::Write;
+
+    let _lease = route.acquire()?;
+    let log_path = crate::ci::prepare::logs_dir(&case_dir(ctx.run_dir, case_id))
+        .join(REPOSITORY_TASK)
+        .join("flake-check.log");
+    let log = crate::support::log::SharedLog::create_followed(&log_path)?;
+    let copy = |mut stream: Box<dyn std::io::Read + Send>,
+                mut log: crate::support::log::SharedLog| {
+        std::io::copy(&mut stream, &mut log).map_err(|error| io(&log_path, error))?;
+        log.flush().map_err(|error| io(&log_path, error))
+    };
+    let completion = crate::support::nix::Invocation::flake("flake check", "path:.")
+        .arg("--print-build-logs")
+        .workdir(worktree)
+        .timeout(route.limits()?.timeout)
+        .route(route)?
+        .run_piped(
+            |stream| copy(stream, log.clone()),
+            |stream| copy(stream, log.clone()),
+        )?;
+    let (status, timed_out) = match completion {
+        crate::support::tools::Completion::Finished(status) => (status, false),
+        crate::support::tools::Completion::TimedOut(status) => (status, true),
+    };
+    log.finish()?;
+    artifacts.record_log(&log_path)?;
+    let success = status.success() && !timed_out;
+    let headline = if timed_out {
+        "repository checks timed out"
+    } else if success {
+        "repository checks passed"
+    } else {
+        "repository checks failed"
+    };
+    let mut fragment = Fragment::new(
+        format!("{case_id}.{REPOSITORY_TASK}"),
+        format!("{case_id}: {REPOSITORY_LABEL}"),
+        TaskKind::Validation,
+        if success {
+            TaskStatus::Success
+        } else {
+            TaskStatus::Failure
+        },
+        headline,
+    );
+    if !success {
+        fragment = fragment.with_data(FragmentData::Log(excerpt(&log_path)));
+    }
+    Ok(fragment)
 }
 
 /// Complete one online evaluation before the authoritative offline one.
@@ -1203,6 +1262,9 @@ fn run_phase(
         .join(PATCH_FILE);
     let worktree = reproduced_worktree(ctx.runner_root, case.source(), &patch)?;
     match (phase, case) {
+        (Phase::Repository, _) => {
+            repository_checks(ctx, worktree.path(), case_id, &route, artifacts)
+        }
         (Phase::EvalInputs, CaseRef::Build(build)) => {
             eval_inputs(ctx, worktree.path(), build, &route, artifacts)
         }
@@ -1224,15 +1286,17 @@ fn run_phase(
     }
 }
 
-pub(crate) fn task_route(repo: &Path, _phase: Phase, placement: Option<&str>) -> Result<Route> {
-    Route::from_on(repo, placement)
+pub(crate) fn task_route(repo: &Path, phase: Phase, placement: Option<&str>) -> Result<Route> {
+    match phase {
+        Phase::Repository => Route::local(),
+        _ => Route::from_on(repo, placement),
+    }
 }
 
-/// A phase whose failure blocks the rest of its case. Builds run as one
-/// union, so there is no core-before-packages ordering to poison; only a
-/// failed evaluation leaves nothing comparable downstream.
+/// A phase whose failure leaves no valid jobs to build or compare. Builds run
+/// as one union, so there is no core-before-packages ordering to poison.
 pub(crate) fn fatal(phase: Phase) -> bool {
-    matches!(phase, Phase::EvalInputs | Phase::Eval)
+    matches!(phase, Phase::Repository | Phase::EvalInputs | Phase::Eval)
 }
 
 pub(crate) fn classify_build_outcome(unsuccessful: usize, blocked: usize) -> (usize, TaskStatus) {

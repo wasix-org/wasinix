@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 use crate::ci::types::{Build, CaseRef, Request, RequestAction, SetName};
 use crate::support::schema::Document;
 
+pub(crate) const REPOSITORY_TASK: &str = "repository";
+pub(crate) const REPOSITORY_LABEL: &str = "Repository checks";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum BuildTarget {
@@ -52,6 +55,7 @@ impl From<SetName> for BuildTarget {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "phase", rename_all = "camelCase")]
 pub enum Phase {
+    Repository,
     EvalInputs,
     Eval,
     Build { set: BuildTarget },
@@ -96,7 +100,7 @@ pub struct Plan {
 
 impl Document for Plan {
     const KIND: &'static str = "plan";
-    const SCHEMA: u32 = 1;
+    const SCHEMA: u32 = 2;
 }
 
 struct Builder {
@@ -194,6 +198,20 @@ pub fn plan_of<S>(request: &Request<S>, request_id: Option<&str>, reused: &[Stri
     };
 
     let cases = request.cases();
+    for case in &cases {
+        let id = case.case_id();
+        if baseline == Some(id) {
+            continue;
+        }
+        builder.push(
+            format!("{id}.{REPOSITORY_TASK}"),
+            format!("{id}: {REPOSITORY_LABEL}"),
+            TaskKind::Validation,
+            id,
+            Phase::Repository,
+            true,
+        );
+    }
     for case in &cases {
         let id = case.case_id();
         if reused.iter().any(|reused_id| reused_id == id) {

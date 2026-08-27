@@ -203,7 +203,9 @@ mod naming {
 
 mod plan {
     use crate::ci::plan::{BuildTarget, Phase, plan_of};
-    use crate::ci::types::{Build, Case, Diff, Request, RevSource, Selector, SelectorKind, Spot};
+    use crate::ci::types::{
+        Build, Case, Diff, Request, RequestAction, RevSource, Selector, SelectorKind, Spot,
+    };
     use crate::support::atoms::Rev;
 
     fn source() -> RevSource {
@@ -275,6 +277,25 @@ mod plan {
                 .tasks
                 .iter()
                 .any(|task| task.task_id.starts_with("compare."))
+        );
+    }
+
+    #[test]
+    fn repository_checks_cover_candidates_but_not_the_baseline() {
+        let mut request = core_diff();
+        let RequestAction::Diff(diff) = &mut request.action else {
+            panic!("expected diff");
+        };
+        diff.cases
+            .push(Case::Build(build("candidate-2", &["core"])));
+        let plan = plan_of(&request, None, &[]);
+        assert_eq!(
+            plan.tasks
+                .iter()
+                .filter(|task| task.phase == Phase::Repository)
+                .map(|task| task.task_id.as_str())
+                .collect::<Vec<_>>(),
+            ["candidate-1.repository", "candidate-2.repository"]
         );
     }
 
@@ -2337,6 +2358,7 @@ mod exec {
 
     #[test]
     fn only_fatal_failures_hide_analysis_results() {
+        assert!(fatal(Phase::Repository));
         assert!(fatal(Phase::Eval));
         assert!(!fatal(Phase::Build {
             set: BuildTarget::Packages,
@@ -6877,6 +6899,14 @@ mod corpus {
 
         let build_job = job(&build, "build");
         assert!(
+            field(build_job, "steps")
+                .as_sequence()
+                .unwrap()
+                .iter()
+                .all(|step| field(step, "name").as_str() != Some("Check Nix source")),
+            "repository checks must run inside the structured CI run"
+        );
+        assert!(
             step_index(build_job, "collect") > step_index(build_job, "run_artifact")
                 && step_index(build_job, "collect") > step_index(build_job, "baseline"),
             "build.yml collects a run before its artifact and baseline are durable"
@@ -7576,7 +7606,7 @@ mod fold {
     }
 
     #[test]
-    fn a_failed_gate_concludes_failure_and_skips_its_downstream() {
+    fn failed_repository_checks_conclude_failure_and_skip_evaluation() {
         let plan = plan_of(
             &Request::build(build("case"), Default::default()),
             None,
@@ -7584,12 +7614,12 @@ mod fold {
         );
         let mut fragments = BTreeMap::new();
         fragments.insert(
-            "case.eval-inputs".to_string(),
+            "case.repository".to_string(),
             fragment(
-                "case.eval-inputs",
-                TaskKind::Eval,
+                "case.repository",
+                TaskKind::Validation,
                 TaskStatus::Failure,
-                "could not evaluate",
+                "repository checks failed",
             ),
         );
         let report = fold(&plan, &fragments, FoldContext::default());
@@ -7788,10 +7818,16 @@ mod fold {
     fn a_fully_reused_build_concludes_success() {
         let request = Request::build(build("case"), Default::default());
         let plan = plan_of(&request, None, &["case".into()]);
-        assert!(plan.tasks.is_empty());
+        assert_eq!(
+            plan.tasks
+                .iter()
+                .map(|task| task.task_id.as_str())
+                .collect::<Vec<_>>(),
+            ["case.repository"]
+        );
         let report = fold(
             &plan,
-            &BTreeMap::new(),
+            &all_green(&plan),
             FoldContext {
                 finished: true,
                 reused_cases: 1,
@@ -7799,7 +7835,7 @@ mod fold {
             },
         );
         assert_eq!(report.conclusion, Some(Conclusion::Success));
-        assert_eq!(report.title, "CI passed from previous results");
+        assert_eq!(report.title, "CI passed");
     }
 
     #[test]

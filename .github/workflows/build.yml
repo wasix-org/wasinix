@@ -59,9 +59,6 @@ jobs:
         continue-on-error: true
         run: nix copy --all --no-check-sigs --from 'file:///tmp/input-store'
 
-      - name: Check Nix source
-        run: nix flake check --print-build-logs
-
       # One CI run: a PR or merge-group event compares the change against its
       # base (reusing the base's published baseline instead of rebuilding it);
       # a push to main builds everything. The run directory carries the whole

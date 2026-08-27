@@ -6,7 +6,7 @@
 |:--|:--|:--|
 | `` checks.zlib`\|<img src=x onerror=alert(1)> `` | case.core | boom \`\`\` · logs `https://ci.example/logs)\|base/log.txt` |
 
-<sub>case: Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ❌<br>full pipeline `https://ci.example/runs/1)|end`</sub>
+<sub>case: Repository checks ✅ · Preparing evaluation inputs ✅ · Evaluating jobs ✅ · Core ❌<br>full pipeline `https://ci.example/runs/1)|end`</sub>
 
 <details><summary>Details</summary>
 
@@ -36,6 +36,7 @@
 
 | task | status | result | time |
 |:--|:--:|:--|--:|
+| case: Repository checks | ✅ | ok | 12s |
 | case: Preparing evaluation inputs | ✅ | ok | 12s |
 | case: Evaluating jobs | ✅ | ok | 12s |
 | case: Core | ❌ | 1 failed · 39 built |  |
