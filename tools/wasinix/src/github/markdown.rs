@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::ci::compare::Comparison;
+use crate::ci::compare::{Comparison, RebuildRole};
 use crate::ci::events::Snapshot;
 use crate::ci::facts::{BUILD_PROCESS_ERROR_TITLE, DependencyPath, Failure, FailureCause};
 use crate::ci::report::{Conclusion, Fragment, FragmentData, Report};
@@ -834,6 +834,7 @@ const COMPARE_LIST_ROWS: usize = 250;
 fn job_list(
     title: &'static str,
     jobs: &[crate::support::atoms::JobAddr],
+    rebuild_roles: &BTreeMap<crate::support::atoms::JobAddr, RebuildRole>,
     identities: &BTreeMap<crate::support::atoms::JobAddr, String>,
     coverage: Option<&BTreeMap<crate::support::atoms::JobAddr, String>>,
     open: bool,
@@ -841,6 +842,16 @@ fn job_list(
     if jobs.is_empty() {
         return Markdown::constant("");
     }
+    let mut jobs = jobs.to_vec();
+    jobs.sort_by(|left, right| {
+        match (rebuild_roles.get(left), rebuild_roles.get(right)) {
+            (Some(left), Some(right)) => left.category.cmp(&right.category),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => left.cmp(right),
+        }
+        .then_with(|| left.cmp(right))
+    });
     let mut body = Markdown::concat([
         Markdown::constant("\n<details"),
         Markdown::constant(if open { " open" } else { "" }),
@@ -947,6 +958,7 @@ fn comparison_lists(comparison: &Comparison) -> Markdown {
     body = body.push(job_list(
         "New evaluation failures",
         &eval.new_eval_errors,
+        &eval.rebuild_roles,
         &eval.identities,
         None,
         true,
@@ -955,6 +967,7 @@ fn comparison_lists(comparison: &Comparison) -> Markdown {
         body = body.push(job_list(
             "Removed jobs that passed",
             &builds.dropped_successes,
+            &eval.rebuild_roles,
             &eval.identities,
             None,
             true,
@@ -962,6 +975,7 @@ fn comparison_lists(comparison: &Comparison) -> Markdown {
         body = body.push(job_list(
             "Fixed",
             &builds.fixes,
+            &eval.rebuild_roles,
             &eval.identities,
             None,
             false,
@@ -998,6 +1012,7 @@ fn comparison_lists(comparison: &Comparison) -> Markdown {
         body = body.push(job_list(
             "Rebuilt",
             &eval.rebuilt,
+            &eval.rebuild_roles,
             &eval.identities,
             None,
             false,
@@ -1006,6 +1021,7 @@ fn comparison_lists(comparison: &Comparison) -> Markdown {
     body = body.push(job_list(
         "Added",
         &eval.added,
+        &eval.rebuild_roles,
         &eval.identities,
         Some(&eval.catalog_job_coverage),
         false,
@@ -1013,6 +1029,7 @@ fn comparison_lists(comparison: &Comparison) -> Markdown {
     body = body.push(job_list(
         "Removed",
         &eval.removed,
+        &eval.rebuild_roles,
         &eval.identities,
         Some(&eval.catalog_job_coverage),
         false,

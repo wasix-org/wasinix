@@ -6,6 +6,7 @@ use std::path::Path;
 
 use serde_json::json;
 
+use crate::ci::compare::RebuildCategory;
 use crate::ci::events::Snapshot;
 use crate::ci::report::{Conclusion, Fragment, Report};
 use crate::github::client::Client;
@@ -16,17 +17,17 @@ use crate::support::error::Result;
 
 pub const PROGRESS_INTERVAL_SECONDS: u64 = 5 * 60;
 
-const REBUILD_LABEL_PREFIX: &str = "10.rebuild-wasix: ";
+const REBUILD_LABEL_PREFIX: &str = "10.rebuild";
 
-pub fn rebuild_label(count: usize) -> &'static str {
-    match count {
-        0 => "10.rebuild-wasix: 0",
-        1 => "10.rebuild-wasix: 1",
-        2..=10 => "10.rebuild-wasix: 1-10",
-        11..=100 => "10.rebuild-wasix: 11-100",
-        101..=500 => "10.rebuild-wasix: 101-500",
-        _ => "10.rebuild-wasix: 501+",
-    }
+fn rebuild_label(name: &str, count: usize) -> String {
+    let bucket = match count {
+        1 => "1",
+        2..=10 => "1-10",
+        11..=100 => "11-100",
+        101..=500 => "101-500",
+        _ => "501+",
+    };
+    format!("10.rebuilds-{name}: {bucket}")
 }
 
 pub struct Target {
@@ -66,22 +67,54 @@ pub struct Rendered {
     pub bisect: Option<crate::nix::bisect::Report>,
 }
 
-fn rebuild_count(report: &Report) -> Option<usize> {
+fn rebuild_labels(report: &Report) -> Result<Option<Vec<String>>> {
     let [comparison] = report.comparisons.as_slice() else {
-        return None;
+        return Ok(None);
     };
     if !comparison.base_evaluated || !comparison.head_evaluated {
-        return None;
+        return Ok(None);
     }
-    let eval = comparison.eval.as_ref()?;
-    Some(
-        eval.added
-            .iter()
-            .chain(&eval.removed)
-            .chain(&eval.rebuilt)
-            .collect::<BTreeSet<_>>()
-            .len(),
-    )
+    let Some(eval) = comparison.eval.as_ref() else {
+        return Ok(None);
+    };
+    let jobs: BTreeSet<_> = eval
+        .added
+        .iter()
+        .chain(&eval.removed)
+        .chain(&eval.rebuilt)
+        .collect();
+    let roles = jobs
+        .iter()
+        .map(|job| {
+            eval.rebuild_roles.get(*job).ok_or_else(|| {
+                crate::support::error::Error::Failure(format!(
+                    "comparison lacks a rebuild role for {job}"
+                ))
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let mut counts = BTreeMap::<RebuildCategory, usize>::new();
+    let mut native = 0;
+    for role in roles {
+        *counts.entry(role.category).or_default() += 1;
+        native += usize::from(role.native);
+    }
+    let mut labels = counts
+        .into_iter()
+        .map(|(category, count)| {
+            let name = match category {
+                RebuildCategory::Packages => "packages",
+                RebuildCategory::Tests => "tests",
+                RebuildCategory::Artifacts => "artifacts",
+                RebuildCategory::Python => "python",
+            };
+            rebuild_label(name, count)
+        })
+        .collect::<Vec<_>>();
+    if native > 0 {
+        labels.push(rebuild_label("native", native));
+    }
+    Ok(Some(labels))
 }
 
 pub fn reconcile_rebuild_label(
@@ -93,7 +126,8 @@ pub fn reconcile_rebuild_label(
     if target.untrusted || effects.is_dry_run() {
         return Ok(());
     }
-    let (Some(pull_request), Some(count)) = (target.pull_request, rebuild_count(&rendered.report))
+    let (Some(pull_request), Some(rebuild_labels)) =
+        (target.pull_request, rebuild_labels(&rendered.report)?)
     else {
         return Ok(());
     };
@@ -105,10 +139,10 @@ pub fn reconcile_rebuild_label(
         .iter()
         .filter_map(|label| label["name"].as_str())
         .filter(|label| !label.starts_with(REBUILD_LABEL_PREFIX))
-        .chain(std::iter::once(rebuild_label(count)))
+        .chain(rebuild_labels.iter().map(String::as_str))
         .collect::<Vec<_>>();
     client.put(&format!("{issue}/labels"), &json!({ "labels": labels }))?;
-    crate::support::ui::fact("rebuild count", count);
+    crate::support::ui::fact("rebuild labels", rebuild_labels.join(", "));
     Ok(())
 }
 
@@ -724,14 +758,22 @@ mod tests {
     fn rebuild_buckets_cover_every_boundary() {
         use super::rebuild_label;
 
-        assert_eq!(rebuild_label(0), "10.rebuild-wasix: 0");
-        assert_eq!(rebuild_label(1), "10.rebuild-wasix: 1");
-        assert_eq!(rebuild_label(2), "10.rebuild-wasix: 1-10");
-        assert_eq!(rebuild_label(10), "10.rebuild-wasix: 1-10");
-        assert_eq!(rebuild_label(11), "10.rebuild-wasix: 11-100");
-        assert_eq!(rebuild_label(100), "10.rebuild-wasix: 11-100");
-        assert_eq!(rebuild_label(101), "10.rebuild-wasix: 101-500");
-        assert_eq!(rebuild_label(500), "10.rebuild-wasix: 101-500");
-        assert_eq!(rebuild_label(501), "10.rebuild-wasix: 501+");
+        assert_eq!(rebuild_label("packages", 1), "10.rebuilds-packages: 1");
+        assert_eq!(rebuild_label("tests", 2), "10.rebuilds-tests: 1-10");
+        assert_eq!(
+            rebuild_label("artifacts", 10),
+            "10.rebuilds-artifacts: 1-10"
+        );
+        assert_eq!(rebuild_label("python", 11), "10.rebuilds-python: 11-100");
+        assert_eq!(rebuild_label("native", 100), "10.rebuilds-native: 11-100");
+        assert_eq!(
+            rebuild_label("packages", 101),
+            "10.rebuilds-packages: 101-500"
+        );
+        assert_eq!(
+            rebuild_label("packages", 500),
+            "10.rebuilds-packages: 101-500"
+        );
+        assert_eq!(rebuild_label("packages", 501), "10.rebuilds-packages: 501+");
     }
 }

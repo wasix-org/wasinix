@@ -906,7 +906,9 @@ mod authorization {
 }
 
 mod compare {
-    use crate::ci::compare::{BuildDiff, Comparison, EvalDiff, compare_loaded};
+    use crate::ci::compare::{
+        BuildDiff, Comparison, EvalDiff, RebuildCategory, compare_loaded, rebuild_role,
+    };
     use crate::ci::evalmap::{EvalMap, JobInfo, StatusMap};
     use crate::ci::types::{Build, CaseRef, RevSource, Selector, SelectorKind, Spot};
     use crate::support::atoms::{JobAddr, JobStatus, Rev};
@@ -976,6 +978,50 @@ mod compare {
 
     fn addrs(names: &[&str]) -> Vec<JobAddr> {
         names.iter().map(|name| JobAddr(name.to_string())).collect()
+    }
+
+    #[test]
+    fn rebuild_roles_partition_changed_jobs_and_mark_native() {
+        let package = JobInfo {
+            kind: Some("package".into()),
+            scope: Some("wasix".into()),
+            ..JobInfo::default()
+        };
+        let wheel = JobInfo {
+            kind: Some("artifact".into()),
+            scope: Some("python".into()),
+            artifact_kind: Some("wheel-py314".into()),
+            ..JobInfo::default()
+        };
+        let native_test = JobInfo {
+            kind: Some("test".into()),
+            scope: Some("native".into()),
+            ..JobInfo::default()
+        };
+        assert_eq!(
+            rebuild_role(&JobAddr("packages.wasix.eh.zlib".into()), Some(&package)),
+            Some(crate::ci::compare::RebuildRole {
+                category: RebuildCategory::Packages,
+                native: false,
+            })
+        );
+        assert_eq!(
+            rebuild_role(
+                &JobAddr("artifacts.wheel-py314.requests".into()),
+                Some(&wheel)
+            ),
+            Some(crate::ci::compare::RebuildRole {
+                category: RebuildCategory::Artifacts,
+                native: false,
+            })
+        );
+        assert_eq!(
+            rebuild_role(&JobAddr("tests.project.treefmt".into()), Some(&native_test)),
+            Some(crate::ci::compare::RebuildRole {
+                category: RebuildCategory::Tests,
+                native: true,
+            })
+        );
     }
 
     fn catalog_map(evaluated: &[(&str, &str)], catalog: &[(&str, &[&str])]) -> EvalMap {
@@ -8211,7 +8257,8 @@ mod scenarios {
     /// rebuilds, version moves, added and removed jobs.
     pub fn diff_green() -> (Report, Fragments) {
         use crate::ci::compare::{
-            BuildDiff, CaseCoverage, Comparison, ComparisonCoverage, EvalDiff, VersionUpdate,
+            BuildDiff, CaseCoverage, Comparison, ComparisonCoverage, EvalDiff, RebuildCategory,
+            RebuildRole, VersionUpdate,
         };
         let request = Request::diff(
             Diff {
@@ -8235,6 +8282,36 @@ mod scenarios {
                     JobAddr("checks.zlib".into()),
                     JobAddr("packages.wasix.eh.zlib".into()),
                 ],
+                rebuild_roles: BTreeMap::from([
+                    (
+                        JobAddr("checks.zlib".into()),
+                        RebuildRole {
+                            category: RebuildCategory::Tests,
+                            native: false,
+                        },
+                    ),
+                    (
+                        JobAddr("packages.wasix.eh.zlib".into()),
+                        RebuildRole {
+                            category: RebuildCategory::Packages,
+                            native: false,
+                        },
+                    ),
+                    (
+                        JobAddr("checks.brotli".into()),
+                        RebuildRole {
+                            category: RebuildCategory::Tests,
+                            native: false,
+                        },
+                    ),
+                    (
+                        JobAddr("checks.legacy-tool".into()),
+                        RebuildRole {
+                            category: RebuildCategory::Tests,
+                            native: false,
+                        },
+                    ),
+                ]),
                 identity_transitions: vec!["packages.wasix.eh.zlib: 1.3.1 -> 1.3.2".into()],
                 version_updates: vec![VersionUpdate {
                     subject: "zlib".into(),
