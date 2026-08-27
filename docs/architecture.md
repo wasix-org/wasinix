@@ -38,13 +38,14 @@ details live in:
 The built-in `wasinix` extension is defined in `pkgs/project/extension.nix`.
 `loadPackageOverlays` discovers two by-name inventories:
 
-- `pkgs/overlays/<initial>/<name>/` for native and WASIX packages;
-- `pkgs/python-overlays/<initial>/<name>/` for Python package fixpoints.
+- `pkgs/overlays/<initial>/` for native and WASIX packages;
+- `pkgs/python-overlays/<initial>/` for Python package fixpoints.
 
-Regular entries live under `pkgs/overlays/<first-character>/<name>/`. A
-`package.nix` defines a complete package and runs in native and WASIX package
-sets. A colocated `wasix.nix` adapts a preceding nixpkgs package only when the
-actual host platform is WASIX. This distinction also applies to nixpkgs' native
+A flat `pkgs/overlays/<initial>/<name>.nix` is a WASIX-only adaptation of a
+preceding nixpkgs package. It is equivalent to
+`pkgs/overlays/<initial>/<name>/wasix.nix`; use the directory form when the
+package owns other files. A `package.nix` defines a complete package and runs in
+native and WASIX package sets. This distinction also applies to nixpkgs' native
 build-package splices, so WASIX adaptations never leak into host tools. Patches,
 tests, and other package inputs stay in the owning directory. Existing nixpkgs
 packages requiring no adaptation are registered by the extension's `inherited`
@@ -52,8 +53,8 @@ attribute set instead of empty units.
 
 WASIX-specific policy lives with its package: patches, flags, runtime
 dependencies, Wasm command names, WebC configuration, and tests. A unit normally
-uses `exposeWasixExtendedPackage` to adapt the preceding package. The directory
-keeps patches and behavior tests beside the package that owns them.
+uses `exposeWasixExtendedPackage` to adapt the preceding package. Expanded units
+keep patches and behavior tests beside the package that owns them.
 
 Python package adaptations and their history live in `pkgs/python-overlays/`.
 

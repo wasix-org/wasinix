@@ -8116,7 +8116,7 @@ mod scenarios {
                     class: Some("Build".into()),
                     message: Some("builder failed with exit code 1".into()),
                     jobs: Vec::new(),
-                    position: Some("pkgs/overlays/z/zlib/wasix.nix:12".into()),
+                    position: Some("pkgs/overlays/z/zlib.nix:12".into()),
                     log: Some(LogRef {
                         path: "00112233445566778899.log.gz".into(),
                         bytes: Bytes(20_000),

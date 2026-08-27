@@ -5,18 +5,20 @@ keeping older versions rebuildable, is `docs/registry.md`.
 
 ## Package layout
 
-Each package lives under `pkgs/overlays/<initial>/<name>/`. The loader checks
-the first character and discovers two optional files:
+The loader checks each package's first character. A WASIX-only adaptation with
+no sibling files lives at `pkgs/overlays/<initial>/<name>.nix`. Expand it to
+`pkgs/overlays/<initial>/<name>/wasix.nix` when it needs tests, patches, or
+other inputs. The expanded form discovers two optional files:
 
 - `package.nix` defines the base package in the native set and every WASIX
   profile set;
 - `wasix.nix` specializes the package in WASIX profile sets only.
 
-For a package nixpkgs already provides, omit `package.nix` and adapt the
-inherited package in `wasix.nix`. For a package defined here, put the definition
-and shared `passthru.wasix` policy in `package.nix`, then add `wasix.nix` only
-when the cross build needs further changes. Patches, tests, lockfiles, and
-update scripts stay in the same directory.
+For a package nixpkgs already provides, adapt the inherited package in the flat
+file or `wasix.nix`. These forms are equivalent. For a package defined here, put
+the definition and shared `passthru.wasix` policy in `package.nix`, then add
+`wasix.nix` only when the cross build needs further changes. Patches, tests,
+lockfiles, and update scripts stay in the same directory.
 
 A base package unit uses the package set from its context:
 
@@ -69,9 +71,9 @@ An inherited package is registered and retained like any other project package.
 Move it to an inventory unit once it needs a WASIX-specific transformation.
 
 The regular inventory uses one-character buckets. A WASIX-only adaptation lives
-at `pkgs/overlays/<first-character>/<name>/wasix.nix`; patches and tests remain
-beside it. Version families use one directory whose unit returns several
-derivations with `exposeWasixExtendedPackages`. See `pkgs/overlays/i/icu/`.
+at `pkgs/overlays/<first-character>/<name>.nix` until it needs sibling files.
+Version families use one directory whose unit returns several derivations with
+`exposeWasixExtendedPackages`. See `pkgs/overlays/i/icu/`.
 
 A package file is a function over one argument set:
 
