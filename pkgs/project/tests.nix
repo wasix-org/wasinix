@@ -665,6 +665,7 @@
       maintainers.janeDoe.github = "jane-doe";
     in {
       inherit maintainers;
+      teams.core = [];
       teams.php = [maintainers.janeDoe];
     };
     overlays = projectApi.loadPackageOverlays {
@@ -1601,7 +1602,7 @@ in {
       updateScriptNames = lib.attrNames repositoryScripts;
       updateOwnership = repositoryScripts."packages.native.ownedUpdate".ownership;
       updateSnapshot = {
-        inherit (repository.updates.snapshot) schemaVersion servedVersions;
+        inherit (repository.updates.snapshot) defaultUpdateOwnership schemaVersion servedVersions;
         hookNames = lib.attrNames repository.updates.snapshot.postUpdateHooks;
         scriptNames = lib.attrNames repository.updates.snapshot.updateScripts;
       };
