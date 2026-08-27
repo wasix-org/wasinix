@@ -5,7 +5,7 @@
   harnesses,
   helpers,
 }: let
-  inherit (helpers) gitSetup setupNativeRemote startLighttpdHttp startLighttpdHttps;
+  inherit (helpers) assertFile gitSetup setupNativeRemote startLighttpdHttp startLighttpdHttps;
 in {
   clone-http = harnesses.wasixShell {
     name = "clone-http";
@@ -26,7 +26,7 @@ in {
     };
     script = ''
       git clone http://127.0.0.1:8765/git-http-backend/remote.git cloned
-      cat cloned/hello.txt
+      ${assertFile "cloned/hello.txt" "hello"}
     '';
   };
 
@@ -98,8 +98,9 @@ in {
       '';
     };
     script = ''
+      git config --global http.sslCAInfo "$WASIX_TEST_ROOT/ca.crt"
       git clone https://127.0.0.1:8766/git-http-backend/remote.git cloned
-      cat cloned/hello.txt
+      ${assertFile "cloned/hello.txt" "hello"}
     '';
   };
 
@@ -144,6 +145,7 @@ in {
       '';
     };
     script = ''
+      git config --global http.sslCAInfo "$WASIX_TEST_ROOT/ca.crt"
       git clone https://127.0.0.1:8766/git-http-backend/remote.git work
       cd work
       echo "world" >> hello.txt

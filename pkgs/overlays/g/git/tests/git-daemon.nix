@@ -5,7 +5,7 @@
   harnesses,
   helpers,
 }: let
-  inherit (helpers) gitSetup;
+  inherit (helpers) assertFile gitSetup;
 in {
   clone-net = harnesses.wasixShell {
     name = "clone-net";
@@ -33,7 +33,7 @@ in {
     };
     script = ''
       git clone git://127.0.0.1:9418/source cloned
-      cat cloned/hello.txt
+      ${assertFile "cloned/hello.txt" "hello"}
     '';
   };
 
@@ -92,7 +92,7 @@ in {
       git push origin main
       cd ..
       git clone git://127.0.0.1:9418/remote.git cloned
-      cat cloned/hello.txt
+      ${assertFile "cloned/hello.txt" "hello"}
     '';
   };
 
@@ -112,13 +112,14 @@ in {
       ${pkgs.lib.getExe pkgs.git} daemon --base-path=. --export-all --reuseaddr --port=9418 &
       sleep 1
       git clone git://127.0.0.1:9418/source cloned
-      cat cloned/hello.txt
+      ${assertFile "cloned/hello.txt" "hello"}
       echo "world" >> source/hello.txt
       ${pkgs.lib.getExe pkgs.git} -C source add .
       ${pkgs.lib.getExe pkgs.git} -C source commit -m "second commit"
       cd cloned
       git pull
-      cat hello.txt
+      ${assertFile "hello.txt" ''          hello
+          world''}
     '';
   };
 }

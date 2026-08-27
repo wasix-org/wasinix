@@ -5,7 +5,7 @@
   harnesses,
   helpers,
 }: let
-  inherit (helpers) gitSetup;
+  inherit (helpers) assertFile gitSetup;
 in {
   clone-local = harnesses.wasixShell {
     name = "clone-local";
@@ -21,7 +21,7 @@ in {
       git commit -m "initial commit"
       cd ..
       git clone source cloned
-      cat cloned/hello.txt
+      ${assertFile "cloned/hello.txt" "hello"}
     '';
   };
 
@@ -46,7 +46,7 @@ in {
       git push origin main
       cd ..
       git clone "$WASIX_TEST_ROOT/remote.git" cloned
-      cat cloned/hello.txt
+      ${assertFile "cloned/hello.txt" "hello"}
       cd work
       echo "world" >> hello.txt
       git add .
@@ -54,7 +54,8 @@ in {
       git push origin main
       cd ../cloned
       git pull
-      cat hello.txt
+      ${assertFile "hello.txt" ''          hello
+          world''}
     '';
   };
 }
