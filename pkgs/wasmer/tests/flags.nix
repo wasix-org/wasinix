@@ -1,6 +1,6 @@
 {
+  harnesses,
   pkgs,
-  testLib,
 }: let
   flagProbe = pkgs.writeShellScriptBin "wasinix-harness-flag-probe" ''
     case " $WASMER_FLAGS " in
@@ -16,11 +16,16 @@
       *) ;;
     esac
   '';
-  invocationArgs = testLib.invocationWasmerArgsEnv;
+  flagCommand = {
+    name = "wasinix-harness-flag-probe";
+    entrypoint = "wasinix-harness-flag-probe";
+    artifact.shim = flagProbe;
+  };
+  invocationArgs = harnesses.invocationWasmerArgsEnv;
 in
-  testLib.mkWasixRun {
+  harnesses.hostShell {
     name = "host-shell-invocation-flags";
-    wasixPkgs = [flagProbe];
+    wasixCommands = [flagCommand];
     wasmerArgs = ["--static-flag"];
     script = ''
       ${invocationArgs}=--first-flag wasinix-harness-flag-probe --first-flag --second-flag
