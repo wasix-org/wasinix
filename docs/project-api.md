@@ -376,6 +376,11 @@ request `package` or `exposeExtendedPackage`; doing so is an error. Raw
 extension overlays retain the standard `final: prev:` interface; the discovered
 unit API does not duplicate those names.
 
+`exposeWasixPackage derivation` defines the named attribute only in WASIX
+package sets. It does not require a preceding attribute and does not create a
+native identity. `exposeWasixExtendedPackage attrs` requires and extends the
+preceding attribute.
+
 The singleton helpers preserve the overlay fixpoint: the loader can discover the
 result attribute without forcing the derivation, so that derivation may depend
 on `packages.sameProfile`. Returning a bare derivation is an error. When

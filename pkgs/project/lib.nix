@@ -298,9 +298,7 @@
     exposeWasixPackage = package:
       if (context.scope or "native") == "wasix"
       then exposePackage package
-      else if !previousAvailable
-      then throw "${name}: every project package requires a native package"
-      else exposePackage previous;
+      else {};
     exposeWasixExtendedPackage = attrs:
       if !previousAvailable
       then throw "${name}: exposeWasixExtendedPackage requires a preceding package"
@@ -828,17 +826,14 @@ in rec {
     precedingNames = lib.subtractLists (lib.attrNames packages) expose;
     missingPreceding = lib.filter (name: !(builtins.hasAttr name prev)) precedingNames;
     preceding = lib.genAttrs precedingNames (name: prev.${name});
+    implicitIdentityUnits = lib.filter (unit: builtins.hasAttr unit.name prev) implicitUnits;
     implicitIdentities =
       if scope != "native"
       then {}
-      else
-        lib.genAttrs (map (unit: unit.name) implicitUnits) (name:
-          if !(builtins.hasAttr name prev)
-          then throw "${name}: every project package requires a native package"
-          else prev.${name});
+      else lib.genAttrs (map (unit: unit.name) implicitIdentityUnits) (name: prev.${name});
     ciPackages =
       declaredCiPackages
-      // lib.optionalAttrs (scope == "native") (lib.genAttrs (map (unit: unit.name) implicitUnits) (_name: false));
+      // lib.optionalAttrs (scope == "native") (lib.genAttrs (map (unit: unit.name) implicitIdentityUnits) (_name: false));
     identities = declaredIdentities // implicitIdentities;
     unitOverlays = builtins.foldl' (state: item: let
       identityNames = lib.attrNames (item.result.${identityAttr} or {});

@@ -15,10 +15,12 @@ other inputs. The expanded form discovers two optional files:
 - `wasix.nix` specializes the package in WASIX profile sets only.
 
 For a package nixpkgs already provides, adapt the inherited package in the flat
-file or `wasix.nix`. These forms are equivalent. For a package defined here, put
-the definition and shared `passthru.wasix` policy in `package.nix`, then add
-`wasix.nix` only when the cross build needs further changes. Patches, tests,
-lockfiles, and update scripts stay in the same directory.
+file or `wasix.nix`. These forms are equivalent. A new WASIX-only package uses
+`exposeWasixPackage` there and has no native projection. For a package defined
+in native and WASIX sets, put the definition and shared `passthru.wasix` policy
+in `package.nix`, then add `wasix.nix` only when the cross build needs further
+changes. Patches, tests, lockfiles, and update scripts stay in the same
+directory.
 
 A base package unit uses the package set from its context:
 
@@ -48,6 +50,7 @@ exposeWasixExtendedPackage {
 
 The results are `packages.native.<name>` and `packages.wasix.<profile>.<name>`.
 `packages.wasix.preferred.<name>` remains the convenient canonical WASIX build.
+`exposeWasixPackage` instead defines only the WASIX views.
 
 A package constructed only in the native set uses `exposeNativePackage`. When an
 existing native package only supplies the catalog identity for a differently
@@ -81,7 +84,7 @@ A package file is a function over one argument set:
 {package, packages, exposePackage, exposeWasixExtendedPackage, ...}: ...
 ```
 
-`package` is the preceding value of the discovered attribute.
+`package` is the preceding value of the discovered attribute when one exists.
 `packages.sameProfile.<dep>` is the immediate recursive package set, already
 using the WASIX stdenv for the current profile.
 `packages.wasix.preferred.<tool>` is for runtime tools that may deliberately use
@@ -104,6 +107,9 @@ lists, recursively merges non-derivation attrsets, lets a function transform the
 old value, and replaces other values. It does not choose check policy. Use
 `extendPackage package attrs` directly when a unit needs the intermediate
 derivation.
+
+`exposeWasixPackage derivation` exposes a replacement only in WASIX package
+sets. It neither requires nor creates a native package.
 
 ## A library
 

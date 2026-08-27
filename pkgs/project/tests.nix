@@ -1397,11 +1397,13 @@ in {
       shardedNativeIdentityIsCiPackage = shardedNative.${projectLib.ciPackageAttr}.beta;
       shardedImplicitIdentity = shardedNative.${projectLib.identityAttr}.delta.name;
       shardedImplicitIdentityIsCiPackage = shardedNative.${projectLib.ciPackageAttr}.delta;
+      shardedWasixOnlyAbsentFromNative = !(shardedNative.${projectLib.identityAttr} ? epsilon);
       shardedNativeDoesNotRunWasix = !(shardedNative ? beta);
       shardedWasixBase = shardedWasixBase.alpha.name;
       shardedWasixAlpha = shardedWasix.alpha.variant;
       shardedWasixBeta = shardedWasix.beta.variant;
       shardedWasixDelta = shardedWasix.delta.variant;
+      shardedWasixOnly = shardedWasix.epsilon.name;
       wasmRename = lib.hasInfix "tool.wasm" (projectLib.wasmRename {wasmName = "tool";} (mkPackage {name = "tool";})).postInstall;
       buildEditSupersedesPyPI = pythonBuildEdit.passthru.wasinix.publication.supersedesPyPI;
       testEditSupersedesPyPI = pythonTestEdit.passthru.wasinix.publication.supersedesPyPI or false;
@@ -1433,11 +1435,13 @@ in {
       shardedNativeIdentityIsCiPackage = false;
       shardedImplicitIdentity = "delta-native";
       shardedImplicitIdentityIsCiPackage = false;
+      shardedWasixOnlyAbsentFromNative = true;
       shardedNativeDoesNotRunWasix = true;
       shardedWasixBase = "alpha-base";
       shardedWasixAlpha = "wasix";
       shardedWasixBeta = "wasix";
       shardedWasixDelta = "wasix";
+      shardedWasixOnly = "epsilon-wasix";
       wasmRename = true;
       buildEditSupersedesPyPI = true;
       testEditSupersedesPyPI = false;
@@ -1721,6 +1725,12 @@ in {
         selected = shardedProject.ci.jobs ? "packages.native.beta";
         wasixSelected = shardedProject.ci.jobs ? "packages.wasix.default.beta";
       };
+      wasixOnlyUnit = {
+        nativeAbsent = !(shardedProject.packages.native ? epsilon);
+        wasixName = shardedProject.packages.wasix.default.epsilon.name;
+        preferredName = shardedProject.packages.wasix.preferred.epsilon.name;
+        selected = shardedProject.ci.jobs ? "packages.wasix.default.epsilon";
+      };
       selectorsCoverJobs =
         lib.sort builtins.lessThan (lib.unique (lib.concatLists (lib.attrValues project.ci.catalog.selectors.sets)))
         == lib.sort builtins.lessThan (lib.attrNames project.ci.jobs);
@@ -1859,6 +1869,12 @@ in {
         cataloged = true;
         selected = false;
         wasixSelected = true;
+      };
+      wasixOnlyUnit = {
+        nativeAbsent = true;
+        wasixName = "epsilon-wasix";
+        preferredName = "epsilon-wasix";
+        selected = true;
       };
       selectorsCoverJobs = true;
       brokenCiAbsent = true;
