@@ -4429,7 +4429,8 @@ mod render {
     use crate::ci::events::Event;
     use crate::ci::facts::{Diagnostic, DiagnosticSeverity, TestOutcome, TestResult};
     use crate::cli::render::{
-        LineRenderer, ReportView, failure_summary, report_lines, report_title, test_summary,
+        LineRenderer, ReportView, failure_summary, rebuild_summary, report_lines, report_title,
+        test_summary,
     };
     use crate::support::atoms::{Bytes, DurationSecs, JobAddr, JobStatus, RunState, TaskStatus};
 
@@ -4478,6 +4479,16 @@ mod render {
                 "Inspect failures: wasinix run failures /tmp/run",
                 "Inspect logs: wasinix run logs /tmp/run",
             ]
+        );
+    }
+
+    #[test]
+    fn a_comparison_reports_grouped_rebuild_counts() {
+        let report = scenarios::diff_green().0;
+
+        assert_eq!(
+            rebuild_summary(&report).as_deref(),
+            Some("Rebuilds: 1 package · 3 tests")
         );
     }
 

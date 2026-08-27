@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use indicatif::{ProgressBar, ProgressStyle};
 
+use crate::ci::compare::rebuild_counts;
 use crate::ci::events::{self, Event, ProgressSink};
 use crate::ci::facts::{Diagnostic, DiagnosticSeverity, FailureCause, TestOutcome, TestResult};
 use crate::ci::report::{Conclusion, Report};
@@ -639,6 +640,31 @@ pub(crate) fn failure_summary(report: &Report) -> Option<String> {
     (!parts.is_empty()).then(|| format!("Jobs: {}", crate::support::ui::counts(&parts)))
 }
 
+pub(crate) fn rebuild_summary(report: &Report) -> Option<String> {
+    let [comparison] = report.comparisons.as_slice() else {
+        return None;
+    };
+    let counts = rebuild_counts(comparison.eval.as_ref()?)?;
+    let mut parts = counts
+        .categories
+        .into_iter()
+        .map(|(category, count)| {
+            let label = match (category, count) {
+                (crate::ci::compare::RebuildCategory::Packages, 1) => "package",
+                (crate::ci::compare::RebuildCategory::Tests, 1) => "test",
+                (crate::ci::compare::RebuildCategory::Artifacts, 1) => "artifact",
+                (crate::ci::compare::RebuildCategory::Python, _) => "Python",
+                _ => category.label(),
+            };
+            format!("{count} {label}")
+        })
+        .collect::<Vec<_>>();
+    if counts.native > 0 {
+        parts.push(format!("{} native", counts.native));
+    }
+    (!parts.is_empty()).then(|| format!("Rebuilds: {}", crate::support::ui::counts(&parts)))
+}
+
 pub(crate) fn bisect_evidence_lines(report: &crate::nix::bisect::Report) -> Vec<String> {
     let Some(evidence) = report.boundary().and_then(|test| test.evidence.as_ref()) else {
         return Vec::new();
@@ -741,6 +767,9 @@ pub(crate) fn report_lines(report: &Report, view: ReportView<'_>, verbose: bool)
         }
     }
     if let Some(line) = failure_summary(report) {
+        lines.push(line);
+    }
+    if let Some(line) = rebuild_summary(report) {
         lines.push(line);
     }
     if verbose && !report.log_retention.is_empty() {
