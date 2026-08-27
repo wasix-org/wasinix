@@ -27,6 +27,7 @@ leaf = [
   "pkgs/toolchain/tests/wide-arithmetic-repro.sh",
   "pkgs/overlays/a/anybuild/tests/check-cross-install.py",
   "pkgs/overlays/a/anybuild/tests/make-mirror-index.py",
+  "pkgs/overlays/p/php/tests/compare-upstream-results.sh",
   "pkgs/overlays/p/python3/tests/ctypes-findlib-check.py",
   "pkgs/overlays/p/python3/tests/ipv6-bind-check.py",
   "pkgs/overlays/p/python3/tests/mp-context-check.py",

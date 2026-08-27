@@ -139,7 +139,7 @@ pub fn load(repo: &Path) -> Result<Snapshot> {
 
 #[cfg(test)]
 mod tests {
-    use super::Snapshot;
+    use super::{SCHEMA, Snapshot};
 
     fn snapshot(schema_version: u64) -> Snapshot {
         Snapshot {
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn cached_update_state_rejects_an_unknown_schema() {
-        assert!(snapshot(2).validate().is_ok());
+        assert!(snapshot(SCHEMA).validate().is_ok());
         assert!(snapshot(1).validate().is_err());
     }
 
@@ -175,7 +175,7 @@ mod tests {
         let tree = crate::support::git::git(&repo, &["rev-parse", "HEAD^{tree}"]).unwrap();
         let job = crate::support::atoms::JobAddr("checks.fixture".into());
         let published = crate::ci::evalmap::EvalMap {
-            update_snapshot: Some(snapshot(1)),
+            update_snapshot: Some(snapshot(SCHEMA)),
             status: Some([(job.clone(), crate::support::atoms::JobStatus::Success)].into()),
             coverage: vec![job],
             ..Default::default()
@@ -186,6 +186,6 @@ mod tests {
         let cached = super::cached(&repo, &format!("{}/{{tree}}.json", maps.display()))
             .unwrap()
             .unwrap();
-        assert_eq!(cached, snapshot(1));
+        assert_eq!(cached, snapshot(SCHEMA));
     }
 }

@@ -6691,8 +6691,9 @@ mod corpus {
             for entry in std::fs::read_dir(&dir).unwrap().flatten() {
                 let path = entry.path();
                 let relative = path.strip_prefix(&root).unwrap();
-                if path.is_dir() {
+                if entry.file_type().unwrap().is_dir() {
                     if relative == std::path::Path::new(".git")
+                        || relative == std::path::Path::new(".direnv")
                         || relative == std::path::Path::new("tools/wasinix/target")
                     {
                         continue;
