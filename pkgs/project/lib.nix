@@ -431,7 +431,10 @@
         inherit name;
         directory = null;
         file = bucketDir + "/${name}.nix";
-        specializationFile = null;
+        specializationFile =
+          if lane == "packages"
+          then bucketDir + "/${name}.nix"
+          else null;
         kind =
           if lane == "packages"
           then "wasix"

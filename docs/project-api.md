@@ -258,6 +258,7 @@ pkgs/
 │   └── extension.nix
 ├── overlays/
 │   ├── a/
+│   │   ├── aprutil.nix
 │   │   └── example/
 │   │       ├── package.nix
 │   │       └── wasix.nix
@@ -276,20 +277,21 @@ Toolchain profile integration remains under `toolchain/`; buildable compiler and
 sysroot packages use the same package inventory as everything else.
 
 Discovery follows `pkgs/by-name`: one single-character bucket and then one
-directory per package. `package.nix` is the base unit and `wasix.nix` is an
-optional cross-only specialization. Other files and directories are inputs of
-that package. The declaration's `inherited` attribute set registers preceding
-nixpkgs packages that need no package unit; each value becomes that package's
-`passthru.wasix` declaration. An inherited name cannot also have an inventory
-unit and must exist in the preceding set.
+attribute per package. A flat `<name>.nix` is equivalent to `<name>/wasix.nix`.
+Use the directory form when the package also has a `package.nix` base unit or
+owns other files. The declaration's `inherited` attribute set registers
+preceding nixpkgs packages that need no package unit; each value becomes that
+package's `passthru.wasix` declaration. An inherited name cannot also have an
+inventory unit and must exist in the preceding set.
 
 `wasix.nix` is instantiated only when the actual package-set host platform is
 WASIX, including across nixpkgs' build-package splices. `package.nix` is
 instantiated in native and WASIX sets. A package that must only be constructed
 natively uses `exposeNativePackage` or `exposeNativeExtendedPackage`.
 `exposeNativePackageIdentity` registers a native catalog subject without adding
-another CI build of that derivation. `recipe.nix` and loose package files are
-rejected. Python uses the same bucket layout and permits only `package.nix`.
+another CI build of that derivation. `recipe.nix` is rejected. Python uses the
+same bucket layout; its flat file and directory `package.nix` forms are
+equivalent.
 
 The loader performs only these jobs:
 
@@ -344,7 +346,7 @@ discovered unit API does not duplicate those names.
 A WASIX adaptation uses the corresponding cross-only helper:
 
 ```nix
-# overlays/z/zlib/wasix.nix
+# overlays/z/zlib.nix
 {
   exposeWasixExtendedPackage,
   packages,
