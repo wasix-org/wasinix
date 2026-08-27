@@ -12,7 +12,6 @@
     ./wasmer-path-rename-hardlink.patch
     ./wasmer-fd-readdir-stable-cookie.patch
     ./wasmer-fd-filestat-stale-size.patch
-    ./wasmer-isatty-non-tty-unknown.patch
     ./wasmer-forward-term-on-tty.patch
     ./wasmer-dev-fd.patch
     ./wasmer-epoll-stale-handler-deadlock.patch
