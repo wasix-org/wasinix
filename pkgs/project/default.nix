@@ -493,9 +493,12 @@ in rec {
       };
 
       compatibilityFor = name: let
+        nativeRegistered = builtins.hasAttr name (nativeRaw.${projectLib.registryAttr} or {});
         nativePackage =
-          (nativeRaw.${projectLib.identityAttr} or {}).${name}
-          or (nativeRaw.${name} or null);
+          if !nativeRegistered
+          then null
+          else (nativeRaw.${projectLib.identityAttr} or {}).${name}
+            or nativeRaw.${name};
         nativeCompatibility =
           (nativeRaw.${
               projectLib.compatibilityAttr
@@ -508,11 +511,15 @@ in rec {
             then {}
             else ((nativePackage.passthru or {}).wasix or {})
           );
-        profile = builtins.head profileNames;
-        profileSet = wasixRaw.${profile};
+        profile =
+          lib.findFirst (
+            candidate: builtins.hasAttr name (wasixRaw.${candidate}.${projectLib.registryAttr} or {})
+          )
+          null
+          profileNames;
         wasixCompatibility =
-          if builtins.hasAttr name (profileSet.${projectLib.registryAttr} or {})
-          then (((registeredPackageFor profileSet name).passthru or {}).wasix or {})
+          if profile != null
+          then (((registeredPackageFor wasixRaw.${profile} name).passthru or {}).wasix or {})
           else {};
       in
         wasixCompatibility // nativeCompatibility;
@@ -757,12 +764,17 @@ in rec {
         allExtensions))
       pythonSpecs;
 
+      registeredWasixNames = lib.unique (lib.concatMap projectLib.registeredNames (lib.attrValues wasixRaw));
+      packageNames = lib.unique (projectLib.registeredNames nativeRaw ++ registeredWasixNames);
       expectedWasixNames = profile:
-        lib.filter (name: builtins.elem profile (supportedProfilesFor name))
-        (projectLib.registeredNames nativeRaw);
+        lib.sort builtins.lessThan (
+          lib.filter (name: builtins.elem profile (supportedProfilesFor name)) packageNames
+        );
       wasixShapeMismatches = lib.concatMap (profile: let
         expected = expectedWasixNames profile;
-        actual = lib.filter (name: builtins.elem profile (supportedProfilesFor name)) (projectLib.registeredNames wasixRaw.${profile});
+        actual = lib.sort builtins.lessThan (
+          lib.filter (name: builtins.elem profile (supportedProfilesFor name)) (projectLib.registeredNames wasixRaw.${profile})
+        );
         missing = lib.subtractLists actual expected;
         unexpected = lib.subtractLists expected actual;
       in

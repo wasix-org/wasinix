@@ -17,7 +17,9 @@
 {
   exposeWasixPackage,
   extendPackage,
+  package,
   packages,
+  profileSets,
   wasmRename,
 }:
 exposeWasixPackage (
@@ -38,7 +40,7 @@ exposeWasixPackage (
     # overrideScope has to come before appendPatches: the other order dies in this
     # spliced cross scope with "expected a set but found a function", though the
     # same chain is fine in a plain nixpkgs cross set.
-    configured = packages.sameProfile.nixVersions.latest.overrideScope (_: prevScope: {
+    configured = package.overrideScope (_: prevScope: {
       nix-expr = prevScope.nix-expr.override {enableGC = false;};
       nix-store = prevScope.nix-store.override {
         withAWS = false;
@@ -82,7 +84,6 @@ exposeWasixPackage (
       # Hydra takes the CLI and component set through nixVersions; keep that
       # versioned pair here so consumers cannot mix patched and stock Nix.
       passthru = {
-        wasix.supportedProfiles = ["eh" "exnrefEh"];
         inherit nixComponents;
         nixVersions =
           packages.sameProfile.nixVersions
@@ -95,6 +96,11 @@ exposeWasixPackage (
           update.notes = [
             {message = "recheck the vendored WASI portability patches against the new Nix release";}
           ];
+        };
+        wasix = {
+          # C++ exceptions rule out the no-EH profile; PIC is untested.
+          supportedProfiles =
+            builtins.filter (p: builtins.elem p profileSets.withoutPic) profileSets.withEh;
         };
         # nixpkgs appends "+<n>" for the patches we add, which is not semver.
         # The patch count is a rebuild of the same upstream release, so it belongs

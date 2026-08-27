@@ -422,12 +422,12 @@
         py313 = {
           pkgs = wasixRaw.exnrefEhpic;
           interpreterPackage = "python313";
-          packageSet = wasixRaw.exnrefEhpic.${projectLib.identityAttr}.python313.pkgs;
+          packageSet = wasixRaw.exnrefEhpic.python313.pkgs;
         };
         py314 = {
           pkgs = wasixRaw.exnrefEhpic;
           interpreterPackage = "python314";
-          packageSet = wasixRaw.exnrefEhpic.${projectLib.identityAttr}.python314.pkgs;
+          packageSet = wasixRaw.exnrefEhpic.python314.pkgs;
           preferred = true;
         };
       };

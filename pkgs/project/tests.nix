@@ -486,6 +486,7 @@
     defaultForwardEnv = ["HOME"];
     defaultTimeout = 300;
     defaultWasixTimeout = 600;
+    invocationWasmerArgsEnv = "WASINIX_WASMER_ARGS";
     normalizers = {};
     mkScriptComparison = args:
       mkPackage {
@@ -636,6 +637,7 @@
         name = "base-replacement";
         version = "0.1";
       };
+      wasixOnly = throw "an unregistered inherited package must not be forced";
       writeText = name: text:
         mkPackage {
           inherit name;
@@ -659,36 +661,43 @@
       python = ./tests/python-history.json;
     };
     overlays = {
-      packages = final: previous: {
-        core = projectLib.extendPackage previous.core {
-          passthru.wasinix = {
-            overrides = "wasinix";
-            checks.probe = true;
-            ci.profiles = ["default" "alternate"];
+      packages = final: previous:
+        {
+          core = projectLib.extendPackage previous.core {
+            passthru.wasinix = {
+              overrides = "wasinix";
+              checks.probe = true;
+              ci.profiles = ["default" "alternate"];
+            };
+          };
+          consumer = mkPackage {
+            name = "consumer-${final.profile}";
+            passthru.wasinix.checks.probe = true;
+          };
+          "dot.name" = mkPackage {name = "dot-name";};
+          limited = mkPackage {
+            name = "limited-${final.profile}";
+            passthru.wasix.supportedProfiles = ["alternate"];
+          };
+          ciNarrow = mkPackage {
+            name = "ci-narrow-${final.profile}";
+            passthru.wasinix.ci.profiles = ["default"];
+          };
+          broken = mkPackage {
+            name = "broken-${final.profile}";
+            meta.broken = true;
+          };
+          plumbing = mkPackage {
+            name = "plumbing";
+            passthru.wasinix.catalog = false;
+          };
+        }
+        // lib.optionalAttrs (previous.profile != "native") {
+          wasixOnly = mkPackage {
+            name = "wasix-only-${final.profile}";
+            passthru.wasix.supportedProfiles = ["default" "alternate"];
           };
         };
-        consumer = mkPackage {
-          name = "consumer-${final.profile}";
-          passthru.wasinix.checks.probe = true;
-        };
-        "dot.name" = mkPackage {name = "dot-name";};
-        limited = mkPackage {
-          name = "limited-${final.profile}";
-          passthru.wasix.supportedProfiles = ["alternate"];
-        };
-        ciNarrow = mkPackage {
-          name = "ci-narrow-${final.profile}";
-          passthru.wasinix.ci.profiles = ["default"];
-        };
-        broken = mkPackage {
-          name = "broken-${final.profile}";
-          meta.broken = true;
-        };
-        plumbing = mkPackage {
-          name = "plumbing";
-          passthru.wasinix.catalog = false;
-        };
-      };
       inherit
         ((projectApi.loadPackageOverlays {
           python = ./tests/python-units;
@@ -1264,11 +1273,13 @@
     "packages.wasix.alternate.core"
     ''packages.wasix.alternate.core.versions."0.9"''
     "packages.wasix.alternate.limited"
+    "packages.wasix.alternate.wasixOnly"
     ''packages.wasix.default."dot.name"''
     "packages.wasix.default.ciNarrow"
     "packages.wasix.default.consumer"
     "packages.wasix.default.core"
     ''packages.wasix.default.core.versions."0.9"''
+    "packages.wasix.default.wasixOnly"
     "tests.artifacts.bundle.consumer.packaged"
     "tests.packages.native.consumer.probe"
     "tests.packages.native.core.probe"
@@ -1300,6 +1311,7 @@
     "packages.wasix.alternate.limited"
     "packages.wasix.alternate.topOwned"
     "packages.wasix.alternate.uses-inherited"
+    "packages.wasix.alternate.wasixOnly"
     ''packages.wasix.default."dot.name"''
     "packages.wasix.default.broken"
     "packages.wasix.default.ciNarrow"
@@ -1307,6 +1319,7 @@
     "packages.wasix.default.core"
     "packages.wasix.default.topOwned"
     "packages.wasix.default.uses-inherited"
+    "packages.wasix.default.wasixOnly"
   ];
   expectedTestNames = [
     "tests.artifacts.bundle.consumer.packaged"
@@ -1658,6 +1671,7 @@ in {
       coreLineage = project.packages.wasix.default.core.passthru.wasinix.lineage;
       preferredProfile = project.packages.wasix.preferred.core.name;
       limitedPreferred = project.packages.wasix.preferred.limited.name;
+      wasixOnlyName = project.packages.wasix.default.wasixOnly.name;
       consumerName = project.packages.wasix.alternate.consumer.name;
       inheritedDependencyName = project.packages.wasix.default.uses-inherited.name;
       focusedHelper = project.packages.wasix.default.uses-inherited.passthru.usedFocusedHelper;
@@ -1780,12 +1794,13 @@ in {
       nativeInterfaceName = "core";
       wasixViewNames = ["alternate" "default" "preferred"];
       topLevelPreferredAbsent = true;
-      defaultNames = ["broken" "ciNarrow" "consumer" "core" "dot.name" "topOwned" "uses-inherited"];
-      alternateNames = ["broken" "ciNarrow" "consumer" "core" "dot.name" "limited" "topOwned" "uses-inherited"];
+      defaultNames = ["broken" "ciNarrow" "consumer" "core" "dot.name" "topOwned" "uses-inherited" "wasixOnly"];
+      alternateNames = ["broken" "ciNarrow" "consumer" "core" "dot.name" "limited" "topOwned" "uses-inherited" "wasixOnly"];
       coreSource = "consumer";
       coreLineage = ["wasinix" "consumer"];
       preferredProfile = "core";
       limitedPreferred = "limited-alternate";
+      wasixOnlyName = "wasix-only-default";
       consumerName = "consumer-alternate";
       inheritedDependencyName = "uses-inherited";
       focusedHelper = true;
