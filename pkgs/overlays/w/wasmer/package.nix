@@ -9,7 +9,6 @@
     ./wasmer-futex-wake-lost-wakeup.patch
     ./wasmer-fd-sync-rights-durability.patch
     ./wasmer-fd-sync-directory.patch
-    ./wasmer-path-rename-hardlink.patch
     ./wasmer-fd-readdir-stable-cookie.patch
     ./wasmer-fd-filestat-stale-size.patch
     ./wasmer-isatty-non-tty-unknown.patch
