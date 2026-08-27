@@ -127,7 +127,8 @@
   },
   "google-cloud-auth": {
     "1.14.0": "sha256-mqIFP9ACvWjfjwv6RtROgPIPjnNqMOM1+eY6qRkGTmk=",
-    "1.15.0": "sha256-8bKh0AXEdg+b13qwuSYP2ACiOuVJfmnvbTASg/xkDHo="
+    "1.15.0": "sha256-8bKh0AXEdg+b13qwuSYP2ACiOuVJfmnvbTASg/xkDHo=",
+    "1.16.0": "sha256-2Kyvc3gDJQixSbrhvAG78GGoZ22vo1VXyB6Jti9lVh4="
   },
   "h2": {
     "0.3.21": "sha256-qeaXCzeqlZYkW7FaBQFOLnj0XJaFlN2OFxpGRZetTzE="
