@@ -1,12 +1,18 @@
 # Program ncurses: builds tic/clear/reset/tput (--with-progs); ships only
 # clear/reset/tput as *.wasm. Distinct from the `ncurses` library package.
 {
-  exposeWasixExtendedPackage,
+  exposeWasixPackage,
+  extendPackage,
   packages,
 }: let
+  base = packages.sameProfile.ncurses.override {
+    enableStatic = true;
+    withCxx = false;
+  };
   buildCc = packages.sameProfile.lib.getExe' packages.sameProfile.buildPackages.stdenv.cc "cc";
 in
-  exposeWasixExtendedPackage {
+  exposeWasixPackage (extendPackage base {
+    pname = "ncurses-progs";
     passthru.wasinix.shipped = true;
     # Replace configureFlags (not append): the override drops withCxx=false's flag,
     # so use a function to override the old value outright.
@@ -66,4 +72,4 @@ in
       fi
     '';
     postFixup = _: "";
-  }
+  })

@@ -814,7 +814,7 @@ in rec {
           python = pythonRaw;
         };
       };
-      allWasixNames = lib.filter (name: supportedProfilesFor name != []) (projectLib.registeredNames nativeRaw);
+      allWasixNames = lib.filter (name: supportedProfilesFor name != []) registeredWasixNames;
       preferredProfileNameFor = name: let
         defaultProfile = profiles.defaultProfileName or null;
         declaredProfile = preferredProfileFor name;
