@@ -360,7 +360,7 @@ pub fn run(request: Request<'_>) -> Result<CommandStatus> {
     // The builder's own store URL: a configured store_url override applies
     // here too, not only to the store route.
     let host_store = request.builder.store();
-    let launcher = crate::support::env::launcher();
+    let launcher = crate::support::env::launcher()?;
     let mut paths = vec![source.clone()];
     if let Some(path) = &launcher {
         paths.push(path.display().to_string());
