@@ -62,6 +62,14 @@ fn matching_check(
     }))
 }
 
+fn updated_at(check: Option<&Value>, run: &Value) -> Result<String> {
+    check
+        .and_then(|check| check["updated_at"].as_str())
+        .or_else(|| run["updated_at"].as_str())
+        .map(str::to_string)
+        .ok_or_else(|| Error::Failure("GitHub response has no updated_at".into()))
+}
+
 pub fn run(repo: &std::path::Path, command: PullRequestCommand) -> Result<CommandStatus> {
     let PullRequestCommand::Watch {
         pull_request,
@@ -109,11 +117,7 @@ pub fn run(repo: &std::path::Path, command: PullRequestCommand) -> Result<Comman
             ui::result(format!("{run_url}: incomplete"));
             return Ok(CommandStatus::from_code(2));
         }
-        let updated = check
-            .as_ref()
-            .map(|check| &check["updated_at"])
-            .unwrap_or(&run["updated_at"]);
-        let updated = string(updated, &[])?;
+        let updated = updated_at(check.as_ref(), &run)?;
         let updated = time::parse_utc(&updated)
             .ok_or_else(|| Error::Failure(format!("invalid GitHub timestamp {updated:?}")))?;
         if time::unix_secs().saturating_sub(updated) > stale_after {
@@ -129,7 +133,7 @@ pub fn run(repo: &std::path::Path, command: PullRequestCommand) -> Result<Comman
 mod tests {
     use serde_json::{Value, json};
 
-    use super::{Api, Result, current_run, matching_check};
+    use super::{Api, Result, current_run, matching_check, updated_at};
 
     struct FakeApi(Vec<(&'static str, Value)>);
 
@@ -184,6 +188,18 @@ mod tests {
             .unwrap()
             .unwrap()["id"],
             3
+        );
+    }
+
+    #[test]
+    fn updated_at_uses_the_build_run_when_the_progress_check_has_no_timestamp() {
+        assert_eq!(
+            updated_at(
+                Some(&json!({ "updated_at": null })),
+                &json!({ "updated_at": "2026-08-26T23:23:09Z" }),
+            )
+            .unwrap(),
+            "2026-08-26T23:23:09Z"
         );
     }
 }
