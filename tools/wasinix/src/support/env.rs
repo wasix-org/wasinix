@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::support::error::{Result, request_error};
+use crate::support::error::{Result, io, request_error};
 
 fn text(name: &str) -> Result<Option<String>> {
     match std::env::var(name) {
@@ -160,8 +160,10 @@ pub fn capability_flake() -> Option<PathBuf> {
     path("WASINIX_CAPABILITY_FLAKE")
 }
 
-pub fn launcher() -> Option<PathBuf> {
+pub fn launcher() -> Result<Option<PathBuf>> {
     path("WASINIX_LAUNCHER")
+        .map(|path| std::fs::canonicalize(&path).map_err(|error| io(&path, error)))
+        .transpose()
 }
 
 pub fn project() -> Result<Option<String>> {
@@ -324,5 +326,26 @@ mod tests {
         assert!(super::flag("WASINIX_TEST_FLAG").is_err());
         std::env::remove_var("WASINIX_TEST_FLAG");
         assert!(!super::flag("WASINIX_TEST_FLAG").unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn launcher_resolves_a_result_symlink_to_its_store_path() {
+        let scratch = crate::support::fs::Scratch::create("wasinix-launcher-test").unwrap();
+        let target = scratch.path().join("store-launcher");
+        let link = scratch.path().join("result");
+        std::fs::create_dir(&target).unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        let previous = std::env::var_os("WASINIX_LAUNCHER");
+        std::env::set_var("WASINIX_LAUNCHER", &link);
+        let resolved = super::launcher().unwrap();
+        if let Some(value) = previous {
+            std::env::set_var("WASINIX_LAUNCHER", value);
+        } else {
+            std::env::remove_var("WASINIX_LAUNCHER");
+        }
+
+        assert_eq!(resolved.as_deref(), Some(target.as_path()));
     }
 }
