@@ -18,7 +18,12 @@ exposePackage (
 
     postPatch = ''
       substituteInPlace pyproject.toml \
-        --replace-fail '"langflow-base~=1.12.0",' '"langflow-base",'
+        --replace-fail '"langflow-base~=1.12.0",' '"langflow-base",' \
+        --replace-fail '"langflow-base[audio]~=1.12.0",' '"langflow-base[audio]",' \
+        --replace-fail '"langflow-base[sandbox]~=1.12.0",' '"langflow-base[sandbox]",' \
+        --replace-fail '"langflow-base[postgresql]~=1.12.0",' '"langflow-base[postgresql]",' \
+        --replace-fail '"langflow-base[pgvector]~=1.12.0",' '"langflow-base[pgvector]",' \
+        --replace-fail '"langflow-base[opensearch]~=1.12.0",' '"langflow-base[opensearch]",'
     '';
 
     pythonRemoveDeps = [
