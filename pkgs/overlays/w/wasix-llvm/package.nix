@@ -76,7 +76,6 @@ exposePackage (packageSet.callPackage ({pkgs}: let
       version = llvmVersion;
       src = monorepoSrc;
       inherit monorepoSrc;
-      doCheck = false;
     })).overrideScope
     (
       final: prev: {
@@ -86,9 +85,17 @@ exposePackage (packageSet.callPackage ({pkgs}: let
         # release_version above is untouched by this). `pos` restamps
         # meta.position to this file, where the pin lives (mkDerivation derives
         # meta.position from pos, clobbering a meta.position attr).
-        libllvm = prev.libllvm.overrideAttrs (_old: {
+        libllvm = prev.libllvm.overrideAttrs (old: {
           inherit version;
           __intentionallyOverridingVersion = true;
+          # llvm-exegesis measures a snippet through the perf counters from
+          # lit.local.cfg, so discovering these tests hangs where the PMU
+          # exposes no LBR sampling.
+          postPatch =
+            old.postPatch
+            + ''
+              rm -rf test/tools/llvm-exegesis
+            '';
         });
         lld = prev.lld.overrideAttrs (_old: {
           inherit version;

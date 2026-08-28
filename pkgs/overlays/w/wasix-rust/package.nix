@@ -192,7 +192,13 @@ in
     inherit version src;
 
     patches =
-      [./wasix-cc-linker.patch]
+      [
+        ./wasix-cc-linker.patch
+        # The wasm feature baseline belongs in the target spec, not in
+        # RUSTFLAGS: it has to reach builds that never route through
+        # cargo-wasix, such as maturin's own `cargo rustc`.
+        ./wasix-target-features.patch
+      ]
       ++ optionals hostedOnWasix [
         ./wasix-host-tools.patch
         ./wasix-process-fds.patch
