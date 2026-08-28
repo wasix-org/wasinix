@@ -8,6 +8,14 @@
 }:
 exposePackage (packageSet.callPackage ({wasix-llvm, ...}:
     wasix-llvm.passthru.llvm.flang-unwrapped.overrideAttrs (old: {
+      # Flang's largest translation units exhaust the builder when Ninja uses
+      # all cores, so only compile rules use a bounded pool.
+      cmakeFlags =
+        (old.cmakeFlags or [])
+        ++ [
+          "-DCMAKE_JOB_POOLS=compile=8"
+          "-DCMAKE_JOB_POOL_COMPILE=compile"
+        ];
       # flang derives the target ABI from the host: no wasm case in Target.cpp, i64
       # _FortranA* lengths from RTBuilder.h, and a 3-arg main WASI's crt never calls.
       patches =
