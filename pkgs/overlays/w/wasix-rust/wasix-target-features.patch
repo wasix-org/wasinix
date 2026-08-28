@@ -1,0 +1,15 @@
+diff --git a/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs b/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs
+--- a/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs
++++ b/compiler/rustc_target/src/spec/targets/wasm32_wasmer_wasi.rs
+@@ -170,8 +170,9 @@
+     options.entry_name = "__main_void".into();
+ 
+     // WASIX enables more WASM features
+-    options.features =
+-        "+bulk-memory,+atomics,+mutable-globals,+sign-ext,+nontrapping-fptoint".into();
++    options.features = "+bulk-memory,+atomics,+mutable-globals,+sign-ext,+nontrapping-fptoint,\
++                        +simd128,+relaxed-simd,+extended-const,-wide-arithmetic"
++        .into();
+ 
+     Target {
+         llvm_target: "wasm32-wasi".into(),
