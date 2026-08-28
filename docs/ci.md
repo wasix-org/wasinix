@@ -250,3 +250,55 @@ one sanitizer at the render edge: fences sized past the payload, HTML and cell
 escaping that neutralizes line breaks and backslashes. A managed surface is one
 marked comment, upserted by an author-checked first-match lookup, so a marker
 planted in someone else's comment is never adopted.
+
+## The remote builder in CI
+
+The EC2 nix builder (`docs/building.md`) stops itself when it has been idle for
+fifteen minutes: it is a 32-core box whose value is its warm store, so it is
+paid for only while it builds. A workflow that wants it must start it first.
+
+`.github/actions/wake-builder` does that in one step. It exchanges the job's
+GitHub OIDC token for an AWS role, starts the instance, and returns once sshd
+answers — the readiness signal that matters, since the build is an `ssh-ng`
+connection. It leaves the private key and `known_hosts` on disk and names both
+in its outputs, so the step that builds can point `--on` at the box.
+
+```yaml
+permissions:
+  id-token: write
+
+jobs:
+  build:
+    environment: nixbuilds # the role trusts this and nothing else
+    steps:
+      - uses: ./.github/actions/wake-builder
+        with:
+          role-to-assume: ${{ vars.NIXBUILDS_WAKE_ROLE_ARN }}
+          instance-id: ${{ vars.NIXBUILDS_INSTANCE_ID }}
+          host: ${{ vars.NIXBUILDS_HOST }}
+          host-key: ${{ vars.NIXBUILDS_HOST_KEY }}
+          ssh-key: ${{ secrets.NIXBUILDS_SSH_KEY }}
+```
+
+`environment: nixbuilds` is the access control, not a label. The role in AWS
+trusts exactly one subject — `repo:wasix-org/wasinix:environment:nixbuilds` —
+so a job without that line cannot assume it whatever branch it runs on, and a
+fork pull request cannot at all, because forks are never issued an OIDC token.
+Anything put on the environment as a required reviewer therefore gates the
+builder too.
+
+No AWS key is stored anywhere, and the role can do exactly one thing:
+`ec2:StartInstances` on that single instance. It cannot look the machine up,
+which is why the address is configuration here — the box holds an Elastic IP
+and keeps it across stops.
+
+`wake-builder.yml` runs the same step on `workflow_dispatch` and reports what
+woke up. Use it to check the path, or to warm the box before a session.
+
+Three of the four `vars` come from `infrastructure/aws/clusters/aux`:
+`terraform output -json nixbuilds_wake` prints the role ARN, the instance id
+and the host. `NIXBUILDS_HOST_KEY` is the builder's own public key, read off
+the box (`ssh-keyscan` against it once, or `/etc/ssh/ssh_host_ed25519_key.pub`);
+omitting it makes the first connection trust whatever key answers.
+`NIXBUILDS_SSH_KEY` is the private key the builder accepts, and is the one
+value that belongs in secrets rather than vars.
