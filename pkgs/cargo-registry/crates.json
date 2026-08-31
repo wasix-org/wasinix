@@ -207,7 +207,8 @@
     "550.0.0": "sha256-W1+AMbPhr3unL3O0faGiAH5HZt9j71QQHlMW2Ibkay8=",
     "550.1.0": "sha256-v99IVqDBJpha6w47QW0NY71VCpWFGMKVtNi2j0BglyU=",
     "550.1.1": "sha256-RmVDck5RePuM9QT1WkrrEHasVHC6PXnte8yy43wuKeQ=",
-    "551.0.0": "sha256-1QgyshrTWUE340z2zV77YFYD8aGFauOYVqjaufLgBRI="
+    "551.0.0": "sha256-1QgyshrTWUE340z2zV77YFYD8aGFauOYVqjaufLgBRI=",
+    "551.0.1": "sha256-Frd7L0CMOXe9Q/Pw5AKidCSZzcxR24Mmhjx6QLWyLTU="
   },
   "mio": {
     "0.8.1": "sha256-eXI3wywDWVCOWlK64MJ73ppnInEFSgKv/F4XGK+/SHk=",
