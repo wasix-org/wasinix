@@ -3,15 +3,14 @@
 
 Copies new wheels from a freshly built structured-project registry
 into the S3-compatible volume behind the index app and regenerates the index
-HTML over everything published so far. Published wheel filenames are
-immutable: a changed build with an existing filename stays unpublished until a
-release-revisions.json bump gives it a new name, and nothing is ever deleted, so old
-lockfiles keep resolving.
+HTML over everything published so far that the overlay index owns. Published
+wheel filenames are immutable: a changed build with an existing filename stays
+unpublished until a release-revisions.json bump gives it a new name, and nothing
+is ever deleted, so old lockfiles keep resolving.
 
 Volume layout (= the web root served by the app):
-  index.html, simple/...     as in the nix output
-  all/simple/...             the same listing over every wheel published
-  packages.json              flat list of everything published so far
+  index.html, simple/...     native and WASIX-modified projects
+  packages.json              flat list of wheels served through simple/
   manifests/<wheel>.json     {project, sha256, metadata_sha256, requires_python,
                               size, published (UTC date, frozen at first publish),
                               + provenance: attr, drv_path, wasinix_rev}
@@ -107,8 +106,15 @@ def main():
     staging = tmp / "staging"
     conflicts, new = [], []
     manifests = dict(published)
+    current_primary = {
+        path.name
+        for path in (args.registry / "simple").iterdir()
+        if path.is_dir() and (path / "index.html").is_file()
+    }
     for whl in sorted((args.registry / "simple").glob("*/*.whl")):
         project = whl.parent.name
+        if project not in current_primary:
+            continue
         sha = hashlib.sha256(whl.read_bytes()).hexdigest()
         prev = published.get(whl.name)
         if prev:
@@ -194,11 +200,12 @@ def main():
     # a manifest predating the field has no flag, so a project last published
     # before it existed stays out of simple/ until its next publish
     supersedes = {m["project"] for m in manifests.values() if m.get("supersedes")}
-    primary = make_index.write_views(staging, pages, supersedes)
-    (staging / "index.html").write_text(make_index.landing(projects))
+    primary = make_index.primary_projects(pages, supersedes)
+    make_index.write_primary_view(staging, primary)
+    (staging / "index.html").write_text(make_index.landing(primary))
     make_index.write_packages_json(
         staging / "packages.json",
-        ((fname, m["sha256"]) for fname, m in manifests.items()),
+        ((fname, digest) for files in primary.values() for fname, digest, *_ in files),
     )
 
     print(

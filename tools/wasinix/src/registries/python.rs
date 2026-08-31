@@ -583,7 +583,11 @@ pub fn preview_index(
     let dists = scratch.join("dists.json");
     crate::support::json::write(&dists, &Value::Array(suffixed))?;
     let mut index = Capability::PythonIndex.command()?;
-    index.arg(&dists).arg(site).current_dir(repo);
+    index
+        .arg("--primary-only")
+        .arg(&dists)
+        .arg(site)
+        .current_dir(repo);
     if !index.run()?.success() {
         return request_error("building the preview index failed");
     }

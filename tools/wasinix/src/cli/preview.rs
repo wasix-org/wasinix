@@ -227,7 +227,7 @@ fn published_body(
             Markdown::constant(", preferred over the published wheels by version:\n"),
             Markdown::fenced(
                 &format!(
-                    "pip install --index-url {url}/all/simple --extra-index-url {}/all/simple <pkg>",
+                    "pip install --index-url {url}/simple --extra-index-url {}/simple --extra-index-url https://pypi.org/simple <pkg>",
                     prod.as_deref().unwrap_or("<prod index>")
                 ),
                 "",

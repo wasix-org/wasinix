@@ -37,7 +37,15 @@
 
   fakeRclone = pkgs.writeShellScript "fake-rclone" ''
     printf '%s\n' "$*" >> "$FAKE_RCLONE_LOG"
-    exit 3
+    operation="$6"
+    if [ "$operation" = copy ] && [ "$7" = test:bucket/manifests ]; then
+      exit 3
+    fi
+    if [ "$operation" = copy ]; then
+      source="''${@: -2:1}"
+      cp -r "$source/." "$FAKE_CAPTURE/"
+    fi
+    exit 0
   '';
 
   # pip-install <attr> from the index, assert expectDeps (top-level module/dir
@@ -70,14 +78,37 @@ in {
     name = "registry-publisher-explicit-rclone";
     packages = [pkgs.python3];
     script = ''
-      mkdir registry
-      echo '{}' > registry/provenance.json
+      native=native-1.0+wasix.1-cp313-none-wasix_wasm32.whl
+      pure=pure-1.0+wasix.1-py3-none-any.whl
+      mkdir -p registry/simple/native registry/simple/pure capture
+      printf native > "registry/simple/native/$native"
+      printf 'Metadata-Version: 2.1\n' > "registry/simple/native/$native.metadata"
+      printf pure > "registry/simple/pure/$pure"
+      printf 'Metadata-Version: 2.1\n' > "registry/simple/pure/$pure.metadata"
+      printf '<a href="native/">native</a>\n' > registry/simple/index.html
+      printf '<a href="$native">native</a>\n' > registry/simple/native/index.html
+      cat > registry/provenance.json <<EOF
+      {
+        "$native": {"attr": "native", "drv_path": "/nix/store/native", "name": "native", "rel_key": "native", "version": "1.0"},
+        "$pure": {"attr": "pure", "drv_path": "/nix/store/pure", "name": "pure", "rel_key": "pure", "version": "1.0"}
+      }
+      EOF
       export FAKE_RCLONE_LOG="$PWD/rclone.log"
+      export FAKE_CAPTURE="$PWD/capture"
       python3 ${./.}/publish.py \
         --registry registry \
         --remote test:bucket \
-        --rclone ${fakeRclone}
+        --rclone ${fakeRclone} \
+        --refresh-listings \
+        --dry-run
       grep -F 'copy test:bucket/manifests' "$FAKE_RCLONE_LOG"
+      test -f "capture/simple/native/$native"
+      test -f "capture/manifests/$native.json"
+      test ! -e capture/all
+      test ! -e capture/simple/pure
+      test ! -e "capture/manifests/$pure.json"
+      grep -F "$native" capture/packages.json
+      ! grep -F "$pure" capture/packages.json
     '';
   };
 

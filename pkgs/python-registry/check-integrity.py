@@ -2,7 +2,7 @@
 exactly the project dirs; every project-page anchor resolves to a file whose
 sha256 matches the fragment; every wheel has a PEP 658 .metadata sidecar whose
 hash matches data-core-metadata; no wheel on disk is missing from its page;
-packages.json lists exactly the served wheels; and every wheel's Requires-Dist
+packages.json lists exactly the wheels in simple/; and every wheel's Requires-Dist
 is satisfiable from the index alone, on each interpreter the wheel installs on.
 
 Usage: check-integrity.py <registry store path> <check-dependencies.py path>
@@ -141,9 +141,10 @@ def check_packages_json(root: Path, wheels: list[tuple[str, Path]]) -> None:
         if "filename" not in entry:
             fail(f"packages.json line {n} has no 'filename' key")
         listed.add(entry["filename"])
-    on_disk = {path.name for _, path in wheels}
-    if listed != on_disk:
-        fail(f"packages.json vs wheels on disk differ: {sorted(listed ^ on_disk)}")
+    projects = set(PROJECT_LINK.findall((root / "simple" / "index.html").read_text()))
+    expected = {path.name for project, path in wheels if project in projects}
+    if listed != expected:
+        fail(f"packages.json vs simple/ wheels differ: {sorted(listed ^ expected)}")
 
 
 def check_requirements(wheels: list[tuple[str, Path]], wheel_deps) -> None:

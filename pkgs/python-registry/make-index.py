@@ -12,7 +12,7 @@ Emits, per PEP 503 (+ PEP 629 version meta, PEP 658/714 metadata files):
   <out>/simple/<project>/index.html     file list with #sha256= anchors
   <out>/simple/<project>/<wheel>        the wheel itself (relative hrefs)
   <out>/simple/<project>/<wheel>.metadata   its core metadata, for resolvers
-  <out>/packages.json                   flat wheel list, for wasmer-compat
+  <out>/packages.json                   simple/ wheel list, for wasmer-compat
   <out>/all/simple/...                  the same listing over every wheel here
 """
 
@@ -21,6 +21,7 @@ import hashlib
 import html
 import json
 import re
+import shutil
 import sys
 import zipfile
 from pathlib import Path
@@ -404,6 +405,25 @@ def write_packages_json(dest: Path, served) -> None:
     )
 
 
+def primary_projects(
+    pages: dict[str, list[tuple]], supersedes: set[str]
+) -> dict[str, list[tuple]]:
+    return {
+        project: files
+        for project, files in pages.items()
+        if project in supersedes or any(is_native(fname) for fname, *_ in files)
+    }
+
+
+def write_primary_view(out: Path, pages: dict[str, list[tuple]]) -> None:
+    for project, files in sorted(pages.items()):
+        pdir = out / "simple" / project
+        pdir.mkdir(parents=True, exist_ok=True)
+        (pdir / "index.html").write_text(project_page(project, files))
+    proot = [f'    <a href="{p}/">{p}</a><br/>' for p in sorted(pages)]
+    (out / "simple" / "index.html").write_text(page("Simple index", proot))
+
+
 def write_views(out: Path, pages: dict[str, list[tuple]], supersedes: set[str]) -> dict:
     """Write both PEP 503 listings over the wheels under simple/<project>/.
 
@@ -415,17 +435,8 @@ def write_views(out: Path, pages: dict[str, list[tuple]], supersedes: set[str]) 
     for. all/simple/ lists everything published, for installing the closure
     from here alone (docs/registry.md). Both point at one copy of each wheel.
     """
-    primary = {
-        project: files
-        for project, files in pages.items()
-        if project in supersedes or any(is_native(fname) for fname, *_ in files)
-    }
-    for project, files in sorted(primary.items()):
-        pdir = out / "simple" / project
-        pdir.mkdir(parents=True, exist_ok=True)
-        (pdir / "index.html").write_text(project_page(project, files))
-    proot = [f'    <a href="{p}/">{p}</a><br/>' for p in sorted(primary)]
-    (out / "simple" / "index.html").write_text(page("Simple index", proot))
+    primary = primary_projects(pages, supersedes)
+    write_primary_view(out, primary)
 
     for project, files in sorted(pages.items()):
         adir = out / "all" / "simple" / project
@@ -442,6 +453,11 @@ def write_views(out: Path, pages: dict[str, list[tuple]], supersedes: set[str]) 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument(
+        "--primary-only",
+        action="store_true",
+        help="omit the complete local all/simple view",
+    )
     ap.add_argument("dists", type=Path)
     ap.add_argument("out", type=Path)
     args = ap.parse_args()
@@ -491,8 +507,7 @@ def main() -> None:
             f"{listed}"
         )
 
-    served: list[tuple[str, str]] = []
-    # project -> the rows its page was built from, reused by the native view
+    # project -> the rows its page was built from, reused by both views
     pages: dict[str, list[tuple]] = {}
     for project, wheels in sorted(projects.items()):
         pdir = out / "simple" / project
@@ -504,7 +519,6 @@ def main() -> None:
             (pdir / f"{fname}.metadata").write_bytes(metadata)
             md_digest = hashlib.sha256(metadata).hexdigest()
             digest = hashlib.sha256(src.read_bytes()).hexdigest()
-            served.append((fname, digest))
             # rev/attr/published are publish-time facts (publish.py fills them
             # from the manifest); size is intrinsic and source decides which
             # listing the project lands in, so both are known here already.
@@ -526,13 +540,22 @@ def main() -> None:
     supersedes = {
         normalize(entry["name"]) for entry in dists if entry.get("supersedes")
     }
-    primary = write_views(out, pages, supersedes)
+    primary = primary_projects(pages, supersedes)
+    if args.primary_only:
+        for project in set(pages) - set(primary):
+            shutil.rmtree(out / "simple" / project)
+        write_primary_view(out, primary)
+    else:
+        write_views(out, pages, supersedes)
 
-    (out / "index.html").write_text(landing(projects))
+    (out / "index.html").write_text(landing(primary))
     (out / "provenance.json").write_text(
         json.dumps(provenance, indent=2, sort_keys=True) + "\n"
     )
-    write_packages_json(out / "packages.json", served)
+    write_packages_json(
+        out / "packages.json",
+        ((fname, digest) for files in primary.values() for fname, digest, *_ in files),
+    )
     print(
         f"indexed {sum(map(len, projects.values()))} wheels across {len(projects)} projects"
         f" ({len(primary)} of them served to a resolver beside PyPI)"

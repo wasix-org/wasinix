@@ -125,15 +125,23 @@ jobs:
       # repo admin, which GITHUB_TOKEN never has:
       #   gh api -X POST repos/wasix-org/wasinix/pages -f build_type=workflow
       - name: Prepare Pages snapshot
+        id: stage-pages
         # Pages intentionally tracks the fresh build, independently of the
         # append-only volume publication above.
         if:
           always() && steps.published.outputs.cache-hit != 'true' &&
           steps.build-index.outcome == 'success'
         run: |
-          # materialize the result symlink with writable modes for the tarring action
-          mkdir site
-          cp -r --no-preserve=mode,ownership --dereference registry-result/. site/
+          mkdir -p site/simple
+          cp --no-preserve=mode,ownership --dereference \
+            registry-result/index.html registry-result/packages.json site/
+          cp --no-preserve=mode,ownership --dereference \
+            registry-result/simple/index.html site/simple/
+          for page in registry-result/simple/*/index.html; do
+            project="$(basename "$(dirname "$page")")"
+            cp -r --no-preserve=mode,ownership --dereference \
+              "registry-result/simple/$project" site/simple/
+          done
 
       - name: Upload Pages artifact
         if:
