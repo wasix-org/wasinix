@@ -454,6 +454,14 @@
       "tag": "11.3.0"
     }
   },
+  "primp": {
+    "1.3.1": {
+      "cargoHash": "sha256-fnOCsxR0/6AnVO7n2M92WIA6kbyOkI6fwQh5QLnsxSc=",
+      "hash": "sha256-VNb/U68NXmfH7eY8JOEk0z2yOUD4R/kFI1IShWS0pU4=",
+      "note": "latest 1.x (outgoing major)",
+      "tag": "v1.3.1"
+    }
+  },
   "prompt-toolkit": {
     "3.0.51": {
       "hash": "sha256-pNYmjAgnP9nK40VS/qvPR3g+809Yra2ISASWJDdQKrU=",
