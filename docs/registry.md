@@ -145,8 +145,8 @@ after a pin bump.
 
 ## The Python wheel index
 
-All shipped wheels, plus their transitive python deps, are published as a static
-PEP 503 "simple" index:
+All shipped wheels, plus their transitive Python dependencies, are built into a
+static PEP 503 index artifact:
 `.#legacyPackages.x86_64-linux.artifacts.registry.python`
 (`pkgs/python-registry/`). Serve the output from any static file host, or
 install directly:
@@ -169,8 +169,8 @@ say. A project has to resolve on one interpreter, not all of them, since a
 release states its own supported range.
 
 Alongside `simple/`, the index root carries `packages.json`: one JSON object per
-line naming a published wheel, which is how `wasmerio/wasmer-compat` decides
-which projects the index covers.
+line naming a wheel listed by `simple/`, which is how `wasmerio/wasmer-compat`
+decides which projects the deployed index covers.
 
 `simple/` lists the projects PyPI cannot supply: those shipping a
 platform-tagged wheel, and those whose package unit changes their source,
@@ -188,10 +188,9 @@ could have supplied pins it to our version and rejects whatever version the
 consuming project asks for. Listing one we patched too narrowly is the opposite
 defect: the resolver takes upstream's build and drops the patch.
 
-`all/simple/` lists every wheel published here, for installing the closure from
-this index alone with no PyPI at all. It carries no wheels of its own; its pages
-link to the copies under `simple/<project>/`, where every wheel lives whether or
-not its project is listed in `simple/`.
+The built artifact also has an `all/simple/` view for local tests that install
+the complete closure without PyPI. It is not deployed. Its pages link to the
+copies under `simple/<project>/` in the local artifact.
 
 Cross-installing for wasix from a host needs pip. `pip --platform wasix_wasm32`
 selects the tagged wheels, while uv's `--python-platform` is a closed enum with
@@ -238,7 +237,8 @@ bleeding-edge snapshot and may serve new bytes under an existing filename. Use
 the volume-backed index for immutable, reproducible installs.
 
 After a green build of main, `publish-index` uploads new filenames to the volume
-and deploys the fresh snapshot to GitHub Pages. The volume service is defined by
+and deploys the fresh `simple/` snapshot to GitHub Pages. Neither deployment
+contains the local `all/` view. The volume service is defined by
 `python-registry/app.yaml`.
 
 A wheel built by both interpreters is published once, under the one filename its
@@ -278,7 +278,8 @@ explicitly or already released. Changed wheels become an ephemeral per-PR Edge
 app serving an overlay index:
 
 ```sh
-pip install --index-url <preview>/all/simple --extra-index-url <prod>/all/simple
+pip install --index-url <preview>/simple --extra-index-url <prod>/simple \
+  --extra-index-url https://pypi.org/simple <pkg>
 ```
 
 which prefers the preview wheels by their longer local version. The app is

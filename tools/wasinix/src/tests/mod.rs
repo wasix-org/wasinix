@@ -6981,6 +6981,12 @@ mod corpus {
                 .contains("nix build"),
             "publishing must reuse the output the Build workflow evaluated"
         );
+        let pages = field(step(publish_job, "stage-pages"), "run")
+            .as_str()
+            .unwrap();
+        assert!(pages.contains("registry-result/simple/*/index.html"));
+        assert!(!pages.contains("registry-result/."));
+        assert!(!pages.contains("registry-result/all"));
 
         let build_job = job(&build, "build");
         assert!(
