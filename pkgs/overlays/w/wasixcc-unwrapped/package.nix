@@ -13,29 +13,19 @@ exposePackage (packageSet.callPackage ({
   }:
     rustPlatform.buildRustPackage (finalAttrs: {
       pname = "wasixcc-unwrapped";
-      version = "0.4.5";
+      version = "0.4.7";
 
       src = fetchFromGitHub {
         owner = "wasix-org";
         repo = "wasixcc";
         tag = "v${finalAttrs.version}";
-        hash = "sha256-dCBNXceJO9Wx91o7+g/iVzHiCeanC71NPk0PUsf4xN0=";
+        hash = "sha256-iL42V0di0MCeLh+ZnDCknPyQmZB3w2nC2ncW5OCEQ3s=";
       };
 
-      cargoHash = "sha256-6f0LnlsAKK/VywTFfjPIMBmG+Ht1q2ItRSvmKkd8qpU=";
+      cargoHash = "sha256-76h9p/1HgOGr4Zx9UjTkJvQ8nkOcISLFyvjfZyxyWbk=";
 
-      # Translate GNU C++ and OpenMP inputs for shared modules, avoid executable-only
-      # inputs for non-executable links, and export the full symbol table only from
-      # dynamically linked modules.
-      patches = [
-        ./wasixcc-map-libstdcxx-to-libcxx.patch
-        ./wasixcc-openmp-link.patch
-        ./wasixcc-relocatable-link-passthrough.patch
-        ./wasixcc-rlib-linker-input.patch
-        ./wasixcc-nodefaultlibs.patch
-        ./wasixcc-nostartfiles.patch
-        ./wasixcc-export-dynamic.patch
-      ];
+      # Export the full symbol table only from dynamically linked modules.
+      patches = [./wasixcc-export-dynamic.patch];
 
       doCheck = true;
 
