@@ -343,7 +343,9 @@ pub fn drive_timed(repo: &Path, options: Options, timings: &mut Recorder) -> Res
             Ok(outcome) => {
                 let after = repo_status(repo)?;
                 let changed = after != before;
+                let backend_notes = outcome.notes;
                 let outcome = outcome
+                    .summary
                     .unwrap_or_else(|| if changed { "updated" } else { "up to date" }.to_string());
                 let outcome = backends::normalize_outcome(target, outcome, changed);
                 if changed {
@@ -354,6 +356,20 @@ pub fn drive_timed(repo: &Path, options: Options, timings: &mut Recorder) -> Res
                         })?;
                     }
                     changes.entries.push(entry);
+                    // The backend's own notes ride with the bump: they say
+                    // something about this move that no later evaluation of
+                    // the new tree could rediscover.
+                    for note in backend_notes {
+                        changes.entries.push(Entry {
+                            kind: EntryKind::Notable,
+                            subject: target.name.clone(),
+                            from: None,
+                            to: None,
+                            detail: Some(note),
+                            changelog: None,
+                            files: Vec::new(),
+                        });
+                    }
                     moved.push(target);
                 } else {
                     changes.unchanged.push(Unchanged {

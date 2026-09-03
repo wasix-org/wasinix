@@ -9,7 +9,11 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     wasmer = {
-      url = "git+https://github.com/wasmerio/wasmer";
+      # A release tag, not a branch: the runtime the packages are built and
+      # tested against is the one users run. `wasinix update wasmer` moves
+      # this to the newest release and leaves it alone otherwise, so the ref
+      # here is the pin's identity rather than something to follow.
+      url = "git+https://github.com/wasmerio/wasmer?ref=refs/tags/v7.4.0&submodules=1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     crane.follows = "wasmer/crane";

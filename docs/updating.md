@@ -18,6 +18,40 @@ target's remote and pinned as the commit it names, so a repository that tags
 target that does not accept the mode you asked for says so; `cargo-registry`
 re-resolves the crate pins.
 
+## Release-tracked pins
+
+Most pins bump to whatever is newest. A release-tracked pin does not: it moves
+only to an upstream release newer than the one it names, and otherwise stays
+put. `wasmer` is the one today, because the runtime the packages are built and
+tested against is the runtime users run — a pin following a branch would test
+every package against a commit nobody released.
+
+The pin's identity is the version its commit declares in the workspace
+manifest, which upstream moves in the release commit itself, so a commit merged
+into the trunk reports the release that precedes it. That identity must name a
+release that exists; if it does not, the update fails rather than proceeding,
+because a pin whose version has no release would find nothing newer forever and
+silently freeze. `flake.lock` records the tag as the input's `ref`, so the
+release a pin names is readable without resolving anything.
+
+Prereleases never win: an `-rc` or `-alpha` tag is not a release version and is
+skipped when picking the newest.
+
+A manual pin ahead of a release is still available — `wasmer@rev:<40-hex>` for
+an unreleased fix a package needs — with one rule: **the revision must already
+be merged upstream**. Nothing else refuses a pull-request head, which locks and
+builds perfectly well and then rides on code that may never merge. A tag skips
+this check, since a release is authoritative even when it was cut off a release
+branch. The manual pin stops being special on its own: once a release contains
+that commit, the release is newer than the pin's identity and the pin advances
+to it like any other.
+
+When a move lands on a release that does not contain what the outgoing pin
+carried — a pin held ahead, or a release cut off a release branch — the bump
+raises a note naming how many commits are dropped. A note makes the ChangeSet
+notable, which keeps auto-merge off, so the drop is reviewed rather than
+silently applied.
+
 How a pin bumps is declared next to it (`passthru.updateScript`, the standard
 nixpkgs convention); its constraints and quirks are comments in the same file. A
 derived pin is recalculated by the package's `updateScript`, so the bump is
