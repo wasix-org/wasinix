@@ -15,16 +15,16 @@ exposePackage (packageSet.callPackage ({
 in
   rustPlatform.buildRustPackage (finalAttrs: {
     pname = "anybuild";
-    version = "0.28.0";
+    version = "0.28.3";
 
     src = fetchFromGitHub {
       owner = "wasmerio";
       repo = "anybuild";
       tag = "v${finalAttrs.version}";
-      hash = "sha256-WYyr+Lis0rVs9bwNtzHtMtRx/4anM+O7TTmS4d3bIM4=";
+      hash = "sha256-ZQjaAUcTO/Lal9a4wzaAHvBK4u4MfOuG5UjZV900itw=";
     };
 
-    cargoHash = "sha256-uMKjsztKNQ+qrR8RaBBLCMOsudKjLk0f0XN6wBYOsgw=";
+    cargoHash = "sha256-IP6VVVTPIJF6jIxJUZg7+0U9yh1KvIEbiMjLzDF+k4E=";
 
     patches = [
       # python_index_url / ANYBUILD_PYTHON_INDEX_URL: the cross-wheel steps
