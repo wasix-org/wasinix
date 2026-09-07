@@ -142,6 +142,7 @@
       abiCheck = nativePkgs.callPackage ../toolchain/tests/abi-check.nix {
         inherit (toolchain) wasixLlvm binaryen;
       };
+      cxxRuntimeCheck = nativePkgs.callPackage ../toolchain/tests/cxx-runtime-check.nix {};
       linkCheck = import ../checks/link-runner.nix {
         inherit lib wasixRun;
         pkgs = nativePkgs;
@@ -195,7 +196,7 @@
           capturedSuite = emulatedChecks.checkFor;
         };
     in {
-      inherit abiCheck emulatedChecks harnesses linkCheck makeWasmerPackage mkCargoRegistry mkPythonRegistry mkPythonWheels mkWasixStdenv testLib wasixInfrastructureOverlay webcIdent;
+      inherit abiCheck cxxRuntimeCheck emulatedChecks harnesses linkCheck makeWasmerPackage mkCargoRegistry mkPythonRegistry mkPythonWheels mkWasixStdenv testLib wasixInfrastructureOverlay webcIdent;
       inherit (toolchain) haskell;
       runners.rawWasm = {
         inherit (rawWasm) unbound;
@@ -308,15 +309,16 @@
         {inherit entry packages;});
       packageAbi = {
         entry,
+        packages,
         packageSets,
         profileSets,
         ...
       }: ((import ../checks/abi.nix {
           inherit lib;
-          inherit ((constructionFor packageSets.native)) abiCheck;
+          inherit ((constructionFor packageSets.native)) abiCheck cxxRuntimeCheck;
         })
           .packageAbi
-        {inherit entry profileSets;});
+        {inherit entry packages profileSets;});
       capturedSuite = {
         entry,
         packageSets,
