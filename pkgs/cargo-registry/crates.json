@@ -40,6 +40,7 @@
     "1.10.0": "sha256-7Q+M5i9pK9t1eEStYm7V2yofRPZte54EA4dXr1hszYc=",
     "1.10.1": "sha256-Lc8ie4dOwmDT426qQBRZ7McgyLPQM16nTmdIhpjB2gI=",
     "1.11.0": "sha256-GgLAMDyV8grk2OJWsXfnoxgSGrF544z2KgdQhu80Mi4=",
+    "1.12.0": "sha256-m2lq0r7gVUy2ZuLzot+nR0e1T12+ahTV3kIf6+cyiIs=",
     "1.8.18": "sha256-Gza3ZfmypLYC6X5AdiJdf828dsvJ68c5pjKYRoZ0fuw=",
     "1.9.0": "sha256-5GhqOdHBtLSfO5qBg96U2vcINcHMqWtq/hS+6IGuOCs="
   },
@@ -207,7 +208,9 @@
     "550.0.0": "sha256-W1+AMbPhr3unL3O0faGiAH5HZt9j71QQHlMW2Ibkay8=",
     "550.1.0": "sha256-v99IVqDBJpha6w47QW0NY71VCpWFGMKVtNi2j0BglyU=",
     "550.1.1": "sha256-RmVDck5RePuM9QT1WkrrEHasVHC6PXnte8yy43wuKeQ=",
-    "551.0.0": "sha256-1QgyshrTWUE340z2zV77YFYD8aGFauOYVqjaufLgBRI="
+    "551.0.0": "sha256-1QgyshrTWUE340z2zV77YFYD8aGFauOYVqjaufLgBRI=",
+    "551.0.1": "sha256-Frd7L0CMOXe9Q/Pw5AKidCSZzcxR24Mmhjx6QLWyLTU=",
+    "551.0.2": "sha256-w65Xr/dUqD5ogAXXm1Berv2vXCglDzmLGpjrOSYFP1c="
   },
   "mio": {
     "0.8.1": "sha256-eXI3wywDWVCOWlK64MJ73ppnInEFSgKv/F4XGK+/SHk=",
@@ -225,12 +228,13 @@
     "1.1.1": "sha256-60gbal4SlMmbkNbQneSWVEDj7oenMeHW+vOFVrB6aSA=",
     "1.2.0": "sha256-KMY7CRXjEVqPbdCCrwFh0dcpGgej2RvszmOcWV406v0=",
     "1.2.1": "sha256-HLb7Pf2wUAR6Kq7AvWMNzjPZXuvRg4rQmymm7W1uU7I=",
-    "1.2.2": "sha256-QlNFP4WuEhAB/PTDdea3yPvx+rZQr3I2Sl1WT/d8hbo="
+    "1.2.2": "sha256-QlNFP4WuEhAB/PTDdea3yPvx+rZQr3I2Sl1WT/d8hbo=",
+    "1.2.3": "sha256-rzSkgKBfbAh/XegKnW/JKOHzpCdFdwnpZ2yqZv2EfCw="
   },
   "mysql": {
     "26.0.1": "sha256-ppt6SBdX67CSnZw1NfURdaAxOVCa0Z5CnAfi5kKrUeI=",
     "27.0.0": "sha256-7IQ5dp/mJS62iDYprSIFHTTrBK8Rf1hD1LT5tbPODeE=",
-    "28.0.0": "sha256-8pgTlCZ8+ANBRRi+6HPTZsso6cWohQs0f3Id9aN3OX0="
+    "28.0.2": "sha256-BV4wt776a8IqmsV2CegeOO0Txc8Y4GB+dPAFJty4mhU="
   },
   "netif": {
     "0.1.6": "sha256-/92VXS+sU1d+8aLne4khYMrcFWjAyYLMPl7wzgSo70U="
@@ -238,7 +242,8 @@
   "open": {
     "5.4.0": "sha256-qQYTdiMvkVgJTKPXddjOkEcod0Woy36qfXY5bXTivsg=",
     "5.4.1": "sha256-y4CpzMzJm9LaSkKn7AWMGBJSKFNS3r4hqZFWqTnRhvI=",
-    "5.4.2": "sha256-pnpTYWinlNNU42WgdCelAnZy9Q6hjVFv0vQkbsEn4+A="
+    "5.4.2": "sha256-pnpTYWinlNNU42WgdCelAnZy9Q6hjVFv0vQkbsEn4+A=",
+    "5.4.3": "sha256-HnVhoWQDNvGOtYlUgYyWwVD9QMD5ENRp3YQ0lRdgGqI="
   },
   "openssl-src": {
     "300.4.1+3.4.0": "sha256-ny/TzdrVBlBEQFhSxE0KBHWhBldYcUYuKXdh8g1P13c=",
