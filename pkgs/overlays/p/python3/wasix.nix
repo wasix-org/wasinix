@@ -220,6 +220,9 @@
         # -lwasi-emulated-signal, which wasix has no archive for, so every later
         # AC_LINK_IFELSE lib probe fails to link. MACHDEP=wasix sets sys.platform while
         # ac_sys_system stays WASI. Setup.local forces the modules configure marks n/a.
+        # Every wasixcc compile is -pthread, so the WASI platform triplet resolves to
+        # the -threads variant and carries SOABI and MULTIARCH with it; extensions in
+        # the registry are tagged wasm32-wasi and load under no other name.
         postPatch = ''
                   substituteInPlace Lib/subprocess.py \
                     --replace-fail '${lib.getExe' packages.sameProfile.buildPackages.bashNonInteractive "sh"}' '${lib.getExe' packages.wasix.preferred.bash "sh"}'
@@ -231,6 +234,9 @@
                   substituteInPlace configure.ac \
                     --replace-fail 'aix*) MACHDEP="aix";;' 'aix*) MACHDEP="aix";;
             wasi) MACHDEP="wasix";;'
+
+                  substituteInPlace Misc/platform_triplet.c \
+                    --replace-fail 'PLATFORM_TRIPLET=wasm32-wasi-threads' 'PLATFORM_TRIPLET=wasm32-wasi'
 
                   substituteInPlace configure.ac \
                     --replace-fail "AC_SUBST([PLATFORM_HEADERS])" \
