@@ -32,6 +32,7 @@ leaf = [
   "pkgs/overlays/p/python3/tests/ipv6-bind-check.py",
   "pkgs/overlays/p/python3/tests/mp-context-check.py",
   "pkgs/overlays/p/python3/tests/pip-usable-check.py",
+  "pkgs/overlays/p/python3/tests/soabi-check.py",
   "pkgs/overlays/p/python3/tests/spawn-passfd-check.py",
   "pkgs/overlays/p/python3/tests/subprocess-opts-check.py",
 ]
