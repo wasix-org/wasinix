@@ -177,9 +177,6 @@
   "artifacts.registry.python.wheels.tiktoken": {
     "0.12.0": 2
   },
-  "artifacts.registry.python.wheels.tokenizers": {
-    "0.22.2": 2
-  },
   "artifacts.registry.python.wheels.tornado": {
     "6.5.7": 2
   },
