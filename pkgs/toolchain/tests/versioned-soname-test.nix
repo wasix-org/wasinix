@@ -4,8 +4,8 @@
 # cmake emits for a target carrying a SOVERSION, e.g. pyarrow's
 # libarrow_python.so.2100.0.0.0) used to be partitioned as a compiler input.
 # wasixcc then expected a compiled <tmp>/libfoo.so.1.2.3.o that nothing
-# produces and the link died with "cannot open". Fixed in
-# ../wasixcc-versioned-soname-inputs.patch; this keeps it fixed.
+# produces and the link died with "cannot open". wasixcc's is_linker_input
+# recognizes the versioned spelling; this keeps it doing so.
 #
 # PIC profiles only: a shared library needs -fPIC.
 {
