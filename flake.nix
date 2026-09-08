@@ -55,6 +55,7 @@
       then throw "repository source contains Git metadata"
       else source;
     repositoryCheckNames = ["deadnix" "nil" "nixf" "project-api" "statix" "treefmt"];
+    toolchainChecks = import ./pkgs/checks/toolchain.nix {inherit (nixpkgs) lib;};
     project = projectApi.mkProject {
       inherit system;
       importNixpkgs = args: import nixpkgs args;
@@ -97,7 +98,15 @@
               check = _project: repositoryChecks.${name};
             };
           })
-          repositoryCheckNames);
+          repositoryCheckNames)
+        // builtins.listToAttrs (map (name: {
+            inherit name;
+            value = {
+              source = "wasinix";
+              check = checkedProject: (toolchainChecks.testsFor checkedProject).${name};
+            };
+          })
+          toolchainChecks.names);
       repository = {
         source = "wasinix";
         root = repositorySource;
