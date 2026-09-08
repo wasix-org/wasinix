@@ -9,18 +9,24 @@ failures = []
 
 target = os.path.abspath("cwd-target")
 os.makedirs(target, exist_ok=True)
+res = subprocess.run(
+    [sys.executable, "-c", "import os; print(os.getcwd())"],
+    cwd=target,
+    capture_output=True,
+    text=True,
+)
+got = res.stdout.strip()
+if got != target:
+    failures.append(f"cwd: child ran in {got!r} instead of {target!r}")
+
+# Callers guard an optional subprocess with OSError, so a bad cwd must land there
+# rather than in an exception type that escapes the guard.
 try:
-    res = subprocess.run(
-        [sys.executable, "-c", "import os; print(os.getcwd())"],
-        cwd=target,
-        capture_output=True,
-        text=True,
-    )
-    got = res.stdout.strip()
-    if got != target:
-        failures.append(f"cwd: child ran in {got!r} instead of {target!r}")
-except Exception as e:
-    print(f"cwd= refused with {type(e).__name__} (acceptable)")
+    subprocess.run([sys.executable, "-c", ""], cwd=os.path.join(target, "missing"))
+except FileNotFoundError:
+    pass
+else:
+    failures.append("cwd: a missing directory did not raise FileNotFoundError")
 
 r, w = os.pipe()
 os.set_inheritable(w, True)
