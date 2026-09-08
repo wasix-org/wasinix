@@ -16,6 +16,7 @@
 #   selfMounts  ? []     => explicit store-path-at-itself mounts
 #   autoSelfMount ? false => also scan bin/*.wasm for embedded /nix/store paths
 #                            and mount each at itself
+#   mountExcludes ? []    => extra -name globs deleted from every mounted tree
 {
   lib,
   pkgs,
@@ -119,6 +120,7 @@
   fs = w.fs or {};
   selfMounts = w.selfMounts or [];
   autoSelfMount = w.autoSelfMount or false;
+  mountExcludes = w.mountExcludes or [];
 
   # Wasix packages this one execs at runtime; each becomes a webc
   # [dependencies] entry. At load wasmer places each dependency's command atoms
@@ -439,7 +441,18 @@ in
           mkdir -p "$(dirname "$target")"
           ${lib.getExe' pkgs.coreutils "cp"} -R --no-preserve=mode,ownership "$src" "$target"
           chmod -R u+w "$(dirname "$target")"
+          prune_mount "$target"
           printf '"%s" = "fs%s"\n' "$virt" "$virt" >> "$pkg_dir/wasmer.toml"
+        }
+
+        # A guest links nothing, so link-time output is dead weight in the image.
+        prune_mount() {
+          local target="$1"
+          ${lib.getExe pkgs.findutils} "$target" \( -type f -o -type l \) \
+            \( -name '*.a' -o -name '*.o' -o -name '*.la' ${
+        lib.concatMapStringsSep " " (g: "-o -name ${lib.escapeShellArg g}") mountExcludes
+      } \) -delete 2>/dev/null || true
+          rm -rf "$target/include" "$target/lib/pkgconfig" "$target/share/pkgconfig"
         }
 
         ${lib.concatMapStringsSep "\n" (e: ''
@@ -462,5 +475,15 @@ in
           | ${lib.getExe pkgs.gnused} -E 's#(/nix/store/[a-z0-9]{32}-[^/]*).*#\1#' \
           | LC_ALL=C sort -u)
       ''}
+
+        # The prune is a glob list, so assert the rule it stands for rather than
+        # trusting the globs to have covered every mount.
+        leftover="$(${lib.getExe pkgs.findutils} "$pkg_dir/fs" \( -type f -o -type l \) \
+          \( -name '*.a' -o -name '*.o' -o -name '*.la' \) -print 2>/dev/null || true)"
+        if [ -n "$leftover" ]; then
+          echo "link-time output reached the ${name} image:" >&2
+          echo "$leftover" >&2
+          exit 1
+        fi
     '';
   })
