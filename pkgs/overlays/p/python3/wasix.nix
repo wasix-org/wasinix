@@ -21,8 +21,9 @@
         SSL_CERT_FILE = "/etc/ssl/certs/ca-bundle.crt";
         SSL_CERT_DIR = "/etc/ssl/certs";
         # getpath can't resolve argv0 (no PATH in the guest), leaving sys.executable
-        # empty, which breaks subprocess([sys.executable, ..]) and spawn.
-        PYTHONEXECUTABLE = lib.getExe' py "python${pyVer}.wasm";
+        # empty, which breaks subprocess([sys.executable, ..]) and spawn. Wasmer
+        # places this package's own command atoms here.
+        PYTHONEXECUTABLE = "/bin/python${pyVer}";
       };
     };
     py =
@@ -228,7 +229,7 @@
         # the registry are tagged wasm32-wasi and load under no other name.
         postPatch = ''
                   substituteInPlace Lib/subprocess.py \
-                    --replace-fail '${lib.getExe' packages.sameProfile.buildPackages.bashNonInteractive "sh"}' '${lib.getExe' packages.wasix.preferred.bash "sh"}'
+                    --replace-fail '${lib.getExe' packages.sameProfile.buildPackages.bashNonInteractive "sh"}' '/bin/sh'
 
                   substituteInPlace configure.ac \
                     --replace-fail ' -lwasi-emulated-signal -lwasi-emulated-getpid -lwasi-emulated-process-clocks' \
@@ -366,9 +367,15 @@
               # interpreter with -m pip prepended.
               ++ [(pythonCommand "pip" // {mainArgs = ["-m" "pip"];})];
             autoSelfMount = true;
-            # autoSelfMount only scans bin/*.wasm, but bash is baked into subprocess.py and
-            # tzdata into _sysconfigdata (else zoneinfo raises "No time zone found").
-            selfMounts = [packages.wasix.preferred.bash packages.sameProfile.buildPackages.tzdata];
+            # autoSelfMount only scans bin/*.wasm, but tzdata is baked into
+            # _sysconfigdata (else zoneinfo raises "No time zone found").
+            selfMounts = [packages.sameProfile.buildPackages.tzdata];
+            # shell=True runs /bin/sh, which this places there.
+            dependencies = [packages.wasix.preferred.bash];
+            # Only the bytecode matching the -O in use is read back, and the wasm is
+            # already the command atom PYTHONEXECUTABLE names, so mounting either
+            # again is dead weight.
+            mountExcludes = ["*.opt-1.pyc" "*.opt-2.pyc" "*.wasm"];
             # Without a bundled CA set, https raises SSLCertVerificationError.
             fs."/etc/ssl" = "${packages.sameProfile.cacert}/etc/ssl";
           };
