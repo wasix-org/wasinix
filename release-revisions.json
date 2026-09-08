@@ -1,208 +1,1034 @@
 {
-  "artifacts.registry.python.wheels.apsw": {
-    "3.51.0.0": 2
+  "artifacts.registry.python.wheels.aiohappyeyeballs": {
+    "2.7.1": 2
   },
-  "artifacts.registry.python.wheels.black": {
-    "24.10.0": 2,
+  "artifacts.registry.python.wheels.aiohttp": {
+    "3.14.3": 2
+  },
+  "artifacts.registry.python.wheels.aiojobs": {
+    "1.4.0": 2
+  },
+  "artifacts.registry.python.wheels.aiokafka": {
+    "0.13.0": 2
+  },
+  "artifacts.registry.python.wheels.aioresponses": {
+    "0.7.8": 2
+  },
+  "artifacts.registry.python.wheels.aiosignal": {
+    "1.4.0": 2
+  },
+  "artifacts.registry.python.wheels.annotated-types": {
+    "0.7.0": 2
+  },
+  "artifacts.registry.python.wheels.anthropic": {
+    "0.109.1": 2,
+    "0.76.0": 2
+  },
+  "artifacts.registry.python.wheels.anyio": {
+    "4.14.2": 2
+  },
+  "artifacts.registry.python.wheels.apsw": {
+    "3.51.0.0": 3
+  },
+  "artifacts.registry.python.wheels.argon2-cffi-bindings": {
     "25.1.0": 2
   },
+  "artifacts.registry.python.wheels.async-timeout": {
+    "4.0.3": 2,
+    "5.0.1": 2
+  },
+  "artifacts.registry.python.wheels.asyncpg": {
+    "0.31.0": 2
+  },
+  "artifacts.registry.python.wheels.attrs": {
+    "23.2.0": 2,
+    "26.1.0": 2
+  },
+  "artifacts.registry.python.wheels.backports-datetime-fromisoformat": {
+    "2.0.3": 2
+  },
+  "artifacts.registry.python.wheels.bcrypt": {
+    "5.0.0": 2
+  },
+  "artifacts.registry.python.wheels.beautifulsoup4": {
+    "4.12.3": 2,
+    "4.14.3": 2,
+    "4.15.0": 2
+  },
+  "artifacts.registry.python.wheels.biopython": {
+    "1.86": 2
+  },
+  "artifacts.registry.python.wheels.bitarray": {
+    "3.10.1": 2
+  },
+  "artifacts.registry.python.wheels.bitstruct": {
+    "8.22.1": 2
+  },
+  "artifacts.registry.python.wheels.black": {
+    "24.10.0": 3,
+    "25.1.0": 3,
+    "26.3.1": 2,
+    "26.5.1": 2
+  },
+  "artifacts.registry.python.wheels.blake3": {
+    "1.0.8": 2
+  },
+  "artifacts.registry.python.wheels.boto3": {
+    "1.42.31": 2
+  },
+  "artifacts.registry.python.wheels.botocore": {
+    "1.37.38": 2,
+    "1.42.31": 2
+  },
+  "artifacts.registry.python.wheels.bottleneck": {
+    "1.6.0": 2
+  },
   "artifacts.registry.python.wheels.brotlicffi": {
-    "1.2.0.0": 2
+    "1.2.0.0": 3
+  },
+  "artifacts.registry.python.wheels.burner-redis": {
+    "0.1.7": 2
   },
   "artifacts.registry.python.wheels.bytecode": {
-    "0.16.2": 2
+    "0.16.2": 3,
+    "0.17.0": 2,
+    "0.18.1": 2
+  },
+  "artifacts.registry.python.wheels.cachebox": {
+    "6.2.1": 2
+  },
+  "artifacts.registry.python.wheels.cachetools": {
+    "5.5.2": 2,
+    "7.1.4": 2
+  },
+  "artifacts.registry.python.wheels.caio": {
+    "0.12.3": 2,
+    "0.9.25": 2
+  },
+  "artifacts.registry.python.wheels.cbor2": {
+    "6.1.3": 2
   },
   "artifacts.registry.python.wheels.certifi": {
-    "2026.06.17": 2
+    "2026.06.17": 3
   },
   "artifacts.registry.python.wheels.cffi": {
-    "2.1.0": 2
+    "1.17.1": 2,
+    "2.1.0": 3
+  },
+  "artifacts.registry.python.wheels.cftime": {
+    "1.6.5": 2
+  },
+  "artifacts.registry.python.wheels.chardet": {
+    "5.2.0": 2,
+    "6.0.0.post1": 2
   },
   "artifacts.registry.python.wheels.charset-normalizer": {
-    "3.4.9": 2
+    "3.4.7": 2,
+    "3.4.9": 3
+  },
+  "artifacts.registry.python.wheels.ciso8601": {
+    "2.3.3": 2
+  },
+  "artifacts.registry.python.wheels.claude-agent-sdk": {
+    "0.2.143": 2
+  },
+  "artifacts.registry.python.wheels.click": {
+    "8.1.7": 2,
+    "8.1.8": 2,
+    "8.3.3": 2
   },
   "artifacts.registry.python.wheels.clickhouse-connect": {
-    "0.10.0": 2
+    "0.10.0": 3
+  },
+  "artifacts.registry.python.wheels.colorama": {
+    "0.4.4": 2,
+    "0.4.6": 2
   },
   "artifacts.registry.python.wheels.contourpy": {
-    "1.3.3": 2
+    "1.3.3": 3
+  },
+  "artifacts.registry.python.wheels.coverage": {
+    "7.15.0": 2,
+    "7.15.4": 2
+  },
+  "artifacts.registry.python.wheels.cramjam": {
+    "2.12.0": 2
+  },
+  "artifacts.registry.python.wheels.crc32c": {
+    "2.8": 2
+  },
+  "artifacts.registry.python.wheels.crcmod": {
+    "1.7": 2
   },
   "artifacts.registry.python.wheels.cryptography": {
-    "43.0.3": 3,
-    "45.0.4": 2,
-    "49.0.0": 2
+    "43.0.3": 4,
+    "45.0.4": 3,
+    "46.0.7": 2,
+    "49.0.0": 3,
+    "50.0.0": 2
+  },
+  "artifacts.registry.python.wheels.cwcwidth": {
+    "0.1.12": 2
+  },
+  "artifacts.registry.python.wheels.cycler": {
+    "0.12.1": 2
+  },
+  "artifacts.registry.python.wheels.cymem": {
+    "2.0.13": 2,
+    "2.0.14": 2
   },
   "artifacts.registry.python.wheels.cython": {
-    "3.2.5": 2
+    "3.0.12": 2,
+    "3.2.5": 3
   },
-  "artifacts.registry.python.wheels.fastavro": {
-    "1.12.1": 2
+  "artifacts.registry.python.wheels.cytoolz": {
+    "1.1.0": 2
   },
-  "artifacts.registry.python.wheels.fastuuid": {
-    "0.14.0": 2
+  "artifacts.registry.python.wheels.dbt-core-experimental-parser": {
+    "2.0.0a5": 2
   },
-  "artifacts.registry.python.wheels.frozenlist": {
-    "1.8.0": 2
+  "artifacts.registry.python.wheels.dbt-extractor": {
+    "0.6.0": 2
   },
-  "artifacts.registry.python.wheels.gevent": {
-    "25.9.1": 2,
-    "26.5.0": 2
+  "artifacts.registry.python.wheels.ddtrace": {
+    "3.19.7": 2,
+    "4.13.1": 2,
+    "4.8.2": 2
   },
-  "artifacts.registry.python.wheels.google-crc32c": {
-    "1.8.0": 2
+  "artifacts.registry.python.wheels.debugpy": {
+    "1.8.21": 2
   },
-  "artifacts.registry.python.wheels.greenlet": {
-    "3.5.3": 2
+  "artifacts.registry.python.wheels.decorator": {
+    "5.3.1": 2
   },
-  "artifacts.registry.python.wheels.grpcio": {
-    "1.74.0": 2
+  "artifacts.registry.python.wheels.dependency-injector": {
+    "4.49.1": 2
   },
-  "artifacts.registry.python.wheels.httptools": {
-    "0.8.0": 2
+  "artifacts.registry.python.wheels.dnspython": {
+    "2.8.0": 2
   },
-  "artifacts.registry.python.wheels.jiter": {
-    "0.12.0": 2
+  "artifacts.registry.python.wheels.docutils": {
+    "0.16": 2,
+    "0.19": 2,
+    "0.21.2": 2,
+    "0.23": 2
   },
-  "artifacts.registry.python.wheels.jq": {
-    "1.12.0": 2
+  "artifacts.registry.python.wheels.duckdb": {
+    "1.4.5": 2,
+    "1.5.5": 2
   },
-  "artifacts.registry.python.wheels.kiwisolver": {
-    "1.5.0": 2
+  "artifacts.registry.python.wheels.editdistance": {
+    "0.8.1": 2
   },
-  "artifacts.registry.python.wheels.lxml": {
-    "6.1.1": 2
+  "artifacts.registry.python.wheels.envier": {
+    "0.6.1": 2
   },
-  "artifacts.registry.python.wheels.lz4": {
-    "4.4.5": 2
+  "artifacts.registry.python.wheels.ephem": {
+    "4.2.1": 2
   },
-  "artifacts.registry.python.wheels.markupsafe": {
-    "3.0.3": 2
+  "artifacts.registry.python.wheels.et-xmlfile": {
+    "2.0.0": 2
   },
-  "artifacts.registry.python.wheels.msgpack": {
-    "1.2.1": 2
+  "artifacts.registry.python.wheels.eventlet": {
+    "0.41.0": 2
   },
-  "artifacts.registry.python.wheels.multidict": {
-    "6.7.1": 2
-  },
-  "artifacts.registry.python.wheels.mysqlclient": {
-    "2.2.7": 2
-  },
-  "artifacts.registry.python.wheels.numpy": {
-    "2.1.3": 2,
-    "2.5.1": 2
-  },
-  "artifacts.registry.python.wheels.orjson": {
-    "3.11.9": 2
-  },
-  "artifacts.registry.python.wheels.pandas": {
-    "2.2.3": 2,
-    "2.3.2": 2,
-    "3.0.4": 2
-  },
-  "artifacts.registry.python.wheels.peewee": {
-    "3.19.0": 2
-  },
-  "artifacts.registry.python.wheels.pillow": {
-    "12.3.0": 2
-  },
-  "artifacts.registry.python.wheels.primp": {
+  "artifacts.registry.python.wheels.exceptiongroup": {
     "1.3.1": 2
   },
+  "artifacts.registry.python.wheels.fastapi": {
+    "0.115.14": 2,
+    "0.139.0": 2
+  },
+  "artifacts.registry.python.wheels.fastavro": {
+    "1.12.1": 3
+  },
+  "artifacts.registry.python.wheels.fastuuid": {
+    "0.14.0": 3
+  },
+  "artifacts.registry.python.wheels.forbiddenfruit": {
+    "0.1.4": 2
+  },
+  "artifacts.registry.python.wheels.frozenlist": {
+    "1.8.0": 3
+  },
+  "artifacts.registry.python.wheels.geoarrow-c": {
+    "0.3.1": 2
+  },
+  "artifacts.registry.python.wheels.gevent": {
+    "25.9.1": 3,
+    "26.5.0": 3
+  },
+  "artifacts.registry.python.wheels.google-crc32c": {
+    "1.8.0": 3
+  },
+  "artifacts.registry.python.wheels.google-re2": {
+    "1.1.20251105": 2
+  },
+  "artifacts.registry.python.wheels.greenback": {
+    "1.3.0": 2
+  },
+  "artifacts.registry.python.wheels.greenlet": {
+    "3.5.3": 3
+  },
+  "artifacts.registry.python.wheels.grpcio": {
+    "1.74.0": 3,
+    "1.83.0": 2
+  },
+  "artifacts.registry.python.wheels.h11": {
+    "0.16.0": 2
+  },
+  "artifacts.registry.python.wheels.h2": {
+    "4.3.0": 2
+  },
+  "artifacts.registry.python.wheels.h5py": {
+    "3.16.0": 2
+  },
+  "artifacts.registry.python.wheels.hf-xet": {
+    "1.6.0": 2
+  },
+  "artifacts.registry.python.wheels.hiredis": {
+    "3.4.1": 2
+  },
+  "artifacts.registry.python.wheels.httpcore": {
+    "1.0.9": 2
+  },
+  "artifacts.registry.python.wheels.httptools": {
+    "0.8.0": 3
+  },
+  "artifacts.registry.python.wheels.httpx": {
+    "0.28.1": 2
+  },
+  "artifacts.registry.python.wheels.hydra-core": {
+    "1.3.5": 2
+  },
+  "artifacts.registry.python.wheels.hypothesis": {
+    "6.156.1": 2
+  },
+  "artifacts.registry.python.wheels.idna": {
+    "3.18": 2
+  },
+  "artifacts.registry.python.wheels.ijson": {
+    "3.5.1": 2
+  },
+  "artifacts.registry.python.wheels.immutables": {
+    "0.21": 2
+  },
+  "artifacts.registry.python.wheels.iniconfig": {
+    "2.3.0": 2
+  },
+  "artifacts.registry.python.wheels.jellyfish": {
+    "1.2.1": 2
+  },
+  "artifacts.registry.python.wheels.jiter": {
+    "0.10.0": 2,
+    "0.12.0": 3,
+    "0.16.0": 2
+  },
+  "artifacts.registry.python.wheels.jmespath": {
+    "1.1.0": 2
+  },
+  "artifacts.registry.python.wheels.jq": {
+    "1.12.0": 3
+  },
+  "artifacts.registry.python.wheels.jqpy": {
+    "1.0.0": 2
+  },
+  "artifacts.registry.python.wheels.json-stream-rs-tokenizer": {
+    "0.5.1": 2
+  },
+  "artifacts.registry.python.wheels.kiwisolver": {
+    "1.5.0": 3
+  },
+  "artifacts.registry.python.wheels.langchain": {
+    "0.3.30": 2,
+    "1.3.14": 2
+  },
+  "artifacts.registry.python.wheels.langchain-core": {
+    "0.3.86": 2,
+    "1.5.4": 2
+  },
+  "artifacts.registry.python.wheels.langchain-text-splitters": {
+    "0.3.11": 2,
+    "1.1.2": 2
+  },
+  "artifacts.registry.python.wheels.langflow": {
+    "1.11.4": 2
+  },
+  "artifacts.registry.python.wheels.langgraph": {
+    "1.0.10": 2,
+    "1.2.10": 2
+  },
+  "artifacts.registry.python.wheels.langgraph-prebuilt": {
+    "1.0.8": 2,
+    "1.1.0": 2
+  },
+  "artifacts.registry.python.wheels.langgraph-sdk": {
+    "0.3.0": 2,
+    "0.4.2": 2
+  },
+  "artifacts.registry.python.wheels.lazy-object-proxy": {
+    "1.12.0": 2
+  },
+  "artifacts.registry.python.wheels.libcst": {
+    "1.8.6": 2
+  },
+  "artifacts.registry.python.wheels.litellm": {
+    "1.97.0": 2
+  },
+  "artifacts.registry.python.wheels.lmdb": {
+    "2.3.0": 2
+  },
+  "artifacts.registry.python.wheels.lru-dict": {
+    "1.4.0": 2
+  },
+  "artifacts.registry.python.wheels.lxml": {
+    "6.1.1": 3
+  },
+  "artifacts.registry.python.wheels.lz4": {
+    "4.4.5": 3
+  },
+  "artifacts.registry.python.wheels.marisa-trie": {
+    "1.4.1": 2
+  },
+  "artifacts.registry.python.wheels.markdown-it-py": {
+    "4.2.0": 2
+  },
+  "artifacts.registry.python.wheels.markupsafe": {
+    "3.0.2": 2,
+    "3.0.3": 3
+  },
+  "artifacts.registry.python.wheels.matplotlib": {
+    "3.10.9": 2,
+    "3.11.1": 2
+  },
+  "artifacts.registry.python.wheels.maxminddb": {
+    "3.0.0": 2
+  },
+  "artifacts.registry.python.wheels.mcp": {
+    "1.29.0": 2
+  },
+  "artifacts.registry.python.wheels.mdurl": {
+    "0.1.2": 2
+  },
+  "artifacts.registry.python.wheels.mmh3": {
+    "5.2.1": 2
+  },
+  "artifacts.registry.python.wheels.more-itertools": {
+    "10.8.0": 2,
+    "11.1.0": 2
+  },
+  "artifacts.registry.python.wheels.msgpack": {
+    "1.2.1": 3
+  },
+  "artifacts.registry.python.wheels.msgspec": {
+    "0.19.0": 2,
+    "0.21.1": 2
+  },
+  "artifacts.registry.python.wheels.multidict": {
+    "6.7.1": 3
+  },
+  "artifacts.registry.python.wheels.murmurhash": {
+    "1.0.15": 2
+  },
+  "artifacts.registry.python.wheels.mutf8": {
+    "1.0.6": 2
+  },
+  "artifacts.registry.python.wheels.mwparserfromhell": {
+    "0.7.2": 2
+  },
+  "artifacts.registry.python.wheels.mysqlclient": {
+    "2.2.7": 3
+  },
+  "artifacts.registry.python.wheels.networkx": {
+    "2.6.3": 2,
+    "3.2.1": 2,
+    "3.4.2": 2,
+    "3.6.1": 2
+  },
+  "artifacts.registry.python.wheels.nh3": {
+    "0.3.2": 2
+  },
+  "artifacts.registry.python.wheels.numpy": {
+    "2.1.3": 3,
+    "2.2.6": 2,
+    "2.3.5": 2,
+    "2.5.1": 3
+  },
+  "artifacts.registry.python.wheels.oauthlib": {
+    "3.3.1": 2
+  },
+  "artifacts.registry.python.wheels.onigurumacffi": {
+    "1.5.0": 2
+  },
+  "artifacts.registry.python.wheels.onnx": {
+    "1.21.0": 2
+  },
+  "artifacts.registry.python.wheels.onnxruntime": {
+    "1.27.1": 2
+  },
+  "artifacts.registry.python.wheels.openai": {
+    "2.41.1": 2,
+    "2.45.0": 2
+  },
+  "artifacts.registry.python.wheels.openai-agents": {
+    "0.18.1": 2
+  },
+  "artifacts.registry.python.wheels.opencv-python": {
+    "4.13.0": 2
+  },
+  "artifacts.registry.python.wheels.opencv-python-headless": {
+    "4.13.0": 2
+  },
+  "artifacts.registry.python.wheels.openpyxl": {
+    "3.1.2": 2,
+    "3.1.5": 2
+  },
+  "artifacts.registry.python.wheels.optree": {
+    "0.18.0": 2
+  },
+  "artifacts.registry.python.wheels.orjson": {
+    "3.11.9": 3
+  },
+  "artifacts.registry.python.wheels.ormsgpack": {
+    "1.12.2": 2
+  },
+  "artifacts.registry.python.wheels.outcome": {
+    "1.3.0.post0": 2
+  },
+  "artifacts.registry.python.wheels.packaging": {
+    "24.2": 2,
+    "25.0": 2,
+    "26.0": 2,
+    "26.2": 2
+  },
+  "artifacts.registry.python.wheels.pandas": {
+    "2.2.3": 3,
+    "2.3.2": 3,
+    "2.3.3": 2,
+    "3.0.4": 3
+  },
+  "artifacts.registry.python.wheels.peewee": {
+    "3.19.0": 3
+  },
+  "artifacts.registry.python.wheels.pendulum": {
+    "3.2.0": 2
+  },
+  "artifacts.registry.python.wheels.pillow": {
+    "10.4.0": 2,
+    "11.3.0": 2,
+    "12.3.0": 3
+  },
+  "artifacts.registry.python.wheels.pluggy": {
+    "1.6.0": 2
+  },
+  "artifacts.registry.python.wheels.preshed": {
+    "3.0.13": 2
+  },
+  "artifacts.registry.python.wheels.primp": {
+    "1.3.1": 3
+  },
+  "artifacts.registry.python.wheels.prompt-toolkit": {
+    "3.0.51": 2,
+    "3.0.52": 2
+  },
   "artifacts.registry.python.wheels.propcache": {
-    "0.5.2": 2
+    "0.5.2": 3
   },
   "artifacts.registry.python.wheels.protobuf": {
-    "6.33.6": 2,
-    "7.35.1": 2
+    "4.25.9": 2,
+    "5.29.6": 2,
+    "6.33.6": 3,
+    "7.35.1": 3
   },
   "artifacts.registry.python.wheels.psutil": {
-    "7.2.2": 2
+    "5.9.8": 2,
+    "6.1.1": 2,
+    "7.2.2": 3
   },
-  "artifacts.registry.python.wheels.psycopg-binary": {
+  "artifacts.registry.python.wheels.psycopg": {
+    "3.2.13": 2,
     "3.3.4": 2
   },
+  "artifacts.registry.python.wheels.psycopg-binary": {
+    "3.3.4": 3
+  },
+  "artifacts.registry.python.wheels.psycopg-pool": {
+    "3.3.1": 2,
+    "3.3.4": 2
+  },
+  "artifacts.registry.python.wheels.psycopg2": {
+    "2.9.12": 2
+  },
+  "artifacts.registry.python.wheels.psycopg2-binary": {
+    "2.9.12": 2
+  },
+  "artifacts.registry.python.wheels.py-rust-stemmers": {
+    "0.1.5": 2
+  },
+  "artifacts.registry.python.wheels.pyahocorasick": {
+    "2.3.1": 2
+  },
   "artifacts.registry.python.wheels.pyarrow": {
-    "19.0.1": 2,
-    "21.0.0": 2,
-    "24.0.0": 2
+    "19.0.1": 3,
+    "21.0.0": 3,
+    "23.0.1": 2,
+    "24.0.0": 3
+  },
+  "artifacts.registry.python.wheels.pyasn1": {
+    "0.6.4": 2
+  },
+  "artifacts.registry.python.wheels.pyasn1-modules": {
+    "0.4.2": 2
+  },
+  "artifacts.registry.python.wheels.pybase64": {
+    "1.5.0": 2
+  },
+  "artifacts.registry.python.wheels.pyclipper": {
+    "1.4.0": 2
+  },
+  "artifacts.registry.python.wheels.pycocotools": {
+    "2.0.11": 2
+  },
+  "artifacts.registry.python.wheels.pycparser": {
+    "2.22": 2,
+    "2.23": 2,
+    "3.00": 2
   },
   "artifacts.registry.python.wheels.pycryptodome": {
-    "3.23.0": 2
+    "3.20.0": 2,
+    "3.23.0": 3
   },
   "artifacts.registry.python.wheels.pycryptodomex": {
-    "3.23.0": 2
+    "3.19.0": 2,
+    "3.23.0": 3
   },
   "artifacts.registry.python.wheels.pycurl": {
-    "7.46.0": 2
+    "7.46.0": 3
   },
   "artifacts.registry.python.wheels.pydantic": {
-    "1.10.26": 2,
-    "2.10.6": 2
+    "1.10.26": 3,
+    "2.10.6": 3,
+    "2.13.4": 2
+  },
+  "artifacts.registry.python.wheels.pydantic-ai-slim": {
+    "1.107.0": 2,
+    "2.31.1": 2,
+    "2.9.0": 2
   },
   "artifacts.registry.python.wheels.pydantic-core": {
-    "2.46.4": 2
+    "2.27.2": 2,
+    "2.41.5": 2,
+    "2.46.4": 3
+  },
+  "artifacts.registry.python.wheels.pydantic-graph": {
+    "1.107.0": 2,
+    "2.31.1": 2,
+    "2.9.0": 2
+  },
+  "artifacts.registry.python.wheels.pygments": {
+    "2.18.0": 2,
+    "2.20.0": 2
+  },
+  "artifacts.registry.python.wheels.pyiceberg": {
+    "0.11.1": 2
+  },
+  "artifacts.registry.python.wheels.pyinstrument": {
+    "5.1.3": 2
+  },
+  "artifacts.registry.python.wheels.pyjson5": {
+    "2.0.1": 2
+  },
+  "artifacts.registry.python.wheels.pymongo": {
+    "4.16.0": 2,
+    "4.17.0": 2
   },
   "artifacts.registry.python.wheels.pynacl": {
-    "1.6.2": 2
+    "1.6.2": 3
   },
   "artifacts.registry.python.wheels.pyopenssl": {
-    "23.3.0": 2,
-    "24.3.0": 2
+    "23.3.0": 3,
+    "24.3.0": 3,
+    "25.3.0": 2,
+    "26.2.0": 2,
+    "26.3.0": 2
   },
-  "artifacts.registry.python.wheels.pypandoc-binary": {
+  "artifacts.registry.python.wheels.pypandoc": {
     "1.16.2": 2
   },
+  "artifacts.registry.python.wheels.pypandoc-binary": {
+    "1.16.2": 3
+  },
+  "artifacts.registry.python.wheels.pyparsing": {
+    "3.2.5": 2,
+    "3.3.2": 2
+  },
+  "artifacts.registry.python.wheels.pypng": {
+    "0.20250521.0": 2
+  },
+  "artifacts.registry.python.wheels.pyroaring": {
+    "1.0.4": 2
+  },
+  "artifacts.registry.python.wheels.pystemmer": {
+    "3.0.0": 2
+  },
+  "artifacts.registry.python.wheels.pytest": {
+    "7.4.4": 2,
+    "8.3.5": 2,
+    "8.4.2": 2,
+    "9.0.3": 2,
+    "9.1.1": 2
+  },
+  "artifacts.registry.python.wheels.pytest-asyncio": {
+    "0.20.3": 2,
+    "0.24.0": 2,
+    "0.26.0": 2,
+    "1.4.0": 2
+  },
+  "artifacts.registry.python.wheels.python-crfsuite": {
+    "0.9.12": 2
+  },
+  "artifacts.registry.python.wheels.python-dateutil": {
+    "2.9.0.post0": 2
+  },
+  "artifacts.registry.python.wheels.python-rapidjson": {
+    "1.23": 2
+  },
+  "artifacts.registry.python.wheels.pytokens": {
+    "0.4.1": 2
+  },
   "artifacts.registry.python.wheels.pytz": {
-    "2026.2": 2
+    "2026.2": 3
   },
   "artifacts.registry.python.wheels.pyyaml": {
-    "6.0.3": 2
+    "6.0.3": 3
   },
   "artifacts.registry.python.wheels.pyzbar": {
-    "0.1.9": 2
+    "0.1.9": 3
   },
-  "artifacts.registry.python.wheels.regex": {
-    "2026.7.11": 2
+  "artifacts.registry.python.wheels.pyzmq": {
+    "27.1.0": 2
   },
-  "artifacts.registry.python.wheels.rpds-py": {
-    "0.30.0": 2,
-    "2026.6.3": 2
-  },
-  "artifacts.registry.python.wheels.shapely": {
-    "2.1.2": 2
-  },
-  "artifacts.registry.python.wheels.sqlalchemy": {
-    "2.0.51": 2
-  },
-  "artifacts.registry.python.wheels.tiktoken": {
-    "0.12.0": 2
-  },
-  "artifacts.registry.python.wheels.tokenizers": {
-    "0.22.2": 2
-  },
-  "artifacts.registry.python.wheels.tornado": {
-    "6.5.7": 2
-  },
-  "artifacts.registry.python.wheels.uuid-utils": {
-    "0.17.0": 2
-  },
-  "artifacts.registry.python.wheels.uvloop": {
-    "0.22.1": 2
-  },
-  "artifacts.registry.python.wheels.watchdog": {
-    "4.0.2": 2
-  },
-  "artifacts.registry.python.wheels.watchfiles": {
-    "1.2.0": 2
-  },
-  "artifacts.registry.python.wheels.xxhash": {
-    "2.0.2": 2,
-    "3.8.1": 2
-  },
-  "artifacts.registry.python.wheels.zope-interface": {
+  "artifacts.registry.python.wheels.qrcode": {
+    "7.4.2": 2,
     "8.2": 2
   },
-  "artifacts.registry.python.wheels.zstandard": {
+  "artifacts.registry.python.wheels.rapidfuzz": {
+    "3.14.5": 2
+  },
+  "artifacts.registry.python.wheels.redis": {
+    "5.3.1": 2,
+    "6.4.0": 2,
+    "7.4.1": 2,
+    "8.0.1": 2
+  },
+  "artifacts.registry.python.wheels.regex": {
+    "2024.11.6": 2,
+    "2026.7.10": 2,
+    "2026.7.11": 3
+  },
+  "artifacts.registry.python.wheels.requests": {
+    "2.31.0": 2,
+    "2.32.3": 2,
+    "2.32.4": 2,
+    "2.32.5": 2,
+    "2.34.2": 2
+  },
+  "artifacts.registry.python.wheels.requests-oauthlib": {
+    "2.0.0": 2
+  },
+  "artifacts.registry.python.wheels.rich": {
+    "13.7.1": 2,
+    "13.9.4": 2,
+    "14.3.3": 2,
+    "15.0.0": 2
+  },
+  "artifacts.registry.python.wheels.rpds-py": {
+    "0.26.0": 2,
+    "0.30.0": 3,
+    "2026.6.3": 3
+  },
+  "artifacts.registry.python.wheels.rsa": {
+    "4.9": 2
+  },
+  "artifacts.registry.python.wheels.ruamel-yaml-clib": {
+    "0.2.15": 2
+  },
+  "artifacts.registry.python.wheels.rustworkx": {
+    "0.17.1": 2
+  },
+  "artifacts.registry.python.wheels.s3transfer": {
+    "0.10.4": 2,
+    "0.11.5": 2,
+    "0.16.0": 2,
+    "0.8.2": 2
+  },
+  "artifacts.registry.python.wheels.safetensors": {
+    "0.8.0": 2
+  },
+  "artifacts.registry.python.wheels.scikit-learn": {
+    "1.5.2": 2,
+    "1.6.1": 2,
+    "1.7.2": 2,
+    "1.8.0": 2
+  },
+  "artifacts.registry.python.wheels.scipy": {
+    "1.14.1": 2,
+    "1.15.3": 2,
+    "1.18.0": 2
+  },
+  "artifacts.registry.python.wheels.sentencepiece": {
+    "0.2.1": 2
+  },
+  "artifacts.registry.python.wheels.setproctitle": {
+    "1.3.7": 2
+  },
+  "artifacts.registry.python.wheels.shapely": {
+    "2.0.7": 2,
+    "2.1.2": 3
+  },
+  "artifacts.registry.python.wheels.simplejson": {
+    "4.1.1": 2
+  },
+  "artifacts.registry.python.wheels.six": {
+    "1.17.0": 2
+  },
+  "artifacts.registry.python.wheels.smolagents": {
+    "1.26.0": 2
+  },
+  "artifacts.registry.python.wheels.sniffio": {
+    "1.3.1": 2
+  },
+  "artifacts.registry.python.wheels.snowflake-connector-python": {
+    "3.18.1": 2,
+    "4.0.0": 2,
+    "4.3.0": 2
+  },
+  "artifacts.registry.python.wheels.sortedcontainers": {
+    "2.4.0": 2
+  },
+  "artifacts.registry.python.wheels.soundfile": {
+    "0.13.1": 2
+  },
+  "artifacts.registry.python.wheels.soupsieve": {
+    "2.8.4": 2
+  },
+  "artifacts.registry.python.wheels.sqlalchemy": {
+    "2.0.41": 2,
+    "2.0.51": 3
+  },
+  "artifacts.registry.python.wheels.srsly": {
+    "2.5.2": 2,
+    "2.5.3": 2
+  },
+  "artifacts.registry.python.wheels.starlette": {
+    "0.46.2": 2,
+    "1.3.1": 2
+  },
+  "artifacts.registry.python.wheels.statsmodels": {
+    "0.14.6": 2
+  },
+  "artifacts.registry.python.wheels.textual": {
+    "8.2.8": 2
+  },
+  "artifacts.registry.python.wheels.thrift": {
+    "0.16.0": 2,
+    "0.20.0": 2,
+    "0.22.0": 2
+  },
+  "artifacts.registry.python.wheels.tiktoken": {
+    "0.12.0": 3
+  },
+  "artifacts.registry.python.wheels.time-machine": {
+    "3.2.0": 2
+  },
+  "artifacts.registry.python.wheels.tokenizers": {
+    "0.22.2": 3
+  },
+  "artifacts.registry.python.wheels.tomli": {
+    "2.4.1": 2
+  },
+  "artifacts.registry.python.wheels.tomlkit": {
+    "0.15.0": 2
+  },
+  "artifacts.registry.python.wheels.tornado": {
+    "6.4.2": 2,
+    "6.5.7": 3
+  },
+  "artifacts.registry.python.wheels.traits": {
+    "7.1.0": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter": {
+    "0.25.2": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-bash": {
+    "0.25.1": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-c": {
+    "0.24.2": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-c-sharp": {
+    "0.23.5": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-cpp": {
+    "0.23.4": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-css": {
     "0.25.0": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-elixir": {
+    "0.3.5": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-embedded-template": {
+    "0.25.0": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-fortran": {
+    "0.6.0": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-go": {
+    "0.25.0": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-groovy": {
+    "0.1.2": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-html": {
+    "0.23.2": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-java": {
+    "0.23.5": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-javascript": {
+    "0.25.0": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-json": {
+    "0.24.8": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-julia": {
+    "0.25.0": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-kotlin": {
+    "1.1.0": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-lua": {
+    "0.5.0": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-markdown": {
+    "0.5.1": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-objc": {
+    "3.0.2": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-php": {
+    "0.24.2": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-powershell": {
+    "0.26.4": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-python": {
+    "0.25.0": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-regex": {
+    "0.25.0": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-rust": {
+    "0.24.0": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-scala": {
+    "0.26.2": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-sql": {
+    "0.3.11": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-swift": {
+    "0.7.3": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-toml": {
+    "0.7.0": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-typescript": {
+    "0.23.2": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-verilog": {
+    "1.0.3": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-xml": {
+    "0.7.0": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-yaml": {
+    "0.7.2": 2
+  },
+  "artifacts.registry.python.wheels.tree-sitter-zig": {
+    "1.1.2": 2
+  },
+  "artifacts.registry.python.wheels.typing-extensions": {
+    "4.13.2": 2,
+    "4.16.0": 2
+  },
+  "artifacts.registry.python.wheels.typing-inspection": {
+    "0.4.2": 2
+  },
+  "artifacts.registry.python.wheels.tzdata": {
+    "2026.3": 2
+  },
+  "artifacts.registry.python.wheels.ujson": {
+    "5.13.0": 2
+  },
+  "artifacts.registry.python.wheels.urllib3": {
+    "1.26.20": 2,
+    "2.7.0": 2
+  },
+  "artifacts.registry.python.wheels.uuid-utils": {
+    "0.17.0": 3
+  },
+  "artifacts.registry.python.wheels.uvloop": {
+    "0.21.0": 2,
+    "0.22.1": 3
+  },
+  "artifacts.registry.python.wheels.watchdog": {
+    "4.0.2": 3,
+    "6.0.0": 2
+  },
+  "artifacts.registry.python.wheels.watchfiles": {
+    "1.2.0": 3
+  },
+  "artifacts.registry.python.wheels.wcwidth": {
+    "0.8.2": 2
+  },
+  "artifacts.registry.python.wheels.websocket-client": {
+    "1.8.0": 2,
+    "1.9.0": 2
+  },
+  "artifacts.registry.python.wheels.werkzeug": {
+    "2.2.3": 2,
+    "3.0.6": 2,
+    "3.1.3": 2,
+    "3.1.8": 2
+  },
+  "artifacts.registry.python.wheels.xxhash": {
+    "2.0.2": 3,
+    "3.8.1": 3
+  },
+  "artifacts.registry.python.wheels.yappi": {
+    "1.7.3": 2
+  },
+  "artifacts.registry.python.wheels.yarl": {
+    "1.24.5": 2
+  },
+  "artifacts.registry.python.wheels.zlib-ng": {
+    "1.0.0": 2
+  },
+  "artifacts.registry.python.wheels.zope-event": {
+    "6.2": 2
+  },
+  "artifacts.registry.python.wheels.zope-interface": {
+    "8.2": 3
+  },
+  "artifacts.registry.python.wheels.zope-proxy": {
+    "7.1": 2
+  },
+  "artifacts.registry.python.wheels.zopfli": {
+    "0.4.0": 2
+  },
+  "artifacts.registry.python.wheels.zstandard": {
+    "0.25.0": 3
   }
 }
