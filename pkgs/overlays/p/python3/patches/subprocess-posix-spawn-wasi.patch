@@ -1,5 +1,5 @@
 diff --git a/Lib/subprocess.py b/Lib/subprocess.py
-index 52b7b71..1c08765 100644
+index 3a8c743..8e568f0 100644
 --- a/Lib/subprocess.py
 +++ b/Lib/subprocess.py
 @@ -75,7 +75,7 @@ else:
@@ -31,7 +31,7 @@ index 52b7b71..1c08765 100644
              ECHILD = errno.ECHILD
  
      import select
-@@ -719,7 +721,7 @@ def _use_posix_spawn():
+@@ -718,7 +720,7 @@ def _use_posix_spawn():
      if ((_env := os.environ.get('_PYTHON_SUBPROCESS_USE_POSIX_SPAWN')) in ('0', '1')):
          return bool(int(_env))
  
@@ -49,8 +49,12 @@ index 52b7b71..1c08765 100644
              raise OSError(
                  errno.ENOTSUP, f"{sys.platform} does not support processes."
              )
-@@ -1787,7 +1789,7 @@ class Popen:
-                          p2cread, p2cwrite,
+@@ -1785,10 +1787,10 @@ class Popen:
+ 
+ 
+         def _posix_spawn(self, args, executable, env, restore_signals, close_fds,
+-                         p2cread, p2cwrite,
++                         cwd, p2cread, p2cwrite,
                           c2pread, c2pwrite,
                           errread, errwrite):
 -            """Execute program using os.posix_spawn()."""
@@ -58,7 +62,7 @@ index 52b7b71..1c08765 100644
              kwargs = {}
              if restore_signals:
                  # See _Py_RestoreSignals() in Python/pylifecycle.c
-@@ -1811,12 +1813,20 @@ class Popen:
+@@ -1812,12 +1814,23 @@ class Popen:
                      file_actions.append((os.POSIX_SPAWN_DUP2, fd, fd2))
  
              if close_fds:
@@ -72,6 +76,9 @@ index 52b7b71..1c08765 100644
 +                    # WASIX-TODO "posix_spawn fd passing"); kept for when it does.
 +                    for fd in range(3, 1024):
 +                        file_actions.append((os.POSIX_SPAWN_CLOSE, fd))
++
++            if cwd is not None:
++                file_actions.append((os.POSIX_SPAWN_CHDIR, cwd))
  
              if file_actions:
                  kwargs['file_actions'] = file_actions
@@ -81,7 +88,7 @@ index 52b7b71..1c08765 100644
              self._child_created = True
  
              self._close_pipe_fds(p2cread, p2cwrite,
-@@ -1857,21 +1867,27 @@ class Popen:
+@@ -1858,23 +1871,28 @@ class Popen:
  
              sys.audit("subprocess.Popen", executable, args, cwd, env)
  
@@ -107,7 +114,6 @@ index 52b7b71..1c08765 100644
 +                unsupported = (
 +                    ("preexec_fn", preexec_fn is not None),
 +                    ("pass_fds", bool(pass_fds)),
-+                    ("cwd", cwd is not None),
 +                    ("start_new_session", start_new_session),
 +                    ("process_group", process_group != -1),
 +                    ("user", uid is not None),
@@ -122,5 +128,8 @@ index 52b7b71..1c08765 100644
 +                        raise NotImplementedError(
 +                            f"{option} is not supported on {sys.platform}")
                  self._posix_spawn(args, executable, env, restore_signals, close_fds,
-                                   p2cread, p2cwrite,
+-                                  p2cread, p2cwrite,
++                                  cwd, p2cread, p2cwrite,
                                    c2pread, c2pwrite,
+                                   errread, errwrite)
+                 return

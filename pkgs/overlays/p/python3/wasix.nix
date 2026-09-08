@@ -168,6 +168,9 @@
           # find_library's posix branch shells out to ldconfig/gcc, returning None on wasm.
           ./patches/ctypes-find-library-wasi.patch
           ./patches/enable-wasm-dynamic-linking-wasi.patch
+          # os.posix_spawn exposes no chdir file action, which is the only way to
+          # honor a subprocess cwd without fork.
+          ./patches/posix-spawn-chdir-action.patch
           # wasi has no fork, so subprocess goes through posix_spawn.
           ./patches/subprocess-posix-spawn-wasi.patch
           # Same for multiprocessing; 3.14 restructured context.py and util.py, hence two.
@@ -230,6 +233,10 @@
                   substituteInPlace configure.ac \
                     --replace-fail ' -lwasi-emulated-signal -lwasi-emulated-getpid -lwasi-emulated-process-clocks' \
                                    ' -lwasi-emulated-getpid -lwasi-emulated-process-clocks'
+
+                  substituteInPlace configure.ac \
+                    --replace-fail 'posix_spawn posix_spawnp \' \
+                                   'posix_spawn posix_spawnp posix_spawn_file_actions_addchdir_np \'
 
                   substituteInPlace configure.ac \
                     --replace-fail 'aix*) MACHDEP="aix";;' 'aix*) MACHDEP="aix";;
