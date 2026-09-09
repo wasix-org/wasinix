@@ -10,6 +10,11 @@
 }: let
   inherit (pkgs) lib;
 
+  # subprocess execs /bin/sh, which the webc gets from its [dependencies]. A
+  # cross build runs the interpreter as a naked module instead, where only
+  # --use puts the command there.
+  wasixRun = runners.rawWasm.withPackages [packages.wasix.preferred.bash];
+
   mkWasixPython = isCurrent: base: let
     pyVer = base.pythonVersion;
     pythonCommand = name: {
@@ -298,7 +303,7 @@
         postInstall = ''
           rm -f "$out/bin/python${pyVer}" "$out/bin/python3" "$out/bin/python"
           printf '#!%s/bin/sh\nexec %s/bin/wasix-run %s/bin/python%s.wasm "$@"\n' \
-            "${packages.sameProfile.buildPackages.bashNonInteractive}" "${runners.rawWasm.unbound}" "$out" "${pyVer}" \
+            "${packages.sameProfile.buildPackages.bashNonInteractive}" "${wasixRun}" "$out" "${pyVer}" \
             > "$out/bin/python${pyVer}"
           chmod +x "$out/bin/python${pyVer}"
           ln "$out/bin/python${pyVer}" "$out/bin/python3"

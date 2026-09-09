@@ -2,7 +2,11 @@
 # build tree identity-mounted, so paths recorded at build time resolve.
 # Env knobs: WASIX_WASMER (runtime), WASIX_RUN_ENV / WASIX_RUN_ENV_ALL
 # (guest env), WASIX_RUN_FLAGS (extra wasmer flags).
-{pkgs}: let
+{
+  pkgs,
+  makeWasmerPackage,
+}: let
+  inherit (pkgs) lib;
   coreutils = pkgs.buildPackages.coreutils;
 
   # No wasmer in the closure: build artifacts bake this launcher in (cmake's
@@ -95,6 +99,21 @@
       makeWrapper ${pkgs.lib.getExe unbound} "$out/bin/wasix-run" \
         --set WASIX_WASMER ${pkgs.lib.getExe wasmer}
     '';
+  # A naked module carries no [dependencies] of its own, so guest commands it
+  # execs have to be named with --use and resolved from local webcs. Prefixed
+  # rather than set, so a caller's own flags survive.
+  withPackages = needed: let
+    webcs = map (package: makeWasmerPackage {inherit package;}) needed;
+    roots = builtins.concatMap (w: [w.webc] ++ lib.optional (w.depTree != null) w.depTree) webcs;
+    flags =
+      builtins.concatMap (w: ["--use" "${w.id.owner}/${w.id.name}"]) webcs
+      ++ builtins.concatMap (root: ["--include-webc" "${root}"]) roots
+      ++ ["--offline"];
+  in
+    pkgs.buildPackages.writeShellScriptBin "wasix-run" ''
+      export WASIX_RUN_FLAGS="${lib.concatStringsSep " " flags}''${WASIX_RUN_FLAGS:+ $WASIX_RUN_FLAGS}"
+      exec ${lib.getExe unbound} "$@"
+    '';
 in {
-  inherit unbound withRuntime;
+  inherit unbound withPackages withRuntime;
 }
