@@ -36,7 +36,6 @@
         # The cross tzcode doesn't build (getresuid), and null breaks the build python's
         # zoneinfo; the platform-independent data is mounted into the webc via selfMounts.
         tzdata = packages.sameProfile.buildPackages.tzdata;
-        gdbm = null;
         # nixpkgs sets libuuid null off Linux; the overlay util-linux ships libuuid only.
         libuuid = packages.sameProfile.util-linux;
         bashNonInteractive = packages.sameProfile.buildPackages.bashNonInteractive;
