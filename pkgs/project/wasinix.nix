@@ -77,7 +77,10 @@
         });
 
     constructionFor = nativePkgs: let
-      rawWasm = import ../runners/raw-wasm.nix {pkgs = nativePkgs;};
+      rawWasm = import ../runners/raw-wasm.nix {
+        pkgs = nativePkgs;
+        inherit makeWasmerPackage;
+      };
       runtime = nativePkgs.wasmer;
       referenceScanner = nativePkgs.callPackage ../lib/check-reference-scanner.nix {};
       helpers = import ../lib {
@@ -199,7 +202,7 @@
       inherit abiCheck cxxRuntimeCheck emulatedChecks harnesses linkCheck makeWasmerPackage mkCargoRegistry mkPythonRegistry mkPythonWheels mkWasixStdenv testLib wasixInfrastructureOverlay webcIdent;
       inherit (toolchain) haskell;
       runners.rawWasm = {
-        inherit (rawWasm) unbound;
+        inherit (rawWasm) unbound withPackages;
         withRuntime = rawWasm.withRuntime runtime;
       };
     };
