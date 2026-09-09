@@ -226,6 +226,8 @@ in rec {
           export CI=true
           export enableParallelChecking=false
           ${lib.optionalString (guestInputs != []) ''
+            # /usr/bin, not /bin: a guest searches both, and /bin is where the
+            # runtime puts the commands a package declares with --use.
             _wasix_guest_bin="$NIX_BUILD_TOP/.wasix-guest-bin"
             ${pkgs.coreutils}/bin/mkdir -p "$_wasix_guest_bin"
             for _wasix_guest_input in ${lib.escapeShellArgs (map toString guestInputs)}; do
@@ -235,7 +237,7 @@ in rec {
                 ${pkgs.coreutils}/bin/ln -s "$_wasix_guest_command" "$_wasix_guest_bin/$_wasix_guest_name"
               done
             done
-            export WASIX_RUN_FLAGS="$WASIX_RUN_FLAGS --volume $_wasix_guest_bin:/bin"
+            export WASIX_RUN_FLAGS="$WASIX_RUN_FLAGS --volume $_wasix_guest_bin:/usr/bin"
           ''}
           ${postRestore}
           if [ -n "''${WASIX_CHECK_SHARD_COUNT:-}" ]; then
