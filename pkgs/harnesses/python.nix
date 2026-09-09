@@ -12,6 +12,10 @@
   ciTags ? [],
 }: let
   pythonPath = python3.pkgs.makePythonPath ([wheel] ++ deps);
+  # The shim resolves the webc's [dependencies] from its own offline tree, which
+  # `wasmer run` on the bare artifact would go to the registry for. Naming the
+  # declared entrypoint keeps the command the same one a bare run would pick.
+  runner = "${pythonWebc.shim}/bin/${pythonWebc.wasmer.package.passthru.wasmer.entrypoint}";
   marker = "PYRUN_OK ${name}";
   file = pkgs.writeText "${name}.py" ''
     ${script}
@@ -24,7 +28,6 @@ in
   } ''
     export HOME=$TMPDIR/home
     mkdir -p "$HOME"
-    webc=$(${lib.getExe' pkgs.findutils "find"} ${pythonWebc} -name '*.webc' | head -1)
 
     site=$TMPDIR/site
     mkdir -p "$site"
@@ -36,12 +39,8 @@ in
 
     log=$(mktemp)
     rc=0
-    timeout ${toString timeout} wasmer run \
-      --volume "$site":/site \
-      --mapdir /home:"$HOME" \
-      --env HOME=/home \
-      --env PYTHONPATH=/site \
-      "$webc" -- /site/__pyrun__.py >"$log" 2>&1 </dev/null || rc=$?
+    export WASMER_FLAGS="--volume $site:/site --mapdir /home:$HOME --env HOME=/home --env PYTHONPATH=/site"
+    timeout ${toString timeout} ${runner} /site/__pyrun__.py >"$log" 2>&1 </dev/null || rc=$?
 
     if ${lib.getExe' pkgs.gnugrep "grep"} -q ${lib.escapeShellArg marker} "$log" && [ "$rc" -eq 0 ]; then
       cp "$log" "$out"
