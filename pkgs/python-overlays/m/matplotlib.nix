@@ -70,6 +70,11 @@ exposePackage (
             --replace-fail \
               'def test_locale_comma():' \
               $'@pytest.mark.xfail(sys.platform == "wasix", reason="wasix-libc localeconv is POSIX-only", strict=True)\ndef test_locale_comma():'
+          substituteInPlace lib/matplotlib/tests/test_animation.py \
+            --replace-fail \
+              '@pytest.mark.skipif(shutil.which("/bin/sh") is None, reason="requires a POSIX OS")' \
+              $'@pytest.mark.skipif(shutil.which("/bin/sh") is None, reason="requires a POSIX OS")\n@pytest.mark.skipif(sys.platform == "wasix", reason="wasix cannot exec a hashbang script")'
+
           substituteInPlace lib/matplotlib/testing/__init__.py \
             --replace-fail \
               'except (OSError, subprocess.CalledProcessError):' \
