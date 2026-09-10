@@ -375,8 +375,15 @@
             # autoSelfMount only scans bin/*.wasm, but tzdata is baked into
             # _sysconfigdata (else zoneinfo raises "No time zone found").
             selfMounts = [packages.sameProfile.buildPackages.tzdata];
-            # shell=True runs /bin/sh, which this places there.
-            dependencies = [packages.wasix.preferred.bash];
+            # shell=True runs /bin/sh, which this places there. Unpinned: an
+            # interpreter should take whatever bash the registry has, not a
+            # version frozen at build time.
+            dependencies = [
+              {
+                package = packages.wasix.preferred.bash;
+                version = "*";
+              }
+            ];
             # Only the bytecode matching the -O in use is read back, and the wasm is
             # already the command atom PYTHONEXECUTABLE names, so mounting either
             # again is dead weight.
