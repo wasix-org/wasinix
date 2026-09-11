@@ -1,0 +1,128 @@
+name: Wake the nix builder
+description:
+  Start the idle-stopped EC2 nix builder and return once sshd answers, leaving
+  an ssh key on disk for the build that follows. Authentication is GitHub OIDC
+  against the aux AWS account, and the role trusts only the nixbuilds
+  environment, so the calling job must declare it or the token is refused.
+inputs:
+  role-to-assume:
+    description: ARN of the nixbuilds-wake role (terraform output nixbuilds_wake)
+    required: true
+  instance-id:
+    description:
+      Instance to start. Named explicitly because the role grants no lookup —
+      ec2:DescribeInstances cannot be scoped to one instance
+    required: true
+  host:
+    description:
+      Address to connect to. The builder holds an Elastic IP, so this is a
+      constant and survives the stop
+    required: true
+  ssh-key:
+    description: Private key the builder accepts
+    required: true
+  host-key:
+    description:
+      The builder's public key as a known_hosts line. Without it the first
+      connection trusts whatever key the host presents
+    default: ""
+  user:
+    description: Account to connect as
+    default: nixremote
+  region:
+    description: Region the instance lives in
+    default: eu-west-3
+outputs:
+  ssh-key-path:
+    description: Where the private key was written
+    value: ${{ steps.ssh.outputs.key-path }}
+  known-hosts-path:
+    description: Where the known_hosts file was written
+    value: ${{ steps.ssh.outputs.known-hosts-path }}
+runs:
+  using: composite
+  steps:
+    - name: Authenticate to AWS
+      uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+      with:
+        role-to-assume: ${{ inputs.role-to-assume }}
+        aws-region: ${{ inputs.region }}
+        role-session-name: wasinix-wake-nixbuilds
+
+    - name: Start the builder
+      shell: bash
+      env:
+        INSTANCE_ID: ${{ inputs.instance-id }}
+      run: |
+        # The only AWS call this job is permitted to make. It is idempotent on
+        # a box that is already running, so no state check precedes it. A box
+        # caught mid-shutdown rejects it until it reaches "stopped"; that is
+        # the one retryable failure, every other one is real.
+        for _ in $(seq 30); do
+          if err=$(aws ec2 start-instances --instance-ids "$INSTANCE_ID" 2>&1); then
+            exit 0
+          fi
+          case "$err" in
+            *IncorrectInstanceState*)
+              echo "builder is still stopping, retrying"
+              sleep 10
+              ;;
+            *)
+              echo "$err" >&2
+              exit 1
+              ;;
+          esac
+        done
+        echo "builder never left the stopping state" >&2
+        exit 1
+
+    - name: Install the builder ssh key
+      id: ssh
+      shell: bash
+      env:
+        SSH_KEY: ${{ inputs.ssh-key }}
+        HOST_KEY: ${{ inputs.host-key }}
+        HOST: ${{ inputs.host }}
+      run: |
+        key="$RUNNER_TEMP/nixbuilds_key"
+        known="$RUNNER_TEMP/nixbuilds_known_hosts"
+        install -m 600 /dev/null "$key"
+        printf '%s\n' "$SSH_KEY" > "$key"
+        : > "$known"
+        if [ -n "$HOST_KEY" ]; then
+          printf '%s %s\n' "$HOST" "$HOST_KEY" > "$known"
+        else
+          echo "::warning::no host-key given; trusting the key the builder presents"
+        fi
+        echo "key-path=$key" >> "$GITHUB_OUTPUT"
+        echo "known-hosts-path=$known" >> "$GITHUB_OUTPUT"
+
+    - name: Wait for sshd
+      shell: bash
+      env:
+        HOST: ${{ inputs.host }}
+        USER_NAME: ${{ inputs.user }}
+        KEY: ${{ steps.ssh.outputs.key-path }}
+        KNOWN: ${{ steps.ssh.outputs.known-hosts-path }}
+        HOST_KEY: ${{ inputs.host-key }}
+      run: |
+        # sshd answering is the readiness signal that matters here: the build
+        # is an ssh-ng connection, not an SSM session, so nothing is gained by
+        # asking AWS what it thinks the instance is doing. A cold boot is
+        # ~60-90s; the ceiling is five minutes.
+        strict=accept-new
+        if [ -n "$HOST_KEY" ]; then strict=yes; fi
+        for _ in $(seq 60); do
+          if ssh -i "$KEY" \
+              -o UserKnownHostsFile="$KNOWN" \
+              -o StrictHostKeyChecking="$strict" \
+              -o BatchMode=yes \
+              -o ConnectTimeout=5 \
+              "$USER_NAME@$HOST" true 2>/dev/null; then
+            echo "builder is up"
+            exit 0
+          fi
+          sleep 5
+        done
+        echo "builder did not answer on ssh within five minutes" >&2
+        exit 1

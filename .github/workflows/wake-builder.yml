@@ -1,0 +1,49 @@
+name: Wake builder
+
+# On demand only. The builder stops itself when idle, so this exists to prove
+# the wake path works — and to warm the box before a session that wants it
+# already up. A build workflow wakes it as a step, not by calling this.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: nixbuilds
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # the OIDC token exchanged for the nixbuilds-wake role
+  id-token: write
+
+jobs:
+  wake:
+    name: Wake the nix builder
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # This is the access control: the role in aux trusts exactly
+    # `repo:wasix-org/wasinix:environment:nixbuilds`, so a job without this
+    # line cannot assume it whatever branch it runs on.
+    environment: nixbuilds
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Wake
+        id: wake
+        uses: ./.github/actions/wake-builder
+        with:
+          role-to-assume: ${{ vars.NIXBUILDS_WAKE_ROLE_ARN }}
+          instance-id: ${{ vars.NIXBUILDS_INSTANCE_ID }}
+          host: ${{ vars.NIXBUILDS_HOST }}
+          host-key: ${{ vars.NIXBUILDS_HOST_KEY }}
+          ssh-key: ${{ secrets.NIXBUILDS_SSH_KEY }}
+
+      - name: Report what woke up
+        env:
+          HOST: ${{ vars.NIXBUILDS_HOST }}
+          KEY: ${{ steps.wake.outputs.ssh-key-path }}
+          KNOWN: ${{ steps.wake.outputs.known-hosts-path }}
+        run: |
+          ssh -i "$KEY" -o UserKnownHostsFile="$KNOWN" -o BatchMode=yes \
+            "nixremote@$HOST" 'nproc; free -g | head -2; df -h /nix | tail -1' \
+            | tee -a "$GITHUB_STEP_SUMMARY"
