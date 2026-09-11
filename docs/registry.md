@@ -225,21 +225,16 @@ Webc rels land in `[package.metadata] wasix-rel` only, for now: the registry has
 no version encoding for republishing (`WASIX-TODO.md`), so a bumped webc still
 cannot republish.
 
-## Immutability, and the two indexes
+## Immutability
 
 Published filenames are immutable and accumulate. A normal registry rebuild can
 change the bytes behind an existing filename through a nixpkgs, toolchain, or
 runtime update, and the volume keeps its original artifact in that case. Bump
 the rel only when that rebuilt wheel is itself a release.
 
-GitHub Pages behaves differently: it is always deployed from the fresh
-`legacyPackages.x86_64-linux.artifacts.registry.python` result, so it is a
-bleeding-edge snapshot and may serve new bytes under an existing filename. Use
-the volume-backed index for immutable, reproducible installs.
-
-After a green build of main, `publish-index` uploads new filenames to the volume
-and deploys the fresh snapshot to GitHub Pages. The volume service is defined by
-`python-registry/app.yaml`.
+After a green build of main, `publish-index` uploads new filenames to the
+append-only volume, served at `python-registry.wasix.org`. The volume service is
+defined by `python-registry/app.yaml`.
 
 A wheel built by both interpreters is published once, under the one filename its
 `py3-none-any` tag earns it. Where the two builds differ, that name cannot hold
