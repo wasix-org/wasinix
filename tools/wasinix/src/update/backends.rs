@@ -12,7 +12,35 @@ use crate::support::format::short_rev;
 use crate::support::nix::eval_installable;
 use crate::support::ui;
 use crate::update::targets::{Backend, Target};
+use crate::update::upstream::Release;
 use crate::update::{Mode, REQUEST_ENV, Request};
+
+/// What a backend did: the outcome line the ChangeSet renders, and any notes
+/// the move itself raised. A note is the backend's own observation about the
+/// bump, distinct from the package-declared notes the fold collects later.
+#[derive(Debug, Default)]
+pub struct Outcome {
+    pub summary: Option<String>,
+    pub notes: Vec<String>,
+}
+
+impl Outcome {
+    fn summary(summary: String) -> Outcome {
+        Outcome {
+            summary: Some(summary),
+            notes: Vec::new(),
+        }
+    }
+}
+
+impl From<Option<String>> for Outcome {
+    fn from(summary: Option<String>) -> Outcome {
+        Outcome {
+            summary,
+            notes: Vec::new(),
+        }
+    }
+}
 
 /// The crate-pins backend reports its state rather than a version.
 static CRATE_STATE: LazyLock<Regex> =
@@ -266,27 +294,124 @@ pub(crate) fn flake_override_ref(source: &Value, rev: &str) -> Result<String> {
     }
 }
 
-fn update_flake_input(
-    repo: &Path,
-    target: &Target,
-    request: Option<&Request>,
-) -> Result<Option<String>> {
+/// A flake reference that names the release tag as well as its commit, so
+/// `flake.lock` records which release the pin is rather than an anonymous
+/// revision. The tag is a ref, not a substitute for the rev: the rev is what
+/// pins, and the ref only carries the identity.
+fn flake_release_ref(source: &Value, tag: &str, rev: &str) -> Result<String> {
+    let reference = flake_override_ref(source, rev)?;
+    let separator = if reference.contains('?') { '&' } else { '?' };
+    Ok(format!("{reference}{separator}ref=refs/tags/{tag}"))
+}
+
+/// The release a release-tracked pin should move to, if upstream has one
+/// newer than the pin. `None` leaves the pin where it is, which is what a
+/// quiet upstream and a pin already at the newest release both mean.
+fn release_move(target: &Target, before: &str) -> Result<Option<(Release, Option<String>)>> {
+    let mirror = release_mirror(target)?;
+    let releases = crate::update::upstream::releases(&mirror)?;
+    let current = crate::update::upstream::identity(&mirror, before, &releases)?;
+    let Some(release) = crate::update::upstream::newer_than(&releases, current) else {
+        ui::note(format!("  {current} is the newest release"));
+        return Ok(None);
+    };
+    // Whether the release still contains what the outgoing pin carried. A
+    // pin deliberately held ahead of its release, or a release cut off a
+    // release branch, makes this false: the move is still the right one, but
+    // it drops commits and must not land unreviewed.
+    let dropped = crate::update::upstream::commits_not_in(&mirror, before, &release.rev)?;
+    let note = (dropped > 0).then(|| {
+        format!(
+            "{} {current} -> {} does not contain the outgoing pin {}: {dropped} commit(s) it \
+             carried are not in the release. Confirm nothing needed is lost before merging.",
+            target.name,
+            release.version,
+            short_rev(before),
+        )
+    });
+    Ok(Some((release.clone(), note)))
+}
+
+/// The release an explicit release request names.
+fn requested_release(target: &Target, value: &str) -> Result<Release> {
+    let Some(version) = crate::update::upstream::Version::parse(value) else {
+        return request_error(format!(
+            "{}: {value:?} is not a release version",
+            target.name
+        ));
+    };
+    let mirror = release_mirror(target)?;
+    let releases = crate::update::upstream::releases(&mirror)?;
+    match crate::update::upstream::release_named(&releases, version) {
+        Some(release) => Ok(release.clone()),
+        None => request_error(format!("{}: no release {version} upstream", target.name)),
+    }
+}
+
+fn release_mirror(target: &Target) -> Result<std::path::PathBuf> {
+    let Some(repository) = target
+        .source
+        .as_ref()
+        .and_then(crate::update::upstream::source_repository)
+    else {
+        return request_error(format!(
+            "{} tracks releases but declares no git source",
+            target.name
+        ));
+    };
+    crate::update::upstream::mirror(&repository)
+}
+
+fn update_flake_input(repo: &Path, target: &Target, request: Option<&Request>) -> Result<Outcome> {
     let before = flake_input_rev(repo, &target.input)?;
-    let requested = request.map(|request| request.value.as_str());
+    let source = || {
+        request
+            .and_then(|request| request.source.clone())
+            .or_else(|| target.source.clone())
+            .unwrap_or(Value::Null)
+    };
+    let mut notes = Vec::new();
+    // What the lock must hold afterwards, for the request kinds that name a
+    // commit. A resolution that lands somewhere else is a failure, not a
+    // surprise the caller has to notice in the receipt.
+    let mut expected: Option<String> = None;
     let override_ref = match request {
-        None => None,
+        Some(request) if request.mode == Mode::Release => {
+            if !target.release_line {
+                return request_error(format!("{} only accepts revision requests", target.name));
+            }
+            let release = requested_release(target, &request.value)?;
+            expected = Some(release.rev.clone());
+            Some(flake_release_ref(&source(), &release.tag, &release.rev)?)
+        }
         Some(request) if request.mode != Mode::Revision => {
             return request_error(format!("{} only accepts revision requests", target.name));
         }
         Some(request) => {
-            let source = request.source.as_ref().unwrap_or(&Value::Null);
-            Some(flake_override_ref(source, &request.value).map_err(|_| {
+            expected = Some(request.value.clone());
+            Some(flake_override_ref(&source(), &request.value).map_err(|_| {
                 crate::support::error::Error::Request(format!(
                     "{} has no Git revision source",
                     target.name
                 ))
             })?)
         }
+        // A release-tracked pin never follows its ref. Advancing to the
+        // newest release is the whole rule; anything else would put the pin
+        // back on whatever the branch happened to hold.
+        None if target.release_line => match release_move(target, &before)? {
+            None => {
+                let outcome = "up to date".to_string();
+                ui::note(format!("  {outcome}"));
+                return Ok(Outcome::summary(outcome));
+            }
+            Some((release, note)) => {
+                notes.extend(note);
+                expected = Some(release.rev.clone());
+                Some(flake_release_ref(&source(), &release.tag, &release.rev)?)
+            }
+        },
+        None => None,
     };
     let mut command = vec!["nix".into(), "flake".into()];
     if let Some(reference) = &override_ref {
@@ -305,11 +430,11 @@ fn update_flake_input(
         return request_error(format!("nix flake pin update exited {code}"));
     }
     let after = flake_input_rev(repo, &target.input)?;
-    if requested.is_some_and(|rev| rev != after) {
+    if expected.as_deref().is_some_and(|rev| rev != after) {
         return request_error(format!(
             "{} resolved requested revision {} to {after}",
             target.name,
-            requested.unwrap_or_default()
+            expected.unwrap_or_default()
         ));
     }
     let outcome = if before == after {
@@ -318,7 +443,13 @@ fn update_flake_input(
         format!("{} -> {}", short_rev(&before), short_rev(&after))
     };
     ui::note(format!("  {outcome}"));
-    Ok(Some(outcome))
+    for note in &notes {
+        ui::warning(note);
+    }
+    Ok(Outcome {
+        summary: Some(outcome),
+        notes,
+    })
 }
 
 fn update_crate_pins(repo: &Path, request: Option<&Request>) -> Result<Option<String>> {
@@ -332,14 +463,42 @@ fn update_crate_pins(repo: &Path, request: Option<&Request>) -> Result<Option<St
         .map(|(_, rest)| rest.trim().to_string()))
 }
 
-pub fn run_backend(
-    repo: &Path,
-    target: &Target,
-    request: Option<&Request>,
-) -> Result<Option<String>> {
+pub fn run_backend(repo: &Path, target: &Target, request: Option<&Request>) -> Result<Outcome> {
     match target.backend {
-        Backend::UpdateScript => run_update_script(repo, target, request),
+        Backend::UpdateScript => run_update_script(repo, target, request).map(Outcome::from),
         Backend::FlakeInput => update_flake_input(repo, target, request),
-        Backend::CratePins => update_crate_pins(repo, request),
+        Backend::CratePins => update_crate_pins(repo, request).map(Outcome::from),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The tag rides along as a ref so the lock records which release the pin
+    /// is; the rev is still what pins, and submodules must survive both.
+    #[test]
+    fn a_release_reference_carries_the_tag_beside_the_revision() {
+        let source = serde_json::json!({
+            "kind": "git",
+            "url": "https://github.com/wasmerio/wasmer",
+            "submodules": true,
+        });
+        let rev = "32b50f8b600efa8e2d5f88593c453139bf1ca222";
+        assert_eq!(
+            flake_release_ref(&source, "v7.4.0", rev).unwrap(),
+            format!(
+                "git+https://github.com/wasmerio/wasmer?rev={rev}&submodules=1&ref=refs/tags/v7.4.0"
+            )
+        );
+    }
+
+    #[test]
+    fn a_github_release_reference_still_names_the_tag() {
+        let source = serde_json::json!({"kind": "github", "owner": "o", "repo": "r"});
+        assert_eq!(
+            flake_release_ref(&source, "v1.2.3", "abc").unwrap(),
+            "github:o/r/abc?ref=refs/tags/v1.2.3"
+        );
     }
 }
