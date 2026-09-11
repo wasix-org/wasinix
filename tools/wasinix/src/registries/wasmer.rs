@@ -537,6 +537,48 @@ const QUERY: &str = "query GetPackageVersion($name: String!, $version: String!) 
     id readme distribution { webcSha256Hash piritaSha256Hash } \
     packagewebcSet(first: 1) { edges { node { tag webc { webcSha256 } webcV3 { webcSha256 } } } } } }";
 
+/// How the pre-flight verifies a dependency will resolve on the registry.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum DependencyCheck<'a> {
+    /// `*` resolves at load time, so any published version of the package does.
+    AnyVersion,
+    /// A pin resolves to one version, which must be present.
+    ExactVersion(&'a str),
+}
+
+/// Classify a dependency from its manifest requirement. `resolved` is the
+/// version this checkout built, used only for a pin.
+pub(crate) fn dependency_check<'a>(
+    requirement: Option<&str>,
+    resolved: &'a str,
+) -> DependencyCheck<'a> {
+    match requirement {
+        Some("*") => DependencyCheck::AnyVersion,
+        _ => DependencyCheck::ExactVersion(resolved),
+    }
+}
+
+const PACKAGE_QUERY: &str =
+    "query GetPackage($name: String!) { getPackage(name: $name) { lastVersion { version } } }";
+
+// Whether the registry serves any version of a package. A `*` dependency is
+// satisfied by whatever is published, so this stands in for an exact-version
+// lookup there.
+pub fn package_published(graphql_url: &str, full_name: &str) -> Result<bool> {
+    let payload = json!({
+        "query": PACKAGE_QUERY,
+        "variables": {"name": full_name},
+        "operationName": "GetPackage",
+    });
+    let document: Value = crate::support::http::post_json(graphql_url, &payload)?;
+    if let Some(errors) = document.get("errors").filter(|errors| !errors.is_null()) {
+        if !errors.as_array().is_some_and(Vec::is_empty) {
+            return package_error(format!("GraphQL returned errors for {full_name}: {errors}"));
+        }
+    }
+    Ok(!document["data"]["getPackage"]["lastVersion"]["version"].is_null())
+}
+
 pub fn get_published(graphql_url: &str, full_name: &str, version: &str) -> Result<Published> {
     let payload = json!({
         "query": QUERY,
@@ -1066,18 +1108,32 @@ fn publish_one(
     // registry or the published webc cannot resolve them. Keyed by
     // (name, version): a dependent needs its exact pin.
     for (dep_name, dep_version) in &pkg.resolved_dependencies {
-        let dep = (dep_name.clone(), dep_version.clone());
+        let requirement = pkg.dependencies.get(dep_name).map(String::as_str);
+        let version = match dependency_check(requirement, dep_version) {
+            // Any published version resolves a `*`; the build's own is irrelevant
+            // and never has to be published.
+            DependencyCheck::AnyVersion => {
+                if !package_published(graphql_url, dep_name)? {
+                    return package_error(format!(
+                        "depends on {dep_name}@*, but the registry has no version to resolve"
+                    ));
+                }
+                continue;
+            }
+            DependencyCheck::ExactVersion(version) => version,
+        };
+        let dep = (dep_name.clone(), version.to_string());
         if available.contains(&dep) {
             continue;
         }
         if packages.contains_key(&dep) {
             return package_error(format!(
-                "dependency {dep_name}@{dep_version} failed earlier in this run"
+                "dependency {dep_name}@{version} failed earlier in this run"
             ));
         }
-        if !get_published(graphql_url, dep_name, dep_version)?.exists {
+        if !get_published(graphql_url, dep_name, version)?.exists {
             return package_error(format!(
-                "depends on {dep_name}@{dep_version}, which is neither published nor part of this run"
+                "depends on {dep_name}@{version}, which is neither published nor part of this run"
             ));
         }
         available.insert(dep);
