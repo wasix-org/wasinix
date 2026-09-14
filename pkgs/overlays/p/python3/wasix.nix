@@ -10,6 +10,13 @@
 }: let
   inherit (pkgs) lib;
 
+  # Certs mounted at /etc/ssl, with the bundle also at openssl's default path
+  # so TLS works without inheriting SSL_CERT_FILE (an anybuild command drops it).
+  caCerts = import ../../../lib/ca-certs.nix {
+    inherit (pkgs.buildPackages) runCommand;
+    inherit (packages.sameProfile) cacert;
+  };
+
   # subprocess execs /bin/sh, which the webc gets from its [dependencies]. A
   # cross build runs the interpreter as a naked module instead, where only
   # --use puts the command there.
@@ -388,7 +395,7 @@
             # again is dead weight.
             mountExcludes = ["*.opt-1.pyc" "*.opt-2.pyc" "*.wasm"];
             # Without a bundled CA set, https raises SSLCertVerificationError.
-            fs."/etc/ssl" = "${packages.sameProfile.cacert}/etc/ssl";
+            fs."/etc/ssl" = "${caCerts}/etc/ssl";
           };
         };
       };
