@@ -6,6 +6,7 @@
   pkgs,
   lib,
   registry,
+  mirror,
   testLib,
   # pname -> the interpreter versions whose wheel set carries it
   projectInterpreters,
@@ -35,7 +36,9 @@ in {
             --quiet --no-cache-dir --disable-pip-version-check \
             --platform wasix_wasm32 --implementation cp \
             --python-version "$py" --abi "cp''${py//./}" \
-            --only-binary :all: --index-url file://${registry}/all/simple \
+            --only-binary :all: \
+            --index-url file://${mirror}/simple \
+            --extra-index-url file://${registry}/simple \
             --dry-run --report /dev/null "$project" >/dev/null 2>&1; then
             return 0
           fi
@@ -50,7 +53,7 @@ in {
       if [ -n "$failures" ]; then
         echo "served, but resolvable on no interpreter:" >&2
         echo "$failures" >&2
-        echo "-> the index is the only source a resolver has, so serving a project it cannot install is a dead entry; serve the missing dependency or drop the project." >&2
+        echo "-> serving a project that resolves from neither the registry nor the pinned PyPI mirror is a dead entry; serve the missing native dependency, add its pure dependency to the mirror (update-mirror.py), or drop the project." >&2
         exit 1
       fi
       echo "ok: $(wc -l < ${worklist}) projects resolve"

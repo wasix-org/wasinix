@@ -7,13 +7,18 @@ The wheels arrive already carrying their publication release and interpreter
 bound; each is produced by its own derivation (publish-wheel.py), so this only
 indexes what it is given.
 
+The index serves only what PyPI cannot: a platform-tagged wheel, or a project
+whose wasix build changed its source (supersedesPyPI). Pure, unmodified wheels
+are PyPI's; a resolver takes this index beside PyPI and gets our wheel for
+exactly those, leaving every other dependency to PyPI. Such wheels are neither
+stored nor listed here (docs/registry.md).
+
 Emits, per PEP 503 (+ PEP 629 version meta, PEP 658/714 metadata files):
   <out>/simple/index.html               project list, what PyPI cannot supply
   <out>/simple/<project>/index.html     file list with #sha256= anchors
   <out>/simple/<project>/<wheel>        the wheel itself (relative hrefs)
   <out>/simple/<project>/<wheel>.metadata   its core metadata, for resolvers
   <out>/packages.json                   flat wheel list, for wasmer-compat
-  <out>/all/simple/...                  the same listing over every wheel here
 """
 
 import argparse
@@ -75,6 +80,13 @@ def _parse_wheel(fname: str) -> tuple[str, str]:
 def is_native(fname: str) -> bool:
     """Whether the wheel is built for a platform rather than being pure python."""
     return fname[: -len(".whl")].rsplit("-", 1)[-1] != "any"
+
+
+def is_primary(filenames, supersedes: bool) -> bool:
+    """Whether a project belongs in the served index: it has a platform-tagged
+    wheel, or its wasix build changed the source (supersedesPyPI). A pure,
+    unmodified wheel is PyPI's, served here neither as a file nor a listing."""
+    return supersedes or any(is_native(f) for f in filenames)
 
 
 def _ver_key(ver: str) -> tuple[int, ...]:
@@ -249,7 +261,7 @@ _PROJECT_SCRIPT = """
 
 
 def landing(projects) -> str:
-    """Human-facing entry page (pip only ever sees simple/)."""
+    """Human-facing entry page over the served projects (pip only sees simple/)."""
     names = sorted(projects)
     items = "\n".join(
         f'      <li><a href="simple/{quote(p)}/">{html.escape(p)}</a></li>'
@@ -404,40 +416,21 @@ def write_packages_json(dest: Path, served) -> None:
     )
 
 
-def write_views(out: Path, pages: dict[str, list[tuple]], supersedes: set[str]) -> dict:
-    """Write both PEP 503 listings over the wheels under simple/<project>/.
+def write_views(out: Path, pages: dict[str, list[tuple]]) -> None:
+    """Write the PEP 503 listing over the served wheels under simple/<project>/.
 
-    simple/ lists what PyPI cannot supply: a platform-tagged wheel, or a project
-    in `supersedes`, whose build here differs from upstream's. A resolver takes
-    it as the
-    priority index beside PyPI and gets our wheel for exactly those, leaving
-    every other dependency to PyPI at the version the consuming project asks
-    for. all/simple/ lists everything published, for installing the closure
-    from here alone (docs/registry.md). Both point at one copy of each wheel.
+    `pages` holds only what PyPI cannot supply: a platform-tagged wheel, or a
+    project whose wasix build changed its source. A resolver takes this index as
+    the priority beside PyPI and gets our wheel for exactly those, leaving every
+    pure dependency to PyPI at the version the consuming project asks for
+    (docs/registry.md).
     """
-    primary = {
-        project: files
-        for project, files in pages.items()
-        if project in supersedes or any(is_native(fname) for fname, *_ in files)
-    }
-    for project, files in sorted(primary.items()):
+    for project, files in sorted(pages.items()):
         pdir = out / "simple" / project
         pdir.mkdir(parents=True, exist_ok=True)
         (pdir / "index.html").write_text(project_page(project, files))
-    proot = [f'    <a href="{p}/">{p}</a><br/>' for p in sorted(primary)]
+    proot = [f'    <a href="{p}/">{p}</a><br/>' for p in sorted(pages)]
     (out / "simple" / "index.html").write_text(page("Simple index", proot))
-
-    for project, files in sorted(pages.items()):
-        adir = out / "all" / "simple" / project
-        adir.mkdir(parents=True, exist_ok=True)
-        (adir / "index.html").write_text(
-            project_page(
-                project, files, href_prefix=f"../../../simple/{quote(project)}/"
-            )
-        )
-    aroot = [f'    <a href="{p}/">{p}</a><br/>' for p in sorted(pages)]
-    (out / "all" / "simple" / "index.html").write_text(page("Simple index", aroot))
-    return primary
 
 
 def main() -> None:
@@ -491,10 +484,19 @@ def main() -> None:
             f"{listed}"
         )
 
+    supersedes = {
+        normalize(entry["name"]) for entry in dists if entry.get("supersedes")
+    }
+
     served: list[tuple[str, str]] = []
-    # project -> the rows its page was built from, reused by the native view
+    # project -> the rows its page is built from
     pages: dict[str, list[tuple]] = {}
     for project, wheels in sorted(projects.items()):
+        # Serve only what PyPI cannot: a platform-tagged wheel, or a project
+        # whose wasix build changed its source. Pure, unmodified wheels are
+        # PyPI's, so they are neither stored nor listed (docs/registry.md).
+        if not is_primary(wheels, project in supersedes):
+            continue
         pdir = out / "simple" / project
         pdir.mkdir(parents=True)
         files = []
@@ -523,19 +525,22 @@ def main() -> None:
             )
         pages[project] = files
 
-    supersedes = {
-        normalize(entry["name"]) for entry in dists if entry.get("supersedes")
-    }
-    primary = write_views(out, pages, supersedes)
+    write_views(out, pages)
 
-    (out / "index.html").write_text(landing(projects))
+    served_names = {fname for fname, _ in served}
+    (out / "index.html").write_text(landing(pages))
     (out / "provenance.json").write_text(
-        json.dumps(provenance, indent=2, sort_keys=True) + "\n"
+        json.dumps(
+            {f: p for f, p in provenance.items() if f in served_names},
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
     )
     write_packages_json(out / "packages.json", served)
     print(
-        f"indexed {sum(map(len, projects.values()))} wheels across {len(projects)} projects"
-        f" ({len(primary)} of them served to a resolver beside PyPI)"
+        f"indexed {len(served)} wheels across {len(pages)} projects"
+        f" served to a resolver beside PyPI"
     )
 
 

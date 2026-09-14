@@ -3,7 +3,8 @@
 # and a resolver picks the file matching the running interpreter.
 #
 #   nix build .#legacyPackages.x86_64-linux.artifacts.registry.python
-#   pip install --index-url file://$(readlink -f result)/all/simple numpy
+#   pip install --index-url https://pypi.org/simple \
+#     --extra-index-url file://$(readlink -f result)/simple numpy
 {
   pkgs,
   lib,
@@ -148,13 +149,17 @@
       wasinix-python-index "$distsJsonPath" "$out"
     '';
 
+  # The pure PyPI wheels the resolver tests take beside the registry, since the
+  # registry no longer serves them and the sandbox has no pypi.org.
+  mirror = import ./mirror.nix {inherit pkgs;};
+
   # e2e/import tests run on the default python webc, installing from the merged index.
   tests =
     import ./tests.nix {
-      inherit harnesses pkgs lib registry testLib pythonCommand python3;
+      inherit harnesses pkgs lib registry mirror testLib pythonCommand python3;
     }
     // import ./resolve-sweep.nix {
-      inherit pkgs lib registry testLib projectInterpreters;
+      inherit pkgs lib registry mirror testLib projectInterpreters;
     };
 in
   registry.overrideAttrs (o: {
