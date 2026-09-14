@@ -26,7 +26,10 @@ jobs:
     name: Publish python package index
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # a backfill uploads the whole volume one object at a time (the S3 proxy
+    # fails on concurrency, so --transfers 1); a routine publish still finishes
+    # in minutes.
+    timeout-minutes: 120
     env:
       # the app itself is resolved from pkgs/python-registry/app.yaml (app_id)
       INDEX_VOLUME: index
