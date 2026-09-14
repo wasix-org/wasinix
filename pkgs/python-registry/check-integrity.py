@@ -2,8 +2,10 @@
 exactly the project dirs; every project-page anchor resolves to a file whose
 sha256 matches the fragment; every wheel has a PEP 658 .metadata sidecar whose
 hash matches data-core-metadata; no wheel on disk is missing from its page;
-packages.json lists exactly the served wheels; and every wheel's Requires-Dist
-is satisfiable from the index alone, on each interpreter the wheel installs on.
+packages.json lists exactly the served wheels; and every Requires-Dist naming a
+project this index serves is met at an admissible version, on each interpreter
+the wheel installs on. Requirements PyPI supplies (anything not served here) are
+the resolve sweep's business, which runs real pip across this index and PyPI.
 
 Usage: check-integrity.py <registry store path> <check-dependencies.py path>
 """
@@ -68,8 +70,8 @@ def anchors(page: str) -> dict[str, str]:
 
 
 def check_views(root: Path, wheels: list[tuple[str, Path]]) -> None:
-    """simple/ must list exactly what PyPI cannot supply, and reach the wheels
-    all/simple/ lists rather than carrying copies of its own.
+    """simple/ must list exactly what PyPI cannot supply, and reach a copy of
+    every wheel it lists.
 
     Being the priority index is what binds a resolver to our versions, so a
     project listed here that PyPI could have supplied blocks the version a
@@ -198,7 +200,14 @@ def check_requirements(wheels: list[tuple[str, Path]], wheel_deps) -> None:
                             continue
                     except UndefinedEnvironmentName:
                         continue  # an extra's requirement: not installed by default
-                have = served[interp].get(wheel_deps.normalize(req.name), [])
+                norm = wheel_deps.normalize(req.name)
+                # PyPI supplies anything this index does not serve; the resolve
+                # sweep validates that cross-index resolution with real pip. Here
+                # we only guard that a dependency we DO serve carries a version
+                # the requirement admits.
+                if not any(norm in served[i] for i in served):
+                    continue
+                have = served[interp].get(norm, [])
                 # filter() applies pip's rule: prefer stable, fall back to a
                 # pre-release only when nothing else matches.
                 if not any(req.specifier.filter(have)):
@@ -211,9 +220,9 @@ def check_requirements(wheels: list[tuple[str, Path]], wheel_deps) -> None:
             )
             print(f"{fname} (python {py}): requires '{req}' ({state})", file=sys.stderr)
         print(
-            "-> a resolver installing from this index sees no other source, so every "
-            "requirement must be satisfiable from it; serve the missing version or fix "
-            "the requiring package's metadata.",
+            "-> this index serves that dependency, so it must serve a version the "
+            "requirement admits; serve the missing version or fix the requiring "
+            "package's metadata.",
             file=sys.stderr,
         )
         fail(f"{len(unmet)} unsatisfiable requirement(s)")
@@ -223,20 +232,19 @@ def main() -> None:
     root = Path(sys.argv[1])
     wheel_deps = load_module(sys.argv[2])
     simple = root / "simple"
-    every = root / "all" / "simple"
-    # all/simple lists every wheel published; simple/ is the subset a resolver
-    # should see beside PyPI, so the exhaustive walk reads the former
-    listed = set(re.findall(r'<a href="([^"]+)/">', (every / "index.html").read_text()))
+    # simple/ is the whole index: what PyPI cannot supply, served beside it.
+    listed = set(
+        re.findall(r'<a href="([^"]+)/">', (simple / "index.html").read_text())
+    )
     on_disk = {d.name for d in simple.iterdir() if d.is_dir()}
     if listed != on_disk:
-        fail(f"all/simple index vs project dirs differ: {sorted(listed ^ on_disk)}")
+        fail(f"simple index vs project dirs differ: {sorted(listed ^ on_disk)}")
 
     wheels = []
     for pdir in sorted(simple.iterdir()):
         if not pdir.is_dir():
             continue
-        # its anchors point back into simple/, so hrefs are compared by filename
-        page = (every / pdir.name / "index.html").read_text()
+        page = (pdir / "index.html").read_text()
         anchored = set()
         for href, digest, attrs in ANCHOR.findall(page):
             fname = unquote(href).rsplit("/", 1)[-1]

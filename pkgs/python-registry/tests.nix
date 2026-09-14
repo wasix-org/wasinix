@@ -4,6 +4,8 @@
   pkgs,
   lib,
   registry,
+  # the pinned pure PyPI wheels, taken beside the registry (mirror.nix).
+  mirror,
   harnesses,
   # eval-only (version tags).
   python3,
@@ -30,7 +32,10 @@
     "--abi cp${lib.replaceStrings ["."] [""] pyVersion}"
     "--only-binary :all:"
   ];
-  pipFlags = "${pipResolveFlags} --index-url file://${registry}/all/simple";
+  # The registry serves only what PyPI cannot; the mirror stands in for PyPI,
+  # so a resolve reads our wheel for a native or patched project and the pinned
+  # pure wheel for everything else.
+  pipFlags = "${pipResolveFlags} --index-url file://${mirror}/simple --extra-index-url file://${registry}/simple";
 
   # PYTHONPATH is how the pip --target tree reaches the guest interpreter.
   forwardEnv = harnesses.defaultForwardEnv ++ ["PYTHONPATH"];
@@ -114,11 +119,15 @@ in {
     wasmerArgs = ["--net"];
     inherit forwardEnv;
     script = ''
-      ${hostPythonExe} -m http.server 8080 --bind 127.0.0.1 --directory ${registry} &
+      ${hostPythonExe} -m http.server 8080 --bind 127.0.0.1 --directory ${mirror} &
+      ${hostPythonExe} -m http.server 8081 --bind 127.0.0.1 --directory ${registry} &
       sleep 1
-      ${hostPythonExe} -m pip install ${pipResolveFlags} --index-url http://127.0.0.1:8080/all/simple --target site requests
+      ${hostPythonExe} -m pip install ${pipResolveFlags} \
+        --index-url http://127.0.0.1:8080/simple \
+        --extra-index-url http://127.0.0.1:8081/simple \
+        --target site requests
       export PYTHONPATH="$PWD/site"
-      ${guestPython} -c 'import requests; r = requests.get("http://127.0.0.1:8080/all/simple/", timeout=30); assert r.ok and "requests" in r.text; print("REGISTRY_HTTP_OK")' | tee net.log
+      ${guestPython} -c 'import requests; r = requests.get("http://127.0.0.1:8080/simple/", timeout=30); assert r.ok and "requests" in r.text; print("REGISTRY_HTTP_OK")' | tee net.log
       grep -q REGISTRY_HTTP_OK net.log
     '';
   };

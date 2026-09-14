@@ -10,8 +10,7 @@ lockfiles keep resolving.
 
 Volume layout (= the web root served by the app):
   index.html, simple/...     as in the nix output
-  all/simple/...             the same listing over every wheel published
-  packages.json              flat list of everything published so far
+  packages.json              flat list of everything served so far
   manifests/<wheel>.json     {project, sha256, metadata_sha256, requires_python,
                               size, published (UTC date, frozen at first publish),
                               + provenance: attr, drv_path, wasinix_rev}
@@ -194,11 +193,22 @@ def main():
     # a manifest predating the field has no flag, so a project last published
     # before it existed stays out of simple/ until its next publish
     supersedes = {m["project"] for m in manifests.values() if m.get("supersedes")}
-    primary = make_index.write_views(staging, pages, supersedes)
-    (staging / "index.html").write_text(make_index.landing(projects))
+    primary = {
+        project: files
+        for project, files in pages.items()
+        if make_index.is_primary([f[0] for f in files], project in supersedes)
+    }
+    make_index.write_views(staging, primary)
+    (staging / "index.html").write_text(make_index.landing(primary))
+    # packages.json (wasmer-compat's coverage list) tracks the served set, so a
+    # pure wheel left on the volume by an earlier publish drops off it here.
     make_index.write_packages_json(
         staging / "packages.json",
-        ((fname, m["sha256"]) for fname, m in manifests.items()),
+        (
+            (fname, m["sha256"])
+            for fname, m in manifests.items()
+            if m["project"] in primary
+        ),
     )
 
     print(
