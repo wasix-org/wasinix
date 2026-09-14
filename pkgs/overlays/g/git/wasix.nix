@@ -15,6 +15,10 @@ exposeWasixPackage (
     nano = packages.wasix.preferred.nano;
     coreutils = packages.wasix.preferred.coreutils;
     gawk = packages.wasix.preferred.gawk;
+    caCerts = import ../../../lib/ca-certs.nix {
+      inherit (packages.sameProfile.buildPackages) runCommand;
+      inherit (packages.sameProfile) cacert;
+    };
   in
     (package.override {
       # gettext lands in nativeBuildInputs too, so the bare argument splices to
@@ -44,7 +48,7 @@ exposeWasixPackage (
           wasinix.shipped = true;
           wasmer = {
             # certs for HTTPS clones, mounted where git/openssl look for them.
-            fs."/etc/ssl" = "${packages.sameProfile.cacert}/etc/ssl";
+            fs."/etc/ssl" = "${caCerts}/etc/ssl";
             commandEnv.git = {
               SSL_CERT_FILE = "/etc/ssl/certs/ca-bundle.crt";
               # nano is a dependency command wasmer mounts under /bin. Without an
