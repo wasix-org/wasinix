@@ -6933,10 +6933,6 @@ mod corpus {
 
         let publish_index = read("publish-index.yml");
         let publish_job = job(&publish_index, "publish");
-        assert_eq!(
-            field(field(step(publish_job, "download"), "with"), "name").as_str(),
-            Some(crate::github::actions::ARTIFACT_CI_RUN)
-        );
         let publish_env = field(&publish_index, "env");
         assert_eq!(
             field(publish_env, "INDEX_ARTIFACT_KIND").as_str(),
@@ -6952,15 +6948,16 @@ mod corpus {
                 .unwrap()
                 .contains_key(serde_yaml_ng::Value::String("INDEX_JOB".into()))
         );
+        // The index is evaluated fresh at the triggering commit, not read from
+        // the Build's eval map: a diff build reuses the baseline path for a job
+        // the commit did not touch, which would republish a stale index.
         let identity = field(step(publish_job, "identity"), "run")
             .as_str()
             .unwrap();
         for contract in [
-            ".info | to_entries[]",
-            ".value.role == \"artifact\"",
-            ".value.artifactKind == $kind",
-            ".value.displayName == $name",
-            "$map.outputs[.key].out // empty",
+            "nix eval",
+            "artifacts.$INDEX_ARTIFACT_KIND.$INDEX_ARTIFACT_NAME",
+            "outPath",
         ] {
             assert!(identity.contains(contract), "missing {contract:?}");
         }
@@ -6971,15 +6968,15 @@ mod corpus {
         );
         assert_eq!(restore_key, save_key);
         assert!(
-            step_index(publish_job, "published") < step_index(publish_job, "checkout"),
-            "an already published index should skip checkout and tool setup"
+            step_index(publish_job, "identity") < step_index(publish_job, "published"),
+            "the index is evaluated before its key gates the publication-state check"
         );
         assert!(
-            !field(step(publish_job, "build-index"), "run")
+            field(step(publish_job, "build-index"), "run")
                 .as_str()
                 .unwrap()
-                .contains("nix build"),
-            "publishing must reuse the output the Build workflow evaluated"
+                .contains("nix-store --realise"),
+            "publishing realises the freshly evaluated index path"
         );
 
         let build_job = job(&build, "build");
