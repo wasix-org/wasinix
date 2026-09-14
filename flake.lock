@@ -59,11 +59,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1787696367,
-        "narHash": "sha256-omdywE4zRUbJLVf91G3tLBEsDUx8KTYf7pIWwZ1rLzM=",
+        "lastModified": 1789039765,
+        "narHash": "sha256-XzoDVK/1hsI+VUf5tPyhhzfZKfXTzm4hCrrHwCLz9AI=",
         "owner": "haskell-wasm",
         "repo": "ghc-wasm-meta",
-        "rev": "f3bbfa9e16bdaa97437435e567960cab3a3768bc",
+        "rev": "358ea50b8496a69da6ce375c0c58bc049dbcb92d",
         "type": "github"
       },
       "original": {
