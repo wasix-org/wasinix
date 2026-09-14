@@ -12,16 +12,16 @@ exposePackage (packageSet.callPackage ({
   }:
     rustPlatform.buildRustPackage (finalAttrs: {
       pname = "cargo-wasix";
-      version = "0.1.33";
+      version = "0.1.34";
 
       src = fetchFromGitHub {
         owner = "wasix-org";
         repo = "cargo-wasix";
         tag = "v${finalAttrs.version}";
-        hash = "sha256-Jd9Dr2P9lqPhlHo1VAU6QBLY4RIAuAuNC7RKUdJL/ZI=";
+        hash = "sha256-2KxeDssfLS6Px8WoiZ07mIPAy8bZdlffPnMU11o/F1g=";
       };
 
-      cargoHash = "sha256-0bQGbrYpqusf1yviMHihhtxyu2ACqiCHgmWtZbhsBn4=";
+      cargoHash = "sha256-5VMt7Xy6Le5LWCppTTVO83REhIX5rkZ9BpW7tcCXdIM=";
 
       # The integration suite creates empty CARGO_HOMEs then invokes cargo-wasix,
       # which downloads the WASIX target. Its download_toolchain unit test also
