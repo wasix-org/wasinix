@@ -36,41 +36,26 @@ jobs:
       # the app itself is resolved from pkgs/python-registry/app.yaml (app_id)
       INDEX_VOLUME: index
     steps:
-      - name: Download build result
-        id: download
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          name: ci-run
-          path: run-dir
-          github-token: ${{ github.token }}
-          run-id: ${{ github.event.workflow_run.id }}
+          # workflow_run does not check out the triggering commit by default
+          ref: ${{ github.event.workflow_run.head_sha }}
 
+      - name: Set up Nix
+        uses: ./.github/actions/setup-nix
+
+      # Evaluate the index at the triggering commit rather than reading the
+      # Build's eval map, which reuses the baseline path for any job the commit
+      # did not touch: a commit that leaves the index alone would otherwise
+      # republish the pre-change index.
       - name: Read index identity
         id: identity
-        shell: bash
         run: |
-          matched="$({
-            jq -r \
-              --arg kind "$INDEX_ARTIFACT_KIND" \
-              --arg name "$INDEX_ARTIFACT_NAME" \
-              '. as $map
-               | .info | to_entries[]
-               | select(.value.role == "artifact"
-                   and .value.artifactKind == $kind
-                   and .value.displayName == $name)
-               | $map.outputs[.key].out // empty' \
-              run-dir/cases/*/maps/eval-map.json
-          } | sort -u)"
-          paths=()
-          if [ -n "$matched" ]; then
-            mapfile -t paths <<< "$matched"
-          fi
-          if [ "${#paths[@]}" -ne 1 ]; then
-            echo "expected one $INDEX_ARTIFACT_NAME $INDEX_ARTIFACT_KIND artifact in the Build result, found ${#paths[@]}" >&2
-            exit 1
-          fi
-          echo "path=${paths[0]}" >> "$GITHUB_OUTPUT"
-          echo "key=python-index-${paths[0]##*/}" >> "$GITHUB_OUTPUT"
+          path="$(nix eval --raw \
+            ".#legacyPackages.x86_64-linux.artifacts.$INDEX_ARTIFACT_KIND.$INDEX_ARTIFACT_NAME.outPath")"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+          echo "key=python-index-${path##*/}" >> "$GITHUB_OUTPUT"
 
       - name: Check publication state
         id: published
@@ -79,14 +64,6 @@ jobs:
           path: .wasinix-published-index
           key: ${{ steps.identity.outputs.key }}
           lookup-only: true
-
-      - name: Checkout
-        id: checkout
-        if: steps.published.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
-        with:
-          # workflow_run does not check out the triggering commit by default
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       # A single wasmer namespace token; the job fetches the volume's S3
       # credentials at runtime (provisioning them on the first run).
@@ -98,10 +75,6 @@ jobs:
           token-prod: ${{ secrets.WASMER_TOKEN }}
           token-staging: ${{ secrets.WASMER_TOKEN_STAGING }}
           token-dev: ${{ secrets.WASMER_TOKEN_DEV }}
-
-      - name: Set up Nix
-        if: steps.published.outputs.cache-hit != 'true'
-        uses: ./.github/actions/setup-nix
 
       - name: Realise index
         id: build-index
