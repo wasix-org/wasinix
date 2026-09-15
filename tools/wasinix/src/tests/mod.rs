@@ -1,3 +1,28 @@
+mod publish_dependency_check {
+    use crate::registries::wasmer::{dependency_check, DependencyCheck};
+
+    #[test]
+    fn a_star_requirement_accepts_any_published_version() {
+        // A `*` dep must never demand the version this checkout happened to
+        // build; the published webc resolves it at load time.
+        assert_eq!(
+            dependency_check(Some("*"), "5.3.15"),
+            DependencyCheck::AnyVersion
+        );
+    }
+
+    #[test]
+    fn a_pin_demands_its_resolved_version() {
+        for requirement in [Some("=5.3.15"), Some("^5.3.15"), Some("5.3.15"), None] {
+            assert_eq!(
+                dependency_check(requirement, "5.3.15"),
+                DependencyCheck::ExactVersion("5.3.15"),
+                "{requirement:?}"
+            );
+        }
+    }
+}
+
 mod naming {
     use crate::support::naming::{Domain, axis_of, parse, render, resolve_all, split};
 
