@@ -20,6 +20,20 @@
       "version": "23.2.0"
     }
   },
+  "bcrypt": {
+    "4.0.1": {
+      "cargoHash": "sha256-5AqaIk/c+in0AYdvjeRBSgSoWoutHL8Pu2uoYsLhbV4=",
+      "hash": "sha256-j6v9NggyarEKYyr7Hlqm95nKJRki/oPDiDVLEKZuLPw=",
+      "note": "langflow-base pins bcrypt==4.0.1; pyo3 0.15 abi3 caps at cp313",
+      "tag": "4.0.1",
+      "variants": [
+        "py313"
+      ],
+      "vendorLayout": {
+        "lockFile": "locks/4.0.1.lock"
+      }
+    }
+  },
   "beautifulsoup4": {
     "4.12.3": {
       "hash": "sha256-dOPRko7cBw0hdIGFxG4/szSQ8i9So63e6a7g9Pd4EFE=",
