@@ -302,6 +302,11 @@
       "hash": "sha256-bpNRCbGML3rZXblc73dtRiZ6fwylAPottNuFCHPBCck=",
       "note": "sibling pinned by langchain 0.3.30",
       "tag": "langchain-core==0.3.86"
+    },
+    "1.6.3": {
+      "hash": "sha256-IOi1Yw1cYdsLogr/xrECYIlfDdHqZzCUz27ubK1QrSQ=",
+      "note": "langchain-perplexity requires langchain-core>=1.6.0",
+      "tag": "langchain-core==1.6.3"
     }
   },
   "langchain-text-splitters": {
