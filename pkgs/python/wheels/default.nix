@@ -12,6 +12,9 @@
   {attr = "urllib3";}
   {attr = "packaging";}
   {attr = "pyparsing";}
+  # 4.9.3, the version omegaconf and hydra-core pin, is sdist-only on PyPI, so
+  # we build and serve it (history 4.9.3, a/antlr4-python3-runtime.nix).
+  {attr = "antlr4-python3-runtime";}
   {
     attr = "attrs";
     pyImport = "attr";

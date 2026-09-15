@@ -234,17 +234,6 @@
     {
       "files": [
         {
-          "filename": "antlr4_python3_runtime-4.13.2-py3-none-any.whl",
-          "sha256": "fe3835eb8d33daece0e799090eda89719dbccee7aa39ef94eed3818cafa5a7e8",
-          "url": "https://files.pythonhosted.org/packages/89/03/a851e84fcbb85214dc637b6378121ef9a0dd61b4c65264675d8a5c9b1ae7/antlr4_python3_runtime-4.13.2-py3-none-any.whl"
-        }
-      ],
-      "project": "antlr4-python3-runtime",
-      "version": "4.13.2"
-    },
-    {
-      "files": [
-        {
           "filename": "anyio-4.15.1-py3-none-any.whl",
           "sha256": "6152fdbbf9a77fdec97731721bebf7c4c44f7c29b424b0065826173efc7ed101",
           "url": "https://files.pythonhosted.org/packages/12/b8/4bd346e22b28902df4d651910f5242c28d84e4a5c2435ca5c3f797ed7e2e/anyio-4.15.1-py3-none-any.whl"

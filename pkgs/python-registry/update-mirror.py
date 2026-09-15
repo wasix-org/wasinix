@@ -68,6 +68,7 @@ PURE_BUT_SERVED = {
     "textual",
     "langchain-core",
     "langchain",
+    "antlr4-python3-runtime",
     "langflow",
     "protobuf",
 }
