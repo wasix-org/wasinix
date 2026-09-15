@@ -15,11 +15,16 @@
     upstream = "0.13.2";
     marker = "dl";
   };
+  simdProbe = {
+    crate = "simd-adler32";
+    upstream = "0.3.7";
+  };
   entryFor = name: upstream:
     lib.findFirst (c: c.crate == name && c.upstream == upstream)
     (throw "cargo-registry: tests expect a ${name} ${upstream} build")
     manifest.crates;
   probeEntry = entryFor probe.crate probe.upstream;
+  simdEntry = entryFor simdProbe.crate simdProbe.upstream;
 in {
   # crates.json and the patch tree name the same crates. A mintable crate with
   # no pins resolves to upstream stock with its edits missing, which nothing
@@ -114,13 +119,25 @@ in {
     } ''
       mkdir -p vendor app/src app/.cargo
       tar xzf "${registry}/crates/${probeEntry.crateFile}" -C vendor
+      tar xzf "${registry}/crates/${simdEntry.crateFile}" -C vendor
 
       unpacked="vendor/${probe.crate}-${probeEntry.wasixVersion}"
+      simd="vendor/${simdProbe.crate}-${simdEntry.wasixVersion}"
       # A directory source requires this file; the store path already
       # content-addresses the mint, so an empty map is honest.
-      echo '{"files":{}}' > "$unpacked/.cargo-checksum.json"
+      for crate in "$unpacked" "$simd"; do
+        echo '{"files":{}}' > "$crate/.cargo-checksum.json"
+      done
       grep -q '${probe.marker}' "$unpacked/src/targets.rs" \
         || { echo "cargo-registry: the ${probe.crate} patch is missing from the minted crate" >&2; exit 1; }
+
+      # The WASIX SIMD baseline selects this module in no_std builds.
+      ${lib.getExe' pkgs.wasix-rust "rustc"} \
+        --crate-name simd_adler32 \
+        --crate-type lib \
+        --edition=2018 \
+        --target wasm32-wasmer-wasi \
+        "$simd/src/lib.rs"
 
       cat > app/Cargo.toml <<'EOF'
       [package]

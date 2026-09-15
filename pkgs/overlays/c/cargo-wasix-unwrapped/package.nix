@@ -23,6 +23,10 @@ exposePackage (packageSet.callPackage ({
 
       cargoHash = "sha256-0bQGbrYpqusf1yviMHihhtxyu2ACqiCHgmWtZbhsBn4=";
 
+      # cargo-wasix's own RUSTFLAGS write is skipped whenever a package sets
+      # RUSTFLAGS, so the wasm feature baseline lives in the rust target spec.
+      patches = [./cargo-wasix-target-features.patch];
+
       # The integration suite creates empty CARGO_HOMEs then invokes cargo-wasix,
       # which downloads the WASIX target. Its download_toolchain unit test also
       # contacts GitHub. Keep the remaining offline library unit tests.

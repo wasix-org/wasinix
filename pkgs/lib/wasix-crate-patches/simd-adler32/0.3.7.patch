@@ -1,0 +1,6 @@
+diff --git a/src/imp/wasm.rs b/src/imp/wasm.rs
+--- a/src/imp/wasm.rs
++++ b/src/imp/wasm.rs
+@@ -146 +146 @@ unsafe fn simd_adler32(adler: Adler32, data: &[u8]) -> Adler32 {
+-    let arr: [u32; 4] = unsafe { std::mem::transmute(v) };
++    let arr: [u32; 4] = unsafe { core::mem::transmute(v) };

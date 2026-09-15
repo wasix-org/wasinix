@@ -370,6 +370,9 @@
   "sct": {
     "0.7.0": "sha256-PASe8tu8NtFVBWb9dg/IdPRq95OyeiCnrCBxnEhZXQw="
   },
+  "simd-adler32": {
+    "0.3.7": "sha256-T0eA4V4PunsK1Q/Vjl/QBNlb8V06aiqOQmX3iLkUlsQ="
+  },
   "socket2": {
     "0.4.7": "sha256-LLHzqKDE5Svcq1/OomPq3Ow6WLpHQI1VC1WZnS4kYYk=",
     "0.4.9": "sha256-x0kmAtng3BG2yH3eKF6TpA2HZFBnnR01jlXHrg3htcI=",
