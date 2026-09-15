@@ -30,6 +30,9 @@
     files,
     rewrites ? [],
   }: {
+    # A bundled native lib is not in PyPI's wheel, so ours supersedes it and the
+    # registry must serve it rather than defer to PyPI.
+    passthru.wasinix.publication.supersedesPyPI = true;
     postPatch = let
       copies =
         lib.concatMapStringsSep "\n" (
