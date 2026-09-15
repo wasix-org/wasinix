@@ -686,5 +686,6 @@
   {attr = "langchain-text-splitters";}
   {attr = "langchain";} # LangChain (langgraph + langchain-core)
   {attr = "litellm";} # LiteLLM (tokenizers + tiktoken + fastuuid + openai)
-  {attr = "langflow";} # Langflow core server and built web frontend
+  # langflow pins ~1446 exact versions across the native stack that we cannot
+  # serve; dropped as ECO-497 (langflow-base leaves with it as its only consumer).
 ]
