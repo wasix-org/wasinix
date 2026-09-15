@@ -284,7 +284,7 @@ def landing(projects) -> str:
       so <code>pip install</code> works where it otherwise could not.</p>
 
     <h2>Install</h2>
-    <pre><code>pip install --index-url <span id="url">&lt;this page&gt;/simple/</span> &lt;package&gt;</code></pre>
+    <pre><code>pip install --index-url https://pypi.org/simple --extra-index-url <span id="url">&lt;this page&gt;/simple/</span> &lt;package&gt;</code></pre>
 
     <h2 id="pkgs-h">{n} package{"" if n == 1 else "s"}</h2>
     <input class="filter" id="filter" type="search" placeholder="Filter packages&hellip;"
@@ -396,7 +396,7 @@ def project_page(project: str, files: list[tuple], href_prefix: str = "") -> str
   <body>
     <p class="crumb"><a href="../../">&larr; all packages</a></p>
     <h1>{html.escape(project)}</h1>
-    <pre><code>pip install --index-url <span id="url">&lt;this index&gt;/</span> {html.escape(project)}</code></pre>
+    <pre><code>pip install --index-url https://pypi.org/simple --extra-index-url <span id="url">&lt;this index&gt;/</span> {html.escape(project)}</code></pre>
 {body}
     <script>{_PROJECT_SCRIPT}    </script>
   </body>
