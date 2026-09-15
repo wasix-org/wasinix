@@ -1807,6 +1807,17 @@
     {
       "files": [
         {
+          "filename": "jqpy-1.0.0-py2.py3-none-any.whl",
+          "sha256": "8674851499a27283447ede1e1edc67586ce553cd151697e492d1d5f121baa3b2",
+          "url": "https://files.pythonhosted.org/packages/d8/0d/c1b7b48b9e66c37488cd219af4b54bf6dfca686fcf0e9a73bdfbd1bd9dcc/jqpy-1.0.0-py2.py3-none-any.whl"
+        }
+      ],
+      "project": "jqpy",
+      "version": "1.0.0"
+    },
+    {
+      "files": [
+        {
           "filename": "json_repair-0.63.4-py3-none-any.whl",
           "sha256": "0f374f3eee21454aef0a5d72c06b8689b660a1788f80ab392639e3f7d5c5d458",
           "url": "https://files.pythonhosted.org/packages/a1/ea/1a7b47196b0d03f59a80f5218b2a34160587c84ca8b0bcb56cb4ee93834e/json_repair-0.63.4-py3-none-any.whl"

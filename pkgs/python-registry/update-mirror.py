@@ -42,7 +42,6 @@ ALIASES = {
 # Attrs that are not on PyPI under their own name (wasix-only or renamed builds);
 # their pure dependencies arrive through another project's resolve.
 SKIP = {
-    "jqpy",
     "burner-redis",
     "dbt-core-experimental-parser",
     "envier",
