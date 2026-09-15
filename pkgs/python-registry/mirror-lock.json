@@ -146,6 +146,17 @@
     {
       "files": [
         {
+          "filename": "aiosignal-1.4.0-py3-none-any.whl",
+          "sha256": "053243f8b92b990551949e63930a839ff0cf0b0ebbe0597b0f3fb19e1a0fe82e",
+          "url": "https://files.pythonhosted.org/packages/fb/76/641ae371508676492379f16e2fa48f4e2c11741bd63c48be4b12a6b09cba/aiosignal-1.4.0-py3-none-any.whl"
+        }
+      ],
+      "project": "aiosignal",
+      "version": "1.4.0"
+    },
+    {
+      "files": [
+        {
           "filename": "aiosqlite-0.22.1-py3-none-any.whl",
           "sha256": "21c002eb13823fad740196c5a2e9d8e62f6243bd9e7e4a1f87fb5e44ecb4fceb",
           "url": "https://files.pythonhosted.org/packages/00/b7/e3bf5133d697a08128598c8d0abc5e16377b51465a33756de24fa7dee953/aiosqlite-0.22.1-py3-none-any.whl"
@@ -3863,6 +3874,17 @@
       ],
       "project": "proto-plus",
       "version": "1.28.4"
+    },
+    {
+      "files": [
+        {
+          "filename": "psycopg-3.3.5-py3-none-any.whl",
+          "sha256": "ce5aa5cdb4f9379f00f487590e5890bfa7df9a164648c969ffa628505e21af4e",
+          "url": "https://files.pythonhosted.org/packages/3d/2e/d0a645bcaadde68bd6d93c43f02f14b0191bdda367ce3f7722abe3da744a/psycopg-3.3.5-py3-none-any.whl"
+        }
+      ],
+      "project": "psycopg",
+      "version": "3.3.5"
     },
     {
       "files": [

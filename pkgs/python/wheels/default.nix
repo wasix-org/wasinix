@@ -168,6 +168,14 @@
   {attr = "rsa";}
   {attr = "textual";}
   {attr = "hydra-core";}
+  {attr = "aiosignal";}
+  {
+    attr = "psycopg";
+    # The pure base; psycopg 3 splits the C driver into psycopg-c/psycopg-binary,
+    # which the registry serves. nixpkgs' check imports psycopg_c/psycopg_pool,
+    # absent from this closure.
+    pyImport = "psycopg";
+  } # python/psycopg.nix
 
   # ── C extensions with no external C library ────────────────────────────────────
   {attr = "cffi";} # python/cffi.nix (libffi ffi_closure_alloc)
@@ -187,7 +195,6 @@
   {attr = "yarl";}
   {attr = "propcache";}
   {attr = "frozenlist";}
-  {attr = "aiosignal";}
   {attr = "xxhash";}
   {
     attr = "pycryptodome";
@@ -509,11 +516,6 @@
     attr = "pynacl";
     pyImport = "nacl.bindings";
   } # libsodium; python/pynacl.nix
-  {
-    attr = "psycopg";
-    # nixpkgs' check also imports psycopg_c/psycopg_pool, absent from this closure.
-    pyImport = "psycopg";
-  } # libpq via psycopg-c; python/psycopg.nix
   {
     attr = "psycopg-binary";
     # upstream guards psycopg_binary against being imported before psycopg;
