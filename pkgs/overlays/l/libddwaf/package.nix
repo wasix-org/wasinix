@@ -9,13 +9,13 @@ exposePackage (
   in
     packageSet.stdenv.mkDerivation (finalAttrs: {
       pname = "libddwaf";
-      version = "2.0.0";
+      version = "2.0.1";
 
       src = packageSet.fetchFromGitHub {
         owner = "DataDog";
         repo = "libddwaf";
         tag = finalAttrs.version;
-        hash = "sha256-CTWyFp41Ddo26U1xE8XLPyQW44krwg7ahJPbx0+ZwZs=";
+        hash = "sha256-qFQN949O1X+Di4eVniPc3pIGPTt0lXTklNON2ty5XCo=";
       };
 
       postPatch = ''

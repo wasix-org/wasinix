@@ -34,14 +34,14 @@ exposePackage (
   in
     packages.sameProfile.buildPythonPackage (finalAttrs: {
       pname = "ddtrace";
-      version = "4.13.1";
+      version = "4.14.0";
       pyproject = true;
 
       src = pkgs.fetchFromGitHub {
         owner = "DataDog";
         repo = "dd-trace-py";
         tag = "v${finalAttrs.version}";
-        hash = "sha256-ffqJADnc+PRCRGNYXjUlEMX15Bzxd4HzdyFGIcaZgMw=";
+        hash = "sha256-qIKUlhFCfUcUurc5KedagWu1ww4n9ZXOibx1yIUY4ws=";
       };
 
       cargoRoot = "src/native";
@@ -49,7 +49,7 @@ exposePackage (
         inherit (finalAttrs) src;
         name = "${finalAttrs.pname}-${finalAttrs.version}-cargo-deps";
         sourceRoot = "${finalAttrs.src.name}/src/native";
-        hash = "sha256-/R6AyuNQEQVo0hPMfieTU+7RUlpcuwvZlPU7JyuM3SI=";
+        hash = "sha256-lG/hKUozNv+WKQc9kFxNvuggAOy5Cnei52K4hQ2hlwc=";
       };
 
       # locks/: a release whose own lock does not resolve its manifest vendors from
