@@ -905,6 +905,14 @@
       "version": "0.20.0"
     }
   },
+  "tokenizers": {
+    "0.23.2": {
+      "cargoHash": "sha256-AVmmOqyH1iX5agDjB58SpzHuk56aV2d1lvopVcR6u4s=",
+      "hash": "sha256-liHx1YRFZC/PUNiv1MJyb9oAw7/xHbaRbFsn1n8gtuI=",
+      "note": "transformers 5.15.0 requires tokenizers<0.24.0,>=0.23.1",
+      "tag": "v0.23.2"
+    }
+  },
   "tornado": {
     "6.4.2": {
       "hash": "sha256-qgJh8pnC1ALF8KxhAYkZFAc0DE6jHVB8R/ERJFL4OFc=",
