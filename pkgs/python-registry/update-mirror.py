@@ -69,6 +69,7 @@ PURE_BUT_SERVED = {
     "langchain-core",
     "langchain",
     "antlr4-python3-runtime",
+    "watchdog",
     "langflow",
     "protobuf",
 }
