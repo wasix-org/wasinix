@@ -71,7 +71,6 @@ PURE_BUT_SERVED = {
     "antlr4-python3-runtime",
     "watchdog",
     "claude-agent-sdk",
-    "langflow",
     "protobuf",
 }
 
