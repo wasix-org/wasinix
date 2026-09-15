@@ -18,4 +18,7 @@ exposeExtendedPackage (lib.optionalAttrs (lib.versionOlder package.version "1") 
   // {
     # The guest cannot execute its Python Wasm binary through host subprocess APIs.
     disabledTests = ["test_importable_all_via_subprocess"];
+    # PURE_BUT_SERVED keeps langchain-core off the PyPI mirror, so the registry
+    # is its sole source across versions, patched or not.
+    passthru.wasinix.publication.supersedesPyPI = true;
   })
