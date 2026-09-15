@@ -6,19 +6,24 @@
 exposePackage (
   packages.sameProfile.buildPythonPackage (finalAttrs: {
     pname = "langflow";
-    version = "1.11.4";
+    version = "1.12.0";
     pyproject = true;
 
     src = pkgs.fetchFromGitHub {
       owner = "langflow-ai";
       repo = "langflow";
       tag = "v${finalAttrs.version}";
-      hash = "sha256-pC1+vUNTXdeYbsJXNZarntYNLvBr4iI7bLwnfe6D9Qw=";
+      hash = "sha256-i3lbuoHnv2qkOeYO+Tyrx+5dRwqCQxhcqkGu5epk43M=";
     };
 
     postPatch = ''
       substituteInPlace pyproject.toml \
-        --replace-fail '"langflow-base[complete]>=0.11.4",' '"langflow-base>=0.11.4",'
+        --replace-fail '"langflow-base~=1.12.0",' '"langflow-base",' \
+        --replace-fail '"langflow-base[audio]~=1.12.0",' '"langflow-base[audio]",' \
+        --replace-fail '"langflow-base[sandbox]~=1.12.0",' '"langflow-base[sandbox]",' \
+        --replace-fail '"langflow-base[postgresql]~=1.12.0",' '"langflow-base[postgresql]",' \
+        --replace-fail '"langflow-base[pgvector]~=1.12.0",' '"langflow-base[pgvector]",' \
+        --replace-fail '"langflow-base[opensearch]~=1.12.0",' '"langflow-base[opensearch]",'
     '';
 
     pythonRemoveDeps = [
