@@ -4904,6 +4904,7 @@ mod update {
             command_drv_paths: Vec::new(),
             file: String::new(),
             accepts: vec!["revision".into()],
+            release_line: false,
             source: Some(serde_json::json!({"kind": "github", "owner": "o", "repo": "r"})),
             ownership: Ownership::default(),
         }
@@ -5052,6 +5053,7 @@ mod update {
             command_drv_paths: Vec::new(),
             file: file.into(),
             accepts: Vec::new(),
+            release_line: false,
             source: None,
             ownership: Ownership::default(),
         };

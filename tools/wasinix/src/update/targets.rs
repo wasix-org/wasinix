@@ -36,6 +36,11 @@ pub struct Target {
     /// Repo-relative pin file, from meta.position.
     pub file: String,
     pub accepts: Vec<String>,
+    /// Whether the pin follows upstream releases rather than a branch. A
+    /// release-tracked input advances only to a newer release, so an
+    /// ordinary "bump to whatever the ref resolves to now" would defeat it.
+    #[serde(default)]
+    pub release_line: bool,
     pub source: Option<Value>,
     #[serde(default)]
     pub ownership: Ownership,
@@ -66,6 +71,7 @@ impl Target {
             command_drv_paths: Vec::new(),
             file: String::new(),
             accepts: Vec::new(),
+            release_line: false,
             source: None,
             ownership: Ownership::default(),
         }
@@ -100,6 +106,12 @@ impl Target {
     }
 }
 
+/// Flake inputs whose pin follows upstream releases instead of a branch.
+/// The runtime the packages are built and tested against is the one users
+/// run, so its pin names a release rather than whatever the branch held the
+/// moment the updater ran.
+const RELEASE_LINE_INPUTS: &[&str] = &["wasmer"];
+
 /// Flake inputs are their own targets so `update nixpkgs` works like a
 /// package; the crate-pin set is named for the file it regenerates.
 pub(crate) fn builtin_targets(ownership: Ownership) -> Vec<Target> {
@@ -107,6 +119,7 @@ pub(crate) fn builtin_targets(ownership: Ownership) -> Vec<Target> {
         .into_iter()
         .map(|name| {
             let mut target = Target::flake(name);
+            target.release_line = RELEASE_LINE_INPUTS.contains(&name);
             target.ownership = ownership.clone();
             target
         })
@@ -221,6 +234,7 @@ pub(crate) fn declared_target(repo: &Path, attr: &str, value: &Value) -> Result<
             .map(|file| repo_relative(file, repo))
             .unwrap_or_default(),
         accepts: declaration.accepts,
+        release_line: false,
         source: declaration.source,
         ownership: declaration.ownership,
     })
@@ -305,6 +319,9 @@ pub fn all_targets(
             };
             if target.source.is_some() && !target.version.is_empty() {
                 target.accepts.push("revision".into());
+                if target.release_line {
+                    target.accepts.push("release".into());
+                }
             }
         }
         targets.push(target);

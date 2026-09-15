@@ -61,7 +61,11 @@ fn resolve_tag(targets: &[Target], name: &str, tag: &str) -> Result<String> {
         .iter()
         .find(|target| target.name == name)
         .ok_or_else(|| crate::support::error::Error::Request(format!("unknown target {name:?}")))?;
-    let Some(repository) = target.source.as_ref().and_then(source_repository) else {
+    let Some(repository) = target
+        .source
+        .as_ref()
+        .and_then(crate::update::upstream::source_repository)
+    else {
         return request_error(format!(
             "tag:{tag}: {name} declares no git source to resolve a tag against"
         ));
@@ -96,17 +100,41 @@ pub(crate) fn tag_commit(output: &str) -> Option<&str> {
     found
 }
 
-/// The clone url a target's source names, for the backends that have one.
-fn source_repository(source: &Value) -> Option<String> {
-    match source["kind"].as_str()? {
-        "github" => Some(format!(
-            "https://github.com/{}/{}.git",
-            source["owner"].as_str()?,
-            source["repo"].as_str()?
-        )),
-        "git" => source["url"].as_str().map(str::to_string),
-        _ => None,
+/// A manual revision must already be merged upstream. Nothing else stops a
+/// pin naming a pull-request head: the commit is fetchable, so it locks and
+/// builds, and the pin then rides on code that may never be merged and that
+/// no release will ever contain. A tag skips this — a release is
+/// authoritative even when it was cut off a release branch.
+fn require_merged(targets: &[Target], name: &str, rev: &str) -> Result<()> {
+    let Some(target) = targets.iter().find(|target| target.name == name) else {
+        return request_error(format!("unknown target {name:?}"));
+    };
+    if !target.release_line {
+        return Ok(());
     }
+    // A malformed revision is the request grammar's error to report, with
+    // its own message; this gate must not answer it with "not merged".
+    if crate::support::atoms::Rev::parse(rev).is_err() {
+        return Ok(());
+    }
+    let Some(repository) = target
+        .source
+        .as_ref()
+        .and_then(crate::update::upstream::source_repository)
+    else {
+        return request_error(format!(
+            "rev:{rev}: {name} declares no git source to check the revision against"
+        ));
+    };
+    let mirror = crate::update::upstream::mirror(&repository)?;
+    if crate::update::upstream::is_merged(&mirror, rev)? {
+        return Ok(());
+    }
+    request_error(format!(
+        "rev:{rev}: not merged into {repository} {}; pin a merged commit, \
+         not a pull-request head",
+        crate::update::upstream::TRUNK
+    ))
 }
 
 /// Validate per-target requests against the modes each target declares.
@@ -224,7 +252,10 @@ pub fn target_requests(
         }
         use crate::support::naming::SourceSpec;
         let (mode, value) = match crate::support::naming::source_spec(source.as_str())? {
-            SourceSpec::Revision(rev) => (Mode::Revision, rev.to_string()),
+            SourceSpec::Revision(rev) => {
+                require_merged(targets, &name, rev)?;
+                (Mode::Revision, rev.to_string())
+            }
             // A tag names one commit; resolving it here means nothing
             // downstream learns a third kind of source.
             SourceSpec::Tag(tag) => (Mode::Revision, resolve_tag(targets, &name, tag)?),
