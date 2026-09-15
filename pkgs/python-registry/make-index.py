@@ -89,6 +89,14 @@ def has_extension(whl: Path) -> bool:
         return any(n.endswith(".so") for n in zf.namelist())
 
 
+# Native closure wheels that cannot be worklist entries: their nixpkgs attr is
+# null on some interpreter (backports-zstd is null on 3.14, where zstd is
+# stdlib), so registering the entry would force that null. They are rel-bumped
+# by name in release-revisions.json instead. Exempted from the worklist guard;
+# an entry matching no served native wheel is stale and fails the build.
+CLOSURE_NATIVE = {"backports-zstd"}
+
+
 def is_primary(filenames, supersedes: bool) -> bool:
     """Whether a project belongs in the served index: it has a platform-tagged
     wheel, or its wasix build changed the source (supersedesPyPI). A pure,
@@ -451,14 +459,28 @@ def main() -> None:
     # A wheel shipping a compiled extension whose project is not a worklist
     # entry reached the registry only through the closure, so it cannot be
     # rel-bumped and keeps serving stale bytes under an immutable filename.
-    # Collected rather than fatal on the first, so one run names them all.
+    # Collected rather than fatal on the first, so one run names them all;
+    # CLOSURE_NATIVE names the few that cannot be worklisted at all.
     escaped: list[tuple[str, str]] = []
+    exempted: set[str] = set()
     for entry in dists:
-        if entry["worklisted"]:
+        natives = [
+            whl.name
+            for whl in sorted(Path(entry["published"]).glob("*.whl"))
+            if has_extension(whl)
+        ]
+        if not natives or entry["worklisted"]:
             continue
-        for whl in sorted(Path(entry["published"]).glob("*.whl")):
-            if has_extension(whl):
-                escaped.append((entry["name"], whl.name))
+        if entry["name"] in CLOSURE_NATIVE:
+            exempted.add(entry["name"])
+            continue
+        escaped += [(entry["name"], fname) for fname in natives]
+    stale = CLOSURE_NATIVE - exempted
+    if stale:
+        sys.exit(
+            "CLOSURE_NATIVE entry serves no native wheel; drop it from"
+            f" make-index.py: {', '.join(sorted(stale))}"
+        )
     if escaped:
         listed = "\n".join(
             f"  {name}  ({fname})" for name, fname in sorted(set(escaped))

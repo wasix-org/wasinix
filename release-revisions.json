@@ -47,6 +47,9 @@
   "artifacts.registry.python.wheels.backports-datetime-fromisoformat": {
     "2.0.3": 2
   },
+  "artifacts.registry.python.wheels.backports-zstd": {
+    "1.6.0": 3
+  },
   "artifacts.registry.python.wheels.bcrypt": {
     "5.0.0": 2
   },
