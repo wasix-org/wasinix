@@ -22,6 +22,9 @@
   # COMPILER_POST_FLAGS entry, which wasixcc appends after all arguments
   # (response files included) and resolves last-wins. COMPILER_POST_FLAGS
   # entries are ':'-separated (wasixcc's own list syntax, not shell words).
+  #
+  # -mno-wide-arithmetic countermands the same way: wasixcc enables the feature
+  # on every compile. The rust side is turned off in the target spec.
   profileEnv = {
     wasmExceptions ? null,
     pic ? false,
@@ -33,9 +36,12 @@
         then "yes"
         else "no";
       WASIXCC_COMPILER_POST_FLAGS =
-        if pic
-        then "-fPIC"
-        else "-fno-PIC";
+        (
+          if pic
+          then "-fPIC"
+          else "-fno-PIC"
+        )
+        + ":-mno-wide-arithmetic";
     };
 
   autoconfEnv = {WASIXCC_AUTOCONF_WORKAROUNDS = "yes";};
