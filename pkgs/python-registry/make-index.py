@@ -82,6 +82,13 @@ def is_native(fname: str) -> bool:
     return fname[: -len(".whl")].rsplit("-", 1)[-1] != "any"
 
 
+def has_extension(whl: Path) -> bool:
+    """Whether the wheel ships a compiled extension module (.so). A platform tag
+    can be set on a pure wheel (baize), so read the archive, not the tag."""
+    with zipfile.ZipFile(whl) as zf:
+        return any(n.endswith(".so") for n in zf.namelist())
+
+
 def is_primary(filenames, supersedes: bool) -> bool:
     """Whether a project belongs in the served index: it has a platform-tagged
     wheel, or its wasix build changed the source (supersedesPyPI). A pure,
@@ -440,6 +447,28 @@ def main() -> None:
     args = ap.parse_args()
     dists = json.loads(args.dists.read_text())
     out = args.out
+
+    # A wheel shipping a compiled extension whose project is not a worklist
+    # entry reached the registry only through the closure, so it cannot be
+    # rel-bumped and keeps serving stale bytes under an immutable filename.
+    # Collected rather than fatal on the first, so one run names them all.
+    escaped: list[tuple[str, str]] = []
+    for entry in dists:
+        if entry["worklisted"]:
+            continue
+        for whl in sorted(Path(entry["published"]).glob("*.whl")):
+            if has_extension(whl):
+                escaped.append((entry["name"], whl.name))
+    if escaped:
+        listed = "\n".join(
+            f"  {name}  ({fname})" for name, fname in sorted(set(escaped))
+        )
+        sys.exit(
+            "native wheel served but not a worklist entry; add it to"
+            " pkgs/python/wheels/default.nix so it can be rel-bumped and"
+            " republished:\n"
+            f"{listed}"
+        )
 
     # normalized project name -> {published filename -> its path}
     projects: dict[str, dict[str, Path]] = {}

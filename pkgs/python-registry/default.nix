@@ -45,10 +45,14 @@
   # the .whl in `dist`; toPythonModule-wrapped non-python drvs have none and can't be served.
   servedOf = pv: set: let
     closure = set.python3.pkgs.requiredPythonModules (lib.attrValues set.pythonWheels);
+    worklistedNames = map (d: d.pname or d.name) (lib.attrValues set.pythonWheels);
   in
     map (drv: rec {
       name = drv.pname or drv.name;
       inherit (drv) version;
+      # A closure-only wheel is not rel-bumpable and can serve stale bytes; the
+      # index build fails on such a wheel that ships a compiled extension.
+      worklisted = lib.elem name worklistedNames;
       relKey = "${relPrefix}${name}";
       # the publishable form, produced by the wheel's own derivation. A package
       # whose build follows the interpreter is published per set instead, under
@@ -92,7 +96,7 @@
   wheelDists = lib.concatLists (lib.attrValues perVersion);
   indexDists =
     map (dist: {
-      inherit (dist) name version relKey published attr drvPath source supersedes;
+      inherit (dist) name version relKey published attr drvPath source supersedes worklisted;
     })
     wheelDists;
 
