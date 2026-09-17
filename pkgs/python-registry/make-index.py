@@ -89,12 +89,26 @@ def has_extension(whl: Path) -> bool:
         return any(n.endswith(".so") for n in zf.namelist())
 
 
-# Native closure wheels that cannot be worklist entries: their nixpkgs attr is
-# null on some interpreter (backports-zstd is null on 3.14, where zstd is
-# stdlib), so registering the entry would force that null. They are rel-bumped
-# by name in release-revisions.json instead. Exempted from the worklist guard;
-# an entry matching no served native wheel is stale and fails the build.
-CLOSURE_NATIVE = {"backports-zstd"}
+# Native closure wheels served without a worklist entry: exempted from the
+# worklist guard and rel-bumped by name in release-revisions.json instead. Two
+# reasons a wheel is here rather than worklisted:
+#   - backports-zstd: its nixpkgs attr is null on 3.14 (zstd is stdlib there), so
+#     a worklist entry would force that null (ECO-498).
+#   - the rest: promoting a deep-closure native to the worklist changes its build
+#     (the worklist path sets PYTHONDONTWRITEBYTECODE), which cascade-reruns every
+#     dependent's upstream test into pre-existing asyncio/mypy hangs. Deferred
+#     until those runtime failures are fixed (WAX-621).
+# An entry matching no served native wheel is stale and fails the build.
+CLOSURE_NATIVE = {
+    "backports-zstd",
+    "brotli",
+    "ml-dtypes",
+    "psycopg-c",
+    "pycares",
+    "pyyaml-ft",
+    "websockets",
+    "wrapt",
+}
 
 
 def is_primary(filenames, supersedes: bool) -> bool:
