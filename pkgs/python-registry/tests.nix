@@ -40,6 +40,28 @@
   # PYTHONPATH is how the pip --target tree reaches the guest interpreter.
   forwardEnv = harnesses.defaultForwardEnv ++ ["PYTHONPATH"];
 
+  # A fake rclone that additionally seeds a manifest predating the supersedes
+  # field on the manifests fetch, so the relist test can prove a flag-less
+  # published manifest is still listed from the current build's provenance.
+  seedingRclone = pkgs.writeScript "fake-rclone-seeding" ''
+    #!${pkgs.python3}/bin/python3
+    import sys, os, json, hashlib, pathlib
+    argv = sys.argv[1:]
+    open(os.environ["FAKE_RCLONE_LOG"], "a").write(" ".join(argv) + "\n")
+    if "copy" in argv:
+        rest = [a for a in argv[argv.index("copy") + 1:] if not a.startswith("--")]
+        src, dst = rest[0], rest[1]
+        if src.endswith("/manifests"):
+            d = pathlib.Path(dst)
+            d.mkdir(parents=True, exist_ok=True)
+            whl = pathlib.Path("registry/simple/watchdog/watchdog-1.0-py3-none-any.whl")
+            sha = hashlib.sha256(whl.read_bytes()).hexdigest()
+            (d / "watchdog-1.0-py3-none-any.whl.json").write_text(json.dumps(
+                {"project": "watchdog", "sha256": sha, "metadata_sha256": "x",
+                 "requires_python": ">=3.8", "size": 1, "published": "2026-09-14"}))
+    sys.exit(0)
+  '';
+
   fakeRclone = pkgs.writeShellScript "fake-rclone" ''
     printf '%s\n' "$*" >> "$FAKE_RCLONE_LOG"
     exit 3
@@ -83,6 +105,34 @@ in {
         --remote test:bucket \
         --rclone ${fakeRclone}
       grep -F 'copy test:bucket/manifests' "$FAKE_RCLONE_LOG"
+    '';
+  };
+
+  # A pure supersedesPyPI wheel first published before the supersedes field
+  # existed carries no flag in its frozen manifest. Regenerating listings from
+  # the manifest alone drops it from simple/ (watchdog, uninstallable from PyPI
+  # on wasix); the publisher must take the flag from the current build's
+  # provenance so --refresh-listings relists it without a rel bump.
+  publisher-relists-supersedes = testLib.mkScriptRun {
+    name = "registry-publisher-relists-supersedes";
+    packages = [pkgs.python3];
+    script = ''
+      mkdir -p registry/simple/watchdog
+      python3 -c 'import zipfile
+      md = "Metadata-Version: 2.1\nName: watchdog\nVersion: 1.0\nRequires-Python: >=3.8\n\n"
+      base = "registry/simple/watchdog/watchdog-1.0-py3-none-any.whl"
+      z = zipfile.ZipFile(base, "w"); z.writestr("watchdog-1.0.dist-info/METADATA", md); z.close()
+      open(base + ".metadata", "w").write(md)'
+      echo '{"watchdog-1.0-py3-none-any.whl": {"supersedes": true, "rel_key": "artifacts.registry.python.wheels.watchdog", "version": "1.0"}}' \
+        > registry/provenance.json
+      export FAKE_RCLONE_LOG="$PWD/rclone.log"
+      python3 ${./.}/publish.py \
+        --registry registry \
+        --remote test:bucket \
+        --rclone ${seedingRclone} \
+        --refresh-listings
+      staging=$(grep -oE 'copy --ignore-times [^ ]+' "$FAKE_RCLONE_LOG" | awk '{print $3}' | tail -1)
+      test -f "$staging/simple/watchdog/index.html"
     '';
   };
 

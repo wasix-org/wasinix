@@ -190,9 +190,17 @@ def main():
             for f, m in sorted(wheels.items())
         ]
         pages[project] = files
-    # a manifest predating the field has no flag, so a project last published
-    # before it existed stays out of simple/ until its next publish
-    supersedes = {m["project"] for m in manifests.values() if m.get("supersedes")}
+    # A wheel first published before the supersedes field existed has no flag
+    # frozen in its manifest, so read the flag from this build's provenance where
+    # it is present and fall back to the manifest only for wheels this build no
+    # longer produces. Otherwise a pure supersedesPyPI project (watchdog) whose
+    # wheel predates the field stays out of simple/ until a new wheel refreshes
+    # it; --refresh-listings then relists it without waiting for a rel bump.
+    supersedes = {
+        m["project"]
+        for fname, m in manifests.items()
+        if prov.get(fname, {}).get("supersedes", m.get("supersedes"))
+    }
     primary = {
         project: files
         for project, files in pages.items()
