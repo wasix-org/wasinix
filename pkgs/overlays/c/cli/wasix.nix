@@ -1,12 +1,20 @@
 {
   exposeWasixPackage,
+  lib,
   packages,
 }:
 exposeWasixPackage (
   let
     pname = "cli";
     version = "0.1.4";
+    wasmerDependencies = import ../../../wasmer/dependencies.nix {inherit lib;};
+    identityFiles = packages.sameProfile.runCommand "cli-identity-files" {} ''
+      mkdir -p "$out"
+      printf 'root:x:0:0:root:/:/bin/bash\n' > "$out/passwd"
+      printf 'root:x:0:\n' > "$out/group"
+    '';
     tools = with packages.wasix.preferred; [
+      coreutils
       curl
       findutils
       gnugrep
@@ -24,22 +32,17 @@ exposeWasixPackage (
       passthru = {
         wasinix.shipped = true;
         wasmer = {
+          fs."/etc" = identityFiles;
           name = pname;
           entrypoint = "bash";
           commands = [
             {
               name = "bash";
-              dependency = {
-                package = packages.wasix.preferred.bash;
-                version = "*";
-              };
+              dependency = wasmerDependencies.exact packages.wasix.preferred.bash;
             }
           ];
           dependencies =
-            map (package: {
-              inherit package;
-              version = "*";
-            })
+            map wasmerDependencies.exact
             tools;
         };
       };
