@@ -8,13 +8,11 @@ exposeWasixPackage (
     pname = "cli";
     version = "0.1.4";
     wasmerDependencies = import ../../../wasmer/dependencies.nix {inherit lib;};
-    identityFiles = packages.sameProfile.symlinkJoin {
-      name = "cli-identity-files";
-      paths = [
-        (packages.sameProfile.writeTextDir "passwd" "root:x:0:0:root:/:/bin/bash\n")
-        (packages.sameProfile.writeTextDir "group" "root:x:0:\n")
-      ];
-    };
+    identityFiles = packages.sameProfile.runCommand "cli-identity-files" {} ''
+      mkdir -p "$out"
+      printf 'root:x:0:0:root:/:/bin/bash\n' > "$out/passwd"
+      printf 'root:x:0:\n' > "$out/group"
+    '';
     tools = with packages.wasix.preferred; [
       coreutils
       curl
